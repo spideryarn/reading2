@@ -254,7 +254,7 @@ const rawPgCommentStore: CommentStore = {
         .values({ articleId, id, ownerId: currentOwnerId(), ...fields })
         .onConflictDoNothing({ target: [commentsTable.articleId, commentsTable.id] })
         .returning()
-        // Both callers below: a thrown refusal rolls the minting transaction back.
+        // The minted-id caller rolls back its transaction; supplied ids use one statement.
         .catch(rethrowPlacementError);
       return row === undefined ? undefined : toComment(row);
     };

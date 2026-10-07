@@ -25,8 +25,8 @@ and [comments.md § the referee's own placement](../project/comments.md#the-refe
 
 One helper carries all four: `violatesForeignKey(err, name)` in
 [`src/store/db-errors.ts`](../../src/store/db-errors.ts), the 23503 sibling of `violatesConstraint`
-and `violatesCheckConstraint`. It reads the whole `cause` chain and matches the constraint **by
-name**, and it is asked inside the store method, before `guardDbStore` drops the name.
+and `violatesCheckConstraint`. It reads up to four links of the `cause` chain and matches the
+constraint **by name**, and it is asked inside the store method, before `guardDbStore` drops the name.
 
 ## The simpler option passed over, and the one not built
 
@@ -77,24 +77,35 @@ check returns.
 - **SVR1 was "not reproduced against Postgres"** in Sol's review. It is now, on both write paths, by
   letting the route's own criteria read answer and then deleting the criterion before the write.
 - **"The 21st criterion"** in the Opus finding is conditional, as Sol's review said: the trim skips
-  `pending` rows, so the criterion in the way is the oldest *finished* one past the cap. The second
-  sentence says "the oldest one", which is true in every case but that one.
+  `pending` rows and deletes finished rows past the cap. The builder's second sentence says
+  "the oldest one", which can be false: an older pending row can have no comments while a younger
+  finished row blocks the trim. The review leaves the quoted wording unchanged for the owner to
+  veto; the pending-row case in `tests/referee-routes-postgres.test.ts` records that scenario.
 - **The Opus review's file list for the fix** named `tests/store-parity-referee.test.ts`. Nothing
   there was needed; the cases are in `tests/referee-routes-postgres.test.ts`, which is where both
   the constraint name and the guard that drops it are in play.
-- **Nobody mentioned that the panel lists newest first.** The hook holds oldest first, so "put the
-  row back where it was" is an index into the hook's order, and a row appended instead would jump to
-  the top of the panel.
+- **The panel lists newest first.** The hook holds oldest first. Restoration uses the row's
+  timestamp and id, matching the store's order; a captured index goes stale when another row is
+  deleted while the first refusal is in flight.
 
 ## Left for others
 
-- **`src/routes.ts` § `tidyMark`'s header** still says a foreign-key error from this key "becomes a
-  generic store failure". That is no longer true of `comments_criterion_fk`. `routes.ts` was out of
-  bounds for this cluster.
-- **The 400's sentence is written twice**, in `tidyMark` and as `CRITERION_NOT_ON_ARTICLE`, for the
-  same reason. The route test compares the two replies whole, so they cannot drift unseen; importing
-  the constant into `routes.ts` is a two-line change for whoever is next in that file.
+- **`src/routes.ts` was out of bounds for the builder.** The review was authorised to correct
+  `tidyMark`'s stale header and import `CRITERION_NOT_ON_ARTICLE`; both are now done.
 - **Questions 3 and 3a** are Greg's.
+
+## Code review corrections
+
+The client initially restored a frozen row at a captured array index. Concurrent refusals could
+reorder rows; frames received while deleted were lost; whichever DELETE refused first could
+restore a pending snapshot after `done`; and an old article's refusal could restore into a new
+article's delete using the same id. Restoration now shares a deletion record with the stream,
+keeps its latest hidden row, checks the record's identity and article scope, and applies the tab's
+colour choice. A stream's duplicate DELETE waits for the original and is skipped after a refusal,
+so it cannot delete a row that the refusal just restored.
+`tests/use-criteria-refusals.test.tsx` covers those races and stream resumption after restoration.
+The trim's stored outcomes remain unchanged. These are the builder's and reviewer's implementation
+choices under the orchestrator's brief, not decisions attributed to the product owner.
 
 ## Evidence
 

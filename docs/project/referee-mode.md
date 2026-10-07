@@ -411,10 +411,11 @@ in advance: a read for comments followed by the delete can be raced by a placeme
 cannot. The delete is optimistic in the browser, so `useCriteria` § `forget` restores the row on a
 409 and on nothing else — a 500 does not say whether the row went.
 
-**The second row is a wedge, and it is still one.** A list is capped at twenty and trimmed from the
-oldest finished criterion; when that one has a comment on it the add fails *every time* until the
-referee clears the placement. Whether the trim should skip such a criterion instead, letting a list
-run past twenty, is a retention decision waiting on Greg (question 3a in
+**The second row is a wedge, and it is still one.** Finished rows past the cap are trimmed, and
+pending rows are skipped. If a trim candidate has comments, that add rolls back. The builder's
+sentence says "the oldest one", which can misidentify the blocker when an older row is pending;
+the code review leaves that wording for the owner to veto. Whether the trim should skip such a
+criterion instead, letting a list run past twenty, is a retention decision waiting on Greg (question 3a in
 [the seventh sweep's umbrella](../plans/261006m-seventh-codebase-sweep-depth-umbrella.md)), as is
 what Delete should do with the comments (question 3).
 `tests/referee-routes-postgres.test.ts` § *OPEN QUESTION 3a* pins today's behaviour so whoever

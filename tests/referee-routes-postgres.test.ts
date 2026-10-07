@@ -61,10 +61,12 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { asc, eq } from "drizzle-orm";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { closeDb } from "../src/db/client.js";
+import { closeDb, getDb } from "../src/db/client.js";
+import { refereeCriteria } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
 import type { RefereeResult } from "../src/referee-criteria.js";
@@ -76,6 +78,7 @@ import {
 import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
 import type { BlockId, Comment } from "../src/types.js";
 import { hashBlocks } from "../src/source-hash.js";
+import { runAsOwner, type OwnerId } from "../src/owner.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
@@ -463,6 +466,10 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
     const criteriaIds = async () =>
       (await asTestOwner(() => refereeCriteriaStore.load(SLUG))).map((c: SavedCriterion) => c.id);
 
+    // Also compare storage-only fields, including attempt ids, across rollback.
+    const criteriaRows = () => getDb().select().from(refereeCriteria)
+      .where(eq(refereeCriteria.articleId, article.articleId)).orderBy(asc(refereeCriteria.id));
+
     /** Every comment and criterion this block made, gone — comments first, for the key. */
     async function clear(): Promise<void> {
       await asTestOwner(async () => {
@@ -598,6 +605,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       for (let i = 0; i < MAX_CRITERIA; i++) ids.push(await criterion(`criterion ${i}`, at(i)));
       const oldest = ids[0] as string;
       const comment = (await place(oldest)).body.comment as Comment;
+      const before = await criteriaRows();
 
       const add = () =>
         call("POST", `/api/referee/criteria/${SLUG}`, { criterion: "one more", kind: "single" });
@@ -609,6 +617,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
         expect(refused.body.error).toBe(CRITERIA_FULL_OLDEST_HAS_COMMENTS);
         // Rolled back whole: nothing trimmed, nothing added.
         expect(await criteriaIds()).toEqual(ids);
+        expect(await criteriaRows()).toEqual(before);
       }
 
       /* The control, and the way out the sentence names: with the placement
@@ -629,8 +638,8 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       /* `comments_identity_fk`: a comment on a block the article does not have.
          The route refuses that long before the store, so this goes to the store
          directly — the point is what the store does with a 23503 that is *not*
-         about a criterion. It must stay the failure it is: a block id the
-         database has never heard of means stage 3 re-minted ids. */
+         about a criterion. It must stay the failure it is: the comment names
+         a block identity the database has never heard of. */
       const id = await criterion("a live criterion");
       const error = await asTestOwner(() =>
         commentStore
@@ -644,6 +653,120 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       expect(error?.code).toBe("23503");
       expect(error?.status).toBeUndefined();
       expect(error?.message).not.toBe(CRITERION_NOT_ON_ARTICLE);
+      expect(await asTestOwner(() => commentStore.load(SLUG))).toEqual([]);
+    });
+
+    // Review additions below are unrun here: this sandbox cannot connect to Postgres.
+    it("does not treat a live criterion on another article as a placement target here", async () => {
+      const elsewhere = await scratchArticleInPg(`${SLUG}-other-article`, { ownerId: TEST_OWNER });
+      try {
+        const { row } = await asTestOwner(() => refereeCriteriaStore.begin(
+          elsewhere.slug, hashBlocks(elsewhere.blocks), "on another article", { kind: "single" }, "spya-zzzzzz",
+        ));
+        const placed = await place(row.id);
+        expect(placed.status).toBe(400);
+        expect(placed.body.error).toBe(CRITERION_NOT_ON_ARTICLE);
+        expect(await asTestOwner(() => commentStore.load(SLUG))).toEqual([]);
+        const deleted = await call("DELETE", `/api/referee/criteria/${SLUG}/${row.id}`);
+        expect(deleted.status).toBe(200); // Absent here, as before; no new refusal.
+        expect((await asTestOwner(() => refereeCriteriaStore.load(elsewhere.slug))).map((c) => c.id))
+          .toEqual([row.id]);
+      } finally {
+        await elsewhere.remove();
+      }
+    });
+
+    it("keeps another owner's access as a 404 before any foreign-key translation", async () => {
+      const id = await criterion("owned by the fixture reader");
+      const outsider = "00000000-0000-4000-8000-0000000000d5" as OwnerId;
+      await expect(runAsOwner(outsider, () => refereeCriteriaStore.remove(SLUG, id)))
+        .rejects.toMatchObject({ status: 404 });
+      await expect(runAsOwner(outsider, () => commentStore.create(SLUG, {
+        blockId: RESULT.blockId, criterionId: id,
+      }))).rejects.toMatchObject({ status: 404 });
+      expect(await criteriaIds()).toEqual([id]);
+      expect(await asTestOwner(() => commentStore.load(SLUG))).toEqual([]);
+    });
+
+    it("rolls back uncommented trim candidates as well as the blocked one", async () => {
+      const at = (i: number) => () => new Date(Date.parse("2026-08-01T00:00:00Z") + i * 60_000).toISOString();
+      const running = [];
+      for (let i = 0; i < 3; i++) {
+        running.push(await asTestOwner(() => refereeCriteriaStore.begin(
+          SLUG, hashBlocks(article.blocks), `running ${i}`, { kind: "single" }, undefined, at(i),
+        )));
+      }
+      for (let i = 3; i < MAX_CRITERIA + 2; i++) await criterion(`finished ${i}`, at(i));
+      for (const row of running.slice(0, 2)) {
+        await asTestOwner(() => refereeCriteriaStore.finish(
+          SLUG, row.row.id, { status: "done", results: [] }, row.attempt,
+        ));
+      }
+      const blocked = running[1]!.row.id;
+      const comment = (await place(blocked)).body.comment as Comment;
+      const before = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+      const beforeRows = await criteriaRows();
+      expect(before).toHaveLength(MAX_CRITERIA + 2);
+      const refused = await call("POST", `/api/referee/criteria/${SLUG}`, {
+        criterion: "would trim several", kind: "single",
+      });
+      expect(refused.status).toBe(409);
+      expect(refused.streamed).toBe(false);
+      expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toEqual(before);
+      expect(await criteriaRows()).toEqual(beforeRows);
+      expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => [c.id, c.criterionId]))
+        .toEqual([[comment.id, blocked]]);
+    });
+
+    it("keeps an oldest pending row, and rolls back all rows when a different trim candidate has comments", async () => {
+      const start = Date.parse("2026-08-01T00:00:00.000Z");
+      const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
+      const pending = await asTestOwner(() => refereeCriteriaStore.begin(
+        SLUG, hashBlocks(article.blocks), "oldest, still running", { kind: "single" }, undefined, at(0),
+      ));
+      const blocked = await criterion("next oldest, with comments", at(1));
+      const comment = (await place(blocked)).body.comment as Comment;
+      for (let i = 2; i < MAX_CRITERIA; i++) await criterion(`finished ${i}`, at(i));
+
+      // Same retention policy: a pending row outside the cap survives a successful add.
+      const accepted = await call("POST", `/api/referee/criteria/${SLUG}`, {
+        criterion: "fits by skipping pending", kind: "single",
+      });
+      expect(accepted.streamed, accepted.text.slice(0, 300)).toBe(true);
+      expect(frame(accepted.text, "done")?.status).toBe("done");
+      const before = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+      const beforeRows = await criteriaRows();
+      expect(before).toHaveLength(MAX_CRITERIA + 1);
+      expect(before[0]).toMatchObject({ id: pending.row.id, status: "pending" });
+      expect(before[1]?.id).toBe(blocked);
+
+      const refused = await call("POST", `/api/referee/criteria/${SLUG}`, {
+        criterion: "blocked by finished candidate", kind: "single",
+      });
+      expect(refused.status).toBe(409);
+      expect(refused.streamed).toBe(false);
+      expect(refused.body.error).toBe(CRITERIA_FULL_OLDEST_HAS_COMMENTS);
+      // Compare full rows, not ids alone: reset/overwrite mutations must fail too.
+      expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toEqual(before);
+      expect(await criteriaRows()).toEqual(beforeRows);
+      expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => [c.id, c.criterionId]))
+        .toEqual([[comment.id, blocked]]);
+      // The sentence says "oldest one", but the oldest is pending and has no comments.
+      expect(pending.row.id).not.toBe(blocked);
+
+      // Clearing the blocker resumes today's trim without deleting the pending row.
+      const cleared = await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
+        criterionId: null, valence: null,
+      });
+      expect(cleared.status).toBe(200);
+      const added = await call("POST", `/api/referee/criteria/${SLUG}`, {
+        criterion: "blocked by finished candidate", kind: "single",
+      });
+      expect(frame(added.text, "done")?.status).toBe("done");
+      const after = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
+      expect(after).toHaveLength(MAX_CRITERIA + 1);
+      expect(after[0]).toMatchObject({ id: pending.row.id, status: "pending" });
+      expect(after.map((c) => c.id)).not.toContain(blocked);
     });
   });
 });

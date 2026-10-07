@@ -292,14 +292,15 @@ export function violatesCheckConstraint(err: unknown, constraint: string): boole
 
 /**
  * **Did a named foreign key refuse the write?** The third sibling, and the same
- * reading as `violatesConstraint`: over the whole `cause` chain, and by name.
+ * reading as `violatesConstraint`: over up to four links in the `cause` chain,
+ * using `chainOf`, and by name.
  *
  * By name matters more here than anywhere. `23503` is raised from **both ends**
  * of a key — deleting a row something still points at, and writing a row that
  * points at nothing — and `comments` alone carries two of them:
  * `comments_criterion_fk` refusing is an answer a referee can act on, and
- * `comments_identity_fk` refusing means stage 3 re-minted block ids and has to
- * be seen as the failure it is (src/store/pg-comments.ts § `create`). Catching
+ * `comments_identity_fk` refusing means the comment names no stored block
+ * identity and remains a failure (src/store/pg-comments.ts § `create`). Catching
  * the code would turn the second into the first's sentence.
  *
  * **It has to be asked before the guard**, inside the store method: once

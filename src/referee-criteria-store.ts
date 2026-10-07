@@ -156,9 +156,9 @@ export const CRITERION_HAS_COMMENTS =
 
 /**
  * **And when adding one would trim such a criterion.** The same refusal reached
- * from `begin`: the list is capped at `MAX_CRITERIA`, the oldest finished row is
- * trimmed to make room, and the same key refuses that delete — so the insert
- * rolls back, every time, until the comments are moved. Whether a list may
+ * from `begin`: finished rows past the cap are trimmed to make room, while
+ * pending rows are skipped. The same key refuses that delete, so the insert
+ * rolls back. Whether a list may
  * instead grow past the cap to protect them is question 3a in the same plan;
  * this is only the sentence for today's behaviour.
  */
@@ -171,9 +171,8 @@ export const CRITERIA_FULL_OLDEST_HAS_COMMENTS =
  * word for word what `tidyMark` in src/routes.ts answers when it looks first
  * and finds nothing. That early check stays; this is the same answer for the
  * placement that passed it and then lost a race with a delete in another tab,
- * which used to be a 500. The sentence is written out in both places, and
- * tests/referee-routes-postgres.test.ts compares the two replies so they
- * cannot drift.
+ * which used to be a 500. `tidyMark` imports this same sentence, and
+ * tests/referee-routes-postgres.test.ts compares the two replies.
  */
 export const CRITERION_NOT_ON_ARTICLE = "criterionId is not one of your criteria on this article";
 

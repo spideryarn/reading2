@@ -265,8 +265,8 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
          oversight (question 3a,
          docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg).
          `comments_criterion_fk` refuses the delete, this transaction rolls back
-         with the insert in it, and adding fails every time until the comments
-         are moved. What changed on 2026-10-07 is only how that is said: a 409
+         with the insert in it. The add fails whenever such a row is a trim
+         candidate. What changed on 2026-10-07 is only how that is said: a 409
          and a sentence where there was a 500. There is deliberately no
          "has it comments?" read in front of the delete — under READ COMMITTED a
          comment can be placed between such a read and the delete, so the key's
