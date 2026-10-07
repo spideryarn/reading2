@@ -26,12 +26,14 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
 
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on nine boxes today — both profile boxes, the chat composer, the comment follow-up, the
+box. It is on ten boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
-([feedback.md](feedback.md)), the note under an Illustrated picture
+([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
+the note under an Illustrated picture
 ([illustrated.md](illustrated.md#steering)) and the command bar's box
 ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) — and adding
-it to a tenth is three lines.
+it to an eleventh is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -345,9 +347,9 @@ then it should also click send afterwards for me. And if I'm in chat or whatever
 the stop button, then it should automatically send that message after it's finished transcribing"*.
 
 A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
-and `sendingAfter` on to `DictationButton` and `DictationStrip`. Five boxes send: Feedback (Send),
-chat (Send), the comment follow-up (Ask in chat), the quiz answer (Answer) and the annotate box
-(Save, never Ask AI). A sixth, the command bar, presses Enter (below). The plan, with what was deferred and why, is
+and `sendingAfter` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
+Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
+quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the command bar, presses Enter (below). The plan, with what was deferred and why, is
 [261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
 
 - **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
@@ -671,7 +673,7 @@ passed over, and GPT Sol's review.
   [`transcriber.ts`](../../src/web/transcriber.ts) is types only; the product passes
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
-  itself: `feedback`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
+  itself: `feedback`, `feedback-reply`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
   `quiz:<slug>:<question>`, `profile:<field>`. A recording is offered back only in the box it was
   made in, to the reader who made it, and is transcribed against the `where` it was recorded with.
 - **Web Locks decide which tab may offer it.** The page holding a tape holds a lock named for it,
@@ -679,6 +681,8 @@ passed over, and GPT Sol's review.
   offered by another, and a dead tab's tape is offered by one page only. No Web Locks, no keeping.
 - **Feedback keeps only while open**, because the dialog is mounted on every page whether or not it
   is showing — a keeper there while shut would let a background tab claim the recording invisibly.
+  Its reply box keeps only while it can be seen, for the same reason (`ReplyBox` in
+  [`FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx)).
 - **The row says so only when it is true.** "The audio is kept on this device, even if you close the
   page" appears only when every write landed (`KeptTape.intact()`); a failed keeper is never
   described as holding anything, and never touches the dictation.

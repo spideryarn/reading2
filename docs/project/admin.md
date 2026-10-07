@@ -241,6 +241,19 @@ projection is written out by hand rather than sharing `REPORT_COLUMNS` with the 
 report, so a field added to a report does not reach this page until somebody decides it should,
 and `tests/admin-feedback-store.test.ts` pins the exact set of keys that comes back.
 
+**One route under `/api/admin/feedback/` is not across owners**, since 2026-10-07:
+`GET /api/admin/feedback/earlier` is the administrator's **own** reports for the Feedback dialog's
+Earlier tab, read through the owner-scoped `feedbackStore`, never `adminStore`. It is under the
+namespace because it carries what no other reader is sent: that a report was ignored, whether its
+note says declined or awaiting, its stored number, and the note's comment
+([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
+The same answer carries the questions agents have put to the administrator, and
+**`POST /api/admin/feedback/answers`** stores a reply to one: a row in `feedback_question_answers`
+under the signed-in administrator's own id, again through `feedbackStore`. It is the second write
+under `/api/admin/feedback/` (the first is the Ignore mark), it touches no report and no other
+reader's data, and it is under the namespace because only an administrator is asked anything
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
+
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is
 **confirmed**, and — since 2026-09-03 — whether the account **can reach these pages**, which is
@@ -799,14 +812,15 @@ checks for each of them:
 | Route | Does |
 |---|---|
 | `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`) and free usage — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
 | `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued; a different body under that id → 409 |
-| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, email, revoked }`; the address only while unclaimed (409 after) |
+| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, recipientName, email, revoked }`; the address only while unclaimed (409 after) |
 | `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
 
 Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in
 [`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): articles a whole number 1–1000, a note of at
-most 500 characters, an address with an `@`, `revoked` a boolean, and an unknown key is a 400 rather
+most 500 characters, a name of at most 80 (refused when longer, never shortened; then made one line
+and trimmed), an address with an `@`, `revoked` a boolean, and an unknown key is a 400 rather
 than a default. There is no delete: a revoked voucher stays as a record, and `revoked: false`
 restores it.
 
@@ -816,7 +830,10 @@ from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a 
 loader is a compile error). A create form — address, articles (20 by default), private note, and a
 note to them that goes in their email, with a sketch of that email beside it showing where the note
 lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
-the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body) — over
+the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body), and
+since 2026-10-07 an optional *Their name* above the note, which opens the email *Dear <name>,* and
+is drawn in the sketch as it is typed ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md); the table shows it under the address, and Edit can change
+it, which re-sends nothing) — over
 a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.

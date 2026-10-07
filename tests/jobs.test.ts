@@ -26,11 +26,12 @@
  * database's own clock, and `failure_kind` is a column. None of those existed
  * on the store this file used to run against.
  *
- * **Eight of the ten blocks below are pure functions and were never affected**
+ * **Eight of the ten blocks below isolate their decisions from the queue and were never affected**
  * — `the pipeline`, `orderSteps`, `cascadeForce`, `forceForRetry`,
  * `parseJobRequest`, `the work key`, `freeSlug` and `slugForRetry`, the last two
- * injecting their shelf lookup. They are untouched by the conversion and need no
- * mutation evidence, because there is no store under them to reach.
+ * injecting their shelf lookup. They are untouched by the queue conversion and
+ * need no mutation evidence for it. Since 2026-10-07 the cases that mint a slug
+ * do make the separate Postgres query that checks whether its short id is taken.
  *
  * ## What the conversion cost, and the one thing it did **not** cost
  *

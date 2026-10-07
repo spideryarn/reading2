@@ -107,6 +107,7 @@ import {
 import { blockOf } from "./block-rows.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
+import { violatesConstraint } from "./db-errors.js";
 import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, structureCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
@@ -798,6 +799,13 @@ async function rememberAskedUrl(
 }
 
 /**
+ * The unique constraint on `articles.short_id`, by the name Postgres reports
+ * it under: drizzle/0044_article_short_id.sql, from `.unique()` on the column
+ * (src/db/schema.ts § `shortId`).
+ */
+const SHORT_ID_UNIQUE = "articles_short_id_unique";
+
+/**
  * The article row for this slug, **locked** — created first if it is not there.
  *
  * `lockArticle` can only lock a row that exists, and "there is no row yet" is
@@ -883,7 +891,33 @@ export async function lockOrCreateArticle(
        yet. `do nothing` plus a re-read is the honest handling; `do update`
        would rewrite somebody's shelf state to defaults. */
     .onConflictDoNothing({ target: articles.slug })
-    .returning();
+    .returning()
+    .catch((err: unknown) => {
+      /* **The other unique column, and `do nothing` above does not cover it.**
+         Some other article, anybody's, already has this short id. The minter
+         asks before it mints (src/jobs.ts § `mintSlug`), so what reaches here
+         is two imports minting one id at the same moment, or an id minted on
+         the line above for a slug that has none. Rare, and until 2026-10-07 it
+         left as a raw driver error. Plan 261007f, E10.
+
+         `permanent`: a retry keeps this slug (`slugForRetry`), so it would stop
+         here again. Adding the article afresh mints another id. The sentence
+         reaches the log and the advance's 409, not yet the reader's card
+         (docs/project/ingest-queue.md § When two imports mint the same id at
+         once). The statement
+         has failed, so the transaction is finished either way; nothing else is
+         asked of it. By the constraint's name, never the code alone
+         (src/store/db-errors.ts § `violatesConstraint`). */
+      if (violatesConstraint(err, SHORT_ID_UNIQUE)) {
+        throw new PublishRefused(slug, "permanent", [
+          "the short id on the end of this article's name is already in use by another " +
+            "article, so it could not be added. Trying this import again would stop in the " +
+            "same place. Add the article again, by pasting its address or choosing the file " +
+            "once more, and it will be given a new id",
+        ]);
+      }
+      throw err;
+    });
   if (inserted[0]) return inserted[0];
   /* Somebody else's insert won. Theirs is an existing row like any other. */
   const raced = await lockArticle(tx, slug);
@@ -899,9 +933,11 @@ export async function lockOrCreateArticle(
      looking for a locking bug.
 
      Distinguished by asking, unfiltered, whether the row exists at all.
-     GPT Sol raised the confusion reviewing the ownership work, 2026-08-27;
-     what it does NOT do is let two readers keep the same URL, which is still an
-     open question rather than a thing that works. */
+     GPT Sol raised the confusion reviewing the ownership work, 2026-08-27.
+     Whether two readers could keep the same URL was an open question then and
+     is not one now: since 2026-08-31 every new slug ends in a random short id
+     (src/ingest.ts § `slugWithShortId`), so two readers who paste one address
+     get two slugs and an article each. */
   if (await slugIsTaken(slug, tx)) {
     /* `permanent`, and it is the known limit rather than a race: `articles.slug`
        is unique across the whole install, so nobody gives this name back. */

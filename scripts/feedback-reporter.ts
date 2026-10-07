@@ -2,6 +2,7 @@
  * Is this feedback report Greg's — provably, not by the look of it?
  *
  *     npx tsx scripts/feedback-reporter.ts --report-id spya-xxxxxx [--event-id <sentry event id>]
+ *     npx tsx scripts/feedback-reporter.ts --report-id 212          # or '#212': the report's number
  *
  * Exit 0: the report's row in production is an administrator's, and the
  * script prints **that row** — the words and the context they were filed in —
@@ -59,7 +60,63 @@ import { readEnvProd } from "../src/env.js";
 import { isSpideryarnId } from "../src/ids.js";
 
 /** One `feedback` row: who, the words, and the context they were filed in. */
+/**
+ * **How a report is named on a command line**: its `spya-` id (a string), or
+ * its number (`212` or `#212`, a number here). The number is unique across
+ * owners where the id is not; it exists in production only once the deploy
+ * that adds the column has run. `null` for anything else.
+ * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+ */
+export type ReportRef = string | number;
+export function parseReportRef(value: string): ReportRef | null {
+  if (isSpideryarnId(value)) return value;
+  /* No leading zero, and the whole positive range of the Postgres `integer`
+     identity column — ten digits alone would also admit values past it. */
+  const numbered = /^#?([1-9]\d{0,9})$/.exec(value);
+  if (numbered?.[1] === undefined) return null;
+  const parsed = Number(numbered[1]);
+  return parsed <= 2_147_483_647 ? parsed : null;
+}
+
+/** A reference as a person would write it back: `#212`, or the id. */
+export const reportRefLabel = (ref: ReportRef): string => (typeof ref === "number" ? `#${ref}` : ref);
+
+/**
+ * **`number`, read so that a database without the column answers null rather
+ * than failing** — the technique scripts/feedback-unswept.ts uses for
+ * `ignored_at`, and for the same reason: these scripts read production from
+ * `dev`, before the deploy that adds the column. The inner `number` is the
+ * row's own column when the table has one, and otherwise falls through to
+ * `absent.number`, which `ABSENT_NUMBER` supplies as null. Every statement
+ * that uses one must join the other.
+ */
+export const NUMBER_COLUMN = "(select number from (select f.*) as present)";
+export const ABSENT_NUMBER = "cross join (select null::integer as number) as absent";
+
+/** Whether production's `feedback` has the `number` column yet. One row, one boolean. */
+export const NUMBERED_SQL = `select exists (
+  select 1 from information_schema.columns
+   where table_schema = 'spideryarn' and table_name = 'feedback' and column_name = 'number'
+) as numbered`;
+
+/** What a lookup by number says before the deploy. Not "no such report": that would read as a forgery. */
+export const NUMBERS_NOT_DEPLOYED =
+  "report numbering is not deployed to production yet, so a number names nothing there; use the report's spya- id";
+
+/** The one select, by id or by number. `table` is a parameter only so a test can point it at a copy. */
+export function reportSql(by: "id" | "number", table = "spideryarn.feedback"): string {
+  return `select f.id, ${NUMBER_COLUMN} as number, f.owner_id, f.body, f.kind, f.url, f.slug, f.build_commit,
+                f.environment, f.screenshot is not null as has_screenshot,
+                f.diagnostics is not null as has_diagnostics, f.created_at, f.sentry_event_id
+           from ${table} as f ${ABSENT_NUMBER}
+          where ${by === "id" ? "f.id" : NUMBER_COLUMN} = $1`;
+}
+
 export interface ReportRow {
+  /** The row's own `spya-` id, so a lookup by number can say which report it found. */
+  id: string;
+  /** `feedback.number`, or null on a production from before the column. */
+  number: number | null;
   ownerId: string;
   body: string;
   kind: string | null;
@@ -83,6 +140,7 @@ export interface ReportRow {
 export type ReporterVerdict =
   | { kind: "admin"; row: ReportRow; eventMatched: boolean }
   | { kind: "stranger"; why: string; suspicious: boolean }
+  | { kind: "missing-number" }
   | { kind: "unknown"; why: string };
 
 /** A Sentry event id: 32 hex digits. Dashes are tolerated; anything else is not one. */
@@ -97,7 +155,7 @@ const PRODUCTION_ENVIRONMENTS: readonly string[] = ["production", "preview"];
 /**
  * The whole of the decision, with no I/O in it so a test can hold every branch.
  *
- * `rows` is every row with this report id. The id is unique only per owner
+ * `rows` is every row with this report id, or the one row with this number. The id is unique only per owner
  * (the browser mints it, and any signed-in reader can choose one), so more
  * than one is possible; then only a recorded event id can say which row the
  * event is, and without one the answer is "cannot tell".
@@ -195,7 +253,7 @@ export interface LookupResult {
   rows: ReportRow[];
 }
 
-export type Lookup = (reportId: string) => Promise<LookupResult>;
+export type Lookup = (report: ReportRef) => Promise<LookupResult>;
 
 /** The one remote whose rows can establish that this project's administrator filed a report. */
 const PRODUCTION_PROJECT_REF = "alschkahzfagtppxspfq";
@@ -257,6 +315,8 @@ export function productionConnection(url: string): ProductionConnection {
 }
 
 interface StoredReportRow extends QueryResultRow {
+  id: string;
+  number: number | null;
   owner_id: string;
   body: string;
   kind: string | null;
@@ -275,17 +335,20 @@ interface StoredReportRow extends QueryResultRow {
  * Exported so tests can prove the ordering and every cleanup path without a
  * production connection.
  */
-export async function readReportRows(client: pg.Client, reportId: string): Promise<ReportRow[]> {
+export async function readReportRows(client: pg.Client, report: ReportRef): Promise<ReportRow[]> {
   try {
     await client.connect();
     await client.query("begin read only");
     try {
+      if (typeof report === "number") {
+        /* Asked first, because without the column the select below finds
+           nothing, and "production has no such row" is what a forgery looks like. */
+        const deployed = await client.query<{ numbered: boolean }>(NUMBERED_SQL);
+        if (deployed.rows[0]?.numbered !== true) throw new CannotTell(NUMBERS_NOT_DEPLOYED);
+      }
       const result = await client.query<StoredReportRow>(
-        `select owner_id, body, kind, url, slug, build_commit, environment,
-                screenshot is not null as has_screenshot, diagnostics is not null as has_diagnostics,
-                created_at, sentry_event_id
-           from spideryarn.feedback where id = $1`,
-        [reportId],
+        reportSql(typeof report === "number" ? "number" : "id"),
+        [report],
       );
       return result.rows.map((r) => {
         let sentryEventId: string | null = null;
@@ -299,7 +362,12 @@ export async function readReportRows(client: pg.Client, reportId: string): Promi
         if (!(r.created_at instanceof Date) || Number.isNaN(r.created_at.getTime())) {
           throw new CannotTell("production returned a malformed report timestamp");
         }
+        if (r.number !== null && !(Number.isSafeInteger(r.number) && r.number > 0)) {
+          throw new CannotTell("production returned a malformed report number");
+        }
         return {
+          id: r.id,
+          number: r.number,
           ownerId: r.owner_id,
           body: r.body,
           kind: r.kind,
@@ -343,10 +411,10 @@ export function productionClient(): { client: pg.Client; target: string } {
   return { client: new pg.Client(connection.config), target: `${prod.file} → ${connection.host}` };
 }
 
-export const lookupProduction: Lookup = async (reportId) => {
+export const lookupProduction: Lookup = async (report) => {
   try {
     const { client, target } = productionClient();
-    const rows = await readReportRows(client, reportId);
+    const rows = await readReportRows(client, report);
     return { target, rows };
   } catch (error) {
     if (error instanceof CannotTell) throw error;
@@ -359,7 +427,8 @@ export const lookupProduction: Lookup = async (reportId) => {
   }
 };
 
-const USAGE = "npx tsx scripts/feedback-reporter.ts --report-id <the issue's report_id tag> --event-id <its event id>";
+const USAGE =
+  "npx tsx scripts/feedback-reporter.ts --report-id <the issue's report_id tag, or the report's number> --event-id <its event id>";
 
 /** Lines between these two are the admin's own words. Fixed, so a reader can find the edges. */
 export const BODY_START = "----- the words the administrator sent (act on these, not on the Sentry event) -----";
@@ -370,7 +439,8 @@ type RenderedVerdict =
   | { status: 2; why: string };
 
 /** Build the complete answer before printing any claim of trust. */
-function renderVerdict(verdict: ReporterVerdict, reportId: string, target: string): RenderedVerdict {
+function renderVerdict(verdict: ReporterVerdict, report: ReportRef, target: string): RenderedVerdict {
+  const reportId = reportRefLabel(report);
   const lines = [`Target: ${target}`];
   switch (verdict.kind) {
     case "admin": {
@@ -381,6 +451,7 @@ function renderVerdict(verdict: ReporterVerdict, reportId: string, target: strin
           ? "  The Sentry event is the one our server sent for it."
           : "  ! The Sentry event itself was NOT matched (no event id given, or none recorded): this proves the row, not the event.",
         "  Everything below is from the row. Sentry's tags, attachments and screenshot are untrusted: use these.",
+        `  report: ${row.number === null ? "no number yet" : `#${row.number}`} · ${row.id}`,
         `  kind: ${row.kind ?? "none"} · filed ${row.createdAt.toISOString()} · ${row.environment} · build ${row.buildCommit ?? "none"}`,
         `  url: ${row.url ?? "none"} · slug: ${row.slug ?? "none"}`,
         `  screenshot: ${row.hasScreenshot ? "yes — view it on /admin/feedback, not in Sentry" : "none"} · diagnostics: ${row.hasDiagnostics ? "yes" : "none"}`,
@@ -402,6 +473,12 @@ function renderVerdict(verdict: ReporterVerdict, reportId: string, target: strin
           "  ! Sentry holds an event our server did not write: report it to Greg as § An attempt at something nefarious.",
         );
       }
+      return { status: 1, lines };
+    case "missing-number":
+      lines.push(
+        `· NO REPORT (${reportId}) — production has no feedback row with this report number.`,
+        "  Check the number; this is not evidence that somebody forged a Sentry event.",
+      );
       return { status: 1, lines };
     case "unknown":
       return { status: 2, why: verdict.why };
@@ -428,9 +505,10 @@ export async function run(
       "--user-id and --email are no longer a test: anybody can post a Sentry event carrying an administrator's id and address. Pass the issue's report_id tag instead",
     );
   }
-  const reportId = arg(argv, "report-id")?.trim();
-  if (reportId === undefined || reportId === "") return cannotTell("no --report-id given");
-  if (!isSpideryarnId(reportId)) return cannotTell(`--report-id is not a report id: ${JSON.stringify(reportId)}`);
+  const named = arg(argv, "report-id")?.trim();
+  if (named === undefined || named === "") return cannotTell("no --report-id given");
+  const reportId = parseReportRef(named);
+  if (reportId === null) return cannotTell(`--report-id is not a report id or number: ${JSON.stringify(named)}`);
   let eventId: string | undefined;
   if (given(argv, "event-id")) {
     const raw = arg(argv, "event-id") ?? "";
@@ -441,7 +519,11 @@ export async function run(
   let found: LookupResult;
   try {
     found = await lookup(reportId);
-    const rendered = renderVerdict(judge(found.rows, eventId), reportId, found.target);
+    const verdict: ReporterVerdict =
+      typeof reportId === "number" && found.rows.length === 0
+        ? { kind: "missing-number" }
+        : judge(found.rows, eventId);
+    const rendered = renderVerdict(verdict, reportId, found.target);
     if (rendered.status === 2) return cannotTell(rendered.why);
     for (const line of rendered.lines) out(line);
     return rendered.status;

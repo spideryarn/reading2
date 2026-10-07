@@ -49,9 +49,14 @@ vi.mock("../src/store/ai-calls.js", async (original) => ({
 const { advanceJobWith, cancelJob, DEADLINE_MARGIN_MS, REQUEUE_BUDGET } = await import("../src/jobs.js");
 const { STEPS } = await import("../src/pipeline.js");
 const { StaleAttemptError } = await import("../src/store/jobs.js");
+const { CallDeadlineReached } = await import("../src/call-failure.js");
 const { runAsOwner } = await import("../src/owner.js");
 
-function fixture(names: StepName[], body: (ctx: StepContext, name: StepName) => Promise<StepProduct>) {
+function fixture(
+  names: StepName[],
+  body: (ctx: StepContext, name: StepName) => Promise<StepProduct>,
+  hooks: { power?: AdvanceParts["power"]; beforeBegin?: (name: StepName) => Promise<void> } = {},
+) {
   row.steps = names.map((name) => ({ name, label: STEPS[name].label, status: "pending", force: true }));
   const settle = async (transition: JobEndTransition) => {
     row = { ...row, ...transition.ending };
@@ -62,7 +67,12 @@ function fixture(names: StepName[], body: (ctx: StepContext, name: StepName) => 
   const session: StoreSession = {
     reads,
     checkpoints: memoryCheckpoints({ articleId: "offline", slug: row.slug }),
-    beginStep: async () => { begins++; if (beginFailure) throw beginFailure; return "step-attempt"; },
+    beginStep: async (_slug, name) => {
+      begins++;
+      if (beginFailure) throw beginFailure;
+      await hooks.beforeBegin?.(name);
+      return "step-attempt";
+    },
     commit: async (_ctx, step, _attempt, _product, transition) => {
       commits.push(step.name);
       if (transition.kind === "end") return settle(transition);
@@ -84,7 +94,7 @@ function fixture(names: StepName[], body: (ctx: StepContext, name: StepName) => 
   }
   const parts: AdvanceParts = {
     steps: { ...STEPS, ...steps } as AdvanceParts["steps"],
-    session: async () => session, power: async () => "standard",
+    session: async () => session, power: hooks.power ?? (async () => "standard"),
   };
   return (short = false) => runAsOwner(OWNER, () => advanceJobWith(row.id, {
     ...parts, ...(short && { leaseMs: DEADLINE_MARGIN_MS + 100 }),
@@ -171,14 +181,103 @@ describe("Tier 0 queue decisions without Postgres", () => {
     expect(begins).toBe(1);
   });
 
-  it.each(["remote", "local"] as const)("preserves the %s Stop outcome during a last step that returns", async (where) => {
+  /* Greg, 2026-10-07: a Stop during the last step, when the step finishes
+     anyway, keeps and publishes the article whichever server it reached.
+     docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
+  it.each(["remote", "local"] as const)("keeps the article when a %s Stop lands during a last step that returns", async (where) => {
     const advance = fixture(["fetch"], async () => {
       if (where === "local") await cancelJob(row.id);
       else row.cancelling = true;
       return { detail: "finished" };
     });
-    expect((await advance())?.job.status).toBe(where === "remote" ? "done" : "cancelled");
+    expect((await advance())?.job.status).toBe("done");
     expect(commits).toEqual(["fetch"]);
+  });
+
+  it("still ends the job cancelled when a local Stop lands during an earlier step that returns", async () => {
+    const advance = fixture(["fetch", "metadata"], async (_ctx, name) => {
+      if (name === "fetch") await cancelJob(row.id);
+      return { detail: name };
+    });
+    expect((await advance())?.job.status).toBe("cancelled");
+    expect(ran).toEqual(["fetch"]);
+  });
+
+  it("settles a local Stop during an earlier step without relying on another progress write or preflight", async () => {
+    let powerReads = 0;
+    noteFailure = (call) => { if (call > 1) throw new Error("later writes unavailable"); };
+    const advance = fixture(["fetch", "metadata"], async (_ctx, name) => {
+      if (name === "fetch") await cancelJob(row.id);
+      return { detail: name };
+    }, {
+      power: async () => { powerReads++; return "standard"; },
+    });
+    expect((await advance())?.job.status).toBe("cancelled");
+    expect(ran).toEqual(["fetch"]);
+    expect(powerReads, "the local abort must settle before any more asynchronous preparation").toBe(1);
+  });
+
+  it.each(["deadline-first", "stop-first"] as const)("preserves the first abort reason for %s", async (order) => {
+    pauseAnswer = "cancelled";
+    let firstReason: unknown;
+    let finalReason: unknown;
+    const advance = fixture(["fetch"], async (ctx) => {
+      if (order === "stop-first") await cancelJob(row.id);
+      await vi.advanceTimersByTimeAsync(200);
+      firstReason = ctx.signal.reason;
+      if (order === "deadline-first") await cancelJob(row.id);
+      finalReason = ctx.signal.reason;
+      return { detail: "finished" };
+    });
+    expect((await advance(true))?.job.status).toBe(order === "deadline-first" ? "cancelled" : "done");
+    /* Assertions belong outside the step: the runner catches its throws. */
+    expect(finalReason).toBe(firstReason);
+    expect(firstReason).toBeInstanceOf(order === "deadline-first" ? CallDeadlineReached : DOMException);
+    expect(commits).toEqual(order === "deadline-first" ? [] : ["fetch"]);
+    expect(pauses).toBe(order === "deadline-first" ? 1 : 0);
+  });
+
+  it("does not start the last step after a local Stop in its preflight, even if its starting note fails", async () => {
+    let powerReads = 0;
+    noteFailure = (call) => { if (call === 3) throw new Error("starting write lost"); };
+    const advance = fixture(["fetch", "metadata"], async (_ctx, name) => ({ detail: name }), {
+      power: async () => {
+        if (++powerReads === 2) await cancelJob(row.id);
+        return "standard";
+      },
+    });
+    expect((await advance())?.job.status).toBe("cancelled");
+    expect(ran).toEqual(["fetch"]);
+    expect(commits).toEqual(["fetch"]);
+    expect(begins, "a step refused in its preflight never opens a marker").toBe(1);
+  });
+
+  it("does not start the last step's work after a local Stop while beginStep is opening", async () => {
+    const advance = fixture(["fetch", "metadata"], async (_ctx, name) => ({ detail: name }), {
+      beforeBegin: async (name) => { if (name === "metadata") await cancelJob(row.id); },
+    });
+    expect((await advance())?.job.status).toBe("cancelled");
+    expect(ran).toEqual(["fetch"]);
+    expect(commits).toEqual(["fetch"]);
+  });
+
+  it("rejects a product that forbids retention under abort when Stop lands after run returns", async () => {
+    const spend = await import("../src/ai-spend.js");
+    const realCollectSpend = spend.collectSpend;
+    const spy = vi.spyOn(spend, "collectSpend").mockImplementation(async (...args) => {
+      const result = await realCollectSpend(...args);
+      /* A completed run can still be awaiting ledger/preview settlement. */
+      await cancelJob(row.id);
+      return result;
+    });
+    try {
+      const advance = fixture(["fetch"], async () => ({ detail: "partial", discardOnAbort: true }));
+      expect((await advance())?.job.status).toBe("cancelled");
+      expect(ran).toEqual(["fetch"]);
+      expect(commits).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("honours a Stop returned by a final skipped note after a kept progress write failed", async () => {

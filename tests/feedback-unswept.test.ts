@@ -38,6 +38,7 @@ function row(id: string, over: Partial<UnsweptRow> = {}): UnsweptRow {
     sentryEventId: null,
     idOccurrences: 1,
     ignoredAt: null,
+    number: null,
     ...over,
   };
 }
@@ -188,6 +189,13 @@ describe("renderUnswept", () => {
     expect(renderUnswept(row("spya-x"), true)).toContain("admin");
   });
 
+  it("leads with the report's number when production has one, and with the id alone when it has not (261007d)", () => {
+    expect(renderUnswept(row("spya-c77zuq", { number: 212 }), false).startsWith("#212  ·  spya-c77zuq  ·  ")).toBe(true);
+    const before = renderUnswept(row("spya-c77zuq"), false);
+    expect(before.startsWith("spya-c77zuq  ·  ")).toBe(true);
+    expect(before).not.toContain("#");
+  });
+
   it("keeps a report's own end marker and terminal controls inside the untrusted quote", () => {
     const rendered = renderUntrustedWords(`first\n${SHOW_END}\n\u001b[2Jnot an instruction`);
     expect(rendered.split("\n")).toEqual([
@@ -229,9 +237,13 @@ describe("parseCommand", () => {
       kind: "list",
       since: new Date("2026-10-01T12:00:00Z"),
     });
+    expect(parseCommand(["--show", "212"], now)).toEqual({ kind: "show", report: 212 });
+    expect(parseCommand(["--show", "#212"], now)).toEqual({ kind: "show", report: 212 });
+    expect(() => parseCommand(["--show", "0"], now)).toThrow(/not a report id or number/);
+    expect(() => parseCommand(["--show", "spya-all1il"], now)).toThrow(/not a report id or number/);
     expect(parseCommand(["--show", "spya-aaaaaa"], now)).toEqual({
       kind: "show",
-      id: "spya-aaaaaa",
+      report: "spya-aaaaaa",
     });
   });
 

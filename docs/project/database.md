@@ -387,7 +387,10 @@ that record two ways, and they fail differently:
   by `criterion_id`, `thread_id` or `revision_id` is in scope for the same reason its parent is.
   `revision_step_runs` was already such a table and was invisible until 2026-09-01. The walk
   deliberately over-reaches: it pulls in `jobs`, because a job points at the draft revision it is
-  building, and `queue_state` behind it. Over-reach costs one written-down sentence; under-reach
+  building. (It pulled in `queue_state` behind that, through `running_job_id`'s key to `jobs`,
+  until the column — read and written by nothing — was dropped on 2026-10-07 with Greg's approval;
+  [261007g](../plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2.)
+  Over-reach costs one written-down sentence; under-reach
   costs a rollback that quietly loses somebody's work. No database needed.
 - **Is the list true?** Every table the record calls exported gets a row with a sentinel string in it,
   `exportArticle` runs, and that string has to come back out of the file the record names. This half

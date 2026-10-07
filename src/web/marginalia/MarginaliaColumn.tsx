@@ -26,6 +26,7 @@ import {
 import { ChevronRight, X } from "lucide-react";
 import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
+import { isFolded, subscribeFold } from "../fold.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
@@ -830,6 +831,28 @@ export function OwnerMarginFeed({
 }
 
 /**
+ * Every read `useMarginLayout` needs, in one pass: each visible note's wanted
+ * top and its height, and which notes are on hidden rows and so left out.
+ */
+function measureNotes(notes: readonly HTMLElement[]) {
+  const shown: HTMLElement[] = [];
+  const hidden: HTMLElement[] = [];
+  const desired: number[] = [];
+  const heights: number[] = [];
+  for (const note of notes) {
+    const row = note.closest("tr");
+    if (row && isFolded(row.dataset.block ?? "")) {
+      hidden.push(note);
+      continue;
+    }
+    shown.push(note);
+    desired.push(row ? row.getBoundingClientRect().top : 0);
+    heights.push(note.offsetHeight);
+  }
+  return { shown, hidden, desired, heights };
+}
+
+/**
  * **Keep the notes from overlapping.** Reads every note's wanted top and
  * height, then writes a `translate` to those that have to move — all reads,
  * then all writes.
@@ -840,9 +863,18 @@ export function OwnerMarginFeed({
  *
  * Re-runs, through one animation frame, when the table changes size (zoom,
  * images, maths), when any note changes size (fonts arriving, a longer
- * question), once the fonts are ready, and whenever `key` changes (the notes
- * themselves). Notes are absolutely positioned and translate is not layout, so
- * nothing written here can resize what is observed and loop it.
+ * question), once the fonts are ready, whenever `key` changes (the notes
+ * themselves), and when a section folds or the front matter opens. Notes are
+ * absolutely positioned and translate is not layout, so nothing written here
+ * can resize what is observed and loop it.
+ *
+ * **A note on a hidden row is left out** (fold.ts § `isFolded`). It lives in
+ * its row's cell, so it is not drawn; measured, it has no height and sits
+ * level with the next visible row, and the collision rule would still start
+ * that row's note one gap below it: 8px lower for every hidden note above.
+ * Relations writes an item on every byline paragraph, so the shut front
+ * matter would have pushed the abstract's first note down on arrival (GPT Sol,
+ * plan review of 261007d, F4; true of an ordinary fold before that).
  */
 export function useMarginLayout(active: boolean, key: unknown): void {
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` is a re-run trigger — the effect reads the notes only through the DOM it just rendered.
@@ -854,19 +886,16 @@ export function useMarginLayout(active: boolean, key: unknown): void {
     let frame = 0;
     const run = () => {
       frame = 0;
-      const desired: number[] = [];
-      const heights: number[] = [];
-      for (const note of notes) {
-        const row = note.closest("tr");
-        desired.push(row ? row.getBoundingClientRect().top : 0);
-        heights.push(note.offsetHeight);
-      }
+      const { shown, hidden, desired, heights } = measureNotes(notes);
       const tops = layoutNotes(desired, heights, NOTE_GAP_PX);
-      for (const [i, note] of notes.entries()) {
+      for (const [i, note] of shown.entries()) {
         const shift = Math.round((tops[i] ?? 0) - (desired[i] ?? 0));
         const value = shift > 0 ? `0 ${shift}px` : "";
         if (note.style.translate !== value) note.style.translate = value;
       }
+      /* A shift from before the row was hidden is not kept for when it shows
+         again: that run measures it afresh. */
+      for (const note of hidden) if (note.style.translate !== "") note.style.translate = "";
     };
     const schedule = () => {
       if (frame === 0) frame = requestAnimationFrame(run);
@@ -875,12 +904,16 @@ export function useMarginLayout(active: boolean, key: unknown): void {
     const observer = new ResizeObserver(schedule);
     observer.observe(table);
     for (const note of notes) observer.observe(note);
+    /* Asked of the store and not left to the table's resize: which notes are
+       left out changes with a fold, whatever the fold does to the height. */
+    const unfold = subscribeFold(schedule);
     let live = true;
     void document.fonts?.ready.then(() => {
       if (live) schedule();
     });
     return () => {
       live = false;
+      unfold();
       observer.disconnect();
       if (frame !== 0) cancelAnimationFrame(frame);
     };

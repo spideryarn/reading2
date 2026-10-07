@@ -197,7 +197,14 @@ import {
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
 import { noticeFeedback } from "./feedback-notice.js";
-import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
+import {
+  feedbackComment,
+  feedbackIdsByEnding,
+  isFeedbackShipped,
+  shippedFeedbackIds,
+} from "./feedback-ending.js";
+import { feedbackQuestionStatus, openFeedbackQuestions } from "./feedback-question.js";
+import { isFeedbackQuestionId } from "./feedback-question-values.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -249,6 +256,7 @@ import type { CitersResult } from "./types.js";
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
+import { isOwnReadingPage } from "./own-reading-page.js";
 import {
   advanceJob,
   cancelJob,
@@ -274,6 +282,7 @@ import type {
   ClaimsFinish,
   CriterionFinish,
   NewFeedback,
+  NewFeedbackAnswer,
   SearchFinish,
   Visibility,
 } from "./store/contracts.js";
@@ -296,6 +305,7 @@ import {
   REASON_NOT_READ,
   UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
+  OWN_READING_PAGE,
   UPLOAD_STILL_ARRIVING,
   UPLOAD_UNAVAILABLE,
 } from "./messages.js";
@@ -465,6 +475,10 @@ import {
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
 import {
+  ADMIN_EARLIER_FEEDBACK_SHOWS,
+  type AdminEarlierFeedbackPage,
+  type AdminFeedbackAnswerReceipt,
+  type AdminFeedbackQuestion,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
   type EarlierFeedbackPage,
@@ -7805,6 +7819,84 @@ async function fileFeedback(
   await Promise.all([mirror, notice]);
 }
 
+/* ------------------------------------------------- replies to questions -- */
+
+/**
+ * **Every open question, as the signed-in admin's Earlier tab shows it**:
+ * oldest first, each with their own newest reply and, when it names a report
+ * **of theirs**, that report's number and first line. Both lookups are
+ * owner-scoped in the store, so a question about another reader's report sends
+ * `report: null` and another admin's reply is never this one's. Only the open
+ * ones: an answered question is not sent, whatever a store hands back. Each is
+ * picked field by field; the file's `refs` and `acted` were never compiled.
+ */
+async function questionsForAdmin(): Promise<AdminFeedbackQuestion[]> {
+  const open = openFeedbackQuestions();
+  if (open.length === 0) return [];
+  const answers = await feedbackStore.newestAnswers(open.map((question) => question.id));
+  const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
+  const reports = await feedbackStore.linkedReports(named);
+  return open.map(({ id, title, body, asked, report }) => {
+    const linked = report === null ? undefined : reports.find((one) => one.id === report);
+    const answer = answers.find((one) => one.questionId === id);
+    return {
+      id,
+      title,
+      body,
+      asked,
+      report: linked === undefined ? null : { id: linked.id, number: linked.number, firstLine: linked.firstLine },
+      answer: answer === undefined ? null : { id: answer.id, body: answer.body, createdAt: answer.createdAt },
+    };
+  });
+}
+
+/** The three fields a reply may carry. **Exactly these**, for `FEEDBACK_FIELDS`' reasons. */
+const FEEDBACK_ANSWER_FIELDS = ["id", "question", "body"] as const;
+
+/**
+ * The most bytes a reply's request may be: the cap's worth of characters at
+ * JSON's worst (a six-byte `\uXXXX` escape each), and room for the envelope.
+ * The default limit is smaller than a full reply in a non-Latin script.
+ */
+const MAX_FEEDBACK_ANSWER_BODY_BYTES = MAX_FEEDBACK_ANSWER_CHARS * 6 + 1024;
+
+/**
+ * **A reply to a question, built field by field** — `POST
+ * /api/admin/feedback/answers`, and `parseFeedback`'s rules at the same seam:
+ * an unknown key is refused in fixed prose, no part of what was sent reaches a
+ * thrown message, and **the environment is this process's own**, so a caller
+ * cannot claim a reply was written in production (plan 261007d, F13).
+ *
+ * The question must be one this build has a file for, **open or answered**: a
+ * reply typed in a tab loaded before the question was marked answered is still
+ * Greg's words, and is kept (F14).
+ */
+function parseFeedbackAnswer(raw: unknown): NewFeedbackAnswer {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw httpError(400, "Expected a JSON object [fa-type]");
+  }
+  const sent = raw as Record<string, unknown>;
+  for (const key of Object.keys(sent)) {
+    if (!(FEEDBACK_ANSWER_FIELDS as readonly string[]).includes(key)) {
+      throw httpError(400, "A reply has a field this endpoint does not take [fa-field]");
+    }
+  }
+  const id = sent.id;
+  if (typeof id !== "string" || !isSpideryarnId(id)) {
+    throw httpError(400, "id must be an answer id [fa-id]");
+  }
+  const question = sent.question;
+  if (!isFeedbackQuestionId(question)) {
+    throw httpError(400, "question must be a question id [fa-question]");
+  }
+  if (feedbackQuestionStatus(question) === null) {
+    throw httpError(400, "There is no such question. [fa-unknown]");
+  }
+  const body = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
+  if (body === null) throw httpError(400, "A reply needs something written in it. [fa-empty]");
+  return { id, questionId: question, body, environment: feedbackEnvironment() };
+}
+
 
 /**
  * One line per request, on the way out, at a level the status decides.
@@ -8655,6 +8747,100 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The admin's own earlier reports, with what became of each** — the
+     Feedback dialog's Earlier tab, for an admin.
+     docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+
+     Under `/api/admin/`, so the namespace gate has refused everybody else
+     before this runs; nothing here asks who the caller is. **Their own list,
+     not a view across owners**: `feedbackStore`, owner-scoped like
+     `GET /api/feedback`, never `adminStore`. What the namespace buys is not
+     other people's rows but the richer account of each: its stored number,
+     whether it was ignored or its note says declined or awaiting, and the
+     sentence an agent wrote about it.
+
+     One segment after `feedback/`; the one-report routes below take two, so
+     neither can answer for the other. Picked field by field, as the plain
+     route is, and the comment is looked up only for the ids the store handed
+     back, so a comment on somebody else's report has nowhere to go. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/feedback/earlier",
+    article: "none",
+    handler: async ({ request: { res, query } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const asked = query.get("show") ?? "all";
+      const show = ADMIN_EARLIER_FEEDBACK_SHOWS.find((known) => known === asked);
+      if (show === undefined) {
+        throw httpError(400, `show must be one of ${ADMIN_EARLIER_FEEDBACK_SHOWS.join(", ")}`);
+      }
+      const page = await feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show);
+      const { open, waiting, aside, shipped } = page.counts;
+      const answer: AdminEarlierFeedbackPage = {
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt }) => ({
+          id,
+          createdAt,
+          kind,
+          body,
+          page: filedFrom,
+          at,
+          number,
+          status,
+          comment: feedbackComment(id),
+          ignoredAt,
+        })),
+        more: page.more,
+        counts: { all: open + waiting + aside + shipped, open, waiting, aside, shipped },
+        questions: await questionsForAdmin(),
+      };
+      send(res, 200, answer);
+    },
+  },
+
+  /* **A reply to a question an agent asked** — the reply box under a question
+     in the Earlier tab. 261007d stage 2. Under `/api/admin/`, so the namespace
+     gate has refused everybody else before this runs; nothing here asks who
+     the caller is, and the row is written under the signed-in owner like every
+     other write. One segment after `feedback/`, like `earlier`, so the
+     two-segment one-report routes cannot answer for it.
+
+     Three outcomes, three statuses (F15): 201 for a new reply; 200 with the
+     stored row for the same reply again, so a retry is safe; 409 when the id
+     is already a different reply, which changes nothing. No rate limit: the
+     hourly cap is `feedback`'s own and an admin has none (`feedbackHourlyCap`). */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/feedback/answers",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const reply = parseFeedbackAnswer(await readBody(req, MAX_FEEDBACK_ANSWER_BODY_BYTES));
+      const stored = await feedbackStore.submitAnswer(reply);
+      /* Ids and a length, never the words: docs/project/logging.md. */
+      log("http").info(
+        { id: reply.id, question: reply.questionId, kind: stored.kind, chars: reply.body.length },
+        "feedback answer accepted",
+      );
+      switch (stored.kind) {
+        case "conflict":
+          throw httpError(409, "That reply's id has already been used for a different reply. [fa-reused]");
+        case "created":
+        case "duplicate": {
+          const { id, body, createdAt } = stored.answer;
+          const receipt: AdminFeedbackAnswerReceipt = { answer: { id, body, createdAt } };
+          send(res, stored.kind === "created" ? 201 : 200, receipt);
+          return;
+        }
+        default: {
+          const unreachable: never = stored;
+          throw new Error(`unknown answer outcome: ${String(unreachable)}`);
+        }
+      }
+    },
+  },
+
   /* **One report, and it takes two segments** — `feedback`'s primary key is
      `(owner_id, id)` because the id is minted by a browser, so an address with
      only the id in it can name two different people's reports. GPT Sol,
@@ -8680,7 +8866,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
   /* **Mark a report as ignored, or take the mark back** — the Ignore button on
-     the card, and the only write under `/api/admin/feedback`. Greg, 2026-10-03
+     the card, and the only write to a report under `/api/admin/feedback` (a
+     reply to a question, above, writes a row of its own). Greg, 2026-10-03
      (`spya-g95x4j`): *"I just saw feedback that I wished I could delete, and
      there wasn't a way to do it, or at least mark it as to be ignored."* It
      sets or clears one timestamp; the report itself is never changed.
@@ -11149,6 +11336,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
+      /* One of our own reading pages is not an article to import, and the
+         answer costs nothing: asked of the normalised address, before any slot.
+         src/own-reading-page.ts. */
+      if (request.url !== undefined && isOwnReadingPage(request.url)) {
+        throw httpError(400, OWN_READING_PAGE.message);
+      }
       const uploadId = request.uploadId;
       if (uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to

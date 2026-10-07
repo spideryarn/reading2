@@ -1,6 +1,7 @@
 ---
 reports: spya-ar65p3
 ending: shipped
+comment: Shipped: a sideways iPhone no longer enlarges a band's text. Still waiting on you: should the same kind of line be the same size in every mode? Three choices, from lining up the five or six kinds that recur to leaving it.
 ---
 # Skim's text is bigger than the article's, and a quick review of fonts and sizes
 
@@ -36,3 +37,7 @@ What we did, in
 measurement and the documented behaviour. Greg: when a build with it is live, Skim on a phone held
 sideways should show the quote smaller than the article text. If it does not, say so and this
 reopens.
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-dhnbhw.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

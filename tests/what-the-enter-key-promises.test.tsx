@@ -62,10 +62,12 @@ const PROMISES: Record<string, string> = {
   /* Enter creates the voucher — the form's one button (plan 261001m). */
   "AdminVouchersPage.tsx › voucher-new-email": "go",
   "AdminVouchersPage.tsx › voucher-new-articles": "go",
+  "AdminVouchersPage.tsx › voucher-new-recipient-name": "go",
   "AdminVouchersPage.tsx › voucher-new-note": "go",
   /* Enter commits an edit in place. */
   "AdminVouchersPage.tsx › Email address": "done",
   "AdminVouchersPage.tsx › Articles": "done",
+  "AdminVouchersPage.tsx › Their name": "done",
   "AdminVouchersPage.tsx › Private note": "done",
   "ChatPanel.tsx › chat-rename": "done",
   "TitleEditor.tsx › Title": "done",
@@ -115,6 +117,7 @@ const PROMISES: Record<string, string> = {
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
+  "FeedbackEarlier.tsx › fb-input fb-reply-input": "newline",
   /* The note on how an Illustrated picture should come out: a sentence or two,
      often dictated, and the paint it goes with is a $0.40 press that must
      never be one keystroke away (plan 261002j). */

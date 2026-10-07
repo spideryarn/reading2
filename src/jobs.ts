@@ -98,6 +98,7 @@ import { NotProcessed } from "./not-processed.js";
 import { NeedsAnotherWindow } from "./another-window.js";
 import { processSingleton } from "./process-state.js";
 import { slugForUrlKey } from "./store/find-article.js";
+import { shortIdIsTaken } from "./store/short-id-is-taken.js";
 import type { JobSettlement, JobTransition, StoreSession } from "./store/session.js";
 import { openPgStoreSession } from "./store/pg-session.js";
 import {
@@ -265,12 +266,15 @@ const aborts = processSingleton<Map<string, AbortController>>(
  *   (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so a PDF's `assets`
  *   can take about 360 s.
  *
- * Neither number was changed with this note. What rests on them is the sum
- * above, and `STEP_BUDGET_MS.assets`, which decides whether `assets` is started
- * after `structure` in the same window: a step admitted on 185 s can outlive
- * the deadline. `transitionAfter` discards its product; `pauseForDeadline`
- * requeues while budget remains, lets Stop win, or refuses a stale claim.
- * Exhausting the budget ends the job as interrupted.
+ * The sum above is still the ordinary web page's, where neither of those
+ * happens, so its two numbers stay. **The admission estimates are separate
+ * and were raised on 2026-10-07** to cover every clock each step sets on
+ * itself: `STEP_BUDGET_MS.assets` 185 s → 400 s and `.fetch` 150 s → 360 s,
+ * measured and reasoned at each row below. Until then `assets` could be
+ * started after `structure` on a remnant it was entitled to outlive; a step
+ * that does outlive the deadline still has its product discarded by
+ * `transitionAfter`, and `pauseForDeadline` requeues while budget remains,
+ * lets Stop win, or refuses a stale claim.
  *
  * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
  * requests.** `STEP_BUDGET_MS.structure` is now 700s, so a walk that has spent
@@ -564,7 +568,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
 
      `fetchDocument` took 107–893 ms over five real addresses off this box
      (paulgraham, gwern, a 1.3 MB Wikipedia article, slatestarcodex, a 5.6 MB
-     arXiv PDF). What bounds the step is not that: it is `DEFAULTS` in
+     arXiv PDF). The nominal request clocks come from `DEFAULTS` in
      src/fetch.ts, **three attempts of 30 s each** with a backoff capped at 10 s
      between them, so a hanging retryable origin costs about **110 s**. An
      earlier draft of this comment said 30 s, having read `timeoutMs` and not the
@@ -576,16 +580,40 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      process sees, because that is when pdf.js loads, and 17–33 ms after —
      measured on four files from 8 to 144 pages and 0.1 MB to 11 MB, with no
      trend against either. The storage put is the one part still unmeasured, and
-     it is the reason for the rounding rather than a gap.
+     it contributes estimated slack rather than an enforced bound.
 
      It read *"GUESS, generous. Network only, no model call. Never measured"*
      until then, and 10 s was under a single one of its own three timeouts.
 
-     **110 s is one `fetchDocument`, and the step can make several.** Since
-     261006i `fetchByAddress` (src/pipeline.ts) may fetch the address and then
-     a paper source's candidates, each with its own three attempts, so 150 s
-     does not bound the step. Not re-measured, and the number is unchanged. */
-  fetch: 150_000,
+     **110 s is one `fetchDocument`, and the step can make three.** Since
+     261006i `fetchByAddress` (src/pipeline.ts) may fetch the pasted address and
+     then each candidate of the paper source it led to, and the most any source
+     gives is two (arXiv's HTML and PDF, PMLR's two PDFs), so the network half
+     is 3 × 110 = **330 s**. 150 s did not cover it.
+
+     **Raised to 360 s on 2026-10-07**: the 330 s the clocks allow, plus the
+     page count and storage work above, with estimated slack. This covers the
+     configured clocks, not a hard return-time ceiling: response cleanup and
+     dispatcher shutdown are awaited without a race, page counting has only
+     the claimant's signal, and storage has no step timer.
+     tests/jobs-lease-budget.test.ts derives the 330 s from src/fetch.ts's
+     `DEFAULTS` and `retryDelayMs` and from the paper sources' candidate
+     lists, requiring a sample for every registered source. A fourth attempt
+     or a third candidate in a sampled address turns it red; a new address
+     shape with a longer list still needs a corresponding sample.
+
+     **Measured the same day; the clocks drive the estimate rather than this tail.**
+     `revision_step_runs`, rows this step ran (not carried forward): production
+     45 runs, median 1.0 s, p99 3.6 s, max **4.3 s**; local 160 runs, max
+     10.7 s. These recorded runs came nowhere near one timeout, let alone three;
+     paused overruns leave no completed step-run row in this sample.
+
+     **And this row decides nothing today**, which is worth knowing before
+     tuning it: `fetch` is first in `STEP_ORDER`, so it is the first step of
+     every job that names it, and the walk starts a claim's first step
+     ungated. It is kept honest for the day something precedes it.
+     docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md. */
+  fetch: 360_000,
   /* **GUESS, generous.** One cheap call over at most 6,000 characters, capped at
      `TIMEOUT_MS` = 60 s in src/paper-metadata.ts, plus pdf.js opening the file
      (1.5–1.8 s cold, measured for `fetch` above) or Readability over an HTML
@@ -718,22 +746,63 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      publisher that hangs. Not imported, deliberately: this file would then
      depend on a pipeline stage's module for a constant it only compares
      against, and the two are allowed to differ — this one has to be the
-     *claimant's* worst case, which is the cap plus whatever unwinding costs.
+     claimant's conservative estimate, including time outside the cap.
 
-     **It is the worst case of the first half of the step only.** For a PDF
-     the step goes on to `recoverPdfFigures`, with a second 180 s cap
-     (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so the claimant's
-     real worst case is about 360 s and this number is under it. Unchanged
-     here; whether to raise it is reported in
-     docs/plans/261007b-seventh-sweep-job-queue-tier-0.md. A step that does
-     outlive the deadline discards its product and asks `pauseForDeadline` for
-     another window; exhausted budget ends the job as interrupted. */
-  assets: 185_000,
+     **That was the worst case of the first half of the step only, and the
+     row said 185 s until 2026-10-07.** The step goes on to
+     `recoverPdfFigures`, with a second 180 s cap (`PDF_FIGURES_BUDGET_MS`,
+     src/collect-pdf-figures.ts), whose clock starts only after the PDF has
+     been read from storage (`readRawBytes`, which no clock bounds). So the
+     walk could start `assets` after `structure` with 185 s left, the figures
+     would meet our deadline instead of their own clock, and the job would
+     pause and re-run the step, spending one of `REQUEUE_BUDGET`'s windows
+     each time; three, and the import ended interrupted.
+
+     **400 s since 2026-10-07**: the two caps (360 s) with an estimated 5 s of
+     unwinding each that 185 s already allowed the first one (370 s), and
+     estimated slack for storage reads. This is no hard upper bound: the
+     blocks, raw manifest and PDF bytes are read outside the collector races.
+     Internal image/figure puts are inside those races, so a hung put does not
+     delay a collector's return indefinitely. Under the claimant's 740 s with
+     340 s to spare. tests/jobs-lease-budget.test.ts holds it at or over
+     `ASSETS_BUDGET_MS + PDF_FIGURES_BUDGET_MS`, read from the two modules.
+
+     **Measured the same day**, `revision_step_runs`, rows this step ran:
+     production 47 runs, a PDF's median 2.2 s, p90 40.0 s, max **92.8 s**
+     (27 runs), a web page's max 4.2 s (20); local 130 runs, a PDF's max
+     **184.3 s**, which is the figures clock running out on a local paper.
+     The two halves are alternatives in practice (a PDF's blocks carry no
+     `<img>`, a web page has no figure markers), so no recorded run exhausted both
+     caps; nothing in the code stops one, and rounding up is the cheap
+     direction. The raise adds a hand-back before `assets` when `structure`
+     left at least 185 s but less than 400 s, which is one more request.
+     docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md. */
+  assets: 400_000,
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
      up hard because it is a model call and one measurement is one sample. */
   arc: 60_000,
-  /* GUESS. A model call over the whole article, in the same family as `arc`. */
-  tweets: 90_000,
+  /* **Admission estimate from the call's token allowance, since 2026-10-07;
+     it said 90 s and "GUESS" until then.** One streamed Messages call, and nothing in the step times
+     it: `streamMessage` (src/messages-stream.ts) sets no clock of its own, and
+     the SDK's request timeout stops at the response headers. We estimate time
+     from `max_tokens`: `budgetFor` over `threadAnswerTokens` at the longest thread
+     `suggestedLength` allows (15 posts), 42,600 tokens, which
+     `deadlineFor` (src/token-budget.ts) turns into **561 s** at the measured
+     95 tokens a second plus a quarter. This is not a time ceiling: all five
+     steps can select Opus via High-powered AI (src/models.ts), whose rate is
+     not measured here. Prefill, provider waits, slower streams and failed
+     attempts add time this conversion does not cover. Two transport waits
+     total 1.5–2.5 s; failed requests can take much longer than their backoffs.
+     **600 s**, 39 s over that, 140 s under the claim's 740 s.
+
+     **Measured the same day**, production `revision_step_runs`, rows this step
+     ran: 28 runs, median 24.9 s, p90 78.8 s, max **114.7 s** (local max
+     128.5 s, 57 runs) — over the old 90 s in both. This row decides only a
+     job that names `tweets` after another step, which nothing in the app does
+     today (the client, a reset and a publication each queue it alone); a hand-written
+     `POST /api/jobs` can. tests/jobs-lease-budget.test.ts derives the floor.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  tweets: 600_000,
   /* GUESS. Fans out over the article; no wall-clock measurement recorded. */
   glossary: 120_000,
   /* GUESS, in `glossary`'s family: one call over the whole article, at the same
@@ -758,8 +827,27 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      distribution and being under kills a call the reader has already bought.
      docs/plans/260928a-trajectory-mode-stage1-real-runs.md. */
   skim: 120_000,
-  /* GUESS, in `glossary`'s family and never measured on its own. */
-  ideas: 120_000,
+  /* **Admission estimate from the call's token allowance, since 2026-10-07;
+     it said 120 s and "GUESS" until then.** One streamed Messages call, timed by nothing in the step
+     (see `tweets` above for why `streamMessage` is not a clock). `max_tokens`
+     is `budgetFor` over `ideasAnswerTokens(MAX_IDEAS)`, 44,600 tokens, which
+     `deadlineFor` turns into **587 s**; transport waits add up to ~2.5 s,
+     excluding failed-request time. **600 s**, 13 s over that, 140 s under the claim's 740 s.
+
+     **This one decides something today**: Skim's job is
+     `["quotes", "ideas", "skim"]` (src/auto-mode-steps.ts), so `ideas` follows
+     `quotes` in one claim. The count is `suggestedIdeas` of the body word
+     count, capped at `MAX_IDEAS` (10), not a count supplied by the model or
+     reader. Measured the same day, production `revision_step_runs`, rows this
+     step ran: 37 runs, median 95.7 s, p90 159.0 s, max **357.8 s** — almost
+     three times the old row. Previously the walk admitted `ideas` with as
+     little as 120 s left, below that observed maximum. Production's worst
+     `quotes` is 51.2 s (42 runs), leaving 688.8 s before other claim
+     overhead, so that runtime alone still admits `ideas`. Hand-back occurs
+     when total claim time before admission exceeds 140 s, including
+     queue/store overhead, not only `quotes` runtime. tests/jobs-lease-budget.test.ts derives the
+     floor. docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  ideas: 600_000,
   /* **MEASURED** 2026-08-31, four runs of the stage on the test article, read
      from `data/_ai-calls.jsonl` as `finishedAt − startedAt`: 78.7s, 95.6s,
      124.9s, 100.8s. Each run is one call under its own `runId`, so the sum and
@@ -822,8 +910,24 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      mid-step kill. Grouped by `runId` from `data/_ai-calls.jsonl` and read as
      `max(finishedAt) − min(startedAt)` — summing durations would have said 408s
      for a batch of three separate articles, which is the trap this table's
-     header warns about from the other direction. */
-  sketch: 240_000,
+     header warns about from the other direction.
+
+     **Raised 240 s → 700 s on 2026-10-07, to the call's estimated full-token time.** Nothing
+     in the step times the call (see `tweets` above). `max_tokens` is
+     `budgetFor` over `SKETCH_ANSWER_TOKENS` (src/sketch.ts), 52,000 tokens,
+     which `deadlineFor` turns into **685 s**; transport waits add up to ~2.5 s, excluding
+     failed-request time. 700 s is 15 s over that and is also the most this table reserves
+     anywhere (`extract`, `structure`, `labels`): the whole window less enough
+     for one step to have preceded it.
+
+     Measured the same day, production `revision_step_runs`, rows this step
+     ran: 25 runs, median 142.7 s, p90 244.8 s, max **335.6 s** (local max
+     182.4 s, 8 runs) — the old 240 s was under production's p90. Nothing in
+     the app puts a step before `sketch` (Illustrated's chain is
+     `["sketch", "illustrated"]`, Sketch first); a hand-written
+     `POST /api/jobs` can. tests/jobs-lease-budget.test.ts derives the floor.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  sketch: 700_000,
   /* **MEASURED**, three runs over two articles on 2026-09-03
      (evals/results/illustrated-2026-09-03b/README.md): the brief call took 175s,
      223s and **334s**, and the three plates behind each took 83s at worst. So
@@ -832,24 +936,46 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      Sequential by design: bounded parallelism here would multiply against the
      global job concurrency above.
 
-     **600s, and it is a ceiling rather than a rounding.** Every other row here
-     rounds up hard, usually to twice the worst — this one cannot. Twice 450s is
-     900s, and the deadline a claimant works to is `LEASE_MS - DEADLINE_MARGIN_MS`
-     = 740s, so a budget over that is a step that never fits in a fresh claim and
-     therefore never starts at all: the job would sit `queued` for ever with
-     nothing failing. 600s is the largest round number that leaves the claimant
-     its 140s of unwind, and it is 1.3x the worst measured rather than 2x. The
-     honest reading of that is that **this step is the one with the least
-     headroom in the table**, and the brief call is 86-89% of it.
+     **700 s since 2026-10-07, and it is a reservation, not a ceiling: this
+     step's estimated full-token time does not fit in a claim.** The brief is one streamed call
+     timed by nothing in the step (see `tweets` above); its `max_tokens` is
+     `budgetFor` over `ILLUSTRATED_ANSWER_TOKENS` (src/illustrated.ts), 72,000
+     tokens, which `deadlineFor` turns into **948 s** on its own. Then up to
+     `MAX_PLATES` image calls in sequence, each up to three transport attempts
+     and none with a clock. Production measured the same day
+     (`revision_step_runs`, rows this step ran): 15 runs, median 291.9 s, p90
+     483.0 s, max **739.3 s** — only 0.7 s below a fresh claim's nominal
+     740 s, before that claim's setup, reads and settlement overhead. The 417–450 s worst
+     case above is out of date.
 
-     **So `MAX_PLATES` and this number move together, and neither alone.**
-     Raising the cap to 5 costs another ~35s of plate and eats the margin;
-     raising this past 740s needs `LEASE_MS` raised first, which needs
-     `vercel.json`'s `maxDuration` — 800s today — raised before it, and
-     tests/jobs-lease-budget.test.ts is what refuses the pair being broken.
-     If the brief ever needs to be longer, the lever the plan names is the
-     prompt: cap the vignette count and the length of the compositions. */
-  illustrated: 600_000,
+     **What this number does now, and what it does not.** It decides one
+     shape: Illustrated's own chain, `["sketch", "illustrated"]`, which the
+     client posts when the Sketch is missing or stale. At 600 s it admitted
+     `illustrated` if total elapsed claim time was at most 140 s, on a remnant the brief
+     alone can outlive, and a step that returns after our deadline is
+     discarded and repeated (`transitionAfter`), spending a `REQUEUE_BUDGET`
+     window. At 700 s all measured Sketch runs hand back (production's fastest
+     is 49.6 s, leaving at most 690.4 s) and `illustrated` **waits for a fresh claim**,
+     where it is the first step and runs ungated with the whole 740 s. A
+     Sketch that is current and skipped leaves ~740 s, so that path still
+     admits it in the same claim. An unmeasured Sketch finishing within 40 s
+     total claim time can still admit it. Chains taking over 140 s already handed back; the added cost
+     is one request for chains taking over 40 s and at most 140 s. Release
+     spends no requeue window. The browser immediately asks again, but a busy
+     queue can make it wait (src/web/jobEngine.ts).
+     A budget at or over 740 s would be satisfied by no claim; 700 s is this
+     table's usual "whole window less a preceding step" (`extract`,
+     `structure`, `labels`).
+
+     **The design question this leaves open, not answered here**: even as a
+     claim's first step the brief's estimated full-token time exceeds the claim,
+     and production's worst step runtime nearly uses the whole nominal
+     window. Extending the claim beyond the host's current 800 s window needs `vercel.json`'s `maxDuration` raised first, and
+     tests/jobs-lease-budget.test.ts refuses the pair being broken. The levers
+     inside the step are a cap on plates or on the brief per request, or
+     splitting the brief and the plates into two steps.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  illustrated: 700_000,
   /* **A GUESS, and the honest label matters here more than usual**, because
      nothing this step does is bounded by a parameter.
      ⟨Stage 0/0b, 2026-09-05, docs/plans/260905f-debate-mode-stage-0-spike-results.md⟩
@@ -874,10 +1000,29 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      the `ai_calls` ledger row as the alarm afterwards — and only the first of
      those is a ceiling on spend at all.
 
-     Re-measure at the end of the stage rather than leaving this a guess: the
-     plan says so, and the first runs against the shelf are what will say
-     whether the article-carrying pass is 20 s or 60 s. */
-  debate: 120_000,
+     **Raised 120 s → 360 s on 2026-10-07, and still not a bound.** The step
+     makes up to three non-streamed calls in sequence — the direct pass, the claims
+     pass and the synthesis (src/debate.ts § `generateDebate`) — and none has a
+     clock: `openRouterJson` (src/ai-call.ts) fetches without a timeout, and a
+     transient failure re-asks the whole call, up to `TRANSPORT_ATTEMPTS`.
+     What the code does state is each call's `max_tokens`: `ANSWER_TOKENS`
+     twice and `SYNTHESIS_ANSWER_TOKENS` once, 8,000 each, which `deadlineFor`
+     (src/token-budget.ts) turns into 106 s apiece, **318 s**. The searches run
+     inside the provider and add time no token count describes, so there is
+     no ceiling to derive; 360 s is a single-attempt token-time estimate with an unmeasured
+     42 s allowance for searches and backoffs. Non-streaming does not remove
+     token generation time, but the Sonnet rate does not bound searches, Opus
+     or whole-call retries (up to three attempts per call). The synthesis is
+     skipped when too few rows survive. The reservation is 380 s under the claim's 740 s.
+
+     Measured the same day, production `revision_step_runs`, rows this step
+     ran: 18 runs, median 77.5 s, p90 114.5 s, max **161.6 s** (local max
+     146.7 s, 5 runs), so the old 120 s row was below the observed maximum. Nothing in the
+     app puts a step before `debate`, which
+     is always queued alone; a hand-written `POST /api/jobs` can. Nothing above about
+     spend changes. tests/jobs-lease-budget.test.ts holds the token floor.
+     docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md. */
+  debate: 360_000,
   /* One Messages call over the whole article, notes and bibliography
      included. **Measured 2026-09-11** on six local runs (ai_calls.duration_ms):
      17 s for a blog post, 63–154 s for three long ones, the slowest writing
@@ -1308,6 +1453,10 @@ async function runStep(
       controller.abort();
       controller.signal.throwIfAborted();
     }
+    /* A local Stop can arrive during the preflight reads even when the
+       starting note fails. Keeping a last step's returned product does not
+       authorise starting that step's work with an already-aborted signal. */
+    controller.signal.throwIfAborted();
     if (!powerRead.ok) throw powerRead.error;
     /* Before `beginStep`: a refused step never started, so it leaves no marker. */
     if (!structureRead.ok) throw structureRead.error;
@@ -1321,6 +1470,9 @@ async function runStep(
        the step honestly not-done. See `beginStep` in
        src/store/artifacts.ts. */
     const attempt = await session.beginStep(job.slug, step.name);
+    /* Opening the marker also yields: honour a Stop/deadline that arrived
+       there before invoking a step that might ignore its signal. */
+    controller.signal.throwIfAborted();
     /* **The one place that knows a step is over.** A step is not a model call
        — summarise batches per parent, labels fans out — so no stage can report
        its own total, and threading one up would be a return-type change on
@@ -1367,6 +1519,10 @@ async function runStep(
        write has landed (`stepPreviews`). What it showed is in `product` now
        and is stored by the commit below; the job row keeps nothing of it. */
     await shown.settle();
+    /* A partial run can return before a Stop, then yield while its ledger or
+       preview settles. Keep the step's retention condition until this final
+       decision boundary, rather than trusting a check inside its run. */
+    if (product.discardOnAbort) controller.signal.throwIfAborted();
     step.detail = product.detail;
     /* **Marked done before the commit, not after, and that is the ordering the
        atomic boundary needs.** `decide` below asks whether this was the job's
@@ -1401,9 +1557,10 @@ async function runStep(
 
        **That argument is the reader's Stop only.** When the abort was our own
        deadline, `decide` throws and the product is dropped on purpose; see
-       `transitionAfter`. And a Stop answered on this instance commits the
-       product into a draft that the `cancelled` ending then fails, so the
-       protection described above is not one that ending gives. */
+       `transitionAfter`. And a Stop answered on this instance with steps still
+       to run commits the product into a draft that the `cancelled` ending
+       then fails, so the protection described above is not one that ending
+       gives; on the last step the product is kept and published. */
     const transition = decide();
     /* **The settlement that happened, not the one that was asked for.** A
        release resolves to *cancelled* when a Stop landed while the step ran, and
@@ -2935,7 +3092,10 @@ async function walkClaim(
          committed the finished product into a draft the same transaction then
          failed, and ended the job `error` under a sentence saying finished
          steps are kept. It was reachable: `assets` answers an abort by
-         returning, and can run about 360 s against a 185 s budget.
+         returning, and its two clocks allow 360 s against what was then a
+         185 s budget. The budget covers them since 2026-10-07
+         (`STEP_BUDGET_MS.assets`); it is still reachable through storage reads
+         outside the collector clocks. Image/figure puts are raced inside them.
 
          **Not kept, deliberately.** What such a step returns is what it had
          when it was told to stop. `assets` returns a manifest whose unfetched
@@ -2944,21 +3104,34 @@ async function walkClaim(
          before it are already in the draft, which the pause keeps.
          tests/jobs-walk.test.ts § the exits of a claim. */
       if (overran()) throw controller.signal.reason;
-      /* **The reader's Stop, on this instance.** Ends `cancelled` with the
-         draft failed, where the same Stop answered by another instance leaves
-         the job to finish `done` and published (`finishIn` clears the flag).
-         Two answers to one question, known and left alone: which is right is
-         a product decision that has not been made, and both are pinned as
-         today's behaviour in tests/jobs-walk.test.ts.
-         docs/plans/261007b-seventh-sweep-job-queue-tier-0.md § Left open. */
-      if (controller.signal.aborted) {
-        markCancelled(job, "Cancelled");
-        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
-      }
       /* The step that has just finished is already `done` in memory, so this is
          the next one the walk would reach — and `undefined` means the job is
          over. */
       const next = job.steps.find((s) => s.status !== "done" && s.status !== "skipped");
+      /* **The reader's Stop, on this instance, with steps still to run.** Stop
+         means do no more: the job ends `cancelled` and the draft is failed, as
+         it does when the Stop reaches another instance and is read at the
+         next boundary (`note`'s `cancelling`, or `releaseStepIn`'s `case`). */
+      if (controller.signal.aborted && next) {
+        markCancelled(job, "Cancelled");
+        return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "cancelled") };
+      }
+      /* **Nothing left: the job is done, and a Stop on this instance does not
+         change that.** The last step returned its product, so it is committed
+         and the article published, exactly as when the Stop reached another
+         instance (`finishIn` clears the flag; `cancel_requested_at` keeps the
+         press). Until 2026-10-07 this instance alone ended such a job
+         `cancelled` and failed the draft, so the same press kept the article
+         or lost it by which server answered it. Greg, 2026-10-07, relayed by
+         the Overseer: "re Stop, yes, probably best to err on the side of
+         caution, and keep & publish".
+
+         **What makes keeping safe is the step's job, not this one's.** A step
+         that obeys the signal throws and has nothing here to keep. One that
+         returns after it must not return a product that claims to be finished:
+         `assets` marks a manifest made under an abort as not current, and
+         `illustrated` throws rather than hand back a half-painted set.
+         docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
       if (!next) {
         return { kind: "end", jobId: job.id, attempt, ending: endingFrom(job, "done") };
       }
@@ -3156,6 +3329,14 @@ async function walkClaim(
           jlog.warn(
             { step: step.name },
             `step ${step.name} ran past its deadline and ignored the signal — ${job.slug}`,
+          );
+        } else if (controller.signal.aborted && settlement.ending.status === "done") {
+          /* `info`, because the job row says only `done`: this line and
+             `cancel_requested_at` are what record that a Stop was pressed and
+             the article kept anyway (`transitionAfter`, the last step). */
+          jlog.info(
+            { step: step.name },
+            `stop pressed during the last step, which finished: kept and published — ${job.slug}`,
           );
         } else if (controller.signal.aborted) {
           jlog.debug({ step: step.name }, `job cancelled after ${step.name} — ${job.slug}`);
@@ -3749,7 +3930,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
     : request.url
       ? await freeSlug(request.slug, request.url)
       : request.upload
-        ? { kind: "minted", slug: slugWithShortId(request.slug) }
+        ? { kind: "minted", slug: await mintSlug(request.slug) }
         : /* From the shelf, and the preflight a few lines up has just proved it:
              this is *"run something on the article I already have"*, and a slug
              nobody has is refused there rather than reaching this line. */
@@ -4086,7 +4267,7 @@ export async function enqueue(request: EnqueueRequest): Promise<Job> {
       if (request.retryOf) return handBackToARetry(outcome.job, owner, drive);
       allocation = request.url
         ? await freeSlug(request.slug, request.url)
-        : { kind: "minted", slug: slugWithShortId(request.slug) };
+        : { kind: "minted", slug: await mintSlug(request.slug) };
       continue;
     }
 
@@ -4391,6 +4572,45 @@ function insistsOnTheArticle(allocation: SlugAllocation): boolean {
   return allocation.kind === "adopted" && allocation.from === "shelf";
 }
 
+/** How many ids `mintSlug` will mint for one slug. It asks about all but the last. */
+const MINT_TRIES = 3;
+
+/**
+ * **A slug for a new article, ending in a short id no article already has.**
+ *
+ * `articles.short_id` is unique across every owner, and a freshly minted id
+ * can equal one an article already holds. That is rare for one import and
+ * grows with the library, and until 2026-10-07 nothing looked: the import
+ * failed where the article row is created, and a retry, which keeps its name,
+ * failed again. So this asks, and mints again on a yes. Plan 261007f, E10.
+ *
+ * **The one way `enqueue` mints.** Its three mints (a pasted address through
+ * `freeSlug`, an upload, and the re-mint after `nameTaken`) all come here. A
+ * retry does not: it keeps the failed attempt's name (`slugForRetry`).
+ *
+ * **Asking is not reserving**, and this does not pretend to. Two imports that
+ * mint one id at the same moment both hear "free". The last id is also sent
+ * out unasked, so a lookup that says yes for ever cannot hang an import. In
+ * both cases the database refuses the second row and `lockOrCreateArticle`
+ * (src/store/pg-revisions.ts) refuses in words. **The reader does not see
+ * those words today**: a refusal while a claim opens its draft ends no job, so
+ * the import sits as running until its lease and requeues run out, then fails
+ * as interrupted. That is true of every refusal thrown there, not only this
+ * one, and is written up in docs/project/ingest-queue.md § When two imports
+ * mint the same id at once.
+ *
+ * The lookup is an argument for `freeSlug`'s reason: tests/short-id-collision.test.ts
+ * can say "taken, then free" without an article in the way.
+ */
+export async function mintSlug(
+  base: string,
+  isTaken: (shortId: string) => Promise<boolean> = shortIdIsTaken,
+): Promise<string> {
+  let id = mintId();
+  for (let tries = 1; tries < MINT_TRIES && (await isTaken(id)); tries += 1) id = mintId();
+  return slugWithShortId(base, id);
+}
+
 /**
  * **The slug this URL should use: the one it already has, or a fresh one.**
  *
@@ -4445,6 +4665,10 @@ function insistsOnTheArticle(allocation: SlugAllocation): boolean {
  * [`tests/jobs.test.ts`](../tests/jobs.test.ts) § freeSlug. The default is the
  * one line those tests do not cover.
  *
+ * `idIsTaken` is a second lookup, handed straight to `mintSlug` above. The
+ * cases in that file that mint leave it at its default, so they do ask the
+ * database; tests/short-id-collision.test.ts is where it is stood in for.
+ *
  * ## It says which of the two it did, and that is not decoration
  *
  * See `SlugAllocation`. The two branches below are the *only* place in the
@@ -4455,9 +4679,10 @@ export async function freeSlug(
   slug: string,
   url: string,
   alreadyHolding: (urlKey: string) => Promise<SlugHolder | undefined> = slugAlreadyHolding,
+  idIsTaken: (shortId: string) => Promise<boolean> = shortIdIsTaken,
 ): Promise<SlugAllocation> {
   const held = await alreadyHolding(urlKey(url));
-  if (held === undefined) return { kind: "minted", slug: slugWithShortId(slug) };
+  if (held === undefined) return { kind: "minted", slug: await mintSlug(slug, idIsTaken) };
   /* The two adoptions are spelled out rather than spread, because they are not
      the same allocation: a queue adoption carries the holder it adopted from,
      and the type will not let it be built without one. See `SlugAllocation`. */

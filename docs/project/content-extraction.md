@@ -298,7 +298,7 @@ everything it makes is sanitised afterwards like the rest of the page.
 | a plot as `<object type="image/svg+xml">` | a caption over nothing | an `<img>`. SVG is still not hosted: [article-images.md](article-images.md) leaves it linked to arXiv |
 | a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
 | a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
-| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)) |
+| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why affiliations are not read) |
 
 **Every rewrite is narrow, and declines rather than guesses.** It applies only on a page fetched
 from arXiv's or ar5iv's `/html/` and beneath `article.ltx_document`: a stranger's page cannot opt

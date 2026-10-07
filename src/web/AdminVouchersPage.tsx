@@ -20,7 +20,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { RefreshCw } from "lucide-react";
 
-import { type VoucherEmailState, giftEmailHeading, giftEmailSubject } from "../admin-vouchers.js";
+import {
+  type VoucherEmailState,
+  RECIPIENT_NAME_MAX,
+  cleanRecipientName,
+  giftEmailGreeting,
+  giftEmailHeading,
+  giftEmailSubject,
+} from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
 import { Shell } from "./AdminPage.js";
 import { Button } from "./components/ui/button.js";
@@ -52,6 +59,11 @@ const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-mediu
 
 /** The default a new voucher offers: Greg's own example, *"e.g. 20 free articles"*. */
 const DEFAULT_ARTICLES = 20;
+const RECIPIENT_NAME_TOO_LONG = `recipientName must be at most ${RECIPIENT_NAME_MAX} characters.`;
+
+function recipientNameTooLong(name: string): boolean {
+  return [...name].length > RECIPIENT_NAME_MAX;
+}
 
 function Refusal({ message }: { message: string }) {
   return (
@@ -75,6 +87,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
   const [articles, setArticles] = useState(String(DEFAULT_ARTICLES));
   const [note, setNote] = useState("");
   const [recipientNote, setRecipientNote] = useState("");
+  const [recipientName, setRecipientName] = useState("");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -87,12 +100,18 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       setRefusal("Articles must be a whole number.");
       return;
     }
+    /* Refuse the raw value before trim can shorten it, as the route does. */
+    if (recipientNameTooLong(recipientName)) {
+      setRefusal(RECIPIENT_NAME_TOO_LONG);
+      return;
+    }
     setBusy(true);
     const answer = await create({
       email,
       articles: count,
       note: note.trim() === "" ? null : note,
       recipientNote: recipientNote.trim() === "" ? null : recipientNote,
+      recipientName: cleanRecipientName(recipientName),
     });
     setBusy(false);
     setRefusal(answer.kind === "refused" ? answer.message : null);
@@ -102,6 +121,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       setArticles(String(DEFAULT_ARTICLES));
       setNote("");
       setRecipientNote("");
+      setRecipientName("");
     }
   }
 
@@ -147,6 +167,27 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
           />
         </label>
       </div>
+      {/* Their name, above the note it is drawn above in the email — Greg,
+          2026-10-06 (spya-vc6pnm): *"the gift voucher would say something
+          like, Dear so-and-so. So maybe it needs a name field as well."*
+          Plan 261007f. */}
+      <div className="tw:mt-3 tw:flex tw:flex-wrap tw:items-end tw:gap-3">
+        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1 tw:text-xs tw:text-muted-foreground">
+          <span>
+            <span className="tw:text-sm tw:font-medium tw:text-foreground">Their name</span> (optional — their
+            email then opens “{giftEmailGreeting("<name>")}”)
+          </span>
+          <input
+            id="voucher-new-recipient-name"
+            type="text"
+            enterKeyHint="go"
+            autoComplete="off"
+            value={recipientName}
+            onChange={(e) => setRecipientName(e.target.value)}
+            className={`${INPUT} tw:w-full`}
+          />
+        </label>
+      </div>
       {/* **The note they will read comes first and is the loud one**; the
           note only the admin sees is last and quiet. Greg, 2026-10-03
           (spya-prv9yu): *"emphasise the public over the private message"*. */}
@@ -174,7 +215,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
             otherwise.
           </p>
         </div>
-        <EmailSketch articles={wholeNumber(articles)} note={recipientNote} />
+        <EmailSketch articles={wholeNumber(articles)} name={recipientName} note={recipientNote} />
       </div>
       {/* The submit is the form's last control and its one filled button —
           *"Make the 'Create voucher' button more visible"*, the same report.
@@ -212,11 +253,14 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
  * reader is told their numbers), which only the server can look up, and the
  * renderer is not browser code. The note is drawn as typed; the server makes
  * its line breaks plain and escapes it when it builds the email. It is in
- * italics and unlabelled, as in the email.
+ * italics and unlabelled, as in the email. **The greeting** is the email's own
+ * line too (`giftEmailGreeting`), drawn only when a name is typed, because the
+ * email has no such line otherwise (plan 261007f).
  */
-function EmailSketch({ articles, note }: { articles: number | null; note: string }) {
+function EmailSketch({ articles, name, note }: { articles: number | null; name: string; note: string }) {
   const n = articles !== null && articles >= 1 ? articles : 1;
   const trimmed = note.trim();
+  const who = cleanRecipientName(name);
   return (
     <section
       aria-label="What their email will look like"
@@ -226,6 +270,7 @@ function EmailSketch({ articles, note }: { articles: number | null; note: string
         <span className="tw:text-ink-faint">Subject:</span> {giftEmailSubject(n)}
       </p>
       <p className="tw:m-0 tw:mb-2 tw:text-sm tw:font-medium tw:text-foreground">{giftEmailHeading(n)}</p>
+      {who !== null && <p className="tw:m-0 tw:mb-2 tw:break-words tw:text-foreground">{giftEmailGreeting(who)}</p>}
       {trimmed === "" ? (
         <p className="tw:m-0 tw:mb-2 tw:border-l-2 tw:border-dashed tw:border-highlight/50 tw:pl-2 tw:italic">
           Your note to them goes here, if you write one.
@@ -399,6 +444,7 @@ function VoucherRow({
   const [articles, setArticles] = useState(String(voucher.articles));
   const [note, setNote] = useState(voucher.note ?? "");
   const [recipientNote, setRecipientNote] = useState(voucher.recipientNote ?? "");
+  const [recipientName, setRecipientName] = useState(voucher.recipientName ?? "");
   const [email, setEmail] = useState(voucher.email);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
@@ -431,6 +477,7 @@ function VoucherRow({
     setArticles(String(voucher.articles));
     setNote(voucher.note ?? "");
     setRecipientNote(voucher.recipientNote ?? "");
+    setRecipientName(voucher.recipientName ?? "");
     setEmail(voucher.email);
     setRefusal(null);
     setEditing(true);
@@ -443,6 +490,10 @@ function VoucherRow({
       setRefusal("Articles must be a whole number.");
       return;
     }
+    if (recipientNameTooLong(recipientName)) {
+      setRefusal(RECIPIENT_NAME_TOO_LONG);
+      return;
+    }
     /* Only what changed, so a save never sends an address for a claimed
        voucher (which the server would refuse with a 409). */
     const patch: { -readonly [K in keyof VoucherPatchInput]: VoucherPatchInput[K] } = {};
@@ -451,6 +502,8 @@ function VoucherRow({
     if (nextNote !== voucher.note) patch.note = nextNote;
     const nextRecipientNote = recipientNote.trim() === "" ? null : recipientNote;
     if (nextRecipientNote !== voucher.recipientNote) patch.recipientNote = nextRecipientNote;
+    const nextRecipientName = cleanRecipientName(recipientName);
+    if (nextRecipientName !== voucher.recipientName) patch.recipientName = nextRecipientName;
     if (unclaimed && email.trim().toLowerCase() !== voucher.email) patch.email = email;
     if (Object.keys(patch).length === 0) {
       setEditing(false);
@@ -475,6 +528,24 @@ function VoucherRow({
           />
         ) : (
           voucher.email
+        )}
+        {/* Their name under the address: the list reads more easily with a
+            name on each row than an address alone (plan 261007f). */}
+        {editing ? (
+          <input
+            type="text"
+            aria-label="Their name"
+            enterKeyHint="done"
+            autoComplete="off"
+            form={`voucher-${voucher.id}`}
+            value={recipientName}
+            onChange={(e) => setRecipientName(e.target.value)}
+            className={`${INPUT} tw:mt-1 tw:block tw:w-56`}
+          />
+        ) : (
+          voucher.recipientName !== null && (
+            <div className="tw:break-words tw:text-xs tw:text-muted-foreground">{voucher.recipientName}</div>
+          )
         )}
       </td>
       <td className={`${CELL} tw:text-right tw:tabular-nums`}>
@@ -511,7 +582,8 @@ function VoucherRow({
                 edit here changes what a later email to a new address says,
                 and nothing already sent or waiting. */}
             <p className="tw:m-0 tw:mt-1 tw:max-w-56 tw:text-xs tw:text-muted-foreground">
-              Changing it does not resend the email. A new address would get the new note.
+              Changing it does not resend the email. A new address would get the new note. The same
+              goes for their name.
             </p>
           </>
         ) : (

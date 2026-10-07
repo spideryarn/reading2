@@ -105,6 +105,12 @@ of several, not the reason the app exists; [vision.md](vision.md) has the rest.
   hidden rather than the row, and why a jump unfolds:
   [261002e](../plans/261002e-collapsible-headings-and-fold-all.md); the chord is in
   [keyboard.md](keyboard.md).
+- **The byline blocks under the title start folded away** — authors, affiliations and contact
+  lines, where the article has them as blocks; *Show authors and details* on the masthead opens
+  them, and so does a jump to one. A rule over the words (`src/web/front-matter.ts`), hidden
+  through the same store as a fold, display only. What counts, what it leaves showing on purpose,
+  and why `?at=` never names a hidden row:
+  [261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md).
 
 ### The modes in the band
 

@@ -98,6 +98,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { Placement } from "@floating-ui/react";
 import { MessageSquareWarning } from "lucide-react";
 
+import { isAdmin } from "../admin.js";
 import { FeedbackDialog, type FeedbackPrefill } from "./FeedbackDialog.js";
 import { withoutShareKey } from "../share-key.js";
 import { useRoute } from "./router.js";
@@ -253,6 +254,9 @@ export function FeedbackHost({ children, readerId }: { children: ReactNode; read
         key={readerId}
         open={open}
         prefill={prefill}
+        /* Cosmetic, as everywhere in the client: it picks which list the
+           Earlier tab asks for, and the server decides who is answered. */
+        admin={isAdmin(readerId)}
         onClose={() => setOpen(false)}
         where={{
           url: withoutShareKey(location.href),

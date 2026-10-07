@@ -558,6 +558,14 @@ and `tests/privacy-page.test.ts` holds the clause. An address two accounts share
 confirmed, gets the plain invitation instead, so the counts never go to an inbox we cannot tie to
 one reader.
 
+**Since 2026-10-07 it may also carry the recipient's name** ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md)):
+whoever makes the gift may type a name, kept as `billing_vouchers.recipient_name`, and the email then
+opens *Dear <name>,*. That is one more piece of personal data about somebody who may never have
+given us anything, in our table, in the kept email (`billing_voucher_emails`), in Resend's log and
+in their inbox. The Resend entry on the page says so, `tests/privacy-page.test.ts` holds the clause,
+and `LAST_UPDATED` moved to 7 October 2026. It is never in the subject, the claim notice or a log
+line.
+
 ## A reader is emailed when their feedback ships
 
 **Added 2026-10-02** ([261002f](../plans/261002f-email-readers-when-their-feedback-ships.md)): when

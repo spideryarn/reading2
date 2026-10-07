@@ -599,6 +599,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-dup": "blocked",
   "up-dup-archived": "blocked",
   "up-dup-wait": "blocked",
+  /* One of our own reading pages pasted into Add. `blocked`: the same link is
+     refused the same way every time, and the way out is the article's own
+     address. See `OWN_READING_PAGE`. */
+  "jb-own-page": "blocked",
   /* A paper on the shelf with only its title and abstract read, and something
      asked of it that needs the whole article — plan 261001m. `blocked`: the
      same request gets the same answer until *Read this* has run, and that is
@@ -641,11 +645,15 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the dialog puts a Copy button beside it for the case where it keeps failing.
      `fb-store` is a deployment running without the database reports are kept in,
      which another go cannot fix. `fb-list` is the transient failure to read the
-     reports back. See § feedback below, and
+     reports back. `fb-reply` is an admin's reply to a question not getting
+     through, and `fb-reply-stale` the same on a page older than the server it
+     reached: both leave the words in the box. See § feedback below, and
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
   "fb-list": "retry",
+  "fb-reply": "retry",
+  "fb-reply-stale": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -2565,6 +2573,23 @@ export const UPLOAD_STILL_ARRIVING: ReaderFacingFailure = {
   message:
     "That file is still on its way — nothing has been lost. Trying again in a moment will " +
     "work, and this page does that for you as long as a Spideryarn tab stays open. [up-wait]",
+};
+
+/**
+ * **A Spideryarn reading page pasted into Add**, refused by `POST /api/jobs`
+ * before a slot is reserved (src/own-reading-page.ts has the rule and why).
+ *
+ * `blocked`, so the Add page offers no *Try again* under it
+ * (src/web/AddPage.tsx § `worthRetrying`): the link is the request, and it
+ * cannot be added. The reader still has two moves and the sentence names both.
+ * Plan 261007f, E8.
+ */
+export const OWN_READING_PAGE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That link opens an article already in Spideryarn, rather than the original article, so " +
+    "adding the same link will not help. Open the link to read it, or paste the article's " +
+    "original address to add your own copy. [jb-own-page]",
 };
 
 export const UPLOAD_MISSING: ReaderFacingFailure = {
@@ -5766,6 +5791,34 @@ export const FEEDBACK_EARLIER_FAILED: ReaderFacingFailure = {
   message:
     "Your earlier feedback would not load just now. What you sent is safe with us — trying again " +
     "in a moment usually works. [fb-list]",
+};
+
+/**
+ * **A reply to a question did not get through** — the reply box under a
+ * question in an admin's Earlier tab (plan 261007d). `retry`: the words are
+ * still in the box, and sending the same words again is safe, because the
+ * reply carries an id the server answers twice with the one stored row.
+ */
+export const FEEDBACK_REPLY_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That reply did not get through. Your words are still in the box — trying again in a moment " +
+    "usually works. [fb-reply]",
+};
+
+/**
+ * **The server this page reached has no way to take a reply** — a 404 from
+ * `POST /api/admin/feedback/answers`: a page loaded from a newer build than
+ * the server answering it, after a rollback or in the minutes of a deploy.
+ * Sending again from this page cannot work until one of them changes, so the
+ * sentence says what does, and says to copy first: the box is not kept across
+ * a reload.
+ */
+export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This page and the server are out of step, so that reply was not sent. Your words are still " +
+    "in the box: copy them, reload the page, and reply again. [fb-reply-stale]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

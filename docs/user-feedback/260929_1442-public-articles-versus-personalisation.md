@@ -1,6 +1,7 @@
 ---
 reports: spya-j5f7yv
 ending: declined
+comment: Set aside as someday-maybe: a design was written, but it would have cost the owner the tailoring of their own summaries, and you chose to keep everything personalised (2026-10-01).
 ---
 
 # Public articles versus personalisation
