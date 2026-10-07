@@ -58,6 +58,7 @@
  * up — the mode has one URL parameter, `?referee=mirror`, and that is all.
  */
 import type { MirrorComment, MirrorRemark, MirrorRemarkKind, MirrorResult } from "../referee-mirror-types.js";
+import { worthRetrying } from "../messages.js";
 import type { BlockId } from "../types.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { ownLabel, plainWords } from "./lib/own-label.js";
@@ -122,14 +123,22 @@ export function MirrorView({
       {/* `MIRROR_IS_NOT_GIVEN_THE_PAPER` opened the panel here until
           2026-10-03; it is behind the band's *How to read this* button now
           (RefereeMode.tsx § HowToRead). */}
-      <button
-        type="button"
-        className="mir-run"
-        onClick={api.ask}
-        disabled={api.status === "running"}
-      >
-        {runLabel(api)}
-      </button>
+      {/* **No button under a failure another try cannot fix** (an account out
+          of credit, a refusal that will be repeated): the sentence below says
+          so, and *Try again* beside it would invite a second full-price call
+          for the same answer. `worthRetrying` reads the sentence's code, as
+          `JobProgress` and Search's rows do (src/messages.ts). Offered for
+          every failure until 2026-10-07. */}
+      {(api.status !== "failed" || worthRetrying(api.error)) && (
+        <button
+          type="button"
+          className="mir-run"
+          onClick={api.ask}
+          disabled={api.status === "running"}
+        >
+          {runLabel(api)}
+        </button>
+      )}
 
       {api.status === "failed" && api.error && <p className="mir-error">{api.error}</p>}
 

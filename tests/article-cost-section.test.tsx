@@ -234,6 +234,30 @@ describe("the article cost section", () => {
        failure (Metadata.tsx § CostSection), so the alert is what shows. */
     expect(summary()).toBe("(none)");
   });
+
+  /* What the read can throw besides a refusal: `apiFetch` on a lost connection
+     and anything unexpected. Both were printed raw after the colon until
+     2026-10-07 (plan 261007a § K4). */
+  it("says a lost connection in our words, not the browser's", async () => {
+    vi.stubEnv("PROD", true);
+    fetchSpy.mockRejectedValue(new TypeError("Load failed"));
+    await mount();
+    vi.unstubAllEnvs();
+    const said = host.querySelector("[role=alert]")?.textContent ?? "";
+    expect(said).toContain("Could not read what this article cost");
+    expect(said).toMatch(/\[net-down\]$/);
+    expect(said).not.toContain("Load failed");
+  });
+
+  it("does not print an exception nobody wrote for a reader", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchSpy.mockRejectedValue(new Error("Cannot read properties of undefined (reading 'ledger')"));
+    await mount();
+    vi.restoreAllMocks();
+    const said = host.querySelector("[role=alert]")?.textContent ?? "";
+    expect(said).toMatch(/\[web-unexpected\]$/);
+    expect(said).not.toContain("Cannot read");
+  });
 });
 
 describe("lineName", () => {

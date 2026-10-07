@@ -166,8 +166,13 @@ describe("a control a finger has to hit", () => {
      glossary.css and `.quotes-rank-btn` in quotes.css carry the same
      declarations, character for character. Whatever floor they get, they get
      together, or the next report is about the other one. */
-  const BARS = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
-  const FLOOR_REM = 2.5; // 40px — these two rows' retained floor.
+  const PAIR = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
+  /* **And Search's order buttons, which are their own class** (they are not an
+     `OrderGroup`: plan 261007a § K4, the review's U16). They had a bare
+     `:hover`, no `:active` and no floor until 2026-10-07; their rules are in
+     search.css, under their own class, and the same checks hold them. */
+  const BARS = [...PAIR, ".srch-sort-btn"] as const;
+  const FLOOR_REM = 2.5; // 40px — these rows' retained floor.
 
   it("keeps the dock's raised 44px coarse-pointer width floor", () => {
     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
@@ -218,6 +223,14 @@ describe("a control a finger has to hit", () => {
         rules(css).some((r) => selectors(r.selector).includes(`${cls}:active`)),
         `${cls} has no :active, so a finger gets no feedback that a press landed`,
       ).toBe(true);
+    });
+
+    it(`${cls} draws its own focus mark for a keyboard`, () => {
+      const rule = rules(readerCssNoComments()).find((r) =>
+        selectors(r.selector).includes(`${cls}:focus-visible`),
+      );
+      expect(rule, `${cls} has no :focus-visible rule`).toBeDefined();
+      expect(rule?.decls ?? "").toMatch(/outline:\s*2px solid var\(--highlight-text\)/);
     });
   }
 

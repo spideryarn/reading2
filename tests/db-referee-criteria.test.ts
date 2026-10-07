@@ -25,6 +25,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 
 import { loadEnvLocal } from "../src/env.js";
+import {
+  REFEREE_CRITERION_KINDS,
+  type RefereeCriterionConfig,
+  type RefereeCriterionKind,
+  configToRow,
+} from "../src/referee-criteria.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -150,6 +156,90 @@ describe("referee_criteria", () => {
       await expectViolation(c, /referee_criteria_diverging_shape/, () =>
         insert("spya-ffffff", ", kind, pole_against, pole_favour, scale", ", 'single','a','b','rg'"),
       );
+    });
+  });
+
+  /**
+   * **All three or none, on every kind, not only on `diverging`.**
+   *
+   * The CHECK was `(kind = 'diverging') = (all three are present)` until
+   * 2026-10-07. For a kind with no ends that is `false = false` whenever at
+   * least one of the three is null, so one or two stray fields passed: a row
+   * the writer never makes (`configToRow` nulls all three) and the reader
+   * silently drops (`configFromRow` ignores them). It now counts:
+   * `num_nonnulls(…) = case when kind = 'diverging' then 3 else 0 end`.
+   *
+   * Watched failing before the migration: the first of these writes went in.
+   */
+  it("refuses a stray pole or scale on a kind that has no ends", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const insert = (id: string, cols: string, vals: string) =>
+        c.query(
+          `insert into spideryarn.referee_criteria (article_id, id, owner_id, criterion, status${cols})
+           values ($1,$2,$3,'x','done'${vals})`,
+          [ART, id, OWNER],
+        );
+      // One stray field.
+      await expectViolation(c, /referee_criteria_diverging_shape/, () =>
+        insert("spya-gggggg", ", kind, pole_against", ", 'single', 'weak'"),
+      );
+      await expectViolation(c, /referee_criteria_diverging_shape/, () =>
+        insert("spya-hhhhhh", ", kind, scale", ", 'literature', 'rg'"),
+      );
+      // Two.
+      await expectViolation(c, /referee_criteria_diverging_shape/, () =>
+        insert("spya-jjjjjj", ", kind, pole_against, pole_favour", ", 'single', 'a', 'b'"),
+      );
+      await expectViolation(c, /referee_criteria_diverging_shape/, () =>
+        insert("spya-kkkkkk", ", kind, pole_favour, scale", ", 'literature', 'b', 'br'"),
+      );
+      // And the partial UPDATE: changing the kind and leaving its ends behind.
+      await expectViolation(c, /referee_criteria_diverging_shape/, () =>
+        c.query(
+          `update spideryarn.referee_criteria set kind = 'single', scale = null
+            where article_id = $1 and id = $2`,
+          [ART, CRIT],
+        ),
+      );
+    });
+  });
+
+  /**
+   * **The mechanism the refusal above rests on: one function writes these four
+   * columns, and what it writes is always legal.** `begin` in
+   * src/store/pg-referee-criteria.ts sets `kind`, `pole_against`, `pole_favour`
+   * and `scale` together from `configToRow`, on the insert and on the reset of
+   * a failed row; `finish`, `recolour` and the sweep name none of them. So this
+   * hands the database exactly what that function returns, for every kind the
+   * union has, as an insert and as the reset's update in both directions.
+   */
+  it("takes what configToRow writes, for every kind, on an insert and on a reset", async () => {
+    const config = (kind: RefereeCriterionKind): RefereeCriterionConfig =>
+      kind === "diverging" ? { kind, poles: { against: "weak", favour: "strong" }, scale: "br" } : { kind };
+    await inRollback(async (c) => {
+      await seed(c);
+      const ids = ["spya-mmmmmm", "spya-nnnnnn", "spya-pppppp"];
+      expect(ids).toHaveLength(REFEREE_CRITERION_KINDS.length);
+      for (const [i, kind] of REFEREE_CRITERION_KINDS.entries()) {
+        const row = configToRow(config(kind));
+        await c.query(
+          `insert into spideryarn.referee_criteria
+             (article_id, id, owner_id, criterion, status, kind, pole_against, pole_favour, scale)
+           values ($1,$2,$3,'x','error',$4,$5,$6,$7)`,
+          [ART, ids[i], OWNER, row.kind, row.poleAgainst, row.poleFavour, row.scale],
+        );
+        // The reset: every row adopts every kind's columns, all four at once.
+        for (const to of REFEREE_CRITERION_KINDS) {
+          const next = configToRow(config(to));
+          await c.query(
+            `update spideryarn.referee_criteria
+                set kind = $3, pole_against = $4, pole_favour = $5, scale = $6
+              where article_id = $1 and id = $2`,
+            [ART, ids[i], next.kind, next.poleAgainst, next.poleFavour, next.scale],
+          );
+        }
+      }
     });
   });
 

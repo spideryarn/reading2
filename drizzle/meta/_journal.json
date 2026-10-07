@@ -1072,6 +1072,55 @@
       "when": 1791297828720,
       "tag": "20261006144348_articles_asked_url",
       "breakpoints": true
+    },
+    {
+      "idx": 153,
+      "version": "7",
+      "when": 1791334488929,
+      "tag": "20261007005448_revision_blocks_article_block_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 154,
+      "version": "7",
+      "when": 1791334950895,
+      "tag": "20261007010230_referee_criteria_shape_all_or_none",
+      "breakpoints": true
+    },
+    {
+      "idx": 155,
+      "version": "7",
+      "when": 1791335394856,
+      "tag": "20261007010954_referee_claims_empty_unless_done",
+      "breakpoints": true
+    },
+    {
+      "idx": 156,
+      "version": "7",
+      "when": 1791335787375,
+      "tag": "20261007011627_upload_source_guesses_created_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1791336047829,
+      "tag": "20261007012047_drop_duplicate_chat_messages_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1791336414855,
+      "tag": "20261007012654_declare_migration_only_indexes_and_checks",
+      "breakpoints": true
+    },
+    {
+      "idx": 159,
+      "version": "7",
+      "when": 1791337115199,
+      "tag": "20261007013835_ledger_indexes_declared_as_made",
+      "breakpoints": true
     }
   ]
 }

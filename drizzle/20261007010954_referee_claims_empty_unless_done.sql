@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."referee_claims" ADD CONSTRAINT "referee_claims_empty_unless_done" CHECK ("spideryarn"."referee_claims"."status" = 'done' or jsonb_array_length("spideryarn"."referee_claims"."claims") = 0);

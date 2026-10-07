@@ -26,7 +26,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { QuotesOwner } from "../src/web/QuotesPanel.js";
-import { MAX_QUOTES_TOTAL, type Quote, type Quotes } from "../src/types.js";
+import { MAX_QUOTES_TOTAL, type Job, type Quote, type Quotes } from "../src/types.js";
 
 /* src/web/lib/api.ts reaches supabase at module scope — the stub
    tests/mode-surface-changes-no-markup.test.tsx installs. */
@@ -174,6 +174,107 @@ describe("the foot", () => {
     await mount(owner(list({ quotes: full })));
     expect(foot()?.textContent).toContain("as many as we keep");
     expect(foot()?.textContent).not.toContain("Find more");
+  });
+
+  /* **A job at the ceiling is not hidden behind the ceiling's sentence.** Find
+     more is not offered there, so the job was started somewhere else (a forced
+     re-run from Metadata), and the sentence used to stand where its progress,
+     its Stop and its failure would have been. Plan 261007a § K4, U14. */
+  describe("at the ceiling, with a run that was started elsewhere", () => {
+    const full = () => list({ quotes: Array.from({ length: MAX_QUOTES_TOTAL }, (_, i) => quote(i)) });
+
+    it("shows a run that is starting, not the sentence", async () => {
+      await mount(owner(full(), { starting: true }));
+      expect(foot()?.querySelector('[role="status"]')).not.toBeNull();
+      expect(foot()?.textContent).not.toContain("as many as we keep");
+    });
+
+    it("shows a running job and its Stop, not the sentence", async () => {
+      const cancel = vi.fn();
+      const job: Job = {
+        id: "job-quotes",
+        ownerId: "owner" as Job["ownerId"],
+        slug: "writes",
+        status: "running",
+        createdAt: "2026-10-07T00:00:00.000Z",
+        startedAt: "2026-10-07T00:00:01.000Z",
+        steps: [{ name: "quotes", label: "Choosing the quotes", status: "running", startedAt: "2026-10-07T00:00:01.000Z" }],
+      };
+      await mount(owner(full(), { job, cancel }));
+      expect(foot()?.textContent).not.toContain("as many as we keep");
+      const stop = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /stop/i.test(b.textContent ?? ""));
+      if (!stop) throw new Error("no Stop beside a running job at the ceiling");
+      await act(async () => stop.click());
+      expect(cancel).toHaveBeenCalledWith("job-quotes");
+    });
+
+    it("shows a failure, and Retry runs that job again", async () => {
+      const retry = vi.fn();
+      const regenerate = vi.fn(async () => {});
+      await mount(
+        owner(full(), {
+          regenerate,
+          failed: { message: "The re-run failed visibly.", retryable: true, retry },
+        }),
+      );
+      expect(foot()?.textContent).toContain("The re-run failed visibly.");
+      expect(foot()?.textContent).not.toContain("as many as we keep");
+      const again = [...(foot()?.querySelectorAll("button") ?? [])].find((b) => /retry/i.test(b.textContent ?? ""));
+      if (!again) throw new Error("no Retry under a failed run at the ceiling");
+      await act(async () => again.click());
+      expect(retry).toHaveBeenCalledTimes(1);
+      expect(regenerate).not.toHaveBeenCalled();
+    });
+
+    it("a run that never became a job is asked for again as a rewrite, not as Find more", async () => {
+      /* Find more sends the list's own profile setting (`regenerate(false)` for
+         this plain list) and is an append; the forced run that failed was not
+         one. *Choose them again* sends no argument, as the stale banner's does. */
+      const regenerate = vi.fn(async () => {});
+      await mount(
+        owner(full(), {
+          profiled: false,
+          regenerate,
+          failed: { message: "The server refused the run.", retryable: true, retry: null },
+        }),
+      );
+      expect(buttons().some((b) => /find more/i.test(b))).toBe(false);
+      const again = [...(foot()?.querySelectorAll("button") ?? [])].find((b) =>
+        /choose them again/i.test(b.textContent ?? ""),
+      );
+      if (!again) throw new Error("no way to ask again under a refused run at the ceiling");
+      await act(async () => again.click());
+      expect(regenerate.mock.calls).toEqual([[]]);
+    });
+
+    /* **The rewrite hold's waiting line is a status too** (rewrite-hold.ts): the
+       job has ended and the new list has not been read, so the forced verb is
+       held and the reader is told why. Under the ceiling `findMore` carries
+       that line; at the ceiling the sentence must not stand in front of it. */
+    it("shows the hold's waiting line while the new list has not loaded, not the sentence", async () => {
+      await mount(owner(full(), { rewriting: true }));
+      expect(foot()?.textContent).toContain("The new quotes haven't loaded yet.");
+      expect(foot()?.textContent).not.toContain("as many as we keep");
+    });
+
+    it("holds the rewrite's button while a failed run's new list is still unread", async () => {
+      await mount(
+        owner(full(), {
+          rewriting: true,
+          failed: { message: "The server refused the run.", retryable: true, retry: null },
+        }),
+      );
+      const again = [...(foot()?.querySelectorAll("button") ?? [])].find((b) =>
+        /choose them again/i.test(b.textContent ?? ""),
+      );
+      expect(again?.disabled, "a second forced run was offered over the hold").toBe(true);
+    });
+
+    it("says the sentence again once nothing is running or failed", async () => {
+      await mount(owner(full()));
+      expect(foot()?.textContent).toContain("as many as we keep");
+      expect(foot()?.querySelectorAll("button")).toHaveLength(0);
+    });
   });
 });
 

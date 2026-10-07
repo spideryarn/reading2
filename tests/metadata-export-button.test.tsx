@@ -103,7 +103,7 @@ let dir: string;
 let metadataFails = false;
 
 /** How `GET /api/export/:slug` answers. `null` means "never" — see `hold`. */
-let exportAnswer: (() => Response) | null;
+let exportAnswer: (() => Response | Promise<Response>) | null;
 /** Resolved by the test when it wants a held export request to finish. */
 let release: (() => void) | undefined;
 
@@ -385,9 +385,52 @@ describe("the Export button", () => {
   });
 
   it("survives the fetch dying on the way out", async () => {
-    exportAnswer = () => {
-      throw new TypeError("Failed to fetch");
-    };
+    vi.stubEnv("PROD", true);
+    /* Rejected, as `fetch` does it: a real one never throws synchronously,
+       and `apiFetch` marks a lost connection on the rejection. */
+    exportAnswer = () => Promise.reject(new TypeError("Failed to fetch"));
+
+    await open();
+    await act(async () => exportButton()?.click());
+    await settle();
+    vi.unstubAllEnvs();
+
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Couldn't build the download.");
+    /* Our sentence for a lost connection and its own code, last. Until
+       2026-10-07 this was the browser's "Failed to fetch" under
+       `[export-failed]` (plan 261007a § K4). */
+    expect(alert?.textContent).toMatch(/\[net-down\]$/);
+    expect(alert?.textContent).not.toContain("Failed to fetch");
+    expect(exportButton()?.disabled).toBe(false);
+  });
+
+  it("says the same when the zip dies part-way down", async () => {
+    vi.stubEnv("PROD", true);
+    exportAnswer = () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            c.error(new TypeError("network error"));
+          },
+        }),
+        { status: 200 },
+      );
+
+    await open();
+    await act(async () => exportButton()?.click());
+    await settle();
+    vi.unstubAllEnvs();
+
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("Couldn't build the download.");
+    expect(alert?.textContent).toMatch(/\[net-down\]$/);
+    expect(alert?.textContent).not.toContain("network error");
+  });
+
+  it("does not print an exception nobody wrote for a reader", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    exportAnswer = () => Promise.reject(new Error("Cannot read properties of undefined (reading 'zip')"));
 
     await open();
     await act(async () => exportButton()?.click());
@@ -395,7 +438,7 @@ describe("the Export button", () => {
 
     const alert = host.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("Couldn't build the download.");
-    expect(alert?.textContent).toContain("[export-failed]");
-    expect(exportButton()?.disabled).toBe(false);
+    expect(alert?.textContent).toMatch(/\[web-unexpected\]$/);
+    expect(alert?.textContent).not.toContain("Cannot read");
   });
 });
