@@ -716,6 +716,9 @@ describe("recording in parts", () => {
     /* The clock passes the deadline with no timer having run. */
     talk(MAX_MS, 5000);
     expect(capped).toHaveLength(1);
+    /* The recorders were told to stop; their closing chunks still arrive. */
+    talk(1000, 100);
+    expect(capped, "a second chunk past the deadline capped it again").toHaveLength(1);
     await vi.advanceTimersByTimeAsync(MAX_MS);
     expect(capped, "the late timer capped it a second time").toHaveLength(1);
     const out = await tape?.stop();

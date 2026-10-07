@@ -112,11 +112,21 @@ describe("the cap, and the minute before it", () => {
     act(() => root.render(createElement(DictationStrip, { dictation: listening(45_000) })));
     const said = () => host.querySelector('[role="status"]')?.textContent;
     const first = said();
-    expect(first).toBe("Dictation stops in less than a minute");
+    expect(first).toBe("Dictation stops within a minute");
     act(() => {
       vi.advanceTimersByTime(5000);
     });
     expect(said()).toBe(first);
+  });
+
+  /* A tab back from hidden can draw before the late cap runs. 0:00 over a
+     live microphone is not true. GPT Sol's code review, C4. */
+  it("says it is stopping, not 0:00, at and past the deadline", () => {
+    act(() => root.render(createElement(DictationStrip, { dictation: listening(0) })));
+    expect(host.querySelector(".prof-listening")?.textContent).toContain("Stopping dictation…");
+    expect(host.querySelector(".prof-listening")?.textContent).not.toContain("0:00");
+    act(() => root.render(createElement(DictationStrip, { dictation: listening(-4000) })));
+    expect(host.querySelector(".prof-listening")?.textContent).toContain("Stopping dictation…");
   });
 
   it("says nothing about a cap when no recording is running to be capped", () => {
@@ -191,6 +201,22 @@ describe("the chime when the last minute starts", () => {
       vi.advanceTimersByTime(30_000);
     });
     expect(notes).toHaveLength(once);
+  });
+
+  it("plays again for the next dictation", () => {
+    const { ctx, notes } = fakeContext();
+    const set = chimeProbe(ctx, NOW + MAX_MS);
+    act(() => {
+      vi.advanceTimersByTime(MAX_MS);
+    });
+    const once = notes.length;
+    expect(once).toBeGreaterThan(0);
+    set(null);
+    set(Date.now() + MAX_MS);
+    act(() => {
+      vi.advanceTimersByTime(MAX_MS);
+    });
+    expect(notes).toHaveLength(once * 2);
   });
 
   it("does not play for a dictation that was stopped first", () => {

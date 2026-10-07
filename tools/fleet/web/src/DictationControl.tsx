@@ -192,8 +192,8 @@ function statusLine(d: UseDictation): string | null {
  * Nothing until then. Greg, spya-n8cuqq: *"if you're ever going to cut me off
  * like that, you should give me some kind of feedback of some kind."*
  *
- * `role="timer"` so it is exposed and not read out every second. Rounded up, so
- * it never reads 0:00 while the microphone is still on.
+ * `role="timer"` so it is exposed and not read out every second. Rounded up, and
+ * at or past the deadline it says it is stopping rather than 0:00.
  */
 function StopsIn({ endsAt }: { endsAt: number }): ReactNode {
   const [now, setNow] = useState(() => Date.now());
@@ -205,7 +205,9 @@ function StopsIn({ endsAt }: { endsAt: number }): ReactNode {
   if (left > CAP_WARNING_MS) return null;
   return (
     <span className="tw:text-[12px] tw:font-semibold tw:text-needs-ink" role="timer">
-      Dictation stops in {formatDuration(Math.ceil(Math.max(0, left) / 1000) * 1000)}.
+      {left <= 0
+        ? "Stopping dictation…"
+        : `Dictation stops in ${formatDuration(Math.ceil(left / 1000) * 1000)}.`}
     </span>
   );
 }

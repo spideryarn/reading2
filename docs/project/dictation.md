@@ -585,12 +585,18 @@ microphone was already off, and somebody thinking aloud is not looking at the bo
 minute (`CAP_WARNING_MS`), the strip takes its warning look and counts down, *"Dictation stops in
 0:45"*; a rising two-note chime plays when that minute starts and a falling three-note one at the
 cap ([`quiet-chime.ts`](../../src/web/quiet-chime.ts)), each once; and the `[mic-full]` sentence
-stays after the words arrive. The hook hands the strip `endsAt`, set when the tape's ceiling timer
-is armed, so the countdown and the timer share a zero. A screen reader is told once, not each
-second. The fleet dashboard gets the cap and the chimes with the hook, and its own strip counts down
-too. Feedback's limit went from 4,000 to 12,000 characters the same day, so the box holds what the
-cap lets in ([feedback.md](feedback.md)). The other boxes keep their own limits: a long dictation
-into a small one overflows it, as it did before. A cap is still there because a microphone left on
+stays after the words arrive. **There is one deadline and the tape owns it**: `endsAt`, which the
+strip counts down to, the timer is set for, and every arriving chunk is checked against, because a
+timer in a throttled tab or on a laptop that slept fires late. The cap happens once. A warning
+chime that would arrive more than five seconds late is dropped, and the cap's chime plays only once
+the track is off, so it is not on the tape. A press on Stop within a second and a half of the cap is
+ignored: the countdown invites it, and it used to start a new dictation and abort the uploads of the
+one just recorded. A screen reader is told once, not each second. The fleet dashboard gets the cap and the chimes with the hook, and its own strip counts down
+too. Feedback's limit went from 4,000 to 12,000 characters the same day
+([feedback.md](feedback.md)). **That is about thirteen minutes of speech without a pause, not
+fifteen**: 12,072 is what the database admits, and raising that is a question put to Greg in the
+plan. Past it the words stay in the box and Send is off until they are trimmed. The other boxes keep
+their own limits: a long dictation into a small one overflows it, as it did before. A cap is still there because a microphone left on
 by mistake records, uploads and is billed for as long as it runs.
 [261007b](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md).
 

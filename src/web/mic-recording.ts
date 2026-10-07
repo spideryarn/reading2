@@ -591,8 +591,13 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
     /* Only the part being recorded rotates. A part already closing is handing
        over its terminal chunk, which is its own and moves nothing. */
     /* The deadline, asked of the clock each time a chunk arrives as well as by
-       the timer — see `cap`. Before the rotation, which a capped tape skips. */
-    if (Date.now() >= endsAt) cap();
+       the timer — see `cap`. Before the rotation, which a capped tape skips.
+       **Not for a part still being opened** (`index < 0`): a chunk delivered
+       from inside `rec.start()` arrives before the part is in `parts` and
+       before the caller holds the tape, so a cap there would stop everything
+       but the newest recorder and end a session that has no tape yet. Its
+       next chunk, a second later, caps it. GPT Sol's code review, C2. */
+    if (index >= 0 && Date.now() >= endsAt) cap();
     if (verdict === "rotate" && p === current && p.state === "recording" && !stopping && !capped) {
       rotate(p);
     }
@@ -718,7 +723,9 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
   }
   if (parts.length === 0) return null;
 
-  ceiling = window.setTimeout(cap, MAX_MS);
+  /* Aimed at `endsAt`, not a fresh `MAX_MS` from here: opening the recorder
+     took a moment, and the timer and the countdown are one deadline. */
+  ceiling = window.setTimeout(cap, Math.max(0, endsAt - Date.now()));
 
   const stopAll = () => {
     window.clearTimeout(ceiling);

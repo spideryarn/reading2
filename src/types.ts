@@ -7437,10 +7437,11 @@ export interface AdminFeedbackReport {
    *
    * **Not length-capped on the way out.** Reports filed before 2026-09-02 carry
    * the three old answers glued together with their headings, so a legacy body
-   * can legitimately be three times the dialog's current limit. A renderer that
-   * truncates to `MAX_FEEDBACK_ANSWER_CHARS` would silently cut the oldest
-   * reports — the ones most likely to be the reason somebody opened this page.
-   * GPT Sol, 2026-09-02.
+   * can legitimately be longer than the dialog's limit (`MAX_FEEDBACK_BODY_CHARS`
+   * against `MAX_FEEDBACK_ANSWER_CHARS`: three times it until 2026-10-07, 72
+   * characters over it since). A renderer that truncates to the dialog's limit
+   * would silently cut the oldest reports — the ones most likely to be the
+   * reason somebody opened this page. GPT Sol, 2026-09-02.
    */
   body: string;
   /**

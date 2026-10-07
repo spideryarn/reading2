@@ -1048,6 +1048,22 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       }
     };
 
+    /**
+     * **Heard as well as shown**, when the cap ended it: somebody thinking
+     * aloud is not looking at the box, and for a year the sentence was the only
+     * sign (spya-n8cuqq). Called once the recorders are drained and the track
+     * is off, never from `capped`, so the notes cannot land on the tape they
+     * announce the end of. Only for the session that still owns the box: a
+     * superseded or unmounted one has nobody to tell. Once, whichever path
+     * gets here. The shared context outlives the stop.
+     */
+    const capChime = () => {
+      if (!s.capped || !stillOurs()) return;
+      s.capped = false;
+      const ctx = audio();
+      if (ctx) playCappedChime(ctx);
+    };
+
     void tape.stop().then(async (ending) => {
       /* The recorders are drained *before* the track is released — killing the
          track under a live recorder loses the final `dataavailable`, which is
@@ -1055,15 +1071,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          the transcription that follows needs no microphone. */
       t?.stop();
       free();
-      /* **Heard as well as shown**, when the cap ended it: somebody thinking
-         aloud is not looking at the box, and for a year the sentence was the
-         only sign (spya-n8cuqq). Here and not in `capped`, so the notes cannot
-         land on the tape they announce the end of — the recorders are drained
-         and the track is off. The shared context outlives the stop. */
-      if (s.capped) {
-        const ctx = audio();
-        if (ctx) playCappedChime(ctx);
-      }
+      capChime();
       /* **A tape that lost audio part-way publishes nothing** (plan 260929f,
          R3). Whatever it kept is offered to save — but not to retry, because
          the part with the hole has no complete file to send again. The requests
@@ -1118,6 +1126,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          happened. */
       t?.stop();
       free();
+      capChime();
       /* Whatever broke, the copy is not proof of anything delivered. */
       if (held.current !== s.kept) s.kept?.release();
       if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);

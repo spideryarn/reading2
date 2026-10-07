@@ -139,6 +139,10 @@ It is not one of the defences listed in security-map.md; this is caution, not a 
 - **C. Raise only for a dictated report.** Not recommended: the server cannot tell dictated text
   from pasted text, so it would be a limit the browser enforces and a script ignores.
 
+**What a real run did.** The soak below was fifteen minutes of speech with no pauses at all, and it
+came to 15,108 characters: over the limit, Send off, every word in the box. That is the worst case,
+and it is the case option B is for.
+
 **What would decide it.** If you expect to dictate long reports without pausing, B. If thirteen
 minutes non-stop is already more than you would say in one go, A. Recommended: **B**. You file
 most of the reports, you dictate them, and what reaches Sentry is your own words in your own
@@ -180,9 +184,13 @@ account. It waits on your yes, in `awaiting-approval.md` and under its own queue
   became is in § The plan review, below.
 - [x] Stage 1: cap, warning, chimes, sentences, docs
 - [x] Stage 2: Feedback's limit
-- [ ] A real fifteen-minute dictation in Chrome on the box (review P10)
-- [ ] GPT Sol code review, fixes, gates, push to `dev`
-- [ ] Feedback note, `feedback-endings.ts`, queue `done`
+- [x] A real fifteen-minute dictation in Chrome on the box (review P10): § The soak
+- [x] GPT Sol code review: **approve with fixes**, six should-fix and a note on the tests, in
+  [the review](261007b-dictation-says-when-it-is-about-to-stop-code-review-sol.md). § The code
+  review, below. It ran read-only and the session made the edits, because the soak was running
+  against this tree's dev server and an edit under `src/web/` would have reloaded the page under it.
+- [x] Gates, push to `dev`
+- [x] Feedback note, `feedback-endings.ts`, queue `done`
 
 ## Decisions and assumptions (unattended run)
 
@@ -208,3 +216,38 @@ account. It waits on your yes, in `awaiting-approval.md` and under its own queue
 | P11 | `MAX_MS` is not a listed defence; Stage 2 touches `routes.ts` and a cap that guards Sentry | Stage 2 was cut back to what the database already admitted, so that guard has not moved |
 | P12 | Drop the warning minute; show the maximum from the start | Not taken (§ What we passed over) |
 
+
+## The soak
+
+One real dictation to the cap, in the Feedback dialog, in headless Chrome 152 on the box, against
+this worktree's dev server, with a fake microphone looping 87 seconds of the speech clips in
+`evals/dictation/clips/`. Run by a Sonnet subagent on 2026-10-07; nobody had run one past two
+minutes before.
+
+- **The countdown.** The row first wore `ending` at 14:01 on its own clock, reading *"Dictation
+  stops in 0:59"*, and was last seen at *"0:04"* at 14:56. Shot:
+  [14:20](261007b-shot-1420-countdown.png).
+- **The cap.** At the 900-second mark the row read *"Turning that into text…"* and the sentence was
+  *"Dictation stops after 15 minutes, so it stopped there. Everything you said up to then is kept.
+  [mic-full]"*. The joined transcript was in the box within eight seconds.
+- **The parts.** Eight requests to `/api/transcribe`, about every 120 seconds, all 200, seven of
+  about 605 KB and a 277 KB tail, each answered in 2.4 to 5.8 seconds.
+- **Afterwards.** 15,108 characters in the box, *"15108 characters — the limit is 12000."* shown,
+  Send disabled. No console errors. The device copy in IndexedDB was empty.
+
+**Not shown by it:** Safari or AAC (this was WebM/Opus); whether a word is garbled where two parts
+join (the clip loops, so a seam cannot be told from a repeat); the chimes (nothing listened); the
+late-timer and stale-press paths, which the unit tests cover. It ran before the code review's
+fixes; those touch the edges of the cap, not the recording, and the suites were run again after.
+
+## The code review, finding by finding
+
+| | Finding | What happened |
+|---|---|---|
+| C1 | A stale Stop press after the cap still opens the field's double-press window | Fixed in `useDictationField`: a press at or past `endsAt` is ignored there too. Test through the field |
+| C2 | A chunk delivered inside `rec.start()` could cap before the part is in `parts` | Fixed: a part still being opened does not cap; its next chunk does |
+| C3 | The timer was armed for a fresh `MAX_MS`, not for `endsAt` | Fixed |
+| C4 | "less than a minute" beside `1:00`, and `0:00` over a live microphone | Fixed: "within a minute", and "Stopping dictation…" at and past zero, in both strips |
+| C5 | The cap chime played for a superseded or unmounted session, and not on the fallback path | Fixed: one helper, behind `stillOurs()`, on both paths |
+| C6 | Docs claimed a shared zero and that 12,000 "holds what the cap lets in" | Corrected in dictation.md and the admin type's comment |
+| C7 | Four tests would pass a broken implementation | Each strengthened. Five guards were then removed one at a time and each test seen to fail |

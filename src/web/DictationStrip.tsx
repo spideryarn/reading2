@@ -93,7 +93,7 @@ function dictationWords(d: UseDictation, sendingAfter: boolean, done: DoneAction
      two, and it is true whether or not the microphone hears anything. The
      seconds are not in this sentence because the live region says it — the
      countdown is drawn beside it, where a screen reader is not read each tick. */
-  if (ending) return "Dictation stops in less than a minute";
+  if (ending) return "Dictation stops within a minute";
   if (d.quiet) {
     /* **Not a diagnosis.** `quiet` means nothing crossed −55 dBFS for ten
        seconds, which a thinking reader in a quiet room produces too — so the
@@ -326,8 +326,9 @@ export function DictationStrip({
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const busy = dictation.armed || dictation.transcribing;
   /* **The last minute before the cap** (`MAX_MS`, plan 261007b). The clock only
-     runs while there is a cap to run towards. Rounded up, so the countdown
-     never reads 0:00 while the microphone is still on. */
+     runs while there is a cap to run towards. Rounded up, and at or past the
+     deadline it says it is stopping: a tab coming back from hidden can draw
+     before the late cap runs, and 0:00 over a live microphone is not true. */
   const now = useNow(dictation.endsAt === null ? null : 1000);
   const left = dictation.armed && dictation.endsAt !== null ? dictation.endsAt - now : null;
   const ending = left !== null && left <= CAP_WARNING_MS;
@@ -380,7 +381,9 @@ export function DictationStrip({
           {/* The live region above is already saying this. */}
           <span className="prof-listening-what" aria-hidden="true">
             {ending && left !== null
-              ? `Dictation stops in ${formatDuration(Math.ceil(Math.max(0, left) / 1000) * 1000)}`
+              ? left <= 0
+                ? "Stopping dictation…"
+                : `Dictation stops in ${formatDuration(Math.ceil(left / 1000) * 1000)}`
               : words}
           </span>
           {dictation.armed && dictation.startedAt !== null && (

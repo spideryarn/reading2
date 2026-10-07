@@ -87,6 +87,12 @@ describe("the fleet microphone, near its cap", () => {
     expect(host.textContent).toContain("Dictation stops in 0:40");
   });
 
+  it("says it is stopping, not 0:00, at the deadline", () => {
+    render(listening(0));
+    expect(host.textContent).toContain("Stopping dictation…");
+    expect(host.textContent).not.toContain("0:00");
+  });
+
   it("starts by itself when the last minute arrives", () => {
     render(listening(62_000));
     expect(host.textContent).not.toContain("stops in");
