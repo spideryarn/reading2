@@ -31,6 +31,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articleRevisions, articles } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { runAsOwner } from "../src/owner.js";
+import { ArtefactNotMadeYet } from "../src/store/artefact-not-made-yet.js";
+import { loadArc, loadIllustrated, loadRelations, loadSketch, loadSkim, loadTweets } from "../src/store/index.js";
 import { NONE_YET_AS_NULL_HEADER } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -109,6 +112,8 @@ beforeAll(async () => {
     }
   };
   bare = await scratchArticleInPg(BARE, { ownerId: TEST_OWNER, mutate: strip });
+  /* And the two of the six reads not moved that the corpus article carries. */
+  await setOnCurrentRevision(bare, { tweets: null, arc: null });
   withQuiz = await scratchArticleInPg(WITH_QUIZ, { ownerId: TEST_OWNER });
   await setOnCurrentRevision(withQuiz, EMPTY as never);
   unusable = await scratchArticleInPg(UNUSABLE, { ownerId: TEST_OWNER, mutate: strip });
@@ -177,6 +182,56 @@ describe("an article with none of the ten", () => {
       const res = await get(`/api/${route}/${BARE}`, false);
       expect(res.status).toBe(404);
       expect(res.cacheControl).toBe("private, no-store");
+    });
+  }
+});
+
+/**
+ * **The six reads not moved: a 404 whatever the client asks.** Tweets,
+ * relations, Skim, Sketch, Illustrated and Arc. Pinned on 2026-10-07, when the
+ * seventh sweep set out to finish the move and found it cannot be done on the
+ * server alone: a route that answers the header needs its name in the offline
+ * cache's `NONE_YET_AS_NULL` (src/web/lib/api.ts) in the same change, and
+ * tests/api-fetch-offline.test.ts fails when the two differ
+ * (docs/plans/261007d-seventh-sweep-small-server-request-path-defects-and-dead-branches.md § 7).
+ *
+ * What did land is the loader's half: each of the six now throws
+ * `ArtefactNotMadeYet`, the type `orNullWhenNotMadeYet` looks for, in place of
+ * a plain error with `status: 404`. The second case below was red before that,
+ * on all six. **The first case is the one that must change when a read is
+ * moved**: "with the header" becomes `200 null`, and its name leaves `STILL_404`
+ * for `ROUTES` above.
+ */
+const STILL_404 = {
+  tweets: loadTweets,
+  relations: loadRelations,
+  skim: loadSkim,
+  sketch: loadSketch,
+  illustrated: loadIllustrated,
+  arc: loadArc,
+} as const;
+
+describe("the six reads not moved yet", () => {
+  for (const [route, load] of Object.entries(STILL_404)) {
+    it(`${route}: a 404 with the header and without it, and the same one`, async () => {
+      const asked = await get(`/api/${route}/${BARE}`, true);
+      const plain = await get(`/api/${route}/${BARE}`, false);
+      expect(plain.status).toBe(404);
+      expect(asked.status).toBe(404);
+      expect(asked.body).toBe(plain.body);
+      /* "Not made yet", not "no such article": the sentence names the step. */
+      expect(JSON.parse(plain.body).error).toMatch(/ yet\. .* POST \/api\/jobs /);
+      expect(plain.body).not.toBe((await get(`/api/${route}/${NO_SUCH}`, false)).body);
+    });
+
+    it(`${route}: the loader says "not made yet" with the type the helper reads`, async () => {
+      const err = await runAsOwner(TEST_OWNER, () => load(BARE)).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ArtefactNotMadeYet);
+      expect((err as ArtefactNotMadeYet).status).toBe(404);
+      /* And "no such article" is still the other 404, not this type. */
+      const none = await runAsOwner(TEST_OWNER, () => load(NO_SUCH)).catch((e: unknown) => e);
+      expect(none).not.toBeInstanceOf(ArtefactNotMadeYet);
+      expect((none as { status?: number }).status).toBe(404);
     });
   }
 });

@@ -131,7 +131,11 @@ describe("the end of the article", () => {
   });
 
   it("keeps the mark visible when the final section is folded", async () => {
-    await draw(article);
+    /* Drawn as a renamed article, because this fixture's only heading is the
+       wrapper's `<h1>` at block 0. Unrenamed, that heading is the masthead's
+       echo: hidden, and so not foldable (fold.ts § The masthead's echo;
+       spya-t6cdve). A renamed article keeps it, and it folds like any other. */
+    await draw({ ...article, titleOverridden: true });
     const heading = [...foldableHeadings(article.blocks)].at(-1);
     if (!heading) throw new Error("the fixture has no foldable heading");
     act(() => toggleFold(heading));

@@ -76,10 +76,9 @@ import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
    guards the other sink, the guessed address (`GuessedSourceLink`), which does
    not come off `meta` and so never passes through `webSource`. */
 import { hostOf, isWebUrl } from "../urls.js";
-import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
-import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
+import { carriedSearch, readHref } from "./router.js";
 import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
@@ -259,29 +258,15 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
   return (
     <div className="masthead">
       <div className="masthead-inner">
-        {/* The way back to the shelf. Here rather than in the sticky controls
-            bar because it belongs with the article's identity, not with the
-            granularity controls — and because the bar is measured by
-            `stickyOffset()`, so anything added to it changes where every deep
-            link and arrow jump lands (scroll.ts). Browser Back does the same
-            job; this is for the reader who arrived by pasted link and has no
-            Back to press. The way home is also `DockHome` in the bottom bar
-            (Dock.tsx), and this is still not a duplicate of it: this one
-            scrolls away with the title, and that one is a brand mark that is
-            always there.
-
-            **An arrow and a tooltip since 2026-09-29**, not the word
-            "Library". Greg, SPIDERYARN-READING2-50: *"change the back button
-            text labels at the top of some pages … to icons with tooltips
-            (because there's already so much text on the page)"*. BackLink.tsx.
-            The label is the owner's library for the owner; a visitor may be
-            signed out, where `/` is the front page, so theirs does not say
-            *your*. */}
-        <BackLink
-          href={LIBRARY_HREF}
-          label={onRenamed === undefined ? "Back to Spideryarn" : "Back to your library"}
-          className="tw:mb-1.5"
-        />
+        {/* **No way back to the shelf here, since 2026-10-07.** An arrow stood
+            above the title (the word "Library" before 2026-09-29) for the
+            reader who arrived by pasted link and has no Back to press. Greg,
+            spya-us7e4v: *"Don't bother showing back arrow to the Shelf at the
+            top. We have the Spideryarn logo for that."* The logo is `DockHome`
+            at the left end of the bottom bar (Dock.tsx), which goes to the
+            same place for an owner and for a visitor;
+            tests/dock-corner-controls.test.tsx holds both halves.
+            docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md. */}
         {/* The title, and the pencil beside it — TitleEditor.tsx owns where the
             pencil hides, what replaces the heading, and what a failed write
             says, because the metadata page needs all three the same way. */}

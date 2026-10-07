@@ -13,11 +13,11 @@
  * refusing for entirely the wrong reason. The byte-level checks — magic and
  * checksum — belong to the acquisition step and are tested with it.
  */
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { handleApi, parseJobRequest } from "../src/routes.js";
 import { slugFromFilename, slugWithShortId } from "../src/ingest.js";
-import { forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
+import { cancelUpload, forgetUpload, recordsSurviveTheRequest } from "../src/upload-records.js";
 import { blobStore, CONTENT_TYPE } from "../src/store/blobs.js";
 import { eq, inArray } from "drizzle-orm";
 
@@ -27,6 +27,7 @@ import { bareArticles, removeBareArticles } from "./helpers/bare-article.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
 import { stagingKey } from "../src/source.js";
+import { UPLOAD_MISSING } from "../src/messages.js";
 import { runAsOwner, type OwnerId } from "../src/owner.js";
 import type { JobStep } from "../src/types.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -76,6 +77,37 @@ afterEach(async () => {
 
 afterAll(async () => {
   await closeDb();
+});
+
+/**
+ * **The other request, let in at the one moment it matters.** `claimUpload` is
+ * the real one throughout; a case may queue a `winner` to run immediately before
+ * the next claim, which is the only way to reach `queueAnUpload`'s lost-claim
+ * answers. The route resolves an existing upload *before* it reserves a slot, so
+ * a claim loses only to a request that got in between that look and the claim.
+ * `claim` is the real function, for a winner that claims and does nothing else.
+ */
+const race = vi.hoisted(() => ({
+  winner: null as null | (() => Promise<unknown>),
+  claim: null as null | typeof import("../src/upload-records.js").claimUpload,
+  /** An answer to give in place of the real one. One case needs it; see there. */
+  forced: null as null | "expired",
+}));
+vi.mock("../src/upload-records.js", async (original) => {
+  const actual = await original<typeof import("../src/upload-records.js")>();
+  race.claim = actual.claimUpload;
+  return {
+    ...actual,
+    claimUpload: async (...args: Parameters<typeof actual.claimUpload>) => {
+      const winner = race.winner;
+      race.winner = null;
+      if (winner) await winner();
+      const forced = race.forced;
+      race.forced = null;
+      if (forced) return { ok: false as const, why: forced };
+      return actual.claimUpload(...args);
+    },
+  };
 });
 
 /**
@@ -585,5 +617,118 @@ describe("the job a repeat claim finds", () => {
       if (was === undefined) delete process.env.VERCEL;
       else process.env.VERCEL = was;
     }
+  });
+});
+
+/**
+ * **A claim that lost, on the full-import path** — the five answers
+ * `queueAnUpload` gives when another request claimed the upload between this
+ * one's look and its claim. Pinned on 2026-10-07 as the licence for replacing
+ * the hand-rolled block there with `answerALostClaim`, which the minimal path
+ * already called (SVO14 in
+ * docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md).
+ * Green with the block in place and green with the call; nothing above reaches
+ * these, because a repeat that arrives *after* the winner is answered by
+ * `resolveExistingUpload` and never claims.
+ */
+describe("a claim that lost the race, on the full-import path", () => {
+  async function ready(name: string, hash: string): Promise<string> {
+    const made = await call("POST", "/api/uploads", { filename: name, bytes: 1024, sha256: hash.repeat(64) });
+    expect(made.status).toBe(201);
+    const uploadId = String(made.body.uploadId);
+    await land(uploadId);
+    return uploadId;
+  }
+
+  /** `VERCEL=1` stops the pump, as in the cases above, so nothing races an ingest. */
+  async function racing(uploadId: string, winner: () => Promise<unknown>) {
+    const was = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      let ran = false;
+      race.winner = async () => {
+        ran = true;
+        await winner();
+      };
+      const reply = await call("POST", "/api/jobs", { uploadId });
+      expect(ran, "the claim was never reached, so this is not the lost-claim path").toBe(true);
+      return reply;
+    } finally {
+      race.winner = null;
+      if (was === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = was;
+    }
+  }
+
+  it("is a 404 when the record went", async () => {
+    const uploadId = await ready("lost-unknown.pdf", "1");
+    const reply = await racing(uploadId, () => forgetUpload(uploadId));
+    expect(reply.status).toBe(404);
+    expect(reply.body.error).toBe("No such upload");
+  });
+
+  /* **Forced to cover grant expiry independently of Stop.** This path
+     claims with `arrived: true`, which drops the grant's expiry from the
+     `WHERE` (src/store/pg-uploads.ts § `claimUploadIn`), so a pending row always
+     wins despite an elapsed grant. A row already marked `expired` by Stop
+     still loses with `expired`, as the separate case below proves. */
+  it("is a 410 when the claim says the grant expired", async () => {
+    const uploadId = await ready("lost-expired.pdf", "2");
+    const was = race.forced;
+    expect(was).toBeNull();
+    const reply = await racing(uploadId, async () => {
+      race.forced = "expired";
+    });
+    expect(reply.status).toBe(410);
+    expect(reply.body.error).toBe(UPLOAD_MISSING.message);
+  });
+
+  /* Stop marks the row `expired`. Losing to it must answer the same 410 as
+     `resolveExistingUpload` does when Stop arrives before the initial look.
+     Updated in the C6 review; requires Postgres and was not run in the review
+     sandbox. */
+  it("is a 410 when a Stop got in between", async () => {
+    const uploadId = await ready("lost-stopped.pdf", "6");
+    const reply = await racing(uploadId, async () => {
+      expect(await cancelUpload(uploadId, OWNER)).toBe(true);
+    });
+    expect(reply.status).toBe(410);
+    expect(reply.body.error).toBe(UPLOAD_MISSING.message);
+  });
+
+  it("is the winner's job when it got as far as one", async () => {
+    const uploadId = await ready("lost-job.pdf", "3");
+    let won: Record<string, unknown> = {};
+    const reply = await racing(uploadId, async () => {
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `the winner was refused: ${String(first.body.error)}`).toBe(202);
+      won = first.body;
+      queued.push(String(first.body.id));
+    });
+    expect(reply.status).toBe(202);
+    expect(reply.body.id).toBe(won.id);
+  });
+
+  it("is the article the record names when that job has been trimmed", async () => {
+    const uploadId = await ready("lost-article.pdf", "4");
+    let slug = "";
+    const reply = await racing(uploadId, async () => {
+      const first = await call("POST", "/api/jobs", { uploadId });
+      expect(first.status, `the winner was refused: ${String(first.body.error)}`).toBe(202);
+      slug = String(first.body.slug);
+      await getDb().delete(jobsTable).where(eq(jobsTable.id, String(first.body.id)));
+    });
+    expect(reply.status).toBe(200);
+    expect(reply.body.article).toBe(slug);
+  });
+
+  it("is a 409 when the winner claimed and has nothing to show for it", async () => {
+    const uploadId = await ready("lost-nothing.pdf", "5");
+    const reply = await racing(uploadId, async () => {
+      const claimed = await race.claim?.(uploadId, { owner: OWNER, arrived: true });
+      expect(claimed?.ok).toBe(true);
+    });
+    expect(reply.status).toBe(409);
+    expect(reply.body.error).toBe("That upload is already being turned into an article.");
   });
 });

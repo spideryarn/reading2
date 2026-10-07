@@ -13,6 +13,17 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-E8 (spya-n8cuqq; the report itself shipped: dictation runs
+  fifteen minutes and warns before it stops, this is its deferred half) · should Feedback take a
+  full fifteen minutes of non-stop speech? It takes 12,000 characters now, about thirteen minutes
+  without a pause; past that the words stay in the box and Send is off until you trim. Going to
+  20,000 means raising the database's own cap, which the code describes as what stops a pasted
+  article reaching Sentry, so it was not done unattended. Two choices: leave it at 12,000, or raise
+  both to 20,000 with `/admin/feedback` paged by size (about two hours; recommended) ·
+  qi-8qvg5gwv ·
+  [261007b § Questions for Greg](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md#questions-for-greg) ·
+  [note](261006_2202-dictation-cut-off-at-five-minutes-with-no-sign.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-DW (spya-ar65p3; the report itself shipped as one rule that
   stops a sideways iPhone enlarging a band's text, this is the review's question) · should the same
   kind of line be the same size in every mode? Today there are about 65 text sizes, and a row's
