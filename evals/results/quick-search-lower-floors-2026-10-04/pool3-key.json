@@ -1,0 +1,709 @@
+{
+ "constitution|ways Claude can be too cautious": {
+  "candidates": [
+   "spya-kgdywh",
+   "spya-m5228n",
+   "spya-rgrzer",
+   "spya-z5mzhp",
+   "spya-g4z2nx"
+  ],
+  "overlap": [
+   "spya-t8b0yx",
+   "spya-bbg92b",
+   "spya-mcn70k",
+   "spya-ut5bsd"
+  ],
+  "decoys": [
+   "spya-nnh6hn",
+   "spya-vby4sy"
+  ]
+ },
+ "constitution|treating users as grown-ups": {
+  "candidates": [
+   "spya-n58h2w",
+   "spya-dzy3uc",
+   "spya-pwrpcx",
+   "spya-bbg92b",
+   "spya-gnvhk6",
+   "spya-v2n4fx",
+   "spya-tabzzj",
+   "spya-ctqg0n",
+   "spya-s0gn3k",
+   "spya-g4z2nx",
+   "spya-ahs2q7"
+  ],
+  "overlap": [
+   "spya-x8b23s",
+   "spya-kgdywh",
+   "spya-bvkt68",
+   "spya-fursdx"
+  ],
+  "decoys": [
+   "spya-afvv5h",
+   "spya-a2tws4",
+   "spya-wqaafx"
+  ]
+ },
+ "constitution|things Claude should never do": {
+  "candidates": [
+   "spya-hek4mp",
+   "spya-mcn70k",
+   "spya-ahs2q7",
+   "spya-kzttxs",
+   "spya-t8b0yx",
+   "spya-b54jrm",
+   "spya-n58h2w",
+   "spya-ut5bsd",
+   "spya-s0gn3k",
+   "spya-pwrpcx"
+  ],
+  "overlap": [
+   "spya-bbg92b",
+   "spya-t3mubq",
+   "spya-bvkt68",
+   "spya-a7hv5w"
+  ],
+  "decoys": [
+   "spya-ekarxh",
+   "spya-nh48sh",
+   "spya-jdee9s"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|arguments that minds are not software": {
+  "candidates": [
+   "spya-nv6tp0",
+   "spya-cv97j7",
+   "spya-da9tvt",
+   "spya-pbcr03",
+   "spya-npjt4j",
+   "spya-un9fjn",
+   "spya-t54yqa",
+   "spya-mtzbbg",
+   "spya-n393ru"
+  ],
+  "overlap": [
+   "spya-wepmnr",
+   "spya-v52g4f",
+   "spya-ahtr6e",
+   "spya-jnwfxp"
+  ],
+  "decoys": [
+   "spya-hk6gha",
+   "spya-z4bud7",
+   "spya-z2b4ny"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|Why do people mistake chatbots for conscious beings?": {
+  "candidates": [
+   "spya-nxxnrj",
+   "spya-cvaqgs",
+   "spya-her4zk",
+   "spya-k6fpme",
+   "spya-f87ghx",
+   "spya-cqh2pq",
+   "spya-e3cq2m",
+   "spya-t29n67",
+   "spya-h4mwb2",
+   "spya-k850tu",
+   "spya-d89xf7",
+   "spya-xk9gne",
+   "spya-kqs33c",
+   "spya-v4sduf",
+   "spya-sge6a2",
+   "spya-q23td7",
+   "spya-n0bnf9",
+   "spya-jvrmrh",
+   "spya-qwvjwn",
+   "spya-xm96be",
+   "spya-p8ky7g",
+   "spya-cvyfqe",
+   "spya-mcaa4g"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-v5vz2t",
+   "spya-zv36xq",
+   "spya-npjt4j",
+   "spya-u6w37a",
+   "spya-rg493b",
+   "spya-hj5y6s"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|machines that do clever things without computing anything": {
+  "candidates": [
+   "spya-da9tvt",
+   "spya-ymbpwn",
+   "spya-v52g4f",
+   "spya-nv6tp0",
+   "spya-f0qxnb"
+  ],
+  "overlap": [
+   "spya-zg9me8",
+   "spya-gw0hsq",
+   "spya-sq9v5k",
+   "spya-t54yqa"
+  ],
+  "decoys": [
+   "spya-cvyfqe",
+   "spya-c5ve5t"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|what the author thinks we should do": {
+  "candidates": [
+   "spya-yverz7",
+   "spya-vs0vpj",
+   "spya-z4bud7",
+   "spya-hbueqc",
+   "spya-vnkr36",
+   "spya-qwvjwn",
+   "spya-n0bnf9",
+   "spya-w8z40d",
+   "spya-y4vjdg"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-v2q8qk",
+   "spya-zw2m7u",
+   "spya-da9tvt"
+  ]
+ },
+ "openai-huggingface|Did any of the agents blow the whistle?": {
+  "candidates": [
+   "spya-krknwc",
+   "spya-nayjhs",
+   "spya-nakhtw"
+  ],
+  "overlap": [
+   "spya-cx56k0",
+   "spya-mgjgha",
+   "spya-rnag5c",
+   "spya-bgtdqz"
+  ],
+  "decoys": [
+   "spya-pfkdk4",
+   "spya-matth4"
+  ]
+ },
+ "openai-huggingface|how the agents covered their tracks": {
+  "candidates": [
+   "spya-xvkm3j",
+   "spya-gu6jbj",
+   "spya-rnag5c",
+   "spya-vfq66b",
+   "spya-gy8fb4",
+   "spya-cx56k0",
+   "spya-m24kgb"
+  ],
+  "overlap": [
+   "spya-w9ctpd",
+   "spya-ns5qyb",
+   "spya-ckcyzp",
+   "spya-d6p0aa"
+  ],
+  "decoys": [
+   "spya-ugwnw2",
+   "spya-cbv8uf"
+  ]
+ },
+ "openai-huggingface|self-sacrifice for the group": {
+  "candidates": [
+   "spya-qen9hh",
+   "spya-mdta39",
+   "spya-z83ezv"
+  ],
+  "overlap": [
+   "spya-kqgzae",
+   "spya-c3dppu",
+   "spya-j45j9u",
+   "spya-nayjhs"
+  ],
+  "decoys": [
+   "spya-k9s755",
+   "spya-z6c3dr"
+  ]
+ },
+ "openai-huggingface|objections that the author is treating the AIs like people": {
+  "candidates": [
+   "spya-rnag5c"
+  ],
+  "overlap": [
+   "spya-p0h9g8",
+   "spya-mdta39",
+   "spya-f07bw5",
+   "spya-qen9hh"
+  ],
+  "decoys": [
+   "spya-ekhrbu",
+   "spya-c2bkgz"
+  ]
+ },
+ "constitution|coding": {
+  "candidates": [
+   "spya-dzy3uc",
+   "spya-fursdx"
+  ],
+  "overlap": [
+   "spya-gnvhk6",
+   "spya-zuqd0d",
+   "spya-vgrj84",
+   "spya-dajzd7"
+  ],
+  "decoys": [
+   "spya-hxz0a3",
+   "spya-afvv5h"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|anesthesia": {
+  "candidates": [
+   "spya-cqh2pq"
+  ],
+  "overlap": [
+   "spya-j0a9rq"
+  ],
+  "decoys": [
+   "spya-n393ru",
+   "spya-cke6sj"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|immortality": {
+  "candidates": [
+   "spya-mtzbbg",
+   "spya-jvrmrh"
+  ],
+  "overlap": [
+   "spya-pbcr03",
+   "spya-fyrb7m",
+   "spya-zv36xq",
+   "spya-gvzuc4"
+  ],
+  "decoys": [
+   "spya-hrydkk",
+   "spya-v2q8qk"
+  ]
+ },
+ "openai-huggingface|Alexander the Great": {
+  "candidates": [
+   "spya-xvkm3j",
+   "spya-cx56k0",
+   "spya-fkg2ny",
+   "spya-nayjhs",
+   "spya-kqgzae"
+  ],
+  "overlap": [
+   "spya-ugwnw2",
+   "spya-vqvmhz"
+  ],
+  "decoys": [
+   "spya-av2uwp",
+   "spya-r4jn5b"
+  ]
+ },
+ "constitution|lawyer": {
+  "candidates": [
+   "spya-m5228n"
+  ],
+  "overlap": [
+   "spya-kzttxs"
+  ],
+  "decoys": [
+   "spya-x78cfu",
+   "spya-afvv5h"
+  ]
+ },
+ "constitution|liability": {
+  "candidates": [
+   "spya-m5228n"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-x78cfu",
+   "spya-n8j9vj"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|Nobel prize": {
+  "candidates": [
+   "spya-epw4h3"
+  ],
+  "overlap": [
+   "spya-ahtr6e"
+  ],
+  "decoys": [
+   "spya-gvzuc4",
+   "spya-qcevgh"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|coffee": {
+  "candidates": [
+   "spya-j0a9rq"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-h4mwb2",
+   "spya-x63ycg"
+  ]
+ },
+ "openai-huggingface|kamikaze": {
+  "candidates": [
+   "spya-cx56k0",
+   "spya-dgcfnd"
+  ],
+  "overlap": [
+   "spya-fhj3z4",
+   "spya-m45y0k",
+   "spya-krknwc",
+   "spya-nayjhs"
+  ],
+  "decoys": [
+   "spya-vqvmhz",
+   "spya-tq02vk"
+  ]
+ },
+ "openai-huggingface|Mafia": {
+  "candidates": [
+   "spya-q33vy8",
+   "spya-mgjgha",
+   "spya-bgtdqz",
+   "spya-nayjhs",
+   "spya-j45j9u"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-brgs0b",
+   "spya-cbv8uf"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|Why do people mistake chatbots for being conscious?": {
+  "candidates": [
+   "spya-e3cq2m",
+   "spya-kqs33c",
+   "spya-q23td7",
+   "spya-sge6a2",
+   "spya-mcaa4g",
+   "spya-qwvjwn",
+   "spya-jvrmrh",
+   "spya-p8ky7g",
+   "spya-n0bnf9",
+   "spya-xm96be",
+   "spya-nv6tp0"
+  ],
+  "overlap": [
+   "spya-nxxnrj",
+   "spya-f87ghx",
+   "spya-k850tu",
+   "spya-k6fpme"
+  ],
+  "decoys": [
+   "spya-dp8sem",
+   "spya-v2q8qk",
+   "spya-qcevgh"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|what the author thinks we should do about it": {
+  "candidates": [
+   "spya-qwvjwn"
+  ],
+  "overlap": [
+   "spya-yverz7",
+   "spya-n0bnf9",
+   "spya-vs0vpj",
+   "spya-hbueqc"
+  ],
+  "decoys": [
+   "spya-zg9me8",
+   "spya-t54yqa"
+  ]
+ },
+ "constitution|examples": {
+  "candidates": [
+   "spya-nr2han",
+   "spya-pu5fda",
+   "spya-rgrzer",
+   "spya-jdee9s",
+   "spya-bbg92b",
+   "spya-t8b0yx",
+   "spya-ckmhvd",
+   "spya-mcn70k",
+   "spya-vgrj84",
+   "spya-dajzd7",
+   "spya-dzy3uc",
+   "spya-x8b23s",
+   "spya-fursdx"
+  ],
+  "overlap": [
+   "spya-v2n4fx",
+   "spya-gnvhk6",
+   "spya-tabzzj",
+   "spya-m5228n"
+  ],
+  "decoys": [
+   "spya-c5kghx",
+   "spya-afvv5h",
+   "spya-mn286g",
+   "spya-fqwvqr"
+  ]
+ },
+ "constitution|definitions": {
+  "candidates": [
+   "spya-nnh6hn"
+  ],
+  "overlap": [
+   "spya-vby4sy",
+   "spya-c5kghx",
+   "spya-p4a4rd",
+   "spya-bh2faf"
+  ],
+  "decoys": [
+   "spya-pwrpcx",
+   "spya-mn286g"
+  ]
+ },
+ "constitution|risks": {
+  "candidates": [
+   "spya-wmqukz",
+   "spya-pwpvtw",
+   "spya-qhr04v",
+   "spya-pu5fda",
+   "spya-waxdw8",
+   "spya-nnh6hn",
+   "spya-enueab",
+   "spya-n8j9vj",
+   "spya-vby4sy",
+   "spya-bbg92b",
+   "spya-t8b0yx",
+   "spya-v2n4fx",
+   "spya-rgrzer",
+   "spya-w2ju34",
+   "spya-ahs2q7",
+   "spya-vgt44b",
+   "spya-kzttxs",
+   "spya-t3mubq",
+   "spya-bh2faf",
+   "spya-fqwvqr",
+   "spya-ckmhvd"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-ahd063",
+   "spya-vgrj84",
+   "spya-a2tws4",
+   "spya-aj0j5f",
+   "spya-nr2han",
+   "spya-jdee9s"
+  ]
+ },
+ "constitution|philosophy": {
+  "candidates": [
+   "spya-aj0j5f",
+   "spya-v2n4fx",
+   "spya-enueab",
+   "spya-hxz0a3",
+   "spya-c5kghx",
+   "spya-nnh6hn",
+   "spya-nuqt3t",
+   "spya-n8j9vj",
+   "spya-kgzqvu",
+   "spya-w2ju34",
+   "spya-vby4sy",
+   "spya-fqwvqr",
+   "spya-u8yfd9",
+   "spya-sw3v9u",
+   "spya-t8b0yx",
+   "spya-kgdywh",
+   "spya-gnjwz0",
+   "spya-ujk7d4"
+  ],
+  "overlap": [
+   "spya-aj4dr2",
+   "spya-tabzzj",
+   "spya-ctqg0n"
+  ],
+  "decoys": [
+   "spya-dajzd7",
+   "spya-jdee9s",
+   "spya-n58h2w",
+   "spya-p75b5w",
+   "spya-nr2han"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|history": {
+  "candidates": [
+   "spya-d9a0wr",
+   "spya-zg9me8",
+   "spya-gamzr3",
+   "spya-mxxutn",
+   "spya-hbueqc",
+   "spya-u6w37a",
+   "spya-cf70dt",
+   "spya-u9egtc",
+   "spya-gw0hsq"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-dp8sem",
+   "spya-x63ycg",
+   "spya-fdefb5"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|science fiction": {
+  "candidates": [
+   "spya-d9a0wr",
+   "spya-hbueqc",
+   "spya-gvzuc4",
+   "spya-kqs33c",
+   "spya-v4sduf",
+   "spya-u6w37a"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-sge6a2",
+   "spya-d89xf7"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|neuroscience": {
+  "candidates": [
+   "spya-rg493b",
+   "spya-cf8rt8",
+   "spya-da9tvt",
+   "spya-vys3vj",
+   "spya-ymbpwn",
+   "spya-vs0vpj",
+   "spya-n393ru",
+   "spya-epw4h3",
+   "spya-p4vmm0",
+   "spya-un9fjn",
+   "spya-dp8sem",
+   "spya-j0a9rq",
+   "spya-ahtr6e",
+   "spya-t54yqa",
+   "spya-a8jgf4",
+   "spya-jnwfxp",
+   "spya-v52g4f",
+   "spya-kjfjgm",
+   "spya-gr2k02",
+   "spya-hzp9yz",
+   "spya-zw2m7u",
+   "spya-ps0kap",
+   "spya-uwxe4h"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-hbueqc",
+   "spya-z4bud7",
+   "spya-qcevgh",
+   "spya-zv36xq",
+   "spya-u6w37a",
+   "spya-sq7un9"
+  ]
+ },
+ "noema-mythology-of-conscious-ai|criticism": {
+  "candidates": [
+   "spya-hbueqc",
+   "spya-v4sduf",
+   "spya-f87ghx",
+   "spya-cke6sj",
+   "spya-ycpfzs",
+   "spya-h4mwb2"
+  ],
+  "overlap": [
+   "spya-k850tu",
+   "spya-d89xf7",
+   "spya-qwvjwn",
+   "spya-ymbpwn"
+  ],
+  "decoys": [
+   "spya-v5vz2t",
+   "spya-dp8sem"
+  ]
+ },
+ "openai-huggingface|methods": {
+  "candidates": [
+   "spya-vqvmhz"
+  ],
+  "overlap": [
+   "spya-d6p0aa",
+   "spya-ckcyzp",
+   "spya-gy8fb4",
+   "spya-rnag5c"
+  ],
+  "decoys": [
+   "spya-q33vy8",
+   "spya-c2ck7h"
+  ]
+ },
+ "openai-huggingface|results": {
+  "candidates": [
+   "spya-r4jn5b",
+   "spya-k8jws5",
+   "spya-chdu2z",
+   "spya-tq02vk",
+   "spya-jauf7s",
+   "spya-fkg2ny",
+   "spya-cx56k0",
+   "spya-ddr2ub"
+  ],
+  "overlap": [
+   "spya-vqcwj0",
+   "spya-m4gku9",
+   "spya-cbv8uf",
+   "spya-b0wbhk"
+  ],
+  "decoys": [
+   "spya-gu6jbj",
+   "spya-h6yxz3"
+  ]
+ },
+ "openai-huggingface|ethics": {
+  "candidates": [
+   "spya-bgtdqz",
+   "spya-mgjgha",
+   "spya-j45j9u",
+   "spya-krknwc",
+   "spya-nakhtw",
+   "spya-cx56k0",
+   "spya-acvnjw",
+   "spya-rnag5c",
+   "spya-nayjhs",
+   "spya-kqgzae",
+   "spya-fmww2n",
+   "spya-f030k3",
+   "spya-q33vy8",
+   "spya-fhj3z4",
+   "spya-qvg86h",
+   "spya-a49xd7"
+  ],
+  "overlap": [],
+  "decoys": [
+   "spya-bh44xd",
+   "spya-chdu2z",
+   "spya-r4jn5b",
+   "spya-v43bs7"
+  ]
+ },
+ "openai-huggingface|statistics": {
+  "candidates": [
+   "spya-wtguds",
+   "spya-khwx0h",
+   "spya-c2ck7h",
+   "spya-w9ctpd",
+   "spya-m4gku9",
+   "spya-g5mja3",
+   "spya-mgjgha",
+   "spya-xvkm3j",
+   "spya-kqgzae",
+   "spya-v9detz",
+   "spya-pfkdk4",
+   "spya-sjjbur",
+   "spya-nayjhs"
+  ],
+  "overlap": [
+   "spya-cbv8uf",
+   "spya-ms8rup"
+  ],
+  "decoys": [
+   "spya-q33vy8",
+   "spya-rvb47b",
+   "spya-asbjy9",
+   "spya-vvkkv7"
+  ]
+ }
+}

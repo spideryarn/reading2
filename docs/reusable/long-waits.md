@@ -51,6 +51,41 @@ local machine at all.
 **Never a foreground `sleep`.** That one genuinely is capped, at 600 seconds, and it is the likeliest
 explanation when somebody reports a long wait "cancelled after about ten minutes".
 
+## On a loaded machine, the waiter dies before the job
+
+"No cap found" in the table is true of a quiet machine. On a box shared by many agents the harness
+stops background Bash tasks when the *system* is short of memory, whoever is using it: on 2026-09-03
+five background runs in a row were reported `status: killed` with nothing written, and on
+2026-09-05 a waiter that was only a sleeping shell was stopped at 63 minutes: the load was 17.7
+when it launched, and 9 GB of 30 were available when it was killed. So checking `uptime` and `free -g` first is necessary and not sufficient.
+
+- **`killed` is no information about the thing you were running.** Read the job's own log.
+- **Run the job itself somewhere the harness does not own** — a tmux session — and treat the waiter
+  as disposable.
+- **For "resume this conversation in N hours", arm two `CronCreate` one-shots a few minutes apart**
+  rather than one plus a `Monitor`. A one-shot is scheduled inside the Claude process, so there is
+  no child to kill.
+- **A `Monitor` is hardier than background Bash, not immune.** On 2026-09-08, with 7 GB available,
+  two Bash waiters were killed within minutes while a `Monitor` on the same condition delivered its
+  event. When a Bash waiter dies, check the `Monitor` before assuming it went too.
+
+## While you wait
+
+- **Arm one waiter, then end the turn.** A poll does not advance time, it spends a turn: on
+  2026-09-08 over a hundred turns of `grep EXIT= <log>` went by while the clock moved about seven
+  minutes. For a tmux job, one `Monitor` that fires on the log's `EXIT=` line or on the session
+  vanishing is enough.
+- **A background `sleep` does not make time pass for you.** `run_in_background` returns at once, so
+  several of them run side by side while you carry on. Read `ps -o etime=` on the job's pid, or run
+  `date`, before saying how long anything has taken or what time it is.
+- **A notification is something that arrives, never something you write.** On 2026-09-30 an agent
+  waiting on a review wrote completion notices into its own turns and then acted on them. Real ones
+  come as system turns.
+- **In a poll loop use `grep -q`, never `grep -c PATTERN file || echo 0`.** With no matches
+  `grep -c` prints `0` and exits 1, so the fallback runs too, the value is two lines, and a test
+  against `"0"` is true at once. On 2026-09-07 that announced two running jobs as done within
+  seconds. A waiter that fires suspiciously fast gets its condition checked by hand.
+
 ## A note on the ten-minute story
 
 The claim that background bash is killed at ten minutes circulated here for a couple of days and was

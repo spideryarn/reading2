@@ -24,8 +24,9 @@ import path from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { assertShellShape, readClientShell } from "../scripts/client-shell.js";
-import { composeShell, MANAGED_HEAD_END, MANAGED_HEAD_START } from "../src/public/page-head.js";
+import { assertDefaultHead, assertShellShape, readClientShell } from "../scripts/client-shell.js";
+import { composeShell, composeSitePage, MANAGED_HEAD_END, MANAGED_HEAD_START } from "../src/public/page-head.js";
+import { SITE_PAGES, type SitePage } from "../src/site-pages.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 
@@ -53,7 +54,7 @@ const dirs: string[] = [];
 function dist(html: string, stamp: unknown): string {
   const dir = mkdtempSync(path.join(tmpdir(), "spya-shell-"));
   dirs.push(dir);
-  writeFileSync(path.join(dir, "index.html"), html);
+  writeFileSync(path.join(dir, "shell.html"), html);
   writeFileSync(path.join(dir, "build.json"), typeof stamp === "string" ? stamp : JSON.stringify(stamp));
   return dir;
 }
@@ -173,6 +174,31 @@ describe("proving the shell came from this build", () => {
     expect(message).toContain("npm run build");
   });
 
+  /**
+   * **The build holds two shells since 2026-10-05, and only one may be compiled
+   * in.** `index.html` is the homepage's head, which a search engine may list;
+   * `shell.html` is the default, which says `noindex`. The function serves its
+   * shell untouched for every private and absent `/read/` address.
+   */
+  it("compiles in shell.html, not the homepage's index.html beside it", () => {
+    const home = composeSitePage(BUILT, SITE_PAGES[0] as SitePage);
+    const dir = dist(BUILT, { commit: COMMIT });
+    writeFileSync(path.join(dir, "index.html"), home);
+    const shell = readClientShell(dir, COMMIT);
+    expect(shell.html).toBe(BUILT);
+    expect(shell.html).toContain('<meta name="robots" content="noindex, nofollow" />');
+    expect(shell.html).not.toContain('rel="canonical"');
+  });
+
+  it("refuses a page's own head in the shell's place, which has no noindex", () => {
+    const home = composeSitePage(BUILT, SITE_PAGES[0] as SitePage);
+    /* It passes every shape check: it is the same shell with other tags. */
+    expect(() => assertShellShape(home)).not.toThrow();
+    expect(() => assertDefaultHead(home)).toThrow(/does not say noindex/);
+    expect(() => readClientShell(dist(home, { commit: COMMIT }), COMMIT)).toThrow(/does not say noindex/);
+    expect(() => assertDefaultHead(BUILT)).not.toThrow();
+  });
+
   it("refuses a missing dist, and an unparseable stamp", () => {
     expect(() => readClientShell(path.join(ROOT, "no-such-dist"), COMMIT)).toThrow(
       /Cannot read the built client shell/,
@@ -208,6 +234,8 @@ describe("the digest that is served to the deployed check", () => {
       title: "T",
       gist: null,
       canonical: null,
+      authors: [],
+      image: null,
     });
     expect(composed).not.toBe(BUILT);
     expect(createHash("sha256").update(Buffer.from(composed, "utf8")).digest("hex")).not.toBe(

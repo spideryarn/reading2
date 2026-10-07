@@ -47,12 +47,13 @@
 
 import { isAdmin, type AdminUser } from "../admin.js";
 import type { OwnerId } from "../owner.js";
+import type { Db } from "../db/client.js";
 import type { Assets } from "../assets.js";
 import type { DocumentKind } from "../fetch.js";
 import type { SpokenTurn } from "../chat.js";
 import type { AiCallRow } from "../ai-spend.js";
 import type { LookupsByTerm } from "../glossary-lookups.js";
-import type { AnswerPatch, MarkPatch, NewComment } from "../comments.js";
+import type { AnswerFinish, MarkPatch, NewComment } from "../comments.js";
 import type { ClaimsRun } from "../referee-claims.js";
 import type { RefereeCriterionConfig } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
@@ -80,6 +81,7 @@ import type {
   GlossaryFound,
   QuotesFound,
   LibraryEntry,
+  Meta,
   LibraryTermsResponse,
   LibraryHit,
   ListOptions,
@@ -93,6 +95,8 @@ import type {
   IllustratedFound,
   SketchFound,
   QuizFound,
+  QuizKeptAnswer,
+  QuizQuestionId,
   FaqFound,
   RelationsResponse,
   CrossrefsFound,
@@ -352,6 +356,21 @@ export interface ArticleReader {
   loadDebate(slug: string): Promise<DebateFound>;
 
   /**
+   * **What the article was imported as: its title, its authors and its DOI** —
+   * for checking an outside record against it (src/citation-index.ts).
+   *
+   * **The title is the revision's own, never the reader's rename.** `loadArticle`
+   * puts its meta through `titleFor`, so a renamed paper's title is the
+   * reader's label, and a correct DOI would then fail a title check (GPT Sol's
+   * F2 on plan 261004h). No stored title falls back to the first heading, then
+   * the slug, as `metaFrom` does.
+   *
+   * Owner-scoped like every read here: somebody else's slug is the same 404 as
+   * one that does not exist.
+   */
+  loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">>;
+
+  /**
    * Every work the piece cites, plus whether the list still describes the
    * article — the cited head and the tree, as `loadIdeas`. Two staleness facts,
    * like the timeline's: no profile is in this stage's stamp. **Owner-only in
@@ -498,14 +517,12 @@ export interface CommentStore {
    *
    * ## The attempt token
    *
-   * `undefined` from the filesystem store, which has one process and needs no
-   * fence — see `beginAnswer` in src/comments.ts for why that is a property of
-   * that store rather than a weaker version of this one. From Postgres it is
-   * the row's `attempt_id`, and it has to be carried to `patch`: without it a
+   * The row's `attempt_id`, and it has to be carried to `patch`: without it a
    * model call this sweep already buried can land on top of the retry the
-   * reader is watching arrive.
+   * reader is watching arrive. It was `string | undefined` while there was a
+   * filesystem store, which had no fence; that store went on 2026-09-05.
    */
-  beginAnswer(slug: string, id: string): Promise<{ comment: Comment; attempt: string | undefined }>;
+  beginAnswer(slug: string, id: string): Promise<{ comment: Comment; attempt: string }>;
 
   /**
    * The reader edited their words. Writes `body` and `updatedAt`, nothing else.
@@ -591,15 +608,16 @@ export interface CommentStore {
   /**
    * Fill in the answer, or the error — **if this attempt is still the live one**.
    *
-   * `attempt` is the token `beginAnswer` handed back. It is optional in the
-   * type because the filesystem store has none; **the Postgres store refuses a
-   * call without it** rather than falling back to identity, because a caller
-   * that merely forgot to carry it would put back the whole race in silence.
-   * Exactly `SearchStore.finish`, and for the same reason.
+   * `attempt` is the token `beginAnswer` handed back, and it is required: a
+   * caller that merely forgot to carry it would put back the whole race in
+   * silence. Exactly `SearchStore.finish`, and for the same reason. The store
+   * still refuses a call without one at run time (`MissingAttempt`), for a
+   * caller that got round the type.
    *
-   * `patch.status` must be `done` or `error`. The attempt ends here either way,
-   * so a patch that left the comment `pending` would strip the fence off a row
-   * still waiting for an answer, after which anybody's late write can land.
+   * `patch.status` must be `done` or `error` — `AnswerFinish` says so. The
+   * attempt ends here either way, so a patch that left the comment `pending`
+   * would strip the fence off a row still waiting for an answer, after which
+   * anybody's late write can land.
    *
    * **`undefined` back means "you were superseded"** — the fenced write matched
    * no row, because a sweep buried this attempt and the reader has already
@@ -614,8 +632,8 @@ export interface CommentStore {
   patch(
     slug: string,
     id: string,
-    patch: AnswerPatch,
-    attempt?: string,
+    patch: AnswerFinish,
+    attempt: string,
     opts?: { quiet?: boolean },
   ): Promise<Comment[] | undefined>;
 
@@ -690,12 +708,16 @@ export interface ShelfStore {
    * src/shelf.ts for why it lives here rather than being edited in place.
    *
    * Returns the entry as it now stands, so a caller cannot get away with
-   * assuming what the write did.
+   * assuming what the write did. **`null` means the owned row was found, but no
+   * shelf card was available to return** — for example, an article mid-import,
+   * or a concurrent edit moving it to the other archive state before the card
+   * is read. Any supplied changes were written. A slug with no owned row still
+   * rejects with not-found, including an empty change.
    */
   patch(
     slug: string,
     change: { archived?: boolean; title?: string | null; purpose?: string | null },
-  ): Promise<LibraryEntry>;
+  ): Promise<LibraryEntry | null>;
 
   /**
    * One more open.
@@ -748,7 +770,27 @@ export interface ShelfStore {
    * render. The slug is the only thing left to say, and the client's next move
    * is to forget it.
    */
-  destroy(slug: string): Promise<{ destroyed: string }>;
+  destroy(slug: string, opts?: DestroyOptions): Promise<{ destroyed: string }>;
+}
+
+/**
+ * **A last word before the row goes, taken under the delete's own locks.**
+ *
+ * `beforeDelete` runs inside `destroy`'s transaction, after the billing row and
+ * the article row are locked and the live-job and stranded-reservation checks
+ * have passed, and before anything is deleted. Throwing refuses the delete and
+ * rolls everything back. It exists for a caller whose reason to delete was
+ * decided earlier and has to be decided again where nothing can move: the
+ * never-published tidy (scripts/never-published-tidy.ts, GPT Sol's R1 on plan
+ * 261007f), whose eligibility proof would otherwise commit before `destroy`
+ * waited for its locks. One deletion path with a hook, not a second copy of
+ * `destroy`'s body. The reader's Delete button passes nothing.
+ */
+export interface DestroyOptions {
+  readonly beforeDelete?: (
+    tx: Pick<Db, "execute">,
+    article: { readonly id: string },
+  ) => Promise<void>;
 }
 
 /**
@@ -758,23 +800,16 @@ export interface ShelfStore {
  * model call and a confidence score. This one is a text index: free, instant,
  * and with nothing to be uncertain about.
  *
- * **The two adapters do not agree, and a parity test over this would be wrong
- * to demand that they do.** This said they agreed on the *set* of block ids for
- * a single-word query. That was false, and a cross-family review caught it:
- * Postgres matches English lexemes, so `writes` finds "writing" and "write-nots"
- * and `the` finds nothing at all (a stop word); the filesystem adapter matches
- * substrings, so it finds `the` inside "theory" and misses every inflection.
- * They disagree on single words, which was exactly the case the old claim
- * called safe.
+ * **There is one adapter now, Postgres.** It matches English lexemes, so
+ * `writes` finds "writing" and "write-nots" and `the` finds nothing at all (a
+ * stop word). Until 2026-09-05 a filesystem adapter stood beside it and matched
+ * substrings instead — `the` inside "theory", and no inflections — so the two
+ * disagreed on single words, which a cross-family review caught after this
+ * comment had called that case safe.
+ * See docs/plans/260826k-library-shelf-actions-and-search.md.
  *
- * What they DO share is written down and is what a test may hold them to: an
- * exact word that appears verbatim, is not a stop word, and has no inflections
- * in the corpus is found by both, in the same blocks. Ranking is never
- * comparable. See docs/plans/260826k-library-shelf-actions-and-search.md.
- *
- * **`excludeSlug` is the one thing they must agree about exactly**, because it
- * is not a matching rule — it is a promise that a named article is absent. Both
- * adapters keep it the same way: inside the query, before the cap. See
+ * **`excludeSlug` is not a matching rule** — it is a promise that a named
+ * article is absent, and it is kept inside the query, before the cap. See
  * `LibrarySearchOptions`.
  */
 export interface LibrarySearch {
@@ -839,6 +874,92 @@ export interface ShelfTermsStore {
   failScores(scope: TopicScope, claimId: string): Promise<void>;
   /** Give the claim back without counting a failure, and wait `retryAfterMs` before the next — the fuse's answer. */
   releaseScores(scope: TopicScope, claimId: string, retryAfterMs: number): Promise<void>;
+
+  /* ---- the model's topic set, one row per owner — src/shelf-topic-sets.ts ---- */
+
+  /**
+   * **Every article on the ambient reader's shelf, active and archived**, as
+   * the topic model sees it, newest first. One query and no fill: `textHash`
+   * is the stored phrase run's, or null when the article has none yet.
+   */
+  topicShelf(): Promise<TopicShelfArticle[]>;
+  /** The ambient reader's stored topic set, or `null` if there is no row. */
+  readTopicSet(): Promise<StoredTopicSet | null>;
+  /**
+   * **Take the work, or learn somebody else has it.** One statement: the claim
+   * lands only when no live claim exists and `retry_after` has passed. Creates
+   * the row if there is none. Returns the claim id to fence the write with, or
+   * `null`.
+   */
+  claimTopicSet(leaseMs: number): Promise<string | null>;
+  /**
+   * Store a whole re-think, **only if `claimId` is still the row's claim**:
+   * replaces the topics and every membership, stamps `rethought_at`, clears
+   * the claim and the backoff. `false` when the fence refused.
+   */
+  writeTopicSet(claimId: string, result: TopicSetResult): Promise<boolean>;
+  /**
+   * Add memberships for newly filed articles to the stored set, **only if
+   * `claimId` is still the row's claim**: merges `members` over the stored
+   * map (an article filed twice takes the newer answer), stamps `filed_at`,
+   * clears the claim and the backoff. `false` when the fence refused.
+   */
+  fileIntoTopicSet(claimId: string, members: Record<string, string[]>): Promise<boolean>;
+  /** A failed re-think or filing: clears the claim, counts the failure, and pushes `retry_after` out by the backoff. */
+  failTopicSet(claimId: string): Promise<void>;
+  /** Give the claim back without counting a failure, and wait `retryAfterMs` before the next. */
+  releaseTopicSet(claimId: string, retryAfterMs: number): Promise<void>;
+}
+
+/** One shelf article as the topic model's path sees it. */
+export interface TopicShelfArticle {
+  /** `articles.id` — what a stored membership is keyed by. */
+  articleId: string;
+  slug: string;
+  archived: boolean;
+  /** The reader's rename if they made one, else the revision's title, else the slug. */
+  title: string;
+  /** `article_revisions.root_gist`, else its `abstract`, else null. */
+  gist: string | null;
+  /** The stored phrase run's `text_hash` (exact copies share one), or null when there is no run yet. */
+  textHash: string | null;
+}
+
+/** One topic of a stored set — `TopicNode` in src/shelf-terms/model-topics.ts, which owns the shape. */
+export interface StoredTopic {
+  id: string;
+  key: string;
+  label: string;
+  parent: string | null;
+  depth: number;
+}
+
+/** A whole re-think, as stored. */
+export interface TopicSetResult {
+  model: string;
+  promptVersion: number;
+  /**
+   * sha256 of the reader's normalised profile as the re-think was shown it, or
+   * `""` when they had none. The profile is model input, so an edit is a reason
+   * to re-think (GPT Sol, v1 review, finding 7).
+   */
+  profileHash: string;
+  topics: StoredTopic[];
+  /** article id → topic ids. An article the model placed nowhere has an empty list: it was seen. */
+  members: Record<string, string[]>;
+  /** How many distinct works the re-think read. */
+  works: number;
+  /** How many of them it placed in no topic. */
+  unplaced: number;
+}
+
+export interface StoredTopicSet {
+  /** Null until a re-think has succeeded once. */
+  result: (TopicSetResult & { rethoughtAt: Date; filedAt: Date | null }) | null;
+  /** Work somebody has taken. */
+  claim: { until: Date } | null;
+  failures: number;
+  retryAfter: Date | null;
 }
 
 /** `active` is the shelf proper; `all` is active + archived (`?archived=1`). */
@@ -926,14 +1047,14 @@ export interface LibrarySearchOptions {
  * What a stale `pending` row looks like, for both sweeps.
  *
  * **`keep` is this process's live work and `graceMs` is everybody else's.**
- * That split is the whole shape of the problem. The filesystem stores decide
- * staleness from an in-memory `Set` in `src/routes.ts`, which is exactly right
- * for one server on one disk and silently wrong the moment two processes share
+ * That split is the whole shape of the problem. The former filesystem stores
+ * decided staleness from an in-memory `Set` in `src/routes.ts`, which was right
+ * for one server on one disk and silently wrong the moment two processes shared
  * a database: process B sees process A's live row in nobody's set and errors
  * an answer that is still arriving. On Vercel that is not an edge case, it is
  * the ordinary shape.
  *
- * So the Postgres stores take both — spare what this process is doing, and
+ * So the stores take both — spare what this process is doing, and
  * spare anything young enough that some *other* process is plausibly still on
  * it. `keep` alone is a cross-process bug; `graceMs` alone would error a run
  * this very process has been streaming for four minutes.
@@ -948,7 +1069,6 @@ export interface SweepOptions {
   readonly keep: ReadonlySet<string>;
   /**
    * How old an attempt must be before another process may declare it dead.
-   * The filesystem stores ignore this — they have no attempt clock to read.
    */
   readonly graceMs: number;
 }
@@ -981,19 +1101,38 @@ export interface SweepOptions {
  * fixed sequence and compare the wire form at every step.
  */
 /**
- * A turn, and the attempt now answering it.
+ * A question and its reply, as stored, in the thread they now belong to.
  *
- * `attempt` is `undefined` from the filesystem store, which has no such thing
- * and never will: the whole point of an attempt is to be compared across
- * processes, and two servers sharing one `data/` directory is a thing nobody
- * does. Under shared Postgres, multi-process is the ordinary case.
+ * What `appendSpoken` returns, and the part of a `Turn` that is not the fence:
+ * a spoken exchange is written finished, so there is no attempt to carry.
  */
-export interface Turn {
+interface StoredExchange {
   readonly thread: ChatThread;
   readonly user: ChatMessage;
   readonly reply: ChatMessage;
-  readonly attempt: string | undefined;
 }
+
+/**
+ * A turn, and the attempt now answering it.
+ *
+ * `attempt` is the pending reply's token, and `finish` must present it. It
+ * was `string | undefined` for two reasons that have both gone: the filesystem
+ * store, which had no attempts and was deleted on 2026-09-05, and
+ * `appendSpoken`, which has none legitimately and now returns a
+ * `StoredExchange` instead of a `Turn` with a hole in it.
+ */
+export interface Turn extends StoredExchange {
+  readonly attempt: string;
+}
+
+/**
+ * What `ChatStore.markHintOpened` answers. The three refusals are different
+ * facts for the route: the message is not there, it is not an answer in a
+ * Recall thread, or the answer no longer carries the hint that was pressed.
+ */
+export type HintOpened =
+  | { ok: true; hintOpenedAt: string }
+  | { ok: false; reason: "no-such-message" | "not-a-recall-answer" | "hint-changed" };
 
 export interface ChatStore {
   load(slug: string): Promise<ChatThread[]>;
@@ -1006,15 +1145,16 @@ export interface ChatStore {
     slug: string,
     /**
      * `anchor` is applied **only when this turn creates the thread** — see
-     * `withTurn` in src/chat.ts, which both stores call. An anchor for a thread
-     * that already exists is refused by the route, not quietly dropped here.
+     * `withTurn` in src/chat.ts. A different anchor for a thread that already
+     * exists is refused there with a `ChatConflict`, inside the transaction,
+     * as well as by the route; the identical one passes.
      */
     turn: {
       threadId: string;
       question: string;
       anchor?: ChatAnchor;
       /**
-       * Chat or Remember — like `anchor`, applied **only when this turn creates
+       * Chat or Learn — like `anchor`, applied **only when this turn creates
        * the thread**. `withTurn` throws `ChatConflict` on one that contradicts
        * an existing thread rather than ignoring it, which is what makes the
        * rule hold under Postgres too: the route's own check runs inside
@@ -1036,27 +1176,22 @@ export interface ChatStore {
 
   /**
    * Patch one message in place. **Never appends**, and bumps the thread's
-   * `updatedAt` whenever the *thread* matches — even if the message does not,
-   * which is what the filesystem does and what the panel's ordering depends on.
+   * `updatedAt` whenever the *thread* matches — even if the message does not.
+   * The panel's ordering depends on that clock.
    *
    * **Pass the `attempt` this answer belongs to.** A retry keeps the message
    * id, so identity cannot say which call is reporting: without the attempt, a
    * model call that a sweep already buried overwrites the retry the reader is
-   * watching. The Postgres store refuses a `finish` with no attempt for exactly
-   * that reason; the filesystem store has no attempts and ignores it.
+   * watching. So the options are required and so is the attempt in them; the
+   * store also refuses a call without one at run time (`MissingAttempt`), for
+   * a caller that got round the type.
    */
   finish(
     slug: string,
     threadId: string,
     messageId: string,
     patch: Partial<ChatMessage>,
-    /* `| undefined` explicitly, not just `?`. `exactOptionalPropertyTypes` is
-       on, and the value a caller has is `Turn.attempt`, which IS `string |
-       undefined` because the filesystem store has no attempts. Writing
-       `attempt?: string` would force every call site to branch on a difference
-       that does not exist for them. The Postgres store is where `undefined`
-       becomes an error, which is the layer that can do something about it. */
-    opts?: { attempt?: string | undefined; now?: (() => string) | undefined },
+    opts: { attempt: string; now?: (() => string) | undefined },
   ): Promise<void>;
 
   /**
@@ -1096,10 +1231,21 @@ export interface ChatStore {
    * the tail already moved and gets `ChatConflict` rather than appending the
    * turn twice. See `SpokenTurn` in src/chat.ts.
    */
-  appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<Turn>;
+  appendSpoken(slug: string, spoken: SpokenTurn, now?: () => string): Promise<StoredExchange>;
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
+
+  /**
+   * **The reader pressed Hint under a Recall answer.** Stamps
+   * `hint_opened_at` once; a second press answers with the first time.
+   *
+   * `hint` is the hint's own text as the reader's browser split it, and it is
+   * the fence: a retry reuses the answer's row, so a press still in flight
+   * could otherwise mark the replacement answer as opened. The store stamps
+   * only when the stored answer, split by `splitHint`, carries that same hint.
+   */
+  markHintOpened(slug: string, threadId: string, messageId: string, hint: string): Promise<HintOpened>;
 
   /** Turn abandoned `pending` answers into `error`. See `SweepOptions`. */
   sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]>;
@@ -1111,21 +1257,31 @@ export interface ChatStore {
  * ## The attempt, and why `begin` hands one back
  *
  * A run is the reader's question and outlives any number of tries at answering
- * it; an **attempt** is one model call. Only the Postgres store has attempts as
- * rows, and it needs them for the reason `SweepOptions` gives: `finish` must be
+ * it; an **attempt** is one model call. The store keeps attempts on the row,
+ * for the reason `SweepOptions` gives: `finish` must be
  * able to say *which* call is reporting, so that a late answer from a call
  * another process already declared dead cannot land on top of the retry the
  * reader is watching. So `begin` returns an opaque attempt token, the caller
- * carries it, and `finish` presents it.
- *
- * The filesystem store returns `undefined` and ignores it, which is today's
- * behaviour exactly: fenced by identity alone.
+ * carries it, and `finish` presents it. Both halves are required in the type.
  *
  * **`finish` returns the run or `undefined`** rather than the whole list. The
  * caller only ever did `.find(…)` on it and 404s when missing, and
  * `UPDATE … RETURNING *` answers that directly — zero rows *is* "deleted while
  * running", or "this attempt is no longer the live one".
  */
+/**
+ * What a search can end as: the hits, or the sentence saying why not.
+ *
+ * **Never `pending`**, and nothing but the answer: `finish` releases the
+ * attempt whatever the patch says, so a patch leaving the run `pending` would
+ * strip the fence off a row still waiting; and `id`, `criterion`, `kind` and
+ * `sourceHash` are `begin`'s to set. It was `Partial<SearchRun>` until
+ * 2026-10-04, with both rules held only at run time.
+ */
+export type SearchFinish =
+  | { status: "done"; hits: SearchRun["hits"]; model?: string }
+  | { status: "error"; error: string };
+
 export interface SearchStore {
   load(slug: string): Promise<SearchRun[]>;
 
@@ -1163,34 +1319,39 @@ export interface SearchStore {
    * attempt. Anything else mints, always under a **new** id — an absent id
    * is a row deleted elsewhere, and must not be recreated. `withRun` in
    * src/searches.ts decides.
+   *
+   * **`sourceHash` is the caller's**: `hashBlocks` of the blocks it is about
+   * to send the model, loaded before this call. The store does not read the
+   * article's fingerprint itself, so the row cannot be stamped with a
+   * different revision from the one answered (plan 261005i § D). Stored on a
+   * mint, a retry and a revision alike.
    */
   begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     kind: SearchKind,
     wantedId?: string,
     now?: () => string,
     options?: { revises?: boolean },
-  ): Promise<{ run: SearchRun; attempt: string | undefined }>;
+  ): Promise<{ run: SearchRun; attempt: string }>;
 
   /**
    * Write the answer, if this attempt is still the live one.
    *
-   * `attempt` is optional in the type because the filesystem store has none.
-   * **The Postgres store refuses a call without it** rather than silently
-   * falling back to identity, which would put back exactly the race the column
-   * exists to close — a caller that forgets to carry the token would recreate
-   * it in full, and nothing would say so.
+   * `attempt` is required. Falling back to identity without it would put back
+   * exactly the race the column exists to close — a caller that forgot to
+   * carry the token would recreate it in full, and nothing would say so. The
+   * store still refuses a missing one at run time (`MissingAttempt`), for a
+   * caller that got round the type.
    *
-   * `patch.status` must be `done` or `error`. The attempt ends here either way,
-   * so a patch that leaves the run `pending` would strip the fence off a row
-   * that is still waiting for an answer.
+   * The patch ends the run — see `SearchFinish`.
    */
   finish(
     slug: string,
     runId: string,
-    patch: Partial<SearchRun>,
-    attempt?: string,
+    patch: SearchFinish,
+    attempt: string,
   ): Promise<SearchRun | undefined>;
 
   remove(slug: string, runId: string): Promise<SearchRun[]>;
@@ -1223,10 +1384,9 @@ export interface SearchStore {
  * sub-mode, docs/plans/260831an-referee-mode-for-peer-reviewers.md § 1.
  *
  * `SearchStore` method for method, including the attempt fence and what it is
- * for, because it is the same problem with the same two stores behind it: a run
- * is the referee's question, an attempt is one model call, and only Postgres
- * has attempts as rows. Read that interface first; only the differences are
- * written out here.
+ * for, because it is the same problem: a run is the referee's question and an
+ * attempt is one model call. Read that interface first; only the differences
+ * are written out here.
  *
  * - **`begin` takes a config as well as a criterion.** A criterion has a kind,
  *   and `diverging` carries the two poles and the ramp. The whole union goes in
@@ -1238,6 +1398,11 @@ export interface SearchStore {
  *   criterion a mark in the prose came from, and nothing about which way a
  *   passage cuts. Sol's finding 7: those two channels must not become one.
  */
+/** What a criterion can end as — `SearchFinish`, with results for hits. */
+export type CriterionFinish =
+  | { status: "done"; results: SavedCriterion["results"]; model?: string }
+  | { status: "error"; error: string };
+
 export interface RefereeCriteriaStore {
   load(slug: string): Promise<SavedCriterion[]>;
 
@@ -1254,28 +1419,30 @@ export interface RefereeCriteriaStore {
    * poles were nonsense is exactly the row a referee fixes and runs again.
    * `withCriterion` in src/referee-criteria-store.ts holds the decision, and
    * both stores call it.
+   *
+   * `sourceHash` is the caller's, of the blocks it is sending —
+   * `SearchStore.begin`.
    */
   begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     config: RefereeCriterionConfig,
     wantedId?: string,
     now?: () => string,
-  ): Promise<{ row: SavedCriterion; attempt: string | undefined }>;
+  ): Promise<{ row: SavedCriterion; attempt: string }>;
 
   /**
    * Write the answer, if this attempt is still the live one.
    *
-   * `attempt` is optional in the type because the filesystem store has none;
-   * the Postgres store **refuses a call without it** rather than falling back
-   * to identity, which would put back the cross-process race the column exists
-   * to close. `patch.status` must be `done` or `error`.
+   * `attempt` is required, and the patch ends the criterion — both for
+   * `SearchStore.finish`'s reasons.
    */
   finish(
     slug: string,
     id: string,
-    patch: Partial<SavedCriterion>,
-    attempt?: string,
+    patch: CriterionFinish,
+    attempt: string,
   ): Promise<SavedCriterion | undefined>;
 
   remove(slug: string, id: string): Promise<SavedCriterion[]>;
@@ -1324,10 +1491,23 @@ export interface RefereeCriteriaStore {
  * What a claims run can end as. **Never `pending`**: `finish` releases the
  * attempt token whatever the patch says, so a patch leaving the row `pending`
  * would strip the fence off a row still waiting for an answer.
- * `RefereeCriteriaStore.finish` refuses the same thing at run time; here the
- * compiler does.
+ * `SearchFinish` and `CriterionFinish` say the same of their stores.
+ *
+ * **And only the fields a finish writes.** `createdAt` and `sourceHash` are
+ * `begin`'s: the adapter ignored them in a patch, silently, so the type now
+ * refuses them.
+ *
+ * **Two arms, like its siblings, since 2026-10-07.** It was one `Partial<Pick>`
+ * with a `status` beside it, which let an `error` finish carry claims. Nothing
+ * did, and the database now refuses the row (`referee_claims_empty_unless_done`
+ * in src/db/schema.ts), so the type refuses it first. The `error` arm may still
+ * say `claims: []`, as the route does: typed as the **empty tuple**, so `[]`
+ * compiles and anything with a claim in it does not.
+ * tests/store-pg-referee-claims.test.ts holds both halves.
  */
-export type ClaimsFinish = Partial<ClaimsRun> & { status: "done" | "error" };
+export type ClaimsFinish =
+  | { status: "done"; claims: ClaimsRun["claims"]; model?: string; claimsOmitted?: number }
+  | { status: "error"; error: string; claims?: [] };
 
 export interface RefereeClaimsStore {
   /** The stored run, or `null` when this paper has never been asked. */
@@ -1382,8 +1562,7 @@ export interface RefereeClaimsStore {
    * and on Vercel it is the ordinary shape. So the Postgres store applies its
    * own window against `referee_claims.created_at`, which `begin` stamps and
    * `finish` never touches (`CLAIMS_ORPHAN_GRACE_MS`,
-   * src/store/pg-referee-claims.ts). The filesystem store needs none: two
-   * servers sharing one `data/` directory is a thing nobody does.
+   * src/store/pg-referee-claims.ts).
    */
   sweep(slug: string, live: boolean): Promise<ClaimsRun | null>;
 }
@@ -1516,6 +1695,32 @@ export interface ReadingTimeStore {
 }
 
 /**
+ * The owner's finished quiz marks on one article — `quiz_attempts`,
+ * docs/plans/261005b-quiz-answers-are-kept-and-restored.md. Both methods are
+ * owner-scoped: a slug the caller does not own is a 404.
+ */
+export interface QuizAttemptStore {
+  /**
+   * **Append one finished mark**, and return when the database says it
+   * happened (the row's `created_at`, ISO). Never an upsert: answering again
+   * is a second row.
+   */
+  record(
+    slug: string,
+    attempt: {
+      batchId: string;
+      questionId: QuizQuestionId;
+      /** The question's words, copied in — the batch they came from can be replaced. */
+      question: string;
+      answer: string;
+      reply: string;
+    },
+  ): Promise<string>;
+  /** The latest kept answer to each question of one batch; other batches' rows are not returned. */
+  latestForBatch(slug: string, batchId: string): Promise<QuizKeptAnswer[]>;
+}
+
+/**
  * The glossary entries the owner has hidden on one article, for themselves —
  * docs/plans/261002c-glossary-hide-an-entry-dig-deeper-from-the-card-hyphens-match-spaces.md § 2.
  * Both methods are owner-scoped (a stranger's slug is a 404), refuse a
@@ -1564,8 +1769,7 @@ export interface ReaderStore {
    * **Experimental features: when they were switched on, or `null` for off.**
    *
    * An ISO 8601 string rather than a `Date`, because that is what crosses the
-   * wire and what the filesystem store holds; a `Date` here would mean one
-   * adapter parsing what the other stringifies for no reader's benefit.
+   * wire (and what the filesystem store held, until 2026-09-05).
    * docs/project/experimental-features.md.
    */
   readExperimental(): Promise<string | null>;
@@ -1580,6 +1784,22 @@ export interface ReaderStore {
    * date: the first spell ended.
    */
   writeExperimental(on: boolean): Promise<string | null>;
+
+  /**
+   * **Whether an import queues the main-mode jobs for this reader.** `true`
+   * for a reader who has never chosen, including one with no row at all.
+   *
+   * A boolean here and a time in the row (`auto_modes_off_at`): nothing shows
+   * when it was switched off, so the contract carries only the answer.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   */
+  readAutoModes(): Promise<boolean>;
+
+  /**
+   * Switch it on or off, and answer with what is now stored. Off twice keeps
+   * the first time; on clears it.
+   */
+  writeAutoModes(on: boolean): Promise<boolean>;
 }
 
 /**
@@ -1587,11 +1807,10 @@ export interface ReaderStore {
  *
  * **The one contract in this file that is not about the reader asking**, and
  * the only one whose implementation runs a query with no owner filter on it.
- * It is a contract rather than a bare function so that the filesystem store can
- * refuse it in the same shape everything else is selected in — see
- * src/store/index.ts, where `files` gets an adapter whose only method throws.
- * There are no users on a filesystem: `data/` is one directory per slug and
- * nothing in it records that a person exists.
+ * It is a contract rather than a bare function for a historical reason: until
+ * 2026-09-05 the filesystem store refused it in the same shape everything else
+ * was selected in, through an adapter whose only method threw. Today
+ * src/store/index.ts wires the one Postgres implementation with `guarded(...)`.
  *
  * Read-only, and it should stay that way. Nothing here bans, deletes or spends;
  * an admin *page* that can only look is a much smaller thing to get wrong than
@@ -1768,7 +1987,7 @@ export interface SourceStore {
 export type { Visibility } from "../types.js";
 /* Imported as well as re-exported, because the two contracts below *use* the
    name and a bare `export … from` does not bring it into this module's scope. */
-import type { Visibility, VisibilityState } from "../types.js";
+import type { ShareLinkState, Visibility, VisibilityState } from "../types.js";
 
 /**
  * What the switch answers with — **defined in [src/types.ts](../types.ts)**
@@ -1836,6 +2055,27 @@ export interface VisibilityStore {
    * confirm that somebody else's article exists.
    */
   set(slug: string, to: Visibility, rightsConfirmed: boolean): Promise<VisibilityState>;
+}
+
+/**
+ * **An article's private link**, for its owner — src/store/pg-share-link.ts.
+ *
+ * Every method throws 404 for a slug the caller does not own, never 403, as
+ * `VisibilityStore.set` does. Each answers the state the link is now in, and
+ * that state is the one value in the app that carries the key.
+ */
+export interface ShareLinkStore {
+  /** The link as it stands, so the card can show it again. Changes nothing. */
+  read(slug: string): Promise<ShareLinkState>;
+  /**
+   * Make a link, with a **new** key every time: a key that was on stops
+   * working in the same statement. Refuses a paper that has not been read
+   * through, as going public does. The route has already refused a request
+   * without `rightsConfirmed: true`; the audit row records that it was given.
+   */
+  create(slug: string): Promise<ShareLinkState>;
+  /** Turn it off. Already off changes nothing and records nothing. */
+  turnOff(slug: string): Promise<ShareLinkState>;
 }
 
 /* -------------------------------------------------------- the AI ledger -- */
@@ -2091,7 +2331,8 @@ export type {
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
-import type { EarlierFeedback } from "../types.js";
+import type { FeedbackEnding } from "../feedback-ending-values.js";
+import type { EarlierFeedback, EarlierFeedbackStatus } from "../types.js";
 
 /** One earlier report as the store reads it: the wire's fields bar `shipped`, which the route adds. */
 export type MyFeedback = Omit<EarlierFeedback, "shipped">;
@@ -2107,6 +2348,66 @@ export interface MyFeedbackPage {
 export interface FeedbackIdFilter {
   ids: readonly string[];
   keep: "in" | "out";
+}
+
+/** The report ids this build has a note for, under the ending each has (src/feedback-ending.ts). */
+export type FeedbackEndingIds = Readonly<Record<FeedbackEnding, readonly string[]>>;
+
+/** One earlier report with what only an admin's list carries from the row: its number, status and mark. */
+export interface MyFeedbackWithStatus extends MyFeedback {
+  number: number;
+  status: EarlierFeedbackStatus;
+  /** ISO, or null. */
+  ignoredAt: string | null;
+}
+
+export interface MyFeedbackStatusPage {
+  reports: MyFeedbackWithStatus[];
+  more: boolean;
+  /** Uncapped, unfiltered, of the same snapshot as `reports`; the four sum to every report the reader filed. */
+  counts: Record<EarlierFeedbackStatus, number>;
+}
+
+/**
+ * **A reply to a question, as the route hands it to the store.** Named field
+ * by field, like `NewFeedback`; the owner is `currentOwnerId()`, never here.
+ */
+export interface NewFeedbackAnswer {
+  /** Client-minted, and the idempotency key. A Spideryarn id. */
+  id: string;
+  /** `q-k3m9qt`. The route has already checked it against the compiled questions. */
+  questionId: string;
+  body: string;
+  /** The server's own, from the mapping a report's comes from. Never the browser's. */
+  environment: FeedbackEnvironment;
+}
+
+/** A reply as it is stored. No owner and no environment: the caller is the owner, and neither is theirs to read back. */
+export interface StoredFeedbackAnswer {
+  id: string;
+  questionId: string;
+  body: string;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * **Three outcomes** (plan 261007d, F15), a union so the route must say which
+ * status each is: written; this owner already sent exactly this, so nothing
+ * was written and the stored row comes back; or this id is already another
+ * reply (a different question or different words), and nothing changed.
+ */
+export type FeedbackAnswerSubmission =
+  | { kind: "created"; answer: StoredFeedbackAnswer }
+  | { kind: "duplicate"; answer: StoredFeedbackAnswer }
+  | { kind: "conflict" };
+
+/** A report a question is about, as much as the question's card shows of it. */
+export interface LinkedFeedbackReport {
+  id: string;
+  number: number;
+  /** The first line of what the reader wrote, cut to a line's length. */
+  firstLine: string;
 }
 
 /** How many reports this reader has filed, and how many of them are among `countIds`. */
@@ -2240,14 +2541,20 @@ export type FeedbackSubmission =
  * **A fenced write that arrived without its fence** — a caller's bug, in four stores.
  *
  * `SearchStore.finish`, `CommentStore.patch`, `ChatStore.finish` and
- * `RefereeCriteriaStore.finish` all take `attempt` as optional, because the
- * filesystem store has no such token. The Postgres side refuses a call without
- * one rather than falling back to identity: a caller that merely forgot to carry
+ * `RefereeCriteriaStore.finish` refuse a call without an attempt rather than
+ * falling back to identity: a caller that merely forgot to carry
  * it through would put the whole cross-process race back — a model call the
  * sweep already buried landing on top of the retry the reader is watching
- * arrive — with nothing anywhere reporting it. Stage H of
- * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
- * is where `attempt` stops being optional and this class stops being reachable.
+ * arrive — with nothing anywhere reporting it.
+ *
+ * **The types refuse it first, since 2026-10-04**
+ * (docs/plans/261004d-fifth-sweep-cluster-6b-store-contracts-require-the-attempt-and-markers-outlive-finish.md,
+ * which is Stage H of
+ * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md):
+ * `attempt` was optional in all four signatures for the filesystem store, and
+ * is now required. This class stayed, for the caller the compiler does not
+ * see — a cast, an `any`, a spread of arguments built elsewhere — because the
+ * thing it guards is a silent overwrite and the guard is one comparison.
  *
  * ## Why it is a class, and why its message names no slug
  *
@@ -2343,12 +2650,11 @@ export function feedbackHourlyCap(ownerId: string): number | null {
  * **A bug report, filed by a reader who is looking at the thing that went
  * wrong.** docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
  *
- * **Postgres only.** Not `guarded(...)` like the reads: there is a Postgres
- * implementation and a filesystem *refusal*, the same asymmetry `AdminStore`
- * and `VisibilityStore` have. A files adapter would be twenty lines written
- * against a module that docs/plans/260831b-finish-the-database-move.md deletes
- * this week, plus a parity obligation to keep two implementations agreeing until
- * one of them goes.
+ * **Postgres only**, and `guarded(...)` in src/store/index.ts like every other
+ * seam. Until 2026-09-05 a filesystem *refusal* stood beside the Postgres
+ * implementation, the same asymmetry `AdminStore` and `VisibilityStore` had; a
+ * files adapter was never written, and the store it would have sat on is gone
+ * (docs/plans/260831b-finish-the-database-move.md).
  *
  * The refusal has to reach the reader as a sentence saying the report was not
  * saved — a button that can only fail is worse than no button, because pressing
@@ -2375,11 +2681,11 @@ export interface FeedbackStore {
    * whether there were more — the Feedback dialog's Earlier tab.
    * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
    *
-   * Owner-scoped like `read`, and the owner is never an argument. Five fields a
+   * Owner-scoped like `read`, and the owner is never an argument. Six fields a
    * report and no more: see `EarlierFeedback` in src/types.ts for why the email,
    * the address, the diagnostics and the screenshot are not among them. `page`
-   * is made from the address here, in the store, by src/feedback-page.ts, so
-   * the address itself is never part of the answer.
+   * and `at` are made from the address here, in the store, by
+   * src/feedback-page.ts, so the address itself is never part of the answer.
    *
    * `filter` narrows by report id — kept `in` or left `out` of the list —
    * **beside** the owner predicate, never instead of it; the Earlier tab's
@@ -2395,6 +2701,47 @@ export interface FeedbackStore {
    * docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
    */
   listMine(limit: number, countIds: readonly string[], filter?: FeedbackIdFilter): Promise<MyFeedbackPage>;
+  /**
+   * **`listMine` with a status and a number on each report** — an admin's
+   * Earlier tab, `GET /api/admin/feedback/earlier`.
+   * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+   *
+   * **Owner-scoped exactly as `listMine` is**, and the owner is never an
+   * argument: this is the caller's own list, not a view across owners. That
+   * the caller is an admin is the route's namespace's business, not this
+   * method's.
+   *
+   * `endings` is which report ids have a note and how it ended; with the row's
+   * `ignored_at` that decides each report's status (`EarlierFeedbackStatus` in
+   * src/types.ts has the rule). The status is one SQL expression, used for the
+   * row, the filter and the counts, so the three cannot disagree. `show`
+   * narrows **before** the cap: the newest `limit` reports of that status.
+   * `counts` is per status, uncapped, in the same snapshot as the list.
+   */
+  listMineByStatus(
+    limit: number,
+    endings: FeedbackEndingIds,
+    show: EarlierFeedbackStatus | "all",
+  ): Promise<MyFeedbackStatusPage>;
+  /**
+   * **Store a reply to a question** — `POST /api/admin/feedback/answers`.
+   * Append-only and idempotent on `(owner, id)`; `FeedbackAnswerSubmission`
+   * has the three outcomes. The owner is `currentOwnerId()`. No rate limit:
+   * the only route that calls it is in the admin namespace.
+   */
+  submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission>;
+  /**
+   * **This owner's newest reply to each of these questions**, at most one a
+   * question; a question they have not replied to is simply absent.
+   * Owner-scoped: another admin's reply is never this one's.
+   */
+  newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  /**
+   * **The number and first line of these reports, among this owner's own.**
+   * An id the owner did not file (another reader's report, or none) is absent,
+   * so a question about a stranger's report shows nothing of it.
+   */
+  linkedReports(ids: readonly string[]): Promise<LinkedFeedbackReport[]>;
   /**
    * **We handed it over.** Written the moment `captureFeedback` returns an
    * event id, which is a thing we know.
@@ -2566,26 +2913,27 @@ export type PreviewClaim =
 /* ------------------------------------------------------- fetch allowance -- */
 
 /**
- * The allowances there are. A closed set, matching the table's CHECK.
+ * The allowances a caller can spend. A closed set, and every member is in the
+ * table's CHECK; the CHECK also still allows the retired `citation-find`, for
+ * rows already written (src/db/schema.ts § `rate_limit_events_bucket`).
  *
  * They are separate buckets rather than one, because they bound different
  * things: `link-preview-fetch` bounds how much of somebody else's server a
  * reader's pointer may ask for, and `link-summary-fill` bounds how much money it
  * may spend. A reader who has hovered a hundred cold links has done nothing
- * wrong by the second measure. `citation-find` is money too — Citations mode's
- * *Find it*, a billed web search per press (src/citation-find.ts) — and its own
- * bucket because a reader summarising links has not spent any of it.
+ * wrong by the second measure. Citations' `citation-investigate` bounds its
+ * whole press, including the lookup (src/citation-investigate.ts), separately
+ * from a reader summarising links.
  * `shelf-topics` is the model scoring a reader's candidate topics
  * (src/shelf-topics.ts): money, spent when the shelf changes rather than when
  * anybody presses anything, and bounded so a shelf that changes on every load
  * cannot spend on every load. `upload-source-guess` is the same billed web
- * search as `citation-find`, spent when an owner opens an upload rather than
+ * search for a work's page, spent when an owner opens an upload rather than
  * when they press anything (src/source-guess-run.ts), so it is bounded apart.
  */
 export type RateBucket =
   | "link-preview-fetch"
   | "link-summary-fill"
-  | "citation-find"
   | "shelf-topics"
   | "upload-source-guess"
   /* Citations' *Investigate* — a streamed, web-searching answer over the whole

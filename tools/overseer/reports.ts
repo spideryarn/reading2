@@ -967,7 +967,7 @@ export type ReportDrainOutcome = {
   debrisRemoved: number;
   probes: number;
   bytesRead: number;
-  stoppedBy: "files" | "bytes" | "probes" | "time" | null;
+  stoppedBy: "files" | "bytes" | "probes" | "time" | "abandoned" | null;
   /** One sentence per refused, pending or skipped item; one for all the quarantined. */
   notes: string[];
 };
@@ -1219,11 +1219,31 @@ function openLog(root: string): LogState {
   return { kind: "ok", recorded };
 }
 
+/** What a pass is sent back for a reference it asked about: the check, or the word to stop. */
+type StepAnswer = ArtefactCheck | "abandon";
+
 /**
- * One pass. **Synchronous, and only ever called by a daemon holding
+ * One pass, with the checker taken out. **Only ever run by a daemon holding
  * `overseer.lock`** — that lock is the exclusion; there is no `reports.lock`.
+ *
+ * ## It can be suspended in exactly one place (plan 261004g)
+ *
+ * Checking a reference means asking git, and the daemon awaits git rather than
+ * blocking on it. So this is a generator: it `yield`s the reference where it
+ * used to call the checker, and whoever drives it sends the answer back. That
+ * is the ONLY `yield`, and it comes before anything has been written for the
+ * report in hand — its `report-processing/` file is written after all its
+ * checks. Everything else is one synchronous stretch per report, as it always
+ * was, so the crash ordering below has no new place to be interrupted.
+ *
+ * Sent `"abandon"`, the pass stops there and writes nothing more: the daemon
+ * lost its lock, or was told to stop, while git was out. The report in hand is
+ * still in the inbox, untouched, for whichever daemon drains next.
+ *
+ * A checker that throws is thrown in at the `yield` (`Generator.throw`), where
+ * the report's own `catch` leaves it pending — as a synchronous throw did.
  */
-export function drainReports(options: DrainOptions): ReportDrainOutcome {
+function* drainSteps(options: Omit<DrainOptions, "checkArtefact">): Generator<ArtefactRef, ReportDrainOutcome, StepAnswer> {
   const { root, now } = options;
   if (!path.isAbsolute(root)) throw new Error(`the store directory must be absolute, not '${root}'`);
   const limits: DrainLimits = { ...DEFAULT_DRAIN_LIMITS, ...options.limits };
@@ -1477,7 +1497,14 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
           break;
         }
         outcome.probes += 1;
-        artefacts.push({ ref, check: options.checkArtefact(ref) });
+        // THE ONE PLACE A PASS WAITS. Nothing is on disk for this report yet.
+        const answer = yield ref;
+        if (answer === "abandon") {
+          outcome.stoppedBy = "abandoned";
+          outcome.deferred = candidates.length - index;
+          return outcome;
+        }
+        artefacts.push({ ref, check: answer });
       }
       const receivedAt = now().toISOString();
       const decisionId = submission.kind === "decision" ? mintId() : null;
@@ -1540,6 +1567,68 @@ export function drainReports(options: DrainOptions): ReportDrainOutcome {
     }
   }
   return outcome;
+}
+
+/**
+ * One pass with a checker that answers at once. This is the drain as every
+ * test of its protocol drives it, and as anything without git to wait on may.
+ */
+export function drainReports(options: DrainOptions): ReportDrainOutcome {
+  const steps = drainSteps(options);
+  let step = steps.next();
+  while (!step.done) {
+    let answer: ArtefactCheck;
+    try {
+      answer = options.checkArtefact(step.value);
+    } catch (cause) {
+      step = steps.throw(cause);
+      continue;
+    }
+    step = steps.next(answer);
+  }
+  return step.value;
+}
+
+/** `stillWanted` is the pass's `stillOwner`, for a checker that awaits more than once: ask it between its own awaits. */
+export type AsyncArtefactChecker = (ref: ArtefactRef, stillWanted: () => boolean) => Promise<ArtefactCheck>;
+
+export type AsyncDrainOptions = Omit<DrainOptions, "checkArtefact"> & {
+  checkArtefact: AsyncArtefactChecker;
+  /**
+   * Whether the caller still holds the lock this pass writes under and has not
+   * been told to stop. Asked before the pass starts and after EVERY awaited
+   * check, because either can change while git is out. Required rather than
+   * defaulted to "yes": a default would be the one answer that cannot be right
+   * for a daemon, and a forgotten one would write under somebody else's lock.
+   */
+  stillOwner: () => boolean;
+};
+
+/**
+ * One pass as the daemon runs it: the same steps, with each check awaited.
+ *
+ * **The caller must not start a second pass while one is in flight, and must
+ * wait for this one before releasing its lock.** The daemon does both
+ * (`reportsRunning`, `settleInFlight`).
+ */
+export async function drainReportsAsync(options: AsyncDrainOptions): Promise<ReportDrainOutcome> {
+  if (!options.stillOwner()) return { ...emptyOutcome(), stoppedBy: "abandoned" };
+  const steps = drainSteps(options);
+  let step = steps.next();
+  while (!step.done) {
+    let answer: { check: ArtefactCheck } | { threw: unknown };
+    try {
+      answer = { check: await options.checkArtefact(step.value, options.stillOwner) };
+    } catch (cause) {
+      answer = { threw: cause };
+    }
+    // ASKED AFTER THE AWAIT AND BEFORE ANYTHING ELSE: what the check said no
+    // longer matters if the store is not ours to write.
+    if (!options.stillOwner()) step = steps.next("abandon");
+    else if ("threw" in answer) step = steps.throw(answer.threw);
+    else step = steps.next(answer.check);
+  }
+  return step.value;
 }
 
 /* ------------------------------------------------------------------ *

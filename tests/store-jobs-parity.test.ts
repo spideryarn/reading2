@@ -41,7 +41,7 @@ import { mintAttempt } from "../src/store/jobs.js";
 import type { ExpirySettlement, JobStore } from "../src/store/jobs.js";
 import { StaleAttemptError } from "../src/store/jobs.js";
 import { ingestProvenanceOf, pgJobStore, releaseStepIn } from "../src/store/pg-jobs.js";
-import type { Job, JobStep, OwnerId } from "../src/types.js";
+import type { BlockId, Job, JobStep, OwnerId, StepPreview } from "../src/types.js";
 import { expectClaimed } from "./helpers/expect-claimed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
@@ -1897,8 +1897,64 @@ for (const adapter of ADAPTERS) {
       expect(cancelled?.error).toBeUndefined();
     });
 
+    it.each(["pause", "requeue", "expiry", "expired-stop", "swept-stop", "queued-stop"] as const)(
+      "removes the stored preview when a step settles through %s",
+      async (door) => {
+        const preview: StepPreview = {
+          kind: "simple-brief",
+          paragraphs: [{ text: "A checked Brief before Fuller finishes.", ids: ["spya-k3m9qt" as BlockId] }],
+        };
+        const job = aJob();
+        if (door === "queued-stop") job.steps[0]!.preview = preview;
+        await store.enqueueOrGet(job, { workKey: "k-preview", reservesName: false });
+        const attempt = mintAttempt();
+        if (door !== "queued-stop") {
+          expectClaimed(await store.claim(job.id, OWNER, attempt, LEASE, CAP));
+          await store.noteProgress(job.id, attempt, [{
+            ...job.steps[0]!, status: "running", startedAt: new Date().toISOString(), preview,
+          }]);
+        }
+        expect((await store.get(job.id, OWNER))?.steps[0]?.preview).toEqual(preview);
+
+        const stop = async () => {
+          const stopped = await store.requestCancel(job.id, OWNER);
+          expect(stopped?.steps[0]?.preview).toBeUndefined();
+        };
+        const expire = async (budget: number) => {
+          await adapter.expire(job.id);
+          await store.settleExpired(undefined, OWNER, budget);
+        };
+        const endings: Record<typeof door, { status: Job["status"]; run: () => Promise<void> }> = {
+          pause: { status: "queued", run: async () => {
+            const paused = await store.pauseForDeadline(job.id, attempt, 2);
+            expect(paused.kind).toBe("requeued");
+            if (paused.kind === "requeued") expect(paused.job.steps[0]?.preview).toBeUndefined();
+          } },
+          requeue: { status: "queued", run: () => expire(2) },
+          expiry: { status: "error", run: () => expire(0) },
+          "expired-stop": { status: "cancelled", run: async () => {
+            await adapter.expire(job.id);
+            await stop();
+          } },
+          "swept-stop": { status: "cancelled", run: async () => {
+            const asked = await store.requestCancel(job.id, OWNER);
+            expect(asked?.status).toBe("running");
+            expect(asked?.steps[0]?.preview, "a live Stop only asks the claimant").toEqual(preview);
+            await expire(0);
+          } },
+          "queued-stop": { status: "cancelled", run: stop },
+        };
+        await endings[door].run();
+
+        const after = await store.get(job.id, OWNER);
+        expect(after?.status).toBe(endings[door].status);
+        expect(after?.steps[0]?.status).not.toBe("running");
+        expect(after?.steps[0]?.preview, "a settled step retained the uncommitted Brief").toBeUndefined();
+      },
+    );
+
     /**
-     * **Everything that was not running is left exactly as it was.**
+     * **Every field except the transient preview is left alone on non-running steps.**
      *
      * The settlement rewrites the `steps` array whole — one `jsonb_agg` over
      * every element in Postgres, a loop over every step on the filesystem — so

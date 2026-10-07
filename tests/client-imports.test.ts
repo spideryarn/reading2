@@ -19,9 +19,9 @@
  * module is one careless edit away from a broken browser bundle."* This is that
  * sentence, enforced.
  *
- * The fix when this fails is never to add the file to the allowlist. It is to
- * move the shared thing into a module that imports nothing — src/types.ts,
- * src/ids.ts, src/urls.ts are the existing examples.
+ * Never allowlist a server module to silence this check. Move the shared thing
+ * into a pure module, or allowlist an existing pure module that meets the
+ * qualification below — src/types.ts, src/ids.ts, src/urls.ts are examples.
  */
 import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -51,7 +51,29 @@ const SHARED = new Set([
      and the date order read it again, so both sides keep one reading. Imports
      `types.js` and nothing else. Plan 261001a, stages 5 and 6. */
   "registry-work.js",
+  /* Scholar's search address and first-author text, extracted from the
+     server's citations.ts for Reception. Imports nothing; the purity check
+     below now covers it too. Plan 261003o, F4. */
+  "scholar-search.js",
+  /* The address of a paper that cites the article, built from its DOI or its
+     OpenAlex id — the server shape-checks the id with the same pattern before
+     it stores it, and the panel checks it again before it is an `href`.
+     Imports `doi-url.js` and nothing else. Plan 261004h. */
+  "citer-link.js",
+  /* A DOI as a doi.org address, encoded, and back — one builder for the
+     server's links and the client's. Imports nothing. Plan 261004j. */
+  "doi-url.js",
+  /* Which influence a Citations row shows — the web one from a kept *Dig
+     deeper* answer, else the list's own — read by the band and by chat's
+     `article_citations` tool, so the two cannot disagree. Imports `types.js`
+     (types only) and nothing else. Plan 261003m, stage 2. */
+  "citation-effective-influence.js",
   "ids.js", // minting and validating block ids
+  /* Which pasted addresses name a paper a source knows (arXiv), and that
+     paper's one key and slug: `ingest.js` asks it in `urlKey` and
+     `slugFromUrl`, which the add page calls. Pure string work; imports
+     nothing. Plan 261005l. */
+  "paper-sources.js",
   /* Whether a section title is the author's heading kept (`sameHeading`), and
      the heading tree's own preamble title — the pipeline checks the claim with
      it and the client voices the title with it (src/web/tree.ts §
@@ -188,6 +210,17 @@ const SHARED = new Set([
   // must share the rule. Extracted from routes.ts into this import-free leaf;
   // the purity check below keeps server dependencies out of the client.
   "spoken-label.js",
+  /* Which part of a Recall answer is its hint. The panel hides it, the store
+     fences the recorded press on it, and Live's seed and `reader_notes` leave
+     an unopened one out, so a browser copy and a server copy would be two
+     rules for one paragraph. It imports types only. src/recall-hint.ts. */
+  "recall-hint.js",
+  /* How a conversation's title is cut from its first question. The server
+     stores that cut; Chat's list asks whether a stored title is exactly it
+     before drawing the whole question instead (src/web/chat-list-row.ts), so
+     a browser copy would be a second rule for one string. It imports
+     nothing. src/chat-title.ts. */
+  "chat-title.js",
   /* What a bug report may carry — the diagnostics blob's shape and the two
      image formats a pasted screenshot may be. On the list for the same reason
      `monitoring-scrub.js` is, and it is the same argument one seam over: the
@@ -196,6 +229,8 @@ const SHARED = new Set([
      It imports nothing at all. See src/feedback-payload.ts and
      docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md. */
   "feedback-payload.js",
+  "feedback-ending-values.js", // a note's three endings and its comment bound, for the Earlier tab; imports nothing
+  "feedback-question-values.js", // a question's statuses, bounds and id rule, for the Earlier tab; imports only ids.js
   /* What may be said about a failure when it leaves the machine. On the list
      for the same reason `messages.js` is: it imports nothing but that file and
      types, and both halves of monitoring have to agree on the rules exactly —
@@ -250,6 +285,11 @@ const SHARED = new Set([
      Types only, no imports: the same argument as `admin.js` and
      `billing-plan.js` — a wire contract with an end on each side. */
   "admin-vouchers.js",
+  /* The `/admin/costs` wire shape and the pure filter, group and pivot over
+     it, shared with the analysis script so a figure has one definition. Imports
+     `step-order.js` and nothing else; `category` is a string the server fills
+     in because src/cost-categories.ts reaches the pipeline. Plan 261005a. */
+  "cost-cube.js",
   /* The Sketch diagram's schema, its validator and its painter — the two files
      that turn a model's scene into geometry. On the list for the reason the
      header states rather than for convenience: `sketch-scene.js` imports
@@ -383,7 +423,8 @@ const SHARED = new Set([
   /* What a referee's criterion is, and what a result of one may say. On the
      list because both modules qualify — `referee-criteria.js` imports
      `quote-match.js`, `types.js` and `urls.js`, every one of them already here,
-     and `saved-criteria.js` imports only `referee-criteria.js` — and because
+     and `saved-criteria.js` imports only `referee-criteria.js` (and holds
+     `isCriteriaAtCeiling`, so the panel need not import the store) — and because
      being on it is the point rather than a convenience.
 
      The client needs them for the reason `sketch-scene.js` is here: **the
@@ -482,6 +523,38 @@ const SHARED = new Set([
      calling this is what makes the counter true.
      See src/citable.ts and docs/plans/chat-markdown.md. */
   "citable.js",
+  /* The shape of a command token in a chat answer (`[cmd:<id>:<argument>]`),
+     and which tokens stand on a line of their own. On the list for
+     `citable.js`'s reason, and imported by it: the renderer lifts a token out
+     of a text node before it looks for citations, and the server's citation
+     counters must blank the same span, or the id in
+     `[cmd:bookmark:spya-k3m9qt]` is counted as a citation nobody was shown.
+     It imports nothing at all. See src/command-token.ts and plan 261003f. */
+  "command-token.js",
+  /* How an answer begins, as one plain line: the cut the server makes for a
+     thread summary's `lastLine` and the collapsed chat card makes from the
+     live transcript. One function so the mark under a claim and the card
+     cannot disagree about the same answer. It imports `urls.js`, already
+     here, and the markdown parser `citable.js` uses. See
+     src/answer-opening.ts and plan 261006f. */
+  "answer-opening.js",
+  /* What the command bar asks when a sentence matches no row, and how the
+     answer is read: the request's shape and caps, the two prompts, `readPick`
+     and the run-at-once cut. On the list because the browser builds the
+     request and re-reads the reply with the same functions the server
+     validates with (and the eval asks with), so the three cannot drift. It
+     imports nothing at all; the catalogue of words is the server's
+     (src/command-pick-call.ts) and is not reachable from here. See
+     src/command-pick.ts and plan 261003k. */
+  "command-pick.js",
+  /* The command bar's short list from why you are reading: the request's
+     shape, the caps, the re-reading of the reply, the fingerprint both sides
+     compute, and the row's own words. On the list for `command-pick.js`'s
+     reason, and it imports only that and `types.js`. **The prompt is not in
+     it**: that carries the plain-words section and lives with the call
+     (src/command-suggest-call.ts), which is not reachable from here. See
+     src/command-suggest.ts and plan 261005k. */
+  "command-suggest.js",
   /* The `data-spya-*` namespace — the attributes stage 2 leaves on the article
      so stage 3 can read them back. On the list because it imports **nothing at
      all**, deliberately and for this reason: its own header says so, since a
@@ -511,6 +584,14 @@ const SHARED = new Set([
      nothing to find.
      See src/changelog.ts and docs/project/changelog.md. */
   "changelog.js",
+  /* What a private link's key looks like and the one parameter it travels
+     under (plan 261005e). The server bounds a caller's `?key=` with
+     `parseShareKey` and the browser forwards only what the same function
+     passes; feedback takes the key off an address at both ends with one
+     `withoutShareKey`. Two copies would be two ideas of what a key is. It
+     imports nothing, and its own header says it must stay that way: minting,
+     which needs `node:crypto`, is in src/store/pg-share-link.ts. */
+  "share-key.js",
 ]);
 
 /**
@@ -776,9 +857,9 @@ describe("the client's imports", () => {
    * **What the rule flags, stated as data.**
    *
    * The sweep above reads real files, so it can only ever exercise the imports
-   * somebody happens to have written — and today every shared module is a leaf,
-   * so it passes without touching a single interesting case. This is the same
-   * rule asked about each spelling directly.
+   * somebody happens to have written, so a passing sweep does not prove that
+   * each forbidden spelling is caught. This is the same rule asked about each
+   * spelling directly.
    *
    * The type-only row is here **as an expected flag rather than as a deleted
    * case**, so that the decision in the comment above is executable rather than

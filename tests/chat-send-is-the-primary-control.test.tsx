@@ -25,6 +25,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
     dictation: { supported: false, armed: false, transcribing: false, toggle: () => {} },
     readOnly: false,
+    busy: false,
     toggle: () => {},
   }),
 }));
@@ -35,6 +36,8 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 vi.mock("../src/web/router.js", () => ({
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
   parseRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
+  /* command-match.ts § pickKey reads it to know a page of Help. */
+  HELP_HREF: "/help",
 }));
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async () => new Response("{}", { status: 200 }),
@@ -151,7 +154,7 @@ describe("the send button", () => {
       '.chat-send[type="submit"]:not([aria-disabled="true"])',
       '.chat-send[type="submit"]:not([aria-disabled="true"]):hover',
       ".chat-send:focus-visible",
-      ".remember .chat-send",
+      ".learn .chat-send",
       ".chat-send.stop",
       /* Quiz borrows the box for Answer and for Next, neither of them a
          `submit` in a form, so its fill is keyed on a class of its own
@@ -168,9 +171,9 @@ describe("the send button", () => {
     expect(go).toMatch(/color:\s*var\(--primary-foreground\)/);
   });
 
-  it("keeps Remember's send control on the far right after the stance picker is gone", () => {
-    const remember = rule(".remember .chat-send");
-    expect(remember).toMatch(/order:\s*4/);
-    expect(remember).toMatch(/margin-left:\s*auto/);
+  it("keeps Learn's send control on the far right after the stance picker is gone", () => {
+    const learn = rule(".learn .chat-send");
+    expect(learn).toMatch(/order:\s*4/);
+    expect(learn).toMatch(/margin-left:\s*auto/);
   });
 });

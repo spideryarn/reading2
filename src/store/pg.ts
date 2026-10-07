@@ -1,11 +1,18 @@
 /**
- * The Postgres store. Same questions as src/store/fs.ts, same answers.
+ * The Postgres store, and since 2026-09-05 the only one.
  *
- * "Same answers" is meant literally and is tested literally: tests/store-parity.test.ts
- * asks both stores for every article in `data/` and compares the **API-shaped**
- * result — the `Article` the client receives — not SQL rows. Comparing rows
- * passes while the thing the client gets has changed shape, which is the
- * failure this whole exercise exists to catch.
+ * It was written as the second of two. src/store/fs.ts answered the same
+ * questions from files, and tests/store-parity.test.ts asked both stores for
+ * every article in `data/` and compared the **API-shaped** result — the
+ * `Article` the client receives — not SQL rows. The filesystem store and that
+ * suite's second arm were deleted on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md);
+ * what the suite still holds is in its own header.
+ *
+ * **Many comments below give "what the filesystem store answered" as the reason
+ * for a choice** — which inputs a fingerprint has, why a field is spread
+ * conditionally. They are history, and still the reason: this file was made to
+ * agree with that one, and the shapes it agreed on are the API's.
  *
  * ## Three things here are easy to get subtly wrong
  *
@@ -14,19 +21,21 @@
  *    differently: `JSON.stringify({a: undefined})` is `{}`, but the property is
  *    there for `in` and for `Object.keys`. Postgres gives back `null` where the
  *    file had *nothing*, so every optional field is a conditional spread. This
- *    is the single biggest source of near-miss parity failures.
+ *    was the single biggest source of near-miss parity failures.
  * 2. **Errors carry a status.** `src/routes.ts` turns `status: 404` into a 404;
  *    an untagged throw becomes a 500. So "no such article" must be tagged here
- *    exactly as it was in src/api.ts, or a missing article starts reporting as a
- *    server fault.
+ *    (`notFound`, below), or a missing article starts reporting as a server
+ *    fault.
  * 3. **Staleness is computed at read time, never stored.** A flag written when
  *    the artefact was generated is right up until the moment it matters.
  *
- * ## What is deliberately NOT here
+ * ## What was deliberately not here
  *
- * A fallback to the filesystem. Nothing in this file may catch an error and
- * call into src/store/fs.ts — see docs/plans/260826e-postgres-storage-implementation.md
- * § Rules. It would hide exactly the divergence the parity test is looking for.
+ * A fallback to the filesystem, while there was one. Nothing in this file
+ * caught an error and called into src/store/fs.ts —
+ * docs/plans/260826e-postgres-storage-implementation.md § Rules — because that
+ * would have hidden exactly the divergence the parity test was looking for.
+ * There is nothing to fall back to now: a read that fails here has failed.
  */
 
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
@@ -108,6 +117,7 @@ import {
   PROMPT_VERSION as DEBATE_PROMPT_VERSION,
 } from "../debate.js";
 import { lookupContext, lookupContextHash } from "../citation-lookup.js";
+import { blockOf } from "./block-rows.js";
 import { findFromRow } from "./citation-lookup-row.js";
 import {
   attachInvestigations,
@@ -149,9 +159,11 @@ import {
 } from "../library-scalars.js";
 import { LABELS_PROMPT_VERSION } from "../labels.js";
 import { log } from "../log.js";
+import { ratedDifficultyOf } from "../reading-time.js";
 import { CAPABLE_MODEL, modelFor } from "../models.js";
 import { currentOwnerId } from "../owner.js";
 import { STEP_ORDER, STEPS } from "../pipeline.js";
+import { blocksAreWhatTheirHtmlProduces } from "../blocks.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import {
   articleFingerprint,
@@ -218,6 +230,7 @@ import { isUsableSimpleSummary } from "../types.js";
 import { structureCurrency, metaRawSha256, sameStamp } from "./artifacts.js";
 import type { ArtifactMap } from "./artifacts.js";
 import type { ArticleReader, RawSource } from "./contracts.js";
+import { ArtefactNotMadeYet } from "./artefact-not-made-yet.js";
 import { CitationsListNotFound } from "./citations-list-not-found.js";
 import { guardDbStore } from "./db-errors.js";
 import { postgresBlobStore } from "./blobs.js";
@@ -699,6 +712,15 @@ const REVISION_READ_POLICY: Record<
      `metaFrom` puts them on every owner-facing `Meta`. No prompt reads either. */
   abstract: { article: "value", library: "value" },
   doi: { article: "value", library: "value" },
+  journal: { article: "value", library: "value" },
+  /* A `Meta` field the Metadata page shows, so `article`. No card prints it and
+     no prompt reads it: the title a model is shown is `title` (plan 261005g). */
+  titleOriginal: { article: "value" },
+  /* A `Meta` field, so `article`; and the shelf sorts and prints it beside
+     `publishedAt`, so `library`. **Not `timeline` or `metadata`**, which
+     `publishedAt` is on: no fingerprint reads the year, because a year is too
+     coarse a frame to resolve "last March" against (plan 261004h). */
+  publishedYear: { article: "value", library: "value" },
   /* **`timeline` and `metadata`, and it is on no other artefact's read** — this
      is the one stage whose freshness fingerprint carries the publication date
      (src/source-hash.ts § `datedArticleFingerprint`), because it is the frame a
@@ -848,8 +870,8 @@ const REVISION_READ_POLICY: Record<
      today".** Without the column here, `isCurrent` below falls to its
      `default: true` arm and a manifest built against paragraphs that have since
      changed reports itself current on the one page whose whole job is to say
-     otherwise — while the filesystem store, which asks the step's own `stamp`,
-     says the opposite about the same article.
+     otherwise — while the filesystem store, which asked the step's own `stamp`,
+     said the opposite about the same article.
 
      Not on the library: a card says nothing about images, and a presence flag
      nobody draws is a column in a query for no reason.
@@ -1060,6 +1082,23 @@ const REVISION_READ_POLICY: Record<
   partCount: { library: "value" },
   sectionCount: { library: "value" },
   rootGist: { library: "value" },
+  /* **The difficulty rating a screen shows: two levels and the model's
+     sentence** (plan 261005j). `metaFrom` builds `Meta.readingDifficulty`
+     from them, so they are in `META_COLUMNS` and both reads that build a
+     `Meta` take all three: the article for its masthead, tile and card, the
+     shelf so `describeArticle` multiplies the same minutes off the same
+     `Meta`. The shelf does not print the sentence; it rides along so there is
+     one way to build the rating rather than two.
+
+     No fingerprint reads them and no prompt is sent them. */
+  readingLanguage: { article: "value", library: "value" },
+  readingIdeas: { article: "value", library: "value" },
+  readingDifficultyReason: { article: "value", library: "value" },
+  /* Which model, and when. No owner-facing read selects either: the two
+     exports read the row whole, and a visitor's projection
+     (src/store/public-reader.ts) leaves them out too. */
+  readingDifficultyModel: {},
+  readingDifficultyRatedAt: {},
   createdAt: {},
 };
 
@@ -1074,6 +1113,8 @@ const META_COLUMNS = {
   note: articleRevisions.note,
   abstract: articleRevisions.abstract,
   doi: articleRevisions.doi,
+  journal: articleRevisions.journal,
+  publishedYear: articleRevisions.publishedYear,
   finalUrl: articleRevisions.finalUrl,
   fetchedAt: articleRevisions.fetchedAt,
   rawSha256: articleRevisions.rawSha256,
@@ -1084,6 +1125,9 @@ const META_COLUMNS = {
   unverified: articleRevisions.unverified,
   recall: articleRevisions.recall,
   pagesChecked: articleRevisions.pagesChecked,
+  readingLanguage: articleRevisions.readingLanguage,
+  readingIdeas: articleRevisions.readingIdeas,
+  readingDifficultyReason: articleRevisions.readingDifficultyReason,
 } as const;
 
 /**
@@ -1162,6 +1206,8 @@ export const REVISION_PROJECTIONS = {
   article: {
     id: articleRevisions.id,
     ...META_COLUMNS,
+    /* Owner-only import provenance; the shelf does not display or need it. */
+    titleOriginal: articleRevisions.titleOriginal,
     authors: articleRevisions.authors,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
@@ -1541,33 +1587,33 @@ export function blocksQuery(db: Pick<ReturnType<typeof getDb>, "select">, revisi
     .orderBy(asc(revisionBlocks.ordinal));
 }
 
-async function blocksFor(revisionId: string): Promise<Block[]> {
+/**
+ * The block rows **as stored**, HTML uncleaned — the same blocks the pipeline's
+ * artefact read returns (`readBlocks`, src/store/artifacts-pg.ts).
+ *
+ * Nothing renders these. They exist for the one question that is about the
+ * stored rows rather than about what a reader is shown: would stage 3 write
+ * them again (`isCurrent` § `case "blocks"`). Cleaned blocks answer that
+ * differently from the queue whenever a row holds markup the sanitiser removes.
+ */
+async function storedBlocksFor(revisionId: string): Promise<Block[]> {
   const rows = await blocksQuery(getDb(), revisionId);
 
-  const blocks = rows.map((row) => ({
-    id: row.blockId,
-    tag: row.tag,
-    kind: row.kind as Block["kind"],
-    // Conditional spreads throughout: the file simply had no `level` key, and
-    // `level: undefined` is a different type under exactOptionalPropertyTypes.
-    ...(row.level === null ? {} : { level: row.level }),
-    text: row.text,
-    words: row.words,
-    html: row.html,
-    gistable: row.gistable,
-    ...(row.note === null ? {} : { note: row.note }),
-    ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
-    ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
-    ...(row.noteId === null ? {} : { noteId: row.noteId }),
-    ...(row.contextId === null || row.contextType === null
-      ? {}
-      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-  }));
+  return rows.map((row) => blockOf(row.blockId, row));
+}
 
+async function blocksFor(revisionId: string): Promise<Block[]> {
+  return cleanedForReading(await storedBlocksFor(revisionId));
+}
+
+/** Stored blocks, made safe to render. Every read but one wants this. */
+function cleanedForReading(blocks: Block[]): Block[] {
   /* The same guard src/api.ts put on the filesystem reader, because there were
-     two `loadArticle`s and guarding one of them passes every test — the fs half
-     is genuinely protected, the suite is green, and the store that is in the
-     middle of *replacing* the filesystem serves old HTML unchecked.
+     two `loadArticle`s and guarding one of them passed every test — the fs half
+     was genuinely protected, the suite was green, and the store that was in the
+     middle of *replacing* the filesystem served old HTML unchecked. (Both
+     src/api.ts and the filesystem reader have since been deleted; this is the
+     one `loadArticle` now, and the guard is no less needed for that.)
 
      `undefined` for the stamp, deliberately, and not because nobody got round
      to it: there is no column to keep one in yet, and absent reads as stale,
@@ -1603,9 +1649,9 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
  * **No sanitiser, and the reason is a contract rather than a guess.**
  * `sanitizeStoredBlocks` *"does not touch `text`"* — its docstring says so and
  * its implementation only ever rewrites `html` (src/sanitize.ts). So the hash
- * over these rows is byte-identical to the one the filesystem store computes
- * over sanitised blocks, which is what keeps the two stores agreeing about
- * `stale`. That agreement is what tests/store-parity.test.ts exists for.
+ * over these rows is byte-identical to the one the filesystem store computed
+ * over sanitised blocks, which is what kept the two stores agreeing about
+ * `stale` until that store went on 2026-09-05.
  *
  * `order by ordinal` for the same reason `blocksFor` has it: block ids are
  * random and carry no position, so without it the rows arrive in whatever order
@@ -1625,11 +1671,9 @@ async function relationsFingerprintInputs(
   return rows.map((row) => ({
     id: row.id as Block["id"],
     text: row.text,
-    kind: row.kind as Block["kind"],
+    kind: row.kind,
     words: row.words,
-    ...(row.treatment === null
-      ? {}
-      : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
+    ...(row.treatment === null ? {} : { treatment: row.treatment }),
   }));
 }
 
@@ -1745,7 +1789,7 @@ export function sourceHashQuery(
 /**
  * The hash of an article's current blocks, or `undefined` when it has none —
  * which every caller's `isStale` treats as stale, the same answer the
- * filesystem store gives for a `blocks.json` it cannot read.
+ * filesystem store gave for a `blocks.json` it could not read.
  */
 export async function sourceHashFor(
   articleId: string,
@@ -1826,7 +1870,7 @@ function metaFrom(
      person to satisfy the typechecker would do it by putting them back in the
      query. The narrow type is the thing stopping that. `REVISION_READ_POLICY`
      above says which read takes what. */
-  revision: MetaRow,
+  revision: MetaRow & { titleOriginal?: string | null },
   /**
    * The first depth-1 heading's text, or null — **the input to the fallback,
    * not the fallback itself.**
@@ -1841,6 +1885,13 @@ function metaFrom(
 ): Meta {
   const title = revision.title ?? headingTitle ?? slug;
   const rawSha256 = metaRawSha256(revision);
+  /* Absent unless the three columns make a whole rating: an unrated piece has
+     no key, and reads at the flat rate (src/reading-time.ts). */
+  const readingDifficulty = ratedDifficultyOf({
+    language: revision.readingLanguage,
+    ideas: revision.readingIdeas,
+    reason: revision.readingDifficultyReason,
+  });
 
   return {
     slug,
@@ -1859,6 +1910,9 @@ function metaFrom(
     ...(revision.note === null ? {} : { note: revision.note }),
     ...(revision.abstract === null ? {} : { abstract: revision.abstract }),
     ...(revision.doi === null ? {} : { doi: revision.doi }),
+    ...(revision.journal === null ? {} : { journal: revision.journal }),
+    ...(typeof revision.titleOriginal === "string" ? { titleOriginal: revision.titleOriginal } : {}),
+    ...(revision.publishedYear === null ? {} : { publishedYear: revision.publishedYear }),
     /* **Non-null exactly when the document came off the reader's own disk**, so
        it is what the masthead and the metadata page ask instead of
        `source === "pdf"` — which is the media kind and stopped being a proxy
@@ -1880,6 +1934,7 @@ function metaFrom(
     ...(revision.unverified === null ? {} : { unverified: revision.unverified }),
     ...(revision.recall === null ? {} : { recall: revision.recall }),
     ...(revision.pagesChecked === null ? {} : { pagesChecked: revision.pagesChecked }),
+    ...(readingDifficulty === null ? {} : { readingDifficulty }),
   };
 }
 
@@ -2718,11 +2773,12 @@ export function shareableArtefacts(revision: {
  * the `Pick` was recording nothing except which names existed when it was last
  * edited.
  *
- * **Annotated, not `satisfies`**, for two reasons. `fsArticleReader` in
- * src/store/fs.ts is annotated the same way, and the twin adapters should read
- * the same; and tests/store-seams-have-two-implementations.test.ts finds an
- * adapter by parsing its *type annotation* out of the source, so a `satisfies`
- * clause would make this one invisible to the test that counts sides of a seam.
+ * **Annotated, not `satisfies`**, because
+ * tests/store-seams-have-two-implementations.test.ts finds an adapter by
+ * parsing its *type annotation* out of the source, so a `satisfies` clause
+ * would make this one invisible to that test. (There was a second reason
+ * until 2026-09-05: `fsArticleReader` in src/store/fs.ts was annotated the same
+ * way, and the twin adapters were meant to read the same.)
  * The narrower inferred type buys callers nothing here: every method already
  * returns exactly what the interface declares.
  */
@@ -2804,7 +2860,7 @@ const rawPgArticleReader: ArticleReader = {
     const assets = found.revision.assets ?? undefined;
     return {
       /* Through `titleFor`, so the reading view's masthead calls a renamed
-         article what the shelf calls it. The filesystem store does the same at
+         article what the shelf calls it. The filesystem store did the same at
          the same seam; a review found this applied to the card only. */
       meta: withAuthors(
         titleFor(metaFrom(slug, found.revision, headingTitleOf(blocks)), shelfFrom(found.article)),
@@ -2833,8 +2889,10 @@ const rawPgArticleReader: ArticleReader = {
          selects `articles` whole.
 
          Always a value here, never conditional on it being `public` — the
-         mark has three states and one of them is *we could not say*, which is
-         what the filesystem store's absence means. `describeArticle` keeps the
+         owner's mark has three states and one of them is *we could not say*.
+         Visitor payloads omit this owner-side field and carry `sharedBy`
+         instead (src/public-types.ts); the filesystem store could not answer,
+         until 2026-09-05. `describeArticle` keeps the
          key only when it says `public` because the shelf has no private twin
          to draw (src/library-scalars.ts); this one draws a lock.
 
@@ -2843,6 +2901,8 @@ const rawPgArticleReader: ArticleReader = {
          drizzle/0024) is a two-member union TypeScript cannot see the
          guarantee for. */
       visibility: found.article.visibility as Visibility,
+      /* The schema pairs this timestamp with the secret. Send only the fact. */
+      privateLinkOn: found.article.shareTokenAt !== null,
       /* Off the same row, for the masthead's Archive button (plan 261002a). */
       archivedAt: found.article.archivedAt?.toISOString() ?? null,
       /* Named, for `assets`' reason: required on `Article`, so a projection
@@ -2936,6 +2996,7 @@ const rawPgArticleReader: ArticleReader = {
              TypeScript cannot see the guarantee for. `describeArticle` keeps
              the key only when it says `public`. */
           visibility: row.article.visibility as Visibility,
+          privateLinkOn: row.article.shareTokenAt !== null,
           /* Exactly the condition under which `stepIsDone(fetch)` can skip on
              the draft copied from this current revision: the raw manifest is
              readable and its completed run row is carried with it. */
@@ -2996,13 +3057,18 @@ const rawPgArticleReader: ArticleReader = {
    * `inputFingerprint`), so it is checked against the artefact like `tweets` and
    * `glossary`, and in full, because its `PROMPT_VERSION` is exported.
    *
-   * `fetch`, `extract` and `blocks` have no currency rule in **either** store —
+   * `fetch`, `metadata` and `extract` have no currency rule on either side —
    * nothing they write records what it was made from — so they are the step row
-   * alone, exactly as on the filesystem. **`assets` is not one of
-   * them**, and the `default` arm below is why it needed a case: its manifest
-   * does record what it was made from, so falling through would have this page
-   * call a stale one current while the filesystem store said otherwise about
-   * the same article.
+   * alone. **`assets` is not one of them**, and the `default` arm below is why
+   * it needed a case: its manifest does record what it was made from, so falling
+   * through would have this page call a stale one current while the pipeline
+   * said otherwise about the same article.
+   *
+   * **Nor is `blocks`, since 2026-10-05.** It records nothing either, but the
+   * queue decides it by replaying stage 3 (`STEPS.blocks.isDone`), and for as
+   * long as this page left it to `default: true` the two answered differently
+   * whenever stage 2's HTML had moved. It asks the same function now, on the
+   * same inputs — `blocksCurrent` below.
    */
   async articleMetadata(slug: string): Promise<ArticleMetadata> {
     requireSlug(slug);
@@ -3019,9 +3085,41 @@ const rawPgArticleReader: ArticleReader = {
     /* Read once, outside the loop: four of the eight checks need the blocks,
        and asking for a 360-row table four times to answer one page is the kind
        of thing that only shows up in production. */
-    const blocks = await blocksFor(found.revision.id);
+    const storedBlocks = await storedBlocksFor(found.revision.id);
+    const blocks = cleanedForReading(storedBlocks);
     const blocksHash = blocks.length ? hashBlocks(blocks) : null;
     const { revision } = found;
+    /* **Would stage 3 write these blocks again from stage 2's HTML?** The
+       queue's own question, asked with the queue's own function, so the two
+       cannot disagree (tests/freshness-deciders-agree.test.ts).
+
+       Computed here rather than in the switch because it needs a read and
+       `isCurrent` is synchronous. The read is **a second query of two columns,
+       not two more columns on the `metadata` projection**: they are the whole
+       article twice, and tests/store-revision-columns.test.ts holds that
+       projection to never taking them. Bound to this revision's id, so a
+       pointer that moves between the two queries cannot mix revisions, and
+       made only when the run row says `done` — nothing else reads the answer.
+
+       **`storedBlocks`, not `blocks`.** The pipeline's read returns block HTML
+       as stored; the cleaned copy answers differently when a row holds markup
+       the sanitiser removes. GPT Sol, 2026-10-05.
+
+       The cost is a jsdom re-split per load of this page — up to about a second
+       on the largest article (src/blocks.ts § What it costs). Accepted: the
+       page is opened on purpose and by few. */
+    let blocksCurrent = false;
+    if (byStep.get("blocks")?.status === "done") {
+      const [html] = await db
+        .select({
+          extracted: articleRevisions.extractedHtml,
+          stamped: articleRevisions.stampedHtml,
+        })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, revision.id))
+        .limit(1);
+      blocksCurrent = blocksAreWhatTheirHtmlProduces(html?.extracted, html?.stamped, storedBlocks);
+    }
     /* Read once, beside the blocks and for the same reason. Six of the eight
        checks below are about an artefact whose prompt read the tree and the
        metadata head as well as the paragraphs — src/source-hash.ts §
@@ -3046,6 +3144,9 @@ const rawPgArticleReader: ArticleReader = {
     /** Is this step's output one we would write again today? */
     const isCurrent = (step: StepName): boolean => {
       switch (step) {
+        /* Answered above, where the read it needs could be awaited. */
+        case "blocks":
+          return blocksCurrent;
         case "structure": {
           /* No tree and no blocks are this function's own preconditions, not
              `structureCurrency`'s: it answers "is this run the one that
@@ -3394,11 +3495,12 @@ const rawPgArticleReader: ArticleReader = {
            sat in the `default` arm below with `fetch`, `extract` and `blocks`.
 
            It has to move out of that arm the moment the artefact gains a stamp,
-           for the reason `assets` is not in it either: the filesystem store now
+           for the reason `assets` is not in it either: the pipeline
            answers this question from `STEPS.arc.stamp`, and a `default: true`
            here would have the metadata page call an arc current while the same
-           article's ingest re-runs it. Two stores disagreeing about one article
-           is the failure this switch exists to prevent.
+           article's ingest re-runs it. (When this was written the filesystem
+           store answered from the stamp too, and two stores disagreeing about
+           one article was the failure this switch existed to prevent.)
 
            **Blocks, tree AND the three metadata fields**, because that is what
            `inputFingerprint` covers — the arc's prompt carries `TITLE:`, `BY:`
@@ -3412,8 +3514,8 @@ const rawPgArticleReader: ArticleReader = {
           return !arcIsStale(arc, blocks, tree, metaFingerprint);
         }
         default:
-          // fetch, extract, blocks — nothing to compare, in either store.
-          // `assets` and `arc` are NOT here; each has its own case above.
+          // fetch, metadata, extract — nothing to compare, on either side.
+          // `blocks`, `assets` and `arc` are NOT here; each has its own case above.
           return true;
       }
     };
@@ -3495,8 +3597,8 @@ const rawPgArticleReader: ArticleReader = {
          this costs no query, no projection change, and no widening of
          `REVISION_READ_POLICY`.
 
-         **Present here and absent on the filesystem**, which is the whole point
-         of the block being optional: this store can answer and that one cannot.
+         **Always present here.** The block is optional in the type because
+         the filesystem store, which went on 2026-09-05, could not answer.
 
          See ArticleMetadata in src/types.ts for why the owner needs it at all —
          the card was asking the *public* endpoint about its own document, which
@@ -3537,12 +3639,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const thread = found.revision.tweets as TweetThread | null;
     if (!thread) {
-      throw Object.assign(
-        new Error(
-          `No thread for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No thread for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3565,12 +3664,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const glossary = found.revision.glossary as Glossary | null;
     if (!glossary) {
-      throw Object.assign(
-        new Error(
-          `No glossary for "${slug}" yet. Find one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["glossary"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No glossary for "${slug}" yet. Find one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["glossary"] }.`,
       );
     }
     const glossaryTree = found.revision.tree as Tree | null;
@@ -3658,12 +3754,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const quotes = found.revision.quotes as Quotes | null;
     if (!quotes) {
-      throw Object.assign(
-        new Error(
-          `No quotes for "${slug}" yet. Choose them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No quotes for "${slug}" yet. Choose them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quotes"] }.`,
       );
     }
     const quotesTree = found.revision.tree as Tree | null;
@@ -3694,12 +3787,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const ideas = found.revision.ideas as Ideas | null;
     if (!ideas) {
-      throw Object.assign(
-        new Error(
-          `No ideas for "${slug}" yet. Find them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["ideas"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No ideas for "${slug}" yet. Find them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["ideas"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3742,12 +3832,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const timeline = found.revision.timeline as Timeline | null;
     if (!timeline) {
-      throw Object.assign(
-        new Error(
-          `No timeline for "${slug}" yet. Build one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["timeline"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No timeline for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["timeline"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3784,12 +3871,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const quiz = found.revision.quiz as Quiz | null;
     if (!quiz) {
-      throw Object.assign(
-        new Error(
-          `No quiz for "${slug}" yet. Build one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quiz"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No quiz for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quiz"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3816,12 +3900,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const faq = found.revision.faq as Faq | null;
     if (!faq || !Array.isArray(faq.questions)) {
-      throw Object.assign(
-        new Error(
-          `No FAQ for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["faq"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No FAQ for "${slug}" yet. Build it with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["faq"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3855,12 +3936,9 @@ const rawPgArticleReader: ArticleReader = {
       relations.relations === null ||
       Array.isArray(relations.relations)
     ) {
-      throw Object.assign(
-        new Error(
-          `No relations for "${slug}" yet. Build them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No relations for "${slug}" yet. Build them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
       );
     }
     const blocks = await relationsFingerprintInputs(found.revision.id);
@@ -3891,12 +3969,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const crossrefs = found.revision.crossrefs as Crossrefs | null;
     if (!crossrefs || !Array.isArray(crossrefs.links)) {
-      throw Object.assign(
-        new Error(
-          `No cross-references for "${slug}" yet. Build them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["crossrefs"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No cross-references for "${slug}" yet. Build them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["crossrefs"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3928,12 +4003,9 @@ const rawPgArticleReader: ArticleReader = {
     /* The whole-artefact guard turns every `simple/1` row into this 404, even
        if an imported row happens to carry a valid-looking `levels` field. */
     if (!isUsableSimpleSummary(simpleSummary)) {
-      throw Object.assign(
-        new Error(
-          `No plain-words summary for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["simple"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No plain-words summary for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["simple"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3967,12 +4039,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const skim = found.revision.skim as Skim | null;
     if (!skim || !Array.isArray(skim.stops)) {
-      throw Object.assign(
-        new Error(
-          `No Skim route for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No Skim route for "${slug}" yet. Build it with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
       );
     }
     const quotes = found.revision.quotes as Quotes | null;
@@ -4026,6 +4095,26 @@ const rawPgArticleReader: ArticleReader = {
    * the reader to a POST that pays up to $0.27 for the same answer on every
    * open. `SHAPE.debate` (src/store/artifacts.ts) makes the same call.
    */
+  /**
+   * The Postgres half of `loadArticleIdentity`: the `article` read's own
+   * columns, with `titleFor` deliberately not applied (the contract says why).
+   * The heading query runs only for a revision with no stored title.
+   */
+  async loadArticleIdentity(slug: string): Promise<Pick<Meta, "title" | "byline" | "authors" | "doi">> {
+    requireSlug(slug);
+    const found = await currentRevision(slug, "article");
+    if (!found) throw notFound(slug);
+    const { revision } = found;
+    const title = revision.title ?? (await firstHeadingTitle(revision.id)) ?? slug;
+    const authors = decodeAuthors(revision.authors);
+    return {
+      title,
+      ...(revision.byline === null ? {} : { byline: revision.byline }),
+      ...(authors ? { authors } : {}),
+      ...(revision.doi === null ? {} : { doi: revision.doi }),
+    };
+  },
+
   async loadDebate(slug: string): Promise<DebateFound> {
     requireSlug(slug);
     const found = await currentRevision(slug, "debate");
@@ -4037,12 +4126,9 @@ const rawPgArticleReader: ArticleReader = {
        non-null JSONB unchecked until 2026-09-05, so a half-written document
        reached the panel here and was refused on the filesystem. */
     if (!debate || !isDebateDocument(debate)) {
-      throw Object.assign(
-        new Error(
-          `No debate for "${slug}" yet. Build one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No debate for "${slug}" yet. Build one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["debate"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4169,12 +4255,11 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The Sketch picture on its own — the Postgres half of `loadSketch`.
+   * The Sketch picture on its own.
    *
    * Three inputs like `loadIdeas` above, and the same reason for the third: the
    * fingerprint covers the tree as well as the blocks, so comparing only the
-   * blocks here would call a re-sectioned article's picture current while the
-   * filesystem store called it stale.
+   * blocks here would call a re-sectioned article's picture current.
    */
   async loadSketch(slug: string): Promise<SketchFound> {
     requireSlug(slug);
@@ -4187,12 +4272,9 @@ const rawPgArticleReader: ArticleReader = {
        column can hold `{"scenes": []}` — from an import, or from a hand edit —
        and a panel handed that would draw an empty band and report success. */
     if (!sketch || !Array.isArray(sketch.scenes) || sketch.scenes.length === 0) {
-      throw Object.assign(
-        new Error(
-          `No sketch for "${slug}" yet. Draw one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No sketch for "${slug}" yet. Draw one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4205,8 +4287,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The Illustrated plates on their own — the Postgres half of
-   * `loadIllustrated`. docs/project/diagram.md § Illustrated.
+   * The Illustrated plates on their own. docs/project/diagram.md § Illustrated.
    *
    * **Two artefacts, not one article.** `loadSketch` above compares its scene
    * with the blocks and the tree; this compares its plates with the *scene*,
@@ -4228,14 +4309,11 @@ const rawPgArticleReader: ArticleReader = {
 
     const illustrated = found.revision.illustrated as Illustrated | null;
     /* An empty plate list counts as none — the same hole `SHAPE` closes at the
-       store boundary and `loadIllustrated` closes on the filesystem. */
+       store boundary. */
     if (!illustrated || !Array.isArray(illustrated.plates) || illustrated.plates.length === 0) {
-      throw Object.assign(
-        new Error(
-          `No illustration for "${slug}" yet. Paint one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No illustration for "${slug}" yet. Paint one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
       );
     }
     const sketch = found.revision.sketch as Sketch | null;
@@ -4283,12 +4361,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const arc = found.revision.arc as Arc | null;
     if (!arc) {
-      throw Object.assign(
-        new Error(
-          `No arc for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No arc for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);

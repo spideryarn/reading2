@@ -29,7 +29,8 @@ import type { PublicCitations } from "../../../public-types.js";
 import { citeBarParam, citeOrderParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
 import { useCitations, type CitationsRead } from "../../useCitations.js";
-import { CitationsPanel } from "../../CitationsPanel.js";
+import { type CiteFocus, CitationsPanel } from "../../CitationsPanel.js";
+import type { CitedWorkChats } from "../../OriginChat.js";
 
 /**
  * The citations, and the fetch and job that belong to them.
@@ -49,6 +50,9 @@ export function CitationsBand({
   slug,
   read,
   onJump,
+  focus,
+  onFocusTaken,
+  chats,
 }: {
   slug: string;
   /**
@@ -58,11 +62,29 @@ export function CitationsBand({
    */
   read: CitationsRead;
   onJump(id: BlockId, passage?: string): void;
+  /** The work the prose card's *Dig deeper* opened this band for — CitationsPanel.tsx § `Props.focus`. */
+  focus: CiteFocus | null;
+  onFocusTaken(focus: CiteFocus): void;
+  /**
+   * **A chat about one cited work**: the thread summaries `Reader` holds, the
+   * sender behind a row's *Ask in chat*, and the handler that reopens a chat
+   * already started from one (OriginChat.tsx § `ItemChats`). The owner's band
+   * only; `VisitorCitationsBand` has no such prop. Plan 261006d.
+   */
+  chats?: CitedWorkChats;
 }) {
   useRenderCount("CitationsBand");
   const owner = useCitations(slug, read);
   const controls = useCitationControls();
-  return <CitationsPanel access={{ kind: "owner", owner }} {...controls} onJump={onJump} />;
+  return (
+    <CitationsPanel
+      access={{ kind: "owner", owner, ...(chats ? { chats } : {}) }}
+      {...controls}
+      onJump={onJump}
+      focus={focus}
+      onFocusTaken={onFocusTaken}
+    />
+  );
 }
 
 /**

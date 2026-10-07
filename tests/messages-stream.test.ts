@@ -13,15 +13,23 @@
  * hand-written to match the code. If OpenRouter moves the field, these are the
  * record of where it used to be.
  */
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import Anthropic, { APIUserAbortError } from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../src/ai-spend.js";
+import { CallDeadlineReached, StallReached } from "../src/call-failure.js";
 import { CAPABLE_MODEL, modelFor } from "../src/models.js";
+import { failureKindOf, readerFailureOf } from "../src/job-failure.js";
+import { MODEL_REFUSED } from "../src/messages.js";
 import {
   MESSAGES_PROVIDER,
+  finishedText,
+  messageText,
   messagesClient,
   streamMessage,
   wasRefused,
 } from "../src/messages-stream.js";
+import { truncationFailure } from "../src/token-budget.js";
+import * as transportRetry from "../src/transport-retry.js";
 
 /* Captured from a live streamed call through https://openrouter.ai/api/v1/messages,
    2026-08-27. Trimmed only of the content blocks. */
@@ -391,6 +399,48 @@ describe("streamMessage — the recording lifecycle", () => {
     }
   });
 
+  it("does not invent an attempt or a spend row when the signal was already aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const t = stubTransport(cannedStream());
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, {
+          power: "standard",
+          signal: controller.signal,
+        });
+        expect(call.attempts()).toBe(0);
+        expect(call.aborted()).toBe(true);
+        await expect(call.finalMessage()).rejects.toBeInstanceOf(APIUserAbortError);
+      });
+      expect(t.seenRequests).toHaveLength(0);
+      expect(report.calls).toEqual([]);
+      expect(report.pending).toEqual([]);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("contains an eager stream failure until finalMessage is read, leaving it visibly pending", async () => {
+    const t = stubTransport({ fail: true });
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard" });
+        expect(call.attempts()).toBe(1);
+        /* Let the SDK emit its error without calling its promise-returning
+           `finalMessage()`. The wrapper's private error listener is what keeps
+           that from becoming a process-level unhandled rejection; the spend
+           stays pending so the missing await is still observable. */
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      });
+      expect(t.seenRequests).toHaveLength(1);
+      expect(report.calls).toEqual([]);
+      expect(report.pending).toHaveLength(1);
+    } finally {
+      t.restore();
+    }
+  });
+
   it("still records a call whose stream never carried a cost", async () => {
     const t = stubTransport(cannedStream({ cost: undefined }));
     try {
@@ -415,14 +465,16 @@ describe("streamMessage — the recording lifecycle", () => {
           streamMessage("ideas", A_BODY, { power: "standard" }).finalMessage(),
         ).rejects.toThrow();
       });
-      expect(report.calls).toHaveLength(1);
-      expect(report.calls[0]?.outcome).toBe("error");
+      /* Three since plan 261003m: a transport that throws is retried, and each
+         go is its own row. One row per network attempt is still the claim. */
+      expect(t.seenRequests).toHaveLength(3);
+      expect(report.calls.map((c) => c.outcome)).toEqual(["error", "error", "error"]);
     } finally {
       t.restore();
     }
   });
 
-  it("calls the transport once per streamMessage, so a record is one real call", async () => {
+  it("calls the transport once per streamMessage that works first time, so a record is one real attempt", async () => {
     const t = stubTransport(cannedStream());
     try {
       const { report } = await collectSpend(async () => {
@@ -559,5 +611,730 @@ describe("wasRefused", () => {
     expect(wasRefused({ stop_reason: "end_turn" } as unknown as Parameters<typeof wasRefused>[0])).toBe(
       false,
     );
+  });
+});
+
+/* ── Reading a finished answer (plan 261004d) ────────────────────────────────
+
+   Until 2026-10-04 every stage wrote this ending out by hand, 32 copies of the
+   text-block filter in 18 files, and one of them (src/illustrated.ts) threw its
+   refusal undeclared for a month. These pin the one copy. */
+
+describe("messageText and finishedText", () => {
+  type Message = Parameters<typeof finishedText>[0];
+  const answer = (over: Record<string, unknown>): Message =>
+    ({
+      stop_reason: "end_turn",
+      stop_details: null,
+      usage: { input_tokens: 10, output_tokens: 900 },
+      content: [
+        { type: "thinking", thinking: "x".repeat(5000), signature: "s" },
+        { type: "text", text: '{"a":' },
+        { type: "text", text: "1}" },
+      ],
+      ...over,
+    }) as unknown as Message;
+
+  const thrownBy = (fn: () => unknown): Error => {
+    try {
+      fn();
+    } catch (err) {
+      return err as Error;
+    }
+    throw new Error("nothing was thrown");
+  };
+
+  it("joins the text blocks in order and leaves the thinking out", () => {
+    expect(messageText(answer({}))).toBe('{"a":1}');
+    expect(messageText(answer({ content: [] }))).toBe("");
+  });
+
+  it("returns the text of an ordinary finish", () => {
+    expect(finishedText(answer({}), "arc", 50_000, 10_000)).toBe('{"a":1}');
+  });
+
+  it.each([
+    ["Anthropic's spelling", { stop_reason: "refusal" }],
+    ["OpenRouter's spelling", { stop_details: { type: "refusal" } }],
+  ])("throws the declared refusal, on %s", (_name, over) => {
+    const err = thrownBy(() => finishedText(answer(over), "arc", 50_000, 10_000));
+    expect(err.message).toBe("the model answered with stop_reason: refusal [ai-model-refused]");
+    /* Declared, so the reader gets the refusal sentence and not the generic
+       one. `new Error(MODEL_REFUSED.message)` would pass a check on the code
+       alone and fail this (tests/stop-details.test.ts on why). */
+    expect(readerFailureOf(err, "arc")).toBe(MODEL_REFUSED);
+    expect(failureKindOf(err)).toBe(MODEL_REFUSED.kind);
+  });
+
+  it("says a truncation the way truncationFailure says it, counting only the text", () => {
+    const err = thrownBy(() =>
+      finishedText(answer({ stop_reason: "max_tokens" }), "thread", 50_000, 10_000),
+    );
+    const want = truncationFailure("thread", 50_000, 10_000, { outputTokens: 900, answerChars: 7 });
+    expect(err.message).toBe(want.message);
+    expect(readerFailureOf(err, "tweets")).toBe(readerFailureOf(want, "tweets"));
+    expect(failureKindOf(err)).toBe("bug");
+  });
+
+  it("passes a stage's own headroom through to the sentence", () => {
+    const err = thrownBy(() =>
+      finishedText(answer({ stop_reason: "max_tokens" }), "table of contents", 50_000, 10_000, 12_345),
+    );
+    expect(err.message).toContain("plus 12,345 for reasoning");
+    expect(
+      thrownBy(() => finishedText(answer({ stop_reason: "max_tokens" }), "arc", 50_000, 10_000)).message,
+    ).not.toContain("12,345");
+  });
+
+  it("calls a refused answer refused even when it also stopped at max_tokens", () => {
+    /* Every hand-written copy judged the refusal first. The other order would
+       tag a refusal `bug` and tell the reader a setting of ours is wrong. */
+    const err = thrownBy(() =>
+      finishedText(
+        answer({ stop_reason: "max_tokens", stop_details: { type: "refusal" } }),
+        "arc",
+        50_000,
+        10_000,
+      ),
+    );
+    expect(readerFailureOf(err, "arc")).toBe(MODEL_REFUSED);
+  });
+});
+
+/* ── A transport blip is retried, countably (plan 261003m) ───────────────────
+
+   Report spya-x4zut6: one import's Arc step failed 595 ms after it began, on a
+   connection that never produced a response, and the job failed with it. The
+   SDK's own retry is off on purpose (`messagesClient` § `maxRetries`), and the
+   replacement that comment named was never built. These are it.
+
+   What each asserts is the pair the comment protects: the answer arrives, AND
+   the ledger shows one record per network attempt. */
+
+/** One scripted answer per request, in order; the last repeats. */
+type Scripted =
+  | { throws: string }
+  /** `fetch` rejecting with exactly this, so a test can put a `cause` on it. */
+  | { rejects: Error }
+  | { status: number }
+  | { body: string }
+  /** A `200` whose stream carries these frames and then breaks. */
+  | { breaksAfter: string };
+
+function scriptTransport(script: Scripted[]) {
+  let sent = 0;
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    const step = script[Math.min(sent, script.length - 1)]!;
+    sent += 1;
+    if ("throws" in step) throw new TypeError(step.throws);
+    if ("rejects" in step) throw step.rejects;
+    if ("status" in step) {
+      return new Response(
+        JSON.stringify({ type: "error", error: { type: "api_error", message: "upstream said no" } }),
+        { status: step.status, headers: { "content-type": "application/json" } },
+      );
+    }
+    if ("breaksAfter" in step) {
+      const encoder = new TextEncoder();
+      /* Two pulls, not `enqueue` then `error` in one: erroring a stream drops
+         whatever is still queued, and the frames have to be read first. */
+      let pulled = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!pulled) {
+            pulled = true;
+            controller.enqueue(encoder.encode(step.breaksAfter));
+            return;
+          }
+          controller.error(new TypeError("terminated"));
+        },
+      });
+      return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+    }
+    return new Response(step.body, { status: 200, headers: { "content-type": "text/event-stream" } });
+  }) as typeof globalThis.fetch;
+  return { sent: () => sent, restore: () => { globalThis.fetch = original; } };
+}
+
+/** A `200` that opens with the provider's `error` event — no `message_start`. */
+const ERROR_EVENT_STREAM = sse("error", {
+  type: "error",
+  error: { type: "overloaded_error", message: "Overloaded" },
+});
+
+/** A stream that begins, says something, and never finishes. */
+const BEGUN_THEN_BROKEN =
+  sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } }) +
+  sse("content_block_start", { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } }) +
+  sse("content_block_delta", { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "half" } });
+
+describe("streamMessage — a transport blip is retried, and every attempt is counted", () => {
+  const savedKey = process.env.OPENROUTER_API_KEY;
+  beforeEach(() => { process.env.OPENROUTER_API_KEY = "sk-or-test-not-a-real-key"; });
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = savedKey;
+  });
+
+  /** Run one call against a script; hand back the answer or the error, and the ledger. */
+  async function drive(script: Scripted[]) {
+    const t = scriptTransport(script);
+    const texts: string[] = [];
+    let starts = 0;
+    let outcome: { ok: true; text: string } | { ok: false; err: unknown } | undefined;
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard" });
+        call.onText((delta) => texts.push(delta));
+        call.onStart(() => { starts += 1; });
+        try {
+          const message = await call.finalMessage();
+          const first = message.content[0];
+          outcome = { ok: true, text: first?.type === "text" ? first.text : "" };
+        } catch (err) {
+          outcome = { ok: false, err };
+        }
+      });
+      return { outcome: outcome!, sent: t.sent(), texts, starts, outcomes: report.calls.map((c) => c.outcome) };
+    } finally {
+      t.restore();
+    }
+  }
+
+  it("answers when the connection fails once and then works — the reported failure", async () => {
+    const run = await drive([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.sent).toBe(2);
+    expect(run.outcomes).toEqual(["error", "ok"]);
+  });
+
+  it("answers when a 200 opens with an error event and the next attempt works", async () => {
+    const run = await drive([{ body: ERROR_EVENT_STREAM }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.sent).toBe(2);
+    expect(run.outcomes).toEqual(["error", "ok"]);
+  });
+
+  it("answers when a 503 is followed by a good response", async () => {
+    const run = await drive([{ status: 503 }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.outcomes).toEqual(["error", "ok"]);
+  });
+
+  it("does not send a refused request again — a 400 is one attempt", async () => {
+    const run = await drive([{ status: 400 }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+    expect(run.outcomes).toEqual(["error"]);
+  });
+
+  it("gives up after three goes, with three records", async () => {
+    const run = await drive([{ throws: "fetch failed" }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(3);
+    expect(run.outcomes).toEqual(["error", "error", "error"]);
+  });
+
+  it("does not retry once the response has begun, so no listener hears two attempts", async () => {
+    const run = await drive([{ breaksAfter: BEGUN_THEN_BROKEN }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+    expect(run.texts).toEqual(["half"]);
+    expect(run.starts).toBe(1);
+  });
+
+  it("draws the line at message_start, not at the first text", async () => {
+    /* A stream that begins and breaks before saying anything. An
+       implementation that retried "until text arrived" would send a second
+       request here; the boundary is the start. */
+    const begunOnly = sse("message_start", {
+      type: "message_start",
+      message: { ...MESSAGE_START.message, content: [] },
+    });
+    const run = await drive([{ breaksAfter: begunOnly }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+    expect(run.starts).toBe(1);
+    expect(run.texts).toEqual([]);
+  });
+
+  it("leaves a 429 to its caller, which has a rate-limit policy of its own", async () => {
+    const run = await drive([{ status: 429 }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+  });
+
+  it("does not ask again after an error event that is a verdict", async () => {
+    const verdict = sse("error", { type: "error", error: { type: "billing_error", message: "no credit" } });
+    const run = await drive([{ body: verdict }, { body: cannedStream() }]);
+    expect(run.outcome.ok).toBe(false);
+    expect(run.sent).toBe(1);
+  });
+
+  it("asks again after an error event that names no type", async () => {
+    const untyped = sse("error", { message: "upstream hiccup" });
+    const run = await drive([{ body: untyped }, { body: cannedStream() }]);
+    expect(run.outcome).toEqual({ ok: true, text: "ok" });
+    expect(run.sent).toBe(2);
+  });
+
+  it("counts its attempts for the callers that publish a request count, and leaves nothing pending", async () => {
+    const t = scriptTransport([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    try {
+      let attempts = 0;
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("labels", A_BODY, { power: "standard" });
+        expect(call.attempts()).toBe(1);
+        await call.finalMessage();
+        attempts = call.attempts();
+      });
+      expect(attempts).toBe(2);
+      expect(report.calls).toHaveLength(2);
+      /* Each attempt minted a pending call; both must have been settled, or
+         the failed one would sit in the report as a call that never returned. */
+      expect(report.pending).toEqual([]);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("fires onStart and onText once for a call that worked on its second attempt", async () => {
+    const run = await drive([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    expect(run.starts).toBe(1);
+    expect(run.texts).toEqual(["ok"]);
+  });
+
+  it("stops at an abort during the wait, without another attempt", async () => {
+    const controller = new AbortController();
+    const t = scriptTransport([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: controller.signal });
+        const pending = call.finalMessage();
+        /* The first attempt fails within a tick; the backoff is hundreds of
+           milliseconds, so this lands inside the wait. */
+        setTimeout(() => controller.abort(), 50);
+        await expect(pending).rejects.toThrow();
+        expect(call.aborted()).toBe(true);
+      });
+      expect(t.sent()).toBe(1);
+      expect(report.calls.map((c) => c.outcome)).toEqual(["error"]);
+    } finally {
+      t.restore();
+    }
+  });
+});
+
+/* ── What each attempt's row says of itself (plan 261006b) ───────────────────
+
+   The retry above writes a row per attempt. These are about what a row can be
+   asked afterwards: which go it was, whether it failed before or after
+   `message_start`, and why, as a label from src/call-failure.ts. Each row is
+   compared whole. */
+
+describe("streamMessage — every attempt's row says which go it was, and how it failed", () => {
+  const savedKey = process.env.OPENROUTER_API_KEY;
+  beforeEach(() => { process.env.OPENROUTER_API_KEY = "sk-or-test-not-a-real-key"; });
+  afterEach(() => {
+    if (savedKey === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = savedKey;
+  });
+
+  const beforeAnswer = (cls: string, status: number | null = null) => ({ phase: "before_answer", class: cls, status });
+  const midAnswer = (cls: string, status: number | null = 200) => ({ phase: "mid_answer", class: cls, status });
+  const errorEvent = (error: unknown) => sse("error", { type: "error", error });
+  /** `fetch failed`, with the code where undici puts it: the SDK wraps this once more. */
+  const droppedWith = (code: unknown) =>
+    new TypeError("fetch failed", { cause: Object.assign(new Error("socket"), { code }) });
+
+  /** Run one call; hand back `[attempt, outcome, failure]` for every row, nothing defaulted. */
+  async function said(script: Scripted[], signal?: AbortSignal, during?: () => void): Promise<unknown[]> {
+    const t = scriptTransport(script);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", ...(signal ? { signal } : {}) });
+        const pending = call.finalMessage().catch(() => undefined);
+        during?.();
+        await pending;
+      });
+      expect(report.pending).toEqual([]);
+      expect(JSON.stringify(report.calls)).not.toContain("badgers");
+      return report.calls.map((c) => [c.attempt, c.outcome, c.failure]);
+    } finally {
+      t.restore();
+    }
+  }
+
+  it("a blip then an answer is (1, error, before_answer) and (2, ok)", async () => {
+    expect(await said([{ throws: "fetch failed" }, { body: cannedStream() }])).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "ok", null],
+    ]);
+  });
+
+  it("three failures end at attempt 3", async () => {
+    expect(await said([{ throws: "fetch failed" }])).toEqual([
+      [1, "error", beforeAnswer("network")],
+      [2, "error", beforeAnswer("network")],
+      [3, "error", beforeAnswer("network")],
+    ]);
+  });
+
+  it("a Stop during the backoff leaves one row, and no attempt 2", async () => {
+    const controller = new AbortController();
+    const rows = await said([{ throws: "fetch failed" }, { body: cannedStream() }], controller.signal, () => {
+      setTimeout(() => controller.abort(), 50);
+    });
+    expect(rows).toEqual([[1, "error", beforeAnswer("network")]]);
+  });
+
+  /**
+   * **The Stop that lands after the wait resolves and before the retry opens.**
+   *
+   * The case above stops *during* the backoff, which `waitOrStop` itself
+   * rejects. This one lets the wait resolve and aborts before its continuation
+   * runs, so the only thing between the Stop and a second attempt is the
+   * `options.signal?.throwIfAborted()` after the wait in `finalMessage`
+   * (src/messages-stream.ts). That line was added after a review *"with no test
+   * of its own"*
+   * (docs/postmortems/261005i-cancellation-checked-before-an-await-does-not-authorize-the-next-attempt.md);
+   * this is the test, written 2026-10-07. The OpenRouter seams have had the same
+   * case in tests/ai-call-transport-retry.test.ts.
+   *
+   * Wrap `waitOrStop` itself, keeping its real wait and aborting when it
+   * resolves, before the caller resumes. Timer lengths cannot identify it:
+   * the SDK has its own timers, and the retry policy can change independently.
+   *
+   * Mutation, watched red that day: the `throwIfAborted()` after the wait
+   * deleted → `expected 2 to be 1` on `call.attempts()`: an attempt opened
+   * after the Stop.
+   */
+  it("a Stop as the backoff finishes leaves one row, and opens no attempt 2", async () => {
+    const controller = new AbortController();
+    vi.spyOn(transportRetry, "backoffMs").mockReturnValue(1);
+    const wait = transportRetry.waitOrStop;
+    const backoff = vi.spyOn(transportRetry, "waitOrStop").mockImplementation(async (ms, signal) => {
+      await wait(ms, signal);
+      controller.abort();
+    });
+    const t = scriptTransport([{ throws: "fetch failed" }, { body: cannedStream() }]);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: controller.signal });
+        await expect(call.finalMessage()).rejects.toThrow();
+        expect(call.aborted()).toBe(true);
+        // An attempt opened then aborted before fetch must also fail this test.
+        expect(call.attempts()).toBe(1);
+      });
+      expect(backoff).toHaveBeenCalledExactlyOnceWith(1, controller.signal);
+      expect(controller.signal.aborted).toBe(true);
+      expect(t.sent()).toBe(1);
+      expect(report.pending).toEqual([]);
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([
+        [1, "error", beforeAnswer("network")],
+      ]);
+    } finally {
+      t.restore();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("a refusal carries its status", async () => {
+    expect(await said([{ status: 503 }, { body: cannedStream() }])).toEqual([
+      [1, "error", beforeAnswer("refused", 503)],
+      [2, "ok", null],
+    ]);
+    expect(await said([{ status: 400 }])).toEqual([[1, "error", beforeAnswer("refused", 400)]]);
+  });
+
+  it("a stream that breaks after message_start is mid_answer", async () => {
+    expect(await said([{ breaksAfter: BEGUN_THEN_BROKEN }])).toEqual([[1, "error", midAnswer("network")]]);
+  });
+
+  it("finds a wrapped ECONNRESET, two causes down", async () => {
+    const rows = await said([{ rejects: droppedWith("ECONNRESET") }, { body: cannedStream() }]);
+    expect(rows[0]).toEqual([1, "error", beforeAnswer("network:ECONNRESET")]);
+  });
+
+  it("gives two different error events two different labels", async () => {
+    const overloaded = await said([
+      { body: errorEvent({ type: "overloaded_error", message: "the reader asked about badgers" }) },
+      { body: cannedStream() },
+    ]);
+    expect(overloaded).toEqual([
+      [1, "error", beforeAnswer("provider:overloaded_error", 200)],
+      [2, "ok", null],
+    ]);
+    const billing = await said([{ body: errorEvent({ type: "billing_error", message: "no credit for badgers" }) }]);
+    expect(billing).toEqual([[1, "error", beforeAnswer("provider:billing_error", 200)]]);
+  });
+
+  it("is `in_band` for an error event that names no type, or one nobody listed", async () => {
+    const untyped = await said([{ body: sse("error", { message: "badgers" }) }, { body: cannedStream() }]);
+    expect(untyped[0]).toEqual([1, "error", beforeAnswer("in_band", 200)]);
+    const odd = await said([{ body: errorEvent({ type: "reader_search_term", message: "badgers" }) }]);
+    expect(odd[0]).toEqual([1, "error", beforeAnswer("in_band", 200)]);
+    expect(JSON.stringify(odd)).not.toContain("reader_search_term");
+  });
+
+  it("keeps nothing of a cause code or an error name it was not told about", async () => {
+    const odd = Object.assign(droppedWith("reader_search_term"), { name: "reader_search_term" });
+    const rows = await said([{ rejects: odd }, { body: cannedStream() }]);
+    expect(rows[0]).toEqual([1, "error", beforeAnswer("network")]);
+    expect(JSON.stringify(rows)).not.toContain("reader_search_term");
+  });
+
+  it("an in-band error after message_start is mid_answer, under its own label", async () => {
+    const begun = sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } });
+    const rows = await said([{ body: begun + errorEvent({ type: "overloaded_error", message: "badgers" }) }]);
+    expect(rows).toEqual([[1, "error", midAnswer("provider:overloaded_error")]]);
+  });
+
+  it.each([false, true])("a provider error wins over a later clock, begun=%s", async (begun) => {
+    const stop = new AbortController();
+    const prefix = begun ? sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } }) : "";
+    const t = scriptTransport([{ body: prefix + errorEvent({ type: "billing_error", message: "badgers" }) }]);
+    const real = Anthropic.Messages.prototype.stream;
+    let failed!: Promise<void>;
+    Anthropic.Messages.prototype.stream = function (this: Anthropic.Messages, ...args: Parameters<typeof real>) {
+      const stream: ReturnType<typeof real> = real.apply(this, args);
+      failed = new Promise((resolve) => stream.on("error", () => resolve()));
+      return stream;
+    };
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: stop.signal });
+        await failed;
+        stop.abort(new StallReached());
+        await call.finalMessage().catch(() => undefined);
+        expect(call.aborted()).toBe(false);
+      });
+      expect(t.sent()).toBe(1);
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([
+        [1, "error", (begun ? midAnswer : beforeAnswer)("provider:billing_error", 200)],
+      ]);
+    } finally {
+      Anthropic.Messages.prototype.stream = real;
+      t.restore();
+    }
+  });
+
+  /* ------------------------------------------------ who stopped an aborted call --
+     Plan docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md.
+     An `aborted` row says who stopped it, from the reason on the signal, and
+     how far the call had got. Nothing of the reason is kept. */
+
+  /**
+   * A transport that hangs until the request's signal fires, as a real one
+   * would: before any response, or after a `200` that carried `frames`.
+   */
+  function hangingTransport(frames?: string) {
+    let sent = 0;
+    const original = globalThis.fetch;
+    globalThis.fetch = ((_input: unknown, init?: { signal?: AbortSignal }) => {
+      sent += 1;
+      const signal = init?.signal;
+      if (frames === undefined) {
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      }
+      const encoder = new TextEncoder();
+      let pulled = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!pulled) {
+            pulled = true;
+            controller.enqueue(encoder.encode(frames));
+            return;
+          }
+          return new Promise<void>((resolve) => {
+            signal?.addEventListener(
+              "abort",
+              () => {
+                controller.error(signal.reason);
+                resolve();
+              },
+              { once: true },
+            );
+          });
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } }));
+    }) as typeof globalThis.fetch;
+    return { sent: () => sent, restore: () => { globalThis.fetch = original; } };
+  }
+
+  /** One call on a transport that hangs, stopped with `reason` after 20 ms. The rows, and how many requests went out. */
+  async function stoppedWith(reason: unknown, frames?: string): Promise<{ rows: unknown[]; sent: number }> {
+    const controller = new AbortController();
+    const t = hangingTransport(frames);
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: controller.signal });
+        const pending = call.finalMessage().catch(() => undefined);
+        setTimeout(() => controller.abort(reason), 20);
+        await pending;
+      });
+      expect(report.pending).toEqual([]);
+      expect(JSON.stringify(report.calls)).not.toContain("badgers");
+      return { rows: report.calls.map((c) => [c.attempt, c.outcome, c.failure]), sent: t.sent() };
+    } finally {
+      t.restore();
+    }
+  }
+
+  const BEGUN = sse("message_start", { type: "message_start", message: { ...MESSAGE_START.message, content: [] } });
+
+  /** The last three only look like one of our clocks. */
+  const STOPS: { name: string; reason: () => unknown; cls: "stall" | "deadline" | "abort" }[] = [
+    { name: "a stall clock", reason: () => new StallReached(), cls: "stall" },
+    { name: "what AbortSignal.timeout aborts with", reason: () => new DOMException("badgers", "TimeoutError"), cls: "deadline" },
+    { name: "a hand-written per-call clock", reason: () => new CallDeadlineReached("badgers"), cls: "deadline" },
+    { name: "a reader's Stop", reason: () => new Error("the reader asked about badgers"), cls: "abort" },
+    { name: "no reason given", reason: () => undefined, cls: "abort" },
+    { name: "a plain Error that says stalled", reason: () => new Error("stalled"), cls: "abort" },
+    { name: "an Error renamed TimeoutError", reason: () => Object.assign(new Error("slow"), { name: "TimeoutError" }), cls: "abort" },
+    { name: "an object named TimeoutError", reason: () => ({ name: "TimeoutError" }), cls: "abort" },
+  ];
+
+  it.each(STOPS)("a stop before message_start is aborted / before_answer / $cls: $name", async ({ reason, cls }) => {
+    const { rows, sent } = await stoppedWith(reason());
+    expect(rows).toEqual([[1, "aborted", beforeAnswer(cls)]]);
+    /* F16: an abort now has failure fields, and is still not asked again. */
+    expect(sent).toBe(1);
+  });
+
+  it.each(STOPS)("a stop after message_start is aborted / mid_answer / $cls: $name", async ({ reason, cls }) => {
+    const { rows, sent } = await stoppedWith(reason(), BEGUN);
+    expect(rows).toEqual([[1, "aborted", midAnswer(cls)]]);
+    expect(sent).toBe(1);
+  });
+
+  it("a stop after the 200 and before message_start is before_answer, with the 200", async () => {
+    /* This wire's boundary is `message_start`, not the headers. */
+    const { rows, sent } = await stoppedWith(new StallReached(), ": keep-alive\n\n");
+    expect(rows).toEqual([[1, "aborted", beforeAnswer("stall", 200)]]);
+    expect(sent).toBe(1);
+  });
+
+  it("a real AbortSignal.timeout is a deadline", async () => {
+    const t = hangingTransport();
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: AbortSignal.timeout(20) });
+        await call.finalMessage().catch(() => undefined);
+      });
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", beforeAnswer("deadline")]]);
+      expect(t.sent()).toBe(1);
+    } finally {
+      t.restore();
+    }
+  });
+
+  it("tells the stall from the reader through the composite signal a caller builds", async () => {
+    const reader = new AbortController();
+    const stall = new AbortController();
+    const t = hangingTransport(BEGUN);
+    try {
+      const { report } = await collectSpend(async () => {
+        const signal = AbortSignal.any([reader.signal, AbortSignal.timeout(60_000), stall.signal]);
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal });
+        const pending = call.finalMessage().catch(() => undefined);
+        setTimeout(() => stall.abort(new StallReached()), 20);
+        await pending;
+        /* The reader leaving afterwards does not rewrite who stopped it. */
+        reader.abort(new Error("the reader left"));
+      });
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", midAnswer("stall")]]);
+    } finally {
+      t.restore();
+    }
+  });
+
+  /* F17. The SDK can abort a stream without the caller's signal having fired.
+     If that signal fires afterwards, and only then is `finalMessage()` awaited,
+     the signal's reason says `deadline` about a stream the deadline did not
+     stop. The class is captured at the controller's abort boundary. */
+  /* F16, where it bites. When the caller's signal fired, the wait before a
+     retry refuses to start, so a loop that took an abort for a failure would
+     still make one request. An abort with no signal behind it has no such
+     backstop: the only thing that stops a second request is the loop asking
+     the outcome. */
+  it("an abort before message_start with no signal fired is not asked again", async () => {
+    const t = hangingTransport();
+    const real = Anthropic.Messages.prototype.stream;
+    let opened: ReturnType<typeof real> | undefined;
+    Anthropic.Messages.prototype.stream = function (this: Anthropic.Messages, ...args: Parameters<typeof real>) {
+      opened ??= real.apply(this, args);
+      return opened;
+    };
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard" });
+        const pending = call.finalMessage().catch(() => undefined);
+        setTimeout(() => opened?.abort(), 20);
+        await pending;
+        expect(call.attempts()).toBe(1);
+      });
+      expect(t.sent()).toBe(1);
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", beforeAnswer("abort")]]);
+    } finally {
+      Anthropic.Messages.prototype.stream = real;
+      t.restore();
+    }
+  });
+
+  it("an SDK abort that settled before an outside deadline fired is `abort`, not `deadline`", async () => {
+    const outside = new AbortController();
+    const t = hangingTransport(BEGUN);
+    const real = Anthropic.Messages.prototype.stream;
+    let opened: ReturnType<typeof real> | undefined;
+    Anthropic.Messages.prototype.stream = function (this: Anthropic.Messages, ...args: Parameters<typeof real>) {
+      opened = real.apply(this, args);
+      return opened;
+    };
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: outside.signal });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        opened?.abort();
+        /* Long enough for the SDK's abort to settle. */
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        expect(opened?.aborted).toBe(true);
+        outside.abort(new DOMException("too slow", "TimeoutError"));
+        await call.finalMessage().catch(() => undefined);
+      });
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", midAnswer("abort")]]);
+    } finally {
+      Anthropic.Messages.prototype.stream = real;
+      t.restore();
+    }
+  });
+
+  it("an SDK abort followed synchronously by a clock keeps the SDK as its cause", async () => {
+    const outside = new AbortController();
+    const t = hangingTransport(BEGUN);
+    const real = Anthropic.Messages.prototype.stream;
+    let opened: ReturnType<typeof real> | undefined;
+    Anthropic.Messages.prototype.stream = function (this: Anthropic.Messages, ...args: Parameters<typeof real>) {
+      opened = real.apply(this, args);
+      return opened;
+    };
+    try {
+      const { report } = await collectSpend(async () => {
+        const call = streamMessage("arc", A_BODY, { power: "standard", signal: outside.signal });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        opened?.abort();
+        outside.abort(new StallReached());
+        await call.finalMessage().catch(() => undefined);
+      });
+      expect(report.calls.map((c) => [c.attempt, c.outcome, c.failure])).toEqual([[1, "aborted", midAnswer("abort")]]);
+      expect(t.sent()).toBe(1);
+    } finally {
+      Anthropic.Messages.prototype.stream = real;
+      t.restore();
+    }
   });
 });

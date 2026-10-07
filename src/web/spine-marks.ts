@@ -30,7 +30,7 @@
  */
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
-import type { ReadLevel } from "./reading-time.js";
+import type { ReadReach } from "./reading-time.js";
 import type { BlockMatch, Found, MatchingSearch } from "./search-hits.js";
 
 /** One block's row, in the rail's document-pixel space. */
@@ -266,11 +266,12 @@ export function jumpOriginMark(
   return row ? { top: row.top, height: row.height } : null;
 }
 
-/** One stretch of the rail read to the same step — `readingRuns`. */
+/** One stretch of the rail read to the same reach — `readingRuns`. */
 export interface ReadingRun {
   top: number;
   height: number;
-  level: Exclude<ReadLevel, 0>;
+  /** Sixteenths of the rail's width, 4 to 16 — reading-time.ts § `readReach`. */
+  reach: ReadReach;
 }
 
 /**
@@ -282,36 +283,155 @@ export interface ReadingRun {
  * >
  * > — Greg, 2026-09-12
  *
- * Neighbouring rows at the same step become one run, which is what keeps this a
- * few dozen elements on a two-thousand-block article rather than one per row.
- * **Neighbouring means adjacent `index`**, not adjacent in the map: a row this
- * page does not have, or one at step 0, ends the run rather than being bridged,
- * so a gap the reader skipped stays a gap. Rows are placed by the same
- * document-pixel ruler as every other mark here.
+ * Neighbouring rows at the same reach become one run, which keeps the path
+ * short on a two-thousand-block article. **Neighbouring means adjacent
+ * `index`**, not adjacent in the map: a row this page does not have, or one
+ * with no reach, ends the run rather than being bridged, so a gap the reader
+ * skipped stays a gap. Rows are placed by the same document-pixel ruler as
+ * every other mark here. Thickness was four widths until 2026-10-03; it is a
+ * reach in sixteenths now, and `readingAreaPaths` draws it.
  */
 export function readingRuns(
   rows: Map<string, Row>,
-  levels: ReadonlyMap<BlockId, ReadLevel>,
+  reach: ReadonlyMap<BlockId, ReadReach>,
 ): ReadingRun[] {
-  const lit: { index: number; top: number; bottom: number; level: Exclude<ReadLevel, 0> }[] = [];
-  for (const [id, level] of levels) {
-    if (level === 0) continue;
+  const lit: { index: number; top: number; bottom: number; reach: ReadReach }[] = [];
+  for (const [id, r] of reach) {
+    if (!(r > 0)) continue;
     const row = rows.get(id);
-    if (row) lit.push({ index: row.index, top: row.top, bottom: row.top + row.height, level });
+    if (row) lit.push({ index: row.index, top: row.top, bottom: row.top + row.height, reach: r });
   }
   lit.sort((a, b) => a.index - b.index);
   const runs: ReadingRun[] = [];
   let prev: (typeof lit)[number] | undefined;
   for (const r of lit) {
     const last = runs[runs.length - 1];
-    if (last && prev && prev.index + 1 === r.index && prev.level === r.level) {
+    if (last && prev && prev.index + 1 === r.index && prev.reach === r.reach) {
       last.height = r.bottom - last.top;
     } else {
-      runs.push({ top: r.top, height: r.bottom - r.top, level: r.level });
+      runs.push({ top: r.top, height: r.bottom - r.top, reach: r.reach });
     }
     prev = r;
   }
   return runs;
+}
+
+/** The two paths of the rail's reading-time chart — `readingAreaPaths`. */
+export interface ReadingAreaPaths {
+  /** The filled area: `edge`, with each stretch closed down the rail's left side. */
+  area: string;
+  /** The line along the area's right-hand side. Never closed, never filled. */
+  edge: string;
+}
+
+/**
+ * The furthest an ease may reach either side of a boundary, as a share of the
+ * document's height: 8px each side on an 800px rail, so 16px for a whole join.
+ * Without a cap two long runs would be joined by one long slope, and neither
+ * would show the reach it has.
+ */
+const EASE_CAP = 1 / 100;
+
+/**
+ * How far apart, in document pixels, one run's bottom and the next one's top
+ * may be and still be the same stretch. Row edges are measured, so neighbours
+ * can disagree by a fraction of a pixel; a row the reader skipped is a line of
+ * text tall at least.
+ */
+const SAME_STRETCH_PX = 1;
+
+/** A path coordinate: hundredths of a unit are finer than anything painted. */
+const coord = (v: number): string => String(Math.round(v * 100) / 100);
+
+/**
+ * **The reading-time runs as an area chart turned on its side** — x is reach in
+ * sixteenths (so the viewBox is 16 wide), y is the rail's document pixels.
+ * docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md.
+ *
+ * > I'm almost imagining like a water level but rotated 90 degrees.
+ * >
+ * > — Greg, 2026-10-03 (spya-jhe9mc)
+ *
+ * **A curve, not steps**, since later the same day: a block is two or three
+ * pixels of rail, and a step at every boundary drew a row of towers.
+ * docs/plans/261003o-spine-reading-chart-quieter-and-smoothed-into-a-curve.md.
+ *
+ * > what if we were to smooth it a bit so it'd be a bit more like a curve and
+ * > less like a bunch of blocks, like skyscrapers on a skyline.
+ * >
+ * > — Greg, 2026-10-03 (spya-bguwsn)
+ *
+ * Each stretch (runs with no unread gap between them) is one outline: it eases
+ * out from the left edge inside the first run, eases from one reach to the next
+ * across each boundary, and eases back to the left edge inside the last run. An
+ * ease reaches half the shorter of the two runs it joins on either side of
+ * the boundary, `EASE_CAP` at most, so a long run keeps a straight side at its
+ * own reach.
+ *
+ * **Nothing is drawn where nothing was read.** The eases at a stretch's ends
+ * stay inside its own runs, and an unread gap starts a new subpath, so an empty
+ * stretch of rail keeps meaning "not read". What the curve does give up is
+ * between two read neighbours: up to half of the lesser-read one is drawn at
+ * more than its reach, and half of the other at less.
+ *
+ * **It cannot overshoot the rail.** Each cubic's two control points take their
+ * x from its two end points, so the curve stays between them.
+ *
+ * At full reach the edge is at x = 16, the viewBox's far side: keeping that
+ * stroke inside the rail is spine.css § reading time's job, not this one's.
+ */
+export function readingAreaPaths(runs: readonly ReadingRun[], docHeight: number): ReadingAreaPaths {
+  /* No visible extent means no mark. A zero-height cubic would still stroke
+     horizontally across the rail and change its neighbours' easing budgets. */
+  runs = runs.filter((run) => run.height > 0);
+  const cap = docHeight * EASE_CAP;
+  /** An S from (xa, ya), going straight down at both ends, to (xb, yb). */
+  const ease = (xa: number, ya: number, xb: number, yb: number): string => {
+    const mid = coord((ya + yb) / 2);
+    return `C${coord(xa)} ${mid} ${coord(xb)} ${mid} ${coord(xb)} ${coord(yb)}`;
+  };
+  let area = "";
+  let edge = "";
+  for (let i = 0; i < runs.length; ) {
+    /* One stretch: runs[i..end], each joined to the one before it. */
+    let end = i;
+    for (let next = runs[end + 1]; next !== undefined; next = runs[end + 1]) {
+      const cur = runs[end];
+      if (!cur || Math.abs(next.top - (cur.top + cur.height)) >= SAME_STRETCH_PX) break;
+      end++;
+    }
+    const first = runs[i];
+    const last = runs[end];
+    if (!first || !last) break;
+    const bottom = last.top + last.height;
+
+    let y = first.top + Math.min(first.height / 2, cap);
+    let d = `M0 ${coord(first.top)}${ease(0, first.top, first.reach, y)}`;
+    /** Straight down to `to`, unless the last ease already ended there. */
+    const down = (to: number): void => {
+      if (to <= y) return;
+      d += `V${coord(to)}`;
+      y = to;
+    };
+    for (let j = i; j < end; j++) {
+      const [above, below] = [runs[j], runs[j + 1]];
+      if (!above || !below) break;
+      const half = Math.min(above.height / 2, below.height / 2, cap);
+      down(below.top - half);
+      /* `Math.max`: two joined runs may overlap by a fraction of a pixel
+         (`SAME_STRETCH_PX`), and the outline must never go back up the rail. */
+      const to = Math.max(y, below.top + half);
+      d += ease(above.reach, y, below.reach, to);
+      y = to;
+    }
+    down(bottom - Math.min(last.height / 2, cap));
+    d += ease(last.reach, y, 0, Math.max(y, bottom));
+
+    edge += d;
+    area += `${d}Z`;
+    i = end + 1;
+  }
+  return { area, edge };
 }
 
 /* --------------------------------------------------- the quotes, every mode -- */

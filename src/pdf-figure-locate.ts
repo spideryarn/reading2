@@ -384,7 +384,11 @@ export const openRouterFigureLocator: FigureLocator = async (request, signal) =>
           json_schema: { name: "figure_location", strict: true, schema: LOCATE_SCHEMA },
         },
       },
-      { signal },
+      /* `retryTransport: false`: `MAX_LOCATE_CALLS` in src/collect-pdf-figures.ts
+         promises at most eight model calls an article and counts asks. A hidden
+         retry would make that twenty-four requests. A blip leaves the figure
+         refused, as it always has. */
+      { signal, retryTransport: false },
     );
     json = call.json;
   } catch {

@@ -2,6 +2,24 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ What it is for](#what-it-is-for) — Greg's ask, and what "a mode" means here
+- [§ The three computed pictures](#the-three-computed-pictures) — Force, Drift and Trail side by side, and what each is honest about
+- [§ There were eight, and five are gone](#there-were-eight-and-five-are-gone) — which pictures were cut, and why (history)
+- [§ Who sees which chip](#who-sees-which-chip-2026-09-04) — the experimental switch, and why it is not a gate
+- [§ Why Force was the default, and why Sketch is now](#why-force-was-the-default-and-why-sketch-is-now) — what arriving costs, and what pressing the bar's Diagram button arms
+- [§ Waiting, and failing](#waiting-and-failing-without-borrowing-a-picture) — spinners, Try again, one request per attempt
+- [§ The graph Force is drawn from](#the-graph-force-is-drawn-from) — the five kinds of edge; sequence chain, anchor, semantic, vocabulary
+- [§ Interaction](#interaction) — keys, the footer card, the step bar and why a press once sprang back
+- [§ Two things that are wrong in a way you cannot see](#two-things-that-are-wrong-in-a-way-you-cannot-see) — SVG clipping and `wrapText`'s shared secret
+- [§ Colour](#colour) — the eight hues and where they come from
+- [§ The two pictures made of paragraphs](#the-two-pictures-made-of-paragraphs) — Drift and Trail: what a projection can promise, the caveat icon, lanes or spread
+- [§ The fourth: Sketch](#sketch) — pointer to [sketch.md](sketch.md)
+- [§ The fifth: Illustrated](#illustrated) — pointer to [illustrated.md](illustrated.md)
+- [§ A visitor gets the Sketch, and only the Sketch](#a-visitor-gets-the-sketch-and-only-the-sketch) — the signed-out view, and what it may not fetch
+- [§ What is deliberately not here](#not-doing) — rejected pictures and libraries, and the known gaps
+
 The article as a picture, in the middle band — several of them, one toggle, and the
 reader's position marked on every one. Three are geometry over the article's own
 tree; the fourth is [a model's drawing](sketch.md), and it is the only one that is
@@ -95,16 +113,7 @@ And Greg, 2026-08-30, on the Tree:
 > Remove the "Tree" diagram from Diagram mode — it's not interesting enough to
 > keep, and it overlaps too much with Hierarchy and Outline mode etc.
 
-The five that went share one property: **each of them was a second way of
-drawing something the reader could already get elsewhere.** Mindmap and Cluster
-were both the containment tree with different geometry — which is the comparison
-GPT Sol had already called for `tree` on the grounds that it was done and `tree`
-had won. Arc drew the vocabulary edges that Force draws, on a line rather than
-in a plane. And Tree, which outlasted them by three days, lost the same argument
-to two things outside this mode: the outline panel and the gist columns (removed with Hierarchy mode on 2026-09-29), which
-already showed the reader the contents page and do it better in a band this
-narrow. Eight chips is also more than a 288px band can show without wrapping to
-two rows, and a toggle you have to read twice is not a toggle you press.
+Why the five went is in [261007g-diagram-history.md § There were eight](../plans/261007g-diagram-history.md#there-were-eight-and-five-are-gone).
 
 **Strata is the real loss, and it is worth naming rather than tidying away.** It
 was the only picture here that was *to scale*: a band's height was how much of
@@ -130,7 +139,7 @@ distinction was GPT Sol's finding against the first round of `strata` — eight
 long paragraphs and eight one-line list items are the same number of blocks and
 very different amounts of article — and it cost a whole round to learn.
 
-**A cut picture's name in a URL opens Force** rather than an error, which is
+**A cut picture's name in a URL opens the default, Sketch** (Force until 2026-09-04), rather than an error, which is
 the same "degrade to something real" rule every parser in
 [`params.ts`](../../src/web/params.ts) follows, and the one place here that has
 an actual pasted link behind it. `?diagram=tree` is the one to watch: it was the
@@ -169,13 +178,13 @@ and shows them a checked chip for it.
 
 **It is not a gate, and nothing here should be written as though it were.** The
 switch is about clutter and the server does not read it. What actually decides
-what a reader may buy is one level in: `access` pins a visitor to Force and draws
+what a reader may buy is one level in: `access` pins a visitor to the Sketch and draws
 no picker at all, and `/api/similar/:slug` and `/api/projection/:slug` sit behind
 `requireUser`. [security-map.md](security-map.md).
 
 **What this does and does not change about spend.** It changes discoverability,
 not authority. Every article owner could already start unlimited paid Sketch
-reruns and still can; a shared visitor is still Force-only; *following a link*
+reruns and still can; a shared visitor is still pinned to one picture (the Sketch since 2026-09-04, Force before); *following a link*
 still buys nothing, because only a **gesture** arms an automatic run — a chip
 inside the mode, or, since 2026-09-06, the bar's own Diagram button
 ([`activation.ts`](../../src/web/activation.ts), and the section below). There is no
@@ -226,24 +235,13 @@ armed by a bar press only if it is the picture the reader is already on; with no
 Sketch drawn, that press is retired unspent by `useIllustrated`'s own gate rather
 than enqueuing a job the server would refuse.
 
-Force held the default until then, on the opposite argument:
-
-**Nothing here is free any more.** The Tree was, and that was the whole of its
-claim on the default slot: stage 4 had already written a gist onto every
-internal node and the block ranges gave the sizes, so the band fetched nothing
-at all until you pressed something else.
-
-What is left is the next-best version of the same rule. Force **draws
+Force **draws
 immediately** — four of its five kinds of line are arithmetic over prose the
 browser is already holding (see the graph table below), and the model's opinion
 only adds the fifth, folded in on a later render. Drift and Trail have *nothing*
-without their model call. So the reader who opens the mode still sees a picture
-straight away; they just also, now, buy the dotted lines.
+without their model call.
 
-That is a real cost the old default did not have, and it is why the hover card
-on each chip says where the picture comes from as well as what it shows. The
-argument was right while Force was the picture everybody saw; it is not an
-argument for keeping a default nobody can see.
+Why Force held the default until 2026-09-04 is in [261007g-diagram-history.md § Why Force was the default](../plans/261007g-diagram-history.md#why-force-was-the-default-and-why-sketch-is-now).
 
 ### Waiting, and failing, without borrowing a picture
 
@@ -326,7 +324,13 @@ Two reasons, and the second is the bigger one:
 - **The fallback was its own class of bug.** It made "which toggle is lit" and
   "which picture is on screen" two different things, so every branch in the
   panel had to remember which one it wanted, and twice it did not. See
-  [§ the corpse](#the-fallback-was-a-bug-factory-and-it-is-gone) below.
+  [§ the corpse](../plans/261007g-diagram-history.md#the-fallback-was-a-bug-factory-and-it-is-gone).
+
+The fix at the time was a `drawnKind` variable, derived from the same condition
+`flat` and `ramp` were already derived from. That worked, and it left the trap
+in place: any *new* branch in the panel could reach for `kind` and be wrong
+again. `layoutDiagram` returning null removes the second value entirely, so
+there is nothing left to disagree with.
 
 **And nothing is bought for a picture that cannot be drawn.** Both paid hooks
 are gated on `root !== null` as well as on their picture, which became necessary
@@ -461,13 +465,7 @@ detailed card carries that a one-line `title` did not:
   0.3 and `MIN_LINKED_SHARE` 0.5 ([`sketch-scene.ts`](../../src/sketch-scene.ts))
   — so both sentences were describing the good case as the guarantee.
 
-**Sketch's scene row was a radiogroup with no arrow keys**, and its comment said
-"one tab stop and arrows, like every other switcher here". The roving `tabIndex`
-was there from the start and the handler was never written, so a keyboard reader
-could reach the scene they were on and none of the others — a picture with more
-parts and no way to get to them. It reads as deliberate *because* the roving
-tabstop is there, which is the same mistake this panel made once with its tree
-role.
+The scene row with no arrow keys is in [261007g-diagram-history.md § And then everything under the chips](../plans/261007g-diagram-history.md#and-then-everything-under-the-chips-2026-08-30).
 
 Pinned in
 [`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx)
@@ -624,10 +622,8 @@ perfectly well when wrong.
   drawn, so a picture with a coincident pair could put a head outside the run —
   27 against 26 is `chainReach` 5 against 4. Trail now decides drawability in a
   first pass and both read that count.
-- **Two tests claimed more than they proved**, including one whose comment named
-  a probe that would not have reddened. Both were corrected rather than deleted,
-  and the reach rule gained a table of its boundary cases, because the test that
-  was there would have passed with a constant reach of 4.
+
+The two tests corrected in that review are in [261007g-diagram-history.md § The chain fades outward](../plans/261007g-diagram-history.md#the-chain-fades-outward-from-the-reader-2026-08-30).
 
 The endpoint pair became a **discriminated union** at the same time —
 `sequence` requires `from`/`to`, the other four kinds declare them `never`. A
@@ -809,9 +805,7 @@ often what you want — *Being honest ←→ Honesty in practice*, *Ethics as pr
 wisdom ←→ Having broadly good values* a hundred rows apart — and it is sometimes
 merely true: an article that talks about its own sections will link the passages
 where it does. So the footer card lists **the words that earned each link**, and
-the reader can dismiss one in a second. An earlier version computed those words
-and never showed them, which made the curves look more authoritative than they
-are; GPT Sol's finding, and the most important one of the round.
+the reader can dismiss one in a second.
 
 Why not ask a model which sections relate? Same rule
 [glossary.md](glossary.md) gives for finding occurrences ourselves: **a question
@@ -821,29 +815,7 @@ pictures work on an article nobody has paid for.
 
 ### What a browser pass reported, and what was actually true
 
-A Sonnet subagent checked the picture in Chrome on 2026-08-27 against a throwaway
-preview page. Most of it confirmed the design — the arrowheads are visible and
-all point down the page, the vermilion cross-reference reads as the brightest
-line despite being the thinnest, the dotted line reads as dotted at 288px, and
-nothing overlaps or clips at any of the three widths. Two findings were reported
-as bugs and **neither was one**, which is worth recording because both were
-reported with more confidence on the fourth telling than on the first.
-
-**"Vocabulary links never render."** True of that page, and a property of the
-fixture rather than of the code: `example/` is a 34-block extract with 10 drawn
-sections, and it has **zero** vocabulary edges — too little distinct vocabulary
-to clear `EDGE_FLOOR`. The real articles have 56, 11, 8 and 3. The agent's first
-message hedged this correctly ("worth confirming whether that's just a fixture
-gap") and its fourth called it a FAIL.
-
-**"Hovering a bubble does not update the footer card."** It does.
-[`tests/diagram-panel-hover.test.tsx`](../../tests/diagram-panel-hover.test.tsx)
-mounts the real panel and hovers a real bubble, and the card moves off the
-reading position onto the hovered node and shows the author's link text. The
-same session reported the whole component crashing and unmounting, HMR refusing
-to fast-refresh, and the preview growing toggle buttons mid-run — someone else
-was editing the file underneath it, and the preview page was deleted while it
-was still open.
+What a browser pass reported on 2026-08-27, and what was actually true, is in [261007g-diagram-history.md § What a browser pass reported](../plans/261007g-diagram-history.md#what-a-browser-pass-reported-and-what-was-actually-true).
 
 The lesson is not that the browser pass was wasted: it produced four real
 confirmations that no test could make, about colour and legibility on a
@@ -872,9 +844,6 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   `aria-posinset`: the DOM is flat, so nothing in the markup says that this is
   the second of three sections inside part 2. The kind toggle is a radiogroup
   with the same one-tab-stop-plus-arrows shape, matching `Dock.tsx`.
-  (A tab stop per node was the first version. On a forty-section article that is
-  forty presses of Tab to get past the panel, and a role describing a widget the
-  code had not implemented. GPT Sol's finding, 2026-08-26.)
 - **↑ / ↓ as buttons**, under the picture, 44px tall — see
   [§ the step bar](#the-step-bar-and-the-key-that-was-firing-twice) below.
 - **Folding a part away is gone**, and saying so is the point of this line. The
@@ -882,8 +851,7 @@ that takes 300ms and cannot be wrong about which build it was looking at.
   a second way and are not one, because `layoutForce` gives every bubble
   `hasChildren: false` and both key branches require it. So the collapse set is
   now a constant — `walk`, `buildGraph` and `DiagramOptions` all still honour
-  one, and the panel has nothing to drive it with. ⟨Sol⟩ caught the claim that
-  ← and → still folded, which was written in the same change that made it false.
+  one, and the panel has nothing to drive it with.
 - **Where you are** is a ring on the deepest node you are inside, and on Drift
   also a dashed line drawn across at your exact row. The ring is orange rather
   than a fill change, because the fill already means *which part* and a position
@@ -1002,10 +970,20 @@ measurement overwrites it, so an interrupted jump corrects itself.
 
 **A press measures the page, and chains.** `readerRow` is React state and is a frame behind at best,
 so `stepTo` calls `measureRow()` itself; and because scrolling is animated, the row the last press
-aimed at stands for `CHAIN_MS` — keynav.ts's constant, for this exact problem — so two rapid presses
-count as two rather than landing half way. The first build asked `glideTarget()` instead and Sol
-found the gap: the glide clears its own handle in the same tick as its last `scrollTo`, leaving a
-window in which nothing is in flight and the measurement is still mid-air.
+aimed at stands instead of a measurement, so two rapid presses count as two rather than landing half
+way. How long it stands is keynav.ts's rule, shared with ↑ / ↓
+([keyboard.md § Rapid presses chain from the last target](keyboard.md#rapid-presses-chain-from-the-last-target-not-from-the-page)):
+while our own jump is unfinished, and after it ends for as long as the page is still at the pixel it
+ended on with the target row's layout unchanged. Replacing the article's blocks, root or picture
+kind also drops the numeric aim; see `DiagramPanel.tsx` § `chain` and
+[the review postmortem](../postmortems/261005g-a-navigation-aim-outlives-the-layout-that-made-its-row-true.md).
+
+**The panel is told when its jump ends; it does not infer it.** A step hands `onFollow` a callback,
+and Reader carries it through `jumpTo` and `beginJump` to `scrollToBlock`'s own report, on every
+branch, the one where the reader was already there included. `glideTarget()` cannot stand in for
+that: under reduced motion the page moves at once and the jump settles a frame later, and for that
+frame nothing is in flight while a centred row has no arrival anchor yet, so a measurement names the
+row before it (Sol, 2026-10-05). `tests/step-chain.test.tsx` holds it, over the real scroll engine.
 
 **What ends the chain is *where* the gesture landed, not which gesture it was**, and getting that
 backwards broke the touch path the buttons exist for. The second build dropped the chain on any
@@ -1038,50 +1016,11 @@ readout keeps its card, because what a press moves *by* is the one thing on this
 bar that is not guessable. `tests/diagram-panel-hover.test.tsx` holds both halves,
 including that neither button falls back to a `title`.
 
-#### The fallback was a bug factory, and it is gone
-
-Worth keeping, because the bug is what argues for the design. While a picture
-with no data was drawn as the Tree, the panel's SVG class and its per-node shape
-branch had to come from *what was drawn* rather than from the chip that was lit.
-They did not, and the result was Tree geometry wearing Drift's stylesheet: every
-row erased by `.diag-drift .diag-box { fill: transparent }`, no dot, no chevron,
-and labels at the browser's default size because no `.diag-drift .diag-label`
-rule exists. Nothing threw, nothing logged, and the strip above it said the
-right thing the whole time. GPT Sol, 2026-08-27 — and it had been live in the
-previous round too, with `strata` where `tree` then was.
-
-The fix at the time was a `drawnKind` variable, derived from the same condition
-`flat` and `ramp` were already derived from. That worked, and it left the trap
-in place: any *new* branch in the panel could reach for `kind` and be wrong
-again. `layoutDiagram` returning null removes the second value entirely, so
-there is nothing left to disagree with.
+The Tree fallback's bug is in [261007g-diagram-history.md § The fallback was a bug factory](../plans/261007g-diagram-history.md#the-fallback-was-a-bug-factory-and-it-is-gone).
 
 #### And then they sprang back, which was not the picture's fault at all
 
-Greg, 2026-08-30:
-
-> the up/down buttons … don't seem to work very reliably. I press them, something changes, and
-> then sometimes it seems to revert back to the active node it was on.
-
-Exactly right, and the cause was one line in a file this panel does not own. `?at=` holds a block id,
-and the scroll spy that writes it is **section-granular**
-([url-state.md § the unit is a section](url-state.md#the-unit-is-a-section-not-a-position)) — it
-compared what it had measured against *the value in the address*. That is
-the same question only while every value in the address is a section — and a rung on Trail or Drift
-is a **paragraph**. So a press put a paragraph there, the spy computed the enclosing section, found
-the two different, and wrote the section's first block back over it when the queued position write
-landed. The mark moved and reverted.
-
-It looked like a scatter bug and mostly was one. On a normal three-deep tree Force's rungs and the
-spy's sections are the same rows, so nothing sprang back there — but only by coincidence: Force is
-capped at depth 2 and the spy uses `leafDepth - 1`, and on a *shallow* depth-2 tree Force's leaves
-are paragraphs inside depth-1 sections and it springs back too. Two numbers that agree on the
-common case and are not the same number. ⟨Sol⟩, correcting the first write-up of this.
-
-The flicker is the half you can see. The half you can measure is worse: the address was now back at
-the top of the section, so the *next* press computed its target from there and landed on the rung it
-had just used. Four presses of ↓ in the reproduction land on the same row four times, and that is
-what "don't work very reliably" was.
+The press that sprang back (the scroll spy writing a section over a paragraph) is in [261007g-diagram-history.md § And then they sprang back](../plans/261007g-diagram-history.md#and-then-they-sprang-back-which-was-not-the-pictures-fault-at-all).
 
 Two things follow, and neither of them is in this file:
 
@@ -1270,10 +1209,7 @@ article.
 
 #### Why the heading row and not the control row
 
-The icon went on `.diag-opts` — the Sideways/Colour strip — first, on the
-reasoning that a row already drawn costs nothing to add to. That was wrong, and
-it is worth the paragraph because **two separate checks confirmed the absence of
-the old wording rather than the truth of the new one**, and both passed.
+Where the icon went first, and why that was wrong, is in [261007g-diagram-history.md § Why the heading row](../plans/261007g-diagram-history.md#why-the-heading-row-and-not-the-control-row).
 
 `.diag-opts` wraps. An auto margin right-aligns an item on the line it lands on;
 it does not stop it starting a new one — so the first version's "costs no
@@ -1282,12 +1218,6 @@ height" was simply false. Nesting the chips in an inner wrapping box fixed
 constraint is **total intrinsic width**, not alignment: at the ideal band width
 Drift's two chip groups and the icon do not fit on one line, so one of them wraps
 however the alignment is written.
-
-The browser sweep that found it (2026-08-31) also shows why the checks missed it.
-Drift was measured at its narrowest, where the chips already wrap and the icon
-rides free; Trail at its widest, where there is only one chip group and
-everything fits. The costly combination — Drift at the ideal width — was in
-neither.
 
 `.band-head` has no `flex-wrap`, so it cannot gain a flex line at any width: it
 shrinks its heading instead.
@@ -1311,31 +1241,7 @@ family in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § mode b
 minimum is its longest word, so it never shrinks far enough for
 `text-overflow` to do anything, and the other three read as present and working.
 
-**Then measured, at last** — 2026-08-31, on a throwaway preview page since
-deleted, 96 widths from 180px to 560px in 4px steps. The icon costs no height at any of them, in either
-row: `.band-head` is 40.91px shown or hidden, at 288px and at 400px alike, and
-`.diag-opts` is 53.77px at 288 and 29.78px at 400 either way — the difference
-between those two being the chip groups wrapping on their own, which is what
-tells you the icon has genuinely left that row. The heading stays on one line at
-every width, and `scrollWidth === clientWidth` throughout, so the ellipsis never
-engages: at the narrowest band it wants 57.77px and has 217.4px. The icon takes
-24.99px of *width* from it and no height, and cannot raise the row because its
-box is 16.19px against the h2's 22.32px line box. That last part is why the
-arrangement is robust rather than lucky.
-
-Worth stating which of the four this is: **the first whose claim survives a
-sweep**, rather than holding at the widths somebody happened to look at. That is
-the whole difference the thread was about.
-
-Three routes to the same extra line, then, found one at a time by three
-different people looking at the same claim. The claim is now a property of the
-markup rather than a measurement that happened to hold, which is the difference
-between fixing this and re-wording it —
-[silent-success.md](../reusable/silent-success.md) applies to a *claim in a
-comment* exactly as it applies to code. The test written to hold it down
-demonstrated the point once more on its way in: it matched the word
-`min-width: 0` in the rule's own explanatory comment, so deleting the
-declaration left it green.
+How that was measured, and the three routes to the same extra line, are in [261007g-diagram-history.md § Why the heading row](../plans/261007g-diagram-history.md#why-the-heading-row-and-not-the-control-row).
 
 ### Sideways on Drift: lanes or spread
 
@@ -1622,9 +1528,10 @@ made by different hands within an hour. See the section above.
   static, shareable image of an article's shape — a thumbnail, an OG image.
 - **No Mermaid.** Clickable nodes need `securityLevel: 'loose'`, and the node
   labels here are headings from a stranger's web page ([security.md](security.md)).
-- **No cross-reference arcs, yet.** The article's own internal links
-  ([`internal-links.ts`](../../src/web/internal-links.ts)) would make this a real
-  graph rather than a tree. The most interesting thing left, and a second feature.
+- **No cross-reference arcs on the two scatters.** Force draws the article's own internal links
+  as its **anchor** edges ([§ Anchor](#anchor-the-one-edge-somebody-meant);
+  [`internal-links.ts`](../../src/web/internal-links.ts) is the click-time other end); Drift and
+  Trail do not.
 - **No UMAP, and no t-SNE.** They would separate the clusters far more prettily
   and they were rejected on a *claim* rather than on a cost: their distances do
   not mean anything. The gaps in a UMAP plot are an artefact of its own

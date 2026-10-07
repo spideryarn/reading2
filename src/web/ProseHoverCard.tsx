@@ -42,6 +42,7 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  Microscope,
   LoaderCircle,
   Plus,
   Quote as QuoteIcon,
@@ -75,6 +76,7 @@ import {
   CITE_QUOTE_LABEL,
   CITE_VERDICT_LABEL,
   CITE_WHY_LABEL,
+  showsWhy,
   InSpideryarn,
   readNoteOf,
   registryConflictNote,
@@ -96,11 +98,12 @@ export const QUOTE_OPEN_MS = 900;
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
 import { worthRetrying } from "../messages.js";
-import { refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
+import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
 import { leavesTheApp } from "./external-links.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { useJobs } from "./useJobs.js";
 import { Link } from "./Link.js";
+import { helpHref, modeAnchor } from "./help/help-anchors.js";
 import { readHref } from "./router.js";
 import { internalTarget } from "./internal-links.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
@@ -189,6 +192,7 @@ function HoverCard({
   canAddToShelf,
   showInSpideryarn,
   termActions,
+  citeActions = null,
   quotes = null,
 }: {
   entries: GlossaryEntry[];
@@ -324,7 +328,17 @@ function HoverCard({
    */
   termActions: TermActions | null;
   /**
-   * **The quotes the prose outlines, and what the card's buttons do with one**
+   * **What an owner may do to a cited work from the card** — *Dig deeper*.
+   * Greg, 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it
+   * would have a button for dig deeper in the tooltip."* Plan 261004b.
+   *
+   * `null` or absent for a visitor, and then no button is drawn: a dig is a
+   * model call the owner pays for. Reader builds it from the owner's citations
+   * read, which a visitor's arm does not have (reader-capability.ts).
+   */
+  citeActions?: CiteActions | null;
+  /**
+   * **The quotes the prose fills, and what the card's buttons do with one**
    * — `QuoteCard`. `null` where there are none to point at; then `read` never
    * looks for one. A visitor gets it too: the scores and the reason are on the
    * public list already (src/public-types.ts § `PublicQuotes`), and stepping
@@ -412,8 +426,10 @@ function HoverCard({
          TableView's own link handler read it: the row is the block, and
          `data-block` is the id every feature here addresses text by
          (docs/project/block-ids.md). It is what tells the summary which of two
-         mentions of one destination the reader is actually looking at. */
-      const inBlock = anchorEl?.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+         mentions of one destination the reader is actually looking at.
+         link-facts.ts § `blockOfLink` has the rule, and the one place a row
+         is not the answer. */
+      const inBlock = blockOfLink(anchorEl);
 
       if (note) return { termIds, citeIds, quoteKeys, link, anchor, inBlock, href, note, back: false };
 
@@ -456,7 +472,7 @@ function HoverCard({
        BlockLinkCard's — would be two answers to one hover. The xref's card is
        the block preview, and the term keeps its underline and the glossary.
        docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
-    /* **And a quote's outline, since 2026-10-02** — Greg, spya-mtyquy. Pointer
+    /* **And a quote's mark, since 2026-10-02** — Greg, spya-mtyquy. Pointer
        and keyboard-focus of a link only: it is not in `tapSelector`, because a
        quote is the one mark a tap selects its paragraph through
        (TableView.tsx § `NOT_A_BLOCK_SELECTION`), which is how a finger
@@ -689,7 +705,13 @@ function HoverCard({
               "belong" to is not a thing the mark records, so picking one would
               be picking for the reader. */}
           {cited.map((w) => (
-            <CiteCard key={w.id} work={w} showInSpideryarn={showInSpideryarn} />
+            <CiteCard
+              key={w.id}
+              work={w}
+              showInSpideryarn={showInSpideryarn}
+              actions={citeActions}
+              onClose={close}
+            />
           ))}
           {/* The quote half, under the term and the citation and above the
               link: what the words mean and whom they lean on come first, then
@@ -1617,14 +1639,14 @@ function ExternalBody({
 }
 
 /**
- * **What the card knows about the quotes**: the list the prose outlines, and
+ * **What the card knows about the quotes**: the list the prose fills, and
  * what pressing does. Built by `Reader` through `quoteCardQuotes`, so the card
- * walks those outlines in document order even when the band is sorted another
+ * walks those marks in document order even when the band is sorted another
  * way.
  * docs/plans/261002h-quotes-in-the-spine-a-card-on-each-quote-and-previous-next.md § 2.
  */
 export interface QuoteCardSource {
-  /** The quotes outlined in the prose, in document order. */
+  /** The quotes filled in the prose, in document order. */
   listed: readonly Quote[];
   /** The same quotes by their mark key (`quoteMarkKey`), which is what `data-hit` holds. */
   byKey: ReadonlyMap<string, Quote>;
@@ -1643,7 +1665,25 @@ export interface QuoteCardSource {
 }
 
 /**
- * **A quote, from the outline the reader is pointing at** — Greg, 2026-09-11
+ * **What a quote is, in the card's first line.** Each claim is one the code
+ * keeps: *a passage*, not a line (src/quotes.ts § `SYSTEM`); *the AI picked
+ * out*, since only a model's quote reaches this card and a reader's own
+ * highlight is another mark; *the article's own words*, never "the author's"
+ * (mode-catalog.ts § quotes says why that cannot be claimed).
+ */
+export const QUOTE_CARD_SAYS = "A passage the AI picked out as worth keeping, in the article’s own words.";
+
+/**
+ * **What the strength of the purple means**, said only on a quote that has a
+ * score: beside *Not scored.* it would be a sentence about some other quote.
+ * `quoteTier` and `quoteAlpha` both read `priorityOf`, the higher of the
+ * scores the card prints below. True in this direction only: the fade has a
+ * floor, so two low scores can draw alike.
+ */
+export const QUOTE_CARD_PURPLE = "Stronger purple means a higher Importance or Striking score.";
+
+/**
+ * **A quote, from the fill the reader is pointing at** — Greg, 2026-09-11
  * (spya-mtyquy): *"tooltip to show our quantitative scores and perhaps
  * Previous/Next icon-buttons to jump to the next Quote, and a button to open
  * Quotes mode"*.
@@ -1654,7 +1694,7 @@ export interface QuoteCardSource {
  *   rather than the model's judgment.
  * - **Why**, the reason the band keeps behind its ⓘ (Greg, 2026-08-31: *"with
  *   reason as a tooltip"*) — the model's words, so in the model's face.
- * - **‹ ›** step the outlined quotes down the page, whatever order the band is
+ * - **‹ ›** step the filled quotes down the page, whatever order the band is
  *   using. Disabled at either end; the card closes on a step, and the reader
  *   points at the next.
  * - **Who chose it, and when**, last and in the app's face — the line the
@@ -1692,6 +1732,27 @@ function QuoteCard({
             {at + 1} of {source.listed.length}
           </span>
         )}
+      </p>
+      {/* **What a quote is**, first, because the fills are in the prose in
+          every mode and this card is where a reader who has never opened
+          Quotes meets one. Greg, 2026-10-06 (spya-tpmde9): *"so readers know
+          what they are"*. From the viewer's side, so it is true for a visitor
+          too. docs/plans/261006j-the-card-on-a-quote-in-the-prose-says-what-a-quote-is.md. */}
+      <p className="prose-card-meta prose-card-quote-what">
+        {scores.length > 0 ? `${QUOTE_CARD_SAYS} ${QUOTE_CARD_PURPLE}` : QUOTE_CARD_SAYS}{" "}
+        <Link
+          className="prose-card-quote-help"
+          href={helpHref(modeAnchor("quotes"))}
+          onClick={(event) => {
+            /* `Link` leaves a modified click to the browser so it can open Help
+               elsewhere. Close only when this tab is actually following it. */
+            if (event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            onClose();
+          }}
+        >
+          More in Help →
+        </Link>
       </p>
       {scores.length > 0 ? (
         <dl className="prose-card-scores">
@@ -1896,13 +1957,19 @@ function clip(text: string, max: number): string {
  * - **The two score bars.** Glossary parity: the card says what a thing means,
  *   the band says what we scored it. A relevance bar in a hover panel is a
  *   number with nothing to compare it against.
- * - **Look it up** (was *Find it on the web*). Its result is here
- *   (`CiteCardReading`); the press is not. It is billed, rate-limited and owner-only, and a
- *   surface that opens because a pointer rested somewhere is the wrong place for
- *   a press that spends money.
- * - **A foot button into Citations mode.** It would need `?cite=` and a
- *   threshold reveal, both deferred — see the plan. The link out is the action,
- *   and it is the one a reader came for.
+ * - **A kept *Dig deeper* answer.** The verdict's short version is here
+ *   (`CiteCardReading`); the long reading stays on the row, which has the room.
+ * - **A selected row in Citations mode.** There is no `?cite=`; the card's
+ *   button scrolls the row into view once and that is all (plan 261004b).
+ *
+ * ## And one thing that was not here until 2026-10-04: *Dig deeper*
+ *
+ * This list used to say a card that opens because a pointer rested somewhere is
+ * the wrong place for a press that spends money. Greg asked for it by name
+ * (report `spya-c2qmbg`), the glossary's card has had the same button since
+ * 261002c, and the press is a deliberate one on a labelled button, not the
+ * hover. It starts the row's own *Dig deeper* and opens Citations on that row,
+ * where the answer streams: `CiteActions`.
  *
  * ## And a count instead of more marks
  *
@@ -1912,7 +1979,18 @@ function clip(text: string, max: number): string {
  * answer. The honest close is words — *cited in 7 paragraphs* — which is Fable's
  * call and costs nothing.
  */
-function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryarn: boolean }) {
+function CiteCard({
+  work,
+  showInSpideryarn,
+  actions,
+  onClose,
+}: {
+  work: CitedWork;
+  showInSpideryarn: boolean;
+  /** `null` for a visitor: no Dig deeper. */
+  actions: CiteActions | null;
+  onClose(): void;
+}) {
   const source = sourceOf(work);
   const by = byLineOf(work);
   const line = workByLine(work);
@@ -1974,16 +2052,22 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
       )}
 
       <div className="prose-card-part prose-card-part-why">
-        <p className="prose-card-label">{CITE_WHY_LABEL}</p>
-        <p className="prose-card-text">{work.why}</p>
-        {/* The band's line, from the band's function: we have not read the
-            work, so `why` above is the article's claim, not the work's content.
-            CitationsPanel.tsx § what we have and have not read. */}
+        {/* `why` only beside the verdict that was checked against it
+            (CitationsPanel.tsx § showsWhy, plan 261003j). The lookup alone:
+            this card draws no *Dig deeper* answer. */}
+        {showsWhy({ lookup: work.lookup }) && (
+          <>
+            <p className="prose-card-label">{CITE_WHY_LABEL}</p>
+            <p className="prose-card-text">{work.why}</p>
+          </>
+        )}
+        {/* The band's line, from the band's function: what we have read of
+            the work. CitationsPanel.tsx § what we have and have not read. */}
         <p className="prose-card-cite-read">{readNoteOf(work)}</p>
       </div>
       <CiteCardReading work={work} />
 
-      <p className="prose-card-foot">
+      <p className="prose-card-foot prose-card-cite-foot">
         {source.kind === "address" ? (
           <span className="prose-card-cite-source">
             {source.host} · {source.how}
@@ -2010,10 +2094,53 @@ function CiteCard({ work, showInSpideryarn }: { work: CitedWork; showInSpideryar
             ? `cited in ${where} ${where === 1 ? "paragraph" : "paragraphs"}`
             : "only in the references"}
         </span>
+        {/* The owner's one verb, last and pushed right. The card closes on the
+            press for `TermCard`'s reason: it is 18rem and goes when the pointer
+            leaves, and the answer needs somewhere that stays put — the row,
+            which `actions.dig` opens. One at a time, as on the rows. */}
+        {actions && (
+          <button
+            type="button"
+            className="prose-card-act prose-card-cite-dig"
+            disabled={actions.digging !== null}
+            title={CITE_CARD_DIG_SAYS}
+            onClick={() => {
+              actions.dig(work.id);
+              onClose();
+            }}
+          >
+            {actions.digging === work.id ? (
+              <LoaderCircle size={10} className="cmt-spinner" />
+            ) : (
+              <Microscope size={10} />
+            )}
+            {actions.digging === work.id
+              ? "Digging deeper…"
+              : work.investigation
+                ? "Dig deeper again"
+                : "Dig deeper"}
+          </button>
+        )}
       </p>
     </div>
   );
 }
+
+/**
+ * **The owner's one verb on a cited work**, as the card needs it. Reader builds
+ * it over the citations read, where *Dig deeper*'s state has lived since
+ * 2026-10-04 so that a card in any mode can start one (plan 261004b).
+ */
+export interface CiteActions {
+  /** Start *Dig deeper* for this work and open Citations on its row. */
+  dig(id: string): void;
+  /** The work a dig is running for, or null — one at a time, across the band and the card. */
+  digging: string | null;
+}
+
+/** The card button's `title`. Each clause is something the row's own press does (CitationInvestigation.tsx § InvestigateButton). */
+export const CITE_CARD_DIG_SAYS =
+  "Searches the web for this work and asks a stronger model how it bears on this article. It costs money. The answer appears on its row in Citations.";
 
 /**
  * **After *Look it up*, the short version of the band's reading** — plan
@@ -2071,7 +2198,15 @@ export interface TermActions {
   hiding: ReadonlySet<string>;
 }
 
-function TermCard({
+/**
+ * **A glossary entry as a card**: what it means here, in general, what the web
+ * said, and one row of *Dig deeper · Hide · Open glossary*.
+ *
+ * Exported since 2026-10-06 for Skim's term chips (SkimPanel.tsx § `TermChip`,
+ * plan 261006e), which draw it inside the shared `Tooltip` rather than this
+ * file's own card. It mounts none of the prose hover machinery.
+ */
+export function TermCard({
   entry,
   onOpen,
   actions,
@@ -2079,11 +2214,20 @@ function TermCard({
   onOpenTerm,
 }: {
   entry: GlossaryEntry;
-  onOpen(): void;
+  /**
+   * The way out to the full entry. **Absent, no *Open glossary* is drawn**: a
+   * Skim reader whose Glossary control is hidden has nowhere to be sent. The
+   * prose always passes it.
+   */
+  onOpen?: (() => void) | undefined;
   /** `null` for a visitor: no Dig deeper, no Hide. */
   actions: TermActions | null;
   onClose(): void;
-  onOpenTerm(id: string): void;
+  /**
+   * Where *Dig deeper* lands. **Absent, no *Dig deeper* is drawn**, for the
+   * same reader: the answer streams into the Glossary band and nowhere else.
+   */
+  onOpenTerm?: ((id: string) => void) | undefined;
 }) {
   const prose = entryProse(entry);
   /* Why the Hide pressed here did not go through. The card's own line, because
@@ -2109,7 +2253,7 @@ function TermCard({
    * streaming inside the card — is passed over in its § 3.
    */
   const dig = () => {
-    if (!actions) return;
+    if (!actions || !onOpenTerm) return;
     void actions.look(entry.id);
     onClose();
     onOpenTerm(entry.id);
@@ -2180,6 +2324,9 @@ function TermCard({
           owner's two verbs were a second row under this one (plan 261002c § 3).
           The row wraps rather than overflowing: an entry with a link and a
           *Dig deeper again* is wider than the card. */}
+      {/* No foot at all with nothing to put in it: a visitor in Skim with no
+          Glossary to open, on a term with no link. */}
+      {(entry.url || actions || onOpen) && (
       <p className="prose-card-foot prose-card-term-foot">
         {entry.url && (
           /* `noreferrer` as well as `noopener`, as in the panel: the article's
@@ -2201,6 +2348,7 @@ function TermCard({
             finger as it does. */}
         {actions && (
           <>
+            {onOpenTerm && (
             <button
               type="button"
               className="prose-card-act"
@@ -2211,6 +2359,7 @@ function TermCard({
               {digging ? <LoaderCircle size={10} className="cmt-spinner" /> : <Globe size={10} />}
               {digging ? "Digging deeper…" : entry.lookup ? "Dig deeper again" : "Dig deeper"}
             </button>
+            )}
             <button
               type="button"
               className="prose-card-act"
@@ -2230,12 +2379,15 @@ function TermCard({
             dead end: the mark itself stays inert to a click, because pressing
             prose has always meant selecting it. It said "in the glossary" until
             2026-10-03; Greg asked for a label that says what pressing it does. */}
+        {onOpen && (
         <button type="button" className="prose-card-open" onClick={onOpen}>
           <BookA size={10} />
           Open glossary
         </button>
+        )}
         </span>
       </p>
+      )}
       {hideFailed && <p className="prose-card-text prose-card-failed">{hideFailed}</p>}
     </div>
   );

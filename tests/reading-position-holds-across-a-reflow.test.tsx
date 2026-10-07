@@ -33,7 +33,7 @@
  * `scrollToBlock`'s clamp against a zero-height document would send every
  * destination to 0 and every assertion here would pass for the wrong reason.
  */
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,6 +47,14 @@ import {
   glideTarget,
   scrollToBlock,
 } from "../src/web/scroll.js";
+import {
+  clearFoldArticle,
+  isFolded,
+  setFoldArticle,
+  toggleFold,
+  toggleFrontMatter,
+  useFoldArticle,
+} from "../src/web/fold.js";
 import { useReadingPosition } from "../src/web/reader/useReadingPosition.js";
 
 enableHistorySync();
@@ -96,6 +104,8 @@ const LANDSCAPE = 40;
 
 let rowHeight = PORTRAIT;
 let scrollY = 0;
+/** How many leading rows are the masthead's echo: drawn with no height. */
+let echoRows = 0;
 let scrollTo: ReturnType<typeof vi.fn>;
 
 function rowIndexOf(el: Element): number | null {
@@ -109,14 +119,14 @@ let host: HTMLDivElement;
 let root: Root;
 
 /** The hook under test, with `layoutKey` driven from a prop. */
-function Harness({ layoutKey }: { layoutKey: string }): ReactNode {
-  useReadingPosition(SECTIONS, BLOCKS, layoutKey);
+function Harness({ layoutKey, sections }: { layoutKey: string; sections: Section[] }): ReactNode {
+  useReadingPosition(sections, BLOCKS, layoutKey);
   return null;
 }
 
-function render(layoutKey: string): void {
+function render(layoutKey: string, sections: Section[] = SECTIONS): void {
   act(() =>
-    root.render(createElement(NuqsAdapter, null, createElement(Harness, { layoutKey }))),
+    root.render(createElement(NuqsAdapter, null, createElement(Harness, { layoutKey, sections }))),
   );
 }
 
@@ -139,6 +149,7 @@ const atNow = () => new URLSearchParams(location.search).get("at");
 beforeEach(() => {
   rowHeight = PORTRAIT;
   scrollY = 0;
+  echoRows = 0;
 
   document.body.replaceChildren();
   const table = document.createElement("table");
@@ -155,8 +166,12 @@ beforeEach(() => {
     this: Element,
   ) {
     const i = rowIndexOf(this);
-    const top = i === null ? 0 : i * rowHeight - scrollY;
-    return { top, bottom: top + rowHeight, height: rowHeight, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    /* A hidden row has no height and sits at the top of the next visible one
+       (fold.ts § Why the cells are hidden): the masthead's echo, below. */
+    const echo = i !== null && i < echoRows;
+    const height = echo ? 0 : rowHeight;
+    const top = i === null ? 0 : (echo ? echoRows : i) * rowHeight - scrollY;
+    return { top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
   });
   vi.spyOn(document.documentElement, "scrollHeight", "get").mockImplementation(
     () => ROWS * rowHeight,
@@ -191,6 +206,7 @@ afterEach(() => {
      leak does to a mutation check. */
   abandonScroll();
   clearArrivalAnchor();
+  clearFoldArticle();
   vi.restoreAllMocks();
 });
 
@@ -402,5 +418,330 @@ describe("a reflow under a reader who is staying put", () => {
     rowHeight = LANDSCAPE;
     render("landscape");
     expect(arrivalAnchor()).toBeNull();
+  });
+});
+
+/**
+ * **The first section starts on a row the reader cannot see, and is still the
+ * section they are in.** Block 0 is the start of the first section of every
+ * article (tree.ts § `navigableItems` begins at row 0), and it is also the
+ * masthead's echo, hidden through the fold store (Greg, spya-t6cdve). A fold
+ * hides a whole section, so its start is skipped; an echo hides one row whose
+ * section is on screen, and skipping it wrote `?at=` as the *next* section.
+ * fold.ts § `isFoldedAway`;
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md.
+ */
+describe("an article whose first rows are the masthead's echo", () => {
+  beforeEach(() => {
+    echoRows = 2;
+    setFoldArticle("x", BLOCKS, new Set([block(0), block(1)]));
+  });
+
+  it("writes ?at= as the first section while the reader is mid-way through it", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k");
+    await settle();
+
+    /* Row 5 at the line: past the echo, seven rows short of the second section. */
+    window.scrollTo({ top: 5 * PORTRAIT });
+    await settle();
+
+    expect(atNow()).toBe(block(0));
+  });
+
+  it("still skips a section whose start a fold hides (the control)", async () => {
+    /* Rows 13 to 29 under one folded heading at row 12: the last section's
+       start is folded away, and the reader is past where it would be. */
+    const folded = BLOCKS.map((b, i) =>
+      i === 12 ? { ...b, kind: "heading", tag: "h2", level: 2 } : b,
+    ) as Block[];
+    setFoldArticle("x", folded);
+    toggleFold(block(12));
+    history.replaceState(null, "", "/read/x");
+    render("k");
+    await settle();
+    window.scrollTo({ top: 26 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(12));
+  });
+
+  /* GPT Sol's C8 (code review of 261007d): the address may hold a paragraph a
+     jump put there, and the spy leaves it standing while the reader is in its
+     section. Folding a heading over that paragraph, inside the same section,
+     changed nothing the spy compares, so the hidden id stayed and the next
+     restore unfolded what the reader had just folded. */
+  it("rewrites a paragraph the reader folds away, to the heading that folded it", async () => {
+    const folded = BLOCKS.map((b, i) =>
+      i === 13 ? { ...b, kind: "heading", tag: "h2", level: 2 } : b,
+    ) as Block[];
+    setFoldArticle("x", folded);
+    history.replaceState(null, "", `/read/x?at=${block(15)}`);
+    render("portrait");
+    await settle();
+    expect(atNow()).toBe(block(15));
+
+    toggleFold(block(13));
+    await settle();
+    expect(isFolded(block(15))).toBe(true);
+    expect(atNow()).toBe(block(13));
+
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    await settle();
+    expect(isFolded(block(15))).toBe(true);
+  });
+
+  it("arrives at the top of the page for ?at= naming an echo row", async () => {
+    scrollY = 7 * PORTRAIT;
+    history.replaceState(null, "", `/read/x?at=${block(0)}`);
+    render("k");
+    await settle();
+    expect(scrollY).toBe(0);
+  });
+});
+
+/**
+ * **A section that starts inside the shut front matter** (front-matter.ts;
+ * Greg, spya-duh4w3;
+ * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ * § Sections that start inside the run). Row 0 is the echo and rows 1 to 3 the
+ * front matter, all four drawn at no height. A section whose first block is in
+ * the run and which carries on past it is on screen, so it is the one named;
+ * but `?at=` is restored through `scrollToBlock`, which opens the run for any
+ * block of it. So it is named by its first *visible* block (fold.ts §
+ * `visibleFrom`), and a reload or a turned phone leaves the front matter shut.
+ */
+describe("an article whose front matter is shut", () => {
+  const section = (row: number, n: number): Section => ({
+    row,
+    blockId: block(row),
+    nodeId: `n000${n}` as NodeId,
+    title: `Section ${n}`,
+    titleVoice: "ai",
+  });
+  /** The byline and the abstract as one section: it starts on row 2, hidden, and runs to row 11. */
+  const SPANNING = [section(0, 1), section(2, 2), section(12, 3), section(24, 4)];
+  /** A section that is rows 1 to 3 and nothing else: wholly hidden. */
+  const WHOLLY = [section(0, 1), section(1, 2), section(4, 3), section(12, 4)];
+  const front = [block(1), block(2), block(3)];
+
+  beforeEach(() => {
+    echoRows = 4;
+    setFoldArticle("x", BLOCKS, new Set([block(0)]), front);
+  });
+
+  it("names the section the reader is in by its first visible block", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", SPANNING);
+    await settle();
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(4));
+    expect(isFolded(block(2))).toBe(true);
+  });
+
+  it("goes on naming it as the reader moves through it, and the next one after", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", SPANNING);
+    await settle();
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    window.scrollTo({ top: 9 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(4));
+    window.scrollTo({ top: 13 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(12));
+  });
+
+  it("leaves the front matter shut when the phone is turned in that section", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("portrait", SPANNING);
+    await settle();
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    rowHeight = LANDSCAPE;
+    render("landscape", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
+    expect(atNow()).toBe(block(4));
+  });
+
+  it("never names a section that is wholly inside the run", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", WHOLLY);
+    await settle();
+    window.scrollTo({ top: 5 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(4));
+    expect(isFolded(block(1))).toBe(true);
+  });
+
+  it("opens the front matter for a link that names one of its blocks", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(2)}`);
+    render("k", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(false);
+    expect(isFolded(block(0))).toBe(true); // the echo stays
+  });
+
+  it("rewrites a front-matter position when the reader shuts the run", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(2)}`);
+    render("portrait", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(false);
+
+    toggleFrontMatter();
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
+    expect(atNow()).toBe(block(4));
+
+    rowHeight = LANDSCAPE;
+    render("landscape", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
+  });
+});
+
+/**
+ * **The run starts at block 0.** A web article imported since 649dc7828 has no
+ * title heading, so its first block is the byline and the first section of the
+ * article starts on a hidden row (front-matter.ts § Where it starts). No echo.
+ * Rows 0 to 2 are the run. The first section is named by its first visible
+ * block, never by a hidden one, and nothing but a link that names a run block
+ * opens the run.
+ */
+describe("an article whose front matter starts at block 0", () => {
+  const front = [block(0), block(1), block(2)];
+  /** The first section is the run and nothing else. */
+  const WHOLLY: Section[] = [
+    { row: 0, blockId: block(0), nodeId: "n0001" as NodeId, title: "Authors", titleVoice: "ai" },
+    { row: 3, blockId: block(3), nodeId: "n0002" as NodeId, title: "Abstract", titleVoice: "ai" },
+    { row: 12, blockId: block(12), nodeId: "n0003" as NodeId, title: "The middle bit", titleVoice: "ai" },
+  ];
+
+  beforeEach(() => {
+    echoRows = 3;
+    setFoldArticle("x", BLOCKS, new Set(), front);
+  });
+
+  it("names the first section by its first visible block", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k");
+    await settle();
+    expect(atNow()).toBeNull(); // the top of the page: nowhere yet
+    window.scrollTo({ top: 6 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(3));
+    expect(isFolded(block(0))).toBe(true);
+  });
+
+  it("never writes a hidden block, wherever the reader stops", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k");
+    await settle();
+    for (const row of [3, 4, 11, 13, 5, 3, 25, 4]) {
+      window.scrollTo({ top: row * PORTRAIT });
+      await settle();
+      expect(front, `row ${row}`).not.toContain(atNow());
+      expect(atNow(), `row ${row}`).toBe(row < 12 ? block(3) : row < 24 ? block(12) : block(24));
+    }
+    expect(isFolded(block(0))).toBe(true);
+  });
+
+  it("names the second section when the first is the run and nothing else", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k", WHOLLY);
+    await settle();
+    window.scrollTo({ top: 5 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(3));
+    expect(isFolded(block(0))).toBe(true);
+  });
+
+  it("leaves the run shut on a reload, and when the phone is turned", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    render("portrait");
+    await settle();
+    expect(isFolded(block(0))).toBe(true);
+    expect(atNow()).toBe(block(3));
+    rowHeight = LANDSCAPE;
+    render("landscape");
+    await settle();
+    expect(isFolded(block(0))).toBe(true);
+    expect(atNow()).toBe(block(3));
+  });
+
+  it("opens the run for a link that names block 0", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(0)}`);
+    render("k");
+    await settle();
+    expect(isFolded(block(0))).toBe(false);
+    expect(isFolded(block(2))).toBe(false);
+    expect(atNow()).toBe(block(0));
+  });
+});
+
+/**
+ * **A pasted link that names a run block opens the run, as the page mounts.**
+ * The cases above hand the store its article before the hook mounts. In the
+ * app the prose table does that from a layout effect, in the same commit as
+ * this hook's restore effect (`useFoldArticle`, TableView.tsx), and in
+ * development React's StrictMode then unmounts and remounts every effect once.
+ * The restore effect does not scroll twice (`synced`), so a store that forgot
+ * the run was open across that remount left the link pointing at a shut run,
+ * and the spy then rewrote `?at=` to the first visible block. Seen in a
+ * browser on the dev server, 2026-10-07 (fold.ts § `reopenFor`). Production
+ * has no StrictMode, so there the link always opened the run.
+ */
+describe("a link that names a run block, with the table mounting beside the hook", () => {
+  const front = [block(1), block(2), block(3)];
+  const echo = new Set([block(0)]);
+
+  function Table(): ReactNode {
+    useFoldArticle("x", BLOCKS, echo, front);
+    return null;
+  }
+  function Page(): ReactNode {
+    useReadingPosition(SECTIONS, BLOCKS, "k");
+    return createElement(Table);
+  }
+  /** The article arrives after the app is up, as it does over the wire: the
+      address is already read when the reader mounts, so the restore effect
+      runs in the mount commit, which is the one StrictMode repeats. */
+  function mount(strict: boolean): void {
+    const within = (page: ReactNode) =>
+      createElement(NuqsAdapter, null, strict ? createElement(StrictMode, null, page) : page);
+    act(() => root.render(within(null)));
+    act(() => root.render(within(createElement(Page))));
+  }
+
+  beforeEach(() => {
+    echoRows = 1;
+  });
+
+  it("opens the run and leaves the address on the block", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(2)}`);
+    mount(false);
+    await settle();
+    expect(isFolded(block(2))).toBe(false);
+    expect(atNow()).toBe(block(2));
+  });
+
+  it("does so under StrictMode's remount too", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(2)}`);
+    mount(true);
+    await settle();
+    expect(isFolded(block(2))).toBe(false);
+    expect(isFolded(block(0))).toBe(true); // the echo stays
+    expect(atNow()).toBe(block(2));
+  });
+
+  it("still arrives shut, under StrictMode, on a link that names no run block", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(12)}`);
+    mount(true);
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
+    expect(atNow()).toBe(block(12));
   });
 });

@@ -17,8 +17,11 @@
  *   `literature` one can take two minutes — and the referee is free to delete
  *   it meanwhile. Without the tombstone the answer landing would put the row
  *   back, because the response is the whole row.
- * - **A `result` frame for a deleted row is dropped too**, not just the final
- *   one.
+ * - **Stream frames for a deleted row stay hidden.** They are retained for
+ *   restoration if the delete is refused.
+ * - **A delete the server refuses puts the row back.** The delete is
+ *   optimistic, and a 409 is the server saying the row is still there — see
+ *   `forget`.
  * - **This tab's colour choice beats a frame carrying an older one**, and two
  *   PATCHes for one row are chained so they cannot land out of order.
  * - **`retry` reads from the closure, not from a `setState` updater.** An
@@ -29,11 +32,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
-import type { SavedCriterion } from "../saved-criteria.js";
+import { isCriteriaAtCeiling, type SavedCriterion } from "../saved-criteria.js";
 import { isStale } from "../search-stale.js";
-import { apiFetch, failure, fetchOk } from "./lib/api.js";
+import { criterionRefusalDrafts } from "./criterion-refusal-drafts.js";
+import { apiFetch, failure, fetchOk, statusOf } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
@@ -82,7 +87,16 @@ function withChoice(row: SavedCriterion, colour: number | null | undefined): Sav
 const url = (slug: string) => `/api/referee/criteria/${encodeURIComponent(slug)}`;
 const one = (slug: string, id: string) => `${url(slug)}/${encodeURIComponent(id)}`;
 
+interface CriterionDeletion {
+  row: SavedCriterion | undefined;
+  scope: symbol;
+  request?: Promise<void>;
+}
+
 export function useCriteria(slug: string): CriteriaApi {
+  // A queued colour or a stream's re-delete can run after the session changes.
+  const madeFor = useMadeFor();
+  const drafts = useMemo(() => criterionRefusalDrafts(slug, madeFor), [slug, madeFor]);
   const [rows, setRows] = useState<SavedCriterion[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -102,14 +116,16 @@ export function useCriteria(slug: string): CriteriaApi {
    */
   const [fingerprint, setFingerprint] = useState<{ hash: string | undefined } | null>(null);
 
-  /** Ids the referee deleted while their answer was still in the air. */
-  const deleted = useRef(new Set<string>());
+  /** Each deletion intent keeps the latest hidden row until it can be restored. */
+  const deleted = useRef(new Map<string, CriterionDeletion>());
+  const deletionScope = useMemo(() => Symbol(slug), [slug]);
   /** Colours this tab has chosen, by id. `null` is a value, not a deletion. */
   const chosen = useRef(new Map<string, number | null>());
   /** The last PATCH in flight for each row, so a second one waits for it. */
   const patching = useRef(new Map<string, Promise<void>>());
 
   // Switching article throws the tombstones away with the rows they name.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger, not an input — the cleanup has to run when the article changes, and the three maps are refs.
   useEffect(() => {
     const gone = deleted.current;
     const picks = chosen.current;
@@ -123,7 +139,7 @@ export function useCriteria(slug: string): CriteriaApi {
 
   useEffect(() => {
     let live = true;
-    setRows([]);
+    setRows(drafts.read());
     setLoaded(false);
     setLoadError(null);
     setFingerprint(null);
@@ -138,7 +154,11 @@ export function useCriteria(slug: string): CriteriaApi {
         if (body.error) {
           setLoadError(body.error);
         } else {
-          setRows(body.criteria ?? []);
+          const stored = body.criteria ?? [];
+          // A late acceptance may already have stored a draft's id. The server
+          // owns those words now; do not show two rows or revive its old error.
+          for (const row of stored) drafts.remove(row.id);
+          setRows([...stored, ...drafts.read()]);
           /* **Unconditionally, including when the field is missing.** A reply
              that got here is the server's answer about this paper, so
              `undefined` is not silence — it is "we checked and cannot tell",
@@ -162,7 +182,7 @@ export function useCriteria(slug: string): CriteriaApi {
       live = false;
       read.abandon();
     };
-  }, [slug]);
+  }, [slug, drafts]);
 
   /** Replace one row in place, or append it if it is new. */
   const put = useCallback((next: SavedCriterion) => {
@@ -174,18 +194,50 @@ export function useCriteria(slug: string): CriteriaApi {
     );
   }, []);
 
+  /**
+   * Tell the server, after the row has already left the screen.
+   *
+   * A 409 restores the latest hidden row, with this tab's colour choice. Its
+   * timestamp and id place it among the surviving rows, matching the store's
+   * order; an array index goes stale when other rows are deleted meanwhile.
+   * Other failures leave the row off screen: they do not say whether it went.
+   *
+   * The record's identity ties the reply to this deletion intent, even if a
+   * later delete reuses the id on another article. Clearing it on a refusal
+   * lets the restored row take stream frames again. The original DELETE and
+   * the stream's re-delete share the record. The re-delete waits for the first
+   * request and is skipped after a refusal, so it cannot succeed after that
+   * refusal restored the row. Restoration includes any hidden `done` frame.
+   */
   const forget = useCallback(
-    async (id: string) => {
-      try {
-        // `fetchOk`, not `apiFetch`: a DELETE that 500s used to remove the row
-        // from the screen and say nothing, so the referee saw it gone and found
-        // it back after a reload. The omission has happened twice already.
-        await fetchOk(one(slug, id), { method: "DELETE" });
-      } catch (e) {
-        setError(describeFetchFailure(e as Error));
-      }
+    (id: string, back = deleted.current.get(id)) => {
+      const request = (back?.request ?? Promise.resolve()).then(async () => {
+        if (back && deleted.current.get(id) !== back) return;
+        try {
+          // `fetchOk`, not `apiFetch`: a DELETE that 500s used to remove the row
+          // from the screen and say nothing, so the referee saw it gone and found
+          // it back after a reload. The omission has happened twice already.
+          await fetchOk(one(slug, id), { method: "DELETE" }, madeFor);
+        } catch (e) {
+          if (back && deleted.current.get(id) !== back) return;
+          setError(describeFetchFailure(e as Error));
+          if (back?.row && statusOf(e) === 409 && deleted.current.delete(id)) {
+            const row = chosen.current.has(id) ? withChoice(back.row, chosen.current.get(id)) : back.row;
+            setRows((prev) => {
+              if (prev.some((c) => c.id === id)) return prev;
+              const next = prev.findIndex((c) =>
+                c.createdAt > row.createdAt || (c.createdAt === row.createdAt && c.id > row.id),
+              );
+              const at = next === -1 ? prev.length : next;
+              return [...prev.slice(0, at), row, ...prev.slice(at)];
+            });
+          }
+        }
+      });
+      if (back) back.request = request;
+      return request;
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -193,11 +245,12 @@ export function useCriteria(slug: string): CriteriaApi {
    *
    * Frames: one `begin`, then any number of `result`, then exactly one `done` —
    * **except when the row was deleted mid-run**, which ends the stream with no
-   * `done` at all (src/routes.ts § referee criteria). The `!settled` check is
-   * how that expected silence is told apart from a broken connection.
+   * `done` at all (src/routes.ts § referee criteria). A stopped stream is kept
+   * as a hidden error while deleted, and shown only if the delete is refused.
    */
   const send = useCallback(
-    (id: string, criterion: string, config: RefereeCriterionConfig, createdAt: string) => {
+    (id: string, criterion: string, config: RefereeCriterionConfig, createdAt: string, isAdd = false) => {
+      const wasDraft = drafts.read().some((draft) => draft.id === id);
       // Drop whatever the previous attempt left behind, so a retry shows a
       // spinner rather than the old error with a spinner under it.
       put({ id, criterion, config, createdAt, status: "pending", results: [] });
@@ -222,7 +275,7 @@ export function useCriteria(slug: string): CriteriaApi {
                 ? { poles: config.poles, scale: config.scale }
                 : {}),
             }),
-          });
+          }, madeFor);
           /* A failure before the stream opens is ordinary JSON — the server
              validates before it writes a header. A failure after it opens is
              the stream simply ending, handled below. */
@@ -231,9 +284,12 @@ export function useCriteria(slug: string): CriteriaApi {
           for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
             // Computed once per frame, before acting on it: a delete can land
             // between two frames of the same stream.
-            const gone = deleted.current.has(liveId);
+            const gone = deleted.current.get(liveId);
+            // An old stream must not fill a new article's deletion record.
+            if (gone && gone.scope !== deletionScope) return;
             if (event.name === "begin") {
               const begun = event.data as SavedCriterion;
+              drafts.remove(id);
               /* Fresher news about the paper than the GET has: the server
                  fingerprints the blocks as it opens the row, so this hash *is*
                  the article's current one. */
@@ -246,12 +302,15 @@ export function useCriteria(slug: string): CriteriaApi {
                 setRows((prev) => prev.filter((c) => c.id !== stale));
                 liveId = begun.id;
               }
-              if (!gone) put(begun);
+              if (gone) gone.row = begun;
+              else put(begun);
               continue;
             }
             if (event.name === "result") {
-              if (!gone) {
-                const { result } = event.data as { result: RefereeResult };
+              const { result } = event.data as { result: RefereeResult };
+              if (gone) {
+                if (gone.row) gone.row = { ...gone.row, results: [...gone.row.results, result] };
+              } else {
                 setRows((prev) =>
                   prev.map((c) =>
                     c.id === liveId ? { ...c, results: [...c.results, result] } : c,
@@ -263,11 +322,15 @@ export function useCriteria(slug: string): CriteriaApi {
             if (event.name === "done") {
               settled = true;
               const done = event.data as SavedCriterion;
-              if (deleted.current.has(done.id)) {
+              const removed = deleted.current.get(done.id);
+              if (removed && removed.scope !== deletionScope) return;
+              if (removed) {
                 /* Deleted while the answer was in the air. The DELETE we sent
                    may have run *before* the server finished writing, so send it
-                   again now that nothing else will write it. */
-                void forget(done.id);
+                   again now that nothing else will write it. Refused, the
+                   finished row is the one to show. */
+                removed.row = done;
+                void forget(done.id, removed);
                 return;
               }
               /* The final pass is authoritative and may legitimately differ
@@ -278,14 +341,12 @@ export function useCriteria(slug: string): CriteriaApi {
             }
           }
 
-          if (!settled && !deleted.current.has(liveId)) {
+          if (!settled) {
             throw new ReaderFacingError("The criterion stopped arriving. Try again.");
           }
         } catch (e) {
-          if (deleted.current.has(liveId)) return;
           const message = describeFetchFailure(e as Error);
-          setError(message);
-          put({
+          const failed: SavedCriterion = {
             id: liveId,
             criterion,
             config,
@@ -293,17 +354,28 @@ export function useCriteria(slug: string): CriteriaApi {
             status: "error",
             results: [],
             error: message,
-          });
+          };
+          const removed = deleted.current.get(liveId);
+          if (removed && removed.scope !== deletionScope) return;
+          if (!removed && (isAdd || wasDraft) && statusOf(e) === 409 && isCriteriaAtCeiling(message)) {
+            drafts.put(failed, wasDraft);
+          }
+          if (removed) {
+            removed.row = failed;
+            return;
+          }
+          setError(message);
+          put(failed);
         }
       })();
     },
-    [slug, put, forget],
+    [slug, put, forget, madeFor, deletionScope, drafts],
   );
 
   const ask = useCallback(
     (criterion: string, config: RefereeCriterionConfig) => {
       const id = mintId();
-      send(id, criterion.trim(), config, new Date().toISOString());
+      send(id, criterion.trim(), config, new Date().toISOString(), true);
       return id;
     },
     [send],
@@ -338,7 +410,7 @@ export function useCriteria(slug: string): CriteriaApi {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ colour }),
-          });
+          }, madeFor);
         } catch (e) {
           setError(describeFetchFailure(e as Error));
         }
@@ -361,18 +433,21 @@ export function useCriteria(slug: string): CriteriaApi {
       patching.current.set(id, next);
       void next;
     },
-    [slug],
+    [slug, madeFor],
   );
 
   const remove = useCallback(
     (id: string) => {
-      deleted.current.add(id);
+      /* Read from the closure, not from inside the updater below — an updater
+         must be pure, the rule `retry` keeps for the same reason. */
+      const back: CriterionDeletion = { row: rows.find((c) => c.id === id), scope: deletionScope };
+      drafts.discard(id);
+      deleted.current.set(id, back);
       setRows((prev) => prev.filter((c) => c.id !== id));
-      // If a POST is still out, its `.then` re-sends the DELETE once the write
-      // it is racing has definitely landed.
-      void forget(id);
+      // If a POST is still out, its `done` frame re-sends the DELETE after the write.
+      void forget(id, back);
     },
-    [forget],
+    [forget, rows, deletionScope, drafts],
   );
 
   /**

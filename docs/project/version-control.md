@@ -5,6 +5,26 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 Where the code lives, and the one habit that is different here because several agents share a
 working tree.
 
+## In this doc
+
+- [Commit your own files, by name, in one command](#commit-your-own-files-by-name-in-one-command) — the commit recipe; open it before every commit in a shared tree
+- [What protects `main`, and what does not](#what-protects-main-and-what-does-not) — before any push, and why nothing stops a push to production
+- [Always merge, never rebase](#always-merge-never-rebase) — integrating `dev` into your work, and the reasons
+- When a pull or merge conflicts — [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)
+- [Never run a git command that throws work away](#never-run-a-git-command-that-throws-work-away) — tempted by `restore`, `stash`, `reset` or `rm`
+- [§ Where it is](#where-it-is) — the remote, the branches, which one is production
+- [§ The reason this doc exists: one tree, several agents](#the-reason-this-doc-exists-one-tree-several-agents) — the rules for a shared tree, and the accidents behind each (mostly history)
+  - [The pathspec takes a peer's hunks too](#and-the-other-half-of-that-which-cost-us-twice-on-2026-08-28) — a file you are committing has someone else's edits in it
+  - [The private index is gone](#the-private-index-is-gone-2026-08-30) — why there is no third commit recipe (history)
+  - [A stale index reports the file deleted](#a-stale-index-reports-the-file-deleted-while-it-sits-there-full-of-content-2026-08-29) — `git status` says deleted and the file is there
+- [§ Four more ways the recipe goes wrong](#four-more-ways-the-recipe-goes-wrong) — the commit ran and committed nothing, or the wrong thing
+- [§ Nobody knows who edited an uncommitted file](#nobody-knows-who-edited-an-uncommitted-file) — an edit in the tree is not yours and you want to know whose
+- [§ The thing that fails silently](#the-thing-that-fails-silently) — a commit that reverts a peer's work without saying so
+- [§ What is deliberately not in git](#what-is-deliberately-not-in-git) — looking for `data/` or `.env.local`
+- [§ Dropbox, until 2026-09-01](#dropbox-until-2026-09-01) — (history)
+- [§ The other repo, and the move that hasn't happened](#the-other-repo-and-the-move-that-hasnt-happened) — the second repository
+- [§ See also](#see-also) — the neighbouring docs
+
 ## Where it is
 
 | | |
@@ -229,10 +249,10 @@ It does. Two of the reasons are specific to this repo:
    GPT Sol reviews cite them, plans say "done (`96c7661`)", every postmortem names the commit that
    introduced the bug. Rebase rewrites every commit it moves, and the reference does not break loudly:
    it keeps looking like a sha and resolves to nothing.
-2. **A replayed conflict is one round trip per commit.** Rebase replays each of your commits over the
-   new base, so a single conflict can surface as many times as you have commits — and under
-   [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)'s *"Make a proposal.
-   Don't make changes yet"* rule, that is a round trip with Greg each time. One merge, one proposal.
+2. **A replayed conflict is one resolution per commit.** Rebase replays each of your commits over the
+   new base, so a single conflict can surface as many times as you have commits — and each time
+   [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) has you write a
+   proposal and have it checked before you edit. One merge, one proposal.
 
 And four that are ordinary good sense:
 
@@ -255,8 +275,22 @@ avoiding — and nothing downstream cares, because `git merge-base --is-ancestor
 land?" identically either way, which is what a worktree sweep asks
 ([worktrees.md](worktrees.md)).
 
-**Most landings never conflict.** A plain non-fast-forward merges automatically, so the proposal rule
-fires on real textual conflicts only, not on every push.
+**Most landings never conflict.** A plain non-fast-forward merges automatically, so a proposal is
+needed for real textual conflicts only, not on every push.
+
+**Merge `origin/dev` when you wake up, too** — after a resume, a compaction or a long wait, before
+anything else, not only when the work is done:
+[worktrees.md § The workflow](worktrees.md#the-workflow).
+
+**A merge refused over a dirty tree has once taken the edits with it.** On 2026-10-01, in a
+worktree with six modified tracked files, `git merge --no-edit origin/dev` printed *"Please commit
+your changes or stash them … Aborting"* and *"Merge with strategy ort failed"*, and afterwards all
+six files were back at `HEAD`, sharing one mtime. No autostash setting was on. `git status` showed
+only untracked files, which looks like an ordinary state. The edits survived as an unreferenced
+commit named `WIP on <branch>: <sha> …`, with an `index on …` twin. They were found with
+`git fsck --no-reflogs --unreachable`, then `git log --no-walk` over the commit ids it lists,
+and written back one file at a time with `git show <sha>:<path> > <path>`. Seen once and not
+reproduced; the cause is not known.
 
 ### Commit your own files, by name, in one command
 
@@ -304,6 +338,17 @@ rewrites the index entries for the paths it commits, so any staleness in them is
 more than it sounds — see [the section below](#the-cause-was-the-recipes-own-last-line-not-a-stray-command-2026-08-29),
 where a whole day of phantom reverts survived precisely because every session was carefully
 avoiding the shared index.
+
+**Work that may have to wait gets its own commit, and it goes last.** A push sends ancestry, not
+files. On 2026-10-05 a session committed a prompt change together with its plan and research,
+then had to push the docs alone because the change could not yet be measured. `git push origin
+HEAD:dev` took the prompt commit with it, and a second commit had to put the three files back:
+`dev`'s tree was right, and its history and the first commit's message ("stays in the worktree")
+were not. With no rebase, no branch switching and one worktree a session, a commit cannot be
+lifted out afterwards. So when part of a change is gated, on a measurement or on Greg, commit
+the docs and the eval first and the gated code as a later commit of its own; then "push the
+docs" is pushing an earlier commit, and nothing has to be undone
+([261005h](../plans/261005h-fuller-summary-written-for-someone-who-has-not-read-the-piece.md)).
 
 ### And the other half of that, which cost us twice on 2026-08-28
 
@@ -837,6 +882,16 @@ by a deploy, not by a test ([deployment.md](deployment.md)).
 `git status` before you commit, and read the untracked list rather than skimming past it. If
 something you import is in it, it is yours to add.
 
+**A tracked file left out of the pathspec does the same, and the untracked list cannot show it.**
+The recipe's list of paths is typed by hand. On 2026-09-07 a commit of fourteen files left out
+`src/web/visitor.ts`: `HEAD` had a new member of `Mode` and no row for it in the total
+`Record<Mode, VisitorPolicy>`, so every public reader crashed. `npm test`, `npm run typecheck` and
+`npm run check` were green throughout, because all three read the working tree, which had the
+row. GPT Sol found it by extracting the commit to a scratch directory and running the visitor
+tests against that. After the commit the omitted file is still there as a ` M` line in
+`git status --porcelain`. So after every pathspec commit, run `git status --porcelain` and read it:
+a ` M` line for a file that belongs to the change is a file that did not go in.
+
 **And the variant where the import is not yours at all.** The recipe's trailing `--` pathspec commits
 a named file *from the working tree*, so naming a file a peer is halfway through commits their half
 too — which the recipe above says is usually fine, with one exception, and this is the exception. On
@@ -899,8 +954,9 @@ push would still turn that project red — but it now costs the old app rather t
 - [git-commit-changes.md](../reusable/git-commit-changes.md) — the batch version: how to decide a
   pile of uncommitted changes is finished, quiet and safe to commit
 - [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) — when a pull leaves
-  conflict markers: read both sides' history, propose before editing, and don't reach for the
-  commands that discard a side
+  conflict markers: read both sides' history, write the proposal down, resolve it yourself (Sol
+  or Opus if unsure; Greg only for a real product trade-off), and don't reach for the commands that
+  discard a side
 - [deployment.md](deployment.md) — Vercel, and why it ships a working tree rather than a commit
 - [setup-dev.md](setup-dev.md) — install, dev, secrets
 - [testing.md](testing.md), [typechecking.md](typechecking.md) — what to run before you commit

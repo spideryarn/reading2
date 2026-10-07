@@ -1,5 +1,7 @@
 # Testing it in a browser, with Playwright
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 [browser-testing.md](browser-testing.md) is **what to look at** — the URLs, the widths, the checks
 worth running, and the many ways the eye lies to you. Almost all of it is true whatever is driving
 the page. But its recipes are written in the Claude-in-Chrome extension's tools, because that is what
@@ -72,10 +74,22 @@ died on `EADDRINUSE` because a peer already held its port, the launcher's readin
 from the peer's server, and sixteen screenshots came from another worktree's build. The server's own
 bind line in its log says which process took the port; a curl cannot.
 
+**Stop your server by the PID you started, never by pattern.** On 2026-10-06 a browser subagent
+tidied up with `pkill -f "node_modules/.bin/vite"`, which also matches `vitest`: it took down every
+dev server on the box (5173, 5174, 5273, 5274) and killed several sessions' test runs, which ended
+`143` and looked like failures of their changes. Note the PID when you start the server, kill that,
+and check its `cwd` is your own tree first.
+
 ## Signing in
 
 Every route past the gate needs a session (src/auth.ts), so the skeleton above can look at the
 landing page and very little else. This is the rest of it, and it needs no human:
+
+> Can we create/hardcode a dummy-dev user with a known password … so that you can sign in with
+> email & password (rather than needing Google SSO, which is a nuisance)? … The key thing is that
+> it shouldn't need human input to create/log in as this dev user.
+>
+> — Greg, 2026-09-01 ([the plan](../plans/260901j-a-signed-in-browser-on-the-box-with-no-human.md))
 
 ```js
 import { signedInBrowser } from "./scripts/browser-sign-in.ts";   // tsx, from the repo root
@@ -89,6 +103,22 @@ Or as a check on its own, which is the quickest way to find out whether this mac
 
 ```
 npx tsx scripts/browser-sign-in.ts --at /read/fowler-phrenology --shot /tmp/x.png
+```
+
+**As a second reader, who is not the administrator**: `--as second` on the command line, or
+`signedInBrowser({ as: "second" })` / `signIn(page, base, { as: "second" })`. That is
+`dev-reader-b@spideryarn.local`, with the same password and the same two proofs. To change reader
+in **one browser profile**, which is what a check of anything kept in `localStorage` needs, sign
+out between them: `signIn` cannot do it alone, because a signed-in visit to `/login` is sent on to
+the shelf.
+
+```js
+import { signedInBrowser, signIn, signOut } from "./scripts/browser-sign-in.ts";
+
+const { browser, page } = await signedInBrowser({ base });        // the administrator
+// … move about on an article both can open …
+await signOut(page, base);                                         // the Sign out button on /profile
+await signIn(page, base, { as: "second" });                        // same context, same localStorage
 ```
 
 **The credential is already on the machine.** `npm run db:seed-owner` writes
@@ -325,7 +355,3 @@ in [browser-testing.md](browser-testing.md) have still not been run on this mech
 
 Also untested: headed Chrome over noVNC, where the visibility findings above may well go back to
 behaving like the laptop, since then there is a real window again.
-
----
-
-Up: [code-quality-overview.md](code-quality-overview.md)

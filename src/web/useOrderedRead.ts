@@ -97,19 +97,17 @@ export interface OrderedRead {
    */
   armRefresh(): void;
   /**
-   * **This artefact is gone** — a DELETE, or the reader asked for it to be
-   * rebuilt. Every reply still in the air is dropped, and the trailing read with
-   * them: a read now would race the rebuild.
+   * **What was being read is gone** — the reader moved to another article, the
+   * artefact was deleted, or it is being rebuilt. Every reply still in the air
+   * is dropped, and the trailing read with them: a read now would race whatever
+   * replaces it.
    *
-   * **Nothing calls this today.** Its one caller was `useGlossary`'s `clear()`,
-   * which went with the glossary panel's *Start again* on 2026-09-05
-   * (`Foot` in ./GlossaryPanel.tsx), and none of the other seven readers ever
-   * had a delete to need it for. A cross-family review said to remove it; it is
-   * kept, on the narrower ground that this is a shared seam and the eight hooks
-   * over it did not ask for a contract change — the first artefact to grow a
-   * delete wants exactly this, and the generation counter it bumps is still
-   * load-bearing for slug changes either way. Delete it if that stops being
-   * true.
+   * **One caller today: `useClaims`**, which returns this as its effect's
+   * cleanup — on a change of slug and on unmount — so a reply about the previous
+   * paper cannot land on the next one (./useClaims.ts). Until 2026-09-05 the caller was `useGlossary`'s `clear()`,
+   * which went with the glossary panel's *Start again*; for a while after that
+   * nothing called it, and this comment went on saying so after `useClaims`
+   * arrived. The other readers have no delete and re-key on the slug instead.
    */
   discard(): void;
 }

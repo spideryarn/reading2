@@ -68,8 +68,9 @@
     .tip-cite-text,
     .prose-card-quote,
     .cite-entry,
-    .dbt-claim-text,
-    /* the by-claim heading: the same verbatim quote as .dbt-claim-text */
+    /* Marginalia's opened citation: the article's own reference entry */
+    .marg-cite-entry,
+    /* Debate's claim heading: the article's own words for the claim */
     .dbt-group-quote,
     /* "first cited" — the words the article cites the work with */
     .cite-at,
@@ -161,10 +162,9 @@
     .marg-idea-statement,
     .marg-arc,
     .marg-arc-full,
-    /* Marginalia's shut notes, opened: Debate's reading of a page, a
-       citation's why, the AI's answer to a comment */
+    /* Marginalia's shut notes, opened: Debate's reading of a page, the AI's
+       answer to a comment */
     .marg-debate-applies,
-    .marg-cite-why,
     .marg-open-answer,
     /* Sketch: the card, the title bar, and the scene tooltips. NOT the SVG
        labels, which are wrapped in TypeScript at Geist's width (CHAR_W in
@@ -214,7 +214,13 @@
     .chat-turn.model :is(.fmt-code, .fmt-pre code),
     .cnd-answer :is(.fmt-code, .fmt-pre code),
     /* Candidates: only the affiliation, not our "said to be at" */
-    .cnd-affil-name
+    .cnd-affil-name,
+    /* Feedback's Earlier tab, for an admin: the line a report's note says
+       about it, which an agent wrote (261007d) */
+    .fb-earlier-comment,
+    /* and a question an agent put to them: its title and its text */
+    .fb-question-title,
+    .fb-question-text
 ) {
     font-family: var(--font-ai);
 }
@@ -265,6 +271,11 @@
     .tip-hit-criterion,
     .fb-body,
     .fb-earlier-body,
+    /* a question's report in the admin's own words, their reply to it, and
+       the box they reply in (261007d) */
+    .fb-question-report-line,
+    .fb-question-answer-body,
+    .fb-reply-input,
     .ill-steer-input,
     .cmdbar-input
 ) {

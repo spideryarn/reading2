@@ -10,8 +10,8 @@
  * for the reading view's one job here: drawing the band when Search mode is
  * open. The owner gate is the Dock's, so it is asked of the real `Dock`.
  *
- * jsdom has no layout and loads no stylesheet, so which of the box and the ⚡
- * a narrow window or a touch screen shows is not visible here — that is the
+ * jsdom has no layout and loads no stylesheet, so whether a narrow window or
+ * a touch screen draws the control at all is not visible here — that is the
  * fit ladder's CSS (styles/dock-quick-search.css) and the browser check's.
  * What is visible is the class that says which one Search mode wants.
  */
@@ -46,6 +46,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { SearchBand } = await import("../src/web/modes/search/SearchMode.js");
 const { DockQuickSearch } = await import("../src/web/DockQuickSearch.js");
 const { Dock } = await import("../src/web/Dock.js");
+const { searchDraftFor } = await import("../src/web/search-draft.js");
 
 let slugCounter = 0;
 /** A fresh article per case: the draft store is per article and outlives a mount. */
@@ -307,6 +308,23 @@ describe("typing in the bar's box", () => {
     expect(opened, "a cleared box still opened Search mode").toBe(0);
   });
 
+  /* An input method's Escape dismisses its candidate list; the words and the
+     caret stay. Plan 261007a-ui-sweep-k2. */
+  it("neither clears nor lets go on a composing Escape", () => {
+    server();
+    mount();
+    barBox().focus();
+    type(barBox(), "日本語の");
+    const flagged = key(barBox(), { key: "Escape", isComposing: true });
+    const older = key(barBox(), { key: "Escape", keyCode: 229 } as KeyboardEventInit);
+    expect(barBox().value).toBe("日本語の");
+    expect(document.activeElement).toBe(barBox());
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(flagged.defaultPrevented).toBe(true);
+    expect(older.defaultPrevented).toBe(true);
+  });
+
   it("switches Search mode to quick when it is open on another matcher", async () => {
     const posted = server();
     mount({ startOpen: true, url: "?mode=search&match=meaning" });
@@ -320,6 +338,134 @@ describe("typing in the bar's box", () => {
     await pause();
     expect(match()).toBe("quick");
     expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["why replication", "quick"]]);
+  });
+});
+
+/**
+ * **The cross that empties the box** — plan 261004g. Greg, 2026-10-04: *"Can
+ * you add a little X to it so that after I've searched with it, I can easily
+ * wipe it?"* It is Escape's clear with the focus kept rather than let go.
+ */
+describe("the clear cross", () => {
+  const cross = () => host.querySelector<HTMLButtonElement>("button.dock-qs-clear");
+  const press = (el: HTMLElement): MouseEvent => {
+    const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    act(() => {
+      el.dispatchEvent(down);
+      el.click();
+    });
+    return down;
+  };
+
+  it("is there only while the box has words in it", () => {
+    server();
+    mount();
+    expect(cross()).toBeNull();
+    type(barBox(), "why");
+    expect(cross()?.getAttribute("aria-label")).toBe("Clear the search");
+    type(barBox(), "");
+    expect(cross()).toBeNull();
+  });
+
+  it("empties the box, drops the pending pause and keeps the focus in it", async () => {
+    server();
+    mount();
+    type(barBox(), "why replication");
+    const down = press(cross()!);
+    // Pressing it must not blur the box: in Search mode a blurred bar becomes the ⚡ under the pointer.
+    expect(down.defaultPrevented).toBe(true);
+    expect(barBox().value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+    expect(cross()).toBeNull();
+    await pause();
+    expect(opened, "a cleared box still opened Search mode").toBe(0);
+  });
+
+  it("after a search, clears the band's session as Escape does and leaves the box ready for the next one", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    expect(posted).toHaveLength(1);
+    press(cross()!);
+    await flush();
+    expect(barBox().value).toBe("");
+    expect(panelBox()?.value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(false);
+    await pause();
+    expect(posted, "clearing asked something").toHaveLength(1);
+    // The next words are a new search, not a revision of the wiped one — Escape's rule.
+    type(barBox(), "sample size");
+    await pause();
+    expect(posted.map((p) => [p.criterion, p.revises ?? false])).toEqual([
+      ["why replication", false],
+      ["sample size", false],
+    ]);
+  });
+
+  it("puts the cursor in a box that did not have it", () => {
+    server();
+    mount();
+    type(barBox(), "why");
+    act(() => barBox().blur());
+    expect(document.activeElement).not.toBe(barBox());
+    press(cross()!);
+    expect(barBox().value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+  });
+
+  it("keeps the field visible when keyboard focus moves to its cross in Search mode", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    act(() => cross()!.focus());
+    expect(document.activeElement).toBe(cross());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(false);
+    // Staying on the cross is staying in this control, not a long blur ending the session.
+    await pause();
+    type(barBox(), "why replication fails");
+    await pause();
+    expect(posted[1]?.revises).toBe(true);
+    act(() => cross()!.focus());
+    act(() => cross()!.click());
+    expect(barBox().value).toBe("");
+    expect(panelBox()?.value).toBe("");
+    expect(document.activeElement).toBe(barBox());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(false);
+  });
+
+  it("collapses and ends the session when keyboard focus leaves through the cross", async () => {
+    const posted = server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    act(() => cross()!.focus());
+    act(() => must<HTMLInputElement>("input.elsewhere").focus());
+    expect(control().classList.contains("dock-qs--bolt")).toBe(true);
+    await pause();
+    type(panelBox()!, "sample size");
+    await pause();
+    expect(posted.map((p) => [p.criterion, p.revises ?? false])).toEqual([
+      ["why replication", false],
+      ["sample size", false],
+    ]);
+  });
+
+  it("moves keyboard focus from the cross to the panel if responsive CSS hides the field", async () => {
+    server();
+    mount();
+    type(barBox(), "why replication");
+    await pause();
+    act(() => cross()!.focus());
+    act(() => {
+      must<HTMLElement>(".dock-qs-field").style.display = "none";
+      window.dispatchEvent(new Event("resize"));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)); });
+    await flush();
+    expect(document.activeElement).toBe(panelBox());
   });
 });
 
@@ -408,6 +554,126 @@ describe("handoffs before the band mounts", () => {
   });
 });
 
+/**
+ * **A search sent from the command bar** (plan 261005i) — the bar's *Quick
+ * search “X”* row does the box's Enter without the box: the words into the
+ * draft, an `enter` handoff, Search opened (command-runners.ts §
+ * `readingExecutor`). These drive the draft the way that row does and hold
+ * what GPT Sol's plan review asked to see held.
+ */
+describe("a search sent from the command bar", () => {
+  /** The row's first two steps; `mount({ startOpen: true })` is its third. */
+  const send = (words: string) => {
+    act(() => {
+      const draft = searchDraftFor(SLUG);
+      draft.set(words);
+      draft.handOff("enter");
+    });
+  };
+  const coarse = () =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(pointer: coarse)",
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("revises the quick search being typed rather than adding a second", async () => {
+    const posted = server();
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    type(panelBox() as HTMLInputElement, "why replication");
+    await pause();
+    expect(posted).toHaveLength(1);
+    send("the limits of free will");
+    await flush();
+    expect(posted[1]).toEqual({
+      id: posted[0]?.id,
+      criterion: "the limits of free will",
+      kind: "quick",
+      revises: true,
+    });
+    expect(panelBox()?.value).toBe("the limits of free will");
+  });
+
+  it("is held until the saved list has loaded, then asked once", async () => {
+    const posted = server();
+    const originalAnswer = answer;
+    let releaseGet = () => {};
+    answer = (url, init) => (init.method ?? "GET") === "GET"
+      ? new Promise((resolve) => { releaseGet = () => resolve(json({ runs: [] })); })
+      : originalAnswer(url, init);
+    send("the limits of free will");
+    mount({ startOpen: true, url: "?mode=search&match=quick" });
+    await flush();
+    expect(posted).toHaveLength(0);
+    releaseGet();
+    await flush();
+    expect(posted.map((p) => [p.criterion, p.kind])).toEqual([["the limits of free will", "quick"]]);
+  });
+
+  /* Sol's F3. Opening Search pushes an entry, and the switch to *quick* then
+     replaces it, so one Back leaves Search. With Search already open nothing
+     was pushed, and a replace would overwrite the words or meaning view the
+     reader was on: Back would skip it. */
+  it("does not push an extra matcher entry when the band has just mounted", async () => {
+    const posted = server();
+    mount({ url: "?match=meaning" });
+    const before = history.length;
+    // This host mounts the band without writing ?mode=. The actual opening and
+    // Back path are covered through Reader in mode-herald-wiring.test.tsx.
+    type(barBox(), "the limits of free will");
+    key(barBox(), { key: "Enter" });
+    await flush();
+    expect(match()).toBe("quick");
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(history.length).toBe(before);
+  });
+
+  it.each(["words", "meaning"])("pushes when Search was already open on %s, so Back returns to it", async (was) => {
+    const posted = server();
+    mount({ startOpen: true, url: `?mode=search&match=${was}` });
+    await flush();
+    const before = history.length;
+    send("the limits of free will");
+    await flush();
+    expect(match()).toBe("quick");
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(history.length).toBe(before + 1);
+  });
+
+  /* Sol's F4: a submitted search has nothing left to type, so on a touch
+     screen the box that mounts for it does not raise the keyboard over the
+     hits. The ⚡ asks for the box, and a desk keeps its caret. */
+  it("on a touch screen, does not focus the box that mounts for it", async () => {
+    coarse();
+    const posted = server();
+    send("the limits of free will");
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    expect(posted.map((p) => p.criterion)).toEqual(["the limits of free will"]);
+    expect(panelBox()?.value).toBe("the limits of free will");
+    expect(document.activeElement).not.toBe(panelBox());
+  });
+
+  it("on a touch screen, the ⚡ still focuses the box", async () => {
+    coarse();
+    server();
+    act(() => searchDraftFor(SLUG).handOff("quick"));
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    expect(document.activeElement).toBe(panelBox());
+  });
+
+  it("at a desk, the box that mounts for it has the focus", async () => {
+    server();
+    send("the limits of free will");
+    mount({ startOpen: true, url: "?mode=search&match=meaning" });
+    await flush();
+    expect(document.activeElement).toBe(panelBox());
+  });
+});
+
 describe("responsive focus", () => {
   it("moves focus to the panel when the final CSS shape hides the focused bar field", async () => {
     server();
@@ -470,7 +736,8 @@ describe("preserved boundaries", () => {
  * A browser check on 2026-10-02 found an owner's reading view already at the
  * last rung at 1440×900, and the last rung drew the ⚡ — so a laptop never saw
  * the search *bar* Greg asked for. Rung 4 went in below it: rung 3 drops every
- * label and keeps a compact box, and only rung 4 swaps it for the ⚡.
+ * label and keeps a compact box, and only rung 4 gives it up — for the ⚡
+ * until 2026-10-05, and for nothing since (plan 261005h).
  */
 describe("the box outlives the labels (the fit ladder's CSS)", () => {
   const rules = (): { sel: string[]; body: string }[] =>
@@ -493,9 +760,57 @@ describe("the box outlives the labels (the fit ladder's CSS)", () => {
     expect(width(".dock.dock-fit-3 .dock-qs-input")).toBeLessThan(width(".dock.dock-fit-2 .dock-qs-input"));
   });
 
-  it("turns it into the ⚡ at rung 4", () => {
+  /* Until 2026-10-05 rung 4 drew the ⚡ alone. Greg, `spya-n8pgy2`: "if there
+     isn't much room, don't bother showing the quick search icon alone without
+     the input text bar … the quick search icon alone doesn't add any value."
+     The children are hidden as well as the wrapper because DockQuickSearch
+     reads the field's own computed `display`, which a hidden parent does not
+     change. */
+  it("draws nothing at rung 4: no box, and no lone ⚡", () => {
+    expect(hides(".dock.dock-fit-4 .dock-qs")).toBe(true);
     expect(hides(".dock.dock-fit-4 .dock-qs-field")).toBe(true);
-    expect(shows(".dock.dock-fit-4 .dock-qs-bolt")).toBe(true);
+    expect(hides(".dock.dock-fit-4 .dock-qs-bolt")).toBe(true);
+    expect(shows(".dock.dock-fit-4 .dock-qs-bolt")).toBe(false);
+  });
+
+  it("draws nothing under 732px or for a finger, whatever the rung", () => {
+    const css = readerCssNoComments();
+    const block =
+      /@media \(max-width: 731px\), \(pointer: coarse\)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/.exec(css)?.[1] ?? "";
+    const hidden = [...block.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => /display:\s*none/.test(m[2] ?? ""))
+      .flatMap((m) => (m[1] ?? "").split(",").map((x) => x.trim()));
+    expect(hidden).toContain(".dock .dock-qs");
+    expect(hidden).toContain(".dock .dock-qs .dock-qs-field");
+    expect(hidden).toContain(".dock .dock-qs .dock-qs-bolt");
+    expect(block).not.toMatch(/inline-flex/);
+  });
+
+  /* Search mode open and the bar's box not focused: still the ⚡, where the
+     width has a box to stand in for. One box to type in, at any width. */
+  it("keeps the ⚡ that stands in for the box while Search mode is open", () => {
+    expect(shows(".dock-qs--bolt .dock-qs-bolt")).toBe(true);
+    expect(hides(".dock-qs--bolt .dock-qs-field")).toBe(true);
+    /* `hides` above proves a hiding declaration exists, not that a stronger
+       or later rule cannot put the bolt back. There is exactly one state in
+       which any rule may show it. */
+    const showingBolt = rules()
+      .filter((r) => /display:\s*inline-flex/.test(r.body))
+      .flatMap((r) => r.sel)
+      .filter((sel) => sel.includes(".dock-qs-bolt"));
+    expect(showingBolt).toEqual([".dock-qs--bolt .dock-qs-bolt"]);
+  });
+
+  /* The rule that keeps that ⚡ is (0,2,0). Each rule that removes it must
+     outrank it by specificity, not by where it happens to sit in the file. */
+  it("outranks the Search-open ⚡ where there is no room", () => {
+    const specificity = (sel: string) => (sel.match(/\./g) ?? []).length;
+    const removing = rules()
+      .filter((r) => /display:\s*none/.test(r.body))
+      .flatMap((r) => r.sel)
+      .filter((sel) => sel.endsWith(".dock-qs-bolt") && sel !== ".dock-qs-bolt");
+    expect(removing.length).toBeGreaterThanOrEqual(2);
+    for (const sel of removing) expect(specificity(sel)).toBeGreaterThan(specificity(".dock-qs--bolt .dock-qs-bolt"));
   });
 });
 

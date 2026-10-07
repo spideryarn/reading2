@@ -76,13 +76,13 @@ const BAR_H = 44;
  * deliberate opposite: a head that is emphatically *not* ours, sitting on the
  * page, so the cases can state that the function cannot be confused by one.
  */
-function poseBar(barBottom: number, safeTop: number): void {
+function poseBar(barBottom: number, safeTop: number, barH: number = BAR_H): void {
   poseInset(safeTop);
 
   const bar = document.createElement("div");
   bar.className = "controls";
   bar.getBoundingClientRect = () =>
-    ({ top: barBottom - BAR_H, bottom: barBottom, height: BAR_H }) as DOMRect;
+    ({ top: barBottom - barH, bottom: barBottom, height: barH }) as DOMRect;
   /* **Inside a `.reader`, and as its direct child**, because that is what
      `controlsBar()` in scroll.ts asks for since 2026-09-08 — the real bar is a
      child of the reading view and an author's forged one never is. Appending it
@@ -220,11 +220,13 @@ describe("stickyOffset with a status bar", () => {
    * **A bar that is halfway back reserves the room it is going to need.**
    *
    * `stickyOffset` returned the bar's *current* coverage, and that is only the
-   * right answer at rest. `scrollToBlock` calls this **once** and hands the
-   * number to `glide()` as a fixed destination; `markOurScroll` then stops the
-   * bar reacting to the jump, but it cannot stop a CSS transition that is
-   * already running. So a reader who scrolls up — starting the 180ms reveal —
-   * and clicks a gist 90ms later got a target placed under a bar on its way
+   * right answer at rest. At the time of this defect, `scrollToBlock` asked
+   * once and handed `glide()` a fixed destination. Suppressing the bar's
+   * reaction to the jump could not stop a CSS transition already running.
+   * Today `aimAt` re-measures every frame, still using `stickyDestination`
+   * to predict the coverage when the bar arrives. A reader who scrolled up
+   * — starting the 180ms reveal — and clicked a gist 90ms later got a target
+   * placed under a bar on its way
    * back to covering it, and the row they asked for finished underneath the
    * chrome.
    *
@@ -292,6 +294,41 @@ describe("stickyOffset with a status bar", () => {
     poseBar(SAFE_TOP + BAR_H / 2, SAFE_TOP);
     expect(stickyOffset()).toBe(SAFE_TOP + BAR_H / 2); // 69, the measurement
     expect(stickyDestination()).toBe(SAFE_TOP + BAR_H); // 91, the prediction
+  });
+
+  /**
+   * **The bar is not always 44px, and neither function may assume it is.**
+   *
+   * Since 2026-10-03 a narrow window's bar is 68px while it holds the headings
+   * breadcrumb (crumbs.css § a narrow window; `--bar-h` raised to 4.25rem). The
+   * four positions above, again at that height: 68 is in no expectation that a
+   * remembered 44 could reach, and 44 is in none that 68 could. GPT Sol F4,
+   * plan review of 261003n.
+   */
+  it("measures a taller bar rather than assuming 44px", () => {
+    const TALL = 68;
+    // Not stuck yet: the ceiling is a prediction, and it is of this bar.
+    poseBar(300, SAFE_TOP, TALL);
+    expect(stickyOffset()).toBe(SAFE_TOP + TALL); // 115, not 91
+    expect(stickyDestination()).toBe(SAFE_TOP + TALL);
+
+    // Stuck under the clock.
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + TALL, SAFE_TOP, TALL);
+    expect(stickyOffset()).toBe(SAFE_TOP + TALL);
+    expect(stickyDestination()).toBe(SAFE_TOP + TALL);
+
+    // Travelling: 50 of the 68 drawn, which is more than a 44px bar has.
+    document.body.innerHTML = "";
+    poseBar(SAFE_TOP + 50, SAFE_TOP, TALL);
+    expect(stickyOffset()).toBe(SAFE_TOP + 50); // the measurement
+    expect(stickyDestination()).toBe(SAFE_TOP + TALL); // the prediction
+
+    // Gone.
+    document.body.innerHTML = "";
+    poseBar(0, SAFE_TOP, TALL);
+    expect(stickyOffset()).toBe(SAFE_TOP);
+    expect(stickyDestination()).toBe(SAFE_TOP);
   });
 
   it("is unchanged on a machine with no status bar", () => {

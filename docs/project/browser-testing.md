@@ -2,9 +2,26 @@
 
 Up: [code-quality-overview.md](code-quality-overview.md)
 
-The reading view has no DOM tests and won't for a while — see
-[testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). Until it
-does, **looking at it in a browser is the test harness for stage 6**, and that makes it worth
+## In this doc
+
+- [§ Before anything, check the server is actually up](#before-anything-check-the-server-is-actually-up) — the port, whose dev server it is, killing it safely, `file://`, a phone-width window, stale stylesheets, preview pages
+- [§ A hidden tab does not animate](#a-hidden-tab-does-not-animate-and-half-this-app-is-animated) — rAF, transitions and the empty spine in a background tab
+- [§ Click by reference, not by pixel](#click-by-reference-not-by-pixel) — hover and coordinates that land elsewhere
+- [§ Signed out is not signed out](#signed-out-is-not-signed-out-in-a-browser-you-have-used-before) — localStorage session, and why a raw `fetch` 401s
+- [§ The URLs and widths worth checking](#the-urls-and-widths-worth-checking) — the table of `?mode=` URLs to open
+- [§ Scroll, then read the address bar](#scroll-then-read-the-address-bar) — checking `?at=`; the long background-tab section sits under it
+- [§ The arrow keys](#the-arrow-keys-and-the-thing-that-makes-them-hard-to-check) — seven checks (describes the gist columns, gone since 2026-09-29: history)
+- [§ Do not judge colour from a screenshot](#do-not-judge-colour-from-a-screenshot) — read the resolved value
+- [§ Three traps this codebase has actually hit](#three-traps-this-codebase-has-actually-hit) — `<col>` custom properties, `color-mix`, sticky
+- [§ Two more, since Tailwind went in](#two-more-since-tailwind-went-in) — layer order, `source(none)`
+- [§ Where the pinned columns collide, and why 736px](#where-the-pinned-columns-collide-and-why-736px) — (history: the gist and text columns are gone)
+- [§ The tab stops running](#the-tab-stops-running-and-the-pages-own-polling-is-how-you-find-out) — every CDP call times out; uploads from page JS
+- [§ A browser subagent stalls silently](#a-browser-subagent-stalls-silently-unless-the-parent-does-the-handshake-first) — do the handshake in the parent
+- [§ Driving it from an agent, through the extension](#driving-it-from-an-agent-through-the-extension) — resize, synthetic wheel vs real, focus rings, short animations, driving rAF by hand
+
+Most component tests run under jsdom, which has no layout or browser rendering; a few Chrome tests now check drawn behaviour, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts), but they do not cover the whole reading view — see
+[testing.md § What we test, and what we don't](testing.md#what-we-test-and-what-we-dont). So
+**looking at it in a browser is the test harness for stage 6**, and that makes it worth
 writing down what to look at and where the eye lies to you.
 
 This doc is the how — what to look at, whichever automation you are driving the page with. **Which
@@ -53,8 +70,18 @@ The same holds for `npx tsx server.ts &` followed by `kill $!`, which stops the 
 leaves the node child holding the port (confirmed 2026-09-09 on the fleet dashboard's port); the
 symptom is a stale bundle hash, which reads as a cache problem.
 
+A pattern cannot tell one worktree's server from another's, because each spells the path the same
+relative way: on 2026-09-08 a `kill` of pids matched by `ps | grep "[t]sx tools/fleet/server.ts"`
+took two belonging to another session. And an environment-variable prefix is not in the command
+line at all, so `pkill -f FLEET_PORT=8791` matches nothing and leaves the server running.
+
 So: kill the **listening** PID (`lsof -ti :PORT`, or find the `vite` child), then check the port is
-actually free before starting another. And prove *which code* is being served before you trust a
+actually free before starting another. **Before killing a pid you found by port, read
+`/proc/<pid>/cwd` and confirm it is your own tree**: on 2026-09-08 a session's own server was
+already gone and the listener on its port was a peer's dev server, bound in the gap. To check
+that your own server is gone, walk `/proc` for processes whose cwd is your tree; do not ask who
+holds the port. And prove
+*which code* is being served before you trust a
 single thing the browser tells you — the `curl` below is the whole of it, and it takes one second.
 
 **Never `pkill -f vite`**, which is what an agent tidying up after itself reaches for. The box runs
@@ -161,6 +188,10 @@ the tree held at each moment, not on a commit, and its report reads exactly like
 current code. On 2026-09-07 one reported the wordmark's text vanishing in the dock against a CSS rule
 its parent had already replaced mid-run; it did not reproduce, and finding that out cost a whole
 verification round. The same is true of a 24-minute gate on a busy `dev`.
+
+So do not edit the files a browser agent is checking while it runs; queue the edits. Where that is
+not possible, say in its brief which findings to re-verify at the end, or re-run any serious
+finding against a known commit before acting on it.
 
 ### A preview page that never imported the stylesheet
 
@@ -411,6 +442,9 @@ from the other side: a check that returns the *same answer whatever the truth is
 This one always says 401. Before trusting a probe, ask what it would print if the thing you are
 testing were fine — and if the answer is "the same", do not write it into anybody's instructions.
 
+On the remote box, [`scripts/browser-sign-in.ts`](../../scripts/browser-sign-in.ts) does the whole
+sign-in for you ([browser-testing-playwright.md § Signing in](browser-testing-playwright.md#signing-in)).
+
 To sign in without a Google round trip, use email and password — the local stack has
 `mailer_autoconfirm` on, so "create an account" lands you straight in the app with no email to
 click. Google needs the port to be on the local redirect allow-list; see
@@ -452,7 +486,10 @@ real layout. Four checks, in order — each one catches a different failure:
 4. **Scroll to the very top.** `?at=` should disappear from the URL entirely.
 
 Then click a gist to jump: that one *should* add a history entry, so Back returns you to where you
-jumped from. It is the only scroll that does.
+jumped from. It is the only scroll that does. **Then wait two seconds and read the address again**,
+on a long article: a jump's `?at=` was right on landing and rewritten after the debounce for six
+days, and every check that stopped at the landing passed
+([postmortem](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md)).
 
 The failure mode to watch for is a **feedback loop** — scrolling writes the URL and the URL scrolls
 the page, so a broken guard shows up as the page fighting you or juddering, not as an error.
@@ -780,7 +817,7 @@ class present in the DOM.
 Everything Tailwind emits sits inside a cascade layer, and unlayered declarations beat layered ones
 whatever the order and whatever the specificity. The hand-written sheets are thousands of lines of
 descendant rules covering exactly the elements chrome components go on
-(`wc -l src/web/styles.css src/web/styles/*.css` — 15,951 over 38 files, 2026-09-06), so an
+(`wc -l src/web/styles.css src/web/styles/*.css` says how many), so an
 unlayered `styles.css` outranks every utility, silently. The guard is the
 `@import "./styles.css" layer(app)` in
 [`src/web/tailwind.css`](../../src/web/tailwind.css)

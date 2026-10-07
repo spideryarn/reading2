@@ -24,6 +24,7 @@
  * whatever else agrees (`conflicts`, below).
  */
 import { identifiersIn, wordsOf } from "./citations.js";
+import { doiUrl } from "./doi-url.js";
 import type { PaperMeta, PaperText } from "./paper-text.js";
 import type { Author, SearchEvidence } from "./types.js";
 
@@ -122,7 +123,7 @@ export function isSamePaper(identity: PaperIdentity, candidate: SourceCandidate)
   if (identity.surname === null && !content) return { same: false, why: "no-agreement" };
 
   const doi = own.dois.find((d) => identity.dois.includes(d));
-  if (doi) return { same: true, matchedBy: "doi", canonicalUrl: `https://doi.org/${doi}` };
+  if (doi) return { same: true, matchedBy: "doi", canonicalUrl: doiUrl(doi) };
   const arxiv = own.arxivs.find((a) => identity.arxivs.includes(a));
   if (arxiv) return { same: true, matchedBy: "arxiv", canonicalUrl: `https://arxiv.org/abs/${arxiv}` };
   if (content) return { same: true, matchedBy: "content", canonicalUrl: null };

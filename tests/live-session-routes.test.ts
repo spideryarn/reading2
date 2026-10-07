@@ -493,6 +493,26 @@ describe("the acceptance endpoints", () => {
     expect(out.status).toBe(404);
   });
 
+  /* **An id that is not a UUID is the same 404, not a 500** (2026-10-07, SVO2 in
+     docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md).
+     The route patterns admit `[\\w-]+`, and `find` bound whatever arrived to a
+     `uuid` column, so Postgres refused the comparison (SQLSTATE 22P02) and a
+     typo became `[db-failed]` and a Sentry report. Watched red on all three
+     paths, 500 each, before `find` asked `isUuid`. The well-formed unknown id
+     above and the real sessions throughout this file are the controls: a guard
+     that refused everything would turn those red instead. */
+  it.each(["connected", "usage", "close"])(
+    "answers a session id that is not a UUID with the same 404, on /%s",
+    async (verb) => {
+      const body = verb === "usage" ? turn() : verb === "close" ? { reason: "hangup" } : {};
+      const out = await post(`/api/live/not-a-uuid/${verb}`, body);
+      expect(out.status).toBe(404);
+      const control = await post(`/api/live/00000000-0000-4000-8000-00000000dead/${verb}`, body);
+      expect(control.status).toBe(404);
+      expect(out.body).toEqual(control.body);
+    },
+  );
+
   it("records the close, with the browser's own word for why", async () => {
     const id = await ticket("spya-lbaaae");
     expect((await post(`/api/live/${id}/close`, { reason: "session_cap" })).status).toBe(200);
@@ -764,6 +784,27 @@ describe("a GPT-Live session", () => {
     expect(backend[0]?.reportedInputTokens).toBe(811);
     /* It does not move the voice meter. */
     expect((await session(id))?.voiceSecondsReported).toBe(15);
+    /* No status was sent, as from a tab that predates it: none is claimed. */
+    expect([backend[0]?.outcome, backend[0]?.providerStatus]).toEqual(["ok", null]);
+  });
+
+  /* qi-p78m9ch9: through the route and into Postgres, so the table's own checks
+     have seen an `error` and an `aborted` backend row. */
+  it("writes a failed or cut-short backend response as what it was, priced all the same", async () => {
+    const id = (await open("spya-lgaaac")).body.sessionId as string;
+    const report = { kind: "backend", inputTokens: 811, cachedInputTokens: 0, outputTokens: 20 };
+    expect((await post(`/api/live/${id}/usage`, { ...report, responseId: "resp_failed", status: "failed" })).status).toBe(200);
+    expect((await post(`/api/live/${id}/usage`, { ...report, responseId: "resp_cut", status: "incomplete" })).status).toBe(200);
+    expect((await post(`/api/live/${id}/usage`, { ...report, responseId: "resp_odd", status: "cancelled" })).status).toBe(400);
+    const rows = (await ledger(id)).filter((r) => r.eventKind === "backend" && r.providerEventId !== "resp_backend_1");
+    expect(
+      rows
+        .map((r) => [r.providerEventId, r.outcome, r.providerStatus, r.failureClass, r.computedCostNanos])
+        .sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
+    ).toEqual([
+      ["resp_cut", "aborted", "incomplete", "abort", 91_100],
+      ["resp_failed", "error", "failed", null, 91_100],
+    ]);
   });
 
   it("refuses the other engine's reports, in both directions, and writes nothing", async () => {

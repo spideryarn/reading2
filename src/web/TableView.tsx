@@ -44,7 +44,7 @@ import {
   type Mark,
   type TermSelection,
 } from "./annotate.js";
-import { readSelection, type SelectionAnchor } from "./selection.js";
+import { readSelection, sameAnchor, type SelectionAnchor } from "./selection.js";
 import { rendersMaths } from "./maths-provenance.js";
 import { internalTarget } from "./internal-links.js";
 import {
@@ -71,7 +71,9 @@ import {
 } from "./zoomable.js";
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
+import { frontMatter } from "./front-matter.js";
 import { FoldToggle } from "./FoldToggle.js";
+import { mastheadEcho } from "./masthead-echo.js";
 
 /**
  * How long the live region stays empty between two announcements.
@@ -394,7 +396,7 @@ const NOT_A_BLOCK_SELECTION = [
      paragraph, which is how a finger reaches the gutter and therefore how a
      reader annotates (docs/project/touch.md). The list below says "a quote and
      nothing else": a quote that *also* carries a comment, a chat anchor, a
-     glossary term or a search's wash keeps the exclusion, because there the tap
+     glossary term or a search's outline keeps the exclusion, because there the tap
      does mean something. GPT Sol found this, reviewing
      docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md — the plan
      had recorded "nothing clicks a `mark.hit`" as a reason there was nothing to
@@ -403,7 +405,7 @@ const NOT_A_BLOCK_SELECTION = [
      **A bare quick hit also lets the tap select the paragraph.** Its mark
      carries `data-hit` for navigation, but paints nothing and has no tap
      action. Excluding every non-quote hit would turn an invisible whole
-     paragraph into a dead zone. Visible washes and overlapping interactive
+     paragraph into a dead zone. Visible outlines and overlapping interactive
      marks still own their taps through the concrete selectors below.
 
      **The one case this still gets wrong**: a quote inside a `<mark>` the
@@ -631,6 +633,15 @@ interface Props {
    */
   hitMarks?: ReadonlyMap<BlockId, readonly Mark[]> | undefined;
   hitStrength?: Map<BlockId, number> | undefined;
+  /**
+   * **The block the chat panel is open on**, if it is open on one — its cell
+   * wears `chat-open`, a rule down its right edge (dialogs.css). The panel is
+   * fixed to the window, so this is the only thing in the prose that says which
+   * paragraph it is about. `null` when no panel is open or the conversation has
+   * no anchor. A string, so `memo` holds across every render that does not
+   * change it.
+   */
+  chatOpenBlock?: BlockId | null | undefined;
   /** The palette slots of every search that matched in each block — `blockHues`. */
   hitHues?: Map<BlockId, number[]> | undefined;
   /**
@@ -762,6 +773,7 @@ function TableViewInner({
   openTerm,
   hitMarks,
   hitStrength,
+  chatOpenBlock,
   hitHues,
   linkBase,
   slug,
@@ -771,9 +783,36 @@ function TableViewInner({
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
+  /* **The leading rows that only repeat the masthead are not drawn** (Greg,
+     spya-t6cdve: the title was on the page twice). They keep their rows, and
+     the fold store hides their cells and answers for them, so everything that
+     measures a row already knows (fold.ts § The masthead's echo). For an
+     owner and a visitor alike: both come through this table. Keyed on the
+     title and the rename as well as the blocks, because a rename changes the
+     answer and leaves `blocks` the same array.
+     docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md */
+  const title = article.meta.title;
+  const { titleOverridden } = article;
+  const echo = useMemo(
+    () => mastheadEcho({ blocks, meta: { title }, titleOverridden }),
+    [blocks, title, titleOverridden],
+  );
+  /* **The byline blocks under the title start folded away** (Greg,
+     spya-duh4w3: *"default collapse them so that you kind of jump straight
+     into the article itself"*). Hidden the way the echo is, through the fold
+     store, but the reader can open them: the masthead's "Show authors and
+     details", or a jump to one of them (fold.ts § The front matter). Owner
+     and visitor alike. Keyed on the two fields of `meta` the rule reads, so
+     an unrelated change to `meta` does not hand the store a new array.
+     docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md */
+  const { authors, byline } = article.meta;
+  const front = useMemo(
+    () => frontMatter({ blocks, meta: { authors, byline } }, echo),
+    [blocks, authors, byline, echo],
+  );
   /* Which article the fold store is about, and ⌘⌥T — fold.ts. Subscribes to
      nothing, so folding never re-renders this table; the chevrons do that. */
-  useFoldArticle(slug, blocks);
+  useFoldArticle(slug, blocks, echo, front);
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /**
    * The figure the reader asked to see larger, or null. A *copy* of the html
@@ -784,6 +823,20 @@ function TableViewInner({
    */
   const [zoomed, setZoomed] = useState<ZoomedFigure | null>(null);
   const bodyRef = useRef<HTMLTableSectionElement>(null);
+  /**
+   * **Two memories of the last mouseup, both for the tbody's handlers.**
+   *
+   * `reportedSelection` is the anchor last handed to `onSelect`, forgotten by
+   * the next press in the prose: a mouseup that finds the same words still
+   * selected is a press on something else in the table, not a new selection.
+   *
+   * `selectionEndedHere` says the click now arriving follows a mouseup that
+   * completed a selection. The click handler used to ask the live selection
+   * that; since 2026-10-04 the highlight is painted between the two events,
+   * and the paint collapses it (GPT Sol, E4 on plan 261004f).
+   */
+  const reportedSelection = useRef<SelectionAnchor | null>(null);
+  const selectionEndedHere = useRef(false);
 
   /**
    * The article's blocks by id, for `resolveAnchors` above — which is where
@@ -1215,9 +1268,9 @@ function TableViewInner({
       /* `only-prose` — the article is the only column there is. It used to hide
          the table head as well, which was worth 40px of a 390px landscape
          viewport where a third of the height is already bars; the head has had
-         no height in any mode since 2026-09-05 (styles.css § the head with no
+         no height in any mode since 2026-09-05 (table.css § the head with no
          row), so that rule went and this class is now only what centres the
-         masthead over a centred column (styles.css § plain, centred).
+         masthead over a centred column (narrow-window.css § `.reader.text-alone`).
 
          Since the gist columns went on 2026-09-29 it is always true, and it
          stays because the stylesheet keys off it. */
@@ -1233,7 +1286,7 @@ function TableViewInner({
         ))}
       </colgroup>
       {/* **A head with no height**, kept for the screen reader's column
-          header and for the sticky offsets that measure it (styles.css § the
+          header (table.css § the
           head with no row). The gist columns' headers went on 2026-09-29. */}
       <thead>
         <tr>
@@ -1275,6 +1328,14 @@ function TableViewInner({
           e.preventDefault();
           onJump(xrefTo);
         }}
+        /* **A press in the prose starts a new selection gesture**, which is what
+           lets the same words be reported again — see `reportedSelection`. A
+           press anywhere else in the table (a gutter icon) leaves the browser's
+           selection, and so the memory of it, where they were. */
+        onMouseDown={(e) => {
+          selectionEndedHere.current = false;
+          if ((e.target as Element).closest?.("td.text .prose")) reportedSelection.current = null;
+        }}
         /* Both handlers below are delegated, not per-block: the prose is
            injected HTML, so its <mark> and <a> elements are not React's and
            cannot carry React handlers. */
@@ -1289,6 +1350,11 @@ function TableViewInner({
           // that works: the href is a real fragment, and main.tsx turns an
           // arriving `#spya-…` into `?at=` before React mounts. Taking it over
           // would break the one case where the browser's own answer is right.
+          /* Read and spent before anything can return: it describes the mouseup
+             this pointer click follows, and no later click. A keyboard click
+             has `detail === 0`; it consumes a stale latch without obeying it. */
+          const endedSelection = selectionEndedHere.current && e.detail !== 0;
+          selectionEndedHere.current = false;
           if (e.defaultPrevented || e.button !== 0) return;
           /* **A cross-reference is not a link, and a modified click on one does
              nothing** — this line returns for it as for everything else. There
@@ -1301,7 +1367,7 @@ function TableViewInner({
              read from the artefact by index and never from the DOM, so a
              `class="xref"` the article wrote itself is an underline that does
              nothing (xref.ts). First, because it wins the words it is on: a
-             term, a citation, a comment or a search's wash under it has
+             term, a citation, a comment or a search's outline round it has
              already stood aside (`onMouseUp` below, ProseHoverCard's
              selectors). An author's link never contains one — `xrefMarks`
              drops those — so the link logic below is not being pre-empted.
@@ -1312,7 +1378,7 @@ function TableViewInner({
           const xrefTo = xrefTarget(e.target, xrefs);
           if (xrefTo) {
             const selection = window.getSelection();
-            if (selection && !selection.isCollapsed) return;
+            if (endedSelection || (selection && !selection.isCollapsed)) return;
             e.preventDefault();
             onJump(xrefTo);
             return;
@@ -1364,9 +1430,17 @@ function TableViewInner({
              click is not optional here: merely declining to jump would leave the
              browser to follow the fragment natively, which throws the reader
              away from the passage they just chose. */
+          /* **`endedSelection` as well as the live selection**, since
+             2026-10-04: outside Referee mode the mouseup now paints the
+             highlight before this click arrives, the paint replaces the
+             paragraph's nodes, and that collapses the selection this test used
+             to read. A click only lands on the link when the press began in it
+             too, so the latch alone says what the anchor test said. GPT Sol, E4
+             on plan 261004f. */
           const selection = window.getSelection();
-          if (selection && !selection.isCollapsed && selection.anchorNode &&
-              link.contains(selection.anchorNode)) {
+          if (endedSelection ||
+              (selection && !selection.isCollapsed && selection.anchorNode &&
+               link.contains(selection.anchorNode))) {
             e.preventDefault();
             return;
           }
@@ -1413,7 +1487,18 @@ function TableViewInner({
           // reader never clicked. The two are separate variants now, and
           // `too-short` stops here: nothing opens, and the reader drags again.
           const read = readSelection(window.getSelection());
-          if (read.kind === "anchor") return onSelect(read.anchor);
+          if (read.kind === "anchor") {
+            /* **The same words, still selected, are not a second selection.**
+               A press on a gutter icon does not clear the browser's selection,
+               so its mouseup arrives here with the words of the last drag
+               still live. That was harmless while a selection only opened a
+               draft box; now it writes a highlight, and would write it twice. */
+            const last = reportedSelection.current;
+            if (last && sameAnchor(last, read.anchor)) return;
+            reportedSelection.current = read.anchor;
+            selectionEndedHere.current = true;
+            return onSelect(read.anchor);
+          }
           if (read.kind === "too-short") return;
           /* A link inside a commented passage is a link. `annotateHtml` puts
              the <mark> *inside* the <a>, so without this a click on one would
@@ -1509,7 +1594,7 @@ function TableViewInner({
                    is the 2026-09-05 change.** `gutter-pad` used to, flooring
                    every owner's row at three slots so nothing could hang below
                    it into the next paragraph. The gutter now measures the room
-                   the row already has and draws only what fits — styles.css §
+                   the row already has and draws only what fits — gutter.css §
                    the gutter — so *that* floor, the class and
                    `tests/gutter-pad-floor.test.tsx` have all gone, and a
                    one-line paragraph is 39.1px again rather than 87.1px. The
@@ -1533,7 +1618,9 @@ function TableViewInner({
                   hitStrength?.has(block.id) ? " has-hit" : ""
                 }${
                   notes?.noteOf.has(block.id) ? " note" : ""
-                }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}`}
+                }${noteStarts.get(block.id)?.opensRegion ? " note-open" : ""}${
+                  chatOpenBlock === block.id ? " chat-open" : ""
+                }`}
                 /* The bar down the left of a matched paragraph — Greg's call,
                    2026-08-25, so a match is findable while scrolling past at
                    speed. Its intensity is scaled *harder* than the wash by the
@@ -1664,6 +1751,31 @@ function TableViewInner({
           </tr>
         ))}
       </tbody>
+      {/* **Where the article ends** — Greg, 2026-10-04: *"Add some subtle
+          pleasant visual marker at the very end of the article in the text
+          column to show that it is the end."* Without it the page just stopped,
+          which is also what a page that has not finished loading looks like.
+
+          A `<tfoot>`, so it is **not a block**: no `data-block`, no `td.text`,
+          and not in `<tbody>`, which is everything a jump, a selection, the
+          row hover and the reading position look for. It is not CSS `::after`
+          on the last cell because folding the last section takes that cell
+          away, and the cell also holds the margin notes and the quiz. The
+          ornament is drawn by prose.css § the end of the article; the words
+          are for a screen reader. Nothing for an article with no blocks, which
+          has not ended so much as not begun. Plan 261005e. */}
+      {blocks.length > 0 && (
+        <tfoot>
+          <tr>
+            <td className="article-end">
+              <div className="article-end-mark" aria-hidden="true">
+                <span />
+              </div>
+              <span className="sr-only">End of article</span>
+            </td>
+          </tr>
+        </tfoot>
+      )}
     </table>
     {/* One overlay for the whole article, always mounted and empty until a
         figure is pressed. Mounted rather than conditionally rendered because

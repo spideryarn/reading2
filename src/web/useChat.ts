@@ -38,6 +38,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "r
 import type {
   BlockId,
   ChatAnchor,
+  ThreadOrigin,
   ChatMessage,
   ChatThread,
   LiveEngine,
@@ -57,12 +58,14 @@ import {
   askForThreads,
   cancelThread,
   deleteThread,
+  markHintOpened,
   renameThread,
   runTurn,
   settledAnswer,
   stopAnswer,
 } from "./chat/effects.js";
-import { asOpId, isSettled, writerOf } from "./chat/model.js";
+import { useMadeFor } from "./lib/made-for.js";
+import { asOpId, isNamed, isSettled, writerOf } from "./chat/model.js";
 
 /* `mergedArrival`, `withoutEmpty` and `withServerIds` live in ./chat/model.ts,
    where `reduce` can use them: a module that imports the module importing it is
@@ -115,6 +118,8 @@ export interface SpokenExchange {
  * `ChatApi.send`.
  */
 export interface SendOptions {
+  /** Data-only acknowledgement; survives unmount, so never navigate from this callback. */
+  onConfirmed?(threadId: string): void;
   /**
    * Whether this answer should be written for the reader's profile. Absent
    * means yes.
@@ -139,7 +144,15 @@ export interface SendOptions {
    */
   anchor?: ChatAnchor;
   /**
-   * Chat or Remember — **only on the send that creates the thread**, and the
+   * The item in another mode this conversation was started from — **only on a
+   * send that may create the thread**. The server stores it on insert, lets
+   * the identical one through for a thread that has it, and 409s a different
+   * one. The band sends it until the server has named the thread
+   * (`ChatApi.named`); see `ChatDrafts.origin` in chat-draft.ts.
+   */
+  origin?: ThreadOrigin;
+  /**
+   * Chat or Learn — **only on the send that creates the thread**, and the
    * server 409s one that contradicts a thread that already exists.
    *
    * Deliberately absent from `retry` and `edit`: their thread already has a
@@ -208,7 +221,8 @@ export interface ChatApi {
   /**
    * **Ask for the thread list again.**
    *
-   * One caller: Candidates' automatic run, for the one case a press cannot be
+   * Candidates' *Try again* (and its automatic run, which nothing arms since
+   * 2026-10-03 — activation.ts § REFEREE_TARGET), for the one case a press cannot be
    * answered from what is on screen — a first read that *failed* is not an
    * answer to *is there a thread yet*, so it is answered by reading again rather
    * than by starting a paid turn. useAutoRun.ts § A failed read is not an
@@ -312,8 +326,8 @@ export interface ChatApi {
    * answer to claim as the *next* exchange's tail. See `SpokenLanded`.
    */
   speak(spoken: SpokenExchange, onThreadId?: (id: string) => void): Promise<SpokenLanded>;
-  /** Start an empty conversation locally. Nothing is stored until you send. */
-  begin(kind?: ThreadKind): string;
+  /** Start locally; an unconfirmed origin draft may resume its original id. No write. */
+  begin(kind?: ThreadKind, threadId?: string): string;
   /**
    * Forget an empty conversation. Local only, and a no-op on anything that has
    * a message in it — see `withoutEmpty`.
@@ -321,8 +335,15 @@ export interface ChatApi {
   discard(threadId: string): void;
   rename(threadId: string, title: string): void;
   /**
+   * **The reader opened a Recall answer's hint**: record it, so the hint is
+   * still open after a reload and after leaving the conversation. The hint is
+   * already on screen; this never closes it and says nothing if it fails. See
+   * `HintOperation` in ./chat/model.ts.
+   */
+  openHint(threadId: string, messageId: string, hint: string): void;
+  /**
    * Delete a conversation. `restoreOnFailure` puts it back if the server
-   * refuses — Remember's Start over, which must not leave its one conversation
+   * refuses — Learn's Start over, which must not leave its one conversation
    * hidden while it still exists. See `DeleteOperation.restoreOnFailure`.
    */
   remove(threadId: string, opts?: { restoreOnFailure?: boolean }): void;
@@ -331,7 +352,7 @@ export interface ChatApi {
    * DELETE is answered either way — including a held one, which has not left
    * yet because the conversation's first turn has not been named.
    *
-   * Derived from the operations, like `recovering`. One reader: Remember's
+   * Derived from the operations, like `recovering`. One reader: Learn's
    * Start over, which must not begin the fresh conversation (and so offer a
    * composer) until the old one is gone from the server, or the first question
    * would be folded into the thread the DELETE is about to remove. Plan
@@ -340,10 +361,17 @@ export interface ChatApi {
   deleting: boolean;
   /**
    * **Stored, and nothing in flight for it from this tab** — see `isSettled`
-   * in chat/model.ts. One reader: Remember offers Start over only when this is
+   * in chat/model.ts. One reader: Learn offers Start over only when this is
    * true, so its DELETE always targets a conversation the server has named.
    */
   settled(threadId: string): boolean;
+  /**
+   * **Does the server have this conversation?** — `isNamed` in chat/model.ts.
+   * True for one that came in a load, and for one this tab began once its
+   * first turn's `begin` frame has arrived. One reader: the band's pending
+   * origin.
+   */
+  named(threadId: string): boolean;
   /** A failure of the *transport*. Model failures live on the message. */
   error: string | null;
 }
@@ -364,6 +392,7 @@ const chatEffects: ChatEffects = {
   settledAnswer,
   stopAnswer,
   cancelThread,
+  markHintOpened,
 };
 
 
@@ -379,12 +408,13 @@ const chatEffects: ChatEffects = {
  */
 const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
   chat: "New chat",
-  remember: "Remembering",
+  learn: "Remembering",
   candidates: "Finding reviewers",
   tutorial: "Tutorial",
+  explore: "Exploring",
 };
 
-export function useChat(slug: string): ChatApi {
+export function useChat(slug: string, onSettled?: () => void): ChatApi {
   /**
    * The state, the operations in flight and the tombstones — all of it, and one
    * of it per article.
@@ -410,8 +440,20 @@ export function useChat(slug: string): ChatApi {
    * missed `error` for as long as chat has existed.
    */
   const held = useRef<ChatController | null>(null);
+  /* A spoken exchange is written for the reader the band was mounted for,
+     on every attempt: the last one can be written as the view unmounts, when
+     the tab is already the next reader's (effects.ts § `appendSpoken`). */
+  const madeFor = useMadeFor();
   if (!held.current || held.current.slug !== slug) {
-    held.current = new ChatController(slug, chatEffects);
+    held.current = new ChatController(
+      slug,
+      {
+        ...chatEffects,
+        appendSpoken: (forSlug, threadId, body) =>
+          appendSpoken(forSlug, threadId, body, undefined, madeFor ?? undefined),
+      },
+      onSettled,
+    );
   }
   const controller = held.current;
   const { state, threads, recovering } = useSyncExternalStore(
@@ -443,13 +485,14 @@ export function useChat(slug: string): ChatApi {
 
   useEffect(() => {
     startLoad();
-    /* **And when this hook goes, the callbacks go with it.** The controller
+    /* **And when this hook goes, its navigation callbacks go with it.** The controller
        outlives it on purpose — the stream still holds it, so a cancel waiting
        for the `begin` frame is still sent after the panel closed — but
        `onThreadId` is the panel's own `setThread`, and calling that from a
        conversation the reader has left reopens or repoints whatever they are
        looking at now. What the controller decides for itself survives; what it
-       was doing on somebody else's behalf does not. */
+       was doing on somebody else's behalf does not. Data-only draft
+       acknowledgements and article-level completion work survive detach. */
     return () => {
       controller.detach();
     };
@@ -604,8 +647,9 @@ export function useChat(slug: string): ChatApi {
    * arrives, which is what makes the optimistic id safe.
    */
   const begin = useCallback(
-    (kind: ThreadKind = "chat") => {
-      const id = mintId();
+    (kind: ThreadKind = "chat", threadId?: string) => {
+      const id = threadId ?? mintId();
+      if (controller.state.base.some((t) => t.id === id)) return id;
       const at = new Date().toISOString();
       /* Straight into `base`, with no operation over it. Starting a
          conversation is synchronous and local — nothing leaves the tab, so
@@ -652,7 +696,7 @@ export function useChat(slug: string): ChatApi {
       at: string | null,
       opts: SendOptions = {},
     ): string => {
-      const { onThreadId, anchor, kind, help, sourceCommentId, visible } = opts;
+      const { onThreadId, anchor, origin, kind, help, sourceCommentId, visible } = opts;
       const useProfile = opts.useProfile ?? true;
       const id = threadId ?? mintId();
       const now = new Date().toISOString();
@@ -706,7 +750,7 @@ export function useChat(slug: string): ChatApi {
                      rather than defaulted: this thread is rendered — and
                      filtered by kind in the panel — in the frame before the
                      server answers. A `?? "chat"` here would flash a new
-                     Remember thread into the list as a chat. */
+                     Learn thread into the list as a chat. */
                   kind: kind ?? "chat",
                   messages: [],
                 },
@@ -734,12 +778,15 @@ export function useChat(slug: string): ChatApi {
             ...(visible && visible.length > 0 ? { visible } : {}),
             ...(useProfile ? {} : { useProfile: false }),
             ...(anchor ? { anchor } : {}),
+            /* On the request only, like the anchor: the optimistic row is a
+               guess, and the server's copy of the thread is what carries it. */
+            ...(origin ? { origin } : {}),
             /* Sent for every kind but the default. A body with no `kind` means
                chat, which is what every caller written before this feature meant,
                and what keeps an old tab working.
 
                **This was `kind === "remember"` until 2026-09-01**, written when
-               Remember was the only second kind. Candidates arrived as the third
+               Remember (Learn, now) was the only second kind. Candidates arrived as the third
                and this line did not widen, so a Candidates turn posted no kind,
                the server stored it as chat and answered it with chat's prompt,
                and the panel's whole shortlist — including every honesty line it
@@ -756,6 +803,7 @@ export function useChat(slug: string): ChatApi {
           },
         },
         onThreadId,
+        opts.onConfirmed,
       );
       return id;
     },
@@ -899,6 +947,17 @@ export function useChat(slug: string): ChatApi {
     [controller],
   );
 
+  /** One dispatch; the reducer decides whether a request is needed at all. */
+  const openHint = useCallback(
+    (threadId: string, messageId: string, hint: string) => {
+      controller.dispatch({
+        type: "hint.started",
+        op: { id: asOpId(mintId()), kind: "hint", threadId, messageId, hint },
+      });
+    },
+    [controller],
+  );
+
   /**
    * Delete a conversation.
    *
@@ -933,6 +992,9 @@ export function useChat(slug: string): ChatApi {
      showing the previous snapshot while the controller coalesces notifications
      from a turn or spoken append registered in the same task. */
   const settled = useCallback((threadId: string) => isSettled(controller.state, threadId), [controller]);
+  /* From the controller as it is now, for the same reason: it is asked on the
+     line of a Send. */
+  const named = useCallback((threadId: string) => isNamed(controller.state, threadId), [controller]);
 
   return {
     /* `ChatApi` promises a plain array and nothing mutates it — ChatPanel
@@ -954,9 +1016,11 @@ export function useChat(slug: string): ChatApi {
     begin,
     discard,
     rename,
+    openHint,
     remove,
     deleting,
     settled,
+    named,
     error: state.error,
   };
 }

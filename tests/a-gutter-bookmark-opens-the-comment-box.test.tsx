@@ -51,7 +51,7 @@ vi.mock("../src/web/useSession.js", async () => {
     useSession: () => ({
       session: null,
       user: useSyncExternalStore(who.subscribe, who.get, who.get),
-      loading: false,
+      loading: false, known: true,
     }),
   };
 });
@@ -151,6 +151,7 @@ const ARTICLE: PublicArticle = {
   searches: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
 };
 
 const OWNED: Article = {
@@ -168,6 +169,8 @@ const OWNED: Article = {
 let storeStatus = 200;
 /** When set, the comments POST waits for it — a slow store. */
 let held: Promise<void> | null = null;
+/** The experimental-features switch, as `/api/reader` answers it. Debate is behind it. */
+let experimentalSince: string | null = null;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -179,7 +182,7 @@ function json(body: unknown, status = 200): Response {
 function reply(url: string, method: string, body: unknown): Response {
   if (url === `/api/public/article/${SLUG}`) return json(ARTICLE);
   if (url === `/api/article/${SLUG}`) return json(OWNED);
-  if (url === "/api/reader") return json({ experimentalSince: null });
+  if (url === "/api/reader") return json({ experimentalSince });
   if (url === `/api/comments/${SLUG}` && method === "POST") {
     if (storeStatus !== 200) return json({ error: "no" }, storeStatus);
     const b = body as { id: string; blockId: string };
@@ -216,6 +219,7 @@ beforeEach(() => {
   trace.length = 0;
   storeStatus = 200;
   held = null;
+  experimentalSince = null;
   who.set(null);
   activation.resetActivations();
   resetExperimental();
@@ -363,6 +367,68 @@ describe("the gutter's bookmark button", () => {
     expect(param("note")).toBeNull();
     expect(host.querySelector(".cmt-dialog")).toBeNull();
     expect(param("mode"), "the chosen mode is still open").toBe("summary");
+  });
+
+  /* **A sub-mode is a foreground choice too, and all six of them are.** The
+     snapshot the late answer is checked against named five sub-mode parameters
+     by hand and left Debate's out (it arrived later, 4b502174a), so Reception →
+     Claims while the store answered changed nothing the check could see, and
+     the box opened over the view the reader had just chosen. The snapshot is
+     built from a `Record<ModeWithSubModes, …>` now (Reader.tsx § `surface`).
+
+     The first case is the control: without it, "no box" would also be what a
+     Debate band that never let the box open looks like.
+
+     **The view is changed through the address**, as the command bar's
+     sub-mode row and a Forward step change it, rather than by pressing the
+     band's chip: the chips are drawn only over a stored debate, and what is
+     under test is `Reader`'s snapshot, which hears the parameter whoever wrote
+     it. `enableHistorySync()` above is what makes nuqs hear a `pushState`. */
+  const chooseClaims = async () => {
+    await act(async () => {
+      history.pushState(null, "", `/read/${SLUG}?mode=debate&debate=claims`);
+    });
+    await settle();
+  };
+
+  it("opens over Debate when the reader stayed on the view they were in", async () => {
+    who.set(OWNER);
+    experimentalSince = "2026-10-01T00:00:00.000Z";
+    let release!: () => void;
+    held = new Promise<void>((go) => {
+      release = go;
+    });
+    await open("?mode=debate");
+    expect(host.querySelector(".mode-band"), "Debate's band is open").not.toBeNull();
+    await pressBookmark();
+    expect(commentPosts()).toHaveLength(1);
+
+    await act(async () => release());
+    await until(() => host.querySelector(".cmt-dialog") !== null);
+    expect(host.querySelector(".cmt-dialog"), "nothing changed, so the box opens").not.toBeNull();
+  });
+
+  it("does not open over a Debate view the reader chose while the store was answering", async () => {
+    who.set(OWNER);
+    experimentalSince = "2026-10-01T00:00:00.000Z";
+    let release!: () => void;
+    held = new Promise<void>((go) => {
+      release = go;
+    });
+    await open("?mode=debate");
+    await pressBookmark();
+    expect(commentPosts()).toHaveLength(1);
+
+    await chooseClaims();
+    expect(param("debate")).toBe("claims");
+    expect(param("mode"), "the mode itself did not change").toBe("debate");
+    expect(host.querySelector(".mode-band"), "and its band is still open").not.toBeNull();
+
+    await act(async () => release());
+    await settle(12);
+    expect(param("note")).toBeNull();
+    expect(host.querySelector(".cmt-dialog")).toBeNull();
+    expect(param("debate"), "the chosen view is still open").toBe("claims");
   });
 
   it("does not open behind the Comments drawer chosen while the store was answering", async () => {

@@ -465,7 +465,103 @@ describe("one record per call, however the call ends", () => {
     expect(report.pending).toHaveLength(0);
   });
 
+  /** Drain one refused stream and hand back what was thrown and what was recorded. */
+  async function refusedStream(response: Response) {
+    let thrown: unknown;
+    const { report } = await collectSpend(async () => {
+      stubTransport(() => response);
+      try {
+        for await (const _ of openRouterStream(
+          "chat",
+          { model: "m", messages: [] },
+          { signal: new AbortController().signal, onActivity: noop, end: end() },
+        )) {
+          void _;
+        }
+      } catch (err) {
+        thrown = err;
+      }
+    });
+    return { thrown, report };
+  }
+
+  it("prices a refusal whose body carries usage, before it judges the status", async () => {
+    /* The same order as the image seam (`openRouterImage`), which learned it
+       from a 429 that had already cost $0.013: nothing about a non-2xx makes its
+       `usage` less true. Until 2026-10-04 `refuse` drained the body and threw
+       without looking, so this row was `{ source: "none" }`. No refusal on this
+       wire has been seen carrying usage; if one ever does, this is the proof
+       the row is right. */
+    const { thrown, report } = await refusedStream({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "retry-after": "3", "x-generation-id": "gen-refused" }),
+      text: async () =>
+        JSON.stringify({
+          error: { message: "SECRET words the provider wrote" },
+          model: "anthropic/claude-sonnet-5",
+          provider: "Anthropic",
+          usage: { prompt_tokens: 1200, completion_tokens: 0, cost: 0.125 },
+        }),
+    } as unknown as Response);
+    expect(thrown).toBeInstanceOf(ProviderRefused);
+    expect((thrown as ProviderRefused).status).toBe(429);
+    expect((thrown as ProviderRefused).retryAfterMs).toBe(3000);
+    /* The body is read for its numbers and still never quoted. */
+    expect((thrown as Error).message).not.toContain("SECRET");
+    expect(JSON.stringify(thrown)).not.toContain("SECRET");
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("error");
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 125_000_000 });
+    expect(report.calls[0]?.inputTokens).toBe(1200);
+    expect(report.pending).toHaveLength(0);
+  });
+
+  it("keeps a refusal a refusal when its body will not read", async () => {
+    /* A characterisation test, green before and after the usage read went in.
+       `refuse` reads the body with `.catch(() => "")`, and the image seam does
+       not: copying that seam literally would have turned this into a transport
+       error and lost the status, the classification and the `Retry-After`
+       ⟨GPT Sol, reviewing the plan, F3⟩. */
+    const { thrown, report } = await refusedStream({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "retry-after": "3" }),
+      text: async () => {
+        throw new TypeError("SECRET terminated mid-body");
+      },
+    } as unknown as Response);
+    expect(thrown).toBeInstanceOf(ProviderRefused);
+    expect((thrown as ProviderRefused).status).toBe(429);
+    expect((thrown as ProviderRefused).retryAfterMs).toBe(3000);
+    expect((thrown as Error).message).not.toContain("SECRET");
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("error");
+    expect(report.calls[0]?.cost).toEqual({ source: "none" });
+  });
+
+  it("still refuses on the status when the refusal's body is not JSON, or is JSON with no usage", async () => {
+    /* A 403 since 2026-10-05, where this was a 502: a 502 is now asked again
+       (tests/ai-call-transport-retry.test.ts), and this test is about the body. */
+    for (const body of ["<html>403 Forbidden</html>", "null", "[]", '"text"', '{"error":{"code":403}}']) {
+      const { thrown, report } = await refusedStream({
+        ok: false,
+        status: 403,
+        headers: new Headers(),
+        text: async () => body,
+      } as unknown as Response);
+      expect(thrown, body).toBeInstanceOf(ProviderRefused);
+      expect((thrown as ProviderRefused).status, body).toBe(403);
+      expect(report.calls, body).toHaveLength(1);
+      expect(report.calls[0]?.outcome, body).toBe("error");
+      expect(report.calls[0]?.cost, body).toEqual({ source: "none" });
+    }
+  });
+
   it("records a fetch that never connected", async () => {
+    /* `retryTransport: false`, so this stays the one-attempt test it was. What
+       the gateway does with a dropped connection when it may ask again, a row
+       per attempt, is tests/ai-call-transport-retry.test.ts. */
     const { report } = await collectSpend(async () => {
       vi.stubGlobal("fetch", async () => {
         throw new TypeError("fetch failed");
@@ -479,6 +575,7 @@ describe("one record per call, however the call ends", () => {
               signal: new AbortController().signal,
               onActivity: noop,
               end: end(),
+              retryTransport: false,
             },
           )) {
             void _;
@@ -695,8 +792,10 @@ describe("one record per call, however the call ends", () => {
   it("writes no record at all when there was no attempt to record", async () => {
     /* The inverse of *one record, one call*. A missing key fails before a
        request exists, and a row for a call that never left the process is a
-       phantom in the bill. Every caller happens to check its own key first,
-       which is why nothing caught this. */
+       phantom in the bill. Every caller checked its own key first when this
+       was written, which is why nothing had caught it. The streaming runners
+       no longer do (tests/no-key-runners.test.ts), so this is now the only
+       guard on their road. */
     vi.stubEnv("OPENROUTER_API_KEY", "");
     const sent = stubTransport(() => streamed("data: [DONE]\n\n"));
     const { report } = await collectSpend(async () => {
@@ -863,6 +962,51 @@ describe("the non-streamed half", () => {
     expect(report.calls[0]?.outcome).toBe("error");
   });
 
+  it("prices a refusal whose body carries usage, before it judges the status", async () => {
+    /* The JSON seam's half of the same fix. Its comment used to call this "a
+       gap rather than a decision": the status was judged first and the body of
+       a 429 was handed to `ProviderRefused` unparsed, so a priced refusal left
+       an unpriced error row. */
+    const { report } = await collectSpend(async () => {
+      stubJson(
+        429,
+        JSON.stringify({
+          error: { message: "SECRET words the provider wrote" },
+          model: "google/gemini-3.1-flash-lite",
+          usage: { prompt_tokens: 1200, completion_tokens: 0, cost: 0.125 },
+        }),
+        { "retry-after": "7" },
+      );
+      const err = await openRouterJson("pdf", { model: "google/gemini-3.1-flash-lite" }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ProviderRefused);
+      expect((err as ProviderRefused).status).toBe(429);
+      expect((err as ProviderRefused).retryAfterMs).toBe(7000);
+      expect((err as Error).message).not.toContain("SECRET");
+      expect(JSON.stringify(err)).not.toContain("SECRET");
+    });
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("error");
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 125_000_000 });
+    expect(report.calls[0]?.inputTokens).toBe(1200);
+  });
+
+  it("still classifies a refusal from its body's text after reading the usage out of it", async () => {
+    /* `ProviderRefused` matches fixed strings in the raw text. Parsing the body
+       first must not change what it is handed. */
+    const { report } = await collectSpend(async () => {
+      stubJson(
+        400,
+        JSON.stringify({ error: { message: "HTTP 400: max_tokens_exceeded" }, usage: { cost: 0.002 } }),
+      );
+      const err = await openRouterJson("pdf", { model: "m" }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(ProviderRefused);
+      expect((err as ProviderRefused).kind).toBe("context-exceeded");
+    });
+    expect(report.calls).toHaveLength(1);
+    expect(report.calls[0]?.outcome).toBe("error");
+    expect(report.calls[0]?.cost).toEqual({ source: "provider", costNanos: 2_000_000 });
+  });
+
   it("classifies the 404 that is an account setting, without carrying the sentence", async () => {
     const err = await collectSpend(async () =>
       (() => {
@@ -1005,8 +1149,9 @@ describe("a `StreamEnd` handed to a second stream", () => {
           }),
         } as unknown as Response;
       }
-      // The second attempt is refused before there is anything to stream.
-      return { ok: false, status: 503, headers: new Headers(), body: null } as unknown as Response;
+      // The second attempt is refused before there is anything to stream. A
+      // 403, which is refused once; a 503 would be asked again, twice more.
+      return { ok: false, status: 403, headers: new Headers(), body: null } as unknown as Response;
     });
 
     await collectSpend(async () => {
@@ -1586,6 +1731,61 @@ describe("the decisions wire", () => {
     expect(result.noul).toEqual({ a: 0.5, e: 0 });
   });
 
+  /* The `choice` question, since 2026-10-03 — the command bar's pick (plan
+     261003k). The answer's shape is the one evals/command-pick/ saved 600 of. */
+  it("reads a choice with its confidence and every option's probability, on the command-pick job", async () => {
+    const ask = {
+      model: "typesafe/jev-1.13",
+      state: { app: "a", reader_request: "what changed" },
+      questions: {
+        command: {
+          type: "choice" as const,
+          instructions: "Which one command?",
+          criteria: { "page:/changelog": "What's new", none: "None of these" },
+        },
+      },
+    };
+    const sent = stubTransport(() =>
+      decided({
+        answers: {
+          command: {
+            type: "choice",
+            choice: "page:/changelog",
+            confidence: 0.88,
+            probabilities: { "page:/changelog": 0.88, none: 0.12, junk: "0.5", over: 1.2 },
+          },
+        },
+        usage: { input_tokens: 4905, output_tokens: 837, cost: 0.00020601 },
+      }),
+    );
+    const { result, report } = await collectSpend(() => openRouterDecisions("command-pick", ask));
+    expect(sent[0]?.body).toEqual(ask);
+    expect(result.choice).toEqual({
+      command: { choice: "page:/changelog", confidence: 0.88, probabilities: { "page:/changelog": 0.88, none: 0.12 } },
+    });
+    /* And a choice is not a yes/no: quick search's reading is untouched. */
+    expect(result.noul).toEqual({});
+    expect(report.calls[0]?.job).toBe("command-pick");
+    expect(report.calls[0]?.wire).toBe("decisions");
+  });
+
+  it("leaves out a choice that names nothing or has no confidence, rather than guessing one", async () => {
+    stubTransport(() =>
+      decided({
+        answers: {
+          a: { type: "choice", choice: "x" },
+          b: { type: "choice", choice: "x", confidence: 1.5 },
+          c: { type: "choice", confidence: 0.9 },
+          d: { type: "choice", choice: "x", confidence: 0.9 },
+          e: { noul: 0.4 },
+        },
+      }),
+    );
+    const { result } = await collectSpend(() => openRouterDecisions("search-quick", ASK));
+    expect(result.choice).toEqual({ d: { choice: "x", confidence: 0.9, probabilities: {} } });
+    expect(result.noul).toEqual({ e: 0.4 });
+  });
+
   it("names the context overflow, and only that, so a caller can halve and ask again", async () => {
     /* Copied from the spike's `mechanics.json` → `overflow`. */
     const overflow =
@@ -1624,7 +1824,8 @@ describe("the decisions wire", () => {
     let report: Awaited<ReturnType<typeof collectSpend>>["report"] | undefined;
     await collectSpend(async () => {
       try {
-        await openRouterDecisions("search-quick", ASK);
+        /* One attempt; the retry has its own file. */
+        await openRouterDecisions("search-quick", ASK, { retryTransport: false });
       } catch {
         /* expected */
       }

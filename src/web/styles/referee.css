@@ -1,7 +1,6 @@
-/* referee.css — Referee mode's band and its four sub-modes: Criteria, Claims,
-   Mirror and Candidates (CriteriaPanel.tsx, ClaimsPanel.tsx, MirrorPanel.tsx,
-   CandidatesPanel.tsx), plus PlaceOnCriterion's colours where they are the
-   panel's rather than the dialog's.
+/* referee.css — Referee mode's band and its five sub-modes: Criteria, Claims,
+   Mirror, Candidates and Hidden text, plus PlaceOnCriterion's colours where
+   they are the panel's rather than the dialog's.
 
    The shell is mode-band.css and the placeholder lines are glossary.css's
    `.gloss-quiet`, so what is here is only what this mode has and no other one
@@ -9,16 +8,12 @@
 
 /* -------------------------------------------------------- § referee mode ----
    The mode for somebody who has been asked to peer-review the piece. The shell
-   is `.mode-band` above and the head is `.band-head`, unchanged; what is here
-   is the three things this band has that no other one does. See App.tsx
-   § RefereeBand and docs/plans/260831an-referee-mode-for-peer-reviewers.md.
+   is `.mode-band` in mode-band.css; this owns the chips and Notices row,
+   the Notices box and the panel. See modes/referee/RefereeMode.tsx
+   and docs/project/referee-mode.md. */
 
-   Everything else is borrowed on purpose rather than duplicated — `.band-head`
-   for the title row and `.gloss-quiet` for the placeholder lines — so this
-   section stays the size of what is genuinely new. */
-
-/* **The mode's own preamble — the notice and the scan — capped at 40% of the
-   band and scrolling inside it.**
+/* **The mode's own preamble — the confidentiality notice — capped at 40% of
+   the band and scrolling inside it.**
 
    Without this the mode was unusable at an ordinary window size, and had been
    since the scan was wired. `.mode-band` is `position: fixed` with a computed
@@ -51,19 +46,10 @@
    three, since after one reading it is 214px of chrome — but a layout bug is
    not the place to reopen a product decision, so the cap shipped alone.
 
-   **Both boxes are collapsible now**, since 2026-09-02, and Greg asked for it
-   as a product change rather than as a layout fix: the notice opens on a press
-   and the scan opens by itself only when it found something. So the ordinary
-   first screen of this box is two lines rather than 600px, and everything above
-   still holds — the cap and the fade are what keep it honest on the visit where
-   a referee has opened both. The measurements above are of the *open* state and
-   are still the ones to design against. src/web/App.tsx § RefereeBand and
-   src/web/SourceScanNotice.tsx carry why a collapse here is not a dismissal.
-
-   `.ref-scan-list` keeps its own 14rem cap inside this one. Two nested
-   scrollers is not lovely, but the inner cap is what stops a hundred findings
-   from making this box's scrollbar meaningless, and it is the rule that was
-   already there. */
+   Since 2026-10-07 the scan is the Hidden text panel and `.ref-panel` scrolls
+   it. `.ref-brief` holds only the confidentiality notice, which opens on a
+   press and remembers nothing; the cap still protects a short band when that
+   notice is open. */
 .ref-brief {
   /* Shrinkable, so that on a very short band this box gives way rather than the
      panel; `.ref-panel`'s flex basis is 0, so all of the shrinking lands here. */
@@ -71,14 +57,14 @@
   min-height: 0;
   max-height: 40%;
   overflow-y: auto;
-  /* **Overflow has to be discoverable**, and here more than anywhere: what is
-     below the fold in this box is the injection scan's findings. Measured in
+  /* **Overflow has to be discoverable.** Measured in
      Chrome on 2026-09-01, this scroller's `clientWidth` equals its
      `offsetWidth` — the scrollbar is an overlay and takes no width, so a box
      with 616px of content in 254px looks exactly like one that ends where it
-     stops. A trailing fade is the answer this file already gives twice — the
-     table that runs off the right edge
-     (`.reader:has(table.zoom.overflowing)::after`) and `.ctx-panel`'s own mask.
+     stops. A trailing fade is the answer these stylesheets already give for
+     the table that runs off the right edge
+     (`.reader:has(table.zoom.overflowing)::after`), and gave a second time in
+     `.ctx-panel`'s own mask until the fisheye panels went on 2026-09-29.
      It is drawn whether or not there is anything below it, which is the price
      of a rule that cannot ask. */
   mask-image: linear-gradient(to bottom, black calc(100% - 1.1rem), transparent);
@@ -91,7 +77,7 @@
    `.gloss-stale`, and specifically NOT `--highlight-ink`, the red of
    `.gloss-error`. A red panel makes a person dismiss the sentence as chrome
    they have seen before, which is the exact failure this notice exists to
-   avoid — and there is nothing to dismiss it with, because it is always here.
+   avoid. Notices collapses it for this visit and remembers nothing.
 
    Wider measure than the panel's other text and a taller line height: it is a
    paragraph somebody has to actually read, not a label. */
@@ -108,51 +94,12 @@
   font-size: 0.88rem;
   line-height: 1.5;
 }
-/* **The fact, as the control.** The whole line is the target rather than a 12px
-   chevron — Metadata.tsx's `Section` makes the same call — and it is `--ink`
-   rather than `--ink-soft`, because shut is this notice's ordinary state and
-   this sentence is then the only one on screen. Left-aligned text with the
-   chevron pushed to the end, so a two-line wrap still reads as a paragraph and
-   not as a menu item. */
-.ref-notice-toggle {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.35rem;
-  width: 100%;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.88rem;
-  line-height: 1.5;
-  text-align: left;
-  cursor: pointer;
-}
-.ref-notice-toggle > span { flex: 1; }
-.ref-notice-toggle svg { flex: none; margin-top: 0.2rem; }
-.ref-notice-toggle:hover { color: var(--highlight-ink); }
-.ref-notice-toggle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-/* Only when it is open: shut, the button IS the notice, and a gap under a
-   single line would read as a box with something missing from it. */
-.ref-notice-toggle[aria-expanded="true"] { margin-bottom: 0.45rem; }
 /* The disclosure line is for a different reader — somebody whose agreement
    permits this — so it is separated rather than run on. */
 .ref-notice .ref-notice-also { margin-top: 0.45rem; color: var(--ink-faint); }
-/* **Outside the collapse**, so it is on screen whether the notice is open or
-   shut — it is the one sentence here in the future tense, about something the
-   next chip press would cause rather than something already done. Not
-   `--ink-faint` like the line above it: that one is a footnote for a reader who
-   has decided the notice does not apply to them, and this one is a warning
-   nobody has read yet. src/messages.ts § `REFEREE_CANDIDATES_REACHES_SEARCH`. */
-.ref-notice .ref-notice-ahead { margin-top: 0.45rem; margin-bottom: 0; }
-/* Only when the notice is open: the paragraphs now sit *under* the ahead line
-   (App.tsx says why), so the gap belongs between them rather than above it. */
-.ref-notice-toggle[aria-expanded="true"] ~ .ref-notice-ahead { margin-bottom: 0.45rem; }
-
-/* **The source scan.** src/web/SourceScanNotice.tsx, and it sits between the
-   confidentiality notice and the sub-mode chips because it belongs to the mode
-   rather than to a panel: a hidden instruction is a fact about the document.
+/* **The source scan.** src/web/SourceScanNotice.tsx, the Hidden text
+   sub-mode's whole panel since 2026-10-07 (plan 261007h); it was inside
+   Notices before that.
 
    Styled as a notice, not as an error, for the same reason `.ref-notice` above
    is: most articles have nothing in them and the ordinary state of this box is
@@ -160,10 +107,11 @@
    `--ink` rather than a colour — *not checked at all* is neither a finding nor a
    failure, and a red box would make a referee read it as one and dismiss it.
 
-   The list is capped and scrolls. `MAX_FINDINGS` is 100, and a badly built HTML
-   export really can produce that many; a band whose first screen is a wall of
-   navigation chrome is a band a referee stops reading, which is the failure
-   src/injection-scan.ts is most afraid of. */
+   The list is not capped on its own any more: it is the sub-mode's panel and
+   `.ref-panel` is its scroller, so a second scroller inside it would only make
+   a hundred findings harder to read. Identical findings are one row
+   (`grouped` in SourceScanNotice.tsx), which is what keeps a wall of them off
+   the first screen. */
 .ref-scan {
   margin: 0.5rem 0.7rem 0;
   padding: 0.55rem 0.6rem;
@@ -220,8 +168,6 @@
 .ref-scan-list {
   margin: 0.45rem 0 0;
   padding: 0;
-  max-height: 14rem;
-  overflow-y: auto;
   list-style: none;
 }
 /* One block per finding, every field on its own line, because a referee reading
@@ -242,53 +188,93 @@
 .ref-scan-item.explained { opacity: 0.7; }
 .ref-scan-kind { color: var(--ink); font-weight: 600; }
 .ref-scan-tag { color: var(--ink-faint); font-style: italic; }
-.ref-scan-where, .ref-scan-detail {
+/* How many identical findings this row stands for. */
+.ref-scan-count { color: var(--ink-soft); }
+/* What the trick is (`KIND_MEANS`): the sentence that turns the row from a
+   code-point count into something a referee can weigh. Plan 261007h. */
+.ref-scan-means { color: var(--ink-soft); }
+/* The evidence, for whoever goes to look: last, smaller, and the path and
+   code points in mono so they can be searched for in the source. */
+.ref-scan-source {
   color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.81rem;
+  font-size: 0.79rem;
   overflow-wrap: anywhere;
 }
+.ref-scan-where, .ref-scan-detail { font-family: var(--font-mono); }
 /* The words themselves, which is the thing the referee actually needs to see. */
 .ref-scan-text { color: var(--ink-soft); overflow-wrap: anywhere; }
+.ref-scan-empty { color: var(--ink-faint); font-style: italic; }
 /* Why this one may be innocent — required on the type for a visible
    instruction, and drawn so it cannot be read with the certainty hidden text
    earns. */
 .ref-scan-caveat { color: var(--ink-faint); }
 
-/* The sub-modes. Deliberately the same shape as the quotes panel's order
-   buttons, because it is the same gesture:
-   one of these is on, you press another, the panel below changes. The markup is
-   Diagram's — a `role="radiogroup"` of `role="radio"` buttons, each its own tab
-   stop and none of them handling a key — so the styling has to carry the
-   selected state on its own; see App.tsx § RefereeViews. */
-.ref-views {
+/* The sub-modes: the part-switcher every mode shares, `.summ-views` /
+   `.summ-view-btn` (mode-band.css § the part-switcher, plan 261007h § F2), so
+   their look is not here; `.ref-views` / `.ref-view-btn` stay on them as hooks.
+   The markup is a `role="radiogroup"` of `role="radio"` buttons, each its own
+   tab stop and none of them handling a key; see RefereeMode.tsx § RefereeViews. */
+/* **One row at the top of the band: the chips, then Notices.** It wraps, so
+   on a band too narrow for both, Notices drops to a line of its own under the
+   chips rather than squeezing them; on one too narrow for the chips alone,
+   they scroll sideways inside their own outline. The right padding keeps the
+   row clear of the band's (i), which is out of flow in the corner
+   (mode-band.css § `--band-about-room`). */
+.ref-top {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.25rem;
   padding: 0.55rem 0.7rem;
   border-bottom: 1px solid var(--rule);
+  flex: none;
 }
-.ref-view-btn {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--rule);
+.mode-band.has-about > .ref-top { padding-right: calc(0.7rem + var(--band-about-room)); }
+/* **A boxed group now, not `display: contents`.** Until 2026-10-07 the four
+   chips and Notices wrapped as one run, because as a flex box of its own the
+   group took a whole line once it wrapped (116px of top row on a ~300px band,
+   measured 2026-10-03). A joined bar cannot be `contents` — the outline is the
+   group's own box — and it no longer wraps inside itself, so the run is
+   two items: the bar, and Notices beside it or under it. GPT Sol's plan
+   review, R4. */
+/* **The notices, as one button.** Quieter than a chip — no fill, no weight —
+   because it is not a sub-mode and must not read as a sixth chip. The icon is
+   the app's ordinary ink, not red: nothing has gone wrong (§ `.ref-notice`). */
+.ref-notices-btn {
+  flex: none;
+  /* To the end of whichever line it lands on. */
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background: transparent;
   color: var(--ink-faint);
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   cursor: pointer;
 }
-.ref-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
-/* Fill rather than a border change: the selected one has to be tellable from
-   the hovered one at a glance, and a border is the channel hover is already
-   using. */
-.ref-view-btn.on {
-  border-color: var(--rule-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-weight: 600;
+.ref-notices-btn:hover { color: var(--ink); border-color: var(--rule); }
+.ref-notices-btn[aria-expanded="true"] { color: var(--ink); border-color: var(--rule-strong); }
+.ref-notices-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **The Hidden text chip's mark** (`sourceScanMark`): a filled dot when the
+   source scan found something with no everyday explanation, a ring when every
+   finding wears one. Ink rather than red, for `.ref-notice`'s reason: a red
+   mark is read as chrome and dismissed, and most of what sets it is a
+   typesetter's habit rather than an attack. */
+.ref-view-dot {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-left: 0.3rem;
+  border: 1px solid var(--ink);
+  border-radius: 50%;
+  vertical-align: 0.15em;
 }
-.ref-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.ref-view-dot.found { background: var(--ink); }
 
 /* The scroller. `.mode-band` is a fixed flex column from the controls bar to
    the dock, so every band puts a `flex: 1; min-height: 0; overflow-y: auto`
@@ -312,71 +298,46 @@
   overflow-y: auto;
 }
 
-/* **The explainer card, and the button in the header that brings it back.**
-   src/web/RefereeCard.tsx says what it is for; what matters here is that it is
-   inside `.ref-panel` and not in `.ref-brief`, so it scrolls away with the
-   sub-mode under it rather than eating the capped 40% the two undismissable
-   notices live in.
-
-   Quiet rather than loud: it is an explanation, not an alert, so it borrows the
-   surface the panel already uses and carries no accent colour of its own. A
-   card that shouted would make the confidentiality notice above it look
-   subordinate, which is the wrong way round.
-
-   **The width the copy is written against is this band's**, so the type is the
-   panel's small size. `.ref-how-list` was here and went with the four sub-mode
-   lines it styled, 2026-09-02 — those lines repeated the four chip cards
-   directly above the card. */
-.ref-how-card {
-  margin: 0.45rem 0.35rem 0.2rem;
-  padding: 0.45rem 0.55rem 0.55rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-}
-.ref-how-head { display: flex; align-items: baseline; gap: 0.4rem; }
-.ref-how-head h3 {
-  flex: 1;
-  margin: 0;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-/* The size is styles/close.css § .close-x. */
-.ref-how-close {
-  border: none;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.ref-how-close:hover { color: var(--ink); }
-.ref-how-close:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-
-.ref-how-p {
-  margin: 0.35rem 0 0;
-  font-size: 0.84rem;
+/* **What to do in this sub-mode, in one line** — the first sentence of the
+   chip's own card, printed (RefereeMode.tsx § the lead). Inside the scroller,
+   so it scrolls away with a long list rather than holding height. `--ink-soft`
+   and not `--ink-faint`: it is the instruction, not a footnote. */
+.ref-lead {
+  margin: 0.55rem 0.7rem 0.15rem;
+  font-size: 0.86rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
-.ref-how-p b { color: var(--ink); font-weight: 600; }
-
-/* In the mode header beside the title, where `.band-head h2` has `flex: 1` and
-   pushes it to the right edge. Text rather than an icon: a `?` in a circle is
-   the affordance nobody presses, and the card it opens is two paragraphs that
-   change what the rest of the band means. */
-.ref-how-btn {
-  flex: none;
-  font: inherit;
-  font-size: 0.83rem;
-  padding: 0.1rem 0.35rem;
-  border: 1px solid var(--rule);
+/* **How to read this**, at the end of the lead line: the button the panel's
+   rule sentences are behind (RefereeMode.tsx § HowToRead; plan 261003m).
+   `.ref-notices-btn`'s quiet — no fill, no weight — and inline, so on a wide
+   band it costs no line of its own. `nowrap`, so the icon and its words wrap
+   as one. The padding is its hit area; § a coarse pointer below raises it. */
+.ref-rules {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background: transparent;
   color: var(--ink-faint);
+  font: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  vertical-align: baseline;
   cursor: pointer;
 }
-.ref-how-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
-.ref-how-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.ref-rules:hover { color: var(--ink); border-color: var(--rule); }
+.ref-rules.on { color: var(--ink); border-color: var(--rule-strong); }
+.ref-rules:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+@media (pointer: coarse) {
+  .ref-rules { padding: 0.45rem 0.55rem; }
+}
+/* Its card: the sentences as paragraphs, `.band-about-card`'s spacing. */
+.ref-rules-card { max-width: min(24rem, calc(100vw - 1.75rem)); }
+.ref-rules-card p { margin: 0; }
+.ref-rules-card p + p { margin-top: 0.4rem; }
 
 /* --- Criteria, the first sub-mode. src/web/CriteriaPanel.tsx.
 
@@ -407,19 +368,13 @@
 }
 .crit-poles { display: flex; flex-direction: column; gap: 0.25rem; }
 
-.crit-kinds { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.crit-kind-btn {
-  font: inherit;
-  font-size: 0.84rem;
-  color: var(--ink-faint);
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  padding: 0.1rem 0.5rem;
-  cursor: pointer;
-}
-.crit-kind-btn.on { color: var(--ink); border-color: var(--rule-strong); background: var(--panel); }
-.crit-kind-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* **Find passages | For–against | Check the literature**: which kind of
+   criterion this is, a choice of one, so it is the part-switcher every mode
+   shares (`.summ-views`, mode-band.css § the part-switcher; plan 261007h § F2,
+   GPT Sol's R6) rather than a pill row. `.crit-kinds` / `.crit-kind-btn` stay
+   as hooks. `flex-start`, or the column it sits in would stretch the bar's
+   outline to the band's width. */
+.crit-kinds { align-self: flex-start; }
 .crit-kind-note { margin: 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 .crit-presets { display: flex; flex-wrap: wrap; gap: 0.2rem; }
@@ -463,11 +418,6 @@
   cursor: pointer;
   padding: 0;
 }
-
-/* **What the tick does**, above the list. Claims says the same thing inside its
-   checkbox's own label; here the label is the criterion's words, so the sentence
-   has to live beside the list rather than in it. */
-.crit-how { margin: 0.25rem 0; font-size: 0.83rem; color: var(--ink-faint); }
 
 /* **The key**, shown only while a for/against criterion is switched on —
    `TheKey` in CriteriaPanel.tsx says what it is for and why it tracks the mode's
@@ -666,8 +616,9 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
 
 .clm { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
 
-/* What a row is and is not, above the button, because it is the thing a referee
-   is likeliest to read past: linkage, never adequacy. */
+/* The panel's quiet notes about its own list: what was withheld, what the cap
+   cut, the other text in quotes. (Linkage-never-adequacy wore this class above
+   the button until 2026-10-03; it is behind `.ref-rules` now.) */
 .clm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .clm-run {
@@ -752,10 +703,6 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
    channel. docs/project/colour-scales.md, and the panel's own header. */
 
 .mir { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
-
-/* What the mode is, above the button, because it is the thing a referee is
-   likeliest to misread: this call is not given the paper. */
-.mir-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
 .mir-run {
   align-self: flex-start;

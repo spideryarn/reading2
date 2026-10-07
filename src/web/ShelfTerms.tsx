@@ -28,16 +28,15 @@
  * The counts come in already computed by the one formula in shelf-narrow.ts,
  * and a click goes back up as a key. docs/project/shelf-terms.md.
  */
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
 import { useQueryState } from "nuqs";
 import type { LibraryEntry, LibraryTermsResponse } from "../types.js";
-import type { PaperTopic } from "./PaperCard.js";
+import type { ArticleTopics } from "./article-topics.js";
 import { libraryTopicsViewParam } from "./params.js";
-import { availableTopics } from "./shelf-narrow.js";
+import { availableTopics, isModelNamed, topicDepth, withinChosenFirst } from "./shelf-narrow.js";
 import { TermChip, type TermTipScope } from "./ShelfTermChip.js";
 import { type PaperScope, ShelfTermsDetail } from "./ShelfTermsDetail.js";
-import { topicHueStops } from "./topic-colour.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 
 /** How many chips the collapsed row draws, besides any chosen ones. */
@@ -45,6 +44,17 @@ export const COLLAPSED_CHIPS = 12;
 
 /** Below this many distinct works the server chooses no topics at all. */
 export const MIN_WORKS = 8;
+
+/**
+ * **Whether a shelf of this many article rows might have topics**, asked
+ * before the answer says. Rows are only an upper bound on distinct works
+ * (`ShelfTermsLoading` below says why), so `true` is "might", and `false` is
+ * "certainly not". One copy, for the placeholder row and for the room each
+ * card holds for its pills (useShelfTerms.ts § `topicsExpected`).
+ */
+export function mightHaveTopics(articleCount: number): boolean {
+  return articleCount >= MIN_WORKS;
+}
 
 const QUIET_BUTTON =
   "tw:inline-flex tw:h-7 tw:items-center tw:gap-1 tw:rounded-md tw:bg-transparent tw:px-2 tw:text-xs tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground";
@@ -80,18 +90,30 @@ const GHOST_PILL_REM = [7.5, 4.5, 8, 5.5, 6, 8, 4, 6.5, 7, 5.5, 6];
  * in words what is happening, and a card there would be a second sentence.
  * Focusable, as the glossary's globe is, so the card is not mouse-only.
  */
-function TopicsLabel() {
+function TopicsLabel({ modelNamed }: { modelNamed: boolean }) {
+  /* **Two cards, because there are two kinds of topic** (plan 261003f): a
+     model names subjects as a broad-to-fine tree, and until its answer is
+     stored the row is the older phrases picked by the program. Each card says
+     only what is true of the row it is on. */
   return (
     <Tooltip
       placement="top"
       keepSide
       className="tip-soon"
       content={
-        <ControlTip
-          head="Topics"
-          what="Phrases your articles use, picked to cover much of the shelf while still overlapping. Choose one to see only the articles about it; choose another to narrow to articles about both."
-          how="Listed roughly in the order they were picked. Each pick favours a phrase that reaches articles the earlier ones reached less, weighted by how good a topic it makes — judged for you by a model once it has scored them, by the program until then. Near-copies are left out, and similar ones kept apart. The number is how many articles in this view use it."
-        />
+        modelNamed ? (
+          <ControlTip
+            head="Topics"
+            what="Subjects a model named from the titles and summaries of your articles. Broad subjects come first. Choose one to see only its articles, and the finer topics grouped under it, marked ›, move up beside it; choose one of those to narrow further. Each pill also takes in matching articles from elsewhere on the shelf."
+            how="Topics with nothing left to show are hidden while you narrow. New articles are sorted into the topics automatically. The number is how many articles in this view are in the topic."
+          />
+        ) : (
+          <ControlTip
+            head="Topics"
+            what="Phrases your articles use, picked to cover much of the shelf while still overlapping. Choose one to see only the articles about it; choose another to narrow to articles about both."
+            how="Listed roughly in the order they were picked. Each pick favours a phrase that reaches articles the earlier ones reached less, weighted by how good a topic it makes — judged for you by a model once it has scored them, by the program until then. Near-copies are left out, and similar ones kept apart. The number is how many articles in this view use it."
+          />
+        )
       }
     >
       <span
@@ -124,7 +146,7 @@ function TopicsLabel() {
  * collapse after the answer if they are copies or no useful topics survive.
  */
 export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
-  const mightHaveTopics = articleCount >= MIN_WORKS;
+  const ghostPills = mightHaveTopics(articleCount);
   /* The chooser returns at most one topic per distinct work. More than twelve
      article rows is therefore necessary — though not sufficient — for the
      real row's conditional "All N topics" button. */
@@ -140,7 +162,7 @@ export function ShelfTermsLoading({ articleCount }: { articleCount: number }) {
         <LoaderCircle className="cmt-spinner" size={13} />
         Loading topics…
       </span>
-      {mightHaveTopics && (
+      {ghostPills && (
         <>
           {GHOST_PILL_REM.map((rem, i) => (
             <span
@@ -176,6 +198,7 @@ export function ShelfTerms({
   entryOf,
   inScope,
   archived,
+  articleTopics,
 }: {
   data: LibraryTermsResponse;
   /** `|visible ∩ its articles|` per key — shelf-narrow.ts § topicCounts. */
@@ -194,36 +217,40 @@ export function ShelfTerms({
   inScope: ReadonlySet<string>;
   /** Whether the archive is in scope, which the tooltip names. */
   archived: boolean;
+  /**
+   * Each topic's hue and each article's topics, worked out by the page from
+   * `data.terms` (article-topics.ts) and shared with the pills on each card,
+   * so the two cannot disagree and the colouring runs once per answer.
+   */
+  articleTopics: ArticleTopics;
 }) {
   const [all, setAll] = useState(false);
   const [view, setView] = useQueryState("topicsView", libraryTopicsViewParam);
   const { terms, pending, scope } = data;
-  /* Selection, search and the two views all rerender this component without
-     changing the server answer. Keep the O(topics² × members + topics³)
-     projection tied to that answer, while still calling the hook on the empty
-     early-return path below. */
-  const hues = useMemo(() => topicHueStops(terms), [terms]);
-  /* Every topic each article is in, for its paper card: over **every** topic
-     the server chose, not only those drawn, in rank order with the hue each
-     already wears — so a card names the same topics however the view is
-     narrowed (plan 261002f). */
-  const topicsBySlug = useMemo(() => {
-    const by = new Map<string, PaperTopic[]>();
-    for (const t of terms) {
-      const topic = { label: t.label, slot: hues.get(t.key) ?? 0 };
-      for (const a of t.articles) {
-        const list = by.get(a.slug);
-        if (list) list.push(topic);
-        else by.set(a.slug, [topic]);
-      }
-    }
-    return by;
-  }, [terms, hues]);
+  /* Each topic's hue, and every topic each article is in for its paper card:
+     the O(topics² × members + topics³) projection, memoised by the page on
+     the server answer (article-topics.ts) so that selection, search and the
+     two views rerender this component without redoing it. */
+  const { hues, bySlug: topicsBySlug } = articleTopics;
 
-  const reading = pending > 0 && (
-    <span className="tw:text-xs tw:text-muted-foreground">
-      Reading {pending} more {pending === 1 ? "article" : "articles"}…
-    </span>
+  /* What the row is still waiting for. On the phrase row, the program's
+     reading. On a model-named row that reading is not what the topics come
+     from, so it is not mentioned; what matters there is the articles that
+     arrived after the topics were last worked out and are missing from them
+     until they are sorted in, which happens by itself (plan 261003f). */
+  const sorting = data.sorting ?? 0;
+  const reading = isModelNamed(terms) ? (
+    sorting > 0 && (
+      <span className="tw:text-xs tw:text-muted-foreground">
+        Sorting {sorting} new {sorting === 1 ? "article" : "articles"} into topics…
+      </span>
+    )
+  ) : (
+    pending > 0 && (
+      <span className="tw:text-xs tw:text-muted-foreground">
+        Reading {pending} more {pending === 1 ? "article" : "articles"}…
+      </span>
+    )
   );
 
   if (terms.length === 0) {
@@ -260,7 +287,12 @@ export function ShelfTerms({
      twelve and then dropping zeros would leave the row short with pills
      waiting beyond it. The colour is computed over every topic, above, so a chip
      keeps its dot when its neighbours come and go. */
-  const available = availableTopics(terms, count, chosen);
+  /* Then the finer topics inside a chosen one move up beside it
+     (`withinChosenFirst`): the identity with nothing chosen, and for phrase
+     topics. Before the first twelve, so the next step down is never beyond
+     the fold. */
+  const available = withinChosenFirst(availableTopics(terms, count, chosen), chosen);
+  const byKey = new Map(terms.map((t) => [t.key, t]));
   const shown = all
     ? available
     : available.filter((t, i) => i < COLLAPSED_CHIPS || chosen.has(t.key));
@@ -268,6 +300,7 @@ export function ShelfTerms({
     inScope,
     scopeWord: archived ? "on the shelf and in the archive" : "on the shelf",
     titleOf: (slug) => entryOf(slug)?.title,
+    labelOf: (key) => byKey.get(key)?.label,
   };
   const papers: PaperScope = { entryOf, topicsOf: (slug) => topicsBySlug.get(slug) ?? [] };
 
@@ -277,7 +310,7 @@ export function ShelfTerms({
   return (
     <div className="tw:mb-3">
       <div className={TERMS_ROW}>
-        <TopicsLabel />
+        <TopicsLabel modelNamed={isModelNamed(terms)} />
         {!detail && (
           <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
             {shown.map((t) => (
@@ -326,6 +359,10 @@ export function ShelfTerms({
         <ShelfTermsDetail
           terms={available}
           slotOf={slotOf}
+          depthOf={(key) => {
+            const t = byKey.get(key);
+            return t ? topicDepth(t, byKey) : 0;
+          }}
           count={count}
           chosen={chosen}
           onToggle={onToggle}

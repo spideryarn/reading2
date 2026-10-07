@@ -59,7 +59,13 @@ and tmux refused the second one; on a box meant to hold many parallel sessions t
   The file on the box is **built from an allowlist**, never copied; `HETZNER_CLOUD_API_TOKEN` (can
   delete the box) is deliberately off it. `SUPABASE_ACCESS_TOKEN` (can delete the production
   Supabase project) was too, until Greg put it on, 2026-10-01: *"I know there is risk, but I think
-  it'll be fine."* Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
+  it'll be fine."* **Its being on the box is not permission to use it.** It went on for one run of
+  `scripts/supabase-auth-config.ts templates`, and Greg, the same day: *"You have my permission
+  this time to run the command … But going forwards, you still need to ask my permission for any
+  action that involves SUPABASE_ACCESS_TOKEN."* So every action that uses it, by any session, needs
+  a fresh yes from him for that action. Do not pass an earlier yes to a peer as though it were
+  standing, and never print the value.
+  Tested in [`tests/gjd-remote-env.test.ts`](../../tests/gjd-remote-env.test.ts).
 - [`scripts/gjd-remote-upload.ts`](../../scripts/gjd-remote-upload.ts) — putting a file on the box:
   where `upload` sends it, the local paths whose basename would escape that folder, and
   `remoteWriteScript`, the one `sh` recipe behind **every** `writeRemote` — prompts and job scripts
@@ -962,6 +968,10 @@ Two things worth knowing:
   kills it; fourteen had piled up by 2026-08-31. `node ~/gjd-remote/sessions.mjs` reports which are
   finished (`--kill` reaps only those), judging by the transcript's last message rather than tmux's
   activity time or the file's mtime, both of which move on idle sessions.
+  The script is not in this repo and nothing under `infra/hetzner/` installs it: `~/gjd-remote` on
+  the box is a drop directory, so it survives a rebuild only because `/home` does. The Overseer's
+  notes of 2026-08-31 say its source is on Greg's laptop; nobody has checked that from the box.
+  `--selftest` checks its classifier.
 - **The file being right and the keyboard being right are two facts.** A tmux server reads its
   config once, at start, and the box's server outlives provisioning by weeks — so provisioning
   rewrites `~/.tmux.conf` and changes nothing about the keyboard until somebody sources it. Both
@@ -1103,6 +1113,31 @@ hand, and `diff` is the whole of the verification:
 diff <(sed 's/@USER@/greg/g' infra/hetzner/systemd/overseer.service) /etc/systemd/system/overseer.service
 ```
 
+**What actually runs, as of 2026-10-04: the dashboard is under systemd, the Overseer daemon is
+not.** `overseer.service` is installed but **disabled**, and the unit sets no `OPENROUTER_API_KEY`,
+so a daemon it started would run with attention off. The live daemon is a tmux session
+(`overseer-daemon<N>-<HHMM>`) started from a launch script that reads the key out of `.env.local`
+and execs `npx tsx scripts/overseer.ts run` in the primary checkout. That script is
+[`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh) since
+2026-10-07 (it lived in the Overseer's scratchpad under `/tmp` before, which a reboot empties), so
+**a reboot still loses the daemon, and no longer the script.** It also has nothing to restart it: it
+stopped on 2026-10-05 with `ENOSPC` when `/home` filled, and stayed down 46 hours. Only one
+daemon can run: a second start, from systemd or anywhere else, prints *"An Overseer is already
+running … Refusing to start a second one"*, and under `Restart=always` the unit retries every five
+seconds until stopped. That happened on 2026-10-04, when `sudo systemctl restart overseer` was run
+while the tmux daemon held the lock; `sudo systemctl stop overseer` ended it. Check which one is
+live with `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
+`systemctl is-active overseer`. Moving the daemon back under the unit needs the key supplied to it
+(for example an `EnvironmentFile=`), which is a box change for Greg.
+
+**The installed unit file was brought up to the repo's on 2026-10-07**, still disabled and not
+started; it had been 59 lines behind, with a `Documentation=` line naming a doc that was renamed.
+Its `failed` state, left by that 2026-10-04 restart loop, was cleared with `reset-failed` at the
+same time. Two things to know before anyone starts it: the current unit needs `/etc/overseer.env`,
+which this box does not have because `provision.sh` has not run here since 2026-09-03, and
+`Restart=always` gives up after ten failed starts in five minutes, so a disk that stays full for
+an hour leaves the unit `failed` after the space comes back and something still has to start it.
+
 At 3am:
 
 ```
@@ -1146,6 +1181,57 @@ The unit names no tailnet address itself, because that is a per-machine fact and
 of it is one the next box cannot bind. It deliberately does not name `FLEET_ACT_ENABLED` in any
 form.
 
+## Keeping the disks from filling
+
+There are two disks and both fill. `/home` is the 49 GB volume: worktrees, transcripts and caches.
+It reached 100% on 2026-10-05, peers' commits failed, and the Overseer daemon died of `ENOSPC` and
+stayed down 46 hours. `/` is 301 GB and sat at 83–89% that week, and what fills it is `/tmp`: test
+runs leave about fifty thousand `mkdtemp` directories a day and remove none, so `/tmp` was 150 GB
+and 806,000 entries on 2026-10-07. systemd ages `/tmp` out after 30 days and **empties it at every
+boot** (`/usr/lib/tmpfiles.d/tmp.conf`), so nothing kept there is kept, an agent's scratchpad
+included.
+
+Greg, 2026-10-06: *"Perhaps add this and other measures to keep the hard disk fullness down to some
+routine daemon/service"*. Three things do that now
+([the plan](../plans/261006m-box-disk-hygiene-timer-and-a-rebuildable-box.md)):
+
+**`box-tidy.timer`, hourly**, runs [`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs).
+The script's header is the list of what it deletes, and it is short on purpose: Codex transcripts
+older than 7 days, `logs/tmux-jobs/*.log` older than 14 days, and the npm download cache when
+`/home` is at 80%. The permission for each is Greg's, quoted in
+[overseer.md § Keeping `/home` from filling](overseer.md#keeping-home-from-filling). It skips any
+file a live process has open or is standing in, as far as `/proc` shows, and deletes nothing at all
+if it cannot read `/proc` to find out. That is a strong guard and not a proof: it does not see a
+memory-mapped file, or one opened a moment after it looked, and the npm cache clean does not
+consult it. It **reports and does not remove** worktrees, Docker images, scratchpads and the stale
+directories in `/tmp`; a session decides those.
+
+```
+systemctl list-timers box-tidy.timer        # when it last ran and when it runs next
+journalctl -u box-tidy -n 30 --no-pager     # what it did, and both disks before and after
+sudo systemctl start box-tidy.service       # run it now
+node /usr/local/lib/spideryarn/box-tidy.mjs --dry-run   # what it would do; by hand it cannot read
+                                            # root's processes, so it says NOTHING DELETED
+```
+
+It is installed **outside the checkout**, at `/usr/local/lib/spideryarn/box-tidy.mjs`, and runs on
+`/usr/bin/node` with no dependencies, unlike the box's other units. A full disk is when the
+checkout is mid-merge or has no `node_modules`, and the tidy has to run then. So **editing the file
+in the repo does not change the box**, exactly as for a unit file
+([The box's own services](#the-boxs-own-services)): re-provision, or install it by hand:
+
+```
+sudo install -o root -g root -m 0644 infra/hetzner/box-tidy.mjs /usr/local/lib/spideryarn/box-tidy.mjs
+```
+
+**The Box health verdict reads `/home` as well as `/`** since 2026-10-07
+([`tools/fleet/health.ts`](../../tools/fleet/health.ts)): strained at 90%, critical at 97%, on the
+dashboard's Box health strip, in `overseer.ts tick`, and at the launch gate, which holds new
+sessions at critical. That is the alert. There is no separate one.
+
+**Old screenshots** are deleted from git by a script the Overseer runs, not by the timer, because it
+is a commit: [`scripts/prune-old-screenshots.ts`](../../scripts/prune-old-screenshots.ts).
+
 ## Traps
 
 - **`gjd-remote` will not tell you a session exists when it cannot see the list.** A `tmux ls`
@@ -1173,6 +1259,42 @@ form.
 - Sessions and their artefacts are keyed by Claude session id, not by name — two concurrent `new`
   runs could otherwise start each other's job. `cmdNew` in
   [`scripts/gjd-remote.ts`](../../scripts/gjd-remote.ts) says why.
+- **`/home` is the small disk.** It is the 49 GB volume and `/` is the 300 GB one, which is the
+  opposite of what the names suggest, and `df -h` on `/` alone says there is plenty of room. It
+  filled to 100% on 2026-10-05 with worktrees, and a full `/home` fails peers' commits and worktree
+  creation rather than anything of yours. New worktrees have gone to
+  `/var/tmp/spideryarn-worktrees/` since then —
+  [worktrees.md § Where a worktree's bytes live](worktrees.md#where-a-worktrees-bytes-live). Anything
+  else large and disposable belongs on `/` too.
+- **Do not retry a command the classifier has just refused.** Whether it runs is not the agent's
+  call. Try a read of real reader data at most once from an unattended session. If it is refused,
+  write the one-command read-only script for Greg to run, do not plan an eval around a real shelf,
+  and say plainly in the report that the data was not looked at.
+- **`gh` is installed and not logged in.** `gh auth status` answers *"You are not logged into any
+  GitHub hosts"* and `GH_TOKEN` is unset (2026-09-02, unchanged 2026-10-05). `git` push and fetch to
+  `origin` work, so the gap is only the GitHub API: the default branch, pull requests, repository
+  settings, Actions. Run `gh auth status` before promising a step that needs the API, not after
+  doing everything around it. Then do every part that does not need it, and tell Greg which one
+  piece is his; he can run `gh auth login` in the session if he would rather it were done there.
+- **The `Write` tool refuses a path outside the session's working directories.** `/tmp/foo.txt`
+  comes back as *"Path is outside allowed working directories"*, and in an unattended session that
+  refusal is final, because it counts as a permission request nobody can answer (2026-09-22). Bash
+  has no such limit: a quoted heredoc (`cat > /tmp/foo.txt <<'EOF'`) writes the file and keeps
+  backticks and `$` literal.
+- **`npm run <script> <word>` passes the word to the script, with no `--`** (npm 11). On 2026-09-09
+  `npm run fleet:restart go`, typed to find out whether npm forwards a bare argument, restarted the
+  live fleet dashboard. The header of [`scripts/fleet-restart.ts`](../../scripts/fleet-restart.ts)
+  has the story, and it is why that script has no default mode. Never find out how a script
+  handles its arguments by passing a word that does something: use `--help`, a nonsense word, or
+  read the script.
+- **Holding the production credential is not being allowed to read with it.** On 2026-10-03 the
+  auto-mode classifier refused an unattended feedback session three reads of real shelf data: a
+  read-only dump of production ("Production Reads"), `evals/shelf-topics/build-cases.ts` against
+  the local shelf's real titles ("PII Data Handling"), and a one-row read-only lookup made after
+  Greg had said yes in chat. The refusal is about the outcome, so a yes in chat does not change it.
+  What was allowed: synthetic shelves, and a query for an owner that does not exist, which proves
+  the SQL. The work was finished with a one-command read-only script for Greg to run himself
+  (`npm run shelf-topics:preview`).
 
 ## Known holes
 

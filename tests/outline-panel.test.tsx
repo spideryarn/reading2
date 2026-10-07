@@ -270,10 +270,28 @@ describe("choosing a rung", () => {
       .toBeGreaterThan(1);
   });
 
-  it("falls back to rung 1 when only the parts fit", () => {
-    /* 10px a row, and rung 1 is the one-row list. */
+  it("keeps the current part's sections and the current section's summary when they do not fit, and scrolls", () => {
+    /* 10px a row: rung 1 is 10px, rung 2 is 50px, rung 3 is 70px. A 15px band
+       held only rung 1 until 2026-10-03, which left the reader with the parts
+       and nothing about the section they were in. Greg, spya-s46j8f: "at the
+       very least I want all the headings for this subsection and its siblings
+       to be visible … I'd also like to see the summary". So rung 3 is the
+       floor, and a list that does not fit scrolls. Plan 261003k. */
     const panel = render(15);
-    expect(panel.dataset.outlineRung).toBe("1");
+    expect(panel.dataset.outlineRung).toBe("3");
+    expect(panel.dataset.outlineScroll).toBe("1");
+    const visible = panel.querySelector(".outln-list:not([data-rung])")!;
+    expect(visible.querySelectorAll(".lvl-2")).toHaveLength(4);
+    expect(visible.querySelector(".now .outln-gist")?.textContent).toBe(
+      "What section 0 establishes.",
+    );
+  });
+
+  it("does not scroll a list that fits", () => {
+    /* Rung 3 is exactly 70px. */
+    const panel = render(70);
+    expect(panel.dataset.outlineRung).toBe("3");
+    expect(panel.dataset.outlineScroll).toBe("0");
   });
 
   it("steps down rather than overflowing as the band shrinks", () => {
@@ -304,38 +322,15 @@ describe("choosing a rung", () => {
     }
   });
 
-  it("prefers the best whole-title rung even when a more detailed clamped rung fits", () => {
-    /* Whole rung 1 is 40px; whole rung 2 is 200px. At 60px the clamped rung 2
-       would fit, but whole titles are the product decision and therefore win
-       before the clamped candidates are considered. Codex code review,
-       2026-09-10. */
-    const panel = render(60, 0, true, 0, 300, true, 30);
-    const visible = panel.querySelector<HTMLOListElement>(
-      ".outln-list:not([data-rung])",
-    )!;
-    const measured = panel.querySelector<HTMLOListElement>(
-      '.outln-list[data-rung="1"][data-clamp="0"]',
-    )!;
-    expect(panel.dataset.outlineRung).toBe("1");
-    expect(panel.dataset.outlineClamp).toBe("0");
-    expect(visible.className).toBe(measured.className);
-    expect(visible.classList.contains("clamp")).toBe(false);
-  });
-
-  it("uses the clamped copy as the floor when no whole-title rung fits", () => {
-    /* Whole rung 1 is 40px and does not fit; clamped rung 1 is 10px and does.
-       The diagnostic and visible class must both describe that same choice. */
+  it("never cuts a title to one line: whole titles, and the scroll is the floor", () => {
+    /* Until 2026-10-03 a band too short for whole titles fell back to a set of
+       candidates clamped to one line, because the panel could not scroll. It
+       can now, so there is one set of candidates and no clamp. */
     const panel = render(30, 0, true, 0, 300, true, 30);
-    const visible = panel.querySelector<HTMLOListElement>(
-      ".outln-list:not([data-rung])",
-    )!;
-    const measured = panel.querySelector<HTMLOListElement>(
-      '.outln-list[data-rung="1"][data-clamp="1"]',
-    )!;
-    expect(panel.dataset.outlineRung).toBe("1");
-    expect(panel.dataset.outlineClamp).toBe("1");
-    expect(visible.className).toBe(measured.className);
-    expect(visible.classList.contains("clamp")).toBe(true);
+    expect(panel.querySelectorAll(".outln-list.clamp")).toHaveLength(0);
+    expect(panel.querySelectorAll(".outln-measure > ol")).toHaveLength(5);
+    expect(panel.dataset.outlineRung).toBe("3");
+    expect(panel.dataset.outlineScroll).toBe("1");
   });
 });
 
@@ -429,6 +424,55 @@ describe("what the list says", () => {
     expect(list.getAttribute("aria-activedescendant")).toBe(nowId());
   });
 
+  it("lets go of a held row when the tree is replaced", () => {
+    /* An article opened before its structure is built has its tree replaced
+       live (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+       GPT Sol's F1). Node ids are positional, so the id Home held can survive
+       the replacement and name a different passage: "is it still drawn" is not
+       the test, the tree being a new one is. */
+    const draw = (tree: typeof root, focusRow: number) =>
+      act(() => {
+        reactRoot.render(
+          <OutlinePanel
+            root={tree}
+            supplementOf={geometry.supplementOf}
+            arcByRow={null}
+            focusRow={focusRow}
+            proseBeside
+            paragraphLabels
+            onJump={() => {}}
+          />,
+        );
+      });
+    const panel = render(10_000, 0);
+    const list = panel.querySelector<HTMLElement>('.outln-list:not([data-rung])')!;
+    const nowId = () => panel.querySelector('.outln-list:not([data-rung]) .outln-row.now')?.id;
+    act(() => {
+      list.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
+    });
+    const held = list.getAttribute("aria-activedescendant");
+    const lastRow = (geometry.cells[1] ?? []).reduce((n, c) => n + c.rowSpan, 0) - 1;
+
+    /* The control: the same tree, the reader elsewhere — the row stays held. */
+    draw(root, lastRow);
+    expect(list.getAttribute("aria-activedescendant")).toBe(held);
+    expect(nowId()).not.toBe(held);
+
+    /* Images redraw the blocks, and hence the derived root, without replacing
+       the stored tree. The row the reader held still means the same thing. */
+    const redrawnBlocks = blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(tree, redrawnBlocks, geometry.leafDepth);
+    expect(redrawnRoot).not.toBe(root);
+    draw(redrawnRoot, lastRow);
+    expect(list.getAttribute("aria-activedescendant"), "an image redraw dropped the held row").toBe(held);
+
+    /* A genuinely new stored tree with the same ids in it. */
+    draw(buildSummaryTree(structuredClone(tree), blocks, geometry.leafDepth), lastRow);
+    expect(list.getAttribute("aria-activedescendant"), "the old tree's row is still held").toBe(
+      nowId(),
+    );
+  });
+
 
   it("does not count the panel's padding as room the list can use", () => {
     /* `clientHeight` includes padding; the list starts below it. Granting the
@@ -441,9 +485,9 @@ describe("what the list says", () => {
       document.body.appendChild(host);
       reactRoot = createRoot(host);
     };
-    const noPadding = render(60, 0, true, 0).dataset.outlineRung;
+    const noPadding = render(130, 0, true, 0).dataset.outlineRung;
     fresh();
-    const withPadding = render(60, 0, true, 40).dataset.outlineRung;
+    const withPadding = render(130, 0, true, 40).dataset.outlineRung;
     expect(Number(withPadding)).toBeLessThan(Number(noPadding));
   });
 
@@ -458,9 +502,9 @@ describe("what the list says", () => {
       document.body.appendChild(host);
       reactRoot = createRoot(host);
     };
-    const noHead = render(60).dataset.outlineRung;
+    const noHead = render(130).dataset.outlineRung;
     fresh();
-    const withHead = render(60, 0, true, 0, 300, true, 0, 40).dataset.outlineRung;
+    const withHead = render(130, 0, true, 0, 300, true, 0, 40).dataset.outlineRung;
     expect(Number(withHead)).toBeLessThan(Number(noHead));
   });
 
@@ -523,7 +567,7 @@ describe("what the list says", () => {
   });
 });
 
-describe("Expanded follow-along", () => {
+describe("follow-along in a list that scrolls", () => {
   /** Give jsdom just enough layout to distinguish an on-screen row from one
    * below the list. Row positions move with `scrollTop`, as they do in a real
    * scroll container. */
@@ -557,7 +601,7 @@ describe("Expanded follow-along", () => {
     });
   }
 
-  const draw = (focusRow: number) => {
+  const draw = (focusRow: number, expanded = true) => {
     act(() => {
       reactRoot.render(
         <OutlinePanel
@@ -568,13 +612,131 @@ describe("Expanded follow-along", () => {
           proseBeside
           paragraphLabels
           onJump={() => {}}
-          expanded
+          expanded={expanded}
           head={<div>Fisheye / Expanded</div>}
         />,
       );
     });
     return host.querySelector<HTMLOListElement>(".outln-list")!;
   };
+
+  /** The fisheye's fit reads each hidden candidate's `scrollHeight`; make every
+   * one taller than the 300px band, so the floor is drawn and the list scrolls. */
+  const nothingFits = () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.dataset.rung ? 1000 : 0;
+    });
+  };
+
+  it("the fisheye at its floor brings the current part's whole block into view when it fits", () => {
+    /* One part and four sections: five rows 50px apart, 30px tall, so the
+       block runs 0–230. A 240px list holds it; scrolled away by hand and then
+       crossing into the next section brings the whole block back, part row
+       included, rather than only the current row (Greg, spya-s46j8f: "all the
+       headings for this subsection and its siblings"). */
+    nothingFits();
+    layout(() => 240);
+    const list = draw(0, false);
+    expect(host.querySelector<HTMLElement>(".mode-band.outln")!.dataset.outlineScroll).toBe("1");
+    list.scrollTop = 100;
+    draw(7, false);
+    expect(list.scrollTop).toBe(0);
+  });
+
+  it("the fisheye at its floor puts the current row a third down when the block is too tall", () => {
+    nothingFits();
+    layout(() => 90);
+    const list = draw(0, false);
+    expect(list.scrollTop).toBe(0);
+    /* Section 3 is the fifth row, at 200px: below a 90px list. */
+    draw(9, false);
+    expect(list.scrollTop).toBe(200 - 90 / 3);
+  });
+
+  it.each([false, true])("never cuts off the foot of a current row that would fit (expanded=%s)", (expanded) => {
+    /* Rows are 30px in this stub; make the current one 80px, as a row with a
+       summary is. In a 90px list a third down is 30px, which would leave 60px
+       for an 80px row. GPT Sol's plan review, 261003k, F2. */
+    nothingFits();
+    layout(() => 90);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (!this.classList.contains("outln-row")) return 0;
+      return this.classList.contains("now") ? 80 : 30;
+    });
+    const list = draw(0, expanded);
+    draw(9, expanded);
+    const top = 200;
+    expect(list.scrollTop).toBeLessThanOrEqual(top);
+    expect(list.scrollTop + 90).toBeGreaterThanOrEqual(top + 80);
+  });
+
+  it.each([false, true])("starts a row taller than the list at its top (expanded=%s)", (expanded) => {
+    nothingFits();
+    layout(() => 90);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) { return this.classList.contains("now") ? 140 : 30; });
+    const list = draw(0, expanded);
+    draw(9, expanded);
+    expect(list.scrollTop).toBe(200);
+  });
+
+  it("keeps a place the reader scrolled to by hand until the section changes — fisheye too", () => {
+    nothingFits();
+    layout(() => 90);
+    const list = draw(9, false);
+    list.scrollTop = 7;
+    draw(10, false);
+    expect(list.scrollTop).toBe(7);
+  });
+
+  it("Home and End show the row they chose, even when the reader's section does not change", () => {
+    nothingFits();
+    layout(() => 90);
+    const list = draw(0, false);
+    list.scrollTop = 120;
+    act(() => {
+      list.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+    });
+    expect(list.scrollTop).toBe(0);
+    act(() => {
+      list.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    });
+    /* The last of five rows: top 200, 30px tall, in a 90px list. */
+    expect(list.scrollTop).toBe(200 + 30 - 90);
+  });
+
+  it("follows when the floor starts scrolling without changing section", () => {
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(cb: ResizeObserverCallback) { observers.push(cb); }
+      observe() {}
+      disconnect() {}
+    });
+    layout(() => 90);
+    let candidateHeight = 70;
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) { return this.dataset.rung ? candidateHeight : 0; });
+    const list = draw(9, false);
+    expect(list.scrollTop).toBe(0);
+    candidateHeight = 1000;
+    act(() => observers[0]!([], {} as ResizeObserver));
+    expect(host.querySelector<HTMLElement>(".outln")!.dataset.outlineScroll).toBe("1");
+    expect(list.scrollTop).toBe(170);
+  });
+
+  it("a fisheye list that fits is never scrolled", () => {
+    layout(() => 90);
+    const list = draw(0, false);
+    draw(9, false);
+    expect(host.querySelector<HTMLElement>(".mode-band.outln")!.dataset.outlineScroll).toBe("0");
+    expect(list.scrollTop).toBe(0);
+  });
 
   it("moves only its own list when `now` changes, and leaves a manual position alone otherwise", () => {
     layout(() => 100);

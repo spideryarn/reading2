@@ -10,11 +10,11 @@
  * The projection is `src/web/structure.ts`; this file draws it and decides
  * nothing about what is current.
  *
- * ## What is here and what is stage 2
+ * ## Fixed rungs, with measured row windows
  *
- * Both columns, from the real projection, at a **fixed rung**. The measured
- * ladders that let each column spend its leftover height, the reserved-height
- * wells, and the row window on a short viewport are stage 2 of
+ * Both columns use **fixed rungs**. Their row windows are measured from hidden
+ * copies of the full lists and the available height. The broader measured
+ * ladders and reserved-height wells were proposed in stage 2 of
  * docs/plans/260907c-structure-mode-as-a-third-mode-behind-the-experimental-switch.md.
  * The mode is registered at stage 1 with two real columns rather than one,
  * because its Dock card describes two — a card that is false of the panel it
@@ -23,8 +23,8 @@
  *
  * ## What it is not
  *
- * **Not a second tree.** It reads `buildSummaryTree`, which is what Outline
- * reads; Hierarchy goes through `buildGeometry`. Two projections, and **one
+ * **Not a second tree.** It reads `buildSummaryTree`, which is what Structure's
+ * list face reads; the reading table goes through `buildGeometry`. Two projections, and **one
  * stored `article.tree`** underneath both — that is the contract AGENTS.md and
  * docs/project/granularity-zoom.md state, and a third view of one artefact is
  * not a divergence.
@@ -390,8 +390,8 @@ function CardRow({
 }) {
   const reveal = useTapReveal(true);
   return (
-        /* **`right`, and deliberately without `keepSide`** — where Structure's
-            other face uses it. The band is the strip *between the spine and the
+        /* **`right`, and deliberately without `keepSide`** — as Structure's
+            other face is too, since 2026-10-04 (OutlinePanel.tsx § `Row`). The band is the strip *between the spine and the
             prose* (layout.ts § the mode band), so a card thrown right lands on
             the article; thrown left it would land on a 12px rail and the window
             edge.
@@ -515,8 +515,9 @@ export function StructurePanel({
 }: {
   root: SummaryNode | null;
   /**
-   * Which row the reader is at — `LiveContext.focusRow`, the same sampler the
-   * gist columns' context panels and Outline read, so the three views can never
+   * Which row the reader is at — `LiveContext.focusRow`, the same sampler
+   * Structure's list face reads (and the gist columns' context panels read,
+   * until 2026-09-29), so the views can never
    * disagree about which section is under the focus line. That agreement is not
    * a nicety: this mode exists to be flipped between the other two, and a second
    * answer to "where am I" would make the flip land somewhere else.
@@ -577,7 +578,11 @@ export function StructurePanel({
    * nothing of its border — the trap `OutlinePanel` documents, where measuring
    * the padded box grants a candidate room it does not have.
    */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads the rows only through the DOM it just rendered, and a new set of rows is exactly when the measured heights stop describing what is on screen. Same shape as OutlinePanel's `candidates` and useColumnContext's `layoutKey`.
+  /* Re-runs on a new set of rows, which is exactly when the measured heights
+     stop describing what is on screen. (This was a hook-deps `biome-ignore`
+     calling the two row lists a trigger the effect never reads; it does read
+     them now, in `capacityFrom` below, so the dependency list is simply true
+     and the suppression suppressed nothing. Removed 2026-10-06.) */
   useLayoutEffect(() => {
     const measure = () => {
       const grid = gridRef.current;

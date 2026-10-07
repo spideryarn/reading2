@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ClientComment } from "../src/web/useComments.js";
 import type { LiveApi } from "../src/web/live/useLiveConversation.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* ------------------------------------------------------------- the mocks -- */
 
@@ -39,6 +40,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
     dictation: { ...mic, toggle: () => {} },
     readOnly: mic.transcribing,
+    busy: mic.transcribing || mic.armed,
     toggle: () => {},
   }),
 }));
@@ -50,6 +52,8 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 vi.mock("../src/web/router.js", () => ({
   useRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
   parseRoute: () => ({ kind: "read", slug: "a-piece", view: "article" }),
+  /* command-match.ts § pickKey reads it to know a page of Help. */
+  HELP_HREF: "/help",
 }));
 
 vi.mock("../src/web/lib/api.js", () => ({
@@ -69,6 +73,8 @@ vi.mock("../src/web/lib/supabase.js", () => ({
         return { data: {}, error: null };
       },
       signInWithOAuth: async () => ({ data: {}, error: null }),
+      /* lib/session.ts subscribes when it is first imported. */
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
   },
   googleSignInAvailable: false,
@@ -99,6 +105,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 /**
@@ -181,7 +188,7 @@ describe("the chat composer", () => {
     expect(e.defaultPrevented).toBe(true);
   });
 
-  /* Greg, from an iPad in Remember's tutorial, 2026-10-03 (spya-gmtt4b): *"I
+  /* Greg, from an iPad in Learn's tutorial, 2026-10-03 (spya-gmtt4b): *"I
      end up … pressing the carriage return button, and then sometimes I can
      actually press the sort of keyboard hide button because the keyboard
      doesn't disappear."* The message has gone and the answer is arriving under
@@ -357,7 +364,7 @@ describe("the chat composer", () => {
 
   async function cardText(): Promise<string> {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     const cards = document.querySelectorAll('[role="tooltip"]');
     expect(cards, "no card opened, or more than one").toHaveLength(1);
@@ -368,7 +375,7 @@ describe("the chat composer", () => {
     await act(async () => {
       el.dispatchEvent(new MouseEvent("mouseleave"));
       el.blur();
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
 
@@ -379,6 +386,7 @@ describe("the chat composer", () => {
    * unavailable; a natively disabled button would not have opened it.
    */
   it("says both keys on its card, by mouse and by keyboard, even with nothing to send", async () => {
+    vi.useFakeTimers();
     mount(false);
     const button = sendButton();
     if (!button) throw new Error("no send button");
@@ -435,6 +443,7 @@ describe("the Candidates box", () => {
           },
           loaded: true,
           loadFailed: false,
+          onReload: () => {},
           blocks: [],
           error: null,
           onAsk: (q: string) => asked.push(q),

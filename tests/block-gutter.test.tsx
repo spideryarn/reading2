@@ -20,7 +20,9 @@ import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MessagesSquare } from "lucide-react";
 import { BlockGutter } from "../src/web/BlockGutter.js";
+import { MODE_ICON } from "../src/web/mode-icons.js";
 import type { BlockId, Comment } from "../src/types.js";
 
 const ID = "spya-k3m9qt" as BlockId;
@@ -345,6 +347,16 @@ describe("the chat button", () => {
     expect(host.querySelector(".block-chat")?.classList.contains("has")).toBe(false);
   });
 
+  /* Greg, spya-vj7wv0: "change the comment icon to a chat icon (because
+     that's really what it is)". The name and the tooltip already said chat;
+     the one bubble was the part that said comment. Plan 261006i. */
+  it("wears Chat's own two bubbles, not the one that reads as a comment", () => {
+    paint();
+    const glyph = host.querySelector(".block-chat svg")?.getAttribute("class") ?? "";
+    expect(glyph).toContain("lucide-messages-square");
+    expect(MODE_ICON.chat).toBe(MessagesSquare);
+  });
+
   it("offers to open one of them, rather than promising a new one", () => {
     /* **This assertion has been red once on purpose**, the way the "?" copy
        below was. Until 2026-09-05 the chip said *"Chat with the AI about this paragraph (2
@@ -475,11 +487,12 @@ describe('the "?"', () => {
        read address-then-mark while the eye read mark-then-address; a column that
        truncates cannot afford that, because the stylesheet now picks "the first
        k that fit" with `:nth-child`. So this assertion is load-bearing: move an
-       element in the JSX and you have changed the layout, not the tab order.
+       element in the JSX and you have changed the layout as well as tab order.
 
        The mark leads because it is the reader's own — Greg's call, asked
-       directly, 2026-09-05 — so a note is never the thing that falls off a short
-       paragraph. styles.css § the gutter has the table. */
+       directly, 2026-09-05 — so it gets the first visible slot whenever an
+       actual control fits. A one-slot row with multiple controls shows the
+       "…" instead, with the mark behind it. gutter.css § the gutter has the table. */
     paint([comment("c1", 5)]);
     /* The reading-time strip is a child too, and not a control: it is filtered
        out here and pinned last by the test below, because anywhere earlier it

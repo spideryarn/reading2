@@ -11,13 +11,14 @@
  * npx tsx evals/simple/probe.ts report > evals/simple/results-260930.md    # free
  * ```
  *
- * `--power high` writes on the high-power model (plan 261001p), and
+ * A run writes on the high-power model, as a press does; `--power standard`
+ * writes on the other (plan 261001p; the default was `standard` until 2026-10-06), and
  * `--guard off` measures the writer alone; without `--guard` the probe does
  * what a press does, `SIMPLE_CHECK_ENABLED`.
  *
  * **Since `simple/2`** (plan 261001b) an arm is `<effort>-<reader>[-<tag>]`,
  * the reader being `none`, `about`, `goalA` or `goalB` from readers.json, and
- * all three levels are recorded; the ELI12 knob went with the real levels. The
+ * all levels are recorded (Brief and Fuller since 2026-10-04); the ELI12 knob went with the real levels. The
  * `…-15-…` arms under evals/results/simple/ are the older prompt, kept as the
  * `before` side. What follows describes the first probe.
  *
@@ -58,15 +59,28 @@ interface ArmFile {
   costUsd: number | null;
   tokens: { input: number; output: number; reasoning: number | null } | null;
   bodyWords: number;
+  /** Since plan 261005b: the length band the write was asked in. Absent before. */
+  band?: string;
   bodyBlocks: number;
   ok: boolean;
   error?: string;
+  /**
+   * The `simple` level's words and paragraphs: the only level before
+   * `simple/2`, the middle of three until 2026-10-04, and **absent in results
+   * written since**, when it stopped being written (plan 261004f).
+   */
   words?: number;
-  /** The `simple` level — the only level before `simple/2`. */
   paragraphs?: { text: string; ids: string[] }[];
   /** `simple/2` arms: who it was written for, and the `fuller` level. */
   reader?: string;
   fullerWords?: number;
+  /**
+   * When each level was final, from the write's start: valid, checked and past
+   * any retry (`onLevel`, plan 261004f stage 2). Present on a failed write too
+   * for a level that landed before the other was lost. Absent before 2026-10-04.
+   */
+  briefReadyMs?: number;
+  fullerReadyMs?: number;
   fuller?: { text: string; ids: string[] }[];
   /** Since the slider (7J): the `brief` level. */
   briefWords?: number;
@@ -76,7 +90,7 @@ interface ArmFile {
    * Since plan 261001h, three things that could move between time-separated arms
    * (Sol's plan review there): the model id actually selected for the call,
    * Simple's input fingerprint (rendered article plus profile-free user prompt),
-   * and a hash of the three rendered system prompts. These live on failed files
+   * and a hash of the rendered system prompts. These live on failed files
    * too.
    */
   model?: string;
@@ -139,8 +153,8 @@ interface RunOpts {
 }
 
 async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
-  const m = /^(low|medium|high|max)-(none|about|goalA|goalB)(-[\w]+)?$/.exec(arm);
-  if (!m) throw new Error("--arm must be <low|medium|high|max>-<none|about|goalA|goalB>[-<tag>]");
+  const m = /^(low|medium|high)-(none|about|goalA|goalB)(-[\w]+)?$/.exec(arm);
+  if (!m) throw new Error("--arm must be <low|medium|high>-<none|about|goalA|goalB>[-<tag>]");
   const effort = m[1]!;
   const reader = m[2] as Reader;
   const pitch = 15;
@@ -156,7 +170,6 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
   const { costStore } = await import("../../src/store/ai-calls.js");
   const { closeDb } = await import("../../src/db/client.js");
   const sourceSha256 = createHash("sha256").update(fs.readFileSync(SOURCE)).digest("hex");
-  const systemsSha256 = createHash("sha256").update(JSON.stringify(simple.SIMPLE_SYSTEMS)).digest("hex");
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   await runAsOwner(environmentOwnerId(), async () => {
     await Promise.all(
@@ -166,6 +179,14 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
         const article = await loadArticle(slug);
         const body = article.blocks.filter(isBodyEvidence);
         const articleHash = simple.inputFingerprint(article.blocks, article.tree, article.meta);
+        /* The length band production picks for this body, and a hash of the
+           pair of system prompts that band sends (plan 261005b; GPT Sol's plan
+           review, F1). A file from before hashed the one pair there was. */
+        const bodyWords = body.reduce((n, b) => n + b.words, 0);
+        const band = simple.evidenceBand(body);
+        const systemsSha256 = createHash("sha256")
+          .update(JSON.stringify(simple.SIMPLE_SYSTEMS_BY_BAND[band]))
+          .digest("hex");
         const base = {
           arm,
           effort,
@@ -174,7 +195,8 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
           version: simple.SIMPLE_PROMPT_VERSION,
           sourceSha256,
           at: new Date().toISOString(),
-          bodyWords: body.reduce((n, b) => n + b.words, 0),
+          bodyWords,
+          band,
           bodyBlocks: body.length,
           /* The resolved call model, including a one-off eval override — not the
              stable generator stamp stored on production artefacts. */
@@ -185,10 +207,15 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
           guard: opts.guard ?? SIMPLE_CHECK_ENABLED,
         };
         const started = Date.now();
+        const readyMs: { brief?: number; fuller?: number } = {};
+        const ready = () => ({
+          ...(readyMs.brief === undefined ? {} : { briefReadyMs: readyMs.brief }),
+          ...(readyMs.fuller === undefined ? {} : { fullerReadyMs: readyMs.fuller }),
+        });
         let file: ArmFile;
         let spent: { costUsd: number | null; tokens: ArmFile["tokens"] } = { costUsd: null, tokens: null };
         const onDone = (report: { calls: { cost: { source: string; costNanos?: number; computedCostNanos?: number }; inputTokens: number | null; outputTokens: number | null; reasoningTokens: number | null }[] }) => {
-          /* Summed over every call: since `simple/2` a run is three, one per level. */
+          /* Summed over every writer and checker call, including retries. */
           if (report.calls.length === 0) return;
           let nanosTotal: number | null = 0;
           const tokens = { input: 0, output: 0, reasoning: 0 as number | null };
@@ -211,6 +238,9 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
                 profile: await readerProfile(reader, slug),
                 power: opts.power,
                 ...(opts.guard === undefined ? {} : { guard: opts.guard }),
+                onLevel: (level) => {
+                  readyMs[level] = Date.now() - started;
+                },
               }),
             {
               attribution: { scopeKind: "eval", ownerId: environmentOwnerId() },
@@ -222,12 +252,11 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
             ...base,
             wallMs: Date.now() - started,
             ...spent,
+            ...ready(),
             ok: true,
             reader,
-            words: result.words.simple,
             fullerWords: result.words.fuller,
             briefWords: result.words.brief,
-            paragraphs: result.simpleSummary.levels.simple,
             fuller: result.simpleSummary.levels.fuller,
             brief: result.simpleSummary.levels.brief,
             dropped: { ...result.dropped },
@@ -240,13 +269,14 @@ async function run(arm: string, slugs: string[], opts: RunOpts): Promise<void> {
             ...base,
             wallMs: Date.now() - started,
             ...spent,
+            ...ready(),
             ok: false,
             error: err instanceof Error ? err.message : String(err),
           };
         }
         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
         console.log(
-          `${arm} ${slug}: ${file.ok ? `${file.paragraphs?.length} paragraphs, ${file.words} words` : `FAILED ${file.error}`}, ${(file.wallMs / 1000).toFixed(1)}s, $${file.costUsd?.toFixed(4) ?? "?"}`,
+          `${arm} ${slug}: ${file.ok ? `Brief ${file.briefWords} words at ${((file.briefReadyMs ?? 0) / 1000).toFixed(1)}s, Fuller ${file.fullerWords} words at ${((file.fullerReadyMs ?? 0) / 1000).toFixed(1)}s` : `FAILED ${file.error}`}, ${(file.wallMs / 1000).toFixed(1)}s, $${file.costUsd?.toFixed(4) ?? "?"}`,
         );
       }),
     );
@@ -309,7 +339,8 @@ function report(): void {
       }
       if (f.brief) lines.push("**brief**", "");
       for (const p of f.brief ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
-      if (f.fuller) lines.push("**simple**", "");
+      /* The middle level: only in a result written before 2026-10-04 (plan 261004f). */
+      if (f.fuller && f.paragraphs) lines.push("**simple**", "");
       for (const p of f.paragraphs ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
       if (f.fuller) lines.push("**fuller**", "");
       for (const p of f.fuller ?? []) lines.push(`${p.text}`, "", `<sub>${p.ids.join(" ")}</sub>`, "");
@@ -331,7 +362,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
     const arm = flags.get("--arm");
     if (!arm) throw new Error("run needs --arm <effort>-<reader>");
-    const power = flags.get("--power") ?? "standard";
+    /* `high` unless told otherwise, since 2026-10-06: Summary is always
+       written on the high-power model (`ALWAYS_HIGH_POWER`, src/models.ts), and
+       a forgotten flag had ten writes measure a model no press uses (plan
+       261005b § Brief by band). */
+    const power = flags.get("--power") ?? "high";
     if (power !== "standard" && power !== "high") throw new Error("--power must be standard or high");
     const guardFlag = flags.get("--guard");
     if (guardFlag !== undefined && guardFlag !== "on" && guardFlag !== "off") throw new Error("--guard must be on or off");

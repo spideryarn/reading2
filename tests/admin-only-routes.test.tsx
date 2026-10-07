@@ -34,7 +34,7 @@ import { adminOnly, parseRoute } from "../src/web/router.js";
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 vi.mock("../src/web/lib/supabase.js", () => ({
@@ -87,6 +87,8 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
         ? '{"reports":[],"hasMore":false}'
         : url.startsWith("/api/admin/vouchers")
           ? '{"vouchers":[]}'
+          : url.startsWith("/api/admin/costs")
+            ? '{"since":null,"until":null,"label":"all recorded calls","rows":[],"owners":[],"emailsAvailable":true}'
           : "{}";
   return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
 }) as typeof fetch;
@@ -103,6 +105,9 @@ globalThis.fetch = (async (input: RequestInfo | URL) => {
    has, so a badly written loader still fails here. */
 await import("../src/web/AdminPage.js");
 await import("../src/web/DesignPage.js");
+/* The costs page is the heaviest of them (the table, the charts), and missed
+   the bounded wait below when it was left to load on demand. */
+await import("../src/web/AdminCostsPage.js");
 
 const { App } = await import("../src/web/App.js");
 
@@ -127,13 +132,25 @@ async function show(path: string) {
 
      Bounded, and it gives up **loudly** — the assertion that follows is the one
      that fails, naming the page it did not get. A wait that returned quietly on
-     a timeout would turn every one of these into a test of the spinner. */
-  for (let i = 0; i < 50 && !host.querySelector("h1"); i++) {
+     a timeout would turn every one of these into a test of the spinner.
+
+     **Bounded by the clock, and the thing waited for is the heading's text.**
+     Until 2026-10-06 this was fifty turns of `setTimeout(1)` — about 50 ms, a
+     count standing in for a deadline — and on a loaded box the chunk took
+     longer: 2 of 21 recorded readiness runs failed here with an empty heading,
+     which is the Suspense fallback. Each turn is still its own short `act`,
+     because React holds the lazy page's commit until the `act` it was scheduled
+     in has closed; one long `act` around the whole wait would wait for itself. */
+  const deadline = Date.now() + PAGE_WAIT_MS;
+  while (!heading() && Date.now() < deadline) {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      await new Promise((resolve) => setTimeout(resolve, 5));
     });
   }
 }
+
+/** How long a lazy page may take to arrive. Generous: it is only spent on a failure. */
+const PAGE_WAIT_MS = 5_000;
 
 /** The page's own name for itself — the shelf, the design reference, or Admin. */
 const heading = () => host.querySelector("h1")?.textContent ?? "";
@@ -183,6 +200,12 @@ describe("/admin still refuses exactly as it did", () => {
     expect(heading()).toBe("Spideryarn");
   });
 
+  it("refuses the costs page to a reader", async () => {
+    session.user = READER;
+    await show("/admin/costs");
+    expect(heading()).toBe("Spideryarn");
+  });
+
   it("refuses the vouchers page to a reader", async () => {
     session.user = READER;
     await show("/admin/vouchers");
@@ -210,6 +233,7 @@ describe("the pages that load on demand", () => {
     ["/admin/users", "Users"],
     ["/admin/feedback", "Feedback"],
     ["/admin/vouchers", "Gift vouchers"],
+    ["/admin/costs", "Costs"],
     ["/design", "Design reference"],
   ];
   for (const [path, name] of variants) {
@@ -229,6 +253,8 @@ describe("the list itself", () => {
     /* The one admin page that writes (gift vouchers, plan 261001m). */
     expect(parseRoute("/admin/vouchers")).toEqual({ kind: "admin", page: "vouchers" });
     expect(adminOnly(parseRoute("/admin/vouchers"))).toBe(true);
+    expect(parseRoute("/admin/costs")).toEqual({ kind: "admin", page: "costs" });
+    expect(adminOnly(parseRoute("/admin/costs"))).toBe(true);
     expect(adminOnly(parseRoute("/design"))).toBe(true);
     for (const open of ["/", "/profile", "/privacy", "/pricing", "/features", "/contact", "/help", "/asdf"]) {
       expect(adminOnly(parseRoute(open)), open).toBe(false);

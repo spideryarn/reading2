@@ -1,0 +1,164 @@
+probe-nber-osf-redirects, 2026-10-06T14:32:20.301Z
+command: cd /var/tmp/spideryarn-worktrees/qi-fbrh4kck-asked-for-address && npx tsx /tmp/claude-1000/-home-greg-code-spideryarn2/46e28a5e-437f-4d14-9085-71da6fcfd506/scratchpad/probe-nber-osf.ts
+fetcher: fetchDocument from src/fetch.ts; 28 requests via the script (plus 3 curl and 1 fetch for discovery)
+
+A old landing w30000
+    asked https://www.nber.org/papers/w30000
+    OK status=200 kind=html bytes=95475 ctype=text/html; charset=UTF-8 title="The US COVID-19 Baby Bust and Rebound | NBER" loginish=true
+    ended https://www.nber.org/papers/w30000
+    chain https://www.nber.org/papers/w30000
+A old PDF w30000
+    asked https://www.nber.org/system/files/working_papers/w30000/w30000.pdf
+    OK status=200 kind=pdf bytes=1077387 ctype=application/pdf first5="%PDF-"
+    ended https://www.nber.org/system/files/working_papers/w30000/w30000.pdf
+    chain https://www.nber.org/system/files/working_papers/w30000/w30000.pdf
+A newest landing w35846
+    asked https://www.nber.org/papers/w35846
+    OK status=200 kind=html bytes=89219 ctype=text/html; charset=UTF-8 title="Are Prediction Markets Politically Biased? | NBER" loginish=true
+    ended https://www.nber.org/papers/w35846
+    chain https://www.nber.org/papers/w35846
+A newest PDF w35846
+    asked https://www.nber.org/system/files/working_papers/w35846/w35846.pdf
+    OK status=200 kind=pdf bytes=870564 ctype=application/pdf first5="%PDF-"
+    ended https://www.nber.org/system/files/working_papers/w35846/w35846.pdf
+    chain https://www.nber.org/system/files/working_papers/w35846/w35846.pdf
+A newest-2 landing w35838
+    asked https://www.nber.org/papers/w35838
+    OK status=200 kind=html bytes=89484 ctype=text/html; charset=UTF-8 title="When Does Bad News Stick? Topic-Level Asymmetry in Narrative Dynamics | NBER" loginish=true
+    ended https://www.nber.org/papers/w35838
+    chain https://www.nber.org/papers/w35838
+A newest-2 PDF w35838
+    asked https://www.nber.org/system/files/working_papers/w35838/w35838.pdf
+    OK status=200 kind=pdf bytes=1058952 ctype=application/pdf first5="%PDF-"
+    ended https://www.nber.org/system/files/working_papers/w35838/w35838.pdf
+    chain https://www.nber.org/system/files/working_papers/w35838/w35838.pdf
+A DOI w30000
+    asked https://doi.org/10.3386/w30000
+    OK status=200 kind=pdf bytes=1077387 ctype=application/pdf first5="%PDF-"
+    ended https://www.nber.org/system/files/working_papers/w30000/w30000.pdf
+    chain https://doi.org/10.3386/w30000 -> http://www.nber.org/papers/w30000.pdf -> https://www.nber.org/papers/w30000.pdf -> https://www.nber.org/system/files/working_papers/w30000/w30000.pdf
+    resolve(asked) = null
+    resolve(final) = null
+A no-www landing w30000
+    asked https://nber.org/papers/w30000
+    OK status=200 kind=html bytes=95475 ctype=text/html; charset=UTF-8 title="The US COVID-19 Baby Bust and Rebound | NBER" loginish=true
+    ended https://www.nber.org/papers/w30000
+    chain https://nber.org/papers/w30000 -> https://www.nber.org/papers/w30000
+A http landing w30000
+    asked http://www.nber.org/papers/w30000
+    OK status=200 kind=html bytes=95475 ctype=text/html; charset=UTF-8 title="The US COVID-19 Baby Bust and Rebound | NBER" loginish=true
+    ended https://www.nber.org/papers/w30000
+    chain http://www.nber.org/papers/w30000 -> https://www.nber.org/papers/w30000
+B landing psyarxiv/np2vd
+    asked https://osf.io/preprints/psyarxiv/np2vd
+    OK status=200 kind=html bytes=4207 ctype=text/html title="OSF" loginish=false
+    ended https://osf.io/preprints/psyarxiv/np2vd
+    chain https://osf.io/preprints/psyarxiv/np2vd
+B download-1 /download/np2vd/
+    asked https://osf.io/download/np2vd/
+    OK status=200 kind=pdf bytes=962101 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e [query: signed, 650 chars]
+    chain https://osf.io/download/np2vd/ -> https://files.osf.io/v1/resources/np2vd_v3/providers/osfstorage/6ac39183a97724c06a496d94 -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e [query: signed, 650 chars]
+B download-2 /np2vd/download
+    asked https://osf.io/np2vd/download
+    OK status=200 kind=pdf bytes=962101 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e [query: signed, 650 chars]
+    chain https://osf.io/np2vd/download -> https://osf.io/download/np2vd -> https://osf.io/download/np2vd/ -> https://files.osf.io/v1/resources/np2vd_v3/providers/osfstorage/6ac39183a97724c06a496d94 -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e [query: signed, 650 chars]
+B download-1 REPEAT (+10s) /download/np2vd/
+    asked https://osf.io/download/np2vd/
+    OK status=200 kind=pdf bytes=962101 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e [query: signed, 660 chars]
+    chain https://osf.io/download/np2vd/ -> https://files.osf.io/v1/resources/np2vd_v3/providers/osfstorage/6ac39183a97724c06a496d94 -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/8308e2a4232f89beefe68d643c90e16fc257d1d77a4f94084a2ce80fa9139f3e [query: signed, 660 chars]
+    same final path (ignoring query) on repeat: true
+B landing osf/vxh6m
+    asked https://osf.io/preprints/osf/vxh6m
+    OK status=200 kind=html bytes=4207 ctype=text/html title="OSF" loginish=false
+    ended https://osf.io/preprints/osf/vxh6m
+    chain https://osf.io/preprints/osf/vxh6m
+B download-1 /download/vxh6m/
+    asked https://osf.io/download/vxh6m/
+    OK status=200 kind=pdf bytes=449067 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a [query: signed, 614 chars]
+    chain https://osf.io/download/vxh6m/ -> https://files.osf.io/v1/resources/vxh6m_v4/providers/osfstorage/6ac3f2faeec363cd1ed1ec4c -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a [query: signed, 614 chars]
+B download-2 /vxh6m/download
+    asked https://osf.io/vxh6m/download
+    OK status=200 kind=pdf bytes=449067 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a [query: signed, 612 chars]
+    chain https://osf.io/vxh6m/download -> https://osf.io/download/vxh6m -> https://osf.io/download/vxh6m/ -> https://files.osf.io/v1/resources/vxh6m_v4/providers/osfstorage/6ac3f2faeec363cd1ed1ec4c -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a [query: signed, 612 chars]
+B download-1 REPEAT (+10s) /download/vxh6m/
+    asked https://osf.io/download/vxh6m/
+    OK status=200 kind=pdf bytes=449067 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a [query: signed, 614 chars]
+    chain https://osf.io/download/vxh6m/ -> https://files.osf.io/v1/resources/vxh6m_v4/providers/osfstorage/6ac3f2faeec363cd1ed1ec4c -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/cf99ef1bdc4aab1f8793e67dc51fcc38e5daff1608596339a5455110d18a108a [query: signed, 614 chars]
+    same final path (ignoring query) on repeat: true
+B landing socarxiv/xwktf
+    asked https://osf.io/preprints/socarxiv/xwktf
+    OK status=200 kind=html bytes=4207 ctype=text/html title="OSF" loginish=false
+    ended https://osf.io/preprints/socarxiv/xwktf
+    chain https://osf.io/preprints/socarxiv/xwktf
+B download-1 /download/xwktf/
+    asked https://osf.io/download/xwktf/
+    OK status=200 kind=pdf bytes=485358 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/4fec667aaab9e1fe97bffb4bf7c91364dd398dc13e92833bd74b395368a28c4b [query: signed, 598 chars]
+    chain https://osf.io/download/xwktf/ -> https://files.osf.io/v1/resources/xwktf_v1/providers/osfstorage/6ac4fcb4eedde6ee59265b6c -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/4fec667aaab9e1fe97bffb4bf7c91364dd398dc13e92833bd74b395368a28c4b [query: signed, 598 chars]
+B download-2 /xwktf/download
+    asked https://osf.io/xwktf/download
+    OK status=200 kind=pdf bytes=485358 ctype=application/octet-stream first5="%PDF-"
+    ended https://storage.googleapis.com/cos-osf-prod-files-us-east1/4fec667aaab9e1fe97bffb4bf7c91364dd398dc13e92833bd74b395368a28c4b [query: signed, 594 chars]
+    chain https://osf.io/xwktf/download -> https://osf.io/download/xwktf -> https://osf.io/download/xwktf/ -> https://files.osf.io/v1/resources/xwktf_v1/providers/osfstorage/6ac4fcb4eedde6ee59265b6c -> https://storage.googleapis.com/cos-osf-prod-files-us-east1/4fec667aaab9e1fe97bffb4bf7c91364dd398dc13e92833bd74b395368a28c4b [query: signed, 594 chars]
+B _v1 landing psyarxiv/np2vd_v1
+    asked https://osf.io/preprints/psyarxiv/np2vd_v1
+    OK status=200 kind=html bytes=4207 ctype=text/html title="OSF" loginish=false
+    ended https://osf.io/preprints/psyarxiv/np2vd_v1
+    chain https://osf.io/preprints/psyarxiv/np2vd_v1
+B DOI 10.31234/osf.io/np2vd
+    asked https://doi.org/10.31234/osf.io/np2vd
+    FAIL code=not-found status=404 retryable=false
+    msg=There's nothing at that address.
+B psyarxiv.com/np2vd
+    asked https://psyarxiv.com/np2vd
+    OK status=200 kind=html bytes=4207 ctype=text/html title="OSF" loginish=false
+    ended https://osf.io/preprints/psyarxiv/np2vd
+    chain https://psyarxiv.com/np2vd -> https://osf.io/preprints/psyarxiv/np2vd
+    resolve(asked) = null
+    resolve(final) = null
+C arXiv DOI
+    asked https://doi.org/10.48550/arXiv.1706.03762
+    OK status=200 kind=html bytes=43644 ctype=text/html; charset=utf-8 title="[1706.03762] Attention Is All You Need" loginish=true
+    ended https://arxiv.org/abs/1706.03762
+    chain https://doi.org/10.48550/arXiv.1706.03762 -> https://arxiv.org/abs/1706.03762
+    resolve(asked) = arxiv arxiv.org/abs/1706.03762
+    resolve(final) = arxiv key=arxiv.org/abs/1706.03762; final equals a candidate: false
+C ACL DOI
+    asked https://doi.org/10.18653/v1/N19-1423
+    OK status=200 kind=html bytes=42297 ctype=text/html; charset=utf-8 title="BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding" loginish=false
+    ended https://aclanthology.org/N19-1423/
+    chain https://doi.org/10.18653/v1/N19-1423 -> https://aclanthology.org/N19-1423 -> https://aclanthology.org/N19-1423/
+    resolve(asked) = acl aclanthology.org/N19-1423
+    resolve(final) = acl key=aclanthology.org/N19-1423; final equals a candidate: false
+C arxiv http abs v5
+    asked http://arxiv.org/abs/1706.03762v5
+    OK status=200 kind=html bytes=43744 ctype=text/html; charset=utf-8 title="[1706.03762v5] Attention Is All You Need" loginish=true
+    ended https://arxiv.org/abs/1706.03762v5
+    chain http://arxiv.org/abs/1706.03762v5 -> https://arxiv.org/abs/1706.03762v5
+    resolve(asked) = arxiv arxiv.org/abs/1706.03762v5
+    resolve(final) = arxiv key=arxiv.org/abs/1706.03762v5; final equals a candidate: false
+C semanticscholar /arxiv/
+    asked https://www.semanticscholar.org/arxiv/1706.03762
+    FAIL code=not-found status=404 retryable=false
+    msg=There's nothing at that address.
+C nature DOI
+    asked https://doi.org/10.1038/nature14539
+    OK status=200 kind=html bytes=397333 ctype=text/html; charset=utf-8 title="Deep learning | Nature" loginish=true
+    ended https://www.nature.com/articles/nature14539 [query: 69 chars]
+    chain https://doi.org/10.1038/nature14539 -> https://www.nature.com/articles/nature14539 -> https://idp.nature.com/authorize [query: 104 chars] -> https://idp.nature.com/transit [query: 108 chars] -> https://www.nature.com/articles/nature14539 [query: 69 chars]
+    resolve(asked) = null
+    resolve(final) = null
+
+NOTES (added by hand)
+- Discovery: nber.org/papers via fetchDocument (html, no paper links in it: JS listing); then 2 curl requests, one to nber.org/papers, one to nber.org/api/v1/working_page_listing/... (newest: w35846, w35838, both "newthisweek": true, October 2026); one curl to api.osf.io for a SocArXiv id (xwktf, published 2026-10-06).
+- No NBER paper found that was held: both newest papers' PDF addresses answered 200 application/pdf starting %PDF-. Not found = not tested.
+- OSF landing pages are the same 4207-byte JS shell (title "OSF") for every id and provider; nothing in them names the paper.
+- Not done: PMLR/JMLR/NeurIPS/CVF DOI search (not searched; skipped), short links (skipped, none known), only one SocArXiv id tried.
+- ACL DOI: final https://aclanthology.org/N19-1423/ equals the paper's canonicalUrl (landing), not a candidate (the only candidate is the .pdf).
+- arXiv: final https://arxiv.org/abs/<id> equals canonicalUrl, not a candidate (candidates are /html/ and /pdf/).

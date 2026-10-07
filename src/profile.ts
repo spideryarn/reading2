@@ -216,8 +216,29 @@ Skipping the basics is correct. Announcing that you are skipping them is not.`;
  * `readerPositionLine` has in src/article-prompt.ts, and for the same reason:
  * a suffix that gains a newline is a suffix that changed.
  */
-export function profileSection(rendered: string | null): string {
+export function profileSection(
+  rendered: string | null,
+  /**
+   * `"with-the-reader"` is Explore's (src/converse.ts § EXPLORE_SYSTEM), the
+   * one conversation whose subject is the reader's own thinking: its prompt
+   * tells the model to speak to them and to use their reason for reading, and
+   * a reminder beside the question saying "Do not address the reader"
+   * contradicted it (GPT Sol, round two of plan 261003l, CR-18). Every other
+   * caller gets the bytes it always had.
+   */
+  stance: "about-the-article" | "with-the-reader" = "about-the-article",
+): string {
   if (!rendered) return "";
+  if (stance === "with-the-reader") {
+    return `=== WHO IS READING THIS ===
+
+${rendered}
+
+Let this change what you lead with and how much you explain. It changes nothing
+about what the article says. You are talking with this reader: speak to them,
+and use the reason they gave for reading where it gives them a case of their
+own. Do not recite this back to them.`;
+  }
   return `=== WHO IS READING THIS ===
 
 ${rendered}
@@ -246,33 +267,40 @@ export function hashProfile(rendered: string): string {
 /**
  * Is an artefact's recorded profile the one we would write from now?
  *
- * Three states in `recorded`, and only one of them is stale:
+ * Three states in `recorded`:
  *
  * | `recorded` | means | stale? |
  * |---|---|---|
  * | `undefined` | written before this feature existed | **no** |
- * | `null` | written deliberately *without* a profile | **no** |
+ * | `null` | written without a profile | once they have one |
  * | a hash | written from that profile | only if it differs from `now` |
  *
- * **`null` is never stale**, and that line is the whole design. A reader who
- * deliberately generated a plain glossary must not be nagged about it for ever
- * — the checkbox that produced it would then be a control whose result the app
- * immediately complains about. `undefined` is never stale for a gentler reason:
- * nobody's existing artefacts should light up with a warning about a profile
- * they never had.
+ * **A first profile counts as a change** — Greg, 2026-10-05: "B treat a first
+ * profile as a change". Until then `null` was never stale, a rule from when
+ * writing without a profile was a choice (a *Use your profile* box, removed
+ * 2026-09-13): a reader who had asked for a plain glossary was not to be
+ * nagged about it. A first profile now offers the rewrite. Plain-list top-ups
+ * still run without the current profile, and older opt-outs exist, so `null`
+ * says only "written without one". `null` against `null` is still nothing to say.
  *
- * And **clearing the profile marks nothing stale**, which falls out of the same
- * rule: `now` is `null`, and a recorded hash compared against `null` would say
- * "changed". It does not, because you have not changed what you want from the
- * article — you have stopped telling us, and that is not a reason to rewrite
- * anything.
+ * `undefined` is never stale: nobody's oldest artefacts should light up about
+ * a profile they never had, and nothing can say what they were written with.
+ * It is told from `null` by the document itself: direct writers stamp a hash
+ * or null, while Illustrated preserves its Sketch's stamp, including absence.
+ * The stamp is a field of the stored JSON rather than a column.
+ *
+ * And **clearing the profile marks nothing stale**: `now` is `null`, and a
+ * recorded hash compared against `null` would say "changed". It does not,
+ * because you have not changed what you want from the article — you have
+ * stopped telling us, and that is not a reason to rewrite anything.
+ *
+ * This only ever *offers* a rewrite. Nothing is rewritten by it.
  */
 export function profileIsStale(
   recorded: string | null | undefined,
   now: string | null,
 ): boolean {
-  if (recorded === undefined || recorded === null) return false;
+  if (recorded === undefined) return false;
   if (now === null) return false;
   return recorded !== now;
 }
-

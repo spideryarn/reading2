@@ -7,9 +7,10 @@
  *
  * ## Three decisions, and none of them is cosmetic
  *
- * **It is the band's, not a sub-mode's.** A hidden instruction is a fact about
- * the document, and it bears on Criteria, Claims, Mirror and Candidates alike.
- * So `RefereeBand` holds it and every sub-mode is drawn underneath the answer.
+ * **It is fetched by the band, then shown in one sub-mode.** A hidden
+ * instruction is a fact about the document, so `RefereeBand` holds the answer
+ * across chip changes and marks Hidden text from every other panel. The full
+ * answer is drawn only in Hidden text; switching chips never fetches it again.
  *
  * **It never blocks the band.** The scan takes hundreds of milliseconds on a
  * short paper and about nine seconds on a 1.3 MB one, so the band opens at once
@@ -28,12 +29,30 @@
  * There is no retry and no refetch. The answer is a pure function of bytes that
  * are already stored, so a second request would return the same thing; a failure
  * is a transport failure, and reloading the page is the whole repair.
+ *
+ * **But the read has an end.** `apiFetch` has no deadline of its own, so until
+ * 2026-10-04 a request that never answered left the notice saying it was
+ * checking the document for ever. The read now goes through `openingRead`
+ * (lib/opening-read.ts) — race, then abort — with its own deadline and its own
+ * sentence, `SCAN_TIMED_OUT`, which says what the paragraph above says: reload
+ * and it asks again. tests/source-scan-read-has-a-deadline.test.tsx.
  */
 import { useEffect, useState } from "react";
 
 import type { SourceScan } from "../injection-scan-types.js";
-import { apiFetch, readJson } from "./lib/api.js";
+import { SCAN_TIMED_OUT } from "../messages.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { openingRead } from "./lib/opening-read.js";
+
+/**
+ * How long the band waits for the scan before saying it did not finish.
+ *
+ * Not the saved lists' fifteen seconds (`OPENING_READ_DEADLINE_MS`): a scan is
+ * about nine on a 1.3 MB paper, before a cold start, and giving up on an answer
+ * that was coming would put a false "did not finish" where a finding should be.
+ * A minute is several times the slowest honest answer and still an end.
+ */
+export const SOURCE_SCAN_DEADLINE_MS = 60_000;
 
 /**
  * What the notice has to draw, as four arms it must all handle.
@@ -56,8 +75,11 @@ export function useSourceScan(slug: string): SourceScanState {
   useEffect(() => {
     let live = true;
     setState({ state: "loading" });
-    apiFetch(`/api/referee/scan/${encodeURIComponent(slug)}`)
-      .then((r) => readJson<{ scan?: SourceScan | null; error?: string }>(r))
+    const read = openingRead<{ scan?: SourceScan | null; error?: string }>(
+      `/api/referee/scan/${encodeURIComponent(slug)}`,
+      { deadlineMs: SOURCE_SCAN_DEADLINE_MS, timedOut: SCAN_TIMED_OUT.message },
+    );
+    read.body
       .then((body) => {
         if (!live) return;
         if (body.error) {
@@ -77,7 +99,10 @@ export function useSourceScan(slug: string): SourceScanState {
         setState({ state: "failed", error: describeFetchFailure(e) });
       });
     return () => {
+      /* `live` first: the abort below rejects the read, and that rejection is
+         this effect's own doing rather than a failure to show anybody. */
       live = false;
+      read.abandon();
     };
   }, [slug]);
 

@@ -49,8 +49,7 @@
  * Still no marks in the prose and no `?faq=` selection — `selectPassages`
  * answers `NOTHING` (src/web/reader/passages.ts).
  */
-import { BadgeQuestionMark, RotateCw, TriangleAlert } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BadgeQuestionMark, TriangleAlert } from "lucide-react";
 import type { BlockId, FaqDropped, FaqQuestion } from "../types.js";
 import type { UseFaq } from "./useFaq.js";
 import type { PublicFaq } from "../public-types.js";
@@ -73,7 +72,10 @@ import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { useRenderCount } from "./perf.js";
 import { ScoreBars } from "./ScoreBars.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
@@ -154,7 +156,15 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
   const ready = faq !== null && (owner === null || owner.status === "ready");
   /* The owner's alone: `dropped` does not cross (src/public-types.ts § PublicFaq). */
   const dropped = owner?.faq && ready ? droppedNote(owner.faq.dropped) : null;
-  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — IdeasPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  const showJob =
+    owner !== null &&
+    ready &&
+    !owner.stale &&
+    (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
 
   /**
    * @param again whether this is the button beside a list that is already
@@ -163,18 +173,22 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
    *   useIdeas.ts § `ensure`.
    */
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new questions haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="faq"
       icon={<BadgeQuestionMark size={13} />}
-      runningLabel="Reading…"
+      runningLabel="Finding…"
     />
   );
 
@@ -201,25 +215,15 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
          SPIDERYARN-READING2-62 (`FaqAbout`). */
       foot={showJob ? <div className="faq-foot">{run("Find them again", true)}</div> : null}
     >
-      {owner?.error && (
-        <div className="faq-read-error">
-          <p className="gloss-error" role="alert">
-            {owner.error}
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void owner.retryRead()}>
-            <RotateCw size={13} />
-            Try again
-          </Button>
-        </div>
-      )}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the questions…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has asked this piece its questions yet.</p>
+          <p>Nobody has asked this one its questions yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article, and it takes tens of seconds. Written once and kept —
+            One model call over the whole article, and it takes tens of seconds. Written once and kept —
             you will not be asked again unless the article changes.
           </p>
           {run("Find the questions")}

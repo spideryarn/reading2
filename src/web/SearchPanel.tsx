@@ -20,7 +20,7 @@
  * pains to make obvious, is **what pressing the key does**. In `words` the
  * results are already there as you type: free, instant, no round trip. In
  * `meaning` nothing happens until you submit, because submitting spends a model
- * call and half a minute. A box that quietly billed you per keystroke would be
+ * call and about ten seconds, sometimes twenty or more. A box that quietly billed you per keystroke would be
  * the worst possible version of this feature.
  *
  * ## Why the results list is not a summary
@@ -97,6 +97,7 @@ import {
   Sparkles,
   Trash2,
   Type,
+  X,
   Zap,
 } from "lucide-react";
 import { worthRetrying } from "../messages.js";
@@ -114,10 +115,12 @@ import { asksTheServer, type HitOrder, type Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { useRenderCount } from "./perf.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { isImeComposing } from "./key-chord.js";
+import { media } from "./media.js";
 import { createSearchDraft, type SearchDraft, useDraftText } from "./search-draft.js";
 
 /**
@@ -187,6 +190,18 @@ export type SearchAccess =
       error: string | null;
       /** Requests this tab started and still has in flight, by run id. */
       running: ReadonlySet<string>;
+      /**
+       * **Quick rows whose thorough search is out and will replace them**
+       * (plan 261004l). Such a row says so in place of its *thorough* button.
+       */
+      upgrading?: ReadonlySet<string>;
+      /**
+       * Those thorough searches' own rows, which are **not** in `runs` until
+       * they are complete. Here only so the "already running" keys include
+       * them: *find* on the meaning matcher for the same words is disabled
+       * rather than silently refused (plan 261004l, review F6).
+       */
+      hidden?: readonly SavedSearch[];
       /**
        * Ask a question. `sourceId` is *thorough*'s: the quick row this
        * meaning search replaces, which the owner of the rows deletes.
@@ -316,8 +331,17 @@ export function SearchPanel({
   const setDraft = store.set;
   const box = useRef<HTMLInputElement>(null);
   /* Sol F2: opened from the bar's box, the panel leaves focus where the reader
-     is typing. Read once, at mount, which is the only moment it matters. */
-  const [quietMount] = useState(() => store.barFocused());
+     is typing. Read once, at mount, which is the only moment it matters.
+
+     **Nor on a touch screen, when it mounts for a search already sent** — an
+     `enter` handoff, which there is the command bar's *Quick search “X”* row
+     (plan 261005i, Sol's F4). There is nothing left to type, and focus would
+     raise the keyboard over the hits; `putKeyboardAway` is what the box's own
+     Enter does for the same reason. The ⚡ (`quick`) asks for the box and
+     still gets it, and at a desk the caret is here as it always was. */
+  const [quietMount] = useState(
+    () => store.barFocused() || (store.handoff()?.type === "enter" && media("(pointer: coarse)")),
+  );
   /* The ⚡ in the bar focuses this box inside its own tap, when it is here. */
   useEffect(() => store.registerBox(() => box.current?.focus({ preventScroll: true })), [store]);
 
@@ -343,7 +367,7 @@ export function SearchPanel({
      be another process's work or an orphan, and this tab receives no event
      when either finishes. SearchMode owns the in-flight ids it started. */
   const running = new Set(
-    runs
+    [...runs, ...(own?.hidden ?? [])]
       .filter((r) => r.status === "pending" && own?.running.has(r.id))
       .map((r) => runningKey(r.criterion, r.kind)),
   );
@@ -431,6 +455,7 @@ export function SearchPanel({
         loaded={loaded}
         active={active}
         typed={(find ?? "").trim().length}
+        own={own !== null}
       />
     </ModeSurface>
   );
@@ -541,6 +566,9 @@ const Box = forwardRef<
      simply shared. */
   const box = useRef<HTMLInputElement>(null);
   useImperativeHandle(ref, () => box.current as HTMLInputElement, []);
+  /* The matchers' bar, kept with its chosen one in view (useRevealChosen.ts). */
+  const matchers = useRef<HTMLDivElement>(null);
+  useRevealChosen(matchers, matcher);
 
   /* The box takes focus when the mode opens. A search panel you have to click
      into before typing is a search panel that costs two actions instead of one,
@@ -581,6 +609,19 @@ const Box = forwardRef<
        so the hits can be read. A refused search keeps the caret. */
     putKeyboardAway(box.current);
   };
+  /**
+   * **Empty the box, and nothing else** — Escape's body, and the cross's
+   * (plan 261005i). It used to also close the open search, back when there was
+   * one; now the ticks own what is showing, and a clear that silently unticked
+   * them would undo work the reader can see they did.
+   */
+  const clear = () => {
+    if (matcher === "words") onFind(null);
+    else {
+      setDraft("");
+      session?.edit("");
+    }
+  };
 
   /**
    * Change matcher, taking whatever is in the box along with it.
@@ -606,7 +647,7 @@ const Box = forwardRef<
 
   return (
     <div className="srch-box">
-      <div className="srch-field">
+      <div className={`srch-field${value === "" ? "" : " srch-field--filled"}${busy ? " srch-field--busy" : ""}`}>
         <input
           ref={box}
           className="srch-input"
@@ -661,22 +702,39 @@ const Box = forwardRef<
             /* Escape clears the search rather than closing the mode. The mode
                has a button of its own in the bar, and a key that sometimes
                empties a box and sometimes throws you out of the panel is a key
-               nobody trusts. */
+               nobody trusts. And not the Escape that dismisses an input
+               method's candidate list, which is the IME's as its Enter is:
+               that one is still cancelled, because a `type="search"` box is
+               emptied by the browser itself on Escape (measured in Chrome,
+               2026-10-07), but it clears nothing. */
             if (e.key === "Escape") {
               e.preventDefault();
-              /* It empties the box and nothing else. It used to also close the
-                 open search, back when there was one; now the ticks own what is
-                 showing, and a key that silently unticked them would undo work
-                 the reader can see they did. */
-              if (matcher === "words") onFind(null);
-              else {
-                setDraft("");
-                session?.edit("");
-              }
+              if (!isImeComposing(e)) clear();
             }
           }}
         />
         {busy && <LoaderCircle size={14} className="srch-spin" aria-label="Searching" />}
+        {value !== "" && (
+          /* **The cross that empties the box** (plan 261005i; Greg,
+             2026-10-04: *"Q-panel-box-cross yes"*) — Escape's clear for a
+             screen with no Escape, and for a hand already on the mouse. The
+             cursor goes to the box, since the only reason to wipe is to type
+             the next words; mousedown keeps it there if it already was, so a
+             quick session does not see a blur in between. The bar's box has
+             the same cross (DockQuickSearch.tsx § `dock-qs-clear`). */
+          <button
+            type="button"
+            className="srch-clear"
+            aria-label="Clear the search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              clear();
+              box.current?.focus({ preventScroll: true });
+            }}
+          >
+            <X size={14} aria-hidden />
+          </button>
+        )}
       </div>
 
       <div className="srch-modes">
@@ -694,7 +752,10 @@ const Box = forwardRef<
             have switched matcher from a button that has nothing to do with the
             choice. */}
         <div
-          className="srch-matchers"
+          ref={matchers}
+          /* The part-switcher every mode shares (mode-band.css § the
+             part-switcher, plan 261007h § F2). */
+          className="srch-matchers summ-views"
           role="radiogroup"
           aria-label="How to match"
         >
@@ -712,7 +773,7 @@ const Box = forwardRef<
                cost, and why the ARIA authoring practice is being departed from;
                tests/arrows-belong-to-the-article.test.tsx holds it. */
             tabIndex={0}
-            className={`srch-mode${matcher === "words" ? " on" : ""}`}
+            className={`srch-mode summ-view-btn${matcher === "words" ? " on" : ""}`}
             onClick={(e) => switchTo("words", e.detail > 0)}
             title="Match the letters you type. Instant, and free."
           >
@@ -724,7 +785,7 @@ const Box = forwardRef<
             role="radio"
             aria-checked={matcher === "quick"}
             tabIndex={0}
-            className={`srch-mode${matcher === "quick" ? " on" : ""}`}
+            className={`srch-mode summ-view-btn${matcher === "quick" ? " on" : ""}`}
             onClick={(e) => switchTo("quick", e.detail > 0)}
             title="A fast first pass: scores every paragraph in about a second. Whole paragraphs, no reasons."
           >
@@ -736,7 +797,7 @@ const Box = forwardRef<
             role="radio"
             aria-checked={matcher === "meaning"}
             tabIndex={0}
-            className={`srch-mode${matcher === "meaning" ? " on" : ""}`}
+            className={`srch-mode summ-view-btn${matcher === "meaning" ? " on" : ""}`}
             onClick={(e) => switchTo("meaning", e.detail > 0)}
             title="Describe what you are looking for and the model finds it. Costs a model call."
           >
@@ -782,8 +843,8 @@ const Box = forwardRef<
  * earned: *theirs vanished on reload, which quietly makes the feature a toy —
  * nothing you produce with it can be returned to*
  * (docs/project/original-version/highlighting.md). Ticking a row here repaints
- * the whole article with no model call and no wait, because the answer is on
- * disk.
+ * the whole article with no model call and no wait, because the saved answer
+ * has already been fetched.
  *
  * ## Four targets on a row, and the two that look alike do different things
  *
@@ -807,7 +868,7 @@ const Box = forwardRef<
  * these two is destructive and both are one press from undoing: a mis-hit marks
  * the wrong searches for as long as it takes to press the right thing. The
  * pixels still matter, so the box keeps its own padding rather than sharing the
- * row's (styles.css § .srch-saved-tick).
+ * row's (search.css § .srch-saved-tick).
  *
  * ## The dot is not the only thing saying which colour this is
  *
@@ -815,8 +876,8 @@ const Box = forwardRef<
  * the same hue; the swatch and the edge are at full strength whether or not
  * the row is ticked (2026-10-03, `spya-fwcwun`). One is easy to
  * miss at 11px, and colour discrimination in a small field is exactly where
- * this fails first — the same reason the granularity columns' tints run down
- * lightness as well as chroma (styles.css § --depth-0). Neither is load-bearing
+ * this fails first — the same reason the former granularity columns' tints ran down
+ * lightness as well as chroma (src/web/styles/tokens.css § --depth-0). Neither is load-bearing
  * on its own: the criterion is printed in full beside them, so a reader who
  * cannot tell two hues apart has still lost nothing but a shortcut.
  */
@@ -833,23 +894,70 @@ const Box = forwardRef<
  * Its own component because `useSlow` is a hook and `Saved` returns early.
  */
 function SavedLoading() {
-  const slow = useSlow(true);
   return (
     <div className="srch-empty">
-      {/* `role="status"` rather than a bare paragraph: the words arrive 600ms
-          after the panel does, and a line that appears with no live region
-          around it is silent to a screen reader. It also reads politely — the
-          reader is not interrupted, they are told when they next pause.
-          `srch-waiting` holds the line's height across those 600ms, so the
-          panel does not grow when the sentence lands. GPT Sol, 2026-08-27. */}
-      <p className="srch-working srch-waiting" role="status">
-        {slow && (
-          <>
-            <LoaderCircle size={13} className="srch-spin" /> Fetching your saved searches…
-          </>
-        )}
-      </p>
+      {/* The shared wait line (BandWaiting.tsx), in Search's own hue.
+          `srch-waiting` holds the line's height across the first 600ms, so
+          the panel does not grow when the sentence lands. */}
+      <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin">
+        Fetching your saved searches…
+      </BandWaiting>
     </div>
+  );
+}
+
+/**
+ * A finished quick row's *thorough* control: the button — **unless the
+ * thorough search is already out by itself** (plan 261004l). A settled quick
+ * answer starts it, and the row then says so, quietly, where the button was.
+ * Not a button in that state: there is nothing to press, and the row is
+ * replaced when the answer lands.
+ */
+function Thorough({
+  upgrading,
+  running,
+  onAsk,
+}: {
+  /** This row's own thorough search is out and will replace it. */
+  upgrading: boolean;
+  /** A thorough search for the same words is out from this tab, for any row. */
+  running: boolean;
+  onAsk(): void;
+}) {
+  if (upgrading) {
+    return (
+      /* **Exactly the button's width**: the word is still there, unseen, and
+         the spinner sits over it. Spelled out beside the spinner it was 22px
+         wider, and in a phone's row that wrapped the line under the words and
+         made the row 17px taller for as long as the search ran (the browser
+         check of plan 261004l). */
+      <span
+        className="srch-upgrading"
+        role="status"
+        aria-label="Thorough search running"
+        title="A thorough search for these words is running. It will replace this quick search when it finishes."
+      >
+        <span className="srch-upgrading-word" aria-hidden>thorough</span>
+        <LoaderCircle size={11} className="srch-spin" aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="srch-thorough"
+      disabled={running}
+      title={
+        running
+          ? "Already running the thorough search for this"
+          : "Run the thorough (meaning) search for these words: exact quotes and reasons, usually about ten seconds. It replaces this quick search."
+      }
+      onClick={() => {
+        if (!running) onAsk();
+      }}
+    >
+      thorough
+    </button>
   );
 }
 
@@ -1134,22 +1242,11 @@ function Saved({
                   A visitor has no way to ask anything, so no button (plan
                   261002e, review F6). */}
               {own && run.kind === "quick" && run.status === "done" && (
-                <button
-                  type="button"
-                  className="srch-thorough"
-                  disabled={thoroughRunning}
-                  title={
-                    thoroughRunning
-                      ? "Already running the thorough search for this"
-                      : "Run the thorough (meaning) search for these words: exact quotes and reasons, about half a minute. It replaces this quick search."
-                  }
-                  onClick={() => {
-                    if (thoroughRunning) return;
-                    own.onAsk(run.criterion, "meaning", run.id);
-                  }}
-                >
-                  thorough
-                </button>
+                <Thorough
+                  upgrading={own.upgrading?.has(run.id) ?? false}
+                  running={thoroughRunning}
+                  onAsk={() => own.onAsk(run.criterion, "meaning", run.id)}
+                />
               )}
               {own && (
                 <>
@@ -1394,10 +1491,19 @@ function SortBar({
           a control that visibly does nothing — the honest version of which is
           not to draw it. */}
       {asksTheServer(matcher) && (
-        <>
+        /* **A named group, and each button says whether it is pressed**, as the
+            five sibling rows do through `OrderGroup` ("Order the … by"). This
+            row stays its own markup, since moving onto that component would
+            change how it wraps and scrolls on a touch screen (plan 261007a §
+            K4). `display: contents` in search.css, so the wrapper is in the
+            accessibility tree and not in the layout. Until 2026-10-07 the
+            pressed order was a colour and nothing a screen reader could hear. */
+        /* biome-ignore lint/a11y/useSemanticElements: toggle buttons that order a list, not form controls; `role="group"` with a name is what ARIA has for that, as OrderGroup.tsx says */
+        <div className="srch-sort-group" role="group" aria-label="Order the passages by">
           <button
             type="button"
             className={`srch-sort-btn${order === "document" ? " on" : ""}`}
+            aria-pressed={order === "document"}
             onClick={() => onOrder("document")}
             title="In the order they appear in the article"
           >
@@ -1406,6 +1512,7 @@ function SortBar({
           <button
             type="button"
             className={`srch-sort-btn${order === "confidence" ? " on" : ""}`}
+            aria-pressed={order === "confidence"}
             onClick={() => onOrder("confidence")}
             title="Strongest matches first — the model's own judgment about its answers"
           >
@@ -1414,12 +1521,13 @@ function SortBar({
           <button
             type="button"
             className={`srch-sort-btn${order === "prioritised" ? " on" : ""}`}
+            aria-pressed={order === "prioritised"}
             onClick={() => onOrder("prioritised")}
             title="In the order they appear in the article, with the weakest matches hidden — and hidden from the article too, not just from this list"
           >
             prioritised
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -1486,12 +1594,12 @@ function ConfSlider({
   const note = confNote(hiddenCount, all.length);
 
   return (
-    <div className="srch-gate">
-      <div className="srch-gate-row">
-        <label className="srch-gate-label" htmlFor="srch-gate">
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="srch-gate">
           confidence
         </label>
-        <span className="srch-gate-value">
+        <span className="gloss-gate-value">
           {gate} · {count}
         </span>
         {/* Only once there is something to undo — the same call the glossary's
@@ -1499,7 +1607,7 @@ function ConfSlider({
         {moved && (
           <button
             type="button"
-            className="srch-gate-reset"
+            className="gloss-gate-reset"
             title={`Back to ${PRIORITY_CONF}`}
             aria-label={`Reset the threshold to ${PRIORITY_CONF}`}
             onClick={() => onGate(null)}
@@ -1510,7 +1618,7 @@ function ConfSlider({
       </div>
       <input
         id="srch-gate"
-        className="srch-gate-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         /* A fixed 0–100, deliberately unlike the glossary's `gateMax`. Ending
@@ -1529,11 +1637,15 @@ function ConfSlider({
         aria-valuetext={`${gate} out of 100, showing ${count} passages`}
         onChange={(e) => onGate(Number.parseInt(e.target.value, 10))}
       />
-      {/* Always, never conditionally: a line that is sometimes absent for a
-          *different* reason teaches the reader nothing, and "Nothing matched"
-          under a slider is otherwise ambiguous between the search finding
-          nothing and the reader having hidden it all. */}
-      <p className="srch-gate-note">{note}</p>
+      {/* Only when the bar is hiding something. It used to be printed always,
+          "Nothing is hidden by this threshold." included; Greg, 2026-10-03
+          (spya-eqcbay): *"We can get rid of that, I think, because the, you
+          know, n of m above kind of answers that."* On a landscape iPad the
+          line was room the results did not have. When something IS hidden the
+          sentence stays, because it is what tells "Nothing matched" from "you
+          hid it all" and names the way back. The other thresholds still print
+          theirs in every state (threshold.ts § hiddenNote). */}
+      {hiddenCount > 0 && <p className="gloss-gate-note">{note}</p>}
     </div>
   );
 }
@@ -1554,6 +1666,7 @@ function Results({
   loaded,
   active,
   typed,
+  own,
 }: {
   found: Found[];
   order: HitOrder;
@@ -1577,6 +1690,8 @@ function Results({
   loaded: boolean;
   active: string[];
   typed: number;
+  /** The reader owns these searches, so a failed row's ⚠ may be a retry button. */
+  own: boolean;
 }) {
   /* Empty in words mode, whatever is ticked. The ticks deliberately survive a
      trip to the words matcher and back (App.tsx § onMatcher), so `active` is
@@ -1642,9 +1757,11 @@ function Results({
   if (waiting.length > 0 && all.length === 0) {
     return (
       <div className="srch-empty">
-        <p className="srch-working">
-          <LoaderCircle size={13} className="srch-spin" /> Reading the article for you…
-        </p>
+        {/* Find has just been pressed: this line acknowledges that request,
+            like a turn already sent, rather than an opening read. */}
+        <BandWaiting className="srch-working srch-waiting" spinnerClassName="srch-spin" delayMs={0}>
+          Reading the article for you…
+        </BandWaiting>
         <p className="srch-empty-hint">
           The whole piece goes to the model, so this takes a few seconds. You can carry on reading —
           the answer is saved either way.
@@ -1660,6 +1777,15 @@ function Results({
      and the reader deserves to be told that the emptiness has a cause. */
   const broken = switchedOn.filter((r) => r.status === "error");
   if (broken.length > 0 && broken.length === switchedOn.length) {
+    /* **How many of those rows have a ⚠ that is a button.** `Saved` draws one
+       only for the owner and only while `worthRetrying` says another go could
+       work; on the rest the ⚠ is plain text. The hint said "tries it again" of
+       every row until 2026-10-07, which is false for those. The count is of
+       ticked searches only, and every ticked search here failed; an unticked
+       row above can have either kind of ⚠, so each sentence names the ticked
+       rows. And none says another go *would* fail: the refusal's own
+       sentence says "most likely" (GPT Sol, K4-F4 and K4-F8). */
+    const retryable = own ? broken.filter((r) => worthRetrying(r.error)).length : 0;
     return (
       <div className="srch-empty">
         <p className="srch-failed">
@@ -1669,7 +1795,13 @@ function Results({
             : `All ${broken.length} of these searches failed.`}
         </p>
         <p className="srch-empty-hint">
-          The ⚠ on each row above tries it again.
+          {retryable === broken.length
+            ? "The ⚠ on each ticked row above tries it again."
+            : retryable === 0
+              ? "The ⚠ on each ticked row above only marks the failure. It is not a button, because " +
+                "running the same search again is unlikely to go differently."
+              : "On the ticked rows above, the ⚠ tries the search again where that could work. On " +
+                "the others it only marks the failure."}
         </p>
       </div>
     );
@@ -1743,7 +1875,6 @@ function Results({
       {asksTheServer(matcher) && order === "prioritised" && (
         <ConfSlider all={all} gate={gate} moved={gateMoved} onGate={onGate} />
       )}
-      <Legend matcher={matcher} coloured={switchedOn.length > 1} />
       <TooltipGroup delay={{ open: 350, close: 120 }} timeoutMs={400}>
         <ul className="srch-hits">
           {found.map((f) => (
@@ -1797,9 +1928,8 @@ function Place({ at, decorative }: { at: number; decorative?: boolean }) {
   return (
     <span
       className="srch-place"
-      /* The legend's specimen is a picture of the control, not a reading of
-         anything: announcing "30% of the way through the article" there would
-         be a screen reader stating a fact about an article that is not true. */
+      /* Decorative in a row's gutter, where the button round it already says
+         the same number in its own name (`Hit` § about). */
       {...(decorative
         ? { "aria-hidden": true }
         : { role: "img", "aria-label": `${pct}% of the way through the article` })}
@@ -1807,55 +1937,6 @@ function Place({ at, decorative }: { at: number; decorative?: boolean }) {
     >
       <span className="srch-place-fill" />
     </span>
-  );
-}
-
-/**
- * One line under the sort bar saying what the two marks in the gutter are.
- *
- * A legend rather than leaving both to hover, because a hover-only explanation
- * is an explanation nobody on a touchscreen ever sees, and because the reader
- * who most needs to know what a confidence number is is exactly the reader who
- * has not thought to hover it. It is drawn from the same components as the rows
- * themselves, so it cannot drift from what it is describing.
- */
-function Legend({ matcher, coloured }: { matcher: Matcher; coloured: boolean }) {
-  return (
-    <p className="srch-legend">
-      {/* Only when there is more than one colour on screen. With a single
-          search on, "which search found it" is a question with one answer, and
-          a legend for it would be explaining a distinction that is not being
-          drawn. */}
-      {coloured && (
-        <span className="srch-legend-item">
-          <span className="srch-swatches" aria-hidden>
-            <i style={{ "--cat-rgb": "var(--cat-0-rgb)" } as React.CSSProperties} />
-            <i style={{ "--cat-rgb": "var(--cat-1-rgb)" } as React.CSSProperties} />
-            <i style={{ "--cat-rgb": "var(--cat-2-rgb)" } as React.CSSProperties} />
-          </span>
-          which search found it
-        </span>
-      )}
-      {asksTheServer(matcher) && (
-        <span className="srch-legend-item">
-          <span className="srch-conf" aria-hidden>
-            62
-          </span>
-          {/* "its own guess" is doing the real work here, and it is in the
-              legend rather than only in the hover card because a reader on a
-              touchscreen rarely opens a hover card — tapping a row navigates,
-              and the card behind the score (`Hit`) is a tap nobody knows to
-              make until they are told there is something there. A caveat only a
-              curious pointer reaches is a caveat most readers do not have.
-              Raised by a GPT Sol review, 2026-08-26. */}
-          how sure the model is — its own guess, not a measurement
-        </span>
-      )}
-      <span className="srch-legend-item">
-        <Place at={0.3} decorative />
-        where in the article
-      </span>
-    </p>
   );
 }
 

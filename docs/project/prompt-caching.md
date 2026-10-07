@@ -17,6 +17,32 @@ those led to — mostly a decision *not* to add machinery, § What production ac
 
 This doc is the operating manual: where the caches are, what breaks them, and how to tell.
 
+## In this doc
+
+- [§ The one rule](#the-one-rule) — why one module renders the article, and why an instruction does
+  not go in the system prompt
+- [§ Where the caches are](#where-the-caches-are) — the three caches (request path, pipeline,
+  labels), and why two stages that agree on every byte can still not share
+  - [§ Glossary is a third cache](#glossary-is-a-third-cache-and-the-reason-is-not-the-article) —
+    `effort` and the renderer are part of the cache key
+  - [§ On the normal path, the breakpoints lose money](#and-on-the-normal-path-the-pipeline-breakpoints-lose-money) —
+    when a stage marks the article (`cacheArticleForStep`), and the break-even rates
+- [§ What production actually does](#what-production-actually-does) — the measured fact that the
+  one-call article stages never cache, and where caching does pay (Simple's fan-out)
+- [§ The marker that used to ruin it](#the-marker-that-used-to-ruin-it) — the reader's position
+  never goes inside the article; and
+  [what that broke in chat](#and-moving-it-out-of-the-body-is-what-broke-chat) (automatic breakpoints)
+- [§ Every cache now goes through OpenRouter](#every-cache-now-goes-through-openrouter) — the
+  provider pin and `require_parameters`, the two usage shapes on the two wires, and cost on the
+  response
+- [§ How to tell whether it is working](#how-to-tell-whether-it-is-working) — `eval:caching`, the
+  prefix-stability test, `aiCost`; a cache that stopped hitting looks like success
+- [§ The floor](#the-floor-and-why-zero-is-ambiguous) — the 1,024-token minimum, and why zero reads
+  is ambiguous
+- [§ What breaks a cache](#what-breaks-a-cache) — the checklist before editing a prompt's head
+- [§ The prices this rests on](#the-prices-this-rests-on) — write 1.25x, read 0.1x, and why not 1h
+- [§ See also](#see-also)
+
 ## The one rule
 
 **A cache matches bytes, not intentions.** The prefix has to be identical, character for character,
@@ -46,16 +72,17 @@ matching before the article is even reached.
 | Cache | Who shares it | The rendering |
 |---|---|---|
 | **request path** | search, chat, explain — one entry *each*, per article. All three use an **explicit** breakpoint on the article; see the chat postmortem for why automatic mode is not an option here | `articleWithIds` |
-| **pipeline** | one entry per **group**, and a group is a matching effort **and** renderer — read off [`STAGE_EFFORT`](../../src/models.ts) and `ARTICLE_RENDERER`, never kept in a list here. On 2026-10-01 that was five: the big `ids` group (tweets, ideas, timeline, quiz, faq, simple), glossary with quotes, and arc, crossrefs and sketch each alone — sketch since it moved to `low` effort that day, [measured](../investigations/261001c-thinking-effort-vs-quality-for-sketch-illustrated-hierarchy-ideas.md). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
+| **pipeline** | a group needs matching effort, renderer **and output format** — `sharesArticleCache` in [`src/pipeline.ts`](../../src/pipeline.ts) reads [`STAGE_EFFORT`](../../src/models.ts), `ARTICLE_RENDERER` and `ARTICLE_OUTPUT_FORMAT`. No two distinct stages share today: their structured-output schemas differ (`tests/article-cache-group.test.ts`). **In production almost none of it is used** — [§ What production actually does](#what-production-actually-does) | `articleText` or `articleWithIds`, per stage |
 | **labels** | the parallel batches of one run | the outline, via `batchParts` |
 
 All three are OpenRouter's caches now, and were not always — see
 [§ Every cache now goes through OpenRouter](#every-cache-now-goes-through-openrouter).
 
-Note what the pipeline row does **not** mean. Apart from Simple's three-call fan-out below, an article
+Note what the pipeline row does **not** mean. Apart from Simple's fan-out below (two calls since
+2026-10-04, three before), an article
 stage makes one call per run, so it caches nothing for itself. The ordinary stage marker is enabled
 only when another member of its group is in the **same job**; merely running two mode jobs inside the
-5-minute TTL does not mark either one. Simple is the exception: it owns all three calls and their
+5-minute TTL does not mark either one. Simple is the exception: it owns all of its calls and their
 `MeteredCall.onStart` coordination inside one call site.
 
 The labels row reads as the reliable one — its four batches run together by construction — and on the
@@ -122,7 +149,7 @@ Only Sketch moved, from `high` to `low`, which took it out of the `ids` group: i
 price over a cache share that production almost never collects ([below](#what-production-actually-does)).
 
 The effort table now lives in [`src/models.ts`](../../src/models.ts) beside `CAPABLE_MODEL`, because both
-are part of the cache key, and **that table is half the cache grouping** — `sharesArticleCache` in
+are part of the cache key, and **that table is one of three cache-grouping dimensions** — `sharesArticleCache` in
 [`src/pipeline.ts`](../../src/pipeline.ts) reads it rather than keeping a second list that could
 drift back out of agreement with it.
 
@@ -159,7 +186,7 @@ write in a doc and a different thing to decide about.
 **So the breakpoint is conditional.** A stage marks the article only when **another step of the same
 job** is in its cache group — `cacheArticleForStep` in [`src/pipeline.ts`](../../src/pipeline.ts),
 set from `job.steps` in [`src/jobs.ts`](../../src/jobs.ts) and carried on `StepContext.cacheArticle`.
-An ordinary ingest therefore marks nothing, a job that asks for glossary and quotes together marks **both**,
+An ordinary ingest therefore marks nothing; a job that asks for glossary and quotes together also marks **neither**, because their output schemas differ,
 and a `{ steps: ["glossary"] }` job on its own marks nothing, which is correct: there is no second
 call.
 
@@ -250,8 +277,8 @@ caching off — and on the numbers that is about right:
 
 - **The money is small.** $72 of spend in those thirty days, and the best any marking rule could have
   saved was a few dollars of it.
-- **The one recurring shape is the import burst** — the add page's tick box queues every main mode at
-  once ([`queueAutoModes`](../../src/web/auto-modes.ts)), and mode jobs on one article run in
+- **The one recurring shape is the import burst** — an import's publication queues every main mode at
+  once ([`autoModePosts`](../../src/auto-mode-steps.ts)), and mode jobs on one article run in
   parallel since 2026-09-29. Of the jobs it posts only **two pairs** can share an article —
   tweets with ideas, glossary with quotes — worth about **2.6¢ an import** on a 10,000-token article.
 - **Capturing it needs cross-job coordination**, and that has no honest signal: the moment an entry
@@ -275,12 +302,14 @@ options, waiting on Greg, are in
 [261001o](../plans/261001o-one-shared-article-first-prefix-cached-across-modes.md).
 
 **Where caching does pay, it is inside one call site that fans out over one article** — and there
-the coordination is in-process and exact. Simple's three levels are the worked example
-([261001j](../plans/261001j-simple-press-cost-and-latency.md)): the slowest level goes first with the
-article marked, the other two start once its stream has begun (`MeteredCall.onStart` in
+the coordination is in-process and exact. Simple's levels are the worked example
+([261001j](../plans/261001j-simple-press-cost-and-latency.md), measured when there were three; two
+since 2026-10-04): the slowest level goes first with the article marked, the rest start once its
+stream has begun (`MeteredCall.onStart` in
 [`src/messages-stream.ts`](../../src/messages-stream.ts)), and a press fell from $0.142 to $0.090.
 **A new call site that fans out over one article should reuse that, not build a second one** — and
-should measure it cold, the way `evals/simple/fanout-spike.ts --cold` does, or a cache left warm by
+should measure it cold, the way the historical `evals/simple/fanout-spike.ts` paid arms did with
+`--cold` (since 2026-10-04 it supports only `report`; the paid arms are at `1698c6448`), or a cache left warm by
 an earlier run fakes the saving.
 
 **An open question, not chased:** Debate shows cache reads in production with no breakpoint of its
@@ -355,7 +384,9 @@ says so. `MESSAGES_PROVIDER` in [`src/messages-stream.ts`](../../src/messages-st
 by `streamMessage` rather than passed by each stage, for exactly that reason: a stage that forgets it
 does not fail, it just quietly stops hitting the cache.
 
-**And it carries a third field the request-path pin does not: `require_parameters: true`.** This is
+**And it carries a third field: `require_parameters: true`** (the request-path rows of `AI_JOB_ROUTE` in
+[`src/ai-call.ts`](../../src/ai-call.ts) carry it too now; this section was written when only the
+pipeline did). This is
 the one that would have been walked into. `allow_fallbacks` defaults to **true** and
 `require_parameters` defaults to **false**, so a fallback upstream that does not support
 `cache_control` may be handed the request and serve it *without it* — successfully. That is not a
@@ -515,8 +546,8 @@ In rough order of how easily it happens here:
 5. **Editing one stage's article rendering.** There is one renderer for a reason; changing it changes
    what several stages send.
 6. **Provider routing.** A cache lives on the upstream that wrote it. Every call sends a `provider`
-   preference — `{ order: ["anthropic"] }` on the request path
-   ([`PROVIDER_ORDER`](../../src/openrouter-stream.ts)), the same plus `require_parameters: true` on
+   preference — `{ order: ["anthropic"], require_parameters: true }` on the request path (the
+   `provider` of each row of `AI_JOB_ROUTE` in [`src/ai-call.ts`](../../src/ai-call.ts)) and on
    the pipeline ([`MESSAGES_PROVIDER`](../../src/messages-stream.ts)) — an ordering, deliberately
    **not** `allow_fallbacks: false`. Banning fallback would turn an Anthropic outage into a hard
    failure on a call a reader is waiting for, and a cache miss costs money where an unavailable

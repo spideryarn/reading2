@@ -1,6 +1,8 @@
 /**
- * The reader's global profile **and their settings** — the Postgres half. src/store/fs.ts's
- * `fsReaderStore` (a thin wrap of src/profile.ts) is the other.
+ * The reader's global profile **and their settings**, in Postgres. Until
+ * 2026-09-05 this was one half of two: `fsReaderStore` in src/store/fs.ts, a
+ * thin wrap of src/profile.ts, was the other, and went with the filesystem
+ * store.
  *
  * One row per `owner_id`, upserted rather than read-modify-written, for the
  * same reason src/store/pg-lookups.ts gives for glossary lookups: a "read the
@@ -12,8 +14,8 @@
  *
  * That still holds now the row carries two things: **each write names one
  * column** and leaves the other where it was, so a profile save and a settings
- * change cannot overwrite each other. The filesystem half has to merge by hand
- * to get the same property — src/profile.ts § `patchReaderFile`.
+ * change cannot overwrite each other. The filesystem half had to merge by hand
+ * to get the same property.
  *
  * **Never logged**, and for the same reason as the per-article half: this
  * string is the reader's own description of themselves. See
@@ -124,6 +126,39 @@ const rawPgReaderStore: ReaderStore = {
       // on, and the caller is told what is stored.
       .returning({ since: readerProfiles.experimentalSince });
     return row?.since ? row.since.toISOString() : null;
+  },
+
+  async readAutoModes(): Promise<boolean> {
+    const [row] = await getDb()
+      .select({ offAt: readerProfiles.autoModesOffAt })
+      .from(readerProfiles)
+      .where(eq(readerProfiles.ownerId, currentOwnerId()))
+      .limit(1);
+    // No row is on: the default, and what the publication reads it as too
+    // (src/store/pg-revisions.ts § `publishRevisionIn`).
+    return !row?.offAt;
+  },
+
+  async writeAutoModes(on: boolean): Promise<boolean> {
+    const ownerId = currentOwnerId();
+    const [row] = await getDb()
+      .insert(readerProfiles)
+      /* The database's clock, `clock_timestamp()` not `now()`, and `coalesce`
+         to keep the first time across a second "off" — each for the reason
+         `writeExperimental` above gives. The column is the inverse of that
+         one: a time means off. */
+      .values({ ownerId, autoModesOffAt: on ? null : sql`clock_timestamp()` })
+      .onConflictDoUpdate({
+        target: readerProfiles.ownerId,
+        set: {
+          autoModesOffAt: on
+            ? sql`null`
+            : sql`coalesce(${readerProfiles.autoModesOffAt}, clock_timestamp())`,
+          updatedAt: sql`now()`,
+        },
+      })
+      .returning({ offAt: readerProfiles.autoModesOffAt });
+    return !row?.offAt;
   },
 };
 

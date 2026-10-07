@@ -58,10 +58,8 @@ import path from "node:path";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
   articleWithIdsFingerprint,
@@ -70,7 +68,7 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -117,6 +115,21 @@ export const MAX_IDEAS = 10;
 
 /** The most occurrences one idea may carry into the artefact. */
 export const MAX_OCCURRENCES = 6;
+
+/**
+ * The answer this stage asks room for, given how many ideas it asks for.
+ *
+ * Each idea is a short proposition, two prose fields, an optional analogy and
+ * up to five verbatim quotes — and the quotes are what makes this larger per
+ * item than the glossary's. Undersizing does not degrade: it throws
+ * `truncationFailure` and loses the whole pass. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate
+ * in `STEP_BUDGET_MS.ideas` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
+ */
+export function ideasAnswerTokens(count: number): number {
+  return 400 + count * 420;
+}
 
 const PROVENANCES: ReadonlySet<string> = new Set<IdeaProvenance>(["assumed", "introduced"]);
 
@@ -523,8 +536,8 @@ export function buildIdeas(
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent. Absent means "written before this existed"; `null`
-       means "written deliberately without a profile", and the two need
-       different sentences. src/profile.ts § profileIsStale. */
+       means "written with no profile", and only `null` reads as changed once
+       the reader has one. src/profile.ts § profileIsStale. */
     profileHash: opts.profile ? hashProfile(opts.profile) : null,
     ideas: inReadingOrder(fresh, opts.blocks),
     generatedAt: new Date().toISOString(),
@@ -967,11 +980,7 @@ export async function generateIdeas(opts: {
   const count = suggestedIdeas(words);
   const started = Date.now();
 
-  /* Each idea is a short proposition, two prose fields, an optional analogy and
-     up to five verbatim quotes — and the quotes are what makes this larger per
-     item than the glossary's. Undersizing does not degrade: it throws
-     `truncationFailure` and loses the whole pass. */
-  const answerTokens = 400 + count * 420;
+  const answerTokens = ideasAnswerTokens(count);
   const maxTokens = budgetFor("ideas", answerTokens);
 
   /* `streamMessage` builds the client, and sets `logLevel: "off"` on it — a
@@ -1042,26 +1051,8 @@ export async function generateIdeas(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    /* `stop_details` is neither thrown nor logged — it is the provider's own
-       words about a request that carried the whole article. src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("ideas", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "ideas", maxTokens, answerTokens);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped: Dropped = {
     unknownIds: 0,

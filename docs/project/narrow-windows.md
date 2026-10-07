@@ -1,9 +1,14 @@
 # Narrow windows, and the screen behind them
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 > **Split out of [design-css-overview.md](design-css-overview.md) on 2026-09-07**, verbatim apart
 > from the heading levels and a couple of "see above" links that had to become cross-doc ones. That
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
 > tokens. This is one area of the territory.
+
+**For the map of everything that differs on a phone or under a finger**, and Greg's words on each,
+start at [phone-and-touch.md](phone-and-touch.md); this doc owns what a narrow window gives up.
 
 ## Narrow windows: wrap, do not shrink
 
@@ -171,6 +176,10 @@ Three things worth carrying to whatever is built next:
   `controlsBar()` in [`src/web/scroll.ts`](../../src/web/scroll.ts) — and every rule keyed on the
   bar's *presence* now has a state where it is absent.
   [260908a](../plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md).
+  **And its height is not one number**, since 2026-10-03: 44px with only the chip, 68px on a narrow
+  window while it holds the breadcrumb, which runs to three lines there
+  ([`styles/crumbs.css`](../../src/web/styles/crumbs.css) § a narrow window raises `--bar-h`;
+  [261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md)).
 - **`.controls` moves by `transform`; everything under it moves by `top`.** A bullet here used to
   say a transform on that bar computed to identity and could not be used. That was wrong, and it was
   wrong for the reason [browser-testing.md § a hidden tab](browser-testing.md) now describes: a CSS
@@ -184,14 +193,19 @@ Three things worth carrying to whatever is built next:
   Anything pinned *above* the bar (the mode band, the overflow fade) reads it directly; anything
   that must clear the bar permanently (`.reader`'s bottom padding, the dialogs) reads `--dock-space`
   instead. **Do not tie the document's height to the moving one** — a page that grows and shrinks
-  under the finger scrolling it is worse than a bar in the way.
+  under the finger scrolling it is worse than a bar in the way. One rule holds the bar home whatever
+  the scroll says (`styles/narrow-window.css` § a small device, the `:root:has(...)` guard): while
+  its drawer is open, while focus is in it, while a dialog or a band that covers the article is up,
+  and — since 2026-10-07 — while its own **More menu** is open, which is portalled out of the bar and
+  takes focus with it, so *focus is in the bar* stops being true the moment the list appears.
 
 **The width layout.ts divides is the layout viewport's, not `innerWidth`.** On iPad Safari
 `innerWidth` is the *visual* viewport and shrinks when the page is zoomed in, while every media query
 and `100vw` above is the layout viewport. A zoom survives a rotation and a later zoom change fires no
 window `resize`, so a reader who rotated zoomed-in was laid out for a window two-thirds of theirs
 until something else resized it — Structure's one column on a landscape iPad, 2026-09-12. So the
-reading view reads `layoutViewportWidth()` in [`src/web/reader/measure.ts`](../../src/web/reader/measure.ts),
+reading view reads `layoutViewportWidth()` in [`src/web/reader/measure.ts`](../../src/web/reader/measure.ts)
+(since 2026-10-02 `pageWidth()` prefers the root's `clientWidth` and keeps that as its fallback),
 and `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` anywhere else in `src/web`
 unless the file is on its list with a reason.
 [260912b](../plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md); the class is
@@ -213,6 +227,14 @@ in [`layout.ts`](../../src/web/layout.ts) is the arithmetic, `marginaliaPress` i
 [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md) and
 [261001k](../plans/261001k-annotations-head-path-wraps-and-the-notes-swap-in-on-a-narrow-window.md)
 the reasons.
+
+**That line goes by itself after about five seconds, and has a × to send it away sooner**, since
+2026-10-06 — Greg, spya-u264yb: *"there's no way to dismiss it, and it doesn't fade after a few
+seconds."* Nothing is remembered: it shows again whenever it is drawn afresh (Marginalia off and
+on, the room found and lost, or a covering band closed below the width where the notes fit alone),
+because a mode that silently drew nothing would look broken. Once gone the element is still in the
+document, invisible, for two reasons that are easy to undo by accident:
+[261006i](../plans/261006i-marginalia-narrow-notice-fades-and-can-be-dismissed.md).
 
 The full account, including what the measuring harness cannot see, is
 [docs/plans/260827t-mobile-reading-view.md](../plans/260827t-mobile-reading-view.md).
@@ -253,14 +275,20 @@ Two rules now live there beside the dock's, and both are floors rather than fixe
   raise a keyboard rather than excluding the ones that do not** — the negative version reached the
   feedback dialog's visible `type="file"` picker, a control with no keyboard and nothing to zoom.
   And **it carries a `:root` for specificity**, said out loud rather than hidden: the fields are
-  styled by classes, `.remember .chat-input` is two of them, and a rule that loses is
+  styled by classes, `.learn .chat-input` is two of them, and a rule that loses is
   indistinguishable from one that wins anywhere but a rendered page. This rule shipped broken twice
   on exactly that, and a browser caught it both times while the suite stayed green.
 
   **The utilities layer is out of reach from it.** `@layer theme, base, app, utilities` puts every
-  `tw:` class after the stylesheets, so the four Tailwind-styled fields — sign-in's email and
-  password, the shelf's search, Add URL, and the library's in-place title editor — carry
-  `tw:any-pointer-coarse:text-base` at their own call sites.
+  `tw:` class after the stylesheets, so the Tailwind-styled fields — sign-in's email and
+  password, the shelf's search, Add URL, the library's in-place title editor, and since 2026-10-07
+  the search box above the contents list on Metadata and `/profile` and Help's search box — carry
+  an `any-pointer-coarse` font-size floor at their own call sites. Most carry
+  `tw:any-pointer-coarse:text-base`, which is `1rem` and so drops under 16px for a reader whose
+  root type is smaller; the two added on 2026-10-07 carry
+  `tw:any-pointer-coarse:text-[max(1rem,16px)]`, the same floor as the app-layer rule, and moving
+  the rest to it is queued. Grep for `any-pointer-coarse:text-` rather than trust this list. It also wins over a breakpoint variant on the same element (`tw:lg:text-xs`), because
+  Tailwind emits the `any-pointer` block after the breakpoint ones.
 
   **`<select>` joined it on 2026-09-08**, working the second report of the same bug
   (SPIDERYARN-READING2-2H, the Feedback dialog zooming on an iPhone — which the `textarea` half had

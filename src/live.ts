@@ -56,11 +56,12 @@
 
 import { createHash } from "node:crypto";
 
-import type { Block, ChatMessage, Meta, MicPlacement } from "./types.js";
+import { answerAsSeen } from "./recall-hint.js";
+import type { Block, ChatMessage, Meta, MicPlacement, ThreadKind } from "./types.js";
 import { articleWithIds } from "./article-prompt.js";
 import { CHAT_TOOLS } from "./chat-tools.js";
 import { recentHistory } from "./converse.js";
-import { webLinks } from "./urls.js";
+import { withoutBlockIds } from "./answer-opening.js";
 import { stageFailure } from "./job-failure.js";
 import { plainWords } from "./plain-words.js";
 import { LIVE_UPSTREAM } from "./messages.js";
@@ -431,6 +432,11 @@ export function liveTools(): unknown[] {
  * handing anything at all to `runTool` — which would answer an unknown name
  * with a helpful sentence listing the others, exactly the wrong reply to a
  * caller that is not the model.
+ *
+ * **Built from `CHAT_TOOLS`, not from `toolsFor`**, and that is what keeps
+ * `reader_notes` out of it: the tool endpoint is given a name and an article
+ * and no thread, so it has nothing to leave out of that tool's list of the
+ * reader's conversations. src/chat-tools.ts § `READER_NOTES_TOOL`.
  */
 export const LIVE_SERVER_TOOLS: ReadonlySet<string> = new Set(
   CHAT_TOOLS.map((t) => t.function.name),
@@ -498,62 +504,28 @@ export function liveInstructions(opts: {
  * Stripping rather than reformatting, and only on the **assistant** side: the
  * reader's own words are theirs, and if they said something that looks like an
  * id we have no business editing it.
+ *
+ * ## A Recall hint nobody opened is left out
+ *
+ * A Recall answer carries a hint behind a button (src/recall-hint.ts). The
+ * voice prompt knows nothing of hints, so the seed is each answer **as the
+ * reader saw it**: the hint is there only if they opened it. That needs the
+ * thread's `kind`, which is why it is a required argument: both engines call
+ * this, and one left passing raw text would be easy to miss.
  */
-export function liveSeedItems(history: ChatMessage[]): { role: "user" | "assistant"; text: string }[] {
+export function liveSeedItems(
+  history: ChatMessage[],
+  kind: ThreadKind | undefined,
+): { role: "user" | "assistant"; text: string }[] {
   return recentHistory(history).map((m) => ({
     role: m.role,
-    text: m.role === "assistant" ? withoutBlockIds(m.text) : m.text,
+    text: m.role === "assistant" ? withoutBlockIds(answerAsSeen(m, kind)) : m.text,
   }));
 }
 
-/**
- * Take our block ids out of a line of prose, leaving it readable.
- *
- * **Not `splitCitations` from src/web/citations.ts**, and the difference is the
- * job rather than the pattern. That one has to know *where* each citation sits
- * so the renderer can put a chip there; this one only has to make the text
- * safe to say out loud, and deleting is strictly simpler than locating. Sharing
- * the harder function to get the easier answer would drag the client's
- * rendering rules onto the server for nothing.
- *
- * **Links are protected**, for the reason `citedBlockIds` gives: a URL a model
- * found on the web can contain something id-shaped, and mangling somebody's
- * link is worse than leaving an id in a place nobody reads aloud. That was a
- * real bug in the first version of this function and the test that caught it is
- * `leaves an id inside a URL alone`.
- */
-export function withoutBlockIds(text: string): string {
-  /* **Links are held out of the way first, and this was a bug before it was a
-     comment.** The first version stripped ids from the raw string, so
-     `https://example.com/notes/spya-k3m9qt` came back as
-     `https://example.com/notes/` — a stranger's URL quietly broken, in an
-     answer the reader might follow. `webLinks` is the SAME matcher the renderer
-     and the citation counters use (src/urls.ts), so the three agree about what
-     a link is rather than each deciding for itself.
-
-     Spans are collected and skipped rather than blanked-then-restored, because
-     `withoutWebLinks` replaces a link with spaces of equal length — right for
-     counting offsets, useless when the text has to survive. */
-  const spans = webLinks(text).map((l) => [l.index, l.end] as const);
-  const insideLink = (at: number): boolean => spans.some(([from, to]) => at >= from && at < to);
-
-  const stripped = text.replace(
-    /* A bracketed citation, or a bare id. One pass, so a bracket cannot be
-       eaten by the first rule and its contents by the second. */
-    /\[\s*(?:spya-[a-z0-9]{6}[\s,;]*)+\]|spya-[a-z0-9]{6}/g,
-    (match, offset: number) => (insideLink(offset) ? match : ""),
-  );
-
-  return (
-    stripped
-      /* Tidy the holes. A stripped citation otherwise leaves a double space and
-         a space before the full stop — and a text-to-speech pass does hear the
-         difference. */
-      .replace(/[ \t]{2,}/g, " ")
-      .replace(/\s+([.,;:!?])/g, "$1")
-      .trim()
-  );
-}
+/* `withoutBlockIds` is in src/answer-opening.ts since 2026-10-06, where the
+   browser can reach it too; re-exported because this is where callers look. */
+export { withoutBlockIds };
 
 /** What the browser is handed. Deliberately not the session — see `mintLiveToken`. */
 export interface LiveToken {
@@ -1071,17 +1043,33 @@ export type GptLiveUsage =
   | {
       /**
        * **GPT-Live's backend bill: one text-model response's tokens**, off the
-       * nested `response.completed`. One row per response id, like `response`.
+       * nested terminal event, whichever it was. One row per response id, like
+       * `response`.
        */
       kind: "backend";
       /** The backend response's `id` (`resp_…`). The idempotency key. */
       responseId: string;
+      /**
+       * How the response ended, or `null` when the report did not say: a tab
+       * still running code from before this field sends no status. Refusing
+       * that report would lose its cost, and calling it `completed` would be
+       * a claim nobody made, so it is kept and its `provider_status` is null.
+       */
+      status: GptLiveBackendStatus | null;
       /** `usage.input_tokens` — the whole prompt, cached part included. */
       inputTokens: number;
       /** `usage.input_tokens_details.cached_tokens`. Inside `inputTokens`. */
       cachedInputTokens: number;
       outputTokens: number;
     };
+
+/**
+ * The three GPT-Live backend terminal events handled by the browser. A subset
+ * of `REALTIME_STATUSES`, so `REALTIME_OUTCOME` maps it. A nested cancellation
+ * event, if the provider sends one, is not currently handled.
+ */
+export const GPT_LIVE_BACKEND_STATUSES = ["completed", "failed", "incomplete"] as const satisfies readonly RealtimeStatus[];
+export type GptLiveBackendStatus = (typeof GPT_LIVE_BACKEND_STATUSES)[number];
 
 /** One usage report, from either engine. What `/api/live/:sessionId/usage` takes. */
 export type LiveUsage = RealtimeUsage | GptLiveUsage;
@@ -1282,9 +1270,17 @@ export function parseLiveUsage(body: unknown): LiveUsage {
 
   if (b.kind === "backend") {
     const inputTokens = count(b.inputTokens, "inputTokens", GPT_LIVE_BACKEND_MAX_INPUT_TOKENS);
+    /* **Absent is allowed, wrong is not.** Only a missing key reads as "not
+       said" (see `status` on `GptLiveUsage`); a null, or a word that is not one
+       of the three, is a report this code did not write. */
+    const status = b.status;
+    if ("status" in b && !GPT_LIVE_BACKEND_STATUSES.includes(status as GptLiveBackendStatus)) {
+      throw badReport(`status must be one of: ${GPT_LIVE_BACKEND_STATUSES.join(", ")}`);
+    }
     return {
       kind: "backend",
       responseId: eventIdOf(b.responseId),
+      status: status === undefined ? null : (status as GptLiveBackendStatus),
       inputTokens,
       /* Bounded by its parent: a cached token is an input token, and a count
          larger than the input would price a negative amount of fresh input. */
@@ -1447,11 +1443,23 @@ export function acceptRealtimeUsage(opts: RealtimeAcceptance): AiCallRow | null 
     };
   }
 
+  const outcome = REALTIME_OUTCOME[usage.status];
   return {
     ...common,
     requestedModel: session.model,
-    outcome: REALTIME_OUTCOME[usage.status],
+    outcome,
     providerStatus: usage.status,
+    /* **A stopped response is an ordinary stop, and says so.** No timer of ours
+       sends `response.cancel`: our time limits close the whole conversation,
+       and closing it creates no response row for an unfinished response without
+       a terminal usage report. So a terminal event that did arrive saying
+       `cancelled` or `incomplete` was not made by
+       our clock: it is the reader talking over the model, or the reply hitting
+       its length cap or a content filter. `abort` rather than null, so the row
+       does not read as a stop that might have been a stall. The phase and the
+       status stay null: the browser does not report how far the response had
+       got. Plan docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md. */
+    failureClass: outcome === "aborted" ? ("abort" as const) : null,
     ...money,
     /* The totals stay on the columns every other wire uses; the splits say what
        they were made of. `reported_`, because a realtime input count is the
@@ -1536,6 +1544,15 @@ function ledgerBase(
        a lower bound: subtracting the two timestamps gives a spurious zero, so
        read this field instead of doing that. */
     durationMs: startedAt === null ? null : finishedAt - startedAt,
+    /* A live session's call is made by the browser, on a wire this process
+       never touches: no retry loop of ours counted it and no gateway saw how it
+       failed. `provider_status` is where a realtime row says what happened.
+       These nulls are the default; stopped Realtime responses and incomplete
+       GPT-Live backend responses carry class `abort`. */
+    attempt: null,
+    failurePhase: null,
+    failureClass: null,
+    failureStatus: null,
     creditsUsedNanos: null,
     byokUpstreamNanos: null,
     isByok: null,
@@ -1638,7 +1655,7 @@ function backendRow(
       : priceLiveBackend(
           model,
           {
-            /* `parseRealtimeUsage` bounded the cached count by the input, so
+            /* `parseLiveUsage` bounded the cached count by the input, so
                this cannot go below zero. */
             freshInputTokens: usage.inputTokens - usage.cachedInputTokens,
             cachedInputTokens: usage.cachedInputTokens,
@@ -1646,12 +1663,20 @@ function backendRow(
           },
           receivedAt,
         );
+  /* **A failed or cut-short response is billed and reported like a finished
+     one, and says which it was.** Mapped as a Realtime response's status is,
+     `abort` class included: we send no backend cancellation command;
+     `incomplete` reports a length cap or a filter. Closing the session can
+     leave an unfinished response without terminal usage. A report with no
+     status is kept as `ok` with a null `provider_status` — see `status` on
+     `GptLiveUsage`. Pricing the reported tokens does not depend on status. */
+  const outcome = usage.status === null ? "ok" : REALTIME_OUTCOME[usage.status];
   return {
     ...ledgerBase(session, "backend", usage.responseId, null, receivedAt.getTime()),
     requestedModel: model ?? GPT_LIVE_BACKEND_MODEL,
-    outcome: "ok",
-    /* Only `response.completed` is reported, so there is no other status. */
-    providerStatus: "completed",
+    outcome,
+    providerStatus: usage.status,
+    failureClass: outcome === "aborted" ? ("abort" as const) : null,
     ...(priced
       ? {
           costSource: "computed" as const,

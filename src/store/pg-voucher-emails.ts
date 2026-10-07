@@ -35,7 +35,7 @@
  *
  * Everything after the event — reserve, the creator lookup, the send, complete
  * — is caught here and logged with a label and the delivery id, never an
- * address, a body or the note (a database error's message can quote a query's
+ * address, a body, the note or the recipient's name (a database error's message can quote a query's
  * parameters, so only its `name` is logged). It never throws to its caller. A
  * failure leaves `queued` (never reserved) or `sending` (never completed), and
  * both can be retried.
@@ -54,7 +54,9 @@ import {
   type VoucherEmailState,
   type VoucherEmailStatus,
   type VoucherEmails,
+  cleanRecipientName,
   freeArticles,
+  giftEmailGreeting,
   giftEmailHeading,
   giftEmailSubject,
 } from "../admin-vouchers.js";
@@ -171,13 +173,39 @@ function noteRow(note: string | null): string {
 }
 
 /**
+ * *Dear Ada,* as its own plain row between the heading and the note, or
+ * nothing at all. The name is somebody else's text, escaped here as the note
+ * is. Plan 261007f.
+ */
+function greetingRow(name: string | null): string {
+  if (name === null) return "";
+  return `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">${escapeNoteHtml(giftEmailGreeting(name))}</td></tr>\n`;
+}
+
+/**
+ * **What the administrator wrote for the recipient**: their name and the note
+ * to them. One named object rather than two adjacent `string | null`
+ * arguments, which could be swapped without a type error (261007f, Sol's F9).
+ */
+export interface GiftWords {
+  /** Their name, raw; null for no greeting. */
+  readonly recipientName: string | null;
+  /** The note to them, raw; null for none. */
+  readonly recipientNote: string | null;
+}
+
+const NO_WORDS: GiftWords = { recipientName: null, recipientNote: null };
+
+/**
  * One email in the shape of supabase/templates/confirmation.html. Every value
- * interpolated is ours, **except `note`**, which is escaped here, at the one
- * place it meets markup.
+ * interpolated is ours, **except `name` and `note`**, which are escaped here,
+ * at the one place they meet markup.
  */
 function giftHtml(parts: {
   readonly subject: string;
   readonly heading: string;
+  /** Their name, cleaned to one line and otherwise raw; null for none. */
+  readonly name: string | null;
   /** The note to the recipient, raw; null for none. */
   readonly note: string | null;
   readonly paragraphs: readonly string[];
@@ -206,7 +234,7 @@ function giftHtml(parts: {
 <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
 </td></tr>
 <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
-${noteRow(parts.note)}${paragraphs.join("\n")}
+${greetingRow(parts.name)}${noteRow(parts.note)}${paragraphs.join("\n")}
 <tr><td style="padding:0 0 28px 0;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${parts.button.url}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">${parts.button.label}</a></td></tr></table>
 </td></tr>
@@ -225,36 +253,53 @@ const FOOTER_TEXT =
 
 /**
  * **The recipient's email.** The values in it are `articles`, an integer the
- * route validated, for an existing reader two counts we computed, and
- * `recipientNote` — the administrator's note *to them*, the one value that is
- * not ours, escaped where it meets the HTML (`escapeNoteHtml`). It goes
- * directly under the heading, above anything we wrote, in both audiences, and
- * never in the subject. **Never the private note, the creator or the voucher
- * id** — tests/billing-voucher-emails.test.ts pins that, for both audiences.
- * Plan 261002b.
+ * route validated, for an existing reader two counts we computed, and the two
+ * values that are not ours: `recipientName`, which opens it as *Dear <name>,*
+ * (plan 261007f), and `recipientNote`, the administrator's note *to them*
+ * (plan 261002b). Both are escaped where they meet the HTML
+ * (`escapeNoteHtml`). They go directly under the heading, the greeting first,
+ * above anything we wrote, in both audiences, and never in the subject.
+ * **Never the private note, the creator or the voucher id** —
+ * tests/billing-voucher-emails.test.ts pins that, for both audiences. With
+ * neither, the email is byte for byte what it was before either existed.
  */
 export function giftMessage(
   articles: number,
   audience: GiftAudience = INVITE,
-  recipientNote: string | null = null,
+  words: GiftWords = NO_WORDS,
 ): RenderedEmail {
   if (!Number.isInteger(articles) || articles < 1) throw new Error("a gift message needs a whole number of articles");
-  /* Cleaned again here as well as on the way in: this is where it meets the
+  /* Cleaned again here as well as on the way in: this is where they meet the
      mail, and a row written before the rule, or by hand, gets the same rule. */
-  const cleaned = recipientNote === null ? "" : noteText(recipientNote);
-  const note = cleaned === "" ? null : cleaned;
+  const cleanedNote = words.recipientNote === null ? "" : noteText(words.recipientNote);
+  const said: Said = {
+    name: cleanRecipientName(words.recipientName),
+    note: cleanedNote === "" ? null : cleanedNote,
+  };
   return audience.kind === "reader"
-    ? readerGiftMessage(articles, audience.plan, note)
-    : inviteGiftMessage(articles, note);
+    ? readerGiftMessage(articles, audience.plan, said)
+    : inviteGiftMessage(articles, said);
 }
 
-/** The text part's note, on its own lines between the heading and the intro, or nothing. */
-function noteLines(note: string | null): string[] {
-  return note === null ? [] : [note, ""];
+/** `GiftWords` once cleaned: what the two letters below are written from. */
+interface Said {
+  readonly name: string | null;
+  readonly note: string | null;
+}
+
+/**
+ * The text part's greeting and note, each on its own lines between the heading
+ * and the intro, or nothing.
+ */
+function saidLines(said: Said): string[] {
+  return [
+    ...(said.name === null ? [] : [giftEmailGreeting(said.name), ""]),
+    ...(said.note === null ? [] : [said.note, ""]),
+  ];
 }
 
 /** To somebody who may not know Spideryarn: what it is, and how to collect. */
-function inviteGiftMessage(articles: number, note: string | null): RenderedEmail {
+function inviteGiftMessage(articles: number, said: Said): RenderedEmail {
   const gift = freeArticles(articles);
   const subject = giftEmailSubject(articles);
   const intro = `You have been given ${gift} on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.`;
@@ -264,7 +309,7 @@ function inviteGiftMessage(articles: number, note: string | null): RenderedEmail
   const text = [
     giftEmailHeading(articles),
     "",
-    ...noteLines(note),
+    ...saidLines(said),
     intro,
     "",
     how,
@@ -279,7 +324,8 @@ function inviteGiftMessage(articles: number, note: string | null): RenderedEmail
   const html = giftHtml({
     subject,
     heading: giftEmailHeading(articles),
-    note,
+    name: said.name,
+    note: said.note,
     paragraphs: [intro, how],
     button: { label: "Sign in or create an account", url: LOGIN_URL },
     after,
@@ -292,7 +338,7 @@ function inviteGiftMessage(articles: number, note: string | null): RenderedEmail
  * many they have with the gift — or, on a paid plan, that it waits for Free
  * (billing.md: a gift counts on Free only).
  */
-function readerGiftMessage(articles: number, plan: ReaderStanding, note: string | null): RenderedEmail {
+function readerGiftMessage(articles: number, plan: ReaderStanding, said: Said): RenderedEmail {
   const gift = freeArticles(articles);
   const subject = giftEmailSubject(articles);
   const intro = `You have been given ${gift} on Spideryarn, for your account with this address.`;
@@ -323,7 +369,7 @@ function readerGiftMessage(articles: number, plan: ReaderStanding, note: string 
   const text = [
     giftEmailHeading(articles),
     "",
-    ...noteLines(note),
+    ...saidLines(said),
     ...paragraphs.flatMap((p) => [p, ""]),
     `Open Spideryarn: ${HOME_URL}`,
     "",
@@ -335,7 +381,8 @@ function readerGiftMessage(articles: number, plan: ReaderStanding, note: string 
   const html = giftHtml({
     subject,
     heading: giftEmailHeading(articles),
-    note,
+    name: said.name,
+    note: said.note,
     paragraphs,
     button: { label: "Open Spideryarn", url: HOME_URL },
     after,
@@ -361,7 +408,7 @@ function utcMinute(at: Date): string {
 
 /**
  * **The creator's notice**, plain text in `arrivalMessage`'s shape. **Not the
- * note** (Sol F7): it would be one more copy in Resend, the forwarder and an
+ * note, and not the recipient's name** (Sol F7): it would be one more copy in Resend, the forwarder and an
  * inbox, and the page already has it. The claimant's address is somebody else's
  * text, so it goes through `oneLine` and never into the subject.
  */
@@ -400,10 +447,10 @@ export async function queueGiftEmail(
   recipient: string,
   articles: number,
   audience: GiftAudience,
-  /** The administrator's note to them, frozen into the email here. Plan 261002b. */
-  recipientNote: string | null,
+  /** Their name and the administrator's note to them, frozen into the email here. */
+  words: GiftWords,
 ): Promise<string> {
-  const message = giftMessage(articles, audience, recipientNote);
+  const message = giftMessage(articles, audience, words);
   const [row] = await tx
     .insert(billingVoucherEmails)
     .values({

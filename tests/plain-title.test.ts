@@ -150,7 +150,10 @@ describe("every seam an outside title enters by", () => {
     expect(readCitations([{ url: "https://physics.aps.org/x", title: APS }])[0]?.title).toBe(APS_PLAIN);
   });
 
-  it("the article's title from an HTML page, in meta and in the heading stage 3 reads", async () => {
+  /* Until 2026-10-07 the third place was an `<h1>` of ours in the page's body,
+     which stage 3 made a block of. The page no longer has one (src/extract.ts
+     § `debugPage`, plan 261007b), so the page's `<title>` is what is left. */
+  it("the article's title from an HTML page, in meta and in the page's <title>", async () => {
     const prose = Array.from(
       { length: 8 },
       (_, i) => `<p>Paragraph ${i} of ordinary prose, long enough that Readability keeps this article rather than deciding the page is a navigation shell.</p>`,
@@ -161,11 +164,16 @@ describe("every seam an outside title enters by", () => {
       slug: "fly",
     });
     expect(meta.title).toBe("The Drosophila genome");
-    expect(extractedHtml).toContain("<h1>The Drosophila genome</h1>");
+    expect(extractedHtml).toContain("<title>The Drosophila genome</title>");
+    expect(extractedHtml).not.toContain("<h1>");
     expect(extractedHtml).not.toContain("&lt;i&gt;");
   });
 
-  it("keeps a hostile plainTitle result as text through extraction, blocks and browser innerHTML", async () => {
+  /* The title used to reach a browser's `innerHTML` as a block, through the
+     `<h1>` stage 2 wrote into the page. Since 2026-10-07 it does not become a
+     block at all, so the two things left to hold are that the page's `<title>`
+     keeps it as text and that no block carries it. */
+  it("keeps a hostile plainTitle result as text in the page's <title>, and out of the blocks", async () => {
     const prose = Array.from(
       { length: 8 },
       (_, i) => `<p>Paragraph ${i} has enough ordinary prose for Readability to retain the article and its deliberately hostile title.</p>`,
@@ -177,18 +185,17 @@ describe("every seam an outside title enters by", () => {
     });
     expect(meta.title).toBe("<script>owned</script>");
     const run = runBlocks({ slug: "hostile", extractedHtml, previous: undefined });
-    const heading = run.blocks.find((block) => block.tag === "h1");
-    expect(heading).toBeDefined();
-    const browser = new JSDOM(`<div id="sink"></div>`).window.document;
-    (browser.querySelector("#sink") as HTMLElement).innerHTML = heading?.html ?? "";
-    expect(browser.querySelector("script")).toBeNull();
-    expect(browser.querySelector("h1")?.textContent).toBe("<script>owned</script>");
+    expect(run.blocks.length).toBeGreaterThan(0);
+    expect(run.blocks.some((block) => block.text.includes("owned"))).toBe(false);
+    const browser = new JSDOM(run.html).window.document;
+    expect(browser.querySelectorAll("script")).toHaveLength(0);
+    expect(browser.title).toBe("<script>owned</script>");
   });
 
   it("keeps a hostile plainTitle result as text in the public title and og:title", () => {
     const title = plainTitle("&lt;/title&gt;&lt;script&gt;owned&lt;/script&gt;");
     const shell = `<html><head>${MANAGED_HEAD_START}${MANAGED_HEAD_END}</head><body></body></html>`;
-    const markup = composeShell(shell, { slug: "hostile", title, gist: null, canonical: null });
+    const markup = composeShell(shell, { slug: "hostile", title, gist: null, canonical: null, authors: [], image: null });
     const doc = new JSDOM(markup).window.document;
     expect(doc.querySelector("script")).toBeNull();
     expect(doc.title).toBe(`${title} · Spideryarn`);

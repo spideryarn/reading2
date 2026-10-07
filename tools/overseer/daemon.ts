@@ -104,7 +104,8 @@ import {
   type SourceOrdering,
 } from "./observation.js";
 import { fleetSource, type SourceMessage, type SourceOptions, type Transport } from "./source.js";
-import { probeProcessTable } from "./work-probe.js";
+import { processProbeOwner } from "../fleet/child.js";
+import { probeProcessTableAsync } from "./work-probe.js";
 import { scanPaneWork } from "./work-reading.js";
 import type { ProcessTableReading } from "./work.js";
 import {
@@ -386,13 +387,20 @@ export type DaemonOptions = {
   attention?: { intervalMs?: number; run: () => Promise<AttentionList> };
   /**
    * Read the process table. Injected so the fold can be driven without a box;
-   * defaults to the real `probeProcessTable`.
+   * defaults to the owned asynchronous `probeProcessTableAsync`, on the one
+   * owner this process shares.
    *
-   * Unlike the attention and usage passes, this is cheap (~40 ms measured) and
-   * synchronous, so it runs inline on the inventory path rather than owning a
-   * timer and a second freshness policy.
+   * Unlike the attention and usage passes, this is cheap (~40 ms measured), so
+   * it runs on the inventory path rather than owning a timer and a second
+   * freshness policy. It is AWAITED, and was not always: a synchronous `ps`
+   * with a timeout is signalled at the timeout and then waited for without
+   * limit, which on this one thread stops the heartbeat and recovery with it
+   * (docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md).
+   * Where the wait sits, and why it may not sit anywhere else, is at
+   * `takeProbed()`. A plain value is still accepted, which is what a test
+   * with a canned table returns.
    */
-  probe?: () => ProcessTableReading;
+  probe?: () => ProcessTableReading | Promise<ProcessTableReading>;
   /**
    * THIS HOST'S BOOT ID, or null when it cannot be read. Defaults to
    * `readHostBootId`; injected so a test can drive one boot into the next.
@@ -614,11 +622,17 @@ export type DaemonOptions = {
    * Injected, like the passes above, because the drain shells out to git and
    * this file does not. It is handed `store.register` — the live one — so its
    * execution comparison is against what this daemon verified, which is the
-   * whole reason the daemon rather than the CLI is the writer. It is synchronous
-   * and relies on this process holding `overseer.lock` for its exclusion, so
-   * there is nothing to await on the way out.
+   * whole reason the daemon rather than the CLI is the writer.
+   *
+   * **AWAITED, since plan 261004g: the drain waits on git.** It still relies on
+   * this process holding `overseer.lock` for its exclusion, and it writes files
+   * of its own under that lock, so three things follow and the daemon owns all
+   * three: one drain at a time; the one in flight is settled before the store
+   * is released, on every way out; and it is handed `stillOwner`, which it must
+   * ask after every await and before it writes, because the lock can go — or
+   * the daemon be told to stop — while it was away.
    */
-  reports?: { intervalMs?: number; drain: (register: SessionRegister) => ReportDrainOutcome };
+  reports?: { intervalMs?: number; drain: (register: SessionRegister, stillOwner: () => boolean) => Promise<ReportDrainOutcome> };
 };
 
 /**
@@ -710,7 +724,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   const log = options.log ?? ((line: string) => console.log(line));
   const root = options.root ?? storeRoot();
   const tickMs = options.tickMs ?? TICK_MS;
-  const probe = options.probe ?? probeProcessTable;
+  const probe = options.probe ?? (() => probeProcessTableAsync(processProbeOwner()));
   const readBootId = options.bootId ?? readHostBootId;
 
   const opened = openStore({ root, now });
@@ -831,9 +845,36 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * to retry: it means two daemons, and the loser stops rather than interleaves
    * its events with the winner's.
    */
+  // THE SOURCE'S OWN SIGNAL: the caller's, plus this daemon finding its lock
+  // gone. Setting `stopped` halts every timer's work but wakes nothing, and the
+  // main loop is usually parked in `source.next()` — which, between payloads,
+  // can stay parked for as long as the dashboard only pings. Without this a
+  // daemon that lost its lock stopped writing and then never returned: no
+  // settlement, no exit, and systemd with nothing to replace. GPT Sol's F1 on
+  // plan 261004g.
+  const sourceStop = new AbortController();
+  if (options.signal.aborted) sourceStop.abort();
+  else options.signal.addEventListener("abort", () => sourceStop.abort(), { once: true });
+
   const guard = (result: { ok: true } | { ok: false; reason: "lock-lost"; holder: LockHolder | null }): boolean => {
     if (result.ok) return true;
+    // SAID ONCE, at the write that found it. The daemon used to stop here
+    // without a word until it returned, so a log reader saw a daemon go quiet
+    // and a test had nothing to wait on but a clock. A log line and not a note:
+    // the note log is the store's, and the store is no longer ours to write.
+    // HALT FIRST, SAY IT SECOND: a log that throws must not be the reason a
+    // daemon without its lock goes on believing it has one.
+    const first = stopped === null;
     stopped = { kind: "lock-lost", holder: result.holder };
+    sourceStop.abort();
+    if (first) {
+      try {
+        const holder = result.holder === null ? "nobody readable" : `pid ${result.holder.pid}, instance ${result.holder.instanceId}`;
+        log(`${now().toISOString()} the lock is gone (now held by ${holder}): this daemon writes nothing more and stops`);
+      } catch {
+        /* Nothing to say it with. The outcome the daemon returns says it too. */
+      }
+    }
     return false;
   };
 
@@ -1565,21 +1606,59 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * fleet. A pass that refused or left something pending says so once.
    */
   const reportOptions = options.reports;
+  /**
+   * What the drain asks after every await, before it writes. Three ways to have
+   * lost the right: a write already found the lock gone; the daemon was told to
+   * stop; or the lock went while the drain was out and nothing has written
+   * since — which only looking finds, and finding it halts the daemon through
+   * `guard` exactly as a refused write would.
+   *
+   * `leaving` is the second of those said by the daemon itself: a source that
+   * ended or threw aborts no signal and sets no `stopped`, and a drain that
+   * went on recording through the settlement would be a daemon that is on its
+   * way out and still taking work (GPT Sol's F2 on plan 261004g).
+   */
+  let leaving = false;
+  const stillOwner = (): boolean => halted() === null && !leaving && !options.signal.aborted && guard(store.checkOwnership());
+  // ONE AT A TIME, and held so `settleInFlight` can wait for it: the drain's
+  // exclusion is this process's lock, which must not be released under it.
+  let reportsRunning: Promise<void> | null = null;
   const reportsTicker =
     reportOptions === undefined
       ? null
       : setInterval(() => {
-          if (halted() !== null) return;
+          if (halted() !== null || reportsRunning !== null) return;
           const at = now().toISOString();
-          try {
-            const outcome = reportOptions.drain(store.register);
-            write(conditions.restore("reports", at, "a report drain pass completed"));
-            if (outcome.refused > 0 || outcome.pending > 0) {
-              log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
-            }
-          } catch (cause) {
-            write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
-          }
+          reportsRunning = (async () => reportOptions.drain(store.register, stillOwner))()
+            .then((outcome) => {
+              // THE LOCK IS SOMEBODY ELSE'S: the note log is theirs too.
+              if (halted() !== null) return;
+              // A pass cut short because the daemon is stopping is neither a
+              // completed pass nor a failed one, so it says nothing about the
+              // condition either way.
+              if (outcome.stoppedBy === "abandoned") return;
+              write(conditions.restore("reports", at, "a report drain pass completed"));
+              if (outcome.refused > 0 || outcome.pending > 0) {
+                log(`reports: ${outcome.recorded} recorded, ${outcome.refused} refused, ${outcome.pending} pending — ${outcome.notes.join("; ")}`);
+              }
+            })
+            .catch((cause: unknown) => {
+              if (halted() !== null) return;
+              try {
+                write(conditions.degrade("reports", at, `the report drain threw: ${cause instanceof Error ? cause.message : String(cause)}`));
+              } catch (failure) {
+                // The note log is what broke. Said here so the rejection is
+                // not an unhandled one, which would take the process down.
+                try {
+                  log(`the report drain failed and that could not be noted: ${failure instanceof Error ? failure.message : String(failure)}`);
+                } catch {
+                  /* Both logs are broken. Settlement and lock release must still run. */
+                }
+              }
+            })
+            .finally(() => {
+              reportsRunning = null;
+            });
         }, reportOptions.intervalMs ?? REPORTS_INTERVAL_MS);
   reportsTicker?.unref?.();
 
@@ -1603,6 +1682,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     for (const inFlight of [attentionRunning, usageRunning]) {
       if (inFlight !== null) await inFlight.catch(() => {});
     }
+    // THE REPORT DRAIN, which writes `reports.jsonl` and its inbox under this
+    // process's lock and nothing else (plan 261004g). It is out for one git
+    // call at most — about three seconds, deadline plus grace — and comes back
+    // to a `stillOwner` that says no, so it stops before its next write.
+    if (reportsRunning !== null) await reportsRunning;
     // THE VIEW PASS, in a loop: one that finishes with a request pending starts
     // the next, and that one writes through the store too.
     while (viewRunning !== null || recoveryRunning !== null || resumeRunning !== null) {
@@ -1657,6 +1741,8 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   // and systemd unable to replace the process. So the timers stop BEFORE any
   // settlement, and again in `finally`, where clearing twice is harmless.
   const stopTimers = (): void => {
+    // Every way out comes through here before it settles anything.
+    leaving = true;
     clearInterval(ticker);
     if (attentionTicker !== null) clearInterval(attentionTicker);
     if (usageTicker !== null) clearInterval(usageTicker);
@@ -1677,11 +1763,11 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // should be: an absent option means the module's own default.
     for await (const message of makeSource({
       baseUrl: options.baseUrl,
-      signal: options.signal,
+      signal: sourceStop.signal,
       ...(options.pollIntervalMs === undefined ? {} : { pollIntervalMs: options.pollIntervalMs }),
       ...(options.streamRetryAfterMs === undefined ? {} : { streamRetryAfterMs: options.streamRetryAfterMs }),
     })) {
-      if (halted() !== null) break;
+      if (halted() !== null || options.signal.aborted) break;
       const at = now().toISOString();
 
       switch (message.kind) {
@@ -1706,15 +1792,18 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
           // Its `false` means the lock is gone and `halted()` is set, which the
           // guard after this switch acts on — a `break` here would only leave
           // the switch, which is the kind of thing that reads as a loop exit
-          // and is not one.
-          take(message.json, message.via, at);
+          // and is not one. AWAITED, so two payloads' folds can never overlap:
+          // the next message is not asked for until this one is finished.
+          await takeProbed(message.json, message.via, at);
           break;
         default: {
           const never: never = message;
           throw new Error(`no handler for source message ${JSON.stringify(never)}`);
         }
       }
-      if (halted() !== null) break;
+      // A probe can yield long enough for shutdown to arrive. Stop before
+      // requesting another payload: the source may still have buffered frames.
+      if (halted() !== null || options.signal.aborted) break;
     }
   } catch (cause) {
     // A THROW IS A DEATH THE DAEMON CAN STILL WRITE DOWN. Without this it dies
@@ -1737,6 +1826,61 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
   }
 
   /**
+   * **THE PROBE, AND THEN THE FOLD — never the probe inside the fold.**
+   *
+   * `take()` publishes as it goes: it moves `accepted` and `refreshMs`, then
+   * diffs, and only at its end moves the register, the baseline and the trusted
+   * inventory. That is safe because it is one synchronous stretch, so no timer
+   * callback can run in the middle of it. The probe is now an awaited child,
+   * and an await where the synchronous `probe()` used to sit would open exactly
+   * that middle: the heartbeat and the recovery tick would run with `accepted`
+   * from the new collection and the inventory and register from the previous
+   * one (the resume observer reads both). GPT Sol's F3 on plan 261004c.
+   *
+   * So the invariant is: **THE ONLY AWAIT ON THIS PATH IS HERE, BEFORE `take()`
+   * HAS CHANGED ANYTHING.** While it is pending every timer sees the previous
+   * collection, whole. After it, `take()` runs start to finish as it always
+   * has, with the reading handed in.
+   *
+   * **WHICH PAYLOADS ARE PROBED** is decided by asking, without changing
+   * anything, the two questions `take()` asks before it would have probed: is
+   * the payload admissible, and can `diff()` place it. A duplicate, a refused
+   * payload and a held collection therefore still cost no `ps`, as before.
+   * `diff()` is called with no baseline and no known executions because its
+   * `held` arm is decided from the new snapshot alone, before it looks at
+   * either; `admissible()` and `diff()` are both pure, and nothing but `take()`
+   * writes `accepted` or `retired`, so `take()` gets the same two answers a
+   * moment later. `parseObservation` runs twice for a payload that is probed,
+   * which is the price of leaving `take()` itself unchanged.
+   *
+   * **AFTER THE AWAIT, BEFORE ANYTHING IS TOUCHED:** a daemon that lost its
+   * lock or was told to stop while the probe was out does not fold. The loop's
+   * own checks would catch both, but only after `take()` had published. An
+   * inventory dropped here is not lost: nothing recorded it, so the next start
+   * diffs the next collection against the same baseline.
+   *
+   * The wait is bounded by the owner (`timeout + grace`), so this cannot hold a
+   * shutdown open the way the synchronous call could hold everything.
+   */
+  async function takeProbed(json: unknown, via: Transport, at: string): Promise<boolean> {
+    let reading: ProcessTableReading | null = null;
+    const preview = admissible(accepted, parseObservation(json), retired);
+    if (preview.verdict === "accept" && diff(null, preview.snapshot, new Map()).kind !== "held") {
+      try {
+        reading = await probe();
+      } catch (cause) {
+        reading = {
+          read: false,
+          why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+        };
+      }
+      if (halted() !== null) return false;
+      if (options.signal.aborted) return true;
+    }
+    return take(json, via, at, reading);
+  }
+
+  /**
    * One payload, all the way through. Returns false when the daemon must stop.
    *
    * Declared after the loop that uses it only because it closes over the
@@ -1744,7 +1888,7 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
    * `runOverseer` is what keeps the state out of module scope where a second
    * daemon in one process would share it.
    */
-  function take(json: unknown, via: Transport, at: string): boolean {
+  function take(json: unknown, via: Transport, at: string, probed: ProcessTableReading | null): boolean {
     lastPayloadAtMs = now().getTime();
     const parsed = parseObservation(json);
     // BEFORE THE GATE, and from every payload including the ones it refuses: a
@@ -1925,15 +2069,16 @@ export async function runOverseer(options: DaemonOptions): Promise<DaemonOutcome
     // on the accept arm would spend a process-table read and throw its answer
     // away because that path writes no checkpoint. The proven-boot-change arm
     // above is the exception: it checkpoints the old world's close-out only.
-    let reading: ProcessTableReading;
-    try {
-      reading = probe();
-    } catch (cause) {
-      reading = {
-        read: false,
-        why: `the process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
-      };
-    }
+    //
+    // THE READING WAS TAKEN BEFORE THIS FUNCTION STARTED, by `takeProbed()`,
+    // which asks the same two questions this fold has just answered — the gate,
+    // and whether `diff()` can place the collection. Null therefore means the
+    // two disagreed, which nothing here can make happen; if it ever does it is
+    // "cannot tell", never a reason to stop the fold and never `no work`.
+    const reading: ProcessTableReading = probed ?? {
+      read: false,
+      why: "no process table was read for this collection: the check made before the fold did not expect it to be placed",
+    };
     try {
       work = scanPaneWork({
         rows: observed.rows,

@@ -22,21 +22,29 @@
  * own** — the same position Summary is in. Nothing here is fetched: the tree
  * arrives in the page's own payload, so a visitor gets the whole of the mode
  * (src/web/visitor.ts § `POLICY`).
+ *
+ * **One exception since 2026-10-05, and it is why the band is told `owner`.**
+ * On a tree built from the author's headings because the model's could not be
+ * made, the head row says so, and the owner is offered another go
+ * (StructureNotice.tsx). The visitor gets the sentence and no press.
  */
 
 import { useQueryState } from "nuqs";
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Article, BlockId, NodeId, TreeNode } from "../../../types.js";
 import { paragraphLabelsReady } from "../../nav-labels.js";
 import { OutlinePanel } from "../../OutlinePanel.js";
 import { STRUCTURE_VIEWS, type StructureView, structureParam } from "../../params.js";
 import { useRenderCount } from "../../perf.js";
+import { StructureNotice } from "../../StructureNotice.js";
 import { StructurePanel } from "../../StructurePanel.js";
+import { StructureArriving, type StructureArrival } from "./StructureArriving.js";
 import { STRUCTURE_SUB_MODES } from "../../sub-modes.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { structureColumnsBand } from "../../layout.js";
 import { type ArcCell, buildSummaryTree } from "../../tree.js";
 import { useColumnContext } from "../../useColumnContext.js";
+import { useRevealChosen } from "../../useRevealChosen.js";
 import type { Section } from "../../position.js";
 
 /**
@@ -86,7 +94,8 @@ const VIEW_HOW: Readonly<Record<StructureView, string>> = {
  * **Fisheye / Expanded** — Greg, 2026-10-01 (spya-gxyhcc). Referee's chips are
  * the pattern (RefereeMode.tsx § `RefereeViews`): a radiogroup of buttons, each
  * its own tab stop, a card on each. Neither arms anything — there is nothing
- * to generate — so the click is only the URL write.
+ * to generate — so the click is only the URL write. Drawn as the part-switcher
+ * every mode shares (mode-band.css § the part-switcher, plan 261007h § F2).
  */
 export function StructureViewToggle({
   view,
@@ -95,8 +104,10 @@ export function StructureViewToggle({
   view: StructureView;
   onView(next: StructureView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, view);
   return (
-    <div className="struct-views" role="radiogroup" aria-label="How Structure is drawn">
+    <div ref={group} className="struct-views summ-views" role="radiogroup" aria-label="How Structure is drawn">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {STRUCTURE_VIEWS.map((v) => (
           <Tooltip
@@ -118,7 +129,7 @@ export function StructureViewToggle({
               role="radio"
               aria-checked={v === view}
               tabIndex={0}
-              className={`struct-view-btn${v === view ? " on" : ""}`}
+              className={`struct-view-btn summ-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
                 /* Writing the value already open would push a history entry
                    that goes nowhere. */
@@ -135,6 +146,8 @@ export function StructureViewToggle({
 }
 
 export function StructureBand({
+  slug,
+  owner,
   article,
   leafDepth,
   sections,
@@ -143,8 +156,12 @@ export function StructureBand({
   arcByRow,
   proseBeside,
   rootFontPx,
+  arrival = null,
   onJump,
 }: {
+  /** The article's slug and whether it is the reader's own — for `StructureNotice` only. */
+  slug: string;
+  owner: boolean;
   article: Article;
   /** `Geometry.leafDepth` — how far down `buildSummaryTree` should walk. */
   leafDepth: number;
@@ -173,6 +190,17 @@ export function StructureBand({
    * the root size changes without changing the band's border-box width.
    */
   rootFontPx: number;
+  /**
+   * **The real structure is still on its way**, and what to say about it above
+   * the rows — or null / absent when the tree is not a stand-in waiting to be
+   * replaced, which is nearly every article. StructureArriving.tsx.
+   *
+   * Handed in rather than worked out here because the two footings get it from
+   * different places: an owner's comes from the job list and carries **Build
+   * it**; a visitor's is read off the payload and carries nothing to press.
+   * This band stays the one component for both and learns nothing about jobs.
+   */
+  arrival?: StructureArrival | null;
   onJump(id: BlockId): void;
 }) {
   useRenderCount("StructureBand");
@@ -274,7 +302,27 @@ export function StructureBand({
    * it is open, so going back to Fisheye lands on the right one.
    */
   const [view, setView] = useQueryState("structure", structureParam);
-  const head = <StructureViewToggle view={view} onView={(v) => void setView(v)} />;
+  /* **The stand-in line rides in the head row**, under the chips, so one place
+     puts it in all three presentations. Both faces measure their room from
+     where their rows actually start (OutlinePanel.tsx § `measure`,
+     StructurePanel.tsx § `roomBelow`), so the columns, which never scroll,
+     give up rows to it rather than overflowing.
+
+     **Two lines, never both.** A tree that is waiting for the real one says so
+     through `arrival` (StructureArriving.tsx: still being built, or it stalled
+     and the owner may build it); a headings tree that is final says so through
+     `StructureNotice`. `arrival` wins, and is null once the real tree is in. */
+  const provisional = article.tree.provisional;
+  const head = (
+    <>
+      <StructureViewToggle view={view} onView={(v) => void setView(v)} />
+      {arrival ? (
+        <StructureArriving arrival={arrival} />
+      ) : provisional === "headings" ? (
+        <StructureNotice provisional={provisional} slug={slug} owner={owner} />
+      ) : null}
+    </>
+  );
 
   if (view === "expanded" || face === "list") {
     return (

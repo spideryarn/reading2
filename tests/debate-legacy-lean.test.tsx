@@ -36,9 +36,10 @@ import type {
   DebateCounts,
   DebateLosses,
   DirectDebateRow,
-  IdentificationLevel,
 } from "../src/types.js";
 import { readStoredLean } from "../src/types.js";
+import type { DebateOrder } from "../src/web/debate-order.js";
+import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 
 const { DebatePanel, LEAN_APPEARANCE } = await import("../src/web/DebatePanel.js");
@@ -123,6 +124,7 @@ function owner(debate: Debate): UseDebate {
     outdated: false,
     slug: "a-piece",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,
@@ -131,23 +133,29 @@ function owner(debate: Debate): UseDebate {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
   };
 }
 
 let host: HTMLDivElement;
 let root: Root;
 
-/* `named` is *show everything* — the fixture row is `named`-only, so any other
-   level would be testing the identification bar by accident. */
-function paint(o: UseDebate, level: IdentificationLevel | null = "named") {
+/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+
+/* Reception (rows about the piece) unless a test says Claims — the two
+   sub-modes each draw one search's rows since 2026-10-03 (plan 261003o). */
+function paint(o: UseDebate, view: DebateView = "reception", order: DebateOrder = "prioritised") {
   act(() => {
     root.render(
       createElement(DebatePanel, {
-        access: { kind: "owner", owner: o },
+        access: { kind: "owner", owner: o, citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
         onJump: () => {},
-        level,
-        onLevel: () => {},
-        order: "prioritised",
+        view,
+        onView: () => {},
+        articleTitle: null,
+        order,
         onOrder: () => {},
         blockOrder: new Map(),
         relevance: null,
@@ -220,8 +228,10 @@ describe("the panel draws a row stored under the old vocabulary", () => {
 
   it("says Supportive for a legacy positive, on a claim row too", () => {
     const debate = artefact({ direct: [], claims: [legacyClaim("positive")] });
-    expect(() => paint(owner(debate))).not.toThrow();
+    expect(() => paint(owner(debate), "claims")).not.toThrow();
     expect(host.textContent ?? "").toContain(LEAN_APPEARANCE["leans-for"].label);
+    /* Grouped under its claim like any other row, with no `bears` to sort by. */
+    expect(host.querySelectorAll("details.dbt-claim-group .dbt-item")).toHaveLength(1);
   });
 
   it("draws the quiet pair calmly rather than as a failure", () => {
@@ -242,26 +252,11 @@ describe("the panel draws a row stored under the old vocabulary", () => {
   /* Stance sorts on the lean (since 2026-09-29, `?debateby=stance`), so an old
      row has to sort where its `valence` says rather than as `undefined`. */
   it("puts a legacy negative first in stance order", () => {
-    const positive = { ...legacyClaim("positive"), id: "spya-c7w2d3" } as ClaimDebateRow;
-    const negative = { ...legacyClaim("negative"), id: "spya-c7w2d4", claimQuote: "another" } as ClaimDebateRow;
-    act(() => {
-      root.render(
-        createElement(DebatePanel, {
-          access: { kind: "owner", owner: owner(artefact({ direct: [], claims: [positive, negative] })) },
-          onJump: () => {},
-          level: "named",
-          onLevel: () => {},
-          order: "stance",
-          onOrder: () => {},
-          blockOrder: new Map(),
-          relevance: null,
-          onRelevance: () => {},
-          articleYear: null,
-          thread: null,
-          onThread: () => {},
-        }),
-      );
-    });
+    /* Rows about the piece: stance is one of Reception's orders, and Claims
+       has none (plan 261003o). */
+    const positive = { ...legacyDirect("positive"), id: "spya-d2w4r3" } as DirectDebateRow;
+    const negative = { ...legacyDirect("negative"), id: "spya-d2w4r4" } as DirectDebateRow;
+    paint(owner(artefact({ direct: [positive, negative], claims: [] })), "reception", "stance");
     const leans = [...host.querySelectorAll(".dbt-item .dbt-lean")].map((l) => l.textContent);
     expect(leans).toEqual([LEAN_APPEARANCE["leans-against"].label, LEAN_APPEARANCE["leans-for"].label]);
   });

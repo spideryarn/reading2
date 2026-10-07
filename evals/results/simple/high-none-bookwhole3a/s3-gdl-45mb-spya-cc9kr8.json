@@ -1,0 +1,27 @@
+{
+  "arm": "high-none-bookwhole3a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "s3-gdl-45mb-spya-cc9kr8",
+  "version": "simple-prompt/11",
+  "sourceSha256": "294923db95e6a5e0c7f490ce493ff5b9a4d86518746875331988cab1771b4ac0",
+  "at": "2026-10-06T00:08:59.392Z",
+  "bodyWords": 47957,
+  "band": "book",
+  "bodyBlocks": 970,
+  "model": "anthropic/claude-sonnet-5",
+  "articleHash": "94e5545c2b197d48",
+  "systemsSha256": "e6a93616d15d191c3e3d229ccb55bf443ee77200d21192a2b5ac38d46e0f4322",
+  "power": "standard",
+  "guard": true,
+  "wallMs": 384657,
+  "costUsd": 0.5932684,
+  "tokens": {
+    "input": 12549,
+    "output": 53279,
+    "reasoning": 206
+  },
+  "fullerReadyMs": 52850,
+  "ok": false,
+  "error": "The simple ran past its 48,999-token budget and came back unfinished. It was sized for an answer of about 8,999 tokens plus 40,000 for reasoning. What it actually spent: about 32,194 tokens of answer and 16,805 of reasoning. Whichever of those two overran is the one to change — see src/token-budget.ts. Retrying is unlikely to come out differently until it does."
+}

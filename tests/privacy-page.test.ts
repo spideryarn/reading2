@@ -31,6 +31,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { BIBLIOGRAPHIC_HOSTS } from "../src/fetch.js";
 import { DISPLAY_NAME } from "../src/models.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -164,6 +165,17 @@ describe("the privacy page", () => {
     expect(prose).toContain("with a short note from whoever gave it, if they wrote one");
   });
 
+  it("says a gift email may carry the recipient's name, as whoever gave it typed it", () => {
+    /* Plan 261007f: `billing_vouchers.recipient_name` opens the email as
+       "Dear <name>,", so one more piece of personal data goes through Resend. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("and the recipient’s name as that person gave it, if they gave one");
+  });
+
+  it("dates the privacy notice to the day the recipient-name disclosure was added", () => {
+    expect(PAGE).toContain('const LAST_UPDATED = "7 October 2026"');
+  });
+
   it("says a reader is emailed when their feedback ships, without their words", () => {
     /* Plan 261002f: scripts/feedback-shipped-emails.ts, run by `npm run deploy`. */
     const prose = PAGE.replace(/\s+/g, " ");
@@ -182,11 +194,128 @@ describe("the privacy page", () => {
     expect(prose).toContain("It goes to our database, to Sentry and, as an email, to our own inbox");
   });
 
+  it("names the three indexes a DOI is sent to, and says what is not sent", () => {
+    /* Plan 261004h. src/fetch.ts § `BIBLIOGRAPHIC_HOSTS` is the list of hosts
+       the server asks about a DOI: Crossref and DataCite since 2026-10-01
+       (src/bibliographic.ts), which the page did not name until now, and
+       OpenAlex since 2026-10-04 (src/citation-index.ts). Read from that list,
+       so a fourth host turns this red until the page names it. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    const NAME: Record<string, string> = {
+      "api.crossref.org": "Crossref",
+      "api.datacite.org": "DataCite",
+      "api.openalex.org": "OpenAlex",
+    };
+    expect(BIBLIOGRAPHIC_HOSTS.length).toBeGreaterThanOrEqual(3);
+    for (const host of BIBLIOGRAPHIC_HOSTS) {
+      const name = NAME[host];
+      expect(name, `${host} has no name on the privacy page yet`).toBeDefined();
+      expect(prose, host).toContain(name);
+    }
+    expect(prose).toContain("its DOI");
+    expect(prose).toContain("when you look up the works it cites");
+    expect(prose).toContain("when you open Reception in Debate");
+    expect(prose).toContain("never the article’s text, and nothing about who you are");
+  });
+
+  it("says quiz answers are kept, and no longer that they are not", () => {
+    /* Plan 261005b: until 2026-10-05 the page said quiz answers "are not
+       stored", and it was true. `quiz_attempts` now holds each answer and the
+       mark it was given, so that sentence would be a false promise on a public
+       page. Held to the table too: if the table goes, this claim should. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).not.toContain("Quiz answers are the exception");
+    expect(prose).not.toContain("are not stored");
+    expect(prose).toContain("your answers to quiz questions, with what the AI wrote back about each");
+    const schema = readFileSync(path.join(ROOT, "src/db/schema.ts"), "utf8");
+    expect(schema).toContain('"quiz_attempts"');
+  });
+
+  it("says the command bar's suggestions are made from the profile, and where a pressed one goes", () => {
+    /* Plan 261005k, GPT Sol's F5. `gpt-5.6-luna` was already on the page, so
+       the model-name check above cannot notice this disclosure being deleted:
+       the profile and the reason for reading go to it, and the searches and
+       the question it writes from them travel on once pressed. Held to the
+       job too: if the call goes, these claims should. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain(
+      "when you ask the command bar to suggest what to do with an article, to write that short list, for which it is shown your profile and your reason for reading the article, with our list of commands",
+    );
+    expect(prose).toContain("The searches and the question the command bar suggests are worded from what you wrote");
+    expect(prose).toContain("Nothing is done with a suggestion until you press it");
+    expect(prose).toContain("a search is seen by visitors if you share the article");
+    expect(prose).toContain("The chat question waits in Chat’s box until you press Send");
+    expect(prose).toContain("Once sent, it is kept like a question you typed and can be searched for on the web");
+    /* It must not promise what a prompt cannot guarantee. */
+    expect(prose).toContain("we cannot promise that it always does");
+    expect(prose).not.toMatch(/never (contain|include)s? anything about you/);
+    const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
+    expect(models).toContain('{ job: "command-suggest", id: QUICK_MODEL_OPENROUTER');
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a
        domain move. */
     expect(PAGE).toContain("CONTACT_EMAIL");
     expect(PAGE).not.toMatch(/@spideryarn\.com/);
+  });
+
+  /**
+   * **A private link is a third way somebody else reads your article**
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md),
+   * so "Who can see your shelf" has to name it. Held to the code as the
+   * claims above are: if the link goes, or starts listing, these should fail.
+   */
+  describe("what it says about a private link", () => {
+    const prose = PAGE.replace(/\s+/g, " ");
+    const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
+
+    it("names it as an exception beside public, and no longer counts two", () => {
+      expect(prose).toContain("private link");
+      expect(prose).not.toContain("Two exceptions");
+      expect(prose).toContain("Three exceptions");
+    });
+
+    it("says anyone who has the link can read without signing in, and can pass it on", () => {
+      expect(prose).toMatch(/anyone who has (it|the link) can read (it|the article) without signing in/);
+      expect(prose).toMatch(/pass (it|the link) on/);
+      expect(read("src/store/link-shared-slug.ts")).toMatch(/eq\(articles\.shareToken, key\)/);
+    });
+
+    it("says it is not listed, and that we cannot tell who read it", () => {
+      expect(prose).toMatch(/An article shared only this way is not listed anywhere/);
+      expect(prose).toMatch(/cannot tell (you )?who (has )?(read|opened)/);
+      expect(read("src/store/public-library.ts")).not.toMatch(/from "\.\/public-access\.js"/);
+      /* Nothing records a visit: the public routes write nothing. */
+      expect(read("src/db/schema.ts")).not.toMatch(/share_link_(reads|visits|opens)/);
+    });
+
+    it("says they get what a public reader gets", () => {
+      expect(prose).toMatch(/same things? a public (article'?s )?reader gets/);
+    });
+
+    it("says it can be turned off, and what that cannot take back", () => {
+      expect(prose).toMatch(/[Tt]urn(ing)? (it|the link) off/);
+      expect(read("src/web/PrivateLink.tsx")).toMatch(/Turn off/);
+    });
+
+    it("says the key is in the address, so it is in a browser's history", () => {
+      expect(prose).toMatch(/browser(’s|'s)? history/);
+    });
+
+    it("says a bug report from such a page leaves the key out, and the button does", () => {
+      expect(prose).toMatch(/without the (link’s|link's) key/);
+      expect(read("src/web/FeedbackButton.tsx")).toMatch(/url: withoutShareKey\(location\.href\)/);
+    });
+
+    it("counts making and turning off a link in the audit trail, and the table exists", () => {
+      expect(prose).toMatch(/when a private link (to it )?was made or turned off/);
+      expect(read("src/db/schema.ts")).toContain('"article_share_link_events"');
+    });
+
+    it("covers a private link in what taken down means", () => {
+      expect(prose).toMatch(/turn off any private link/);
+    });
   });
 });

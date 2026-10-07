@@ -32,11 +32,20 @@
  *
  * ## Where the entries come from, and what is deliberately absent
  *
+ * **Both witnesses were deleted on 2026-10-06**, with the four cases that read
+ * them (docs/plans/261006j-sixth-sweep-s1-filesystem-store-leftovers.md): the
+ * filesystem store went on 2026-09-05 and there was nothing condemned left to
+ * witness. So `STORE_MIGRATION` is **a closed record**. Nothing asks a new test
+ * file for an entry, `evidence` is checked by nothing, and every "re-run
+ * witness 2" below is a sentence about an instrument that no longer exists.
+ * `TEST_LANES`, `LANES_BEYOND_THE_SCAN` and `OWNER_AUDIT` are live, and are why
+ * this file is still imported by `vitest.config.ts`.
+ *
  * Two witnesses, neither subsuming the other:
  *
- * 1. **[`scripts/store-migration-candidates.ts`](../scripts/store-migration-candidates.ts)**,
- *    a transitive import-graph walk. A file's imports are a *claim*.
- * 2. **[`store-migration-witness.json`](store-migration-witness.json)**, an
+ * 1. **The candidates script**, a transitive import-graph walk over `src/`,
+ *    `tests/`, `scripts/`, `api/` and `evals/`. A file's imports are a *claim*.
+ * 2. **The witness JSON**, an
  *    instrumented full-suite run recording which files actually *executed* a
  *    condemned function, down to the method. What a file executes is the fact,
  *    and this is the authority on "needs action".
@@ -143,8 +152,8 @@
  *
  * The witness measured 588 test files; the graph walk saw 597 an hour and a
  * half later. Nothing here is a fact about the repository for longer than a
- * morning. The guard re-derives the static universe on every run for exactly
- * that reason.
+ * morning. The guard re-derived the static universe on every run for exactly
+ * that reason, until both went on 2026-10-06.
  */
 
 /** What is to be done with a file. See the table in the header. */
@@ -177,7 +186,9 @@ export type CollateralMechanism =
    */
   | "condemned-symbol-import";
 
-/** How the verdict was reached: watched executing, or read off the graph. */
+/** How the verdict was reached: watched executing, or read off the graph.
+ *  A record only since 2026-10-06, when the case that held it to the witness
+ *  went with the witness. */
 export type Evidence = "dynamic" | "static-only";
 
 interface EntryCommon {
@@ -218,7 +229,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * It is not resting on the import graph alone, though. The ad-hoc witness was
    * pointed at it —
-   * `npx tsx scripts/store-migration-witness.ts --files tests/tree-redundant-rung.test.ts` —
+   * the witness script run with `--files tests/tree-redundant-rung.test.ts` —
    * and reported "ran, touched nothing" under full instrumentation. `evidence`
    * still says `static-only` because that is what the field means: the stored
    * `touched` map does not name this file, and the guard holds the two apart so
@@ -333,7 +344,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * Measured rather than reasoned, on the `tree-redundant-rung.test.ts`
    * precedent above:
-   * `npx tsx scripts/store-migration-witness.ts --files tests/debate-step-registration.test.ts`
+   * the witness script run with `--files tests/debate-step-registration.test.ts`
    * reported **"ran, touched nothing"** under full instrumentation, and the
    * instrument's own `--self-check` passed immediately before — twelve control
    * files, all eight modules still hooked at method level, 24 sites. An
@@ -427,7 +438,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "real `claimSession`, with `expect(STORE).toBe('postgres')` where the `files` self-check " +
       "used to be. Mutation watched red: `error: ending.error ?? null` in `finishIn` set to " +
       "`null`. The category is left alone deliberately — a converted file may only leave this map " +
-      "once `store-migration-witness.json` is re-run at the end of stage B, so this reason says " +
+      "once the witness JSON is re-run at the end of stage B, so this reason says " +
       "the work is done rather than the verdict being quietly re-labelled.",
   },
   "tests/all-skipped-publication-refusal.test.ts": {
@@ -519,6 +530,36 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "question is still answered as one. It pins `postgres` before any import and seeds through " +
       "`scratchArticleInPg`; what it still reaches is the seeder's copy step and the ledger row " +
       "the stubbed model call records.",
+  },
+  /**
+   * **Written 2026-10-05 (plan 261005i), after the witness ran**, so
+   * `static-only`. Its harness is `chat-anchor-route.test.ts`'s and it reaches
+   * what that file reaches, by the same two doors.
+   */
+  "tests/chat-origin-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_threads.origin_*` at the route, in the store and in the export: what the wire may " +
+      "carry, that a thread's origin is set once, and that the four columns round-trip. It seeds " +
+      "through `scratchArticleInPg`; what it still reaches is the seeder's copy step and the " +
+      "ledger row the stubbed model call records.",
+  },
+  /**
+   * **Written 2026-10-04 (plan 261004h), after the witness ran**, so
+   * `static-only` for the ordinary reason the header gives. Born on Postgres;
+   * it makes no model call, so the seeder's copy step is the one door.
+   */
+  "tests/chat-hint-opened-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "`chat_messages.hint_opened_at` at the route: that a press on a Recall hint is recorded " +
+      "once, and refused for a hint the stored answer no longer carries or for somebody else's " +
+      "article. It seeds through `scratchArticleInPg`; what it still reaches is the seeder's " +
+      "copy step.",
   },
   /**
    * **Written 2026-09-12 (fb30 stage 1b), after the witness ran**, so
@@ -743,6 +784,20 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "(SPIDERYARN-READING2-6Q). The purpose and the job both live only in Postgres; the " +
       "seeder is the whole of its filesystem contact.",
   },
+  /**
+   * **`evidence: "static-only"`, because this file arrived after the stored
+   * witness ran** (2026-10-04), as its two neighbours above did.
+   */
+  "tests/freshness-deciders-agree.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Holds `stepIsDone` (src/pipeline.ts) and `articleMetadata(...).stages[].done` " +
+      "(src/store/pg.ts) to one answer per step, by rewriting one published revision's artefact " +
+      "columns and `revision_step_runs` rows and asking both. Both deciders, and every state it " +
+      "seeds, exist only in Postgres; the seeder is the whole of its filesystem contact.",
+  },
   "tests/enqueue-owns-the-article.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -797,7 +852,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    *
    * It is not resting on the import graph alone. The ad-hoc witness was pointed
    * at it —
-   * `npx tsx scripts/store-migration-witness.ts --files tests/helpers-store-fakes.test.ts` —
+   * the witness script run with `--files tests/helpers-store-fakes.test.ts` —
    * and reported **"ran, touched nothing"** under full instrumentation. The
    * graph reaches `artifacts-fs` from here only through
    * `helpers/memory-artefacts.ts` → `src/pipeline.ts`, whose `contextPaths` this
@@ -991,7 +1046,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`openPgStoreSession`, the real `blocks` stage runs forced against a `scratchArticleInPg` " +
       "fixture, and the artefacts come back through `readOnlyPgArtifacts` over the published " +
       "revision instead of `fsArtifacts`. **Still `database-integration` rather than " +
-      "re-categorised**: the map shrinks when `tests/store-migration-witness.json` is re-run at " +
+      "re-categorised**: the map shrinks when the witness JSON is re-run at " +
       "the end of stage B, and converted files drop out of it then rather than being given a " +
       "verdict that no longer describes any outstanding work.",
   },
@@ -1028,7 +1083,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "mutation, `eq(jobs.status, 'queued')` deleted from `claimIn`, is the first evidence any of " +
       "it reaches the SQL that ships. **Still `database-integration` rather than collateral**, and " +
       "that is the honest verdict rather than an un-updated one: the map shrinks when " +
-      "`store-migration-witness.json` is re-run at the end of stage B, at which point converted " +
+      "the witness JSON is re-run at the end of stage B, at which point converted " +
       "files drop out of it entirely. Two things it now needs that no other converted queue suite " +
       "does: an article per case, because `claimSession` opens a draft; and a stamp on every fake " +
       "product, because `publishRevisionIn` refuses a tree that ran against `unstamped`.",
@@ -1062,7 +1117,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "proving the function is on the path — nothing here tells *artefacts present* from *a step " +
       "recorded done*). **Still `database-integration` rather than collateral**, which is the " +
       "honest verdict rather than an un-updated one: the map shrinks when " +
-      "`store-migration-witness.json` is re-run at the end of stage B, at which point converted " +
+      "the witness JSON is re-run at the end of stage B, at which point converted " +
       "files drop out of it entirely.",
   },
   "tests/live-session-routes.test.ts": {
@@ -1082,7 +1137,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "path that cannot be written, and *nothing was journalled* is a row count rather than the " +
       "size of a parsed JSON object. Mutation watched red: the `is null` earliest-wins predicate " +
       "deleted from `markConnected`. The category is left alone deliberately — a converted file " +
-      "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
+      "may only leave this map once the witness JSON is re-run at the end of stage " +
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
   /**
@@ -1186,7 +1241,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     category: "database-integration",
     reason:
       "**Converted in stage B on 2026-09-04**; the category stays `database-integration` because " +
-      "the map shrinks by re-running `store-migration-witness.json` at the end of the stage, not " +
+      "the map shrinks by re-running the witness JSON at the end of the stage, not " +
       "by re-labelling a file whose conversion is done. `claimsOmitted` was computed by the " +
       "validator, printed by the panel, and never carried between the two — and the file was " +
       "checking the one store that cannot have that bug, since a JSON file carries any key it is " +
@@ -1253,7 +1308,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     mechanisms: ["fixture-loader"],
     reason:
       "The suite written *because* of the 501 postmortem — it pins `postgres`, owns the sentence " +
-      "*these routes work under Postgres*, and fails rather than skips under `REQUIRE_POSTGRES`. " +
+      "*these routes work under Postgres*, and failed rather than skipped under `REQUIRE_POSTGRES`, a flag no code reads now. " +
       "It reaches the filesystem only through `scratchArticleInPg`, and its header's argument for " +
       "existing separately is the thing the hinge makes moot.",
   },
@@ -1367,7 +1422,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg` and that copy step is the only condemned module it reaches: " +
       "`embedAll` is stubbed, so no provider is called and no ledger row is written.",
   },
-  "tests/remember-route.test.ts": {
+  "tests/learn-route.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     reason:
@@ -1382,7 +1437,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
    * the file arrived into it.
    *
    * The measurement was made rather than inferred:
-   * `npx tsx scripts/store-migration-witness.ts --files tests/reserved-article-address.test.ts`
+   * the witness script run with `--files tests/reserved-article-address.test.ts`
    * reported *ran, touched nothing*. `--files` writes no JSON, so the stored
    * map still predates the file and the honest `evidence` is `static-only`
    * until witness 2 is re-run — which is what would move this entry off the
@@ -1416,7 +1471,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "row. The mutation is `failureKind` deleted from `finishIn` — a column with no filesystem " +
       "counterpart — watched red. **Still `database-integration` rather than collateral**, and " +
       "that is the honest verdict rather than an un-updated one: the entry should simply leave " +
-      "this map, and can only do so when `tests/store-migration-witness.json` is re-run at the end " +
+      "this map, and can only do so when the witness JSON is re-run at the end " +
       "of stage B and stops seeing this file reach a condemned module.",
   },
   "tests/routes.test.ts": {
@@ -1443,7 +1498,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`STORE_CONVERSIONS` is what checks the evidence has not shrunk since. **Still " +
       "`database-integration` " +
       "rather than collateral**, and that is the honest verdict rather than an un-updated one: " +
-      "the entry should simply leave this map when `tests/store-migration-witness.json` is re-run " +
+      "the entry should simply leave this map when the witness JSON is re-run " +
       "at the end of stage B.",
   },
   "tests/shelf.test.ts": {
@@ -1517,7 +1572,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "the read-after-write race the plan asked about is gone**: there is no `data/_jobs/` left in " +
       "it, and ten consecutive runs on a box at load 32–52 were green. The category is left alone " +
       "deliberately — a converted file may only leave this map once " +
-      "`store-migration-witness.json` is re-run at the end of stage B.",
+      "the witness JSON is re-run at the end of stage B.",
   },
   "tests/store-ai-calls.test.ts": {
     category: "filesystem-adapter-behaviour",
@@ -1598,7 +1653,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "entry would have lost all fifty-three. **Kept as `filesystem-adapter-behaviour` rather " +
       "than re-categorised**, on the precedent this map's header states for `fixture-loader`: an " +
       "entry records why a file was classified as it was, and the map shrinks when " +
-      "`store-migration-witness.json` is re-run, not by rewriting verdicts one at a time. The " +
+      "the witness JSON is re-run, not by rewriting verdicts one at a time. The " +
       "reach itself is gone.",
   },
   "tests/store-parity-referee.test.ts": {
@@ -1703,14 +1758,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "default `repeatable read` so a passing assertion cannot be the database's own default " +
       "agreeing with the bug. Nothing about it is filesystem; the two sites are `contextPaths`.",
   },
-  "tests/store-session.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "D1a — the commit seam **on the filesystem, where there is no transaction to hold**, and its " +
-      "sharpest case is a refusal over an artefact carried from a previous run, because against an " +
-      "empty directory a refusal proves nothing. The Postgres half of the same seam already lives " +
-      "in `store-pg-session.test.ts`.",
-  },
   "tests/store-uploads-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
@@ -1753,7 +1800,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "never had (the dependency itself went on 2026-09-06) — the file's header records the drop, and the 404-for-an-unknown-slug half " +
       "is kept in a case of its own. Mutation watched red: `entries` emptied in " +
       "`pgArticleReader.loadGlossary`. The category is left alone deliberately — a converted file " +
-      "may only leave this map once `store-migration-witness.json` is re-run at the end of stage " +
+      "may only leave this map once the witness JSON is re-run at the end of stage " +
       "B, so the reason says the work is done rather than the verdict being re-labelled.",
   },
   "tests/the-query-string-does-not-decide-the-route.test.ts": {
@@ -1883,17 +1930,19 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "condemned modules is the seeder's copy step and the spend ledger, as for " +
       "`tests/glossary-asked-term-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
-  "tests/citation-find-route.test.ts": {
+  "tests/citation-finds-read-back-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["ledger-redirect", "fixture-loader"],
     evidence: "static-only",
     reason:
-      "Arrived after the witness ran, with Citations mode's stage 3 (2026-09-12). It seeds one " +
-      "article with `scratchArticleInPg`, writes a citations artefact onto its revision, and " +
-      "drives `POST /api/citations/:slug/:id/find` through `handleApi` against a stubbed " +
-      "provider, reading the stored find back through the citations GET — entirely Postgres. " +
-      "Its reach into the condemned modules is the seeder's copy step and the spend ledger, as " +
-      "for `tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
+      "Arrived after the witness ran, with Citations mode's stage 3 (2026-09-12), as " +
+      "`tests/citation-find-route.test.ts`; renamed on 2026-10-04 when the `/find` route it drove " +
+      "was deleted. It seeds one article with `scratchArticleInPg`, writes a citations artefact " +
+      "onto its revision, runs `runCitationLookup` against the real find store with the model " +
+      "call injected, and reads the stored find back through the citations GET on `handleApi` — " +
+      "entirely Postgres. Its reach into the condemned modules is the seeder's copy step and the " +
+      "spend ledger (reached through the routes import; no call is made), as for " +
+      "`tests/glossary-lookup-stream-route.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/citation-investigate-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1905,7 +1954,20 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "drives `POST /api/citations/:slug/:id/investigate` through `handleApi` against a stubbed, " +
       "streamed provider, reading the stored answer back through the citations GET — entirely " +
       "Postgres. Its reach into the condemned modules is the seeder's copy step and the spend " +
-      "ledger, as for `tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+      "ledger, as for `tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
+  },
+  "tests/citation-index-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["ledger-redirect", "fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Reception's Cited by (2026-10-04, plan 261004h). It " +
+      "seeds four articles with `scratchArticleInPg`, reads and writes the two `citation_index_*` " +
+      "tables and the limiter's rows directly, and drives `GET /api/citers/:slug` through " +
+      "`handleApi` with `fetchBibliographicJson` replaced — entirely Postgres, and no model is " +
+      "called. Its reach into the condemned modules is the seeder's copy step and the spend ledger " +
+      "(reached through the routes import; no call is made), as for " +
+      "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/dig-deeper-comment.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1929,7 +1991,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "with `scratchArticleInPg` to read the owner's and the visitor's payloads, and drives " +
       "`POST /api/source-guess/:slug` through `handleApi` to its 409 — no model is called. Its " +
       "reach into the condemned modules is the seeder's copy step, as for " +
-      "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+      "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/reading-time-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1940,7 +2002,7 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "articles with `scratchArticleInPg` and drives `GET` and `POST /api/reading-time/:slug` " +
       "through `handleApi`, reading rows back out of `reading_time` — entirely Postgres. Its " +
       "reach into the condemned modules is the seeder's copy step, as for " +
-      "`tests/citation-find-route.test.ts`. Read off the graph, not re-witnessed.",
+      "`tests/citation-finds-read-back-pg.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/glossary-hidden-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -1954,6 +2016,42 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off the graph, not " +
       "re-witnessed.",
   },
+  "tests/quiz-attempts-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with kept quiz answers (plan 261005b, 2026-10-05). It " +
+      "seeds three articles with `scratchArticleInPg`, each with a quiz written into the clone, " +
+      "and drives `POST /api/quiz/:slug/mark` and `GET /api/quiz/:slug` through `handleApi`, " +
+      "reading rows back out of `quiz_attempts` — entirely Postgres. Its reach into the " +
+      "condemned modules is the seeder's copy step, as for " +
+      "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
+  "tests/none-yet-is-not-a-404-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with `200 null` for an artefact not made yet (plan " +
+      "261006g, 2026-10-06). It seeds two articles with `scratchArticleInPg`, one with its quiz " +
+      "removed from the clone, and drives `GET /api/quiz/:slug`, `/api/crossrefs/:slug` and " +
+      "`/api/citations/:slug` through `handleApi` — entirely Postgres. Its reach into the " +
+      "condemned modules is the seeder's copy step, as for " +
+      "`tests/quiz-attempts-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
+  "tests/command-suggest-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with the command bar's suggestions (plan 261005k, " +
+      "2026-10-05). It seeds two articles with `scratchArticleInPg`, writes a purpose on each, " +
+      "and drives `POST /api/command-suggest/:slug` and `GET /api/reader` through `handleApi` " +
+      "with the model's address stubbed — entirely Postgres. Its reach into the condemned " +
+      "modules is the seeder's copy step, as for `tests/reading-time-route.test.ts`. Read off " +
+      "the graph, not re-witnessed.",
+  },
   "tests/glossary-added-term.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["fixture-loader"],
@@ -1964,6 +2062,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "each, and drives `addTerm`, hide, the owner's `loadGlossary` and the public read directly — " +
       "entirely Postgres. Its reach into the condemned modules is the seeder's copy step, as for " +
       "`tests/glossary-hidden-route.test.ts`. Read off the graph, not re-witnessed.",
+  },
+  "tests/reader-notes-owner-isolation.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with chat's `reader_notes` tool (plan 261003l, 2026-10-03). " +
+      "It seeds two articles under two owners with `scratchArticleInPg`, writes comments and one " +
+      "finished conversation on each through the stores, and runs the tool as each owner against " +
+      "the other's slug and thread id — entirely Postgres. Its reach into the condemned modules is " +
+      "the seeder's copy step, as for `tests/glossary-added-term.test.ts`. Read off the graph, not " +
+      "re-witnessed.",
+  },
+  "tests/explore-digest-route.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran, with Explore, Learn's fourth sub-mode (plan 261003l stage " +
+      "2, 2026-10-03). It seeds one article with `scratchArticleInPg`, writes a comment and " +
+      "finished conversations through the stores, posts chat turns with `fetch` stubbed to keep " +
+      "the request body and fail, and reads what would have been sent — entirely Postgres. Its " +
+      "reach into the condemned modules is the seeder's copy step, as for " +
+      "`tests/reader-notes-owner-isolation.test.ts`. Read off the graph, not re-witnessed.",
   },
   "tests/reset-route.test.ts": {
     category: "shared-mechanism-collateral",
@@ -2105,6 +2227,30 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "`scratchArticleInPg`, which loads a corpus article into Postgres and reads no `data/` " +
       "directory of its own. Re-run witness 2 to confirm.",
   },
+  "tests/title-original-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for `article_revisions.title_original` " +
+      "(docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md): the owner's read, the " +
+      "carry-forward, the export and the visitor's read. It seeds through `scratchArticleInPg`, " +
+      "which loads a corpus article into Postgres and reads no `data/` directory of its own; the " +
+      "export it runs writes to a temporary directory it removes. Re-run witness 2 to confirm.",
+  },
+  "tests/reading-difficulty-pg.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["import-only"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran. A pure Postgres suite for the five reading-difficulty columns " +
+      "on `article_revisions` " +
+      "(docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md): " +
+      "the owner's read, the shelf entry's minutes, the carry-forward, both exports and the visitor's " +
+      "read. It seeds through `scratchArticleInPg`, which loads a corpus article into Postgres and " +
+      "reads no `data/` directory of its own; the export it runs writes to a temporary directory it " +
+      "removes. Re-run witness 2 to confirm.",
+  },
   "tests/store-glossary-delete-pg.test.ts": {
     category: "shared-mechanism-collateral",
     mechanisms: ["import-only"],
@@ -2122,6 +2268,15 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
     reason:
       "Arrived after the witness ran (plan 261001i § 3). A pure Postgres suite — " +
       "`articleMetadata`'s glossary verdict against a list stamped the way the job stamps one. " +
+      "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
+  },
+  "tests/unknown-thread-kind-refuses-cleanly.test.ts": {
+    category: "shared-mechanism-collateral",
+    mechanisms: ["fixture-loader"],
+    evidence: "static-only",
+    reason:
+      "Arrived after the witness ran (plan 261006a, stage 0's code review). A Postgres suite from " +
+      "birth: what a refused rename, delete, retry or edit leaves in `chat_threads` and on screen. " +
       "Its only filesystem contact is the scratch-article loader. Re-run witness 2 to confirm.",
   },
 
@@ -2143,8 +2298,8 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
 
      The heading survives the entry because the *class* does: a test that reads a
      condemned file's source is invisible to both witnesses, and the next one
-     will need a line here. scripts/store-migration-witness.ts § the blind spots
-     says the same thing from the other end. */
+     will need a line here. The witness script's own list of blind spots said
+     the same thing from the other end, until it was deleted on 2026-10-06. */
 };
 
 /* ------------------------------------------------------------------------- */
@@ -2262,8 +2417,10 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 1 },
   "tests/article-cache-call-site.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 2 },
+  /* Three blocks added on 2026-10-07 (seventh sweep, C4/B), each with its
+     own mutation and its own blind spot, so the arrears stay at three. */
   "tests/chat-anchor-route.test.ts":
-    { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 2, blocksWithoutJudgement: 3 },
+    { date: "2026-09-04", stage: "B", mutations: 5, blindSpots: 5, blocksWithoutJudgement: 3 },
   "tests/chat-live-ticket-route.test.ts":
     { date: "2026-09-04", stage: "B", mutations: 2, blindSpots: 3, blocksWithoutJudgement: 4 },
   "tests/chat-live-turn.test.ts":
@@ -2507,7 +2664,8 @@ export const STORE_CONVERSIONS: Readonly<Record<string, Conversion>> = {
  * By running, not by reading — 260903e's own instruction, and the reason this
  * map could not be written in stage A. Every entry below was run against a
  * database minted by the factory, one file at a time, under `REQUIRE_POSTGRES=1`
- * so that a skip counted as a failure. The results, the tail of suites that
+ * so that a skip counted as a failure (no code reads that flag now; `pgReady`
+ * throws instead). The results, the tail of suites that
  * assume seeded local state, and what was fixed against what was catalogued are
  * in
  * docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md
@@ -2557,12 +2715,20 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      doing the same job — this file is what it looks like when the second one
      feeds the first. */
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": "private-postgres",
+  /* The deploy window of plan 261005l: job rows seeded with the keys the build
+     before the paper-source resolver wrote, then `enqueue`. The queue only. */
+  "tests/a-paper-queued-before-the-resolver.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` below. Found by the
      Storage poison on its first full run, which is what a semantic backstop is
      for: Sol read four out of the lane map and running it found two more. */
   "tests/acquire-extract-blocks-end-to-end.test.ts": "private-postgres",
+  /* The cost cube's query, 261005a: ledger rows in 2033 under two seeded owners. */
+  "tests/admin-costs-store.test.ts": "private-postgres",
   "tests/admin-feedback-store.test.ts": "private-postgres",
   "tests/ai-calls-spend-pg.test.ts": "private-postgres",
+  /* Plan 261006i. Claims jobs through the real `claimSession` and reads
+     `articles.asked_url` straight back; two cases assert a null stayed null. */
+  "tests/asked-url-claim-session.test.ts": "private-postgres",
   /* The two asset routes, 2026-09-06. Postgres for the two seeded articles and
      their manifests; the bucket is a temp directory, mocked at the `blobStore()`
      selector exactly as `illustrated-route` mocks it, so nothing here touches
@@ -2603,6 +2769,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      race the test is measuring the only race in it. No GoTrue and no bucket. */
   "tests/article-delete-pg.test.ts": "private-postgres",
   "tests/article-rows-snapshot.test.ts": "private-postgres",
+  /* 261004h stage 2: the registry backfill's apply and dry run. It writes
+     revision columns under `ADMIN_USER_ID_LOCAL`, holds a row lock in a second
+     connection, and deletes its own slugs by prefix. No GoTrue and no bucket. */
+  "tests/backfill-registry-facts-pg.test.ts": "private-postgres",
   /* 261001a stage 1: the bibliographic cache and its politeness rows. Those
      tables are ownerless and this file resets all three between cases, which a
      shared database must never have done to it mid-run. */
@@ -2640,9 +2810,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 260930i: the sign-up ledger. `pgReady`, its own two seeded accounts, and
      its oracle is the ledger's rows. */
   "tests/reader-arrivals.test.ts": "private-postgres",
-  /* 261001m: the Remember fold migration, run statement by statement inside a
+  /* 261001m: the Learn fold migration, run statement by statement inside a
      transaction it always rolls back. `pgReady`, its own two articles. */
-  "tests/remember-one-thread-migration.test.ts": "private-postgres",
+  "tests/learn-one-thread-migration.test.ts": "private-postgres",
+  /* 261006a: the thread kind `remember` → `learn`, replayed the same way
+     against the schema of the day before. `pgReady`, its own three articles. */
+  "tests/learn-kind-migration.test.ts": "private-postgres",
   /* 261002b: a job row written under a retired step name reads back under the new one. */
   "tests/retired-step-names.test.ts": "private-postgres",
   "tests/billing-usage-route.test.ts": "private-postgres",
@@ -2673,6 +2846,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      than through the Auth service — nothing here talks to GoTrue — so
      `shared-services` would buy nothing while the clone keeps a growing journal
      of stub sessions out of the shared stack's own. */
+  "tests/chat-hint-opened-route.test.ts": "private-postgres",
   "tests/chat-live-ticket-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane is decided by what the cases do
      rather than by what they seed: each one leaves a model call hanging open
@@ -2691,6 +2865,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      writing to the same `chat_threads` could falsify without touching this
      file. */
   "tests/chat-help-route.test.ts": "private-postgres",
+  /* Plan 261005i. The anchor route suite's harness and its lane: it reads
+     conversations back with `chatStore.load` and asserts a refused request
+     left none. */
+  "tests/chat-origin-route.test.ts": "private-postgres",
   "tests/chat-visible-route.test.ts": "private-postgres",
   "tests/chat-route.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from the read-backs
@@ -2738,11 +2916,15 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      is the asymmetry `lateCalls` exists to report and cannot be shown against a
      store nothing selects. It was written against `fsCostStore` for a day and
      the import-graph guard is what said so. */
+  /* The cost analysis's two reads, 261005a stage 3: ledger rows in July 2033
+     under two seeded owners, like tests/admin-costs-store.test.ts. */
+  "tests/cost-detail-store.test.ts": "private-postgres",
   "tests/cost-ledger-shortfall.test.ts": "private-postgres",
   /* Stage C, 2026-09-05. A `unit`-lane file until the redirect it asserted
      went away; what it asserts now is *which database* the ledger lands in,
      and that needs one. */
   "tests/cost-store-under-test.test.ts": "private-postgres",
+  "tests/created-at-on-action-tables.test.ts": "private-postgres",
   "tests/db-error-scrub.test.ts": "private-postgres",
   "tests/db-referee-criteria.test.ts": "private-postgres",
   "tests/db-schema-drift.test.ts": "private-postgres",
@@ -2755,6 +2937,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/draft-sweep-on-step-start.test.ts": "private-postgres",
   "tests/enqueue-drives-what-it-queues.test.ts": "private-postgres",
   "tests/enqueue-owns-the-article.test.ts": "private-postgres",
+  "tests/event-times.test.ts": "private-postgres",
   "tests/quiz-job-carries-the-reading-goal.test.ts": "private-postgres",
   "tests/export-route.test.ts": "private-postgres",
   "tests/feedback-store.test.ts": "private-postgres",
@@ -2768,18 +2951,30 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      owners over SQL and needs neither GoTrue nor a bucket. */
   "tests/fetch-allowance.test.ts": "private-postgres",
   "tests/find-article.test.ts": "private-postgres",
+  /* Seeds one corpus article under a per-run slug, owned by `DEV_OWNER_ID` (a
+     row the private clone already seeds), then rewrites that revision's
+     artefact columns and `revision_step_runs` rows over SQL and asks
+     `stepIsDone` and `articleMetadata` about them. No model, no GoTrue, no
+     bucket. */
+  "tests/freshness-deciders-agree.test.ts": "private-postgres",
   /* Seeds one article and reads it; the provider is a stubbed `fetch`, so the
      only Postgres writes are the seed and the spend ledger's row per call. */
   "tests/glossary-asked-term-stream-route.test.ts": "private-postgres",
   /* Seeds two articles, writes lookups and deletes one article mid-stream;
      the provider is a stubbed `fetch`. */
   "tests/glossary-lookup-stream-route.test.ts": "private-postgres",
-  /* Seeds one article, writes a citations artefact and one find row, and
-     drives *Find it* through the route; the provider is a stubbed `fetch`. */
-  "tests/citation-find-route.test.ts": "private-postgres",
+  /* Seeds one article, writes a citations artefact and one find row, runs the
+     citation lookup against the real find store with the model call injected,
+     and reads the finds back through the citations GET. */
+  "tests/citation-finds-read-back-pg.test.ts": "private-postgres",
   /* Seeds one article, writes a citations artefact, and drives *Investigate*
      through the route; the provider is a stubbed, streamed `fetch`. */
   "tests/citation-investigate-route.test.ts": "private-postgres",
+  /* Reception's *Cited by* (261004h): seeds four articles for two owners, clears
+     the ownerless `citation_index_lookups` and resets the limiter's rows between
+     cases — which no shared database may have done to it mid-run — and drives
+     `GET /api/citers/:slug` with the fetcher replaced. No model, no network. */
+  "tests/citation-index-pg.test.ts": "private-postgres",
   /* Seeds six articles for two owners — private, public, archived, unreadable —
      and reads Citations' in-Spideryarn candidates back as each. No model is called. */
   "tests/cited-in-spideryarn-pg.test.ts": "private-postgres",
@@ -2790,10 +2985,31 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      glossary hide PUT and DELETE and the owner's GET through the route,
      reading rows back out of `glossary_hidden_entries`. No model is called. */
   "tests/glossary-hidden-route.test.ts": "private-postgres",
+  /* Seeds three articles with a quiz each and drives the quiz mark POST and
+     the owner's GET through the route, reading rows back out of
+     `quiz_attempts`. The marker is a script; no model is called. */
+  "tests/quiz-attempts-route.test.ts": "private-postgres",
+  /* Seeds two articles, one without a quiz, and drives the quiz, crossrefs
+     and citations GETs through the route, with and without the header that
+     asks for `200 null`. No model is called. */
+  "tests/none-yet-is-not-a-404-route.test.ts": "private-postgres",
+  /* Seeds two articles, writes a purpose on each, and drives the command
+     bar's suggest POST and the reader GET through the route. The model's
+     address is stubbed; no model is called. */
+  "tests/command-suggest-route.test.ts": "private-postgres",
   /* Seeds three articles, writes a glossary on each, and drives adding a
      looked-up term, hiding it, the owner's read and the public read, reading
      rows back out of `glossary_lookups`. No model is called. */
   "tests/glossary-added-term.test.ts": "private-postgres",
+  /* Chat's `reader_notes` tool, 261003l. Seeds two articles under two owners,
+     writes comments and a finished conversation on each through the stores, and
+     runs the tool (and Live's tool endpoint) as one owner against the other's
+     slug and thread id. No model is called. */
+  "tests/reader-notes-owner-isolation.test.ts": "private-postgres",
+  /* Explore's notes digest, 261003l stage 2. Seeds one article, a comment and
+     finished conversations of several kinds, and posts chat turns through the
+     route with `fetch` stubbed to keep the request and fail. No model is called. */
+  "tests/explore-digest-route.test.ts": "private-postgres",
   /* Claims and settles guessed web addresses on a bare article, seeds one more
      to read both payloads, and drives the route to its 409. No model is called. */
   "tests/source-guess-pg.test.ts": "private-postgres",
@@ -2801,11 +3017,16 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      articles by hand, fills `revision_phrase_runs` and drives
      `GET /api/library/terms` through the route. No model is called. */
   "tests/shelf-terms-pg.test.ts": "private-postgres",
-  /* The shelf's topics chosen with a model, 260929c stage 2. Seeds one owner
-     and ten articles, drives `GET /api/library/terms` through the route, and
-     reads back `shelf_topic_scores`, `rate_limit_events` and `ai_calls`. The
-     provider is a stubbed `fetch` with a fake key. */
+  /* The shelf's topics named by a model, 261003f (it tested the phrase scores
+     of 260929c stage 2 until then). Seeds one owner and fifteen articles,
+     drives `GET /api/library/terms` through the route, and reads back
+     `shelf_topic_sets`, `rate_limit_events` and `ai_calls`. The provider is a
+     stubbed `fetch` with a fake key. */
   "tests/shelf-topics-route.test.ts": "private-postgres",
+  /* The model's topic set, 261003f. Seeds two owners and a handful of bare
+     articles by hand, and reads and writes `shelf_topic_sets` through the
+     store. No model is called. */
+  "tests/shelf-topic-sets-pg.test.ts": "private-postgres",
   /* Written 2026-09-11 for the last slice of the `AUTH_ROUTES` migration. Seeds
      one article and deletes only its own entry's lookup row; no model is called. */
   "tests/glossary-stream-lifetime.test.ts": "private-postgres",
@@ -2837,6 +3058,10 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   "tests/illustrated-route.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/job-failure.test.ts": "private-postgres",
+  /* Plan 261005j, stage C of the rest of 1a: a structure step whose slices run
+     out of time hands its job back for another window, through the real
+     `enqueue`, claim, walk, draft, publication and cost ledger. */
+  "tests/job-hands-back-for-another-window.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from what a single
      case writes: a seeded article, a `jobs` row against it, and then a **real
      `blocks` stage committing through `pgStoreSession`** — so one run of it
@@ -2938,6 +3163,18 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
      it seeds its own throwaway article per run and reads back one column. */
   "tests/nav-label-status-pg.test.ts": "private-postgres",
+  /* New on 2026-10-07 (plan 261007f). Its own owner and throwaway articles,
+     every survey scoped to that owner. */
+  "tests/never-published-tidy.test.ts": "private-postgres",
+  /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
+     one column read back through four reads. */
+  "tests/title-original-pg.test.ts": "private-postgres",
+  /* New on 2026-10-05 (plan 261005j). Its own throwaway article per run, and
+     five columns read back through six reads. */
+  "tests/reading-difficulty-pg.test.ts": "private-postgres",
+  /* New on 2026-10-06 (plan 261006j, cluster S5). Its own throwaway article per
+     run, and three block rows read back through four reads. */
+  "tests/block-row-mapper-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. The lane follows from what arbitrates:
      the refusal this file's repair handles is `jobs_active_source`, a partial
      unique index over *every* active reserving job for a URL — global on the
@@ -2947,6 +3184,12 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      `activeSlugsFor` is over the owner's whole queue, and the owner is the
      shared dev one. No article, no GoTrue, no bucket. */
   "tests/one-article-for-one-address.test.ts": "private-postgres",
+  /* Plan 261005j: an import that opens before its structure is built, through
+     the real `enqueue`, claim, `structure` step and publication. */
+  "tests/open-before-structure-queue.test.ts": "private-postgres",
+  /* Plan 261007f: two accounts import one address, through the real `enqueue`,
+     claim and publication. The bucket is a `Map` in the test's own process. */
+  "tests/two-readers-one-article-pg.test.ts": "private-postgres",
   "tests/owner-isolation.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header's *jobs never reach Postgres*
      is what the conversion falsifies, and the lane follows from the two owners
@@ -2974,6 +3217,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      throughout — it publishes real revisions, claims a real job and inserts a
      real `ingest_events` row to prove the successor never settles one. */
   "tests/publication-enqueues-the-labels-successor.test.ts": "private-postgres",
+  /* Plan 261005j: what a publication queues when its tree is the stand-in a
+     first import opened with. The main-modes suite's harness. */
+  "tests/publication-of-an-awaiting-tree.test.ts": "private-postgres",
+  /* Plan 261004h: an import's first full publication queues the main-mode
+     jobs. The same harness as the labels-successor suite above — real
+     revisions, real job rows, a real `reader_profiles` row for the opt-out. */
+  "tests/publication-queues-the-main-modes.test.ts": "private-postgres",
   /* The lane's own negative control, and it has to be *in* the lane to be one:
      it asks Postgres which database this worker landed in after a
      `vi.resetModules()`, which is a question only a worker with a minted
@@ -2981,6 +3231,19 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      tests/setup/private-db.ts. */
   "tests/private-lane-survives-a-module-reset.test.ts": "private-postgres",
   "tests/public-visibility-pg.test.ts": "private-postgres",
+  /* The private link, plan 261005e: seven seeded articles, the owner's route
+     and the public reads with a key. The bucket is a temp directory, mocked at
+     the `blobStore()` selector as `asset-route` mocks it. */
+  "tests/share-link-pg.test.ts": "private-postgres",
+  /* Plan 261007f, E14 to E16: two seeded readers who hold the same article,
+     through the real billing, upload, share-link and public routes. The bucket
+     is a temp directory, mocked as `share-link-pg` mocks it, and the upload
+     grant is mocked beside it, so nothing reaches Storage. */
+  "tests/two-readers-one-article-billing-pg.test.ts": "private-postgres",
+  /* A visitor before publication, plan 261005l § 2c: thirteen seeded articles
+     and their jobs, read through the public route. The bucket is a temp
+     directory, mocked as `share-link-pg` mocks it. */
+  "tests/public-still-being-added-pg.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane is decided by the one case
      that publishes: *a revision landing between the two reads* is now a second
      real publication onto a seeded article, taken while a request is halfway
@@ -3023,7 +3286,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      are `spideryarn.ai_calls` now, and the child reaches the private database
      because it inherits both `DATABASE_URL` and `SPIDERYARN_ENV_PINNED`. */
   "tests/request-spend.test.ts": "private-postgres",
-  "tests/remember-route.test.ts": "private-postgres",
+  "tests/learn-route.test.ts": "private-postgres",
   /* The guarantee the Metadata page's "Generate it again" control sells: a
      re-run that fails leaves the reader on the artefact they already had
      (docs/plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md).
@@ -3106,6 +3369,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      clone already seeds, no article is loaded from the corpus, and nothing
      goes near GoTrue or the bucket. */
   "tests/shared-site-run-row-gate.test.ts": "private-postgres",
+  /* 2026-10-07 (plan 261007f, E10): `articles` rows under the ambient owner,
+     which the private clone already seeds. Rolled back, bar one row it deletes. */
+  "tests/short-id-collision.test.ts": "private-postgres",
   "tests/source-store.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the private lane is not optional
      here: six fixed slugs, each of which `lockOrCreateArticle` **creates** the
@@ -3179,6 +3445,13 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      concurrent runs seeing each other's single thread in a `load()` this file
      asserts the length of. */
   "tests/the-query-string-does-not-decide-the-route.test.ts": "private-postgres",
+  /* Drops the `chat_threads_kind` CHECK, but only inside a transaction it
+     always rolls back, so nothing a peer file can see changes. */
+  "tests/unknown-stored-thread-kind.test.ts": "private-postgres",
+  /* Its sibling, for what the refusal leaves behind. Drives `pgChatStore` and
+     `handleApi` against a scratch article of its own and changes no schema: the
+     unknown kind is put in the reader's hand, never in a row. */
+  "tests/unknown-thread-kind-refuses-cleanly.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the lane follows from `spideryarn.
      uploads` rather than from the bucket: this file mints records and never
      issues a real grant — the issuer is a stand-in and no bytes are PUT — so
@@ -3325,6 +3598,19 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/a-long-pdf-is-refused-before-it-is-stored.test.ts": {
     "00000000-0000-4000-8000-0000000000dd": { kind: "seeded" },
   },
+  /* Plan 261005l. `seedAuthUser` in `beforeAll`: its jobs spend real ingest
+     reservations, which hang off the `auth.users` foreign key. */
+  "tests/a-paper-queued-before-the-resolver.test.ts": {
+    "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
+  },
+  "tests/admin-costs-store.test.ts": {
+    "00000000-0000-4000-8000-0000c0be0a01": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000c0be0a02": { kind: "seeded" },
+  },
+  "tests/cost-detail-store.test.ts": {
+    "00000000-0000-4000-8000-0000de7a0a01": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000de7a0a02": { kind: "seeded" },
+  },
   "tests/admin-feedback-store.test.ts": {
     "00000000-0000-4000-8000-00000000fc01": { kind: "seeded" },
     "00000000-0000-4000-8000-00000000fc02": { kind: "seeded" },
@@ -3335,6 +3621,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
   /* Two readers, each owning private and public articles, so one's citations
      can be shown never to match the other's private one. 260930b. */
+  /* A second reader who owns an article with the same DOI, so the route's
+     refusal is the owner filter and not a missing slug. 261004h. */
+  "tests/citation-index-pg.test.ts": {
+    "00000000-0000-4000-8000-00000c17e4c1": { kind: "seeded" },
+  },
   "tests/cited-in-spideryarn-pg.test.ts": {
     "00000000-0000-4000-8000-00000c17e0a1": { kind: "seeded" },
     "00000000-0000-4000-8000-00000c17e0b2": { kind: "seeded" },
@@ -3345,10 +3636,17 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     "00000000-0000-4000-8000-0000000057a1": { kind: "seeded" },
     "00000000-0000-4000-8000-0000000057b2": { kind: "seeded" },
   },
-  /* One reader with ten articles, a profile, a score row and allowance rows —
-     all of which reference `auth.users`. 260929c stage 2. */
+  /* One reader with fifteen articles, a profile, a topic-set row and allowance
+     rows — all of which reference `auth.users`. Its two other readers are
+     minted per run. 260929c stage 2, rewritten for 261003f. */
   "tests/shelf-topics-route.test.ts": {
     "00000000-0000-4000-8000-00000000c7a1": { kind: "seeded" },
+  },
+  /* Two readers: `shelf_topic_sets.owner_id` references `auth.users`, both
+     own articles, and one's claim id is tried in the other's hands. 261003f. */
+  "tests/shelf-topic-sets-pg.test.ts": {
+    "00000000-0000-4000-8000-0000000075a1": { kind: "seeded" },
+    "00000000-0000-4000-8000-0000000075b2": { kind: "seeded" },
   },
   /* Two owners, both written under: `rate_limit_events.owner_id` really does
      reference `auth.users(id)` (drizzle/20260905172650), so a made-up uuid can
@@ -3413,6 +3711,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     "3e1ec7ed-0000-4000-8000-00000000ab01": { kind: "seeded" },
     "3e1ec7ed-0000-4000-8000-00000000ab02": { kind: "seeded" },
   },
+  /* 261007f's two readers, A and B, who hold the same article. `seedAuthUser`
+     in `beforeAll`; articles, uploads, ledger rows, jobs and the billing
+     anchor all hang off the `auth.users` foreign key. */
+  "tests/two-readers-one-article-billing-pg.test.ts": {
+    "dbd38869-cc97-475e-b4d5-0d690338daad": { kind: "seeded" },
+    "0ee81fe4-6630-450f-9d3a-97750838f812": { kind: "seeded" },
+  },
   "tests/billing-high-power.test.ts": {
     "0b1f0a1e-0000-4000-8000-0000000c6c01": { kind: "seeded" },
     "0b1f0a1e-0000-4000-8000-0000000c6c02": { kind: "seeded" },
@@ -3444,6 +3749,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      `lockBillingAccount` before it deletes anything. */
   "tests/article-delete-pg.test.ts": {
     "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
+  },
+  /* Plan 261007f. `seedAuthUser` in `beforeEach`, deleted again in `afterAll`:
+     the articles hang off it, and `destroy` creates its billing anchor. */
+  "tests/never-published-tidy.test.ts": {
+    "7e1d0000-0000-4000-8000-0000000000b1": { kind: "seeded" },
   },
   "tests/db-referee-criteria.test.ts": {
     "7ac042a4-7c19-44a6-ab6d-448acc5909b8": { kind: "seeded" },
@@ -3544,6 +3854,16 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "`currentOwnerId()`, which the private lane provides.",
     },
   },
+  "tests/share-link-pg.test.ts": {
+    "00000000-0000-4000-8000-0000005a11ec": {
+      kind: "no-row-needed",
+      why:
+        "`OUTSIDER` is a request `sub` for the three share-link routes, which must answer 404 for " +
+        "an article that is not the caller's. Each resolves the slug through `ownedSlug` before " +
+        "it writes, so the id matches no row and is never put in a column: the same reason as " +
+        "`public-visibility-pg`'s, and here there is not even a billing anchor to create.",
+    },
+  },
   "tests/asset-route.test.ts": {
     "0e5c0001-0000-4000-8000-0000000000a5": {
       kind: "no-row-needed",
@@ -3623,6 +3943,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "JSONL file with no foreign key anywhere, and the Postgres half overrides it with " +
         "`currentOwnerId()` on every fixture. `ai_calls_owner_id_users_id_fk` is real, so the " +
         "constraint exists — nothing reaches it with this id.",
+    },
+  },
+  "tests/referee-routes-postgres.test.ts": {
+    "07852712-f444-4aec-bd4a-b70403c8c03d": {
+      kind: "no-row-needed",
+      why:
+        "`outsider` is a request owner for the one case that asks whether somebody who does not " +
+        "own the article is turned away before `comments_criterion_fk` is ever consulted. Both " +
+        "calls made as him, `refereeCriteriaStore.remove` and `commentStore.create`, must reject " +
+        "with a 404 from the article lookup, and the case then checks that no comment and no " +
+        "criterion changed. If either call ever got as far as its write, the insert would name " +
+        "him in `comments.owner_id` and this entry would have to become `seeded`.",
     },
   },
   "tests/store-jobs-parity.test.ts": {

@@ -18,7 +18,7 @@
  * ## What is deliberately not an input
  *
  * **The lease.** `Job` on the wire carries none. `leaseExpiresAt` lives on the
- * Postgres row and in the filesystem adapter's `attempts` map and never
+ * Postgres row and never
  * reaches `publicJob`, so *running, and its claimant is dead* is invisible here
  * until the server reconciles it — `settleExpired`, called from `listJobs` in
  * src/jobs.ts. That is the design and not a gap: the lease is the correctness
@@ -42,6 +42,22 @@
 import { jobWorthRetrying } from "./job-failure.js";
 import { codeOfMessage, INTERRUPTED_CODE } from "./messages.js";
 import type { Job, JobStep, StepName } from "./types.js";
+
+/**
+ * **Whether this job is an import**: its steps start the article, `fetch`
+ * among them. A mode job on an article already there has no `fetch`.
+ *
+ * Not `job.url`: a mode job carries one too, read from the article when the
+ * request supplied none (`enqueue`, src/jobs.ts). One predicate, used by the
+ * job card's copy-the-link button and by the page an owner sees at an
+ * import's address before it has published (src/web/article/StillBeingAdded.tsx),
+ * so the two cannot disagree about which jobs make an article.
+ * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md,
+ * GPT Sol's plan review P2-3.
+ */
+export function isImportJob(job: Pick<Job, "steps">): boolean {
+  return job.steps.some((step) => step.name === "fetch");
+}
 
 /**
  * The eight things an import can look like to somebody watching it.

@@ -129,6 +129,26 @@ import type { Block } from "./types.js";
  */
 export const ASSETS_VERSION = "assets/2" as const;
 
+/**
+ * **The `sourceHash` of a manifest the step made after it was told to stop** —
+ * a value `assetsInputHash` can never produce, so the stamp never matches and
+ * the next run of the step that is not forced does it again.
+ *
+ * Why it exists: since 2026-10-07 a Stop that lands while an import's last step
+ * is finishing keeps and publishes the article
+ * (docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md), and
+ * this step answers an abort by returning. Its manifest then records every image
+ * it had not fetched as `failed: "network"`, and a PDF figure it had not reached
+ * as `out-of-time`. Stamped with the real hash, that manifest is current, and an
+ * ordinary re-run skips the step and never fetches them.
+ *
+ * It is the existing freshness rule, not a new one: a stamp that does not
+ * match is *not current*. No column, no status. Written by the step in
+ * src/pipeline.ts § `STEPS.assets` and nowhere else. A manifest made after our
+ * own deadline never reaches the store at all (`transitionAfter`, src/jobs.ts).
+ */
+export const STOPPED_PART_WAY = "stopped-part-way" as const;
+
 /* ------------------------------------------------------------------ *
  * Limits — policy, not measurement
  * ------------------------------------------------------------------ */

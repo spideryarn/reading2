@@ -47,6 +47,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 import type { LibraryEntry } from "../src/types.js";
 import { Actions, type Shelf } from "../src/web/ShelfEntry.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* --------------------------------------------------------------- fixtures -- */
 
@@ -73,6 +74,7 @@ function stubShelf(): Shelf {
   return {
     archive: vi.fn(async () => {}),
     report: vi.fn(),
+    copied: vi.fn(),
     renaming: null,
   } as unknown as Shelf;
 }
@@ -96,6 +98,9 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  /* The hover cases fake the clock (2026-10-04: they slept the open delay for
+     real); this hands it back to the ones that tick with a real timer. */
+  vi.useRealTimers();
 });
 
 function render(entry: LibraryEntry): void {
@@ -338,11 +343,12 @@ describe("a mouse", () => {
    * now. GPT Sol, 2026-09-05.
    */
   it("keeps a hovered card open through a click", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     const el = control("Copy link");
     el.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(isOpen(el)).toBe(true);
     press(el, "mouse");
@@ -362,14 +368,15 @@ describe("a mouse", () => {
    * it still there a moment later**.
    */
   it("opens a card that is still there a moment later", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     control("Edit title").dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(openCardHead()).toBe("Edit title");
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
     expect(openCardHead(), "the card was gone 300ms later — the group closed it").toBe("Edit title");
   });
@@ -380,11 +387,12 @@ describe("a mouse", () => {
    * pointer has just *arrived* at — the opposite of what the group is for.
    */
   it("hands the card over when the pointer moves along the row", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     const first = control("Edit title");
     first.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     first.dispatchEvent(new MouseEvent("mouseleave"));
     first.dispatchEvent(
@@ -392,7 +400,7 @@ describe("a mouse", () => {
     );
     control("Archive").dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
     expect(openCardHead(), "the previous control's close timer took the new card").toBe("Archive");
   });
@@ -405,11 +413,12 @@ describe("a mouse", () => {
    * reason.
    */
   it("still closes the card when the pointer leaves the row", async () => {
+    vi.useFakeTimers();
     render(FETCHED);
     const el = control("Edit title");
     el.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     expect(openTriggers()).toHaveLength(1);
     el.dispatchEvent(new MouseEvent("mouseleave"));
@@ -419,7 +428,7 @@ describe("a mouse", () => {
        `act` the queued update is not applied until the block exits. */
     for (const _ of [0, 1]) {
       await act(async () => {
-        await new Promise((r) => setTimeout(r, 300));
+        vi.advanceTimersByTime(300);
       });
     }
     expect(openTriggers()).toHaveLength(0);
@@ -464,6 +473,7 @@ describe("a finger on the card's row", () => {
      synthetic mouseenter is the compatibility event that must not leave a
      hover card behind after the direct press. */
   it("presses on the first iOS tap without leaving a card open", async () => {
+    vi.useFakeTimers();
     coarse(true);
     renderCard(FETCHED);
     const copy = control("Copy link");
@@ -475,7 +485,7 @@ describe("a finger on the card's row", () => {
     press(archive, "mouse");
     expect(shelf.archive).toHaveBeenCalledTimes(1);
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(400);
     });
     expect(openTriggers(), "a card opened on a direct press").toHaveLength(0);
   });
@@ -541,5 +551,132 @@ describe("a finger on the card's row", () => {
     press(control("Archive"), "pen");
     expect(shelf.archive, "the reveal was lost where the device has no finger").not.toHaveBeenCalled();
     expect(openCardHead()).toBe("Archive");
+  });
+});
+
+/* ------------------------------------------------------- copying the link -- */
+
+/**
+ * **What Copy says, when two presses are out at once or a tick is showing.**
+ *
+ * `writeText` is a promise, so the older of two presses can settle last, and a
+ * tick's timer can outlive the thing it was ticking for. Each case below was
+ * red against the hand-written handler this row had until 2026-10-04, and is
+ * what moving it onto `useCopy` (src/web/useCopy.ts) fixed.
+ * docs/plans/261004e-fifth-sweep-cluster-20-one-copy-hook-for-the-nine-clipboard-writers.md.
+ */
+describe("copying the link", () => {
+  type Write = { resolve(): void; reject(reason: unknown): void };
+
+  /** A clipboard whose every write this test settles by hand, in any order. */
+  function clipboard(): Write[] {
+    const writes: Write[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: () =>
+          new Promise<void>((resolve, reject) => {
+            writes.push({ resolve, reject });
+          }),
+      },
+    });
+    return writes;
+  }
+  afterEach(() => {
+    Reflect.deleteProperty(navigator as object, "clipboard");
+  });
+
+  /** The one Copy control, whichever of its two names it is wearing. */
+  function copyControl(): HTMLElement {
+    const hit = [...host.querySelectorAll<HTMLElement>("button")].filter((el) =>
+      ["Copy link", "Copied"].includes(el.getAttribute("aria-label") ?? ""),
+    );
+    expect(hit, "no single Copy control").toHaveLength(1);
+    return hit[0] as HTMLElement;
+  }
+  const ticked = () => copyControl().getAttribute("aria-label") === "Copied";
+
+  async function settle(how: () => void): Promise<void> {
+    await act(async () => {
+      how();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+  function wait(ms: number): void {
+    act(() => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  it("gives a second copy its own full tick", async () => {
+    vi.useFakeTimers();
+    const writes = clipboard();
+    render(FETCHED);
+    press(copyControl(), "mouse");
+    await settle(() => writes[0]?.resolve());
+    expect(ticked()).toBe(true);
+
+    wait(1000);
+    press(copyControl(), "mouse");
+    await settle(() => writes[1]?.resolve());
+    /* 2000 ms after the first tick began and 1000 ms into the second. The
+       first press's timer, left running, takes the second tick away at 1500. */
+    wait(1000);
+    expect(ticked(), "the second tick was cut short by the first one's timer").toBe(true);
+    wait(600);
+    expect(ticked(), "the tick never went").toBe(false);
+  });
+
+  it("says nothing about a refusal a newer press has overtaken", async () => {
+    const writes = clipboard();
+    render(FETCHED);
+    press(copyControl(), "mouse");
+    press(copyControl(), "mouse");
+    await settle(() => writes[1]?.resolve());
+    await settle(() => writes[0]?.reject(new Error("denied")));
+    /* The clipboard holds the link. "Couldn't copy the link" over that is false. */
+    expect(shelf.report).not.toHaveBeenCalled();
+    expect(ticked()).toBe(true);
+  });
+
+  it("takes an earlier tick away at once when a newer copy fails", async () => {
+    vi.useFakeTimers();
+    const writes = clipboard();
+    render(FETCHED);
+    press(copyControl(), "mouse");
+    await settle(() => writes[0]?.resolve());
+    expect(ticked()).toBe(true);
+
+    press(copyControl(), "mouse");
+    await settle(() => writes[1]?.reject(new Error("denied")));
+    expect(shelf.report).toHaveBeenCalledTimes(1);
+    expect(shelf.report).toHaveBeenCalledWith("Couldn't copy the link: denied", "copy");
+    expect(ticked(), "Copied was still showing beside the notice that it failed").toBe(false);
+  });
+
+  it("leaves no timer running when the row goes while the tick is showing", async () => {
+    vi.useFakeTimers();
+    const writes = clipboard();
+    render(FETCHED);
+    press(copyControl(), "mouse");
+    await settle(() => writes[0]?.resolve());
+    expect(ticked()).toBe(true);
+
+    act(() => root.unmount());
+    expect(vi.getTimerCount()).toBe(0);
+    /* A fresh root so `afterEach`'s unmount has something to unmount. */
+    root = createRoot(host);
+  });
+
+  it("does not print undefined when the browser rejects with something that is not an Error", async () => {
+    const writes = clipboard();
+    render(FETCHED);
+    press(copyControl(), "mouse");
+    await settle(() => writes[0]?.reject(undefined));
+    expect(shelf.report).toHaveBeenCalledTimes(1);
+    const sentence = String((shelf.report as Mock).mock.calls[0]?.[0]);
+    expect(sentence).toMatch(/^Couldn't copy the link: \S/);
+    expect(sentence).not.toContain("undefined");
   });
 });

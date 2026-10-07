@@ -109,9 +109,20 @@ export interface Advanced {
  * The two lines every job request makes. Exported because `useJobs` fires the
  * *actions* — an add, a cancel, a retry — and an action is a fetch that belongs
  * beside the card that fires it, not inside the engine.
+ *
+ * **Sent as the reader the engine is bound to, or not at all.** The session
+ * key is read here, when the call is made, and travels with the request to
+ * where the token goes on. An add POST, a Retry or an `/advance` begun under
+ * reader A can still be waiting for its token when the session becomes reader
+ * B's, and `stop()` runs from an effect, which is later still. The epoch
+ * fences what the *answer* may touch; it cannot stop the request leaving, and
+ * an add POST that leaves as B spends one of B's slots on an import B never
+ * asked for. `NotThisReader` in lib/api.ts;
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md
+ * § 2 (GPT Sol's F1). With no session bound there is nobody to compare with.
  */
 export async function send<T>(url: string, init?: RequestInit): Promise<T> {
-  return readJson<T>(await apiFetch(url, init));
+  return readJson<T>(await apiFetch(url, init, jobEngine.reader()));
 }
 
 function isBusy(jobs: Job[]): boolean {
@@ -225,6 +236,11 @@ export interface JobEngine {
    * knows. A different key tears everything down first.
    */
   start(sessionKey: string): void;
+  /**
+   * The reader the engine is bound to right now: `start`'s key, or `null`
+   * when it is stopped. For `send`, which names them on every request.
+   */
+  reader(): string | null;
   /**
    * Stop scheduling, fence anything in flight, and drop this reader's snapshot.
    *
@@ -358,6 +374,26 @@ export interface JobEngine {
    * Plan 261001m § What Sol's plan review changed, item 4.
    */
   watchTerminal(jobId: string, onEnd: (outcome: TerminalOutcome) => void): () => void;
+  /**
+   * **Tell me once when a job list asked for after this call has been
+   * applied.** Returns the way to stop waiting.
+   *
+   * `loaded` says a list has landed at some point; it does not say the
+   * snapshot is as new as the question being asked of it. A caller about to
+   * spend on "no job is running" — the command bar's Find more
+   * (find-more-handoff.ts) — needs the second fact: a run started in another
+   * tab is in no snapshot until the next list.
+   *
+   * **Asked for after, not answered after**, by `watchTerminal`'s rule and its
+   * numbering: a list already on the wire was asked before the question
+   * existed. A failed list tells nobody; nor does one fenced by a teardown,
+   * which drops every waiter.
+   *
+   * **It asks for nothing and arms nothing.** The caller pokes; asleep or
+   * paused, no list comes and the callback is never made, which the caller
+   * must be content with. The snapshot is already the new one when it is.
+   */
+  afterFreshList(onList: () => void): () => void;
   /** Back to the state a fresh engine is in. For tests of the singleton. */
   reset(): void;
 }
@@ -456,6 +492,9 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     symbol,
     { id: string; onEnd: (outcome: TerminalOutcome) => void; since: number }
   >();
+
+  /** `afterFreshList`'s registrations: the callback, and the list number it arrived at. */
+  const listWaiters = new Map<symbol, { onList: () => void; since: number }>();
 
   /** Report an ending to everyone watching that job, once each, and forget them. */
   const endWatchers = (id: string, outcome: TerminalOutcome): void => {
@@ -625,6 +664,10 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     recordCompletions(jobs, first);
     set({ jobs: kept, loaded: true, error: null, driverFailures: pruneDriverFailures(jobs) });
     tellWatchers(jobs, startedAt);
+    for (const [key, w] of [...listWaiters]) {
+      if (startedAt <= w.since || !listWaiters.delete(key)) continue;
+      w.onList();
+    }
 
     /* **Including on the first list**, unlike the completions above. A job left
        unfinished by a closed tab or a restarted server is exactly what a fresh
@@ -824,6 +867,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
     /* Dropped without a word: whoever registered them belongs to the session
        that is ending, and is fenced by it too. */
     watchers.clear();
+    listWaiters.clear();
     /* The *sequence* stays where it is, so a cursor a subscriber captured under
        the old session can never be met by a new session's event. Only the
        events themselves go. */
@@ -892,6 +936,7 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
       reconciliationRequested += 1;
       void poll();
     },
+    reader: () => sessionKey,
     stop() {
       if (!started && snapshot === EMPTY) return;
       started = false;
@@ -981,6 +1026,13 @@ export function createJobEngine(deps: JobEngineDeps): JobEngine {
           clearTimeout(timer);
           timer = undefined;
         }
+      };
+    },
+    afterFreshList(onList) {
+      const key = Symbol("list");
+      listWaiters.set(key, { onList, since: listsStarted });
+      return () => {
+        listWaiters.delete(key);
       };
     },
     reset() {

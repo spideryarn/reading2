@@ -27,6 +27,7 @@
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
+import type { CallFailure, FailureClass, FailurePhase } from "./call-failure.js";
 import { log } from "./log.js";
 import type { Nanos } from "./pricing.js";
 /* **Type-only, and it has to stay type-only.** `src/models.ts` reaches
@@ -198,6 +199,36 @@ export interface SpendRecord {
   ms: number;
   /** How it ended — `"ok"`, or the failure that stopped it. */
   outcome: "ok" | "error" | "aborted";
+  /**
+   * **Which go this was, inside one call's transport retry** — 1-based, so a
+   * record with `attempt > 1` is a retry that really started. `null` where no
+   * retry loop of the gateway's counted it: a seam called with
+   * `retryTransport: false`, whose caller owns the loop.
+   *
+   * There is deliberately no "was retried" beside it. Both wires record a
+   * failed attempt before the backoff, and a Stop during the backoff means no
+   * attempt follows, so that fact is not known when this record is written. The
+   * retry's own record is what says a retry happened.
+   *
+   * Optional, like `failure` below, and for one reason: the two gateways are
+   * the only things that know either, and everything else that builds one of
+   * these (a declared bypass in src/declared-spend.ts, a test) has nothing to
+   * say. Absent and `null` are stored the same.
+   */
+  attempt?: number | null;
+  /**
+   * Where and why a failed call failed, as labels from a closed list —
+   * [`call-failure.ts`](call-failure.ts). `null` on a call that answered.
+   *
+   * **An `aborted` record from either gateway carries it too**, since
+   * 2026-10-06: the class is who stopped the call (`stall`, `deadline` or
+   * `abort`), the phase and status how far it had got. `outcome` is still
+   * `aborted`. So a phase or a class alone does not mean the call failed;
+   * read it with `outcome`. An `aborted` record with none is from something
+   * that could not tell: the realtime wire (src/live.ts), or a row from
+   * before.
+   */
+  failure?: CallFailure | null;
 }
 
 /**
@@ -512,6 +543,26 @@ export interface AiCallRow {
    */
   durationMs: number | null;
   outcome: SpendRecord["outcome"];
+  /**
+   * `SpendRecord.attempt`: which go this row was in a transport retry, or
+   * `null` where nothing counted — every row before 2026-10-06, every realtime
+   * row, and a call whose caller owns the retry.
+   */
+  attempt: number | null;
+  /**
+   * `SpendRecord.failure`, flattened into the three columns it is stored in.
+   * All three are `null` on an `ok` row and on every row from before the
+   * columns existed, so **a null here is "not said", never "did not fail"**:
+   * `outcome` is what says whether a call failed. An `aborted` row has them
+   * when a gateway wrote it on or after 2026-10-06 (class `stall`, `deadline`
+   * or `abort`). A stopped Realtime response carries class `abort` with no
+   * phase or HTTP status (src/live.ts). A phase here is not by itself a failure
+   * either.
+   */
+  failurePhase: FailurePhase | null;
+  failureClass: FailureClass | null;
+  /** The HTTP status of the response, when there was one. */
+  failureStatus: number | null;
   /**
    * **Credits OpenRouter deducted**, in nano-dollars — not cash, and the name
    * says so.
@@ -1072,6 +1123,12 @@ function write(
     finishedAt: new Date(finishedAt).toISOString(),
     durationMs: record.ms,
     outcome: record.outcome,
+    attempt: record.attempt ?? null,
+    /* The failure's three columns. Read one by one rather than spread, so that
+       a field added to `CallFailure` does not reach the row without a column. */
+    failurePhase: record.failure?.phase ?? null,
+    failureClass: record.failure?.class ?? null,
+    failureStatus: record.failure?.status ?? null,
     /* **One arm of the union in, one legal combination out** — decided in
        `moneyFields`, which is the only place that reads `record.cost.source`
        for the row, so the row and the CHECK it is about to meet

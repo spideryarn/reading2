@@ -37,10 +37,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
   articleFingerprint,
@@ -50,7 +48,7 @@ import {
   hashBlocks,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type { Block, Meta, Tree, Tweet, TweetThread } from "./types.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -241,6 +239,21 @@ export function sentIds(version: string): boolean {
  */
 export function suggestedLength(words: number): number {
   return Math.min(15, Math.max(4, Math.round(words / 700)));
+}
+
+/**
+ * The answer a thread of `posts` asks room for.
+ *
+ * A thread is a bounded thing — `suggestedLength` caps it — so the answer is a
+ * few thousand tokens whatever the article. The allowance still has to scale,
+ * because the model reads the whole piece to write it and thinks about it
+ * inside this same number. See src/token-budget.ts. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate in
+ * `STEP_BUDGET_MS.tweets` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
+ */
+export function threadAnswerTokens(posts: number): number {
+  return 500 + posts * 140;
 }
 
 export const TWEETS_SYSTEM = `You are writing a NUMBERED THREAD: one long article compressed into a short
@@ -553,8 +566,8 @@ export function buildThread(
     slug: opts.slug,
     sourceHash: opts.sourceHash,
     /* `null`, never absent: absent means "written before this existed" and
-       `null` means "written deliberately without a profile", and the page needs
-       to tell those apart. src/profile.ts § profileIsStale. */
+       `null` means "written with no profile", and only `null` reads as changed
+       once the reader has one. src/profile.ts § profileIsStale. */
     profileHash: opts.profile ? hashProfile(opts.profile) : null,
     limit: LIMIT,
     tweets,
@@ -672,11 +685,7 @@ export async function generateTweets(opts: {
   const posts = suggestedLength(words);
   const started = Date.now();
 
-  /* A thread is a bounded thing — `suggestedLength` caps it — so the answer is
-     a few thousand tokens whatever the article. The allowance still has to
-     scale, because the model reads the whole piece to write it and thinks about
-     it inside this same number. See src/token-budget.ts. */
-  const answerTokens = 500 + posts * 140;
+  const answerTokens = threadAnswerTokens(posts);
   const maxTokens = budgetFor("thread", answerTokens);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
@@ -740,28 +749,8 @@ export async function generateTweets(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    /* `stop_details` is deliberately neither thrown nor logged — it is the
-       provider's own words about a request that carried the whole article,
-       and this error is copied onto the job and shown on the progress card.
-       See MODEL_REFUSED in src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("thread", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "thread", maxTokens, answerTokens);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyPostBlocksDropped();
   const thread = buildThread(parseJson(raw), {

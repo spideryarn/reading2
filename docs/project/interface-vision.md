@@ -78,7 +78,7 @@ anchored, so placing it costs layout, not a model call.
 | Debate's disputed claims | every claim row has a `blockId` and a located `claimQuote` (`readClaimGroup`, `src/debate.ts`); its `relation` is one of disputes, qualifies, extends, corroborates, unclear | right: collapsed, opening the replies | **in the margin** since 261002b, every relation with its word first — Greg, 2026-10-02: *"Let's try with everything, and see how it feels"* (narrowing to `disputes` is one line in `src/web/marginalia/notes.ts`) |
 | FAQ answers | the passages that answer | right, or a mark | **in the margin** since 261002b, beside the earliest answering passage, shut; marked nowhere in the prose |
 | Timeline events | resolved passages | right, or a mark | data yes; marked in the prose only while Timeline's band is open |
-| Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **no** — a new model pass (the relation words in [261001d](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) stage 2) |
+| Rebuttals, conclusions ("this answers §2", "so…") | blocks | right | **partly** — the relation words *so*, *but* and *vs* are in the margin since 2026-10-03 ([marginalia.md § Relation words](marginalia.md#relation-words)); fuller rebuttals and conclusions are not, and would be a new model pass |
 | Explaining a hard paragraph | blocks | right, collapsed | **no** — needs [vision.md](vision.md)'s difficulty map, which does not exist |
 | Structure | the whole | left | yes, as a band |
 | Summary | the whole, linked to passages | left | yes, as a band |
@@ -86,7 +86,7 @@ anchored, so placing it costs layout, not a model call.
 | Diagram / Sketch / Illustrated | the whole | left, or a surface of its own | yes, as bands |
 | Skim | a route through quotes | left? it is walked, not read | yes, as a band |
 | Comments and bookmarks | blocks or quoted passages | right: collapsed | **in the margin** since 261002b; a visitor sees the owner's published comments |
-| Search, Chat, Remember / Quiz, Referee | the reader's own actions | tools, not columns | — |
+| Search, Chat, Learn / Quiz, Referee | the reader's own actions | tools, not columns | — |
 
 The finding that matters: **most of the right-hand column's content is already made and already
 anchored.** The expensive items — rebuttals, conclusions, explanations — are the two that need a new
@@ -155,7 +155,8 @@ These are the reasons to go carefully, each one already said by Greg in another 
   typefaces experiment (7C: author serif, AI Courier, reader Arial) is one answer.
 - **Cost and consent — settled 2026-10-02: opening Marginalia spends nothing.** It shows only what
   other modes have already made, and the automatic help comments in 7E were declined for the same
-  reason. Greg would have had it run the missing modes, but only if a mode made later never reached
+  reason. **One exception since 2026-10-05, Greg's own**: the column's relation words are made the
+  first time it is shown ([marginalia.md § Relation words](marginalia.md#relation-words)). Greg would have had it run the missing modes, but only if a mode made later never reached
   the margin:
 
   > My worry is that if we *don't* fill in stuff that hasn't been generated, then even if we do
@@ -175,8 +176,8 @@ These are the reasons to go carefully, each one already said by Greg in another 
 - **Phones.** On a phone a band already covers the article, and a passage link in it scrolls text
   you cannot see (5A), and the notes do not fit at all under 612px. The vision has no phone answer
   yet.
-- **Experimental gating.** Marginalia, the typefaces, cross-references, Debate, Diagram and FAQ are
-  behind the switch or owner-only. A vision that makes them the default view is also a decision to
+- **Experimental gating.** Debate, Diagram and FAQ are behind the switch (Marginalia was until
+  2026-10-05, the typefaces until 2026-10-02) or owner-only. A vision that makes them the default view is also a decision to
   take them out from behind it.
 
 ## A path, simplest first
@@ -195,9 +196,55 @@ Each step is useful on its own, and none commits us to the next.
 4. **Recede the single-purpose modes** from the Dock into an overflow and the command bar — each
    one only once its content reaches the reader through the middle or the right; Timeline does not
    reach either yet.
-5. **New model passes for the margin** — relation words, rebuttals, conclusions — measured on the
-   eval corpus before shipping, as any new prompt is ([prompting-guide.md](prompting-guide.md)).
+5. **New model passes for the margin** — relation words (done, 2026-10-03,
+   [261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)), rebuttals,
+   conclusions — measured on the eval corpus before shipping, as any new prompt is
+   ([prompting-guide.md](prompting-guide.md)).
 6. **The left as a column of its own**, if the band turns out not to be enough.
+
+## Decluttering the bottom bar
+
+Greg wants fewer buttons on the bottom bar. On 2026-10-04, asked whether to build an "Extracts"
+menu:
+
+> this needs more thought from me before we're ready to proceed. perhaps write up somewhere in a
+> vision or appropriate doc that we're interested in finding ways to declutter the bottom bar (and
+> this is part of that)
+
+So this is a goal rather than one plan. One part of it is now decided and built, the **More
+button**. Greg, 2026-10-06 (spya-dest8x):
+
+> there's a whole bunch of modes in the middle that people probably don't need to open that often.
+> I'm thinking of the glossary, FAQ, ideas, timeline, quotes, because a lot of them have been folded
+> into other larger modes, or meta modes like skim and marginalia. Or they're just visible in the
+> text. […] And so for those, I wonder if we could maybe gather them together and create either a
+> dot dot dot or a more button in their place. And if you click on them, it sort of expands upwards
+> to let them choose from those.
+
+What has happened and what is on the table:
+
+- **Done:** Tweets left the bar and became Summary's Thread
+  ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)).
+- **Done:** a `find` or *search for* in the command bar now opens quick search
+  ([261005i](../plans/261005i-the-command-bar-opens-quick-search-and-the-search-panel-box-gets-a-clear-cross.md)).
+  The quick-search box and icon stay; removing them (Greg's option C on Q-bar-3) is still open.
+  Separately, the same day, a narrow or touch bar stopped drawing the icon alone
+  ([261005h](../plans/261005h-narrow-window-chat-thread-list-gets-more-lines-and-no-lone-quick-search-icon-in-the-bottom-bar.md)).
+- **Done:** Quotes, Glossary, FAQ, Ideas and Timeline left the bar for a **More** button, whose
+  menu opens upwards ([261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)). Nothing was
+  removed: each is still a mode, still in an owner's command bar whenever it is offered, and drawn
+  in the bar again while it is the open one. This **supersedes the *Extracts* menu** proposed in queue item `qi-5ay85q7d` (one
+  button for Quotes, Glossary and Ideas), and with it the merged *Lists* mode and the "leave the bar
+  alone" option weighed beside it. Folding those lists into Marginalia was weighed then and argued
+  against, because a phone has no Marginalia column.
+- **Still open:** the other half of `qi-5ay85q7d`, a filter on which kinds of note Marginalia
+  shows. Not built, and waiting on Greg.
+- **Related:** folding Citations into Debate as a sub-mode
+  ([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md) Part 2), and the command
+  bar taking a sentence ([261003k](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md)),
+  which makes a mode reachable without a button.
+
+Any change that removes or merges a bar button goes to Greg first.
 
 ## Open questions
 

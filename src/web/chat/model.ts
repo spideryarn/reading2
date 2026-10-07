@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ToolRun } from "../../types.js";
+import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ThreadOrigin, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -69,7 +69,7 @@ export interface LoadOperation extends Registered {
 }
 
 /**
- * One conversation, re-fetched because a 409 said the screen is wrong.
+ * One conversation, re-fetched after a refusal or an uncertain write.
  *
  * Registered in the same transition that drops the operation the server
  * refused — they are one decision, and split across two transitions there is a
@@ -80,18 +80,15 @@ export interface RepairOperation extends Registered {
   kind: "repair";
   threadId: string;
   /**
-   * The rows the refused turn had already written into `base`, which the
-   * server has just said do not exist.
-   *
-   * Only a **send** has any: it writes its question and its empty answer down
-   * at registration, because nothing withdraws the reader's own words — except
-   * this, the one case where the server says the turn never happened. A retry
-   * and an edit *draw*, so dropping their operation is the whole of putting the
-   * screen back and there is nothing here for them.
+   * Rows in `base` that must not be kept if the server's copy lacks them:
+   * a refused send's own provisional pair, or the stored rows an edit would
+   * discard. See `discardedBy` in reduce.ts for the provisional sends excluded
+   * from an edit's discard. A retry has no exclusions of its own, but a repair
+   * inherits any exclusions still unresolved by an earlier read.
    *
    * Named rather than implied, because the repair no longer replaces the
    * conversation wholesale: it merges, and a merge that kept everything would
-   * keep these two rows for ever.
+   * keep excluded rows for ever.
    */
   drop: readonly string[];
   /**
@@ -438,17 +435,39 @@ export interface DeleteOperation extends Registered, Held {
   kind: "delete";
   threadId: string;
   /**
-   * **Put the conversation back if the server refuses.** Remember's Start over
+   * **Put the conversation back if the server refuses.** Learn's Start over
    * asks for this, and chat's delete does not.
    *
    * Chat's delete leaves a refused conversation off screen with the error
    * above it (see `delete.failed` in reduce.ts). Start over cannot: the band
-   * begins a fresh Remember conversation only once the delete has been
+   * begins a fresh Learn conversation only once the delete has been
    * answered, and a refused delete means the old one is still the article's
-   * Remember conversation on the server — so a fresh one beside it would have
+   * Learn conversation on the server — so a fresh one beside it would have
    * its first turn folded into a thread this tab is hiding. Plan 261001m, F1.
    */
   restoreOnFailure?: boolean;
+}
+
+/**
+ * **The reader opened a Recall answer's hint, and the server is being told.**
+ *
+ * The hint is on screen from the panel's own state the moment it is pressed;
+ * this exists only to admit the write's answer. A success patches the server's
+ * time onto the message in `base` — so the hint is still open after the reader
+ * leaves the conversation and comes back — and a failure writes nothing at
+ * all. Nothing is drawn while it is out: there is nothing to withdraw.
+ *
+ * `hint` is the hint's text, and it is what the answer is matched on. A retry
+ * reuses the message id, so by the time this answers the row may hold another
+ * answer; the time is patched only onto a message that still carries this hint.
+ * The server makes the same check (`markHintOpened` in src/store/pg-chat.ts).
+ * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+ */
+export interface HintOperation extends Registered {
+  kind: "hint";
+  threadId: string;
+  messageId: string;
+  hint: string;
 }
 
 /**
@@ -470,7 +489,8 @@ export type Operation =
   | RecoveryOperation
   | RenameOperation
   | DeleteOperation
-  | IntentOperation;
+  | IntentOperation
+  | HintOperation;
 
 /**
  * An operation as its caller hands it over: the reducer adds the rest.
@@ -508,6 +528,9 @@ export interface ChatState {
    * stand in for it. GPT Sol, 2026-08-28.
    */
   tombstones: ReadonlyMap<string, Tombstone>;
+  /** Unresolved repair exclusions survive a superseded or failed read. Cleared
+   * only when a fresh conversation actually reconciles them. */
+  repairDrops: ReadonlyMap<string, readonly string[]>;
   /**
    * Where the one fetch that fills the list got to — **and it outlives that
    * fetch's operation**, which is why it is a field rather than a lookup.
@@ -551,6 +574,7 @@ export function initialState(slug: string): ChatState {
     base: [],
     operations: new Map(),
     tombstones: new Map(),
+    repairDrops: new Map(),
     loadPhase: "loading",
     unnamed: new Set(),
     error: null,
@@ -613,6 +637,8 @@ export type ChatInput =
       type: "intent.started";
       op: { id: OpId; intent: Intent; threadId: string; messageId: string };
     }
+  /** The reader opened a Recall answer's hint. See `HintOperation`. */
+  | { type: "hint.started"; op: Registering<HintOperation> }
   /** A new, empty conversation. Local: nothing is stored until you send. */
   | { type: "thread.begun"; thread: ChatThread }
   /** Forgetting one. A no-op on anything with a message in it. */
@@ -655,8 +681,13 @@ export type ChatResult =
    * The `error` frame inside a 200, a request that never opened, a non-2xx that
    * is not a 409. `text` is the partial answer where the server sent one back;
    * what arrived is kept, because the reader watched it appear.
+   *
+   * **`repair` is for the one case that keeps nothing**: a retry or an edit
+   * of a confirmed conversation that failed before `begin` is withdrawn and
+   * repaired, as a `turn.refused` is. Always carried, because whether the turn had begun is
+   * the reducer's to know and the id is not the reducer's to mint.
    */
-  | { type: "turn.failed"; opId: OpId; error: string; text?: string }
+  | { type: "turn.failed"; opId: OpId; error: string; text?: string; repair: { id: OpId } }
   /**
    * The stream stopped without ending, or ended without saying how.
    *
@@ -667,9 +698,9 @@ export type ChatResult =
    * projecting its pending row over the answer when it arrived, so the answer
    * would land and be invisible. GPT Sol's second blocker, 2026-08-28.
    *
-   * Unless the server never named the row, in which case there is nothing to
-   * look for and `error` is what the reader is told. The reducer decides that,
-   * because `began` is a fact about the operation.
+   * Before `begin`, a send or an attempt on an unnamed draft keeps its row
+   * with the error. A retry or edit of a confirmed conversation is withdrawn
+   * and repaired, using `recovery.id` as the repair's id. The reducer decides.
    */
   | {
       type: "turn.disconnected";
@@ -744,7 +775,14 @@ export type ChatResult =
    * written — one decision, so there is no moment where the conversation is back
    * with nothing said about it.
    */
-  | { type: "intent.failed"; opId: OpId; error: string };
+  | { type: "intent.failed"; opId: OpId; error: string }
+  /** The press is stored, and this is the time the server gave it. */
+  | { type: "hint.succeeded"; opId: OpId; hintOpenedAt: string }
+  /**
+   * It is not. Nothing is written and nothing is said: the hint is open on
+   * screen either way, and the next press on a fresh mount tries again.
+   */
+  | { type: "hint.failed"; opId: OpId; error: string };
 
 /** What the `done` frame carries — the finished answer, and its receipts. */
 export interface TurnDone {
@@ -769,6 +807,8 @@ export interface TurnDone {
 export interface Begun {
   threadId: string;
   title: string;
+  /** The server's stored source, so a pending draft never invents one on a loaded row. */
+  origin?: ThreadOrigin;
   /** The assistant row the answer streams into. */
   messageId: string;
   /** The question above it. Absent from older servers; see `withServerIds`. */
@@ -845,11 +885,11 @@ export type ChatCommand =
       engine?: LiveEngine;
       /**
        * The kind of the conversation as this tab has it, which is the only
-       * place a conversation Remember began and nobody has written to yet
+       * place a conversation Learn began and nobody has written to yet
        * exists. The server uses it only when this exchange creates the thread.
        * `SpokenTurn.kind` in src/chat.ts; SPIDERYARN-READING2-70.
        */
-      kind?: Extract<ThreadKind, "chat" | "remember">;
+      kind?: Extract<ThreadKind, "chat" | "learn">;
     }
   /** Ask about one conversation, because the screen is wrong about it. */
   | { type: "repair"; opId: OpId; slug: string; threadId: string }
@@ -879,6 +919,15 @@ export type ChatCommand =
       messageId: string;
       attempt: string | null;
     }
+  /** Record that the reader opened this answer's hint. One request. */
+  | {
+      type: "hint";
+      opId: OpId;
+      slug: string;
+      threadId: string;
+      messageId: string;
+      hint: string;
+    }
   /**
    * The server has overruled a turn's thread id, and the panel's `?thread=` has
    * to follow or a reload lands on a conversation that is not there.
@@ -905,6 +954,9 @@ export type ThreadsOutcome =
 
 /** Either the write stuck, or why it did not. */
 export type WriteOutcome = { ok: true } | { ok: false; error: string };
+
+/** Either the press is stored, with the time the server gave it, or why not. */
+export type HintOutcome = { ok: true; hintOpenedAt: string } | { ok: false; error: string };
 
 /**
  * Drop a conversation that never had anything said in it.
@@ -1021,6 +1073,7 @@ export function withServerIds(
       : {
           ...t,
           id: begun.threadId,
+          ...(begun.origin ? { origin: begun.origin } : {}),
           // The title is cut on a word boundary on the server; the optimistic
           // one is a blunt 60-character slice that would otherwise stay on
           // screen until the next reload.
@@ -1040,7 +1093,7 @@ export function withServerIds(
 /**
  * **The server named a conversation this tab already holds, so the two are one.**
  *
- * An article has one Remember conversation (plan 261001m), and a typed turn
+ * An article has one Learn conversation (plan 261001m), and a typed turn
  * into a second — a stale tab, a bookmark, two tabs racing — is appended by the
  * server to the one it has, whose id the `begin` frame then carries. Renamed in
  * place, the provisional thread would sit in the list under the same id as the
@@ -1117,7 +1170,7 @@ export function attemptOf(op: Operation | undefined): string | null {
  * no operation of any kind — a turn being answered, a recovery, a spoken
  * exchange, a rename, a delete — is still out for it.
  *
- * Remember's Start over is offered only then. A DELETE of such a conversation
+ * Learn's Start over is offered only then. A DELETE of such a conversation
  * is never held and races no write from this tab, so a delete aimed at an
  * empty, unnamed or half-answered conversation — each of which needed its own
  * reducer machinery to unwind — cannot be asked for. Plan 261001m, after GPT
@@ -1131,6 +1184,19 @@ export function isSettled(state: ChatState, threadId: string): boolean {
     if (op.kind !== "load" && op.threadId === threadId) return false;
   }
   return true;
+}
+
+/**
+ * **Does the server have this conversation?** It is in the list and is not one
+ * this tab invented and is still waiting to hear back about (`unnamed`).
+ *
+ * Weaker than `isSettled`: an answer may still be streaming. One reader, the
+ * band's pending origin (plan 261005i): what a thread was started from is set
+ * on the server's insert only, so the band goes on offering it until this is
+ * true, and holds Live back for the same stretch.
+ */
+export function isNamed(state: ChatState, threadId: string): boolean {
+  return !state.unnamed.has(threadId) && state.base.some((t) => t.id === threadId);
 }
 
 /** Answers this tab has lost the stream of and is asking the server about. */

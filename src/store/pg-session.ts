@@ -4,10 +4,11 @@
  * > A stage stops writing. It returns a product. A short commit afterwards
  * > writes the product, checks it, finishes the step, and moves the job on.
  *
- * `fsStoreSession` says out loud that it holds no transaction: on the filesystem
- * the four writes happen one after another and a kill between any two of them
- * leaves the state it always did. This is the other implementation, and the
- * whole of its value is the word *one*: **artefacts, postcondition, step
+ * This is the only implementation since 2026-10-07. The filesystem one
+ * (`fsStoreSession`, which only a test still called) held no transaction: its
+ * four writes happened one after another and a kill between any two of them
+ * left the state it always did. The whole of this one's value is the word
+ * *one*: **artefacts, postcondition, step
  * completion, publication and job transition commit together or not at all.**
  *
  * The model call stays outside, permanently. `run` happens between `beginStep`
@@ -75,18 +76,20 @@
  * which is why `publishRevisionIn` and `failRevisionIn` may go on taking it for
  * themselves. GPT Sol, 2026-08-29.
  *
- * ## It does not accept `JobSettles`
+ * ## It does not take the job store's public methods
  *
- * `releaseStepIn(tx, …)` and `finishIn(tx, …)` are called directly, because the
- * public capability's methods reach `getDb()` for themselves and injecting them
- * would bind nothing to this transaction — artefacts and step state committing
- * while the release fails separately is the exact fault this file exists to
- * remove. See `JobSettles` in src/store/session.ts.
+ * `releaseStepIn(tx, …)` and `finishIn(tx, …)` are called directly, because
+ * `JobStore.releaseStep` and `.finish` reach `getDb()` for themselves and
+ * injecting them would bind nothing to this transaction — artefacts and step
+ * state committing while the release fails separately is the exact fault this
+ * file exists to remove. (The injected pair was a type, `JobSettles`, which
+ * went with the filesystem session on 2026-10-07.)
  *
  * ## Every real step runs through it, and once nothing could
  *
- * `checkProduct` is asked with the unconverted set, and that set is now
- * **empty** (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts): every step returns
+ * `checkProduct` refuses a product with no `parts` for every step, with no
+ * exemption (the list of exempt names, `LEGACY_UNCONVERTED_STEPS`, emptied on
+ * 2026-08-31 and was deleted on 2026-10-07): every step returns
  * `parts` and this session is what writes them. This paragraph said *"nothing
  * real can run through it yet, and that is correct"* while all ten steps were
  * still legacy and a stage that wrote its own files during `run` wrote them
@@ -97,6 +100,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { jobs as jobsTable } from "../db/schema.js";
+import { currentOwnerId } from "../owner.js";
 import { assertProduced } from "../pipeline.js";
 import type { StepName } from "../types.js";
 import {
@@ -110,7 +114,7 @@ import { READ_COMMITTED } from "./isolation.js";
 import { DraftGoneError, StaleAttemptError } from "./jobs.js";
 import type { JobEnding } from "./jobs.js";
 import { RELEASED, settleReservation, supersedeMinimal } from "./pg-billing.js";
-import { finishIn, releaseStepIn } from "./pg-jobs.js";
+import { anotherJobCarriesLabelsIn, finishIn, keepStepIn, releaseStepIn } from "./pg-jobs.js";
 import {
   JobDraftGone,
   NotTheLiveAttempt,
@@ -140,18 +144,6 @@ import {
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-
-/**
- * **No step is exempt here**, and it is a constant rather than an option.
- *
- * `fsStoreSession` consults `UNCONVERTED_STEPS` because on the filesystem a
- * stage writing its own files during `run` is simply how it has always worked.
- * Under a transaction those writes land outside it, so the same product would
- * pass its postcondition against the artefacts `beginDraftIn` carried forward
- * and be marked done having written nothing into the draft. There is no value
- * of this that would be safe, so there is no parameter.
- */
-const NOTHING_UNCONVERTED: ReadonlySet<StepName> = new Set<StepName>();
 
 /* **`READ_COMMITTED` was defined here, and moved to [isolation.ts](isolation.ts)
    on 2026-09-03** when every transaction in the store started naming its level
@@ -251,11 +243,14 @@ export async function openPgStoreSession(opts: {
   readonly job: { readonly id: string; readonly attemptId: string };
   /** The article is born minimal if this claim creates it — see `lockOrCreateArticle`. */
   readonly processing?: "minimal";
+  /** The job's own address, for `articles.asked_url`. Absent for an upload. */
+  readonly askedUrl?: string;
 }): Promise<StoreSession> {
   const draft = await openOrBeginJobDraft({
     slug: opts.slug,
     job: opts.job,
     ...(opts.processing ? { processing: opts.processing } : {}),
+    ...(opts.askedUrl !== undefined ? { askedUrl: opts.askedUrl } : {}),
   });
   return pgStoreSession({
     ref: {
@@ -299,7 +294,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
    * write a perfectly valid draft into an article nobody is reading.
    */
   const lockArticleFor = async (tx: Tx, slug: string): Promise<void> => {
-    const article = await lockOrCreateArticle(tx, slug);
+    /* No asked-for address: this is a commit's lock on an article the claim
+       already opened, and told. A row created here is the wrong article, and
+       the check below refuses it. */
+    const article = await lockOrCreateArticle(tx, slug, { askedUrl: null });
     if (article.id !== ref.articleId) {
       throw new Error(
         `The article for "${slug}" is now ${article.id}, but this session's draft belongs to ` +
@@ -449,18 +447,26 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
      * **The step is done and the job goes on, holding its claim.** Case 0, and
      * it is the one the coordinator takes between the steps of a walk.
      *
-     * Nothing about the *job row* belongs in this transaction. The step's
-     * artefacts and its `revision_step_runs` row have just been written by the
-     * caller and are what `stepIsDone` reads; the job's `steps` array is a
-     * progress bar, written by `noteProgress` outside this transaction and
-     * deliberately not renewing the lease. Widening the transaction to touch
-     * the job row for a field nothing decides anything on would take the job
-     * lock on every step of a walk for no gain.
+     * **The job's `steps` are written here, and nothing else on the row is.**
+     * Until 2026-10-07 this branch wrote nothing, on the argument that `steps`
+     * is a progress bar nothing decides anything on. One thing does: a forced
+     * step runs again unless its stored status is `done` (`stillForced`,
+     * src/jobs.ts), and the artefacts cannot say that for it. Left to
+     * `noteProgress`, outside this transaction, the receipt could be lost
+     * while the product was kept, and the next claim paid for the step twice.
+     * It took no new lock to put it here: `finishStepRun`, a statement
+     * earlier, already holds the job row. See `keepStepIn`.
+     *
+     * The lease is not renewed and `cancelling` is not read; `noteProgress`
+     * still follows, and is still how the walk hears a Stop.
      *
      * **And the draft stays exactly where it is**, which is the whole point of
      * keeping the claim: the next step in this same walk writes into it.
      */
-    if (transition.kind === "keep") return { settlement: { kind: "kept" }, announce: {} };
+    if (transition.kind === "keep") {
+      await keepStepIn(tx, transition.jobId, transition.attempt, transition.steps);
+      return { settlement: { kind: "kept" }, announce: {} };
+    }
     if (transition.kind === "release") {
       /* Case 1 and case 4, and which of the two it is cannot be decided here.
          `releaseStepIn`'s `case when cancelling` is the authority on it; asking
@@ -572,9 +578,22 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
        * ever started does not reach this line. And **`error` only** — a reader
        * who pressed Stop has not been told anything went wrong, and asking again
        * is the remedy the pending sentence already implies.
+       *
+       * **And only when nobody else is going to make them.** A job that fails
+       * here while another `labels` job for this article is still queued has not
+       * lost the article its labels, and saying so would be a sentence that is
+       * wrong until it heals. `anotherJobCarriesLabelsIn` (./pg-jobs.ts) is the
+       * same question the lease sweep asks, in one place since 2026-10-07; this
+       * job is named to it because it is still `running` and would otherwise
+       * count as its own successor. The ambient owner, as the mark itself uses:
+       * a claimant runs as the article's owner.
        */
       const navLabelsFailed =
-        unfinished === "labels" && ending.status === "error"
+        unfinished === "labels" &&
+        ending.status === "error" &&
+        !(await anotherJobCarriesLabelsIn(tx, { slug, ownerId: currentOwnerId() }, [
+          transition.jobId,
+        ]))
           ? await markNavLabelsFailedIn(tx, slug, ref.revisionId)
           : null;
       announce = {
@@ -760,7 +779,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
       /* **Before the transaction opens**, because it is a claim about the
          product and not about the database, and a refusal that has not touched
          Postgres is one nothing has to roll back. */
-      checkProduct(step, product, NOTHING_UNCONVERTED);
+      checkProduct(step, product);
 
       let announced: Announcement = {};
       const settled = await db
@@ -785,8 +804,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
              this transaction. `settleIn` would otherwise ask `finishStepRun` to
              end a row that is already `done`, its fence would refuse, and a
              perfectly good commit would roll back — which is reachable, since
-             `transitionAfter` returns an `end` with a `cancelled` or
-             `interrupted` ending after a step that ran to completion. */
+             `transitionAfter` returns an `end` with a `cancelled` ending after
+             a step that ran to completion when a Stop on this instance landed
+             with steps still to run. (It returned an `interrupted` one too,
+             until our own deadline stopped committing at all on 2026-10-07.) */
           const { settlement, announce: what } = await settleIn(tx, ctx.slug, transition);
           announced = what;
           return settlement;

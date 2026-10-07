@@ -6,27 +6,69 @@
  * thin adapter over two tmux calls and is tested against the box it is running
  * on. If it grows a decision, the decision is in the wrong file.
  *
- * ## Where the session list comes from, and the seam
+ * ## Where the session list comes from, and who calls this
  *
- * **The daemon does not use this.** Inside the daemon the sessions come from the
- * register, which is folded from the dashboard's own snapshot, because *there is
- * one collector on this box and it is not ours*
- * (docs/project/overseer-direction.md § Two tenses). This function exists so
- * `overseer attention` can be run against the live fleet without a healthy
- * daemon and without the dashboard — which is what an evaluation needs, since an
- * evaluation that could only run when everything else was working would be an
- * evaluation of everything else.
+ * **Both the hand-run `overseer attention` and the daemon call this.** The
+ * daemon's attention pass is `attentionRunner` in attention-cli.ts, which
+ * `scripts/overseer.ts` hands to the daemon, and it lists the sessions and reads
+ * the generation here on every pass. (This header said for a long time that the
+ * daemon did not, and that its sessions came from the register. That was the
+ * intention — *there is one collector on this box and it is not ours*,
+ * docs/project/overseer-direction.md § Two tenses — and it is not what the code
+ * does.) It also means `overseer attention` can be run against the live fleet
+ * without a healthy daemon and without the dashboard, which is what an
+ * evaluation needs, since an evaluation that could only run when everything
+ * else was working would be an evaluation of everything else.
  *
  * `tmux list-sessions` is one call and costs nothing; the thing the direction
  * doc forbids duplicating is the ~12 seconds of grepping thirty-five
  * transcripts, which nothing here does.
+ *
+ * ## Why both reads are owned asynchronous children
+ *
+ * Because the daemon has one thread. A synchronous child with a `timeout` is
+ * signalled at the timeout and then waited for until it exits, so a tmux that
+ * would not die held the heartbeat and recovery for as long as it liked
+ * (docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md).
+ * Through the process's one owner the caller is released at `timeout + grace`
+ * whether tmux died or not, and a child still unaccounted for refuses the next
+ * read under its key rather than starting a sibling. `capturePane` is still
+ * synchronous, and is `pane.ts`'s to convert, not this file's.
  */
-import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { processProbeOwner, type ProbeOwner } from "../fleet/child.js";
 import { capturePane } from "../fleet/pane.js";
 import type { SessionToScan } from "./attention-pass.js";
+
+/**
+ * When tmux is signalled. A tmux server under load is still a tmux server, so
+ * this is generous; the caller is released one grace after it either way.
+ */
+const TMUX_TIMEOUT_MS = 10_000;
+
+/**
+ * The seams a test needs: a stand-in for `tmux`, tighter bounds, and its own
+ * owner. Everything defaults to the real thing on the process's one owner.
+ */
+export type TmuxProbeOptions = { bin?: string; timeoutMs?: number; graceMs?: number; owner?: ProbeOwner };
+
+/** One tmux command through the owner: its stdout, or the owner's sentence saying why not. */
+async function askTmux(
+  key: string,
+  args: readonly string[],
+  opts: TmuxProbeOptions,
+): Promise<{ ok: true; stdout: string } | { ok: false; why: string }> {
+  const outcome = await (opts.owner ?? processProbeOwner()).run({
+    key,
+    cmd: opts.bin ?? "tmux",
+    args,
+    timeoutMs: opts.timeoutMs ?? TMUX_TIMEOUT_MS,
+    ...(opts.graceMs === undefined ? {} : { graceMs: opts.graceMs }),
+  });
+  return outcome.kind === "ok" ? { ok: true, stdout: outcome.stdout } : { ok: false, why: outcome.why };
+}
 
 /**
  * Every live tmux session, with the pane its first window is showing.
@@ -34,16 +76,21 @@ import type { SessionToScan } from "./attention-pass.js";
  * `#{pane_id}` on a `list-sessions` format is the session's CURRENT pane, which
  * is the one a person looking at that session would see, and is what the whole
  * pane-reading approach is about.
+ *
+ * **Rejects when tmux cannot be asked**, as the synchronous call threw: a
+ * failed exit, a timeout, and a refusal because the last listing's child is
+ * still unaccounted for are all "there is no listing", and none of them is an
+ * empty fleet. The daemon turns a rejected pass into an `unknown` list.
  */
-export function listSessions(): readonly SessionToScan[] {
-  const out = execFileSync("tmux", ["list-sessions", "-F", "#{session_id}\t#{session_name}\t#{pane_id}"], {
-    encoding: "utf8",
-    // A tmux server under load is still a tmux server; a hang here would hold a
-    // tick open, and a tick that cannot end is worse than a pass that skipped.
-    timeout: 10_000,
-  });
+export async function listSessions(opts: TmuxProbeOptions = {}): Promise<readonly SessionToScan[]> {
+  const asked = await askTmux(
+    "attention:tmux-list-sessions",
+    ["list-sessions", "-F", "#{session_id}\t#{session_name}\t#{pane_id}"],
+    opts,
+  );
+  if (!asked.ok) throw new Error(`tmux list-sessions could not be read: ${asked.why}`);
   const sessions: SessionToScan[] = [];
-  for (const line of out.split("\n")) {
+  for (const line of asked.stdout.split("\n")) {
     if (line.trim() === "") continue;
     const [sessionId, sessionName, paneId] = line.split("\t");
     if (sessionId === undefined || sessionName === undefined) continue;
@@ -84,10 +131,11 @@ export { capturePane };
  * value that will not match a real one — so the waits are dropped, which is the
  * safe direction.
  */
-export function tmuxServerGeneration(): number | null {
+export async function tmuxServerGeneration(opts: TmuxProbeOptions = {}): Promise<number | null> {
   try {
-    const out = execFileSync("tmux", ["display-message", "-p", "#{pid}"], { encoding: "utf8", timeout: 10_000 });
-    const pid = Number(out.trim());
+    const asked = await askTmux("attention:tmux-generation", ["display-message", "-p", "#{pid}"], opts);
+    if (!asked.ok) return null;
+    const pid = Number(asked.stdout.trim());
     return Number.isInteger(pid) && pid > 0 ? pid : null;
   } catch {
     return null;

@@ -248,6 +248,67 @@
 }
 .install-hint-close:hover { color: var(--highlight-text); border-color: var(--highlight); }
 
+/* ------------------------------------------------------------ the entrance --
+   **The bar is absent for a second, then fades and rises into place** — once,
+   on the first reading view of a page load. Greg, 2026-10-06 (spya-dest8x):
+   *"perhaps it appears, maybe it fades in or slowly rises to the top when the
+   page, the article first loads after a second, so that the page can load and
+   then it draws their eye to it."* Which mount gets the class is
+   reader/dock-entrance.ts; this is only what the class does.
+   docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md § D7.
+
+   **`opacity` and the separate `translate` property, never `transform`.**
+   `transform` on both of these elements is the phone's hide-on-scroll rule's
+   (`.dock` above, `--install-hint-transform`), and an animation that named it
+   would override that rule for as long as `forwards` holds its last frame,
+   which is for ever. `translate` composes with `transform` instead of
+   replacing it, so a bar told to hide mid-entrance still ends up hidden.
+
+   **Hidden outright during the delay, not merely transparent.** A static
+   `visibility: hidden` is what applies until the animation starts, so for
+   that second the bar cannot be pressed or focused; Tab skips it, which is
+   accepted. Both keyframes then say `visible`, because `visibility` is
+   discrete and a `hidden` first frame would hold for half the fade. `forwards`
+   keeps the last frame, and with it `visible`, once the animation is over
+   (GPT Sol, PR-8).
+
+   **The install hint enters with the bar it sits on**, or it would float over
+   an empty strip (PR-5). The same distance for both, the bar's own height, so
+   they rise as one piece; the hint starts behind the bar (46 under 96).
+
+   Nothing is measured against any of this: opacity, visibility and translate
+   leave `scrollWidth` and `clientWidth` alone, so the fit ladder reads the
+   same row either way (dock-fit.ts).
+
+   tests/dock-entrance.test.tsx reads these rules as text. */
+.dock.dock-enter,
+.install-hint.dock-enter {
+  visibility: hidden;
+  animation: dock-enter 0.6s ease 1s forwards;
+}
+@keyframes dock-enter {
+  from {
+    visibility: visible;
+    opacity: 0;
+    translate: 0 var(--dock-space);
+  }
+  to {
+    visibility: visible;
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+/* A reader who asked for less motion gets the bar, at once. `animation: none`
+   also drops the delay, so the static `hidden` above has to be undone here or
+   the bar would never arrive. */
+@media (prefers-reduced-motion: reduce) {
+  .dock.dock-enter,
+  .install-hint.dock-enter {
+    animation: none;
+    visibility: visible;
+  }
+}
+
 /* -------------------------------------------------------- the return chip --
    "↩ back to <section>", above the bar, after a jump — ReturnChip.tsx, which
    carries the words and the rule for when it is there at all.
@@ -297,7 +358,7 @@
   /* The same lift `.cmt-dialog` has: it floats over prose, and a flat panel on
      a dark ground reads as a hole in the article rather than as something in
      front of it. */
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   font-size: 0.75rem;
   line-height: 1.4;
@@ -407,6 +468,11 @@
   transition: color 0.12s, background-color 0.12s, box-shadow 0.12s;
 }
 .dock-btn:hover { color: var(--highlight-text); background: var(--panel); }
+/* **The More button while its menu is open** (Dock.tsx § `DockMore`): the
+   hover wash, held, so the list reads as coming out of this button once the
+   pointer has moved up into it. Not `.on` — that says *this mode is open*,
+   and More is never a mode. Radix writes `data-state` on the trigger. */
+.dock-more-trigger[data-state="open"] { color: var(--highlight-text); background: var(--panel); }
 .dock-btn:focus-visible {
   outline: 1px solid var(--highlight-text);
   outline-offset: -2px;
@@ -468,7 +534,7 @@
    `DockExperimentalSwitch`, whose comment repeats this argument because it is
    the thing a reader of that file will want to argue with. */
 .dock-btn.soon {
-  color: var(--ink-faintest, var(--ink-faint));
+  color: var(--ink-faint);
   opacity: 0.5;
   cursor: default;
 }
@@ -558,15 +624,16 @@
    nearly its own background. The chip is one glyph, so nothing about its width
    is load-bearing beyond the `min-width` above.
 
-   **`var(--destructive, …)` with a fallback spelled out** — a habit from when
-   `--destructive` was defined nowhere in this app. It is defined now, in
-   styles/tokens.css with a light value beside it, so the fallback never
-   applies; search.css and mode-band.css carry the same literal. Were the token
-   ever removed, a bare `var()` would be invalid at computed-value time and
-   simply dropped — a chip with no fill, with nothing reporting an error —
-   which is what `tests/css-tokens.test.ts` exists to catch. */
+   **A bare `var(--destructive)`.** It carried a literal fallback until
+   2026-10-07, a habit from when `--destructive` was defined nowhere in this
+   app. It is defined in styles/tokens.css with a light value beside it, so the
+   fallback never applied; search.css and mode-band.css carried the same
+   literal. Were the token ever removed, a bare `var()` is invalid at
+   computed-value time and simply dropped — a chip with no fill, with nothing
+   reporting an error — which is what `tests/css-tokens.test.ts` exists to
+   catch, and a fallback would have hidden it from that test. */
 .dock-count.failed {
-  background: var(--destructive, oklch(0.65 0.2 25));
+  background: var(--destructive);
   color: var(--page);
   font-weight: 700;
 }
@@ -854,7 +921,7 @@
   color: var(--ink-faint);
 }
 .dock-question-state.pending { color: var(--highlight-text); font-style: italic; }
-.dock-question-state.error { color: var(--danger, var(--highlight)); }
+.dock-question-state.error { color: var(--danger); }
 /* The reader's own words, rather than the model's. Brighter, because in a list
    that mixes the two the one you wrote is the one you are scanning for. */
 .dock-question-state.own { color: var(--ink-soft); }
@@ -897,33 +964,22 @@
      the `max-width` above. GPT Sol, 2026-09-06. */
   overflow-wrap: anywhere;
 }
-.tip-soon-flag {
-  margin-left: 0.4rem;
-  font-weight: 400;
-  font-size: 0.72rem;
-  color: var(--ink-faint);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 .tip-soon p {
   margin: 0.35rem 0 0;
   font-size: 0.8rem;
   line-height: 1.45;
   color: var(--ink-soft);
 }
-/* Two footers, one treatment, because they sit in the same place and mean the
-   same kind of thing — an aside under the description rather than more of it.
+/* A footer: an aside under the description rather than more of it. `tap` is
+   "tap again to do it", which a card opened by a finger has to say and no other
+   card does (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). It shared
+   this rule with a `learned` footer until 2026-10-06, when that selector went:
+   nothing had emitted the class for some time.
 
-   `learned` is what that project learned the hard way; `tap` is "tap again to
-   do it", which a card opened by a finger has to say and no other card does
-   (Tooltip.tsx § `ControlTip.tap`, docs/project/touch.md). One rule rather than
-   two identical ones: if they ever need to differ, split it then.
-
-   Selector written as `.tip-soon p.tip-soon-learned` rather than the class on
+   Selector written as `.tip-soon p.tip-soon-tap` rather than the class on
    its own so it outranks `.tip-soon p` above without an `!important`. Same
    result, and the next person to add a rule here inherits a specificity ladder
    they can reason about rather than one they have to escalate past. */
-.tip-soon p.tip-soon-learned,
 .tip-soon p.tip-soon-tap {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
@@ -935,7 +991,7 @@
    for every reader, so it is quoted rather than blended into the description
    above it: the rule says "and here is what came back", and it keeps its full
    ink because it is the most specific thing in the card. `ControlTip`
-   § `drawn`. Specificity ladder as `.tip-soon-learned` above. */
+   § `drawn`. Specificity ladder as `.tip-soon-tap` above. */
 .tip-soon p.tip-soon-drawn {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
@@ -946,7 +1002,7 @@
    paragraph. A rule above, full ink, medium weight, and an arrow before it; not
    italic, which is the gesture hint's (`.tip-soon-tap`) and would make the two
    look like one kind of line. `ControlTip` § `press`, and spya-d886ah for why.
-   Specificity ladder as `.tip-soon-learned` above. */
+   Specificity ladder as `.tip-soon-tap` above. */
 .tip-soon p.tip-soon-press {
   padding-top: 0.35rem;
   border-top: 1px solid var(--rule);
@@ -955,4 +1011,53 @@
 }
 .tip-soon p.tip-soon-press::before {
   content: "→\00a0";
+}
+
+/* ---------------------------------------------------------- skip to modes --
+   The reading view's first Tab stop (reader/SkipToModes.tsx, plan 261007h §
+   F5b): out of sight until it has focus, then a pill in the top-left corner,
+   over the bars, saying where Enter goes. Here rather than with the reader
+   because it is the dock's way in.
+
+   Off-screen by the clip recipe (`.sr-only`, chat-actions.css), never
+   `display: none`, which would take it out of the Tab order it exists for.
+   Fixed, so it shows wherever the page is scrolled; above the bars and their
+   tooltips, because a focus mark under a bar is no mark at all. */
+.skip-to-modes {
+  position: fixed;
+  top: calc(var(--safe-top) + 0.5rem);
+  left: calc(var(--safe-left, 0px) + 0.5rem);
+  z-index: 101;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.skip-to-modes:focus {
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-size: 0.875rem;
+  text-decoration: none;
+  outline: 2px solid var(--highlight-text);
+  outline-offset: 2px;
+}
+/* An explicit skip takes priority over the decorative entrance. The marker
+   stays on this mount, so blurring a radio cannot restart the delay. */
+.dock.dock-enter[data-skip-arrived],
+:root:has(.dock[data-skip-arrived]) .install-hint.dock-enter {
+  animation: none;
+  visibility: visible;
+}
+@media print {
+  .skip-to-modes {
+    display: none;
+  }
 }

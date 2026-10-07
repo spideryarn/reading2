@@ -1,0 +1,254 @@
+{
+  "arm": "high-none-timed350b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "scaling-hypothesis",
+  "version": "simple-prompt/7",
+  "sourceSha256": "0cb02db96b3aa8bde13695982986b8490ea073e7e2b333229670086e98750a85",
+  "at": "2026-10-04T12:36:45.471Z",
+  "bodyWords": 12646,
+  "bodyBlocks": 145,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "bac789a78e5d98f5",
+  "systemsSha256": "a517e085ff6f7ddcb776af033804dfa3c4a919138b87d1c52ad14cfb5ec6fa7c",
+  "power": "high",
+  "guard": true,
+  "wallMs": 63466,
+  "costUsd": 0.2850056,
+  "tokens": {
+    "input": 24487,
+    "output": 6241,
+    "reasoning": 2632
+  },
+  "briefReadyMs": 13363,
+  "fullerReadyMs": 63463,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 334,
+  "briefWords": 87,
+  "fuller": [
+    {
+      "text": "This long essay by Gwern uses GPT-3 to argue for the scaling hypothesis. GPT-3, released by OpenAI in May 2020, is a neural network, a program that learns patterns from examples, trained to predict the next word of Internet text. It has 175 billion parameters, the adjustable numbers inside it, making it 117 times larger than GPT-2.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-aqts9c"
+      ],
+      "sentences": [
+        {
+          "text": "This long essay by Gwern uses GPT-3 to argue for the scaling hypothesis.",
+          "id": null,
+          "key": "the scaling hypothesis"
+        },
+        {
+          "text": "GPT-3, released by OpenAI in May 2020, is a neural network, a program that learns patterns from examples, trained to predict the next word of Internet text.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "It has 175 billion parameters, the adjustable numbers inside it, making it 117 times larger than GPT-2.",
+          "id": "spya-aqts9c"
+        }
+      ]
+    },
+    {
+      "text": "The piece says GPT-3 matters because size alone produced meta-learning: learning a new task from a few examples, though it was never built for that. Its gains also kept following a smooth curve, with no sign of slowing yet. Gwern argues models costing far more are still affordable, so trillions of parameters look possible and useful.",
+      "ids": [
+        "spya-ewxv9q",
+        "spya-asr663"
+      ],
+      "sentences": [
+        {
+          "text": "The piece says GPT-3 matters because size alone produced meta-learning: learning a new task from a few examples, though it was never built for that.",
+          "id": "spya-ewxv9q",
+          "key": "size alone produced meta-learning"
+        },
+        {
+          "text": "Its gains also kept following a smooth curve, with no sign of slowing yet.",
+          "id": "spya-asr663"
+        },
+        {
+          "text": "Gwern argues models costing far more are still affordable, so trillions of parameters look possible and useful.",
+          "id": "spya-asr663"
+        }
+      ]
+    },
+    {
+      "text": "The numbers use loss, the model's prediction error, measured in bits per character. GPT-2 scored about 3.3, and GPT-3 roughly halved that to about 1.73. Gwern estimates 100 to 1,000 times more computing might reach about 1.24, still short of humans at about 0.7.",
+      "ids": [
+        "spya-edr6mj",
+        "spya-rjwfkb"
+      ],
+      "sentences": [
+        {
+          "text": "The numbers use loss, the model's prediction error, measured in bits per character.",
+          "id": "spya-edr6mj"
+        },
+        {
+          "text": "GPT-2 scored about 3.3, and GPT-3 roughly halved that to about 1.73.",
+          "id": "spya-edr6mj",
+          "key": "roughly halved that to about 1.73"
+        },
+        {
+          "text": "Gwern estimates 100 to 1,000 times more computing might reach about 1.24, still short of humans at about 0.7.",
+          "id": "spya-rjwfkb"
+        }
+      ]
+    },
+    {
+      "text": "The essay explains why predicting text could force real understanding, as learning moves through stages: First, letter and space frequencies cut error from 8 bits to about 5. Around 2 bits, sentences start to make sense, and each further gain costs more. The last bits need reasoning, common sense and grasping what people want, so they are the deepest.",
+      "ids": [
+        "spya-r465ug",
+        "spya-x3c389",
+        "spya-g3b5y7"
+      ],
+      "sentences": [
+        {
+          "text": "The essay explains why predicting text could force real understanding, as learning moves through stages:",
+          "id": null
+        },
+        {
+          "text": "First, letter and space frequencies cut error from 8 bits to about 5.",
+          "id": "spya-r465ug"
+        },
+        {
+          "text": "Around 2 bits, sentences start to make sense, and each further gain costs more.",
+          "id": "spya-x3c389"
+        },
+        {
+          "text": "The last bits need reasoning, common sense and grasping what people want, so they are the deepest.",
+          "id": "spya-g3b5y7"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Gwern's tentative explanation is that a big network holds countless small sub-models that average out, favouring simple answers. With enough data, memorizing every sum costs more than learning arithmetic itself. He admits this once seemed unconvincing: it might have needed more text than exists, or a different design.",
+      "ids": [
+        "spya-grkhs8",
+        "spya-vkkfzh",
+        "spya-faees7"
+      ],
+      "sentences": [
+        {
+          "text": "Gwern's tentative explanation is that a big network holds countless small sub-models that average out, favouring simple answers.",
+          "id": "spya-grkhs8"
+        },
+        {
+          "text": "With enough data, memorizing every sum costs more than learning arithmetic itself.",
+          "id": "spya-vkkfzh"
+        },
+        {
+          "text": "He admits this once seemed unconvincing: it might have needed more text than exists, or a different design.",
+          "id": "spya-faees7"
+        }
+      ]
+    },
+    {
+      "text": "He contrasts OpenAI's bet with DeepMind's weak scaling hypothesis: building the brain piece by piece, then scaling each piece. He also faults experts who predicted failure, were wrong, and rarely admitted it.",
+      "ids": [
+        "spya-vr9q2p",
+        "spya-m9r8zx"
+      ],
+      "sentences": [
+        {
+          "text": "He contrasts OpenAI's bet with DeepMind's weak scaling hypothesis: building the brain piece by piece, then scaling each piece.",
+          "id": "spya-vr9q2p"
+        },
+        {
+          "text": "He also faults experts who predicted failure, were wrong, and rarely admitted it.",
+          "id": "spya-m9r8zx"
+        }
+      ]
+    },
+    {
+      "text": "The conclusion is that Hans Moravec's old forecast, human-rivalling cheap computing in the 2020s, is holding up. An appendix warns that tool-like AIs may become agents that pursue goals, and that filtering training data will not prevent it.",
+      "ids": [
+        "spya-ad5qgy",
+        "spya-hjpau9"
+      ],
+      "sentences": [
+        {
+          "text": "The conclusion is that Hans Moravec's old forecast, human-rivalling cheap computing in the 2020s, is holding up.",
+          "id": "spya-ad5qgy"
+        },
+        {
+          "text": "An appendix warns that tool-like AIs may become agents that pursue goals, and that filtering training data will not prevent it.",
+          "id": "spya-hjpau9"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay is about GPT-3, a huge computer program that learned from text on the internet. Simply making it much bigger did not stop paying off, as many experts expected. Instead, it learned new skills, like doing a fresh task from just a few examples.",
+      "ids": [
+        "spya-suzdvz",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "This essay is about GPT-3, a huge computer program that learned from text on the internet.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Simply making it much bigger did not stop paying off, as many experts expected.",
+          "id": "spya-ewxv9q"
+        },
+        {
+          "text": "Instead, it learned new skills, like doing a fresh task from just a few examples.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    },
+    {
+      "text": "The author argues for the scaling hypothesis: the idea that size alone can produce intelligence. It says simple programs grow smarter just by getting bigger, with more data and computing power. If true, human-like AI may come sooner than most experts admit.",
+      "ids": [
+        "spya-m3gtj6",
+        "spya-ewxv9q"
+      ],
+      "sentences": [
+        {
+          "text": "The author argues for the scaling hypothesis: the idea that size alone can produce intelligence.",
+          "id": "spya-m3gtj6",
+          "key": "the scaling hypothesis"
+        },
+        {
+          "text": "It says simple programs grow smarter just by getting bigger, with more data and computing power.",
+          "id": "spya-m3gtj6"
+        },
+        {
+          "text": "If true, human-like AI may come sooner than most experts admit.",
+          "id": "spya-ewxv9q"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 1,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 2,
+        "retriedAfterFlag": true,
+        "stored": 2
+      }
+    }
+  }
+}

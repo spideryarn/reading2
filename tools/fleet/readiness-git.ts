@@ -13,6 +13,13 @@
  *    IO inside a handler makes the whole diagnostic dashboard unresponsive at
  *    exactly the moment somebody needs it. GPT Sol's P1.8.
  *
+ *    **The timer is not another thread**, so that was half the fix: a
+ *    `spawnSync` on the timer froze every request just the same, and its
+ *    `timeout` is when the signal is sent, not a bound (postmortem 260910a).
+ *    The dashboard therefore calls {@link snapshotDevAsync}, which asks the
+ *    same questions through an owned asynchronous child. The synchronous
+ *    functions here are for the scripts.
+ *
  * ## What "on dev" is allowed to claim, which is less than it looks
  *
  * The first draft of the plan proposed reporting the mtime of
@@ -34,10 +41,14 @@
 import { spawnSync } from "node:child_process";
 import { dirname } from "node:path";
 
+import type { ProbeOwner } from "./child.js";
 import type { TreeStamp } from "./readiness.js";
 
 /** No git call may hold anything up for longer than this. */
 export const GIT_TIMEOUT_MS = 5_000;
+
+/** Everything here prints one line; see `git` below. */
+const GIT_MAX_BYTES = 1024 * 1024;
 
 /**
  * Git's inherited location overrides, which can make `cwd` and `git -C`
@@ -88,6 +99,47 @@ export function gitEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessE
 }
 
 /**
+ * The environment for every child the readiness runner starts: {@link gitEnv},
+ * and with **every `npm_config_*` variable removed**, whatever its case.
+ *
+ * npm reads any variable of that name as configuration, and several of them
+ * make a command exit 0 having done nothing. Measured here on npm 11.19.0,
+ * 2026-10-06, against a fixture whose root `postinstall` writes a file:
+ *
+ *     npm_config_ignore_scripts=true    npm ci exits 0, the file is absent
+ *     npm_config_script_shell=/bin/true npm ci exits 0, the file is absent —
+ *                                       and so would `npm run build:fleet`,
+ *                                       `npm run db:migrate` and the check
+ *     npm_config_dry_run=true           npm ci exits 0, node_modules untouched
+ *
+ * Pinning a flag on the command line answers one of those at a time and the
+ * list does not end (GPT Sol's R724-02, then P3R-03 one flag later). Removing
+ * the whole family does. npm then reads its npmrc files again. Inherited
+ * overrides, including legitimate cache, registry and alternate-userconfig
+ * settings, are deliberately discarded. npm also exports CLI settings in
+ * `npm_config_*`, so these variables are not necessarily echoes of npmrc files.
+ *
+ * **What this does not claim:** independence from a user-level or global
+ * npmrc. `script-shell=/bin/true` in an npmrc hollows the same commands and
+ * nothing here sees it.
+ *
+ * `npm_package_*` and `npm_lifecycle_*` are left alone: they describe the
+ * script that started this process, npm does not read them back as
+ * configuration, and each `npm run` below replaces them.
+ *
+ * A separate function, not a change to `gitEnv`, because `gitEnv` is also what
+ * `scripts/worktree-check.ts`, `scripts/worktree-port.ts` and the dashboard run
+ * git with, and none of those is an unattended runner.
+ */
+export function runnerChildEnv(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = gitEnv(source);
+  for (const name of Object.keys(env)) {
+    if (name.toLowerCase().startsWith("npm_config_")) delete env[name];
+  }
+  return env;
+}
+
+/**
  * The sentence the page shows beside "on dev", instead of a freshness it cannot
  * measure. See the header for the two ways ref mtime lies.
  */
@@ -109,7 +161,7 @@ function git(cwd: string, args: string[]): GitRun {
     cwd,
     encoding: "utf8",
     timeout: GIT_TIMEOUT_MS,
-    maxBuffer: 1024 * 1024,
+    maxBuffer: GIT_MAX_BYTES,
     /* No prompts or credential helper reaching for the network. This module
        is read-only and must stay that way even if repository config disagrees. */
     env: gitEnv(),
@@ -173,7 +225,12 @@ export function stampTree(cwd: string): TreeStamp {
  * wherever you ask from. GPT Sol's P1.8.
  */
 export function primaryCheckout(cwd: string): { path: string } | { why: string } {
-  const common = git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
+  return primaryFromCommonDir(git(cwd, COMMON_DIR_ARGS));
+}
+
+const COMMON_DIR_ARGS = ["rev-parse", "--path-format=absolute", "--git-common-dir"];
+
+function primaryFromCommonDir(common: GitRun): { path: string } | { why: string } {
   if (!common.ok) return { why: common.why };
   if (common.out === "") return { why: "git printed no common directory" };
   return { path: dirname(common.out) };
@@ -199,23 +256,36 @@ export type DevSnapshot =
     }
   | { kind: "unknown"; why: string; observedAt: string };
 
-export function snapshotDev(cwd: string, nowIso: string): DevSnapshot {
-  const primary = primaryCheckout(cwd);
-  if ("why" in primary) return { kind: "unknown", why: primary.why, observedAt: nowIso };
+/*
+ * The snapshot's questions and its assembly, shared by the synchronous and the
+ * asynchronous asker below so that only the spawn differs between them.
+ *
+ * **Every count is asked of SHAS, never of names.** The three refs are resolved
+ * first and the two `rev-list`s are built from what they resolved to. With
+ * names, a push or a fetch landing between two calls gave a snapshot whose
+ * `devSha` and `primarySha` were one moment's and whose counts were another's
+ * — always possible from outside, and since the dashboard's calls are awaited,
+ * possible from this server's own requests too. GPT Sol's F9, 2026-10-04.
+ */
+const REV_DEV = ["rev-parse", "origin/dev"];
+const REV_HEAD = ["rev-parse", "HEAD"];
+const REV_MAIN = ["rev-parse", "origin/main"];
+const NOT_ASKED: GitRun = { ok: false, why: "" };
 
-  const dev = git(primary.path, ["rev-parse", "origin/dev"]);
-  if (!dev.ok) {
-    return {
-      kind: "unknown",
-      why: `${dev.why} — without origin/dev there is nothing to compare a reading against`,
-      observedAt: nowIso,
-    };
-  }
+/** How many commits `toSha` has that the sha `from` resolved to does not. Null when it did not resolve. */
+function countArgs(from: GitRun, toSha: string): string[] | null {
+  return from.ok ? ["rev-list", "--count", `${from.out}..${toSha}`] : null;
+}
 
-  const head = git(primary.path, ["rev-parse", "HEAD"]);
-  const behind = head.ok ? git(primary.path, ["rev-list", "--count", `HEAD..${dev.out}`]) : { ok: false as const, why: "" };
-  const gap = git(primary.path, ["rev-list", "--count", "origin/main..origin/dev"]);
+function devUnknown(why: string, nowIso: string): DevSnapshot {
+  return { kind: "unknown", why, observedAt: nowIso };
+}
 
+function devMissing(why: string, nowIso: string): DevSnapshot {
+  return devUnknown(`${why} — without origin/dev there is nothing to compare a reading against`, nowIso);
+}
+
+function devKnown(devSha: string, head: GitRun, behind: GitRun, gap: GitRun, nowIso: string): DevSnapshot {
   const count = (r: GitRun): number | null => {
     if (!r.ok) return null;
     const n = Number(r.out);
@@ -224,13 +294,75 @@ export function snapshotDev(cwd: string, nowIso: string): DevSnapshot {
 
   return {
     kind: "known",
-    devSha: dev.out,
+    devSha,
     primarySha: head.ok ? head.out : null,
     primaryBehind: count(behind),
     trunkGap: count(gap),
     observedAt: nowIso,
     caveat: DEV_FRESHNESS_CAVEAT,
   };
+}
+
+export function snapshotDev(cwd: string, nowIso: string): DevSnapshot {
+  const primary = primaryCheckout(cwd);
+  if ("why" in primary) return devUnknown(primary.why, nowIso);
+
+  const dev = git(primary.path, REV_DEV);
+  if (!dev.ok) return devMissing(dev.why, nowIso);
+  const head = git(primary.path, REV_HEAD);
+  const main = git(primary.path, REV_MAIN);
+
+  const behindArgs = countArgs(head, dev.out);
+  const gapArgs = countArgs(main, dev.out);
+  const behind = behindArgs === null ? NOT_ASKED : git(primary.path, behindArgs);
+  const gap = gapArgs === null ? NOT_ASKED : git(primary.path, gapArgs);
+  return devKnown(dev.out, head, behind, gap, nowIso);
+}
+
+/**
+ * One key for every git question the dashboard asks, awaited one at a time.
+ *
+ * The owner refuses a second child under a key whose first is unaccounted for,
+ * so a git that will not die costs this server ONE stuck child, and every later
+ * question — in this snapshot and the next — is refused and reported as unknown
+ * until it is gone. A key per question would allow six.
+ */
+const GIT_PROBE_KEY = "readiness:git";
+
+async function gitAsync(owner: ProbeOwner, cwd: string, args: string[]): Promise<GitRun> {
+  const outcome = await owner.run({
+    key: GIT_PROBE_KEY,
+    cmd: "git",
+    args,
+    cwd,
+    env: gitEnv(),
+    timeoutMs: GIT_TIMEOUT_MS,
+    maxBytes: GIT_MAX_BYTES,
+  });
+  /* Refused, timed out, overflowed and failed are all "git did not answer":
+     the owner's own sentence says which, and the caller reports unknown. */
+  return outcome.kind === "ok" ? { ok: true, out: outcome.stdout.trim() } : { ok: false, why: `git ${args[0]}: ${outcome.why}` };
+}
+
+/**
+ * {@link snapshotDev} for the dashboard, which has one thread: the same
+ * questions in the same order, through an owned asynchronous child, so the
+ * caller stops waiting at the timeout plus one grace whatever git does.
+ */
+export async function snapshotDevAsync(owner: ProbeOwner, cwd: string, nowIso: string): Promise<DevSnapshot> {
+  const primary = primaryFromCommonDir(await gitAsync(owner, cwd, COMMON_DIR_ARGS));
+  if ("why" in primary) return devUnknown(primary.why, nowIso);
+
+  const dev = await gitAsync(owner, primary.path, REV_DEV);
+  if (!dev.ok) return devMissing(dev.why, nowIso);
+  const head = await gitAsync(owner, primary.path, REV_HEAD);
+  const main = await gitAsync(owner, primary.path, REV_MAIN);
+
+  const behindArgs = countArgs(head, dev.out);
+  const gapArgs = countArgs(main, dev.out);
+  const behind = behindArgs === null ? NOT_ASKED : await gitAsync(owner, primary.path, behindArgs);
+  const gap = gapArgs === null ? NOT_ASKED : await gitAsync(owner, primary.path, gapArgs);
+  return devKnown(dev.out, head, behind, gap, nowIso);
 }
 
 /* ------------------------------------------------------------------ *

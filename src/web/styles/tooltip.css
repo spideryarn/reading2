@@ -39,9 +39,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 5px;
   background: var(--surface-raised);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.5),
-    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  box-shadow: var(--shadow-pop);
   font-family: var(--font-ui);
   /* No transform-origin here on purpose: useTransitionStyles writes a
      placement-aware one inline, so the panel grows out of the band it belongs

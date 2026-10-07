@@ -1,5 +1,31 @@
 # Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz, Quotes and Structure
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.tsx`](../../src/web/reader/Reader.tsx)), [`key-chord.ts`](../../src/web/key-chord.ts) (the ⌘ chords), [`TermJump.tsx`](../../src/web/TermJump.tsx) (G), [`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx) (`/`); tests [`keynav.test.ts`](../../tests/keynav.test.ts), [`keynav-horizontal.test.ts`](../../tests/keynav-horizontal.test.ts).
+
+**Which sections are live.** Live: ← / → in Skim, Quiz, Quotes and Structure; the five rules; the chords (⌘-K, ⌘-Enter, ⌘⌥T); G; `/`; Tab. History (the gist columns went on 2026-09-29): the pointer's stride and aim, `L1 / L2`.
+
+- [§ Why the pointer, and not a mode](#why-the-pointer-and-not-a-mode) — the stride-by-pointer design (history)
+- [§ What each zone means](#what-each-zone-means) — pointer zones (history)
+- [§ Choosing the level without a mouse](#choosing-the-level-without-a-mouse) — ← / → as a stride (history)
+- [§ ← / → in Skim](#-in-skim) — the stop-stepping seam, and how a mode hands `useArrowNav` a handler
+- [§ ← / → in Quiz](#-in-quiz) — Previous/Next, and the refusals that keep a draft
+- [§ ← / → in Quotes](#-in-quotes) — `stepQuote` and the band's order
+- [§ ← / → in Structure](#-in-structure) — `acrossDepth`, and why ↑ / ↓ left the list
+- [§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything) — column tinting (history)
+- [§ Five rules, each with a reason](#five-rules-each-with-a-reason) — auto-repeat, a widget that handled the key, rapid presses, a keypress's URL
+- [§ The one chord that is not an arrow](#the-one-chord-that-is-not-an-arrow) — ⌘-K, ⌘-Enter (Metadata), ⌘⌥T (fold all), Enter in a text box
+- [§ G, the one letter](#g-the-one-letter) — jump to a term in the paragraph
+- [§ Quick search: the slash key](#quick-search-the-slash-key) — `/`
+- [§ What we gave up](#what-we-gave-up) — what the arrows cost the browser
+- [§ This constrains which components we may use](#this-constrains-which-components-we-may-use) — keys a widget must not swallow
+- [§ Tab, and the surfaces it walks through](#tab-and-the-surfaces-it-walks-through) — "not trapped", three ways
+- [§ Where this leaves an older sketch](#where-this-leaves-an-older-sketch) — (history)
+- [§ The same step, with a finger](#the-same-step-with-a-finger) — pointer to touch.md (history)
+
 > **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
 > steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
 > stepped a section, and a focused row in Structure's list stepped the list. **← / → step
@@ -156,6 +182,14 @@ selected as it traversed was several paid jobs from one keypress. The full reaso
 extra tab stops cost is in [`Dock.tsx`](../../src/web/Dock.tsx) § the mode switch; the assertion is
 `tests/arrows-belong-to-the-article.test.tsx`.
 
+**One thing in the bar does take arrows since 2026-10-07, and it is a menu rather than a
+radiogroup**: the bar's More button
+([261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)).
+With focus on it, ↓ opens its menu instead of stepping the article, and while the menu is open ↑ and
+↓ move through its items, Enter picks one and Escape closes it and returns focus to the button. That
+is Radix's menu-button behaviour, left as it is: opening a list selects nothing and starts no model
+call, which was the objection to arrows on the radios. The same test file holds it.
+
 The blur on click survives all of that, and still earns its place: nothing eats the arrows now, but a
 focused button still takes Enter and Space, and leaving focus on it after a mouse click is not what
 the reader asked for.
@@ -177,7 +211,7 @@ the table by adding one attribute, and why a new panel would too.
 **While Skim is the mode, ← / → step its stops instead of moving the stride** — the stops
 of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
 through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
-they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Skim
+they are the browser's (the stride is gone, see the status above), and ↑ / ↓ are the article's in every mode, Skim
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:
 
@@ -190,8 +224,9 @@ The seam is one optional argument to `useArrowNav` in [`keynav.ts`](../../src/we
 horizontal handler that `Reader` passes only while Skim is open, and that is the band's own
 `step` — so the keys, the band's ‹ › and the door in the prose are one rule
 ([`skim-route.ts`](../../src/web/skim-route.ts)), and each of them flashes the stop it
-lands on and, on a narrow window, steps the band aside (since 2026-09-28,
-[skim.md](skim.md) § What shipped). It runs **after every guard** on this
+lands on (since 2026-09-28, [skim.md](skim.md) § What shipped). None of them steps a covering band
+aside on a narrow window: they did until 2026-10-03, and now only a row press does (report
+spya-kudr63). It runs **after every guard** on this
 page: no modifiers, not while typing, not when a widget already handled the key, no auto-repeat. The
 route does not wrap, so at the end of a pass → answers that it took nothing and the key goes back
 to the browser, the same concession ↑ / ↓ make at the ends of the article. **← on the first stop
@@ -214,9 +249,9 @@ The band's ‹ › and the door's *Next stop ›* name their key on their cards 
 >
 > — Greg, 2026-09-30, SPIDERYARN-READING2-71
 
-**While Remember's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
+**While Learn's Quiz half is showing, ← is Previous and → is Next** ([quiz.md](quiz.md)). The
 same seam as Skim's: `QuizPanel` hands `Reader` one stable handler while it is mounted and
-`null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Remember — so
+`null` when it is not, and `Reader` passes it to `useArrowNav` only while the mode is Learn — so
 it runs after every guard above, and Recall, or any other mode, leaves ← / → with the browser.
 
 The handler is the buttons' own rule, so the keys can do no more than the buttons: no wrap at
@@ -250,7 +285,7 @@ Quiz's seam: `Reader` hands `useArrowNav` a handler only in that mode, so every 
 and the key goes back to the browser when the handler takes nothing. The rule is `stepQuote`
 (QuotesPanel.tsx), the band's ‹ › rule too: nothing selected goes to the first quote, ← on the
 first goes to the first again (Skim's rule), → on the last takes nothing, no wrap. It steps only
-over quotes the prose actually outlines (`useQuoteMarks`' `steppable`), so a row whose block a
+over quotes the prose actually marks (`useQuoteMarks`' `steppable`), so a row whose block a
 re-extraction took away is skipped rather than selected with nowhere to go (GPT Sol's plan review).
 A step selects the quote (`?quote=`, the ring), jumps to it, scrolls its row into view in the band,
 and on a narrow window steps the band aside. The ‹ › name their key on their cards.
@@ -394,10 +429,43 @@ was mine* whoever writes the next one.
 Scrolling is animated ([`scroll.ts`](../../src/web/scroll.ts)), so a second press landing mid-flight
 would measure a position halfway between two items and step from *that* — two presses, one item of
 movement. Instead `keynav.ts` remembers the row its own last jump was headed for and steps from
-there, for `SCROLL_MS + 400` or until the reader grabs the page back with a wheel or a pointer.
+there.
 
-This is the one piece of state in the file, and it exists solely because the scroll is animated. If
-jumps ever become instant, delete it.
+**That aim stands while our own jump is unfinished, and after it ends for as long as the page is
+still at the pixel it ended on with the target row's layout unchanged.** `scrollToBlock` reports how
+each jump ends; `keynav.ts` § `Chain` records the offset and target layout then. A later press checks
+one target rectangle and the reading line before trusting a settled aim, because reflow can move
+rows without moving `scrollY` (a change of a pixel or more counts; a browser re-rounding an edge by
+a fraction does not). A changed block mapping also drops the numeric aim. The next press
+measures when those facts no longer hold. A wheel or a pointer still drops
+it outright, as before. So:
+
+- a second press mid-glide steps from the aim (its own scroll cancels the first, which ends the
+  *first* press's record, not the second's);
+- a row the page cannot bring to the reading line, at the clamped end of an article, keeps its aim
+  however long the reader pauses, so ↓ asks for the row after it and ↑ steps back one, not two;
+- **a ↓ that settles without moving the page leaves the aim where it was.** Several rows can begin
+  inside the last screenful, and these keys show no cursor, so the page moving is the only sign of a
+  press. If each ↓ at the bottom advanced the aim, ↑ had to walk it back through rows that cannot
+  move: nine dead presses on a 93-block article, in a browser, 2026-10-05. The aim stays on the
+  last row that moved the page and the first ↑ moves it. ↑ is not treated the same way: it adopts
+  its aim even when nothing moved, or an aim already deep in the last screen (several quick ↓)
+  would have ↑ ask for the same row for ever. The Diagram's Previous / Next do not do this; they
+  show their rung;
+- a scrollbar drag, the browser restoring a position, another feature's jump: the pixel is no
+  longer ours, and the next press measures.
+
+It was a timer until 2026-10-05 (`CHAIN_MS`, the glide plus 400 ms), and a timer cannot know whether
+the glide has run: under a long render the aim was dropped with the glide still pending and ↓
+repeated its target. The class is
+[a clock standing in for a fact](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md);
+the plan is
+[261005h](../plans/261005h-three-robustness-bugs-unknown-wire-values-rootless-children-list-chain-timer.md)
+§ Stage C. The rule is `keynav.ts` § `Chain`, shared with the Diagram's Previous / Next
+([diagram.md](diagram.md)), and `tests/step-chain.test.tsx` pins it over the real scroll.
+
+This is the one piece of state in the file. It exists because the scroll is animated and because
+the end of an article clamps.
 
 ### A note on the jump itself
 
@@ -450,11 +518,24 @@ a coincidence:
 
 - **Auto-repeat is ignored** ([§ auto-repeat](#auto-repeat-is-ignored)). Holding the chord would
   otherwise reopen the bar every few milliseconds under whatever you had already typed.
-- **It does not fire while focus is in an input, a textarea, a select or anything contenteditable**,
-  which is the same list the arrows respect — and it matters more here, because ⌘-K is a
-  text-editing chord in several editors. The list is one function, `isTyping` in
-  [`key-chord.ts`](../../src/web/key-chord.ts), shared by the arrows, G and both chords; so is
-  `isModChord`, the ⌘-or-Ctrl test with Shift, Alt, auto-repeat and IME composition refused.
+- **It fires while focus is in a text field, since 2026-10-04**, the one chord here that does.
+  Greg, spya-szdjek:
+
+  > I want to be able to hit Command-K at more or less any time from within the reading view.
+
+  Until then it stood down wherever the arrows do (`isTyping` in
+  [`key-chord.ts`](../../src/web/key-chord.ts), still shared by the arrows, G, ⌘-Enter and Escape on
+  Metadata), on the grounds that ⌘-K is a text-editing chord in several editors. None of our fields
+  binds it. The bar is a modal `<dialog>`, so the field keeps its text and gets its focus back when
+  the bar closes. **The listener is on `window` in the capture phase and a claimed press goes no
+  further** (`stopPropagation`), so the field it was typed in never sees it, and a container that
+  stops its own keydowns from bubbling, as the live conversation's do, cannot hide the press. The
+  test is `isModChord`: ⌘ or Ctrl, with Shift, Alt, auto-repeat and IME composition refused.
+  **Two presses in a text field are still the field's** (`keepsItsOwnModK`): Ctrl-K without ⌘ on a
+  Mac, where it deletes to the end of the line, and any press in a field marked
+  `data-command-bar="off"`, which today is the title editor, because it saves on blur and a modal
+  opening is a blur
+  ([261004h](../plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md)).
 - **`preventDefault()` only when the press is claimed.** Firefox focuses the address bar on ⌘-K; a
   listener that suppressed that without opening anything would be a chord that quietly breaks a
   browser feature.
@@ -505,6 +586,20 @@ claimed — and adds two where it does not fire:
 The Metadata button's card says the chord opens it and a second press returns to the article.
 Tests: `tests/metadata-chord.test.tsx`.
 
+**Escape on the Metadata page goes back to the article too, since 2026-10-04**, by the same href as
+the button and the chord (`useMetadataEscape` in [`Dock.tsx`](../../src/web/Dock.tsx)):
+
+> If I hit escape while in metadata mode, sort of hide the metadata mode, as if I'd clicked on the
+> metadata mode button to take me back to wherever I was before.
+>
+> — Greg, 2026-10-04, spya-ynx97n
+
+The page is the last surface to hear the key: a bubble-phase `window` listener, T3 in
+[the escape inventory](../plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md).
+A card or popover in front stops the press before it arrives, an open `<dialog>` owns it, and **a
+text field keeps its Escape**, so a reader in the tag editor or the page search is not thrown off a
+page they were editing. Same test file.
+
 ### ⌘⌥T folds or unfolds every section
 
 > And ideally `Cmd+Opt+t` (and appropriate Windows equivalent) as keyboard shortcut to
@@ -542,6 +637,28 @@ to accept a word. Chat's Send button carries the two keys on its card, and stays
 rather than `disabled` so the card still opens on an empty box
 ([260929g § Part C](../plans/260929g-shelf-search-focus-and-metadata-chord.md)). Tests:
 `tests/the-enter-key-really-sends.test.tsx`.
+
+### A key an input method is using is not ours
+
+A reader typing Japanese or Chinese presses Enter to accept a candidate word and Escape to dismiss
+the candidate list. Neither is a press on anything of ours, so while a composition is open **no
+text box saves, sends, clears, cancels or navigates on them, and no surface closes**. The one test
+is `isImeComposing` in [`key-chord.ts`](../../src/web/key-chord.ts), which reads the native flag,
+React's, and the older `keyCode` 229. Four things a new handler has to get right:
+
+- **The two shared Escape listeners ask it too**: `useEscapeToClose` (Chat, Comment, Annotate) and
+  the Dock drawer's capture listener. A guard in the box alone leaves the panel closing around it.
+- **Where a handler stops propagation on purpose, the test comes after the stop**, so a composing
+  key is contained like any other.
+- **A box in a form cancels a composing Enter** (`preventDefault`), so the form's implicit submit
+  cannot send a half-chosen word. Everywhere else a composing key is left untouched.
+- **A `type="search"` box cancels a composing Escape**, because the browser itself empties such a
+  box on Escape. Measured in Chrome on 2026-10-07; jsdom has no such default, so only a browser
+  shows it.
+
+Which handlers were fixed, and which were left and why:
+[261007a K2](../plans/261007a-ui-sweep-k2-composition-keys.md). Tests:
+`tests/one-escape-closes-one-surface.test.tsx` (the surfaces) and `tests/chat-composing-keys.test.tsx`.
 
 ## G, the one letter
 
@@ -601,8 +718,8 @@ key, and there is no way to switch it off or remap it.
 ## Quick search: the slash key
 
 **`/` jumps to quick search** — it focuses the quick-search box in the bottom bar, or, where the
-bar shows the ⚡ instead (a coarse pointer, fit rung 4, a window under 732px, or Search mode open
-with the bar box unfocused), opens Search mode on *quick* with the panel's box focused.
+box is not shown (a coarse pointer, fit rung 4 or a window under 732px, where since 2026-10-05
+nothing is drawn; or Search mode open with the bar box unfocused, where the ⚡ is), opens Search mode on *quick* with the panel's box focused.
 Built 2026-10-02 with the box itself
 ([search.md § Search as you type](search.md#search-as-you-type-and-the-box-in-the-bottom-bar),
 [261002h](../plans/261002h-quick-search-bar-in-the-dock.md)); the code is `isQuickSearchKey` in
@@ -645,8 +762,8 @@ reading view, where the box does. *`tests/dock-quick-search.test.tsx`.*
 
 ## This constrains which components we may use
 
-All four arrow keys are spoken for, and now all four by this file: ↑/↓ take the step, ←/→ choose the
-stride. (So is a bare G outside text fields — [§ G](#g-the-one-letter).) So a component that captures arrow keys takes something real away — more than it did when
+↑/↓ are spoken for everywhere (they take the step), and ←/→ are spoken for while Skim, Quiz, Quotes or
+Structure is the mode (the stride they once chose went with the gist columns). (So is a bare G outside text fields — [§ G](#g-the-one-letter).) So a component that captures arrow keys takes something real away — more than it did when
 ←/→ were only the browser's — and several of the obvious ones do.
 
 **Radix's roving focus binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown.** That is why the
@@ -706,6 +823,14 @@ holding a link and a button, portalled to the end of `<body>`, opened by keyboar
 skipped by Tab. That is a known defect awaiting a product decision, **not** an example of the rule
 above. Anything new should look like the ten, not the two.
 
+### The first Tab stop: Skip to modes
+
+**The reading view's first Tab stop is a "Skip to modes" link**, hidden until it has focus, which
+puts focus on the checked mode radio in the dock (the first radio when the open mode lives under
+More) — so a keyboard reader does not tab past the spine's slivers and every paragraph's buttons to
+reach the switcher. Since 2026-10-07; [`SkipToModes.tsx`](../../src/web/reader/SkipToModes.tsx),
+`tests/skip-to-modes.test.tsx`, plan 261007h § F5b.
+
 ### What giving focus back means in practice
 
 - **Only rescue focus that went nowhere.** A reader who has already clicked something real must be
@@ -713,7 +838,7 @@ above. Anything new should look like the ten, not the two.
   *unmounting itself* asks whether focus is still inside it, because React runs cleanup **before**
   detaching and `activeElement` has not fallen to `<body>` yet (`ChatDialog`); one that reacts to a
   flag going false can ask the simpler `activeElement === null || activeElement === document.body`
-  afterwards (`TitleEditor`, `RefereeCard`).
+  afterwards (`TitleEditor`).
 - **Name a destination for when the opener has gone**, because often it has: the gutter's Help button
   closes its own disclosure before opening a chat, so the control that opened the panel is never
   there when the panel closes.

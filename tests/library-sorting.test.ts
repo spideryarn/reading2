@@ -18,7 +18,7 @@
  * The rules being pinned are the ones that look right in a browser and are
  * wrong — see docs/plans/260826y-library-sorting.md § Three rules a browser cannot check.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createTable,
   getCoreRowModel,
@@ -28,11 +28,12 @@ import {
   type TableState,
 } from "@tanstack/table-core";
 import type { LibraryEntry } from "../src/types.js";
-import { CHIP_ORDER, DEFAULT_BY, libraryColumns } from "../src/web/library-columns.js";
+import { CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "../src/web/library-columns.js";
 import { sortingFromUrl } from "../src/web/lib/table-sort.js";
 import type { Shelf } from "../src/web/ShelfEntry.js";
 import { sinkLast } from "../src/web/lib/table-sort.js";
 import { naturalDirections, toggleSort } from "../src/web/lib/DataTable.js";
+import { calendarDay, publishedOf } from "../src/web/relative-time.js";
 
 const NOW = Date.parse("2026-08-26T12:00:00.000Z");
 
@@ -146,9 +147,24 @@ describe("the shelf's order", () => {
        reader's own library, and nothing about that looks like a bug. */
     const list = [
       entry({ slug: "real", words: 100, opens: 0, comments: 0 }),
-      entry({ slug: "example", words: 99999, opens: 99, comments: 99, fixture: true }),
+      entry({
+        slug: "example",
+        words: 99999,
+        opens: 99,
+        comments: 99,
+        fixture: true,
+        /* A date, and the later one, so that under `published` it is the
+           fixture rule holding it down and not the missing-value rule. */
+        publishedAt: "2026-08-01",
+      }),
     ];
-    for (const id of ["added", "opened", "title", "length", "opens", "questions"]) {
+    /* An id no column has is ignored by TanStack and the fixture sink still
+       fires, so each id is checked to be a real sort key first (Sol F3). */
+    const sortable = libraryColumns(NO_SHELF, NOW)
+      .filter((c) => c.enableSorting !== false)
+      .map((c) => c.id);
+    for (const id of ["added", "published", "opened", "title", "length", "opens", "questions"]) {
+      expect(sortable).toContain(id);
       expect(order(list, asc(id)).at(-1)).toBe("example");
       expect(order(list, desc(id)).at(-1)).toBe("example");
     }
@@ -207,6 +223,169 @@ describe("the shelf's order", () => {
     ];
     expect(order(list, desc("added"))).toEqual(["real", "junk"]);
     expect(order(list, asc("added"))).toEqual(["real", "junk"]);
+  });
+
+  /* ---- Published: the publisher's own date (plan 261003m, report spya-t3es7k) ---- */
+
+  it.each(["en-GB", "th-TH", "fa-IR", "en-US-u-ca-japanese"])(
+    "prints the publisher's Gregorian day under the %s locale",
+    (locale) => {
+      const format = Date.prototype.toLocaleDateString;
+      const spy = vi.spyOn(Date.prototype, "toLocaleDateString").mockImplementation(function (
+        this: Date,
+        _locales,
+        options,
+      ) {
+        return format.call(this, locale, options);
+      });
+      try {
+        const expected = new Intl.DateTimeFormat(locale, {
+          calendar: "gregory",
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+          timeZone: "UTC",
+        }).format(new Date("2024-03-11T00:00:00Z"));
+        expect(calendarDay("2024-03-11T23:30:00-05:00")).toEqual({
+          t: Date.UTC(2024, 2, 11),
+          label: expected,
+        });
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it("distinguishes ISO year zero (1 BC) from year one in the printed date", () => {
+    const format = Date.prototype.toLocaleDateString;
+    const spy = vi.spyOn(Date.prototype, "toLocaleDateString").mockImplementation(function (
+      this: Date,
+      _locales,
+      options,
+    ) {
+      return format.call(this, "en-GB", options);
+    });
+    try {
+      expect(calendarDay("0000-01-01")?.label).toBe("1 Jan 1 BC");
+      expect(calendarDay("0001-01-01")?.label).toBe("1 Jan 1");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("sorts by publication date both ways, with an undated article last in both", () => {
+    /* Greg, 2026-10-03: "sorting the Shelf by publication date where
+       available". A PDF never has one and nor does anything extracted before
+       2026-08-31, so "not available" is a large group and it goes to the foot
+       whichever way the arrow points — the rule every other key follows. */
+    const list = [
+      entry({ slug: "undated" }),
+      entry({ slug: "y2019", publishedAt: "2019-06-01" }),
+      entry({ slug: "y2026", publishedAt: "2026-08-29T22:47:53+00:00" }),
+      entry({ slug: "y2024", publishedAt: "2024-03-12T09:00:00Z" }),
+    ];
+    expect(order(list, desc("published"))).toEqual(["y2026", "y2024", "y2019", "undated"]);
+    expect(order(list, asc("published"))).toEqual(["y2019", "y2024", "y2026", "undated"]);
+  });
+
+  it("compares publication dates by calendar day, not by the instant", () => {
+    /* The day is the whole content of the field (src/db/schema.ts §
+       `publishedAt`). Parsed as instants, 23:30 in New York on the 11th is
+       *after* 01:00 in London on the 12th; by the publishers' own calendars it
+       is the day before. And two pieces on one day are a tie, so the next key
+       gets its turn rather than their times of day deciding. */
+    const list = [
+      entry({ slug: "ny-11th-late", publishedAt: "2024-03-11T23:30:00-05:00" }),
+      entry({ slug: "london-12th-early", publishedAt: "2024-03-12T01:00:00+00:00" }),
+    ];
+    expect(order(list, asc("published"))).toEqual(["ny-11th-late", "london-12th-early"]);
+
+    const sameDay = [
+      entry({ slug: "evening", title: "Alpha", publishedAt: "2024-03-12T20:00:00+00:00" }),
+      entry({ slug: "date-only", title: "Bravo", publishedAt: "2024-03-12" }),
+      entry({ slug: "morning", title: "Charlie", publishedAt: "2024-03-12T06:00:00-08:00" }),
+    ];
+    expect(
+      order(sameDay, [
+        { id: "published", desc: true },
+        { id: "title", desc: false },
+      ]),
+    ).toEqual(["evening", "date-only", "morning"]);
+  });
+
+  it("treats a publication date that is not a real day as no date", () => {
+    const list = [
+      entry({ slug: "prose", publishedAt: "soon" }),
+      entry({ slug: "feb-31", publishedAt: "2026-02-31" }),
+      entry({ slug: "real", publishedAt: "2020-01-01" }),
+    ];
+    expect(order(list, desc("published"))[0]).toBe("real");
+    expect(order(list, asc("published"))[0]).toBe("real");
+  });
+
+  it("reads ?by=published as newest first, and gives the key a chip", () => {
+    const natural = naturalDirections(libraryColumns(NO_SHELF, NOW));
+    expect(sortingFromUrl(["published"], null, natural, DEFAULT_BY)).toEqual([
+      { id: "published", desc: true },
+    ]);
+    expect(CHIP_ORDER).toContain("published");
+  });
+
+  it("says the publication date on a card sorted by it, in the publisher's own day", () => {
+    /* 23:30 at UTC-5 is the 12th in UTC and the 11th to the publisher; the
+       card must say the 11th, whatever zone the reader's browser is in. */
+    const note = CARD_NOTES.published;
+    if (!note) throw new Error("no card note for published");
+    const said = note(entry({ slug: "a", publishedAt: "2024-03-11T23:30:00-05:00" }), NOW);
+    const expected = new Intl.DateTimeFormat(undefined, {
+      calendar: "gregory",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    }).format(new Date("2024-03-11T00:00:00Z"));
+    expect(said).toBe(`published ${expected}`);
+    expect(note(entry({ slug: "b" }), NOW)).toBe("no publication date");
+  });
+
+  /* ---- A paper the registry dates only to a year (plan 261004h) ---- */
+
+  it("reads a day, a year, or neither, through one function", () => {
+    expect(publishedOf({ publishedAt: "2024-03-11T23:30:00-05:00" })).toEqual({
+      ...calendarDay("2024-03-11"),
+      precision: "day",
+    });
+    expect(publishedOf({ publishedYear: 2011 })).toEqual({
+      t: Date.UTC(2011, 0, 1),
+      label: "2011",
+      precision: "year",
+    });
+    expect(publishedOf({})).toBeUndefined();
+    /* A stored day wins: it is the finer statement. A day that is not one
+       falls through to the year. */
+    expect(publishedOf({ publishedAt: "2024-03-11", publishedYear: 2011 })?.precision).toBe("day");
+    expect(publishedOf({ publishedAt: "soon", publishedYear: 2011 })?.label).toBe("2011");
+    /* The column's own bounds; anything else is no date. */
+    for (const year of [999, 3000, 2011.5, Number.NaN]) {
+      expect(publishedOf({ publishedYear: year })).toBeUndefined();
+    }
+  });
+
+  it("sorts a year-only paper among the dated ones, at the start of its year", () => {
+    const list = [
+      entry({ slug: "undated" }),
+      entry({ slug: "dec-2010", publishedAt: "2010-12-31" }),
+      entry({ slug: "year-2011", publishedYear: 2011 }),
+      entry({ slug: "mar-2011", publishedAt: "2011-03-01" }),
+    ];
+    expect(order(list, asc("published"))).toEqual(["dec-2010", "year-2011", "mar-2011", "undated"]);
+    expect(order(list, desc("published"))).toEqual(["mar-2011", "year-2011", "dec-2010", "undated"]);
+  });
+
+  it("says the year alone on a card sorted by it, with no made-up day", () => {
+    const note = CARD_NOTES.published;
+    if (!note) throw new Error("no card note for published");
+    expect(note(entry({ slug: "a", publishedYear: 2011 }), NOW)).toBe("published 2011");
   });
 
   it("counts zero as a value, not as absent", () => {

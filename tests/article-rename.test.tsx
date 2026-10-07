@@ -41,7 +41,19 @@ vi.mock("../src/web/lib/api.js", async () => {
   const actual = await vi.importActual<typeof import("../src/web/lib/api.js")>(
     "../src/web/lib/api.js",
   );
-  return { ...actual, apiFetch: (...args: unknown[]) => apiFetch(...args) };
+  return {
+    ...actual,
+    /* The sharing card asks for its private link's state on its own route when
+       the metadata page opens (src/web/PrivateLink.tsx). Answered here, so the
+       one `Response` a case queues for the page's own read is not read twice,
+       and the call counts below stay about the rename. */
+    apiFetch: (...args: unknown[]) =>
+      String(args[0]).endsWith("/share-link")
+        ? Promise.resolve(
+            new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } }),
+          )
+        : apiFetch(...args),
+  };
 });
 
 /* The metadata page's two neighbours, stubbed. `nuqs` needs an adapter above
@@ -52,7 +64,12 @@ vi.mock("nuqs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("nuqs")>()),
   useQueryState: () => [null, () => {}],
 }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { Masthead } = await import("../src/web/Masthead.js");
 const { Metadata } = await import("../src/web/Metadata.js");
@@ -295,6 +312,23 @@ describe("renaming from the masthead", () => {
     // reader's, which is a lie the shelf tooltip then repeats.
     expect(apiFetch).not.toHaveBeenCalled();
     expect(renamed).not.toHaveBeenCalled();
+  });
+
+  it("explains a saved title with no shelf card without dereferencing null", async () => {
+    apiFetch.mockResolvedValue(new Response(JSON.stringify({ entry: null, purpose: null }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    mount("The Barn Owl");
+    act(() => pencil().click());
+    type("Owls, revisited");
+    submit();
+    await act(async () => {});
+
+    expect(renamed).not.toHaveBeenCalled();
+    expect(find("h1").textContent).toBe("The Barn Owl");
+    expect(find('[role="alert"]').textContent).toContain("saved");
+    expect(find('[role="alert"]').textContent).not.toContain("Cannot read");
   });
 
   it("says so when the write fails, and leaves the heading alone", async () => {

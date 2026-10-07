@@ -51,6 +51,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, Ideas, IdeasResponse } from "../src/types.js";
 import type { PublicArtefacts, PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 
 /* -------------------------------------------------------------- the probe --
 
@@ -163,7 +164,7 @@ vi.mock("../src/web/useSession.js", async () => {
     useSession: () => ({
       session: null,
       user: useSyncExternalStore(who.subscribe, who.get, who.get),
-      loading: false,
+      loading: false, known: true,
     }),
   };
 });
@@ -416,6 +417,7 @@ const ARTICLE: PublicArticle = {
   searches: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
 };
 
 const OWNED: Article = {
@@ -481,7 +483,20 @@ function reply(url: string, method: string): Response {
   if (notBuilt !== null && url.startsWith(notBuilt)) return new Response(null, { status: 404 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
-  if (url.startsWith("/api/glossary/")) return json({ status: "none", glossary: null });
+  /* **The three reads `OwnedReader` makes for every article, answered the way
+     the server answers "nobody has made one": 404.** They used to get a body no
+     route sends (`{ glossary: null }`, and `{}` from the fall-through), which
+     each hook threw a `TypeError` on. Nothing noticed until 2026-10-04, when the
+     read catches began reporting an unauthored exception as the page's own
+     fault (plan 261004c § 1a) — three reports beside the one this file counts.
+
+     **And the reads that check their reply has its artefact**, for the same
+     reason: citations since plan 261006g, and Simple, FAQ, Timeline and
+     Debate since 261006h, each of which the fall-through's `{}` is now a
+     reported fault for rather than an `undefined` quietly published. */
+  if (/^\/api\/(glossary|quotes|quiz|citations|simple|faq|timeline|debate)\//.test(url)) {
+    return new Response(null, { status: 404 });
+  }
   if (url.startsWith("/api/ideas/")) return json(IDEAS_BODY);
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
@@ -571,12 +586,12 @@ async function open(search = ""): Promise<void> {
 
 const text = (): string => host.textContent ?? "";
 
-function modeButton(label: string): HTMLButtonElement {
-  const found = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+/* The bar's button, or the mode's item under More where it is one of the
+   five gathered there (plan 261007c) — `modeDoor` opens More to find it. */
+function modeButton(label: string): HTMLElement {
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 function buttonNamed(label: string): HTMLButtonElement {
@@ -802,6 +817,12 @@ describe("a mode that throws is replaced by a band, not by an empty page", () =>
     await act(async () => who.set(OWNER_B));
     await settle();
 
+    /* B is not left in A's mode: a change of reader takes the article's
+       parameters off the address (last-view.ts § A change of reader). So B
+       opens Ideas themselves, and it is a healthy panel with nothing pressed. */
+    expect(text(), "the fallback survived a remount").not.toContain("[mode-render]");
+    expect(modeInUrl(), "B was left in A's mode").not.toBe("ideas");
+    await open("?mode=ideas");
     expect(text(), "the fallback survived a remount").not.toContain("[mode-render]");
     expect(text(), "Ideas did not come back").toContain(IDEA_NAME);
     expect(jobPosts(), "changing reader is not a press").toEqual([]);
@@ -1247,9 +1268,12 @@ describe("Debate that throws is replaced by a band, not by an empty page", () =>
     await act(async () => who.set(null));
     await settle();
 
-    expect(modeInUrl(), "signing out changed the mode instead of changing its access").toBe(
-      "debate",
-    );
+    /* Signing out is a change of reader, so the owner's view is taken off the
+       address (last-view.ts § A change of reader). The visitor then asks for
+       Debate themselves, and gets the owners-only band rather than the panel. */
+    expect(modeInUrl(), "the visitor was left in the owner's mode").not.toBe("debate");
+    await open("?mode=debate");
+    expect(modeInUrl()).toBe("debate");
     expect(
       host.querySelector('.mode-band[aria-label="Not available on a shared link"]'),
       "the visitor's owners-only band never replaced Debate",
@@ -1414,6 +1438,12 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     /* Its own band since Simple (plan 260930i): the visitor's reads the
        stored paragraphs off the payload, with no `useSimple` under it. */
     { label: "VisitorSummaryBand", as: "visitor" },
+    /* The thread, Summary's third view since 2026-10-03 (plan 261003l) and a
+       mode of its own before: a second owner band behind the same boundary.
+       `VisitorTweetsBand` needs a stored thread on the payload, and the owner
+       witness proves its composition, as for the artefact twins above. */
+    { label: "TweetsBand", as: "owner", extra: "&summary=thread" },
+    { label: "VisitorSummaryBand", as: "visitor", extra: "&summary=thread" },
   ],
   diagram: [
     { label: "DiagramBand", as: "owner" },
@@ -1423,10 +1453,10 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
     { label: "IdeasBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
-  remember: [
-    { label: "RememberBand", as: "owner" },
-    { label: "ConversationBand", as: "owner", extra: "&remember=recall" },
-    { label: "QuizSubBand", as: "owner", extra: "&remember=quiz" },
+  learn: [
+    { label: "LearnBand", as: "owner" },
+    { label: "ConversationBand", as: "owner", extra: "&learn=recall" },
+    { label: "QuizSubBand", as: "owner", extra: "&learn=quiz" },
     { label: "VisitorBand", as: "visitor" },
   ],
   quotes: [
@@ -1451,13 +1481,6 @@ const WITNESS: Partial<Record<AnyMode, Witness[]>> = {
   ],
   faq: [
     { label: "FaqBand", as: "owner" },
-    { label: "VisitorBand", as: "visitor" },
-  ],
-  /* A mode since 2026-09-29 (plan 260929f), FAQ's shape: the owner's band and
-     the visitor's gap. `VisitorTweetsBand` needs a stored thread on the
-     payload, and the owner witness proves its composition, as above. */
-  tweets: [
-    { label: "TweetsBand", as: "owner" },
     { label: "VisitorBand", as: "visitor" },
   ],
   structure: [
@@ -1703,7 +1726,7 @@ describe("a throw inside any band leaves the article", () => {
    Ideas' and Debate's blocks above carry the full set of money cases. These are
    the same rule for the other five things a press can arm, at the seam that
    arms each: the bar's button for a fixed mode and for Diagram's picture, and
-   the chip inside the band for Referee and Remember. Each asserts the token is
+   the chip inside the band for Referee and Learn. Each asserts the token is
    gone — the direct statement of retirement — and that nothing was bought. */
 
 describe("a press that met any broken band is retired", () => {
@@ -1790,21 +1813,21 @@ describe("a press that met any broken band is retired", () => {
     );
   });
 
-  it("remember: the Quiz chip, when the panel throws under the real useQuiz", async () => {
+  it("learn: the Quiz chip, when the panel throws under the real useQuiz", async () => {
     who.set(OWNER_A);
-    await open("?mode=remember");
+    await open("?mode=learn");
     expect(text()).not.toContain("[mode-render]");
     trace.length = 0;
 
     probe.throwAt = "QuizPanel";
-    const chip = [...host.querySelectorAll<HTMLButtonElement>(".remember-submode-btn")].find(
+    const chip = [...host.querySelectorAll<HTMLButtonElement>(".learn-submode-btn")].find(
       (b) => (b.textContent ?? "").trim() === "Quiz",
     );
     expect(chip, "no Quiz chip").toBeDefined();
     await act(async () => chip?.click());
     await settle();
 
-    containedInside("remember");
+    containedInside("learn");
     expect(activation.pendingActivation(SLUG, "quiz"), "the Quiz press survived").toBeNull();
     expect(jobPosts()).toEqual([]);
   });
@@ -1827,11 +1850,11 @@ describe("a press that met any broken band is retired", () => {
     expect(jobPosts()).toEqual([]);
   });
 
-  /* Summary's plain-words slider (plans 260930i, 261001b): `bandTarget` must
-     answer `simple` for every level — Fuller here, the one Sol's plan review
+  /* Summary's control (plans 260930i, 261001b, 261003l): `bandTarget` must
+     answer `simple` for both lengths — Fuller here, the one Sol's plan review
      found missing (P1-3) — or the boundary retires nothing and the token
      waits for a later mount to spend. */
-  it("summary: the slider moved to Fuller, when the plain-words view throws under the real useSimple", async () => {
+  it("summary: the Fuller segment pressed, when the plain-words view throws under the real useSimple", async () => {
     who.set(OWNER_A);
     notBuilt = "/api/simple/";
     await open("?mode=summary");
@@ -1839,17 +1862,76 @@ describe("a press that met any broken band is retired", () => {
     trace.length = 0;
 
     probe.throwAt = "OwnerSimple";
-    const input = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
-    expect(input, "no plain-words slider").not.toBeNull();
-    await act(async () => {
-      if (!input) return;
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "2");
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    const fuller = [...host.querySelectorAll<HTMLButtonElement>('.summ-views [role="radio"]')].find(
+      (b) => b.textContent === "Fuller",
+    );
+    expect(fuller, "no Fuller segment").toBeDefined();
+    await act(async () => fuller?.click());
     await settle();
 
     containedInside("summary");
     expect(activation.pendingActivation(SLUG, "simple"), "the Simple press survived").toBeNull();
     expect(jobPosts()).toEqual([]);
+  });
+});
+
+/* ------------------------------------------- Debate's two views are two bands --
+
+   Reception and Claims are chosen by `?debate=`, for the owner and for a
+   visitor alike (DebateMode.tsx reads it in both `DebateBand` and
+   `VisitorDebateBand`). Until 2026-10-06 `ModeBoundary`'s reset key named five
+   sub-mode parameters by hand and Debate's, which arrived later (4b502174a),
+   was not among them: both views had one key, so a view that threw left its
+   fallback over the other when the reader went Back or Forward to it. A fresh
+   press could still clear it through activation, which is what hid this; a
+   history step is not a press.
+
+   The parameters and which reader they select a band for are a
+   `Record<ModeWithSubModes, …>` in ModeBoundary.tsx now, so a seventh mode
+   with sub-modes does not compile until it has been decided. */
+describe("a broken Debate view does not follow the reader to the other one", () => {
+  const debateView = () => new URLSearchParams(location.search).get("debate");
+
+  it("owner: Back from a broken Claims to Reception is a fresh band", async () => {
+    debateOn();
+    await open("?mode=debate");
+    expect(text(), "Reception opened working").not.toContain("[mode-render]");
+
+    probe.throwDebate = true;
+    await act(async () => history.pushState(null, "", "?mode=debate&debate=claims"));
+    await settle();
+    containedInsideDebate();
+
+    /* What threw was Claims; Reception would draw. No press is made. */
+    probe.throwDebate = false;
+    const renders = probe.debateRenders;
+    await act(async () => history.back());
+    for (let i = 0; i < 40 && debateView() !== null; i++) {
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 10));
+      });
+    }
+    await settle();
+
+    expect(modeInUrl()).toBe("debate");
+    expect(debateView(), "Back did not leave Claims").toBeNull();
+    expect(text(), "the broken Claims followed the reader to Reception").not.toContain("[mode-render]");
+    expect(probe.debateRenders, "the band was never tried again").toBeGreaterThan(renders);
+    expect(host.querySelector('.mode-band[aria-label="Debate"]'), "no Debate band").not.toBeNull();
+  });
+
+  it("visitor: the other view is a fresh band too", async () => {
+    experimentalSince = "2026-09-01T09:00:00.000Z";
+    probe.throwAt = "VisitorBand";
+    await open("?mode=debate&debate=claims");
+    containedInside("debate");
+
+    probe.throwAt = null;
+    await act(async () => history.pushState(null, "", "?mode=debate"));
+    await settle();
+
+    expect(modeInUrl()).toBe("debate");
+    expect(text(), "the broken view followed the visitor").not.toContain("[mode-render]");
+    expect(text()).toContain(PARAGRAPH);
   });
 });

@@ -180,6 +180,26 @@ afterEach(() => {
   host.remove();
 });
 
+describe("shelf actions when the saved row has no shelf card", () => {
+  it("does not insert a null card when restoring an article", async () => {
+    answers.set("/api/library", async () => shelfOf("another-article"));
+    answers.set("/api/library?archived=1", async () => ({ articles: [entry({
+      slug: "restored-article", archivedAt: "2026-10-04T12:00:00Z",
+    })] }));
+    answers.set("/api/library/restored-article", async () => ({ entry: null, purpose: null }));
+    paint();
+    await settle();
+    await act(async () => { await shelfNow_!.loadArchived(); });
+
+    await act(async () => { await shelfNow_!.restore("restored-article"); });
+
+    expect(shelfNow()).toEqual(["another-article"]);
+    expect(shelfNow_!.archived?.map((article) => article.slug)).toEqual(["restored-article"]);
+    expect(actionErrorNow()).toContain("saved");
+    expect(actionErrorNow()).not.toContain("[page-fault]");
+  });
+});
+
 describe("the admin lists use the same failure boundary", () => {
   it("recognises the users request's Safari wording by apiFetch's brand", async () => {
     answers.set("/api/admin/users", () =>
@@ -750,13 +770,23 @@ describe("a body saved by an older deployment", () => {
       siteName: "A site",
       gist: "In one sentence",
       lastOpenedAt: "2026-08-29T09:00:00.000Z",
+      publishedAt: "2024-03-12",
       fixture: true,
       visibility: "public",
       sourceReusable: false,
     });
     expect(shelfFromCachedBody({ articles: [rich] })).toEqual([rich]);
     expect(shelfFromCachedBody({ articles: [{ ...rich, visibility: "private" }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...rich, privateLinkOn: "yes" }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, lastOpenedAt: 17 }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...rich, publishedAt: 2024 }] })).toBeNull();
+    /* A paper dated only to a year (plan 261004h): a whole year in the
+       column's bounds, or the body is not a shelf. */
+    const { publishedAt: _day, ...undated } = rich;
+    const paper = { ...undated, publishedYear: 2011 };
+    expect(shelfFromCachedBody({ articles: [paper] })).toEqual([paper]);
+    expect(shelfFromCachedBody({ articles: [{ ...paper, publishedYear: "2011" }] })).toBeNull();
+    expect(shelfFromCachedBody({ articles: [{ ...paper, publishedYear: 20111 }] })).toBeNull();
     expect(shelfFromCachedBody({ articles: [{ ...rich, sourceReusable: "yes" }] })).toBeNull();
     const { sourceReusable: _missing, ...old } = rich;
     expect(shelfFromCachedBody({ articles: [old] })).toBeNull();

@@ -24,6 +24,22 @@ what `changelog.ts check` prints, and is deliberately not written down here.
 > I wonder if we can make sure that the latest release notes are included in the deploy itself
 > going forwards.
 
+## In this doc
+
+Code: [`scripts/changelog/changelog.ts`](../../scripts/changelog/changelog.ts) (the runner) and
+[`release-notes.ts`](../../scripts/changelog/release-notes.ts); the file is
+[`src/web/changelog-versions.ndjson`](../../src/web/changelog-versions.ndjson); tests are
+`tests/changelog-*.test.ts*`.
+
+- [§ A version is a deploy](#a-version-is-a-deploy) — what counts as a version and how its commit range is found
+- [§ The file](#the-file) — the NDJSON's shape and the watermark
+- [§ The pending release](#the-pending-release) — how notes ship in the deploy itself (since 2026-10-01)
+- [§ The four stages](#the-four-stages) — enumerate, trawl, review, copy: who may assert what
+- [§ The first run is retrospective](#the-first-run-is-retrospective) — (history) how the back catalogue was written
+- [§ The page](#the-page) — what `/changelog` shows and how it renders
+- [§ Running it](#running-it) — what "run this doc" means, step by step
+- [§ The traps](#the-traps) — what has gone wrong, before you run it
+
 ## A version is a deploy
 
 Not a semver number, not a date. **One production deploy on Vercel is one version**, and its name is
@@ -418,6 +434,23 @@ And one on 2026-09-30, from Greg's feedback (SPIDERYARN-READING2-6P):
   library: it is `src/web/relative-time.ts`, the one the shelf already uses, on a `useNow` clock so a
   tab left open does not rot.
   [260930i](../plans/260930i-changelog-release-dates-as-relative-time.md).
+
+And one on 2026-10-05, from Greg's feedback the day before (spya-ym9dum): *"Could you set this page
+to somehow poll every 15 minutes or so, and if there's a new version, then refresh the page."*
+
+- **The page reloads itself when a new build is live.** The list is compiled into the bundle, so a
+  copy left open — for days, in the app opened from a home-screen icon — went on showing an old one.
+  The app now asks `/build.json` whether a different build is live when the page wakes and every
+  fifteen minutes while it is visible (`src/web/stale-shell.ts` § `watchForDeploy`), and
+  `/changelog` reloads when the answer is yes, the page is being looked at, and nothing unsent would
+  be lost: no Chat, Learn or Feedback draft held, no autosaved text still unsent, no upload going,
+  not offline
+  (`src/web/safe-to-reload.ts`). At most once per build in a session; a refused reload is tried
+  again at the next check. The address survives, `#release-126` included; which releases the reader
+  had opened by hand does not. **No other page does this** — an unasked reload under an article
+  somebody is reading is not what was asked for.
+  [261005d](../plans/261005d-notice-a-deploy-on-wake-and-reload-the-changelog.md);
+  `scripts/check-two-builds.ts` is the check that runs it against two real builds.
 
 ## Running it
 

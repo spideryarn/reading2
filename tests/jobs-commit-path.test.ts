@@ -41,9 +41,9 @@
  * It used to leave `SPIDERYARN_STORE` unset and wrap `fsStoreSession`, which
  * means the sentence at the top of this header — *"D1b turns that one call into
  * a transaction, so it is worth knowing how much of the suite is watching it"* —
- * was watching **the session that has no transaction in it**. `fsStoreSession`
- * says so about itself in as many words (src/store/session.ts): four writes in a
- * row, and a kill between any two of them leaves half of them done. So the file
+ * was watching **the session that had no transaction in it**. `fsStoreSession`
+ * (deleted 2026-10-07) said so about itself in as many words: four writes in a
+ * row, and a kill between any two of them left half of them done. So the file
  * whose entire subject is *the commit as one act* was pinned against the
  * implementation where it is not one. That is what the conversion bought, and it
  * is worth more here than in most of the twenty-six.
@@ -159,7 +159,7 @@
  * - **the fence.** `attempt_id` is never wrong in these two cases, because
  *   nothing else claims the job.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * What the runner did to its session, recorded from inside it.
@@ -222,7 +222,7 @@ import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { advanceJob } from "../src/jobs.js";
 import { DEV_OWNER_ID, runAsOwner } from "../src/owner.js";
-import { STEPS, stepIsDone, type StepContext } from "../src/pipeline.js";
+import { STEPS, readingDifficultyDeps, stepIsDone, type StepContext } from "../src/pipeline.js";
 import {
   readOnlyPgArtifacts,
   readsPgArtifacts,
@@ -309,6 +309,14 @@ describe("a step run for real, through the commit", () => {
     article = await scratchArticleInPg(SLUG, { ownerId: DEV_OWNER_ID });
   }, 120_000);
 
+  /* The real `blocks` step ends by asking a model how hard the piece is to
+     read (src/pipeline.ts § ratedReadingDifficulty). Nothing here is about
+     that, and a test may not reach a provider, so it answers "unrated".
+     Inside braces: vitest calls whatever a hook returns as teardown. */
+  beforeEach(() => {
+    vi.spyOn(readingDifficultyDeps, "rate").mockResolvedValue({ kind: "unrated", why: "too-short" });
+  });
+
   afterEach(async () => {
     seen.commits = 0;
     seen.settles = 0;
@@ -383,6 +391,7 @@ describe("a step run for real, through the commit", () => {
       power: "standard",
       slug: SLUG,
       report: () => undefined,
+      preview: () => undefined,
       signal: new AbortController().signal,
       cacheArticle: false,
     };

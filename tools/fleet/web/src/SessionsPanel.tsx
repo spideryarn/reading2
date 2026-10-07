@@ -46,13 +46,24 @@
  * the three bands dealt into as many columns as the window affords. That is not
  * a third layout, it is the second one with the detail absent.
  */
-import { useCallback, useRef, type ReactNode } from "react";
+import {
+  Component,
+  useCallback,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 
 import { NewSessionPanel } from "./NewSessionPanel";
 import { PauseLine } from "./PauseLine";
 import { MissingSession, SessionDetail } from "./SessionDetail";
 import { Handles, LaunchMode, QuestionCard, StatusPill, Uptime } from "./SessionParts";
-import { Explain, type Tip } from "./Tooltip";
+import { SessionPreview } from "./SessionPreview";
+import { Explain, Tooltip, type Tip } from "./Tooltip";
 import { useDetailTargetKey } from "./continuity";
 import { COLUMN_MIN_PX, chooseColumns, choosePanes, spreadIntoColumns, useContainerWidth } from "./fit";
 import type { NewSessionApi } from "./new-session-client";
@@ -147,6 +158,73 @@ export function headingFor(row: FleetRow): { kind: "own" | "generated" | "name";
   return { kind: "name", text: row.name };
 }
 
+/**
+ * **The preview a compact card's title button carries** — SessionPreview.tsx
+ * for what it shows and why nothing in it can be pressed.
+ *
+ * In the left-hand column a card has dropped its question's options and clamped
+ * its description; hovering or tabbing to it shows what was dropped, so the
+ * reader can decide whether to switch session without switching.
+ *
+ * `mouseOnly`, as on the dock and for the dock's reason: a tap on this button
+ * selects the session, and a card would land over the detail the tap just
+ * opened. Keyboard focus still opens it — `useFocus` is separate from
+ * `useHover`, and in a browser it wants `:focus-visible`, which a tap does not
+ * give a button.
+ *
+ * **`when` is false on a full-width card**, which already shows its option labels, **and
+ * on the selected one**, whose detail is the whole right-hand pane. The second
+ * is also what closes the preview when its session is clicked, so the card does
+ * not stay over the detail it was a preview of.
+ *
+ * **`when` switches the `Tooltip` off; it does not take it away.** Until
+ * 2026-10-06 it returned the bare button, which moved the button in the tree
+ * and so rebuilt it every time a selection changed which cards were eligible
+ * (GPT Sol's F18). The button is now the same node either way.
+ *
+ * **Beside the CARD, not beside the title.** The button is only as wide as its
+ * text, so a preview anchored to it opened over the middle of the card it
+ * describes and the two below it — measured in a browser at x 219–545 for a
+ * card spanning 12–352. `card` is the element it is drawn against; hover and
+ * focus are still the button's.
+ *
+ * `placement="right-start"`: the column is at the left edge, and above or below
+ * would cover the neighbouring cards the pointer is travelling along. `-start`
+ * so its top is level with the card's, whatever their two heights. It fits
+ * wherever it exists: two panes need 740px (fit.ts) and the card's right edge
+ * plus the gap, the preview and the margin is 724.
+ *
+ * `session-preview-card` is this card's width — tailwind.css, beside `.tooltip`.
+ */
+function PreviewOn({
+  row,
+  heading,
+  when,
+  card,
+  children,
+}: {
+  row: FleetRow;
+  heading: string;
+  when: boolean;
+  /** The session card's own element, once it is on the page. */
+  card: Element | null;
+  /** The title button. `Tooltip` needs one element that takes a ref, which a `<button>` does. */
+  children: ReactElement<Record<string, unknown>>;
+}): ReactNode {
+  return (
+    <Tooltip
+      content={<SessionPreview row={row} heading={heading} />}
+      placement="right-start"
+      mouseOnly
+      enabled={when}
+      positionReference={card}
+      className="session-preview-card"
+    >
+      {children}
+    </Tooltip>
+  );
+}
+
 function SessionCard({
   row,
   now,
@@ -168,9 +246,13 @@ function SessionCard({
      and there is nothing to show rather than something to apologise for. */
   const dir = row.meta.version === 1 ? row.meta.dir : null;
   const heading = headingFor(row);
+  /* State rather than a ref object: the preview has to hear when the element
+     arrives, and a ref filling in tells nobody. § `PreviewOn`. */
+  const [card, setCard] = useState<HTMLDivElement | null>(null);
 
   return (
     <Card
+      ref={setCard}
       className={cx(
         "session-card tw:mb-2 tw:border-l-4 tw:p-3",
         tone.edge,
@@ -208,25 +290,31 @@ function SessionCard({
       </div>
 
       <h3 className="tw:mt-1.5 tw:leading-snug tw:font-medium tw:break-words">
-        <button
-          type="button"
-          className={cx(
-            "session-open",
-            /* ONLY A BARE NAME IS FAINT. A generated title is real
-               information about the session and a tmux name is the absence
-               of any, and the first version drew both in the same grey — so
-               a described row and an undescribed one looked equally
-               de-emphasised, which defeats the point of distinguishing the
-               three sources at all. The marker says it is generated; the
-               colour no longer has to. Found in a browser, where it is the
-               only place it is visible. */
-            heading.kind === "name" && "tw:text-ink-faint",
-          )}
-          aria-current={selected ? "true" : undefined}
-          onClick={() => onSelect(row.id)}
-        >
-          {heading.text}
-        </button>
+        <PreviewOn row={row} heading={heading.text} when={compact && !selected} card={card}>
+          <button
+            type="button"
+            className={cx(
+              "session-open",
+              /* ONLY A BARE NAME IS FAINT. A generated title is real
+                 information about the session and a tmux name is the absence
+                 of any, and the first version drew both in the same grey — so
+                 a described row and an undescribed one looked equally
+                 de-emphasised, which defeats the point of distinguishing the
+                 three sources at all. The marker says it is generated; the
+                 colour no longer has to. Found in a browser, where it is the
+                 only place it is visible. */
+              heading.kind === "name" && "tw:text-ink-faint",
+            )}
+            aria-current={selected ? "true" : undefined}
+            /* How the list finds this row again to hand focus back — when the
+               one-pane detail closes (§ `openFromList`), and when the list is
+               rebuilt under the reader (§ `titleButton`). */
+            data-session={row.id}
+            onClick={() => onSelect(row.id)}
+          >
+            {heading.text}
+          </button>
+        </PreviewOn>
         {heading.kind === "generated" ? (
           /* SAID OUT LOUD, because a generated title is a guess about a session
              and the reader has to be able to tell it from the one Claude gave
@@ -448,7 +536,51 @@ function ListControls({
   );
 }
 
+/** A session's title button, wherever in the list it is drawn now. `SessionCard` writes the `data-session`. */
+function titleButton(id: string): HTMLElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>("button.session-open")).find(
+      (button) => button.dataset["session"] === id,
+    ) ?? null
+  );
+}
+
+/** The session whose title button has focus at this moment, if one does. */
+function focusedTitleId(): string | null {
+  const active = typeof document === "undefined" ? null : document.activeElement;
+  if (!(active instanceof HTMLElement) || !active.matches("button.session-open")) return null;
+  return active.dataset["session"] ?? null;
+}
+
+/**
+ * Preserve the focused title across list replacement, independently of scroll.
+ * Render can precede commit by an arbitrary interval. React's snapshot lifecycle
+ * reads focus before DOM mutation; the update lifecycle restores it after child
+ * refs and layout effects (including deliberate focus into the detail) run.
+ * A discarded render writes nothing, and a surviving focused control wins.
+ * See docs/postmortems/261006r-logical-list-continuity-does-not-preserve-dom-focus.md.
+ */
+class TitleFocusContinuity extends Component<{ children: ReactNode }, Record<string, never>, string | null> {
+  override getSnapshotBeforeUpdate(): string | null {
+    return focusedTitleId();
+  }
+
+  override componentDidUpdate(_previousProps: unknown, _previousState: unknown, focusedTitle: string | null): void {
+    if (focusedTitle === null) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    titleButton(focusedTitle)?.focus({ preventScroll: true });
+  }
+
+  override render(): ReactNode {
+    return this.props.children;
+  }
+}
+
+export type SessionsPanelHandle = { openFromList: (id: string) => void };
+
 export function SessionsPanel({
+  ref: selectionRef,
   rows,
   now,
   collected,
@@ -469,6 +601,8 @@ export function SessionsPanel({
   newSession,
   onRefresh,
 }: {
+  /** Share the measured list-open path with the Attention cards above it. */
+  ref?: Ref<SessionsPanelHandle>;
   rows: readonly FleetRow[];
   now: number;
   /**
@@ -679,6 +813,62 @@ export function SessionsPanel({
     [selectedId],
   );
 
+  /**
+   * **AT ONE PANE THE LIST COMES BACK WHERE IT WAS LEFT.**
+   *
+   * There the detail replaces the list, so the page's scroll offset stops
+   * meaning "how far down the list" the moment a row is opened, and closing
+   * would otherwise land at whatever offset the detail was read to. The offset
+   * is taken when a row is opened *from the list* and put back when the
+   * selection clears — by "← All sessions" or by the browser's Back, which is
+   * the same transition seen from here. It runs once the list is mounted again.
+   *
+   * **Here and not in the hash hook**, because only this component knows the
+   * measured layout and when the list is on the page again. A layout effect, so
+   * the list is in the document and nothing has painted at the wrong offset.
+   *
+   * **Nothing saved, nothing restored**: a detail arrived at by a link, or from
+   * another tab, has no list position to go back to. And it does not meet
+   * `detailRef` above — that fires when a selection arrives, this when it goes.
+   *
+   * Focus goes back to the row as well, without scrolling: the button that
+   * closed the detail has just been unmounted, which leaves focus on nothing.
+   */
+  // A pixel offset belongs to this width, ordering and membership.
+  const listKey = JSON.stringify([width, order, sorted.map((row) => row.id)]);
+  const listScroll = useRef<{ y: number; id: string; listKey: string; world: number | null } | null>(null);
+  const openFromList = useCallback(
+    (id: string) => {
+      if (panes === 1 && selectedId === null) {
+        listScroll.current = { y: window.scrollY, id, listKey, world: tmuxServerPid };
+      }
+      onSelect(id);
+    },
+    [panes, selectedId, onSelect, listKey, tmuxServerPid],
+  );
+  useImperativeHandle(selectionRef, () => ({ openFromList }), [openFromList]);
+  useLayoutEffect(() => {
+    const saved = listScroll.current;
+    if (saved === null) return;
+    // Discard during the excursion, not only at its end: the list may have
+    // reappeared at two panes and been hidden again, or a link changed target.
+    if (
+      panes !== 1 ||
+      (saved.world !== null && tmuxServerPid !== null && saved.world !== tmuxServerPid) ||
+      (selectedId !== null && (selectedId !== saved.id || selectedPid !== null))
+    ) {
+      listScroll.current = null;
+      return;
+    }
+    if (selectedId !== null) return;
+    listScroll.current = null;
+    const opener = titleButton(saved.id);
+    if (opener === null) return;
+    // An ordering or membership change invalidates pixels, not a surviving row's focus.
+    opener.focus({ preventScroll: true });
+    if (saved.listKey === listKey) window.scrollTo(0, saved.y);
+  }, [selectedId, selectedPid, panes, listKey, tmuxServerPid]);
+
   const detail =
     selectedId === null ? null : wrongWorld ? (
       /* **NOT "we could not find it" — "we will not look".** `MissingSession`
@@ -773,7 +963,7 @@ export function SessionsPanel({
       row={row}
       now={now}
       selected={row.id === selectedId}
-      onSelect={onSelect}
+      onSelect={openFromList}
       compact={compact}
     />
   );
@@ -785,14 +975,14 @@ export function SessionsPanel({
       rows={one.rows}
       now={now}
       selectedId={selectedId}
-      onSelect={onSelect}
+      onSelect={openFromList}
       compact={compact}
     />
   );
 
   /** The whole list in one column — what the left pane and a phone both get. */
   const oneColumnList: ReactNode = banded ? (
-    <>{bands.map(band)}</>
+    bands.map(band)
   ) : (
     <div className="tw:pt-2">{sorted.map(card)}</div>
   );
@@ -840,7 +1030,7 @@ export function SessionsPanel({
     ) : null;
 
   if (empty !== null) {
-    return (
+    const content = (
       <div className="tw:mx-auto tw:max-w-3xl">
         {unreadable}
         <NewSessionPanel api={newSession} />
@@ -861,6 +1051,7 @@ export function SessionsPanel({
         {empty}
       </div>
     );
+    return <TitleFocusContinuity>{content}</TitleFocusContinuity>;
   }
 
   /* Never more columns than there are bands to put in them: an empty first
@@ -871,7 +1062,7 @@ export function SessionsPanel({
      two-pane grid puts the ordering control in the middle of nothing. */
   const wideHeader = spread || (detail !== null && panes === 2);
 
-  return (
+  const content = (
     /* The measured element is this one, and it is always full width — the
        narrowing happens INSIDE it. Capping the measured box at `max-w-3xl`
        would make the answer to "how much room is there?" depend on the answer,
@@ -931,4 +1122,5 @@ export function SessionsPanel({
       )}
     </div>
   );
+  return <TitleFocusContinuity>{content}</TitleFocusContinuity>;
 }

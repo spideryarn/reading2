@@ -16,7 +16,7 @@
 import type { Arc, Block, BlockId, NodeId, Tree, TreeNode } from "../types.js";
 import { isSupplementNode, supplementIndex } from "../supplement.js";
 import { withoutOwnNumber } from "./heading-number.js";
-import { PREAMBLE_TITLE, sameHeading } from "../heading-text.js";
+import { PREAMBLE_TITLE, sameHeading, UNTITLED_WINDOW_TITLE } from "../heading-text.js";
 import type { Voice } from "./voice.js";
 
 export interface Cell {
@@ -64,7 +64,13 @@ function buildChains(tree: Tree, blocks: Block[]): NodeId[][] {
     let node: TreeNode | undefined = tree.nodes[tree.rootId];
     while (node) {
       chain.push(node.id);
-      const next: TreeNode | undefined = node.children
+      /* **`?? []`, here as well as at the door.** `withChildLists` below mends a
+         stored tree where the client receives it, so the reading view never
+         brings this walk a node with no list. But this is the walk that was
+         reported throwing (qi-gwnd4skg), and tests and scripts hand
+         `buildGeometry` a tree that has been nowhere near that door. A node
+         with no list is a leaf: the chain stops and the tree draws short. */
+      const next: TreeNode | undefined = (node.children ?? [])
         .map((id) => tree.nodes[id])
         .find((c) => {
           if (!c) return false;
@@ -75,6 +81,48 @@ function buildChains(tree: Tree, blocks: Block[]): NodeId[][] {
     }
     return chain;
   });
+}
+
+/**
+ * **A stored tree, with a `children` list on every node.** The same object
+ * back when none was missing.
+ *
+ * `TreeNode.children` is `NodeId[]`, and that describes what this app writes.
+ * It does not describe every tree the client is handed: the tree is stored
+ * JSON, and a type cannot see JSON. One node without the key threw in whichever
+ * walker met it first — `buildChains` above was the one reported, and
+ * Marginalia's questions (marginalia/notes.ts), the breadcrumb (crumbs.ts) and
+ * Skim's where-card (where.ts, through src/section-path.ts) each read the list
+ * unguarded too. Guarding them one at a time moves the crash to the next
+ * reader of `.children`, including the one somebody writes next month.
+ *
+ * So it is mended once, where the client receives the article
+ * (article/access.ts § `resolveAccess`), and every walker after that can
+ * believe the type. **A node with no list is a leaf**, which is the rule this
+ * file already has for a malformed tree: it renders visibly short rather than
+ * throwing or claiming the whole article.
+ *
+ * **Identity is kept wherever nothing was wrong** — the tree itself when every
+ * node had a list, and every node that had one in a tree that did not —
+ * because the reading view memoises on `article.tree`. The argument is never
+ * written to.
+ *
+ * It mends this one thing. A node that is missing, a range that does not
+ * resolve and a root that is not in `nodes` are each already drawn short by
+ * the walkers, and src/validate-tree.ts is where a tree is complained about
+ * properly. tests/tree-missing-children.test.ts.
+ */
+export function withChildLists(tree: Tree): Tree {
+  /* An answer with no tree in it at all is not this function's to repair. */
+  const nodes = (tree as Tree | undefined)?.nodes;
+  if (!nodes) return tree;
+  let mended: Record<NodeId, TreeNode> | null = null;
+  for (const [id, node] of Object.entries(nodes)) {
+    if (!node || Array.isArray(node.children)) continue;
+    mended ??= { ...nodes };
+    mended[id] = { ...node, children: [] };
+  }
+  return mended ? { ...tree, nodes: mended } : tree;
 }
 
 export function buildGeometry(tree: Tree, blocks: Block[]): Geometry {
@@ -369,7 +417,9 @@ export function titleVoice(node: TreeNode): Voice {
   if (node.sourceHeading !== undefined) {
     return sameHeading(node.title, node.sourceHeading) ? "author" : "ai";
   }
-  if (node.title === PREAMBLE_TITLE) return "ui";
+  /* A tree no model wrote quotes the passage's opening words where there is no heading. */
+  if (node.titleFrom === "opening-words") return "author";
+  if (node.title === PREAMBLE_TITLE || node.title === UNTITLED_WINDOW_TITLE) return "ui";
   return "ai";
 }
 

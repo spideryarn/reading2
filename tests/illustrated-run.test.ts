@@ -37,14 +37,18 @@ const streamMessage = vi.fn(
   },
 );
 
-vi.mock("../src/messages-stream.js", () => ({
+/* Only the transport is replaced. `finishedText` and `wasRefused` stay real, so
+   a refusal here is a message that really is one, not a toggle on a fake. */
+vi.mock("../src/messages-stream.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/messages-stream.js")>()),
   streamMessage,
-  wasRefused: () => false,
 }));
 
 const { generateIllustrated, imagePrompt, inputFingerprint, isStale, PLATE_REQUEST, ILLUSTRATED_BRIEF_OUTPUT_SCHEMA } =
   await import("../src/illustrated.js");
 const { MAX_PLATES } = await import("../src/illustrated-plate.js");
+const { failureKindOf, readerFailureOf, undeclaredBlocked } = await import("../src/job-failure.js");
+const { MODEL_REFUSED } = await import("../src/messages.js");
 
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -441,6 +445,39 @@ describe("generateIllustrated", () => {
     answerWith(BRIEF, { stop_reason: "max_tokens" });
     const { draw, calls } = drawer();
     await expect(generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw })).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+  });
+
+  /**
+   * **A refusal has a sentence of its own, and the reader is owed it.** Until
+   * 2026-10-04 this one site threw `new Error(MODEL_REFUSED.message)` where its
+   * seventeen siblings throw `stageFailure(MODEL_REFUSED, …)`. The bracketed
+   * code still made the job `blocked`, so Retry was rightly off — and the job
+   * stored the generic "could not be done for this article" beside it, which is
+   * the one failure a reader can do nothing about, explained by nothing.
+   *
+   * Asserted on what src/jobs.ts § `runStep` derives from the thrown value, not
+   * on the error's own text: the old plain throw carried the right words in
+   * `message` and still lost them, so a `toThrow(/declined/)` here would have
+   * passed over the defect.
+   */
+  it("declares a refused brief, so the reader gets the refusal sentence and not the generic one", async () => {
+    answerWith(BRIEF, { stop_reason: "refusal" });
+    const { draw, calls } = drawer();
+    const err: unknown = await generateIllustrated({
+      power: "standard",
+      article: ARTICLE,
+      sketch: SKETCH,
+      draw,
+    }).then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(Error);
+    const reader = readerFailureOf(err, "Illustrated");
+    expect(reader).toBe(MODEL_REFUSED);
+    expect(failureKindOf(err)).toBe("blocked");
+    expect(undeclaredBlocked(err, reader)).toBe(false);
     expect(calls).toHaveLength(0);
   });
 

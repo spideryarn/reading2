@@ -445,6 +445,32 @@ export const SHELF_TOPICS_MODEL = "openai/gpt-6-luna";
 export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
+ * **What rates how hard a piece is to read**, its language and its ideas each
+ * 1 to 5, from a sample of it (src/reading-difficulty.ts). The same cheap model
+ * as `PAPER_METADATA_MODEL` above, on the same zero-retention route
+ * (`reading-difficulty` in src/ai-call.ts), chosen for plan
+ * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+ *
+ * Its own constant, though the string is the same: the two jobs were chosen
+ * separately, and moving one to another model must not move the other.
+ */
+export const READING_DIFFICULTY_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
+ * **What lightly tidies an imported title** — its capitals, a site's name
+ * stuck on the end, stray spacing (src/title-tidy-model.ts). Greg, 2026-10-05:
+ * *"yes, a small model (e.g. GPT Luna or DeepSeek)"*. The same cheap model as
+ * `PAPER_METADATA_MODEL` above, on a copy of its zero-retention route
+ * (`title-tidy` in src/ai-call.ts), so a model put here must be one Fireworks,
+ * DeepInfra or Together serves. Measured against the rule and against Luna:
+ * docs/investigations/261005b-title-tidying-rule-against-a-small-model.md.
+ *
+ * Its own constant, though the string is the same: the two jobs were chosen
+ * separately, and moving one to another model must not move the other.
+ */
+export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
  * **What scores every block for a quick search** — TypeSafe's Jev, a "decision"
  * model that answers typed questions with probabilities rather than writing
  * text (src/quick-search.ts, docs/plans/261002e-quick-search-v1.md). One `noul`
@@ -452,7 +478,7 @@ export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
  * a typical article, against 5–16 s for the meaning search.
  *
  * **Requests the versioned id, not `-latest`**, because the floor the hits are cut
- * at (`QUICK_FLOOR`, 0.7) was measured on this model and means nothing on the
+ * at (`QUICK_FLOOR`) was measured on this model and means nothing on the
  * next one. The provider may return a dated id, which is stored as the model
  * that answered; the request itself names `typesafe/jev-1.13`.
  * docs/investigations/261002o-quick-search-spike.md.
@@ -465,6 +491,24 @@ export const PAPER_METADATA_MODEL = "deepseek/deepseek-v4.1-flash";
  * cannot afford.
  */
 export const QUICK_SEARCH_MODEL = "typesafe/jev-1.13";
+
+/**
+ * **What picks a command from a sentence typed into the command bar** — Jev
+ * again, asked one `choice` question over the bar's rows
+ * (src/command-pick-call.ts, plan 261003k). About 0.3 s and $0.0002.
+ *
+ * Its own constant beside `QUICK_SEARCH_MODEL`, although today they are one
+ * string, because each holds a threshold measured on its model:
+ * **`RUN_AT_ONCE`, 0.95 (src/command-pick.ts), was measured on
+ * `typesafe/jev-1.13`** and means nothing on the next version. Moving this is
+ * a rerun of evals/command-pick/, not a bump
+ * (docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md).
+ *
+ * The words of an argument command — what to look for, the tag — are copied
+ * out by a second call on the quick tier's model, `QUICK_MODEL_OPENROUTER`
+ * (job `command-pick-words`): Jev's own attempt at them failed 15 times in 48.
+ */
+export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
 
 /**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
@@ -595,8 +639,7 @@ export type Task =
   | "quotes"
   /* The picture a model draws of the argument — docs/project/diagram.md
      § Sketch. Article-reading like `ideas`, and like `ideas` it names block
-     ids, so it renders with `articleWithIds` and shares no cached prefix with
-     arc, tweets or glossary. */
+     ids, so it renders with `articleWithIds`. */
   | "sketch"
   /* When the piece says things happened, and how sure it is —
      docs/plans/260831i-timeline-mode.md. Article-reading like `ideas`, and like `ideas` it
@@ -611,17 +654,16 @@ export type Task =
      Article-reading like `ideas`, and like `ideas` every vignette names a block
      id, so it renders with `articleWithIds`. It is not an `ArticleStage`, so
      the cross-stage cache predicate deliberately excludes it.
-     It is also the one stage that reads another stage's artefact — the Sketch —
+     It also reads another stage's artefact — the Sketch —
      rather than deciding its own shape. src/illustrated.ts. */
   | "illustrated"
   /* The questions the piece can ask you back — docs/plans/260831al-review-quiz-sub-mode.md.
      Article-reading like `ideas`, and like `ideas` every piece of evidence names
-     a block id, so it renders with `articleWithIds` and joins that cached
-     prefix rather than arc's. */
+     a block id, so it renders with `articleWithIds`. */
   | "quiz"
   /* The questions a careful reader would put to the piece, and the passages
      where it responds — docs/plans/260916d-faq-mode.md. Article-reading like
-     `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+     `ideas`, naming block ids, so `articleWithIds`. */
   | "faq"
   /* How each paragraph bears on the one before it —
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
@@ -633,7 +675,7 @@ export type Task =
   | "crossrefs"
   /* Simple: a plain-words orientation, each paragraph naming its passages —
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Article-reading like
-     `ideas`, naming block ids, so `articleWithIds` and that cached prefix. */
+     `ideas`, naming block ids, so `articleWithIds`. */
   | "simple"
   /* A route through the Quotes — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      **Not article-reading**: it sends the quotes and never the article, so it
@@ -808,6 +850,13 @@ export type Task =
    */
   | "citation-paper-passages"
   /**
+   * **A cited work's influence, read from the press's own search results** —
+   * one non-streamed JSON call inside a *Dig deeper* press
+   * (src/citation-influence.ts, plan 261003m stage 2). Its own job so the
+   * ledger shows what it adds to a press; no tools.
+   */
+  | "citation-influence"
+  /**
    * ***Dig deeper*'s forced search** (src/dig-deeper.ts, plan 261001p): one
    * web search with `tool_choice: "required"`, run before the answer because
    * the high-power model that writes the answer cannot be made to search. It
@@ -848,6 +897,13 @@ export type NonTaskAiJob =
   /* **A batch-added paper's title, authors and abstract** —
      src/paper-metadata.ts, on `PAPER_METADATA_MODEL` below. */
   | "paper-metadata"
+  /* **How hard a piece is to read, rated from a sample of it** —
+     src/reading-difficulty.ts, on `READING_DIFFICULTY_MODEL` below. Not
+     `difficulty`: that word is already a field on FAQ and glossary items. */
+  | "reading-difficulty"
+  /* **An imported title, lightly tidied** — src/title-tidy-model.ts, on
+     `TITLE_TIDY_MODEL` below. */
+  | "title-tidy"
   /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
      (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
      is not a tier decision and must not be overridable. It is always the
@@ -861,7 +917,21 @@ export type NonTaskAiJob =
      a `Task`: its model was chosen by a spike, not a tier, and it speaks the
      Decisions wire, where a tier's reasoning effort means nothing. Its own job
      rather than `search`, so the ledger can say what the quick half costs. */
-  | "search-quick";
+  | "search-quick"
+  /* **A sentence in the command bar, turned into one of its rows** — Jev's
+     one `choice` over the rows (src/command-pick-call.ts, plan 261003k). Not
+     a `Task`, for `search-quick`'s two reasons. */
+  | "command-pick"
+  /* **And the words that sentence names**, when the pick is a command that
+     takes some: a second, tiny call on `QUICK_MODEL_OPENROUTER`. Its own job,
+     so the ledger can say what the two halves cost. Not a `Task`: it is the
+     model the eval measured, not a tier, and an override would unpin it. */
+  | "command-pick-words"
+  /* **The bar's short list from why you are reading** — searches, modes and a
+     lens proposed from the reader's profile, on `QUICK_MODEL_OPENROUTER`
+     (src/command-suggest-call.ts, plan 261005k). Not a `Task`, for
+     `command-pick-words`'s reason: it is the model the eval measured. */
+  | "command-suggest";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -983,14 +1053,12 @@ export type AiJob =
  * **Which tier each task is on — and the file's actual decision, rather than its
  * constants, which are only the vocabulary for it.**
  *
- * Everything is `capable` except `link-summary`, `quiz-verdict`, and
- * `simple-check`. The capable default is what Greg asked for ("default to
- * capable-model for now"). No task here has been *moved* to the quick tier: all
- * three exceptions were written for it, which is the difference between a
- * decision and an unmeasured migration.
+ * The capable default is what Greg asked for ("default to capable-model for
+ * now"). The quick rows and their reasons are recorded beside the table;
+ * changing a tier still needs evidence about the task, not just its price.
  *
  * **Flipping a row is not the whole of switching a task** — read the header's
- * list of what has to move with the model first. For the seven pipeline tasks it
+ * list of what has to move with the model first. For Messages-wire tasks it
  * is not even the start of one, and the check below the table says so out loud
  * rather than letting the edit look like it worked.
  *
@@ -1002,10 +1070,10 @@ export type AiJob =
  *   reads, so a weaker model shows up as worse *picks*, which
  *   evals/ can measure directly, rather than as flatter writing, which it
  *   cannot. It is also the one a reader waits on with nothing on screen.
- * - **`labels`** is the biggest bill in the app by a distance — one gist per
- *   gistable block, every article — so it is where the tenth-of-the-price would
- *   actually be felt. It is also the core of the product: the gist columns *are*
- *   granularity zoom. Cheapest to move, most expensive to get wrong.
+ * - **`labels`** writes one nav label per gistable block, in batches
+ *   (src/labels.ts), so its cost grows with article length. Those labels help
+ *   the reader find paragraphs in Structure. A cheaper tier would need an
+ *   evaluation of that navigation quality before a switch.
  * - **`explain`, `chat`, `arc`, `tweets`, `glossary`, `structure`** all
  *   write something a person reads, or decide the shape of the whole article.
  *   These are the last places to economise, not the first.
@@ -1076,6 +1144,9 @@ export const TASK_TIER: Record<Task, Tier> = {
   /* The quick check's tier (`citations-find`), as plan 261001a says: weighing
      a few passages of a paper against one claim. Code checks every quote. */
   "citation-paper-passages": "capable",
+  /* The tier of the press it runs inside. The press itself passes
+     `DIG_DEEPER_MODEL`, as it does to every call whose output the reader reads. */
+  "citation-influence": "capable",
   /**
    * **The first `quick` row in this table**, and the one place its two
    * unmeasured caveats got measured. `openai/gpt-5.6-luna` at roughly a tenth
@@ -1323,6 +1394,8 @@ export const TASK_WIRE: Record<Task, Wire> = {
   "citation-investigate": "chat",
   /* Chat, the wire of the press it runs inside; no tools, one JSON answer. */
   "citation-paper-passages": "chat",
+  /* Chat, for the same reason: no tools, one JSON answer, inside that press. */
+  "citation-influence": "chat",
   /* Chat, for `citations-find`'s reason — the web-search server tool — and
      the quick tier's only wire. */
   "dig-deeper-search": "chat",
@@ -1355,12 +1428,22 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "shelf-topics": "chat",
   /* A strict JSON schema back, on chat/completions. src/paper-metadata.ts. */
   "paper-metadata": "chat",
+  /* A strict JSON schema back, on chat/completions. src/reading-difficulty.ts. */
+  "reading-difficulty": "chat",
+  /* A strict JSON schema back, on chat/completions. src/title-tidy-model.ts. */
+  "title-tidy": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
   "dig-deeper": "chat",
   dictation: "transcription",
   /* OpenRouter's Decisions API — typed probabilities, not a chat completion.
      src/quick-search.ts through `openRouterDecisions`. */
   "search-quick": "decisions",
+  /* The command bar's sentence: Jev's `choice` on the Decisions wire, then a
+     small JSON answer on chat/completions for the words. src/command-pick-call.ts. */
+  "command-pick": "decisions",
+  "command-pick-words": "chat",
+  /* The bar's short list: one small JSON answer. src/command-suggest-call.ts. */
+  "command-suggest": "chat",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -1440,6 +1523,10 @@ export const MODEL_ENV_VAR: Record<Task, string | null> = {
      would quietly make the two calls diverge while the UI and plan still said
      they were the same model. The spend row remains its own job. */
   "citation-paper-passages": "SPIDERYARN_CITATIONS_FIND_MODEL",
+  /* Shares the press's own override rather than adding a name: the call is
+     only ever made with `DIG_DEEPER_MODEL` passed in (src/citation-investigate.ts),
+     so this entry is never what picks its model. */
+  "citation-influence": "SPIDERYARN_CITATION_INVESTIGATE_MODEL",
   explain: "SPIDERYARN_EXPLAIN_MODEL",
   chat: "SPIDERYARN_CHAT_MODEL",
   "quiz-mark": "SPIDERYARN_QUIZ_MARK_MODEL",
@@ -1587,7 +1674,8 @@ export const DISPLAY_NAME: Record<string, string> = {
      until plan 260930k — so /privacy was never required to name it. */
   "google/gemini-3.1-flash-image": "gemini-3.1-flash-image",
   "openai/gpt-6-luna": "gpt-6-luna",
-  /* The batch import's metadata reader, `PAPER_METADATA_MODEL`. */
+  /* The batch import's metadata reader, `PAPER_METADATA_MODEL`, and the
+     reading-difficulty rater, `READING_DIFFICULTY_MODEL`. */
   "deepseek/deepseek-v4.1-flash": "deepseek-v4.1-flash",
   /* Quick search's scorer, `QUICK_SEARCH_MODEL`. */
   "typesafe/jev-1.13": "jev-1.13",
@@ -1624,7 +1712,12 @@ export const NON_TASK_MODELS: readonly {
   { job: "pdf-figure-locate", id: PDF_FIGURE_LOCATOR_MODEL, provider: "openrouter" },
   { job: "shelf-topics", id: SHELF_TOPICS_MODEL, provider: "openrouter" },
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
+  { job: "reading-difficulty", id: READING_DIFFICULTY_MODEL, provider: "openrouter" },
+  { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
+  { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
+  { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
+  { job: "command-suggest", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
   /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
      by its source because that file imports this one. */
   { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },
@@ -1686,31 +1779,83 @@ for (const task of PIPELINE_TASKS) {
   }
 }
 
-/** The reasoning levels `output_config.effort` accepts. */
-export type Effort = "low" | "medium" | "high";
+/**
+ * The reasoning levels this app asks for in `output_config.effort`.
+ *
+ * A tuple with the type derived from it, so there is a list to check a string
+ * against at run time (`pipelineEffortOverride` below). A bare union type is
+ * gone by then, which is how a cast came to stand in for a check.
+ */
+export const EFFORTS = ["low", "medium", "high"] as const;
+export type Effort = (typeof EFFORTS)[number];
+
+/**
+ * **`SPIDERYARN_PIPELINE_EFFORT`, checked.** The whole-run override, or
+ * `undefined` when it is unset or empty.
+ *
+ * The one place the variable is read. `effortFor` below, src/citations.ts and
+ * src/skim.ts each call this and supply their own fallback; until 2026-10-04
+ * each of the three read `process.env.SPIDERYARN_PIPELINE_EFFORT as Effort |
+ * undefined` for itself. A cast checks nothing, so a typo (`hgih`) went to the
+ * provider as the effort, and so did an empty string, because `"" ?? fallback`
+ * is `""`.
+ *
+ * **A value that is not one of the three throws**, naming the variable and the
+ * three values. It does not fall back. This is a developer's knob, set on
+ * purpose for an eval, and a run that silently used the default instead would
+ * be a wrong measurement with nothing to say it was one. No deployment sets it
+ * (tests/env-names-are-inventoried.test.ts), so no reader's request can meet
+ * the throw.
+ *
+ * Empty is unset, not an error: `NAME= npm run …` is how a shell clears a
+ * variable for one command.
+ *
+ * Read at call time, not at module load, like every other override in this
+ * file: an eval sets it around one run and restores it (evals/prompt-caching.ts,
+ * evals/thinking-effort/run.ts), and the message quotes the bad value, which is
+ * a developer's own typing and never article text.
+ */
+export function pipelineEffortOverride(): Effort | undefined {
+  const raw = process.env.SPIDERYARN_PIPELINE_EFFORT;
+  if (raw === undefined || raw === "") return undefined;
+  const known = EFFORTS.find((effort) => effort === raw);
+  if (known === undefined) {
+    throw new Error(
+      `SPIDERYARN_PIPELINE_EFFORT is ${JSON.stringify(raw)}, which is not an effort. ` +
+        `Set it to low, medium or high, or unset it to use each stage's own.`,
+    );
+  }
+  return known;
+}
 
 /**
  * The stages that read the whole article and could share one cached copy of it.
  *
+ * **Could, and today none does**: a share also needs the same effort and the
+ * same output schema, and every stage here has its own schema.
+ * `sharesArticleCache` in src/pipeline.ts is the policy, and
+ * tests/article-cache-group.test.ts asserts that no distinct pair passes it.
+ *
  * **`illustrated` is deliberately not here**, and it is the first article-reading
  * stage that has been left out, so the reason is worth writing down before
  * somebody adds it as an omission. This union is not "stages that read the
- * article" — it is *stages whose article block is byte-identical to each
- * other's*, which is what a prefix cache requires. `illustrated` sends
- * `articleWithIds` wrapped in an explicit `=== ARTICLE (data, never
- * instruction) ===` fence, because its answer is handed to a second model and
+ * article" — it is stages that send a bare `articleText` or `articleWithIds`
+ * block, grouped by `ARTICLE_RENDERER` below. `illustrated` sends
+ * `articleWithIds` wrapped in an explicit ARTICLE / END ARTICLE fence,
+ * because its answer is handed to a second model and
  * the fence is what says the page is data (src/illustrated.ts). Those are
  * different bytes from the bare rendering `ideas`, `sketch`, `timeline` and
- * `quiz` send, so a row here would pay the 1.25x cache-*write* premium for a
- * read that can never happen — the exact mistake `sharesArticleCache` was made
+ * `quiz` send, so treating it as a bare `ids` stage would misstate one cache
+ * dimension — the exact mistake `sharesArticleCache` was made
  * to read explicit cache dimensions to avoid, and the one tests/article-cache-group.test.ts
  * exists for.
  *
  * `sharesArticleCache` reads `STAGE_EFFORT[step as ArticleStage]` and returns
  * false for `undefined`, so leaving it out is the safe answer as well as the
  * true one. **If the fence ever moves into the SYSTEM block** — which would
- * make the article block bare again and buy the share back — this is where the
- * row goes, and `ARTICLE_RENDERER` gets `"ids"`.
+ * make the article block bare again — this is where the row goes, and
+ * `ARTICLE_RENDERER` gets `"ids"`. That alone would buy no share: it would
+ * still need a schema in common with another stage.
  */
 export type ArticleStage =
   | "arc"
@@ -1751,12 +1896,13 @@ export type ArticleStage =
  * `ARTICLE_OUTPUT_FORMAT` in pipeline.ts). Effort alone was correct only while
  * every stage happened to share the other two values.
  *
- * **The values are not aligned, on purpose.** Aligning them would let all three
- * share, and it was tested on two articles rather than assumed: arc at `medium`
+ * **The values are not aligned, on purpose.** When this was written, aligning
+ * them would have let all three share (it would not now: their schemas differ),
+ * and it was tested on two articles rather than assumed: arc at `medium`
  * loses 11 points of vocabulary retention on one of them, and glossary at `high`
  * gets measurably more formulaic on the other while spending 4,558 more output
  * tokens. Neither trade is worth making to win a cache, so each stage keeps the
- * setting its writing wants and glossary is simply a second cache. The numbers
+ * setting its writing wants. The numbers
  * are in evals/results/effort-vs-quality.md.
  *
  * **The environment still wins**, like the models above:
@@ -1884,7 +2030,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
      synergy) into "feedback loops" (which, in the same paper, lower it), and the
      `high` run kept the author's term. Evidence, not a distribution —
      evals/simple/results-260930.md. Its paragraph schema differs from every
-     other `ids/high` schema, so it shares no cached article, and it sits beside
+     other `ids/high` schema, so it shares no cached article, and it sits after
      `faq` in `STEP_ORDER` (src/step-order.ts). */
   simple: "high",
 };
@@ -1903,7 +2049,7 @@ export const STAGE_EFFORT: Record<ArticleStage, Effort> = {
  * why the stages that return no ids deliberately omit them). So it can never
  * share a prefix with arc, glossary or quotes however its effort is set. (This
  * said "arc, tweets or glossary" until 2026-10-01; `tweets` has sent the ids too
- * since `tweets/5` on 2026-09-29, and is in `ideas`' group — see its row below.)
+ * since `tweets/5` on 2026-09-29 — see its row below.)
  * And
  * `sharesArticleCache` in src/pipeline.ts reads all three values,
  * so nothing pays a 1.25x cache *write* premium for a read that cannot happen.
@@ -1917,34 +2063,33 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
   arc: "text",
   /* `ids` since `tweets/5` (2026-09-29): each post names the blocks it came
      from, so the ids have to be on the page. It sends the body only,
-     byte-identical to `ideas` and `faq`, so it joins that prefix and leaves
-     arc and glossary's. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+     byte-identical to `ideas` and `faq`. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
   tweets: "ids",
   glossary: "text",
   /* The model returns the words and never a block id — src/quotes.ts § the
-     header — so this sends the same bytes `glossary` does, which is what lets
-     the two share one cached article. */
+     header — so this sends the same bytes `glossary` does. Their schemas
+     differ, so the two share no cached article all the same. */
   quotes: "text",
   ideas: "ids",
   /* Every node the picture draws may carry a block id for the reader to jump
      to, so the ids have to be on the page — the same reason `ideas` is `ids`,
-     and the same consequence: no shared prefix with the four above. */
+     and the same consequence: different article bytes from the `text` stages. */
   sketch: "ids",
   /* Every occurrence names a block id, exactly as `ideas` does — and the
      publication date, which is the one thing this stage needs that the others
      do not, goes in the *user* prompt rather than into the head
      `articleWithIds` writes. That is deliberate: a date in the head would be
-     different bytes for the same article and would cost this stage the share
-     with `ideas` on every article, to save nothing.
+     different bytes for the same article, and would rule out a share with
+     `ideas` on bytes as well as on schema, to save nothing.
      src/timeline.ts § `renderPrompt`. */
   timeline: "ids",
   /* Every piece of evidence names a block id — that is what ties a reference
      answer to the page rather than to the model's memory of it — so the ids
-     have to be on the page. Same consequence as the three above: no shared
-     prefix with the four `articleText` stages. */
+     have to be on the page. Different article bytes from the three
+     `articleText` stages. */
   quiz: "ids",
   /* Every passage names a block id, so the ids have to be on the page — and it
-     sends the body only, byte-identical to `ideas`, so it joins that prefix. */
+     sends the body only, byte-identical to `ideas`. */
   faq: "ids",
   /* It answers block ids, so the ids have to be on the page — and it sends the
      body only, byte-identical to `ideas` and `faq`. `low` effort and its own
@@ -1954,11 +2099,16 @@ export const ARTICLE_RENDERER: Record<ArticleStage, "text" | "ids"> = {
      only, byte-identical to `ideas`. The effort differs, so no share. */
   crossrefs: "ids",
   /* Every paragraph names its passages' block ids, so the ids are on the page;
-     the body only, byte-identical to `ideas`, at `high`: it joins that prefix. */
+     the body only, byte-identical to `ideas`, at `high`. */
   simple: "ids",
 };
 
-/** One stage's effort, with the whole-run environment override applied. */
+/**
+ * One stage's effort, with the whole-run environment override applied.
+ *
+ * Throws if the override is set to something that is not an effort; see
+ * `pipelineEffortOverride`.
+ */
 export function effortFor(stage: ArticleStage): Effort {
-  return (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? STAGE_EFFORT[stage];
+  return pipelineEffortOverride() ?? STAGE_EFFORT[stage];
 }

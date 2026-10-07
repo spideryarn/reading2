@@ -80,6 +80,12 @@ will read is not doing its job, however true it is.
 
 ## Keep it navigable
 
+- **Many small docs, not a few big ones.** One topic per doc, each dense with signposts — up, across
+  and down to the code — and with the human's intent, mostly in their own words. When an area has
+  more than a handful, give it an **overview doc as a hub**, and link the important hubs and the
+  must-read-first docs from the top-level signpost file the agents load (here, `AGENTS.md`). Greg,
+  2026-10-06: *"lots of little docs, each with lots of signposting to other docs and code etc, and
+  human intent (mostly quotes/paraphrases from me)"*.
 - **Every evergreen doc is reachable from exactly one deliberate parent**, and that parent links to
   it. If nothing wants to own it, that is a signal about the doc. Dated collections — plans,
   research, postmortems — are owned at directory level instead, and are not indexed item by item;
@@ -98,8 +104,17 @@ will read is not doing its job, however true it is.
 
 ## Keeping it true
 
+- **Correct a stale or wrong comment wherever you find it**, without asking — the general rule is
+  AGENTS.md § When the right thing to do is obvious and unambiguous, do it.
 - **Fix a doc you find out of date, even one your change did not touch** — the standing permission
   and how to land it are in [engineering-manager.md § Along the way](engineering-manager.md#along-the-way).
+- **Check the docs at the two checkpoints**: before you push, for the areas your change touched; and
+  at each release, for everything in it — whoever cuts the release reads its changes against the docs
+  that own them. A doc is cheapest to keep true at the moment its subject changes. Greg, 2026-10-06:
+  *"ideally we update them periodically (e.g. when pushing, or deploying)"*.
+  In this repo a hint prompts the first: on `git push`,
+  [`.claude/hooks/push-doc-hint.sh`](../../.claude/hooks/push-doc-hint.sh) names the docs that
+  mention a file you changed and that you did not touch. It never blocks.
 - **Update the docs in the same piece of work.** If you changed what something does, the doc is part
   of the change, not a follow-up. **Removing a feature most of all**: grep the docs for its names and
   fix every hit in the same change. A removal done as "a line here and there" leaves the reference
@@ -113,6 +128,16 @@ will read is not doing its job, however true it is.
 - **A doc whose wording is a rule changes differently** — one approved set of changes at a time, with
   the before and after shown: [edit-important-docs.md](edit-important-docs.md). Signposting is not a
   rule, so adding a line for a new doc, or tweaking a pointer, needs no approval.
+- **Never pass prose through a shell string.** Backticks inside a double-quoted shell argument are
+  command substitution, so each code span is run and removed: a plan section appended that way on
+  2026-09-08 landed with four spans missing, the script printed its success line, and the result
+  read as clumsy writing, not as damage. `$`, `!` and `\` are the same family. Write prose with the
+  Write tool, or have a script read it from a file; a heredoc with a quoted delimiter is safe. Then
+  read what landed.
+- **Edit a doc with the Edit tool.** If it must be a script, write `assert old and s.count(old) == 1`
+  before every replace, and never pass `-q` to `git commit`: a replace whose target came out empty
+  succeeds everywhere and silently grew one plan to 22 MB
+  ([the postmortem](../postmortems/261005r-a-slice-between-two-markers-can-be-empty-and-replace-with-an-empty-needle-succeeds-everywhere.md)).
 
 ## Checking that the signposts work
 

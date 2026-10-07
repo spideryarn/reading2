@@ -30,7 +30,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Claim, ClaimsRun, OtherText } from "../src/referee-claims.js";
 import {
@@ -145,6 +145,17 @@ const OTHER_TEXT: OtherText[] = [
 
 /* ------------------------------------------------- rule 1, on the screen -- */
 
+it("acknowledges a Claims run immediately, before any wait timer runs", () => {
+  vi.useFakeTimers();
+  try {
+    render([], { status: "pending", createdAt: "2026-09-01T00:00:00.000Z", claims: [] });
+    expect(host.querySelector('.band-waiting[role="status"]')?.textContent).toBe("Reading the paper…");
+    expect(host.querySelector('svg.cmt-spinner[aria-hidden="true"]')).not.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 describe("the order, and the absence of any way to rank", () => {
   it("draws the claims in the order it is given, thinnest last", () => {
     /* The band hands `ClaimsView` an already-sorted list, so this is the half
@@ -241,12 +252,14 @@ describe("the three things an empty claim can mean", () => {
 /* -------------------------------------------------- rule 3, and the doors -- */
 
 describe("what the panel says a row is", () => {
-  it("says linkage rather than adequacy, above the list rather than under it", () => {
-    /* Above, because a note under a list is a note read after the list has
-       already been read the wrong way. */
+  it("leaves linkage-not-adequacy to the band's how-to-read button, and prints no copy", () => {
+    /* It opened this panel as visible text until 2026-10-03, when Greg chose
+       to move each panel's how-to-read sentences behind a button (plan
+       261003m). tests/referee-notices.test.tsx § one press away asserts the
+       sentence where it is drawn now; a second copy here would be the panel
+       growing back. */
     const panel = render([THICK]);
-    const note = panel.querySelector(".clm-what");
-    expect(note?.textContent ?? "").toMatch(/yours to judge/i);
+    expect(panel.textContent ?? "").not.toMatch(/yours to judge/i);
   });
 
   it("says the order is the paper's and is not a ranking", () => {

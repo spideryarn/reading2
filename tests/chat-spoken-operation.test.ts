@@ -114,18 +114,18 @@ describe("registering one", () => {
     expect(commands[0]).toHaveProperty("expectedTailId", null);
   });
 
-  it("names the conversation's own kind, so a Remember conversation Live began is stored as one", () => {
-    /* SPIDERYARN-READING2-70. The conversation Remember opens with is in
+  it("names the conversation's own kind, so a Learn conversation Live began is stored as one", () => {
+    /* SPIDERYARN-READING2-70. The conversation Learn opens with is in
        `base` from `thread.begun` and nowhere else, so this is the only place
        its kind is known when the first spoken exchange creates it. */
     const remembered: ChatState = {
       ...initialState(SLUG),
-      base: [{ ...thread("spya-thra01"), kind: "remember" }],
+      base: [{ ...thread("spya-thra01"), kind: "learn" }],
       loadPhase: "ready",
     };
     expect(twice(remembered, started({ expectedTailId: null })).commands[0]).toHaveProperty(
       "kind",
-      "remember",
+      "learn",
     );
     expect(twice(withTypedTurn(), started()).commands[0]).toHaveProperty("kind", "chat");
     /* A conversation this tab does not have: no opinion, the server's default. */

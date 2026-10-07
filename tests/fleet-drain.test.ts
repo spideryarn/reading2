@@ -132,6 +132,7 @@ function snap(rows: FleetRow[], over: Partial<FleetSnapshot> = {}): FleetSnapsho
     collectedAt: "2026-09-08T12:00:00.000Z",
     tookMs: 13_000,
     tmuxServerPid: TMUX_GENERATION,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
     ...over,
   };
 }

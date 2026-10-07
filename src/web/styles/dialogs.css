@@ -1,7 +1,8 @@
 /* dialogs.css — the floating panels that share the bottom-right corner: the
    chat dialog (ChatDialog.tsx), the annotate box a selection opens
    (AnnotateDialog.tsx), and PlaceOnCriterion inside both. It ends with
-   `mark.chat`, the mark a corner conversation leaves in the prose.
+   `mark.chat`, the mark a corner conversation leaves in the prose, and
+   `td.text.chat-open`, the rule on the block an open one is about.
 
    The panel they are shaped after is `.cmt-dialog`, in annotations.css. */
 
@@ -31,11 +32,194 @@
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   /* Same layer as the explanation panel: above the sticky bars and the spine,
      below the tooltip layer, for the reasons written on `.cmt-dialog`. */
   z-index: 70;
+}
+
+/* **Docked: over the marginalia column, not over the prose.** A class
+   ChatDialog.tsx adds when layout.ts § `chatDock` says the column is showing
+   and there is at least `CHAT_DOCK_MIN` of room right of the prose; without it
+   this panel is the floating one above, unchanged — Marginalia off, a phone, a
+   narrow iPad.
+   docs/plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md.
+
+   **Sideways only.** `left` is the expression `.marg-head` uses for the
+   column's edge (`--marg-left` is on `.reader`, which this panel is inside),
+   plus an inset so the prose's gutter icons stay clear. `--chat-dock-inset` and
+   `--chat-dock-room` are written on the panel itself from layout.ts's numbers,
+   so the inset `chatDock` subtracts and the one added here are one constant.
+   The room already has the inset and the right gutter (`CHAT_DOCK_GUTTER`) out of it.
+
+   **No `bottom`, `height` or `max-height` here, on purpose**: the bottom anchor
+   and `--kb-inset` are how this panel stays above the iOS keyboard, and a dock
+   that re-anchored it to the top of the column would drop that (GPT Sol on the
+   plan, F1). So it sits in the lower part of the column, and `.marg-head`
+   stays uncovered. tests/chat-dialog-docks.test.tsx holds both halves. */
+.chat-dialog.docked {
+  left: calc(var(--safe-left) + var(--marg-left) + var(--chat-dock-inset));
+  right: auto;
+  width: min(26rem, var(--chat-dock-room));
+  /* Tighter than the floating panel's 1.1rem: at a full column this is 272px
+     wide, and the browser check (2026-10-03) had the answer at two to four
+     words a line. */
+  padding-inline: 0.7rem;
+  /* Lighter than the floating panel's: it is beside the article now rather
+     than hovering over it. */
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+}
+
+/* **In the column: a card level with its block, scrolling with the article.**
+   On trial — layout.ts § `BLOCK_CHAT_IN_COLUMN`.
+   docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md.
+
+   Two boxes. `.chat-card-host` is `Reader`'s, in the anchor block's `td.text`
+   (which is `position: relative` — prose.css), and is what a `.marg-note` is:
+   absolutely positioned from the cell's top, just past its right edge, and
+   collected by `useMarginLayout`, which pushes the notes after it below it.
+   The panel is **in flow inside it**, so the host's height is the card's and
+   that is the height the collision pass reads (GPT Sol on the plan, F3). An
+   absolutely positioned panel would leave the host 0px tall.
+
+   **`--marg-gap` past the edge**, so the card starts on the column's one left
+   edge; `--chat-card-w` is layout.ts § `chatCard`, which has that gap and the
+   window's right gutter already out of it, written on the host by
+   ChatDialog.tsx.
+
+   **Not a note in two ways.** It can be selected and copied, where a note is
+   `user-select: none`. And it is inside the prose cell without being prose, so
+   the cell's reading type is put back to the app's here rather than
+   inherited. */
+.chat-card-host {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--marg-gap));
+  /* The fallback is the instant before the panel has written its width on a
+     host it has only just been handed: the notes' own. */
+  width: var(--chat-card-w, var(--marg-w));
+  box-sizing: border-box;
+  /* The first line of a 13px note sits level with its paragraph at 0.5rem
+     (marginalia.css § a note); the card's border starts a little above its
+     text, so it takes a little less. */
+  padding-top: 0.25rem;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: normal;
+  text-align: left;
+  color: var(--ink);
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: auto;
+}
+/* The mount point the panel goes home to, and the container that moves
+   (ChatDialog.tsx § One panel, one container, moved): neither is a box. */
+.chat-dialog-home,
+.chat-dialog-mount {
+  display: contents;
+}
+
+/* **Every piece of the fixed geometry is undone**, because the base rule
+   pins the panel to the window's corner. No bottom anchor: the card hangs from
+   its block. `max-height` is kept from the floating panel on purpose — 34rem,
+   or the visible viewport less the chrome with `--kb-inset` in it — so the
+   composer is never more than a card's height from the top of the transcript
+   and an iPad's keyboard still shrinks it (plan § 5; the keyboard itself is
+   unproved off an iPad, Sol F6). */
+.chat-dialog.in-column {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding-inline: 0.7rem;
+  /* Beside the article, not hovering over it: the docked panel's shadow. */
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+  /* In the page's own order. The base rule's 70 would put a scrolling card
+     over the sticky bars. */
+  z-index: auto;
+}
+/* The floating panel takes a steady 34rem once there is a transcript, because
+   it grows upward from a bottom anchor and its header would otherwise move.
+   The card grows downward from its block, and at 34rem a one-line answer would
+   push every later note most of a screen away. */
+.chat-dialog.in-column:has(.chat-scroll) {
+  height: auto;
+}
+
+/* **Collapsed: about one note tall, and the whole card is one button**
+   (ChatDialog.tsx § The card collapses to one line). The rest of the panel is
+   hidden, not unmounted; said here as well as by `hidden`, because
+   `.chat-dialog header` below is `display: flex` and would outrank the
+   attribute. */
+.chat-dialog.collapsed {
+  padding: 0;
+}
+.chat-dialog.collapsed > :is(header, .chat-dialog-body, footer) {
+  display: none;
+}
+.chat-card-shut {
+  appearance: none;
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.7rem;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-card-shut:hover { background: var(--panel); }
+/* Inset, because `.chat-dialog` hides its overflow and an outward mark would
+   be cut. `--highlight-text`, the app's usual mark; it was `--rule-strong`,
+   which is a hairline colour and under 2:1 against this card. */
+.chat-card-shut:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: -2px;
+}
+/* The header's own label, one line: the icon, the reader's title, and a
+   chevron saying there is more. */
+.chat-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+.chat-card-head > svg { flex: none; color: var(--ink-faint); }
+.chat-card-head > .chat-dialog-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Faint, one line: an answer arriving, the latest answer's first line, or how
+   many questions. */
+.chat-card-line {
+  /* A block, not a flex row: an ellipsis is not drawn on a flex container's
+     bare text. */
+  display: block;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-card-line > svg {
+  vertical-align: -0.125em;
+  margin-right: 0.3rem;
 }
 
 /* ------------------------------------------------------- the comment box --
@@ -64,7 +248,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   /* The same layer as the two panels it shares a corner with. */
   z-index: 70;
@@ -157,19 +341,9 @@
 .annotate-dialog textarea::placeholder { color: var(--ink-faint); }
 .annotate-dialog textarea:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
-/* The tick-box is the whole of the paid/free decision, so it gets a row of its
-   own rather than sitting in the button strip where it would read as a third
-   button. */
-.annotate-ask {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.6rem 0 0.15rem;
-  font-size: 0.84rem;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.annotate-ask input { cursor: pointer; }
+/* **A tick-box row lived here until 2026-10-03** ("Also ask the AI about it").
+   It is the Ask AI button in the strip below now: a ticked box looked like an
+   action taken, and was not one. AnnotateDialog.tsx's header has Greg's report. */
 
 /* ---- the highlight colour row ------------------------------------------
    HighlightSwatches.tsx, in both comment boxes (AnnotateDialog and
@@ -233,6 +407,20 @@
   margin-top: 0.55rem;
 }
 .annotate-actions button { font-size: 0.81rem; white-space: nowrap; }
+/* Discard sits apart on the left, away from the two buttons that keep the
+   draft: it is the one press here that throws the reader's words away. */
+.annotate-actions button.linky { margin-right: auto; }
+/* **A finger's size on a finger's device.** The three presses that decide what
+   happens to a draft were 25 to 29px tall on an iPad (browser check,
+   2026-10-03): Discard beside Save at that size is a mis-tap that throws words
+   away. `--control-h-lg` is the house touch height (docs/project/controls.md
+   § The numbers); `pointer: coarse` as footnotes.css and citations.css use it. */
+@media (pointer: coarse) {
+  .annotate-actions button {
+    min-height: var(--control-h-lg);
+    min-width: var(--control-h-lg);
+  }
+}
 
 /* **The fourth `.linky`, and it had never been styled.** The class was scoped on
    purpose — `.controls`, `.cmt-dialog`, `.chat-dialog`, the first of those since
@@ -262,7 +450,10 @@
 }
 .annotate-dialog button.linky:hover { color: var(--highlight-text); }
 
-.annotate-save {
+/* Ask AI and Save are one shape: both store the comment, and neither spends
+   anything by being pressed. Save is last, where the primary button was. */
+.annotate-save,
+.annotate-ask-ai {
   padding: 0.32rem 0.6rem;
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
@@ -271,8 +462,10 @@
   font-family: var(--font-ui);
   cursor: pointer;
 }
-.annotate-save:hover { border-color: var(--highlight); }
-.annotate-save:disabled { opacity: 0.4; cursor: default; }
+.annotate-save:hover,
+.annotate-ask-ai:hover { border-color: var(--highlight); }
+.annotate-save:disabled,
+.annotate-ask-ai:disabled { opacity: 0.4; cursor: default; }
 
 .annotate-hint {
   margin: 0.5rem 0 0;
@@ -465,6 +658,33 @@
 }
 .chat-dialog-close:hover { color: var(--highlight-text); }
 
+/* The header's right-hand end: Collapse, in the column only, then the close.
+   8px apart, because on a finger's device the cross's target reaches 4px past
+   its box (close.css) and would otherwise take Collapse's taps. */
+.chat-dialog-tools {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* The cross's box, so the two read as a pair: 32px, in px for close.css's
+   reason (a 12px root). */
+.chat-dialog-collapse {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.chat-dialog-collapse:hover { color: var(--highlight-text); }
+
 .chat-dialog-body {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -562,10 +782,15 @@
 /* ------------------------------------------------------------ chat marks -- */
 /* A conversation started from a selection. A different hue from a comment's
    wash rather than a different alpha, so the two are told apart by kind rather
-   than by strength — the rule search.md sets out for its own wash. */
+   than by strength — the rule search.md sets out for its own mark. */
 
 mark.chat {
   background: none;
+  /* The UA sheet gives every `<mark>` `color: MarkText`, which is black: on
+     the dark page these words were near-invisible on /design (browser check,
+     2026-10-03). `mark.cmt`, `mark.term`, `mark.cite` and `mark.hit` each
+     carry this line for the same reason. */
+  color: inherit;
   border-bottom: 1px solid color-mix(in oklab, var(--chat-mark) 60%, var(--page));
 }
 mark.chat[data-chat-open] {
@@ -586,3 +811,28 @@ mark.chat[data-chat-end]::before {
   color: var(--chat-mark);
 }
 
+/* -------------------------------------------- the block a chat is open on -- */
+/* While the chat panel is open on a block — floating or docked, any width —
+   that block's cell wears `chat-open` (TableView.tsx § `chatOpenBlock`): a 2px
+   rule down its right edge, the side the gutter icons and the column are on.
+   The panel is fixed to the window, so this is what says which paragraph it is
+   about. A rule rather than a wash, because the flash and a search hit already
+   use the wash.
+
+   **A pseudo-element, not a border and not the cell's `box-shadow`.** A border
+   would narrow the cell and re-wrap the paragraph as the panel opened; the
+   shadow is already the search bar's (`td.text.has-hit`) and the flash's
+   (`block-flash-still`), and a third declaration would replace whichever lost
+   the cascade. `td.text` is `position: relative` for its gutter, so this hangs
+   off the same box. `pointer-events: none` because the gutter's controls are a
+   few pixels to its left. */
+td.text.chat-open::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 2px;
+  background: var(--chat-mark);
+  pointer-events: none;
+}

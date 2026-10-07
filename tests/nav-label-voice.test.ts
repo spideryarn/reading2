@@ -17,7 +17,7 @@
 import { describe, expect, it } from "vitest";
 import { childLabel } from "../src/web/Spine.js";
 import { structureProjection } from "../src/web/structure.js";
-import { PREAMBLE_TITLE } from "../src/heading-tree.js";
+import { PREAMBLE_TITLE, UNTITLED_WINDOW_TITLE } from "../src/heading-tree.js";
 import { articleTitleVoice } from "../src/web/voice.js";
 import { buildOutline, buildSummaryTree, navLabelVoice, nodeLabel, titleVoice } from "../src/web/tree.js";
 import type { Block, BlockId, NodeId, Tree, TreeNode } from "../src/types.js";
@@ -152,6 +152,14 @@ describe("titleVoice", () => {
   it("is ours for the apparatus and the heading tree's preamble", () => {
     expect(titleVoice(n({ title: "Notes", treatment: "supplement" }))).toBe("ui");
     expect(titleVoice(n({ title: PREAMBLE_TITLE }))).toBe("ui");
+  });
+
+  /* A tree no model touched (src/heading-tree.ts § `buildBoundedHeadingTree`)
+     names a window by the opening words of its first paragraph. Those are the
+     author's words, with no heading to point at; and its stock title is ours. */
+  it("is the author's when the title quotes the passage's opening words", () => {
+    expect(titleVoice(n({ title: "It was a bright cold day in…", titleFrom: "opening-words" }))).toBe("author");
+    expect(titleVoice(n({ title: UNTITLED_WINDOW_TITLE }))).toBe("ui");
   });
 
   /* An author can call a section anything, including our preamble's words, so

@@ -43,6 +43,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LibraryEntry } from "../src/types.js";
 import { Actions, type Shelf } from "../src/web/ShelfEntry.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* --------------------------------------------------------------- fixtures -- */
 
@@ -87,6 +88,7 @@ function stubShelf(): Shelf {
   return {
     archive: vi.fn(async () => {}),
     report: vi.fn(),
+    copied: vi.fn(),
     renaming: null,
   } as unknown as Shelf;
 }
@@ -106,6 +108,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 function render(entry: LibraryEntry, shelf: Shelf = stubShelf()): void {
@@ -153,9 +156,13 @@ function control(name: string): HTMLElement {
  * attached to the wrong button.
  */
 async function cardFor(el: Element): Promise<{ head: string; what: string; how: string }> {
+  /* **A faked clock from here to the end of the case**, since 2026-10-04: these
+     were real sleeps, a second a card. The row is drawn here with no
+     `TooltipGroup` above it, so the open delay is `Tooltip.tsx`'s own. */
+  vi.useFakeTimers();
   el.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
@@ -173,7 +180,7 @@ async function cardFor(el: Element): Promise<{ head: string; what: string; how: 
      applied until the block exits. */
   for (const _ of [0, 1]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(
@@ -274,16 +281,17 @@ describe("the shelf's action row", () => {
   it("wires the card up as the control's description, by keyboard as well", async () => {
     render(FETCHED);
     const el = control("Edit title");
+    vi.useFakeTimers();
     await act(async () => {
       el.focus();
-      await new Promise((r) => setTimeout(r, 400));
+      vi.advanceTimersByTime(DELAY.open);
     });
     const described = el.getAttribute("aria-describedby");
     expect(described, "focus did not open the card, or did not describe the button").toBeTruthy();
     expect(document.getElementById(described ?? "")).not.toBeNull();
     await act(async () => {
       el.blur();
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   });
 });

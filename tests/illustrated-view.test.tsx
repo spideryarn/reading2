@@ -131,10 +131,13 @@ interface Serving {
   plateStatus?: number;
   /** Hold `GET /api/sketch/:slug` open, so `checking` can be observed. */
   hangSketch?: boolean;
+  /** Keep image bytes unresolved while timing or switching their wait lines. */
+  hangPlate?: boolean;
   /** What `GET /api/jobs` answers. Empty unless a test puts a run in flight. */
   jobs?: unknown[];
   /** The artefact the route answers with, when not `ILLUSTRATED`. */
   illustrated?: unknown;
+  profileChanged?: boolean;
 }
 
 /**
@@ -164,6 +167,7 @@ function serving(opts: Serving = {}) {
     const method = (init?.method ?? "GET").toUpperCase();
     record(method, u, init);
     if (/\/api\/illustrated\/[^/]+\/[0-9a-f]{64}\.jpeg$/.test(u)) {
+      if (opts.hangPlate) return new Promise<Response>(() => {});
       /* **A refusal still has a body**, which is the whole hazard: an error
          page makes a perfectly good Blob, so a component that skipped `res.ok`
          would show it as a picture. */
@@ -185,7 +189,7 @@ function serving(opts: Serving = {}) {
           illustrated: opts.illustrated ?? ILLUSTRATED,
           stale: false,
           outdated: false,
-          profileChanged: false,
+          profileChanged: opts.profileChanged ?? false,
         }),
         { status: 200 },
       );
@@ -258,6 +262,40 @@ async function mount(onJump: (id: BlockId) => void = () => {}) {
 }
 
 describe("the plate's bytes", () => {
+  it("starts a fresh wait when another plate is chosen before the first fetch finishes", async () => {
+    vi.useFakeTimers();
+    try {
+      serving({
+        hangPlate: true,
+        illustrated: {
+          ...ILLUSTRATED,
+          plates: [
+            ILLUSTRATED.plates[0],
+            { ...ILLUSTRATED.plates[0], sceneId: "second", title: "Another picture", image: {
+              ...ILLUSTRATED.plates[0]!.image, sha256: "b".repeat(64),
+            } },
+          ],
+        },
+      });
+      await act(async () => root.render(<IllustratedView slug="s" blocks={BLOCKS} onJump={() => {}} />));
+      expect(asked.some((u) => u.endsWith(`/${HASH}.jpeg`))).toBe(true);
+      act(() => vi.advanceTimersByTime(600));
+      expect(host.querySelector('.ill-plate-out[role="status"]')?.textContent).toBe("Fetching the picture…");
+      const second = host.querySelector<HTMLButtonElement>('[data-ill-plate="second"]');
+      expect(second).not.toBeNull();
+      await act(async () => second?.click());
+      expect(asked.some((u) => u.endsWith(`/${"b".repeat(64)}.jpeg`))).toBe(true);
+      const line = () => host.querySelector('.ill-plate-out[role="status"]');
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(599));
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(1));
+      expect(line()?.textContent).toBe("Fetching the picture…");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   /**
    * **Written red first.** Against a `Plate` that rendered
    * `<img src={"/api/illustrated/s/" + hash + ".jpeg"}>` both of these failed:
@@ -763,6 +801,27 @@ describe("a plate the run could not paint", () => {
 });
 
 describe("the empty state, which has three refusals to tell apart", () => {
+  it("shows the known empty state immediately and delays only the Sketch lookup", async () => {
+    vi.useFakeTimers();
+    try {
+      serving({ noArtefact: true, hangSketch: true });
+      await act(async () => root.render(<IllustratedView slug="s" blocks={BLOCKS} onJump={() => {}} />));
+      expect(asked).toContain("GET /api/sketch/s");
+      expect(host.textContent).toContain("Nobody has painted this one yet.");
+      expect(host.querySelector("svg.cmt-spinner")).toBeNull();
+      const line = () => host.querySelector('.band-waiting[role="status"]');
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(599));
+      expect(line()?.textContent).toBe("");
+      act(() => vi.advanceTimersByTime(1));
+      expect(line()?.textContent).toBe("Looking for the Sketch…");
+      expect(line()?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+      expect(host.textContent).toContain("Nobody has painted this one yet.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   /**
    * The step refuses when the Sketch is absent, stale, or drawn for a different
    * reader profile — always before the brief call, so nothing is spent. Each of
@@ -772,7 +831,7 @@ describe("the empty state, which has three refusals to tell apart", () => {
   const cases = [
     { name: "absent", sketch: null, says: "no Sketch of this article yet" },
     { name: "stale", sketch: { stale: true, profileChanged: false }, says: "out of date" },
-    { name: "profile-changed", sketch: { stale: false, profileChanged: true }, says: "reader profile you have since changed" },
+    { name: "profile-changed", sketch: { stale: false, profileChanged: true }, says: "before your profile said what it says now" },
   ] as const;
 
   for (const c of cases) {
@@ -1312,6 +1371,22 @@ describe("the reader's steering note", () => {
     expect(posted.length).toBe(1);
     expect(posted[0]?.force).toEqual(["illustrated"]);
     expect(posted[0]?.illustrationNote).toBe("A map, not a manuscript.");
+  });
+
+  it("redraws before repainting an existing picture when the reader first adds a profile", async () => {
+    serving({ illustrated: ILLUSTRATED, profileChanged: true });
+    await mount();
+    expect(posted).toEqual([]);
+    const redraw = buttonSaying("Draw the Sketch, then paint again") ?? buttonSaying("Paint again");
+    expect(redraw).toBeDefined();
+    await act(async () => {
+      redraw?.click();
+    });
+    await settle();
+    expect(posted).toHaveLength(1);
+    expect(posted[0]?.steps).toEqual(["sketch", "illustrated"]);
+    expect(posted[0]?.force).toEqual(["illustrated"]);
+    expect(host.textContent).toContain("The Sketch first: one model call");
   });
 
   it("will not paint with a note the server would refuse", async () => {

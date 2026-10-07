@@ -1,0 +1,138 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "final-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "fc011bba35fa885f87fa082f4180775115c28eccecc873503a26e7069c39165a",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, still-unexplained glowing sphere seen during or near thunderstorms, lasting seconds before vanishing with or without a trace.",
+      "background": "The term was coined by French scientist François Arago in 1837 for luminous balls reported during storms. Despite thousands of eyewitness accounts, it remains unconfirmed by instruments and has no agreed scientific explanation."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered and uncoordinated, with no shared theory, data standards, or unified research community.",
+      "background": "The phrase comes from researcher Turner, who used it in 2001 to characterize the disorganized state of the ball lightning research field."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "A German network of ground sensors that detects and locates lightning strikes across the country in real time."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "Austria's lightning detection and information system, a network used to pinpoint the time, location, and electrical strength of lightning strikes."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "An Austrian geologist and mineralogist who was a member of the Imperial Academy of Sciences in Vienna. He observed and formally reported a 1868 ball lightning sighting from his home, one of the earliest detailed scientific accounts of the phenomenon."
+    },
+    {
+      "name": "Axel D. Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann"
+      ],
+      "background": "An astrophysicist at the Göttingen university observatory who, as a child in 1951, witnessed ball lightning splitting into smaller spheres and later calculated the energy density of the plasma from melted asphalt evidence."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor known for the 1922 Stern-Gerlach experiment demonstrating quantum spin. In 1927 he reported and mathematically analyzed his own ball lightning sighting, calculating its speed from timing of thunder and an explosion."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A radio astronomer at Jodrell Bank Observatory who later became a professor of physical electronics. His widely publicized 1963 report of a glowing sphere passing through an airplane cabin became one of the most cited ball lightning cases."
+    },
+    {
+      "name": "Puy de Dôme Observatory",
+      "kind": "place",
+      "aliases": [
+        "Puy de Dôme"
+      ],
+      "background": "A weather observatory atop a 1465-metre extinct volcano in the Auvergne region of France. In 1916 its staff recorded multiple ball lightning events during a single storm, reported to the French Academy of Sciences by observatory director Emile Mathias."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who died in 1753 while experimenting with atmospheric electricity. His death, actually from a conventional lightning strike via an ungrounded conductor, was later popularly but inaccurately depicted as caused by ball lightning."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or numbness in a limb caused by a nearby lightning or ball lightning event, distinct from longer-lasting nerve damage.",
+      "background": "Jean-Martin Charcot used this concept to separate brief shock-induced paralysis from lasting traumatic neurological symptoms in lightning survivors."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A French physician and founder of modern neurology at the Salpêtrière Hospital in Paris, and a teacher of Sigmund Freud. He documented a patient's ball lightning encounter and its lasting neurological aftereffects."
+    },
+    {
+      "name": "Dorstone case",
+      "kind": "event",
+      "aliases": [
+        "Dorstone"
+      ],
+      "senseHere": "A briefly documented 1936 English sighting in which a glowing ball reportedly struck a house and boiled a tub of water, later used by researchers to estimate the object's energy density."
+    },
+    {
+      "name": "Camp Blanding lightning-triggering experiments",
+      "kind": "event",
+      "aliases": [
+        "Camp Blanding"
+      ],
+      "senseHere": "A field project where researchers deliberately triggered real lightning strikes using rockets trailing thin wires, then directed the strikes onto various ground materials to study the resulting light effects.",
+      "background": "Conducted by Martin A. Uman's research group at a Florida military base, the experiments produced glowing effects on substances like salt water and steel, though the researchers stopped short of calling these true ball lightning."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "The idea that ball lightning forms when a lightning strike vaporizes soil minerals, creating a glowing cloud of burning particles rich in elements like iron and silicon.",
+      "background": "Proposed by researchers Abrahamson and Dinniss, this theory was supported by a 2014 Chinese spectroscopic recording showing ball lightning's light contained spectral lines matching soil elements."
+    },
+    {
+      "name": "Mitino case",
+      "kind": "event",
+      "aliases": [
+        "Mitino"
+      ],
+      "senseHere": "A 2015 Moscow-district ball lightning sighting independently videorecorded by three observers on their phones, letting researchers triangulate the object's position, height, and speed."
+    }
+  ]
+}

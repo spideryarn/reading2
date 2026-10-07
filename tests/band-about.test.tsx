@@ -60,22 +60,22 @@ describe("ModeSurface's about", () => {
 
   it("opens with the mode's own words from the catalog, then what the mode adds", async () => {
     draw(
-      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
+      <ModeSurface label="Tweets" mode="summary" about={<p>12 posts.</p>}>
         body
       </ModeSurface>,
     );
     await act(async () => (host.querySelector(".band-about") as HTMLButtonElement).click());
     const card = document.querySelector(".band-about-card")?.textContent ?? "";
-    expect(card).toContain(`${MODE_CATALOG.tweets.description}.`);
-    expect(card).toContain(MODE_CATALOG.tweets.how);
-    expect(card.indexOf(MODE_CATALOG.tweets.how)).toBeLessThan(card.indexOf("12 posts."));
+    expect(card).toContain(`${MODE_CATALOG.summary.description}.`);
+    expect(card).toContain(MODE_CATALOG.summary.how);
+    expect(card.indexOf(MODE_CATALOG.summary.how)).toBeLessThan(card.indexOf("12 posts."));
   });
 
   /* Plan 261002e: the one card in the corner with something to press, and so
      the one that lets the pointer in. */
-  it("ends a mode's card with a link to that mode's section of Help, and lets the pointer in", async () => {
+  it("ends a mode's card with a link to that mode's page of Help, and lets the pointer in", async () => {
     draw(
-      <ModeSurface label="Tweets" mode="tweets" about={<p>12 posts.</p>}>
+      <ModeSurface label="Tweets" mode="summary" about={<p>12 posts.</p>}>
         body
       </ModeSurface>,
     );
@@ -83,7 +83,7 @@ describe("ModeSurface's about", () => {
     const card = document.querySelector(".band-about-card")!;
     const link = card.querySelector("a")!;
     expect(link.textContent).toBe("More in Help →");
-    expect(link.getAttribute("href")).toBe("/help#mode-tweets");
+    expect(link.getAttribute("href")).toBe("/help/mode-summary");
     expect(card.textContent?.endsWith("More in Help →")).toBe(true);
     expect(document.querySelector(".tooltip-anchor")?.classList.contains("interactive")).toBe(true);
   });
@@ -97,7 +97,7 @@ describe("ModeSurface's about", () => {
 
   it("toggles closed on a mouse click while its interactive card is hover-open", async () => {
     vi.useFakeTimers();
-    draw(<ModeSurface label="Tweets" mode="tweets">body</ModeSurface>);
+    draw(<ModeSurface label="Tweets" mode="summary">body</ModeSurface>);
     const button = host.querySelector(".band-about") as HTMLButtonElement;
     button.dispatchEvent(new MouseEvent("mouseenter"));
     await act(async () => vi.advanceTimersByTime(500));
@@ -113,12 +113,43 @@ describe("ModeSurface's about", () => {
     expect(document.querySelector(".band-about-card")).toBeNull();
   });
 
+  /* qi-9rk34gjz, plan 261004g. Pointing schedules a hover-open; the two presses
+     toggle through the button's own click, which Floating UI never hears of,
+     so the timer outlived them and reopened a card the reader had just shut. */
+  it.each([
+    ["with a Help link", <ModeSurface key="a" label="Tweets" mode="summary">body</ModeSurface>],
+    ["without one", <ModeSurface key="b" label="Tweets" about={<p>About.</p>}>body</ModeSurface>],
+  ])("stays shut after a quick double press, %s", async (_name, el) => {
+    vi.useFakeTimers();
+    draw(el);
+    const button = host.querySelector(".band-about") as HTMLButtonElement;
+    await act(async () => {
+      button.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+      button.dispatchEvent(new MouseEvent("mouseenter"));
+    });
+    await act(async () => button.click());
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => button.click());
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded"), "the pending hover timer reopened it").toBe("false");
+    /* The dismissal lasts only until the pointer comes back. */
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent("mouseleave"));
+      button.dispatchEvent(new PointerEvent("pointerout", { bubbles: true, pointerType: "mouse" }));
+      button.dispatchEvent(new PointerEvent("pointerover", { bubbles: true, pointerType: "mouse" }));
+      button.dispatchEvent(new MouseEvent("mouseenter"));
+    });
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(button.getAttribute("aria-expanded"), "a fresh hover opens it again").toBe("true");
+  });
+
   it("keeps a touch-open card available for the following tap on its Help link", async () => {
     vi.useFakeTimers();
     vi.spyOn(window.navigator, "userAgent", "get").mockReturnValue("Chrome");
     vi.stubGlobal("scrollTo", vi.fn());
     const navigate = vi.spyOn(window.history, "pushState").mockImplementation(() => {});
-    draw(<ModeSurface label="Tweets" mode="tweets">body</ModeSurface>);
+    draw(<ModeSurface label="Tweets" mode="summary">body</ModeSurface>);
     const button = host.querySelector(".band-about") as HTMLButtonElement;
     // jsdom has no pointer modality or :focus-visible implementation. A touch
     // focuses a button without making it focus-visible in the browser.
@@ -150,11 +181,37 @@ describe("ModeSurface's about", () => {
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(link.isConnected).toBe(true);
     await act(async () => link.click());
-    expect(navigate).toHaveBeenCalledWith(null, "", "/help#mode-tweets");
+    expect(navigate).toHaveBeenCalledWith(null, "", "/help/mode-summary");
+  });
+
+  it("lets a real mouse take over when it enters a touch-open interactive card directly", async () => {
+    vi.useFakeTimers();
+    draw(<ModeSurface label="Tweets" mode="summary">body</ModeSurface>);
+    const button = host.querySelector(".band-about") as HTMLButtonElement;
+    const touchDown = new MouseEvent("pointerdown", { bubbles: true });
+    Object.defineProperty(touchDown, "pointerType", { value: "touch" });
+    await act(async () => {
+      button.dispatchEvent(touchDown);
+      button.click();
+    });
+    await act(async () => vi.advanceTimersByTime(500));
+    const card = document.querySelector(".tooltip-anchor") as HTMLElement;
+    expect(card).not.toBeNull();
+
+    /* On a hybrid device the cursor can approach the portalled card without
+       crossing its trigger. That real mouse entry ends the tap's exemption. */
+    const mouseOver = new MouseEvent("pointerover", { bubbles: true });
+    Object.defineProperty(mouseOver, "pointerType", { value: "mouse" });
+    card.dispatchEvent(mouseOver);
+    card.dispatchEvent(new MouseEvent("mouseenter"));
+    card.dispatchEvent(new MouseEvent("mouseleave", { relatedTarget: document.body }));
+    card.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+    for (const _ of [0, 1, 2]) await act(async () => vi.advanceTimersByTime(500));
+    expect(document.querySelector(".band-about-card")).toBeNull();
   });
 
   it("has an (i) from the mode alone, when there is nothing to add yet", () => {
-    draw(<ModeSurface label="Tweets" mode="tweets" about={null}>body</ModeSurface>);
+    draw(<ModeSurface label="Tweets" mode="summary" about={null}>body</ModeSurface>);
     expect(host.querySelector("aside > .band-about")).not.toBeNull();
   });
 

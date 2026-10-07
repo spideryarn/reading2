@@ -1,8 +1,33 @@
 # Privacy
 
 **What we do with a reader's data, and the page that tells them so** —
-[`/privacy`](../../src/web/PrivacyPage.tsx). Part of
-[reading-view-overview.md](reading-view-overview.md).
+[`/privacy`](../../src/web/PrivacyPage.tsx).
+
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ The four decisions](#the-four-decisions-greg-made) — controller, deletion, whether we read content, facts
+- [§ The cross-family review](#what-the-cross-family-review-changed-and-what-is-still-open) — what the first review found; the legal gaps still open
+- [§ What a bug report carries](#what-a-bug-report-carries) — the Feedback consents, the whole URL, the article copy to Sentry
+- [§ What protects us](#what-protects-us-and-what-was-deliberately-left-out) — beta, responsibility, under-18s
+- [§ If something here is yours](#if-something-here-is-yours) — the takedown section
+- [§ Where a reader's voice goes](#where-a-readers-voice-goes) — dictation lost zero-data-retention; the sources the copy is written from
+- [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
+- [§ Reading time](#reading-time) — the bullet and what it must keep true
+- [§ Shelf topics](#shelf-topics) — what the topic model is shown
+- [§ Quick search](#quick-search) — what a quick search sends
+- [§ A sentence in the command bar](#a-sentence-in-the-command-bar) — what the pick models see
+- [§ The command bar's suggestions](#the-command-bars-suggestions-are-made-from-the-profile) — profile to a model, and no promise about names
+- [§ Admin sign-up notices](#the-admins-sign-up-and-upgrade-notices-carry-the-address) — the address in the notice
+- [§ A gift email](#a-gift-email-to-an-existing-reader-carries-their-allowance) — counts in Resend's log
+- [§ Feedback-shipped email](#a-reader-is-emailed-when-their-feedback-ships) — what goes through Resend
+- [§ Feedback to the admin](#the-admin-is-emailed-each-readers-feedback) — their words in our inbox
+- [§ DOI lookups](#crossref-datacite-and-openalex-are-sent-a-doi) — Crossref, DataCite, OpenAlex
+- [§ Quiz answers](#quiz-answers) — stored since 2026-10-05
+- [§ A private link](#a-private-link) — the four places the page names it
+- [§ What is pinned by a test](#what-is-pinned-by-a-test-and-what-is-not) — what to re-read when X moves; the checklist
+- [§ Where it lives](#where-it-lives-and-why-it-is-not-markdown) — why JSX, not markdown
 
 This doc is the reasoning; the page is the promise. Its sibling is
 [website-text.md](website-text.md), which owns the rest of the public-facing
@@ -83,6 +108,7 @@ The four that mattered:
   The page mentioned an email address only under bug reports.
 - **Quiz answers are not stored at all** — v1 marks and discards
   ([`src/db/schema.ts`](../../src/db/schema.ts) § `quiz`). The page had them on the kept list.
+  **True then, reversed on 2026-10-05**: [§ Quiz answers](#quiz-answers) below.
 
 Also corrected: the account fields we actually hold, what a public link exposes, that OpenRouter
 allows fallbacks so the upstream may be a cloud host rather than the model's maker, that ZDR covers
@@ -126,7 +152,11 @@ Three things go with every report, and the reader is told all three on
   things, proceed."* [`src/db/schema.ts`](../../src/db/schema.ts) § `url` has the
   engineering half of the argument — a vocabulary that needs a migration per page
   is one whose escape hatch gets used, and an escape hatch in use is worse data
-  than no constraint.
+  than no constraint. **One parameter is taken off, since 2026-10-05: a private
+  link's `key`**, which is a credential and not view state. The browser removes
+  it before sending and the server removes it again before storing
+  (`withoutShareKey`, [`src/share-key.ts`](../../src/share-key.ts)), and the
+  page says so.
 - **The build commit and the article slug**, so a report names a deploy and a
   piece.
 
@@ -385,8 +415,9 @@ until that sentence moves. The same trap took three sentences down on 2026-09-02
 
 ## Reading time
 
-**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner with experimental features
-on, a running total of seconds per block of their own articles, drawn in the spine and the gutter.
+**Added 2026-09-16**, with [reading-time.md](reading-time.md): for an owner, a running total of
+seconds per block of their own articles, drawn in the spine and the gutter. Only with experimental
+features on until 2026-10-05; for every owner since (below).
 The page's *What we keep* gained a bullet, because the list is only honest if it is complete, and
 "no advertising or analytics trackers" stays true: this is shown to the reader it is about and to
 nobody reading a shared link.
@@ -401,11 +432,15 @@ code has to keep true:
 - **"Not shown to anybody reading an article you have shared"**, not "to nobody else". An
   administrator can read stored data, which the page already says.
 
-**The experimental switch is availability, not consent**, and the bullet says "with experimental
-features on" as a fact about when it is kept, not as a permission. If recording ever moves out from
-behind the switch — Fable's recommendation in
-[260916c](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what)
-— that clause goes, and `LAST_UPDATED` moves with it.
+**It is kept for every owner since 2026-10-05, and the bullet lost "with experimental features
+on".** That clause was a fact about when it was kept, never a permission: the switch was
+availability, not consent. Greg took reading time out from behind the switch
+([reading-time.md § Who gets it](reading-time.md#who-gets-it)), so the clause would have been false.
+`LAST_UPDATED` already read 5 October 2026 from another change that day, so it did not move.
+
+**The bullet promises no way to turn it off or erase it, because there is none yet.** It says the
+totals go when the article does, which is true. When an off switch or an erase is built, the bullet
+gains a sentence and the date moves.
 
 It goes with the article (a cascade through `block_identities`), and is in both exports.
 
@@ -438,6 +473,13 @@ and `LAST_UPDATED` moved. The scores it returns are stored against the reader
 (`shelf_topic_scores`), deleted with the account, and never logged; nor are the titles, gists or
 profile it was sent. It runs only for the shelf's owner — the public shelf gets no topics at all.
 
+**Changed 2026-10-03**, with [shelf-terms.md § Topics a model names](shelf-terms.md#topics-a-model-names-broad-to-fine):
+the same model now names the topics itself and sorts the articles into them, rather than scoring
+phrases. It is shown the same titles, gists and profile, **and a paper's abstract when the paper
+has no gist yet**, which is new; it is no longer shown candidate phrases. What it returns (the
+topic names, and which article is in which) is stored against the reader in `shelf_topic_sets`,
+deleted with the account, and never logged. The page's sentence and `LAST_UPDATED` moved.
+
 ## Quick search
 
 **Added 2026-10-02**, with [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second):
@@ -448,6 +490,50 @@ call is OpenRouter's like the rest — but the page names it and what it is show
 paragraph. The search and its hits are stored like a meaning search (`search_runs`, with `kind =
 'quick'`), and [`src/quick-search.ts`](../../src/quick-search.ts) logs counts only, never the
 criterion or a passage.
+
+## A sentence in the command bar
+
+**Added 2026-10-03**, with
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar): a sentence
+the bar cannot match, sent on Enter by a signed-in reader, goes to TypeSafe's `jev-1.13` with our
+own words for the bar's commands, and, when the command picked takes words (a search, a term, a
+tag), to `gpt-5.6-luna` as well, which copies them out. Neither is shown the article. **A new flow
+of the reader's own words to two models already on the page**, not a new subprocessor, so the
+`jev-1.13` clause in the models paragraph says so and `LAST_UPDATED` moved to 3 October 2026. The
+sentence is not stored, and [`src/command-pick-call.ts`](../../src/command-pick-call.ts) logs the
+outcome's kind, counts and timings, never the sentence or the words.
+
+## The command bar's suggestions are made from the profile
+
+**Added 2026-10-05**, with
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar) and
+[plan 261005k](../plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md):
+when the owner of an article presses *Suggest what to do here*, the reader's profile and their
+reason for reading that article go to `gpt-5.6-luna`, with our own words for the bar's modes. It is
+not shown the article. **A new flow of the profile to a model already on the page**, so the
+`gpt-5.6-luna` clause in the models paragraph says so. `LAST_UPDATED` already reads 5 October 2026.
+
+**The page also says what follows, because that is the part a reader could not guess.** The model
+writes up to three searches and one question for chat, and words them from what it was shown. One
+the reader presses follows the same path as words they typed: a quick search is sent to
+`jev-1.13` with the article's passages and is stored, and a stored search is shown to visitors
+when the article is shared. A pressed question waits in Chat's box; it is sent and stored only
+when the reader presses Send, and can then become a web search. So words that began in the
+profile can end up outside the conversation, on the reader's own press. This is the one exception to the profile's rule, and
+[reader-profile.md § The command bar's suggestions](reader-profile.md#the-command-bars-suggestions-the-one-exception)
+owns the reasoning.
+
+**The page makes no promise that personal details are kept out, and must not gain one.** The prompt
+asks the model to build the searches and the question from the topic and leave the person out
+([`src/command-suggest-call.ts`](../../src/command-suggest-call.ts) § `SUGGEST_SYSTEM`). Nothing
+checks that it did. The page says so in those words and tells the reader to read a suggestion
+before pressing it. What was measured is in
+[261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md).
+
+The list is not stored on the server. The browser keeps it for the visit, in memory only. The call
+logs kinds, counts and timings, never the profile, the reason or a suggestion.
+`tests/privacy-page.test.ts` holds both sentences on the page, since naming the model alone would
+not notice the disclosure being deleted.
 
 ## The admin's sign-up and upgrade notices carry the address
 
@@ -472,6 +558,14 @@ and `tests/privacy-page.test.ts` holds the clause. An address two accounts share
 confirmed, gets the plain invitation instead, so the counts never go to an inbox we cannot tie to
 one reader.
 
+**Since 2026-10-07 it may also carry the recipient's name** ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md)):
+whoever makes the gift may type a name, kept as `billing_vouchers.recipient_name`, and the email then
+opens *Dear <name>,*. That is one more piece of personal data about somebody who may never have
+given us anything, in our table, in the kept email (`billing_voucher_emails`), in Resend's log and
+in their inbox. The Resend entry on the page says so, `tests/privacy-page.test.ts` holds the clause,
+and `LAST_UPDATED` moved to 7 October 2026. It is never in the subject, the claim notice or a log
+line.
+
 ## A reader is emailed when their feedback ships
 
 **Added 2026-10-02** ([261002f](../plans/261002f-email-readers-when-their-feedback-ships.md)): when
@@ -493,7 +587,93 @@ email above, **this one does carry their words**, through Resend's log and Namec
 `hello@`, which is two more places an erasure has to reach. The Resend entry on the page says so,
 and `tests/privacy-page.test.ts` holds the clause. `LAST_UPDATED` already reads 2 October 2026.
 
+## Crossref, DataCite and OpenAlex are sent a DOI
+
+**Added 2026-10-04**, with
+[debate.md § Cited by](debate.md#cited-by-the-papers-that-cite-the-piece)
+([261004h](../plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md)). Three
+public indexes of published work are asked about a paper by its identifier, from our server:
+
+- **Crossref and DataCite**, since 2026-10-01: what a DOI or arXiv id refers to, for an article
+  being added and when its cited works are looked up ([`src/bibliographic.ts`](../../src/bibliographic.ts)).
+  **They were missing from the page until this change**, which is the page falling behind the
+  code for three days.
+- **OpenAlex**, since 2026-10-04: which papers cite the article, when its owner has Debate's
+  Reception open ([`src/citation-index.ts`](../../src/citation-index.ts)).
+
+Each is sent the identifier and our contact address (in the `User-Agent`, and as `mailto` where the
+service asks for it). Never the article's text, never anything about the reader. For a private
+upload this does tell the service that somebody using Spideryarn asked about that paper, and the
+page says so in those words.
+
+**A paragraph under the list, not three more entries in it.** The list in *Where it goes* is who is
+sent something of the reader's; these are sent the identifier of a published work. The page names
+all three, links each, and says what is and is not sent. `LAST_UPDATED` moved to 4 October 2026.
+
+**Pinned by a test from the code's own list**: `tests/privacy-page.test.ts` reads
+`BIBLIOGRAPHIC_HOSTS` in [`src/fetch.ts`](../../src/fetch.ts), the only hosts that fetcher will
+dial, and requires the page to name each. A fourth index turns it red until the page names it.
+
+## Quiz answers
+
+**Stored since 2026-10-05, at Greg's request** — the reversal of a sentence this page had carried
+since the review above: *"Quiz answers are the exception: they go to a model to be marked and are
+not stored."* That was true until then. Greg, 2026-10-04 (report `spya-e8ujxn`):
+
+> I think when I tried with the quiz, I answered a question or two and then came back to it and it
+> looked like the answers had been thrown away. Is there a way for us to store those answers?
+
+So each mark that finishes is one row in `quiz_attempts`
+([`src/db/schema.ts`](../../src/db/schema.ts)): the reader's answer, the reply it was given, the
+question's words and when. The page's *What you write* bullet lists them and the exception sentence
+is gone; `LAST_UPDATED` moved to 5 October 2026. The plan is
+[261005b](../plans/261005b-quiz-answers-are-kept-and-restored.md); how it behaves is
+[quiz.md § Answers are kept](quiz.md#answers-are-kept).
+
+What the code has to keep true for the page to stay honest:
+
+- **Whether an answer was judged right or wrong is still not stored**, and not logged. The table has
+  no column for it; the hidden verdict lives in the panel for the length of a visit, as before
+  ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)).
+- **Neither the answer nor the reply is logged** — the route reports a failed save with the slug
+  and nothing else, and the store is guarded so a failed query's parameters do not reach an error.
+- **Owner-only.** The owner's read returns them; the public page has no quiz and its queries never
+  name the table (`tests/public-reads.test.ts`).
+- **They go when the article does** (a cascade from `articles`), and they are in both exports —
+  including answers to a batch of questions that has since been rewritten, which the panel no
+  longer shows.
+
+`tests/privacy-page.test.ts` holds the page to it: the old sentence must be gone and the new clause
+there.
+
+## A private link
+
+Since 2026-10-05 an owner can make a private link to an article
+([261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md);
+[public-readable-sharing.md](public-readable-sharing.md) has the notice and the card). It is a third
+way somebody else reads a reader's article, so the page names it in four places:
+
+- **Who can see your shelf** counts three exceptions where it counted two. It says anyone who has
+  the link can read the article without signing in and can pass it on, that it is not listed, that
+  they get what a public reader gets, that we cannot tell who has read it, that the key is part of
+  the address and so stays in a browser's history, and what turning it off can and cannot do.
+- **If you send us a bug report** says a report from such a page records the address without the
+  key.
+- **Deleting things** says archiving leaves a private link working, as it leaves a public one, and
+  that the audit trail keeps when a link was made or turned off, never the link.
+- **If something here is yours** says taking a piece down also turns off any private link to it.
+  That is done by hand, as making an article private is: there is no administrator's control for
+  either.
+
+What we hold: the key itself, in `articles.share_token`, in the clear so the owner can copy the
+link again; and `article_share_link_events`, who made or turned off a link and when, without the
+key. We record nothing about who opens one.
+
 ## What is pinned by a test, and what is not
+
+**The private-link sentences are held to the code** by the last block of
+[`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts): the predicate, the listing's
+imports, the Feedback button's `withoutShareKey` and the audit table.
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
 `DISPLAY_NAME` in [`src/models.ts`](../../src/models.ts) and to `LIVE_MODEL` / `LIVE_TRANSCRIBER` in

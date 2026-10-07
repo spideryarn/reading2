@@ -2,7 +2,7 @@
 
 **This doc is the platform side — how to *inspect* what is running.** Its twin is
 [deployment.md](deployment.md), which is the *process* side: the domain, the build, the env
-variables, what is broken in production today, and the history of how each of those was got wrong.
+variables, the wall production used to hit, and the history of how each of those was got wrong.
 Nothing is repeated between them; when you want a fact about deploying rather than about looking,
 it is over there.
 
@@ -88,6 +88,15 @@ Four things, each learned by getting it wrong first:
   diagnostic that exists anywhere: Sentry withholds that sentence on purpose
   ([job-failure.ts](../../src/job-failure.ts) § The log, and not Sentry), and nothing writes it to a
   store. One day of retention, then it is gone.
+- **The result usually overflows the tool limit and is written to a file**, not returned inline.
+- **An unattended session may be refused the call while the credential is fine.** Measured
+  2026-09-20 and 2026-09-21 in the feedback sweep: `list_teams` answered, and `list_projects` and
+  `get_runtime_logs` were each refused with *"requires approval, and this session has no approval
+  surface"*. Some tools are pre-approved and these are not, so a refusal there is a permission
+  answer and not a lost login. The Supabase MCP was refused the same way on 2026-09-19.
+  So do not plan an unattended job around reading production logs without first making the call
+  from such a session. What would change it is not code or a credential but an allow-list entry
+  for those two read-only tools, which is Greg's to add.
 
 That `level` one is the dangerous one: it answers a real outage with silence, and silence reads as
 health. Why our lines look like that at all is
@@ -133,7 +142,7 @@ does not work — [deployment.md § What does not work in production yet](deploy
 ## Related docs
 
 - [debugging.md](debugging.md) — the front door: which of the three places answers your question
-- [deployment.md](deployment.md) — the deploy process, the domain, env vars, and what is broken today
+- [deployment.md](deployment.md) — the deploy process, the domain, env vars, and the history of what broke
 - [sentry-error-monitoring.md](sentry-error-monitoring.md) — the 30-day half, and what reaches it
 - [logging.md](logging.md) — why the lines are shaped the way they are, and what is never logged
 - [database.md](database.md) — Supabase's own logs, which Vercel never sees

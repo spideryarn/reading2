@@ -46,8 +46,8 @@
  * (`ALWAYS_SHARED` — comments crossed over on 2026-09-04); glossary lookups,
  * reader profile, private rename, uploaded file and the cost of it all on the
  * other (`NEVER_SHARED`); and the arc, which crosses like an artefact but has
- * no mode to be swept (`SHARED_ARC`). The tweet thread was a second such row
- * until it became a mode on 2026-09-29, and the sweep lists it now.
+ * no mode to be swept (`SHARED_ARC`), and the tweet thread, which is one of
+ * Summary's views and so has none either (`SHARED_THREAD`).
  * `visitorGap` has nothing to say about
  * any of them, and each is settled in a different file — the projection in
  * [../public/dto.ts](../public/dto.ts), the reader's `select` in
@@ -63,6 +63,7 @@ import {
   NEVER_SHARED,
   OWNER_MODE_NOTE,
   SHARED_ARC,
+  SHARED_THREAD,
 } from "../messages.js";
 import { visitorGap } from "./visitor.js";
 
@@ -133,11 +134,15 @@ export function sharedInventory(available: PublicArtefacts): SharedInventory {
      there is one. It crosses when it exists, and was an `available` flag with
      nothing reading it until GPT Sol found it on 2026-09-02.
 
-     **The thread was the second until 2026-09-29**, when it stopped being a page
-     and became a mode — so the sweep above lists it now, through `POLICY.tweets`,
-     and a row here as well would list it twice.
-     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
+     **The thread is the second**, again, since 2026-10-03: it was a row here
+     until 2026-09-29, then a mode the sweep listed through `POLICY.tweets`, and
+     is now Summary's Thread view. Summary's own row is `available` whatever is
+     stored, so without this one the owner would not be told that a stored
+     thread goes out — or that one written later would (GPT Sol's closing note
+     on plan 261003l).
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
   (available.arc ? shared : ifBuilt).push({ ...SHARED_ARC });
+  (available.tweets ? shared : ifBuilt).push({ ...SHARED_THREAD });
 
   withheld.push(...NEVER_SHARED.map((it) => ({ ...it })));
   return { shared, ifBuilt, withheld };

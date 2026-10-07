@@ -507,6 +507,25 @@ export interface Pass0Options {
   /** Refuse, before any page is read, a document with more pages than this (`TooManyPages`). */
   maxPages?: number;
   /**
+   * **Read only this many pages from the front, and stop** — a bound, not a
+   * refusal: a 250-page document with `firstPages: 2` gives its pages 1 and 2
+   * and page 3 is never asked for. For a caller that wants the opening of a
+   * document of any length (src/source-guess-run.ts § `defaultFirstPages`,
+   * which used to pass `maxPages` instead and so refused every long upload —
+   * plan 261005c § (h)). Aborting from `onPage` is not a way to do this: an
+   * abort rejects, and the pages read so far go with it.
+   *
+   * **The result then describes the pages read, not the document.**
+   * `pages.length` is at most this, and there is no total anywhere in a
+   * `Pass0`; `isScan` and `furniture` are judged on those pages alone, so a
+   * running header needs `FURNITURE_PAGES` of them to be noticed and a caller
+   * that bounds the read should not lean on either. `metaTitle` is the
+   * document's and is unaffected. `maxPages` is independent and still compares
+   * the document's real length; `maxChars` and `maxItems` count only what was
+   * read.
+   */
+  firstPages?: number;
+  /**
    * Stop, and throw `TooManyCharacters`, once the text read so far passes this
    * many characters. Checked as each text run is added, so a single enormous
    * page is bounded too.
@@ -741,6 +760,106 @@ export async function firstPagesText(
   }
 }
 
+/**
+ * One page of `frontPagesWithStamps`, from pdf.js's items: the upright runs
+ * joined as `firstPagesText` joins them, then the sideways runs with a
+ * non-whitespace boundary between independent regions. **After, not in place**:
+ * pdf.js can hand a margin stamp over in
+ * the middle of a word (`isSideways` has the example), and an identifier
+ * spliced into "normalization" is two broken strings. Split out so the
+ * ordering can be tested without a PDF that happens to interleave them.
+ * Sideways fragments join only when their geometry makes them adjacent on
+ * the same baseline; unrelated labels and digits cannot become an identifier.
+ */
+export function frontPageRecord(page: number, items: readonly unknown[]): { page: number; text: string } {
+  let upright = "";
+  let sideways = "";
+  let previous: { transform: number[]; width: number; eol: boolean } | undefined;
+  /* Whitespace alone is not a boundary: the arXiv matcher allows whitespace
+     after its label. A non-text marker prevents it crossing independent runs. */
+  const boundary = "\n\uFFFC\n";
+  for (const item of items) {
+    if (typeof item !== "object" || item === null || !("str" in item) || typeof item.str !== "string") continue;
+    const transform = "transform" in item && Array.isArray(item.transform) ? (item.transform as number[]) : [];
+    const run = item.str + ("hasEOL" in item && item.hasEOL ? "\n" : "");
+    if (isSideways(transform)) {
+      const width = "width" in item && typeof item.width === "number" ? item.width : NaN;
+      let adjacent = false;
+      if (previous && !previous.eol && transform.length === 6 && previous.transform.length === 6) {
+        const p = previous.transform;
+        const length = Math.hypot(p[0]!, p[1]!);
+        const nextLength = Math.hypot(transform[0]!, transform[1]!);
+        const dx = p[0]! / length;
+        const dy = p[1]! / length;
+        const offsetX = transform[4]! - p[4]!;
+        const offsetY = transform[5]! - p[5]!;
+        adjacent = (
+          Number.isFinite(previous.width) && length > 0 && nextLength > 0 &&
+          Math.abs(transform[0]! / nextLength - dx) < 0.01 &&
+          Math.abs(transform[1]! / nextLength - dy) < 0.01 &&
+          Math.abs(offsetX * dy - offsetY * dx) < 1 &&
+          Math.abs(offsetX * dx + offsetY * dy - previous.width) < 2
+        );
+      }
+      if (sideways !== "" && !adjacent) sideways += boundary;
+      sideways += run;
+      previous = { transform, width, eol: "hasEOL" in item && item.hasEOL === true };
+    } else upright += run;
+  }
+  const tidy = (text: string) => text.replace(/[ \t]+/g, " ").trim();
+  return { page, text: [tidy(upright), tidy(sideways)].filter((part) => part !== "").join(boundary) };
+}
+
+/**
+ * **The text layer of the first few pages, a record a page, sideways runs
+ * kept** — the shape `ownIdsOfPdf` (src/article-registry.ts) reads, for a
+ * caller that has the stored PDF and no transcript: the registry backfill
+ * (src/backfill-registry-facts.ts).
+ *
+ * The opposite choice from `firstPagesText` about sideways text, on purpose.
+ * That one feeds a title to a model and must not have arXiv's margin stamp in
+ * it; this one is looking for the paper's own identifier, and the stamp is it.
+ *
+ * The same discipline otherwise: a copy of the bytes, the signal checked
+ * before and after loading, `destroy` on every path. A scan with no text
+ * layer gives pages of empty text, not an error.
+ */
+export async function frontPagesWithStamps(
+  source: Uint8Array,
+  opts: { pages: number; signal?: AbortSignal | undefined },
+): Promise<{ page: number; text: string }[]> {
+  const { signal } = opts;
+  signal?.throwIfAborted();
+  const data = new Uint8Array(source);
+  const pdfjs = await loadPdfjs();
+  signal?.throwIfAborted();
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
+  const giveUp = () => {
+    void loadingTask.destroy();
+  };
+  signal?.addEventListener("abort", giveUp, { once: true });
+  try {
+    const doc = await loadingTask.promise;
+    const records: { page: number; text: string }[] = [];
+    for (let n = 1; n <= Math.min(opts.pages, doc.numPages); n++) {
+      signal?.throwIfAborted();
+      const content = await (await doc.getPage(n)).getTextContent();
+      records.push(frontPageRecord(n, content.items));
+    }
+    return records;
+  } catch (err) {
+    signal?.throwIfAborted();
+    throw err;
+  } finally {
+    signal?.removeEventListener("abort", giveUp);
+    try {
+      await loadingTask.destroy();
+    } catch {
+      /* Being abandoned anyway; see `countPdfPages`. */
+    }
+  }
+}
+
 export async function pass0(
   source: string | Uint8Array,
   opts: Pass0Options = {},
@@ -839,7 +958,8 @@ export async function pass0(
     metaTitle = info?.Title?.trim() || null;
     let chars = 0;
     let textItems = 0;
-    for (let n = 1; n <= doc.numPages; n++) {
+    const lastPage = opts.firstPages === undefined ? doc.numPages : Math.min(doc.numPages, opts.firstPages);
+    for (let n = 1; n <= lastPage; n++) {
       /* Between pages, which is where pdf.js hands control back. */
       signal?.throwIfAborted();
       const page = await doc.getPage(n);

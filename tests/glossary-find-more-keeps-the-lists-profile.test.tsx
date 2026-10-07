@@ -78,10 +78,13 @@ function owner(list: Glossary, over: Partial<GlossaryOwner>): GlossaryOwner {
     profileChanged: false,
     slug: "constitution",
     error: null,
+    retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     find: async () => {},
     more: async () => {},
     refresh: async () => {},
@@ -128,7 +131,7 @@ async function mount(view: GlossaryOwner): Promise<void> {
 /** The run row at the top of the column — the foot until 2026-10-03 (plan 261003c). */
 function moreButton(): HTMLButtonElement | undefined {
   return [...host.querySelectorAll<HTMLButtonElement>(".gloss-more button")].find((b) =>
-    /find more|find terms again/i.test(b.textContent ?? ""),
+    /find more|write a new list/i.test(b.textContent ?? ""),
   );
 }
 
@@ -200,9 +203,9 @@ describe("Find more at the top of the glossary", () => {
    — Greg, 2026-10-02, spya-s660yh: *"There used to be a Find More button in
    Glossary mode. Add it back, at the top of the column"*. It was in the foot,
    and hidden on a list from an older prompt (plan 260929c), which is most
-   lists; Greg's own was `glossary/4`. On such a list the forced run rewrites
-   (`existingFor` refuses to append across prompt versions), so the button says
-   so rather than "more". docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */
+   lists; Greg's own was `glossary/4`. On such a list the forced run rewrote
+   until 2026-10-04 and the button said so; it appends now (plan 261004f).
+   docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */
 describe("where the run row is, and what it says", () => {
   it("is above Look up a term, and the foot holds no button", async () => {
     await mount(owner(glossary(null), {}));
@@ -217,34 +220,66 @@ describe("where the run row is, and what it says", () => {
     expect(moreButton()?.textContent).toMatch(/find more/i);
   });
 
-  it("on an outdated list, offers Find terms again, and it sends the same forced run", async () => {
+  /* Greg, 2026-10-04, spya-try2v7: *"In glossary, there's a find terms again
+     button. I don't know what that does. I want a find more button that finds
+     a bunch more."* An appendable older prompt's list is added to now
+     (src/glossary.ts § `appendableVersion`), so it is *Find more* there, with
+     no sentence under it. Plan 261004f. */
+  it("on an outdated list, offers Find more, and it sends the same forced run", async () => {
     const more = vi.fn(async () => {});
-    await mount(owner(glossary(null), { more, outdated: true }));
+    await mount(owner(glossary(null), { more, outdated: true, panelRun: "append" }));
     const button = moreButton();
-    expect(button?.textContent).toMatch(/find terms again/i);
-    expect(button?.textContent).not.toMatch(/find more/i);
+    expect(button?.textContent).toMatch(/find more/i);
+    expect(host.querySelector(".gloss-more-note")).toBeNull();
+    expect(host.textContent).not.toMatch(/find terms again/i);
     await pressFindMore();
     expect(more.mock.calls).toEqual([[false]]);
   });
 
-  /* The server's verdict wins over the panel's two facts: it also sees a
-     changed or cleared profile, which `outdated` and `stale` do not
-     (`panelRunKind`, GPT Sol's plan review P1). */
-  it("says Find terms again when the server says the press rewrites, on a current list", async () => {
+  /* The server's verdict wins over the panel's own fact: it also sees a
+     changed or cleared profile, which `stale` does not (`panelRunKind`, GPT
+     Sol's plan review of 261003c, P1). The reason is on screen, not only in a
+     tooltip a touch screen never shows. */
+  it("says Write a new list, and why, when the server says the press rewrites", async () => {
     await mount(owner(glossary("a-profile"), { panelRun: "rewrite" }));
-    expect(moreButton()?.textContent).toMatch(/find terms again/i);
+    expect(moreButton()?.textContent).toMatch(/write a new list/i);
+    const note = host.querySelector(".gloss-more-note")?.textContent ?? "";
+    expect(note).toMatch(/replaces the list/i);
+    expect(note).toMatch(/terms you added are kept/i);
+    expect(host.textContent).not.toMatch(/find terms again/i);
   });
 
-  it("says Find more when the server says the press appends", async () => {
-    await mount(owner(glossary(null), { panelRun: "append" }));
+  it("says Find more when the server says the press appends, even on an outdated list", async () => {
+    await mount(owner(glossary(null), { panelRun: "append", outdated: true }));
     expect(moreButton()?.textContent).toMatch(/find more/i);
+  });
+
+  it("does not promise an append when an older cached response has no server verdict", async () => {
+    await mount(
+      owner({ ...glossary(null), version: "glossary/1" }, { panelRun: undefined, outdated: true }),
+    );
+    expect(moreButton()?.textContent).toMatch(/write a new list/i);
+  });
+
+  /* A press that found nothing must not look like a button that did nothing
+     (docs/reusable/silent-success.md; GPT Sol's plan review of 261004f, F6). */
+  it("says so when the last Find more added nothing, and only then", async () => {
+    await mount(owner({ ...glossary(null), passes: 2, lastAdded: 0 }, { panelRun: "append" }));
+    expect(host.querySelector(".gloss-more-note")?.textContent).toMatch(/no more terms/i);
+    await mount(owner({ ...glossary(null), passes: 2, lastAdded: 3 }, { panelRun: "append" }));
+    expect(host.querySelector(".gloss-more-note")).toBeNull();
+    // A first pass, and a list from before the field existed.
+    await mount(owner({ ...glossary(null), passes: 1, lastAdded: 0 }, { panelRun: "append" }));
+    expect(host.querySelector(".gloss-more-note")).toBeNull();
+    await mount(owner({ ...glossary(null), passes: 3 }, { panelRun: "append" }));
+    expect(host.querySelector(".gloss-more-note")).toBeNull();
   });
 
   it("on a stale list, the banner says so and the one run button is the top row's", async () => {
     await mount(owner(glossary(null), { stale: true }));
     expect(host.querySelector(".gloss-stale")).not.toBeNull();
     expect(host.querySelector(".gloss-stale button")).toBeNull();
-    expect(moreButton()?.textContent).toMatch(/find terms again/i);
+    expect(moreButton()?.textContent).toMatch(/write a new list/i);
   });
 
   it("while a run is going, shows its progress in the same place", async () => {

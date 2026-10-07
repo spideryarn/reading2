@@ -69,6 +69,23 @@ queue."* That includes a doc he asks for and a loop he asks for. The one-line-fi
 for keeping the fleet running — a re-pin, a status line in a plan, a line in the log, a pointer under
 an entry point — not for his requests.
 
+## In this doc
+
+- [§ The gates](#the-gates) — may you decide this on Greg's behalf? Read before answering an agent or acting
+  - [On editing docs whose wording is a rule](#on-editing-docs-whose-wording-is-a-rule) — an agent wants a rule doc changed
+- [§ What you actually do](#what-you-actually-do) — the work of a waking
+  - [The standing jobs](#the-standing-jobs) — what to check for when nothing is asking
+  - [The tick](#the-tick) — what one wake does, in order
+  - [The three deterministic rules that pay back most](#the-three-deterministic-rules-that-pay-back-most) — the checks worth running every time
+  - [Steering, and the actions you have](#steering-and-the-actions-you-have) — an agent is stuck, idle or off course
+  - [Deploying](#deploying) — somebody asks for a deploy to production
+  - [Dependabot alerts](#dependabot-alerts) — an alert arrived
+  - [Keeping `/home` from filling](#keeping-home-from-filling) — the box's disk is low
+  - [Dispatching agents](#dispatching-agents) — starting a new agent for a piece of work
+- [§ Things that will catch you](#things-that-will-catch-you) — the traps, before trusting what a tool just told you
+- [§ The log, and the surface Greg reads](#the-log-and-the-surface-greg-reads) — where to write down what you did
+- [§ What you are not](#what-you-are-not) — the limits of the role
+
 ## The gates
 
 Four, and they are the whole of what you may decide on Greg's behalf. He asked for principles rather
@@ -129,6 +146,20 @@ is the cadence [engineering-manager.md](../reusable/engineering-manager.md) alre
   *Decisions made* mode renders (until that lands, the same fields as one line in the decision log).
   A decision he has not seen is still a decision he can reverse, so the record is the whole of the
   permission.
+- **Bugs, and improvements that cost nothing, you authorise yourself — when you are confident and
+  there is no trade-off.** Greg, 2026-10-04: *"if you see bugs, fix them without asking me."* and
+  *"if there are clear no-tradeoffs-improvements that won't add much complexity, you should always do
+  them"*; and on 2026-10-06, confirming them: *"yes, as long as you're confident and there aren't
+  tradeoffs"* and *"yes (though complexity counts as a tradeoff)"*. So a plain bug fix, or an
+  improvement with no trade-off and little added complexity, does not wait as *needs Greg*: dispatch
+  it, and say in the queue entry that it rests on this rule. What still goes to him as a tagged
+  question is a real product trade-off, added complexity, a destructive write to production, and the
+  wording of a rule doc. (The general rule, for every agent, is AGENTS.md § When the right thing to
+  do is obvious and unambiguous, do it.)
+- **A question waiting on him blocks only itself.** Greg, 2026-10-06: *"I'm probably only going to
+  check in every day or so, so if something is blocking you, just work around it sensibly in the
+  meantime."* So ask, and meanwhile carry on with everything that does not depend on the answer, or
+  take the sensible default and say so; never let one open question hold the fleet or a deploy.
 - **Except where it outlives the branch**, and then it waits for him: a schema, a prompt, a published
   sentence, a privacy promise, a field stored about a reader, or **a case being dropped**. Scope is
   where his fifth options come from, so narrowing it is never yours.
@@ -403,17 +434,15 @@ Every half hour or so, in this order — the first two need no model, the last o
 2. **Close out what finished** — the close-out under *Dispatching agents*, debrief first. An agent an
    hour into building with no commit on its branch is told to commit now; the only copy of an
    evening's work was on one disk on 2026-09-09.
-   **The seven-day window is the one that freezes the fleet for days**, and it is rationed the same
-   way: at ~4 points a day it lasts the week; the night of 2026-09-08/09 spent 18 points in eight
-   hours with ten to twelve sessions. When it is short, Greg's standing answer (2026-09-09) is
-   *"slow things down a bit, and/or delegate more to GPT via codex-cli-as-subagent.md to
-   implement"* — fewer Claude sessions, each managing and reviewing while Codex writes the code
-   (`run-codex.ts --sandbox workspace-write`), which bills the ChatGPT subscription instead. **That
-   shifts the spend; it does not escape the rationing.** Every stage ends in a Sol review and nothing
-   ships without one, so the ChatGPT window running out stops the fleet exactly as the Claude one
-   does, and the same thresholds and the same pause apply to whichever of the two is nearer its
-   limit — slowing Claude sessions down to hand more to Codex is only an answer while Codex has
-   room. Watch both budgets, and ration against the tighter one.
+   **Claude's seven-day window is not rationed, since 2026-10-01.** Greg, after the Overseer said it
+   would slow new session starts at 92% of the week: *"Keep going until you hit 100% of your weekly
+   usage limits, and then I'll find a way to reset them."* So do not hold the queue or slow releases
+   because Claude's weekly figure is high; when sessions do stop at 100%, tell him plainly, and a
+   line to him at about 95% is fine. The Overseer broke this on 2026-10-03: at 97% it held the queue
+   for about three hours, reasoning that at 100% every session stops, itself included. That is the
+   trade he had already chosen. (It replaced his 2026-09-09 answer, *"slow things down a bit, and/or
+   delegate more to GPT"*.) **A GPT limit is different and still stops work**: every stage ends in a
+   Sol review and nothing ships without one (*Usage limits*, above).
 3. **Then pull from the queue**, if the box, the window and the file sets allow — prioritised by a
    combination of ease and value, unless Greg said otherwise
    ([engineering-manager.md § How far to run](../reusable/engineering-manager.md#how-far-to-run)). Every brief quotes
@@ -497,8 +526,15 @@ consequences do not depend on context; *keep going* and *approve the prompt* are
 anything is in it, holds included — Greg approved the restart 2026-09-08, and the classifier accepted
 that command unattended on 2026-09-09. `check` is the same thing without the restart. A hand-typed
 `sudo systemctl restart` is still refused, and so was one `npm run` form; if the script is ever
-refused too, it is Greg's. The daemon is separate: its relaunch is still the `tmux-job` pair under
-*Prove the relaunch before you stop a process*.
+refused too, it is Greg's. A refusal is weak evidence about the command on its own: on 2026-09-09
+both sessions that had done a real restart were refused commands afterwards, a bare read-only
+`systemctl is-active` among them, and the refused `npm run` form had also been piped through grep,
+so the wrapper, the pipeline and the session's history cannot be told apart. Unproven, but the
+classifier does not seem to judge the text alone. The daemon is separate: its relaunch is still the
+`tmux-job` pair under
+*Prove the relaunch before you stop a process*. It runs in tmux, not under `overseer.service`, and
+why, and what a `systemctl restart overseer` does while it runs, are in
+[hetzner-remote-server-box.md § The box's own services](hetzner-remote-server-box.md#the-boxs-own-services).
 
 ### Deploying
 
@@ -532,6 +568,10 @@ Every few hours, as a tmux loop like the feedback sweep's:
    Help page has been updated accordingly"*. A Help commit rolls to the next release's notes like
    any late commit; there is no need to run step 3 again. It is a step, not a gate: the deploy does
    not check it.
+   **The project docs get the same read, in a Sonnet subagent** while the deploy runs: the release's
+   commits against the docs that own what they changed, fixing what is now false or missing a
+   signpost. Greg, 2026-10-06: *"ideally we update them periodically (e.g. when pushing, or
+   deploying)"* — [documentation-policy.md § Keeping it true](../reusable/documentation-policy.md#keeping-it-true).
 5. Run `npm run deploy` under `scripts/tmux-job.ts`, logging to a file. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
@@ -560,6 +600,56 @@ Where you see them: the box has no GitHub API credential
 to `dev` or `main` prints — `GitHub found N vulnerabilities … (x high, y moderate)`. Read it after each
 deploy's push; `npm audit --audit-level=high` in the primary is the second opinion.
 
+### Keeping `/home` from filling
+
+`/home` on the box is the small disk, and when it is full it is peers' commits and worktree
+creation that fail ([hetzner-remote-server-box.md § Traps](hetzner-remote-server-box.md#traps)).
+Greg gave two standing permissions on 2026-10-05, the day it reached 100%.
+
+**Worktrees and temp files.** *"You are allowed to remove worktrees where it's safe to do so (e.g.
+we've already pushed their contents, or we have explicitly agreed that we are throwing them away)
+And you are allowed to remove temp files where safe to do so"*. Safe for a worktree is still what
+`npm run worktree:check` says inside it, and the removal is still `npm run worktree:remove`. What
+this adds to the close-out under *Dispatching agents* is the tree you and Greg agreed to throw away,
+and temp files; `npm cache clean --force` is one of those.
+
+**Old Codex transcripts.** *"Ok, you have permission any time to delete Codex transcripts more than
+a week old"*. That is the `rollout-*.jsonl` files under `~/.codex/sessions/` last modified more than
+seven days ago, and the directories that leaves empty:
+`find ~/.codex/sessions -type f -name 'rollout-*.jsonl' -mtime +7 -delete`. They were 6.8 GB that
+day, half of it older than a week. A review's conclusions are in the repo's `*-sol.md` files.
+Claude's transcripts under `~/.claude/projects/` are **not** covered.
+
+**Old screenshots in the repo.** Greg, 2026-10-06: *"Yes, old screenshots (>1w) can be deleted - you
+have permission going forwards. Perhaps add this and other measures to keep the hard disk fullness
+down to some routine daemon/service"*. Image files under `docs/plans/` (and the other dated folders)
+last committed more than a week ago may be deleted from the tree in an ordinary commit; they stay in
+git history. A plan that links one is left with a dead image link, which is acceptable.
+**This one is yours to run, weekly or when a disk is tight**, because it is a commit and nothing
+unattended commits in the shared checkout: `npx tsx scripts/prune-old-screenshots.ts` lists them
+from anywhere. **`--apply` runs only in a worktree of your own** and refuses in the primary, because
+no check can stop a peer editing one of the files in the moment before the commit. So: make a
+worktree from `origin/dev`, run `--apply` there, `git push origin HEAD:dev`, remove the worktree.
+What counts as a week old is in the script's header.
+
+**The rest runs by itself since 2026-10-07.** `box-tidy.timer` runs
+[`infra/hetzner/box-tidy.mjs`](../../infra/hetzner/box-tidy.mjs) every hour; what it deletes and
+what it leaves for you is in
+[hetzner-remote-server-box.md § Keeping the disks from filling](hetzner-remote-server-box.md#keeping-the-disks-from-filling).
+It never removes a worktree or a Docker image, and when a disk reaches 80% its last lines in
+`journalctl -u box-tidy -n 20` say so and name the commands that are yours. **You hear about a
+filling disk from the Box health verdict**, which reads `/home` as well as `/` since the same day
+(strained at 90%, critical at 97%), on the dashboard and in `overseer.ts tick`.
+
+**Your working scripts are in the repo**, in
+[`scripts/overseer-tools/`](../../scripts/overseer-tools/README.md), since 2026-10-07: the tick and
+queue screens, `release.sh`, the two brief writers, the daemon launcher and the scripts behind the
+feedback-sweep and dashboard-refresh loops. They lived in your `/tmp` scratchpad, which systemd
+empties at every boot. Set `OVERSEER_SCRATCH` to a directory outside `/tmp` for your briefs and
+pause state. `tick.sh` also prints whether the tidy and watchdog timers are running and how each
+last ended: on 2026-10-05 the daemon died of `ENOSPC` and was down for 46 hours with nothing saying
+so, and that line is what says so now.
+
 ### Dispatching agents
 
 **The queue is the entry point for every new idea, Greg's included.** Greg, 2026-09-09: *"preferring
@@ -586,6 +676,15 @@ the work delegated, a GPT Sol review at the end of each stage — and its own wo
 server and one box. Beyond three the suites go red for reasons that are nobody's bug, and you will
 spend the evening investigating the box.
 
+**Every new session counts against what the box can carry, whoever asked for it.** Work started for
+an answer Greg has just given is not exempt. On 2026-10-05 about fifteen sessions were started in
+two hours, one per answer. With about twenty running, up to eight `tsc` runs at once (1–3 GB each),
+dev servers and browser agents, load reached about 170 and swap 31 of 32 GB; Greg's ssh crawled and
+peers' gates were killed. The 30 GB box fits about six to eight active sessions. So when Greg
+answers several questions at once, record the decisions straight away, put the work at the front of
+the queue, and release it as sessions finish. Check load, memory and swap before **any**
+`gjd-remote new-claude`, not only before a release from the queue.
+
 **Use waves to keep two agents off the same ground.** `--wait 5h --no-attach` creates the session now
 and starts it later, so the whole queue goes out in one pass. Two jobs touching the same mode, the
 same prompt or the same file belong in different waves.
@@ -609,6 +708,13 @@ finished successfully and safe to remove, it's fine to do so immediately"* — t
 or liveness cannot be checked
 ([worktrees.md § Removing one](worktrees.md#removing-one)).
 
+**Killing finished sessions to free memory is yours too.** Greg, 2026-09-29, after running the
+Overseer's `tmux kill-session` list himself: *"You're allowed to run that command and similar
+yourself in future to free up memory."* That day swap was full, vitest's memory guard had blocked
+four sessions' tests for hours, and killing 17 finished sessions took available RAM from 7 to 12 GB
+and swap from 31 to 21 GB. Gate 3 still picks which: only a session that has debriefed, with no
+worktree holding uncommitted or unpushed work. A session's old Playwright Chrome goes with it.
+
 ## Things that will catch you
 
 Each of these has cost somebody real time on this box.
@@ -629,6 +735,14 @@ Each of these has cost somebody real time on this box.
 - **`idle` describes the pane, not the work.** A session that ended its turn by handing Greg a
   decision in prose shows as idle; ten of fifteen did, and a mechanical check for question marks
   found one of twenty-three, because decisions end in full stops.
+- **`idle` is not abandoned either.** Measured 2026-09-06 across sixteen sessions: most `idle` ones
+  had armed a `CronCreate` one-shot hours ahead and stopped on purpose. Before calling a session
+  stuck or finished, `tmux capture-pane` and look for a `CronCreate` near the tail, and check for a
+  running `sleep` or `until` child: a session that scheduled its own wake-up is not to be killed.
+  The percentage in its status line is the context bar, not progress — "7%" was once reported as
+  "stage 1 not yet coded" on a branch eight commits deep — so take `git log origin/dev..<branch>`
+  and the plan doc's status line over any reading of the pane. Killing a finished session loses
+  nothing: its edits are on disk and `claude --resume <session-id>` brings the conversation back.
 - **`gjd-remote resume` is an alias for `attach`** and reattaches to a **live** tmux session. It is
   not what brings a conversation back after a reboot; that is `claude --resume <claudeSessionId>`,
   and the id is in your own register.
@@ -639,6 +753,11 @@ Each of these has cost somebody real time on this box.
   Greg, 2026-09-08: *"SendMessage for Claude agents where available, and fall back to tmux as a
   backup plan."* Your own peer name is whatever `ListAgents` prints at the top; Greg sets it with
   `/rename`, and it is not the tmux session name.
+- **An empty `ListAgents` is not a dead peer.** `ListAgents` and `SendMessage` find peers per Claude
+  config directory. A session started under another one sees only the sessions registered there,
+  and its `SendMessage` to you answers *"No agent named 'Overseer' is reachable."* Seen 2026-09-10,
+  from the first session on a pool account, which reported it as a fault. Every session has run
+  under the default directory since 2026-09-30, so this comes back only if a second login does.
 - **To read what another session has been saying, ask the dashboard, not the transcript store.**
   `GET /api/messages?id=<tmux session id>` returns that session's recent turns with timestamps — the
   id's `$` must be percent-encoded as `%24`, or the reply is an empty error rather than turns — and
@@ -656,6 +775,12 @@ Each of these has cost somebody real time on this box.
   allowed `kill -TERM` of the daemon and refused every relaunch, and the daemon was down eleven
   minutes on 2026-09-08 until Greg typed it. Run the exact relaunch shape against something harmless
   first; if that is refused, leave the old one running and hand Greg both halves as one command pair.
+  Worktree isolation is a second gate of the same shape: on 2026-09-09 a session in a worktree was
+  allowed to stop the readiness loop and refused every way of starting it, because the launch runs
+  git in another worktree. So probe the real path, not only the command's shape. Do not ask a peer
+  to run the half you were refused. The way out of an isolation refusal is `ExitWorktree` with
+  `action: "keep"`, which returns the session to the primary, where restarting a service is an
+  ordinary operation; say so to the Overseer before doing it.
 
 ## The log, and the surface Greg reads
 

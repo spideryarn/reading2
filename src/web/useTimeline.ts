@@ -36,12 +36,16 @@
  *
  * See docs/plans/260831i-timeline-mode.md and src/timeline.ts.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Timeline, TimelineResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type TimelineStatus = "loading" | "none" | "ready" | "error";
 
@@ -94,6 +98,15 @@ export interface UseTimeline {
    * step replaces rather than appends.
    */
   regenerate(): Promise<void>;
+  /**
+   * The forced run was pressed on the timeline still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /** Read again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -112,10 +125,14 @@ export interface TimelineRead {
   stale: boolean;
   outdated: boolean;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Join a read in flight, or start one. `OrderedRead.reload`. */
   reload(): Promise<void>;
   /** Read again because the list has just changed. `OrderedRead.refresh`. */
   refresh(): Promise<void>;
+  /** This read's bookkeeping for the forced verb's hold — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
 }
 
 export function useTimelineRead(slug: string): TimelineRead {
@@ -124,38 +141,66 @@ export function useTimelineRead(slug: string): TimelineRead {
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
-   * The read itself — the parse, the 404 branch and the error copy, which are
+   * The read itself — the parse, the "none yet" branch and the error copy, which are
    * this mode's own. `current()` after every `await`, before any state is
    * set: false means this reply is about an article, or an artefact, the hook
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
-      const res = await apiFetch(`/api/timeline/${encodeURIComponent(slug)}`);
+      /* The header asks for "none yet" as `200 null` rather than a 404, which
+         a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+         is still read the same way, for a server that has not heard of the
+         header — the minutes of a deploy. */
+      const res = await apiFetch(`/api/timeline/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const loaded = res.status === 404 ? null : await readJson<TimelineResponse | null>(res);
+      if (!current()) return;
+      if (loaded === null) {
         /* The ordinary case, not a fault, and here it is the *commonest* case
            by some distance: most articles have no timeline because nobody has
            asked for one. This is what the panel's button is for. */
         setTimeline(null);
         setStale(false);
         setOutdated(false);
+        landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
-      const loaded = await readJson<TimelineResponse>(res);
-      if (!current()) return;
+      /* Only an explicit `null` means none yet, and a reply without its
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
+         `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+         stays. */
+      if (typeof loaded?.timeline !== "object" || loaded.timeline === null) {
+        throw new MalformedReply("the timeline reply has no timeline");
+      }
       setTimeline(loaded.timeline);
+      landed(started, res, loaded.timeline.generatedAt);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
          job finishes — and the panel renders the events only under
@@ -163,22 +208,31 @@ export function useTimelineRead(slug: string): TimelineRead {
          flaky connection blank a list that was still perfectly good. Only the
          opening read has nothing to fall back on, and the message is shown
          either way. Same guard, same reason, as useIdeas.ts and useGlossary.ts. */
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Events already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (timeline === null) setStatus("loading");
+    await reload();
+  }, [timeline, reload]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return { status, timeline, stale, outdated, error, reload, refresh };
+  return { status, timeline, stale, outdated, error, retryRead, reload, refresh, fresh };
 }
 
 export function useTimeline(slug: string): UseTimeline {
@@ -194,9 +248,21 @@ export function useTimeline(slug: string): UseTimeline {
   const ensure = useCallback(async () => {
     await queue.start({});
   }, [queue]);
+  /* **The forced verb holds the timeline it was pressed on** (rewrite-hold.ts),
+     as useIdeas.ts § `regenerate` does. The list's clock is its identity: a
+     forced run replaces it and re-stamps it. */
+  const hold = useRewriteHold({
+    slug,
+    step: "timeline",
+    identity: read.timeline?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read is
      not an answer, and useIdeas.ts says why it is `reload` and not `load`. */
@@ -210,10 +276,13 @@ export function useTimeline(slug: string): UseTimeline {
     slug,
     error: read.error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    rewriting: hold.rewriting,
+    refresh,
+    retryRead: read.retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,

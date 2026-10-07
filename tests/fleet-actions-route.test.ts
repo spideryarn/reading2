@@ -21,6 +21,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { externalWorktreeRoot } from "../scripts/worktree-roots.js";
 import { actionById, renderBroadcast, staggerMinutes, type BroadcastAction, type ProcRecord, type Step } from "../tools/fleet/actions.js";
 import {
   judgeStep,
@@ -138,6 +139,23 @@ const OK_STEP: StepRun = { code: 0, stdout: "", stderr: "", timedOut: false, spa
 
 type Invocation = { argv: readonly string[]; cwd: string };
 
+/** The box in the state the plan expects: a gate prints its evidence, anything else exits 0. */
+function asPlanned(step: Step): StepRun {
+  if (step.pass.kind === "stdout-has-record") return { ...OK_STEP, stdout: `${step.pass.record}\0` };
+  return step.pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${step.pass.line}\n` } : OK_STEP;
+}
+
+/**
+ * As planned, except that `worktree:check` says no. Keyed on the step and not on
+ * its position: the removal plan grew a step on 2026-10-05, and every test that
+ * had written "the second step is the check" was then failing the wrong gate.
+ */
+const isCheckStep = (step: Step): boolean => step.argv[1] === `${PRIMARY}/scripts/worktree-check.ts`;
+
+function checkSaysNo(step: Step): StepRun {
+  return isCheckStep(step) ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : asPlanned(step);
+}
+
 /** The box, as a recorder. Nothing it is asked to do actually happens. */
 function fakeIo(opts: {
   step?: (step: Step, index: number) => StepRun;
@@ -162,8 +180,7 @@ function fakeIo(opts: {
       // enacted tests about what they are testing; the tests that want the
       // pairing to fail pass an explicit `step`, and there is one below for
       // every `stdout-has-line` step in the file.
-      const pass = step.pass;
-      return Promise.resolve(pass.kind === "stdout-has-line" ? { ...OK_STEP, stdout: `${pass.line}\n` } : OK_STEP);
+      return Promise.resolve(asPlanned(step));
     },
     listProcesses: () =>
       Promise.resolve(
@@ -1171,6 +1188,20 @@ describe("judgeStep", () => {
     expect(judgeStep(line("$99001 wf-a"), { ...OK_STEP, stdout: "$99001 wf-a-2\n" }).status).toBe("failed");
   });
 
+  it("compares registration records without trimming or splitting path characters", () => {
+    const record = `worktree ${externalWorktreeRoot()}/wf-fixture `;
+    const step: Step = { argv: ["git"], cwd: PRIMARY, why: "", pass: { kind: "stdout-has-record", record } };
+    expect(judgeStep(step, { ...OK_STEP, stdout: `${record}\0HEAD abc\0\0` }).status).toBe("passed");
+    expect(judgeStep(step, { ...OK_STEP, stdout: `${record.trimEnd()}\0HEAD abc\0\0` }).status).toBe("failed");
+    expect(judgeStep(step, { ...OK_STEP, stdout: `${record}more\0` }).status).toBe("failed");
+    expect(judgeStep(step, { ...OK_STEP, stdout: record }).status).toBe("failed");
+    expect(judgeStep(step, { ...OK_STEP, stdout: `${record}\0`, code: 1 }).status).toBe("failed");
+    expect(judgeStep(step, { ...OK_STEP, stdout: `${record}\0`, timedOut: true }).status).toBe("failed");
+    expect(judgeStep(step, { ...OK_STEP, stdout: `${record}\0`, spawnError: "ENOENT" }).status).toBe("failed");
+    const unusual = `worktree ${externalWorktreeRoot()}/a\nb\t\\"é`;
+    expect(judgeStep({ ...step, pass: { kind: "stdout-has-record", record: unusual } }, { ...OK_STEP, stdout: `${unusual}\0HEAD abc\0\0` }).status).toBe("passed");
+  });
+
   it("fails a killed step even when its output contains the line", () => {
     // A `tmux list-sessions` we killed at two minutes has told us nothing, and
     // the half-written output it left behind must not be read as evidence.
@@ -1205,14 +1236,70 @@ describe("POST /api/actions/session — enacted", () => {
     expect(r.json.op).toBe("dry-run");
     const steps = resultOf(r).steps as { argv: string[]; cwd: string }[];
     expect(steps.map((s) => s.argv)).toEqual([
+      ["git", "worktree", "list", "--porcelain", "-z"],
       ["git", "-C", WORKTREE, "rev-parse", "--abbrev-ref", "HEAD"],
-      ["npm", "run", "worktree:check"],
-      ["npm", "run", "worktree:sweep", "--", "remove", "--branch", "worktree-fixture"],
+      [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", WORKTREE],
+      [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`],
     ]);
-    expect(steps[0]?.cwd).toBe(PRIMARY);
-    expect(steps[1]?.cwd).toBe(WORKTREE);
-    expect(steps[2]?.cwd).toBe(PRIMARY);
+    expect(steps.map((s) => s.cwd)).toEqual([PRIMARY, PRIMARY, PRIMARY, WORKTREE]);
     expect(ran).toEqual([]);
+  });
+
+  /**
+   * The bug this was: since 2026-10-05 a new worktree on the box is under
+   * `/var/tmp/spideryarn-worktrees/`, and this route answered `plan-refused`
+   * for every one of them — safely, and so the dashboard could not remove any
+   * tree made that week. The root is asked of the same function the route asks,
+   * so this holds whatever `SPIDERYARN_WORKTREE_ROOT` is where the suite runs.
+   */
+  it("plans the removal of a tree under the external root, from the tree's root or from inside it", async () => {
+    const tree = `${externalWorktreeRoot()}/wf-fixture`;
+    for (const worktreeDir of [tree, `${tree}/tools/fleet`]) {
+      const { io, ran } = fakeIo({});
+      const r = await call(harness({ io }).routes, fakeReq({ body: removeBody({ mode: "run", worktreeDir }) }));
+      expect(r.status, worktreeDir).toBe(200);
+      expect(ran.map((x) => x.argv)).toEqual([
+        ["git", "worktree", "list", "--porcelain", "-z"],
+        ["git", "-C", tree, "rev-parse", "--abbrev-ref", "HEAD"],
+        [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", tree],
+        [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`],
+      ]);
+      expect(ran.map((x) => x.cwd)).toEqual([PRIMARY, PRIMARY, PRIMARY, tree]);
+    }
+  });
+
+  /**
+   * What makes the external root safe to accept. A path under it says which
+   * tree, not WHOSE: another repository's worktree has the same shape, and the
+   * sweep removes this repository's tree on the branch named. So git is asked
+   * whether the directory is one of ours, first, and here it is not —
+   * `git worktree list` names other trees — and NOTHING RUNS after that.
+   */
+  it("stops when the directory is not a registered worktree of this repository", async () => {
+    const tree = `${externalWorktreeRoot()}/somebody-elses`;
+    const { io, ran } = fakeIo({
+      step: () => ({ ...OK_STEP, stdout: `worktree ${PRIMARY}\nHEAD abc\nbranch refs/heads/dev\n\nworktree ${WORKTREE}\nHEAD def\nbranch refs/heads/worktree-fixture\n` }),
+    });
+    const r = await call(harness({ io }).routes, fakeReq({ body: removeBody({ mode: "run", worktreeDir: tree }) }));
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("plan-failed");
+    expect(ran.map((x) => x.argv)).toEqual([["git", "worktree", "list", "--porcelain", "-z"]]);
+    const run = r.json.run as { stoppedAt: number; steps: { status: string }[] };
+    expect(run.stoppedAt).toBe(0);
+    expect(run.steps.map((s) => s.status)).toEqual(["failed"]);
+  });
+
+  it("does not register a different directory by trimming its trailing space", async () => {
+    const tree = `${externalWorktreeRoot()}/wf-fixture`;
+    const { io, ran } = fakeIo({
+      step: (step) => step.argv.includes("list")
+        ? { ...OK_STEP, stdout: step.argv.includes("-z") ? `worktree ${tree}\0HEAD abc\0\0` : `worktree ${tree}\nHEAD abc\n` }
+        : asPlanned(step),
+    });
+    const r = await call(harness({ io }).routes, fakeReq({ body: removeBody({ mode: "run", worktreeDir: `${tree} ` }) }));
+    expect(r.status).toBe(409);
+    expect(r.json.code).toBe("plan-failed");
+    expect(ran).toHaveLength(1);
   });
 
   /**
@@ -1224,24 +1311,36 @@ describe("POST /api/actions/session — enacted", () => {
    * stale — the tree re-made on another branch, the page not refreshed — could
    * have the check clear one tree and the sweep remove another. Here the
    * directory turns out to be on `worktree-something-else`, and NOTHING RUNS
-   * after the first step.
+   * after that step.
    */
   it("stops when the directory is not on the branch the page claimed", async () => {
-    const { io, ran } = fakeIo({ step: () => ({ ...OK_STEP, stdout: "worktree-something-else\n" }) });
+    const { io, ran } = fakeIo({
+      step: (s) => (s.argv[1] === "-C" ? { ...OK_STEP, stdout: "worktree-something-else\n" } : asPlanned(s)),
+    });
     const { routes } = harness({ io });
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("plan-failed");
-    expect(ran.map((x) => x.argv[0])).toEqual(["git"]);
+    expect(ran.map((x) => x.argv.slice(0, 2))).toEqual([["git", "worktree"], ["git", "-C"]]);
     const run = r.json.run as { stoppedAt: number; steps: { status: string }[] };
-    expect(run.stoppedAt).toBe(0);
-    expect(run.steps.map((s) => s.status)).toEqual(["failed"]);
+    expect(run.stoppedAt).toBe(1);
+    expect(run.steps.map((s) => s.status)).toEqual(["passed", "failed"]);
   });
 
   it("refuses a directory outside this checkout's worktrees", async () => {
     const { io, ran } = fakeIo({});
     const { routes } = harness({ io });
-    for (const dir of ["/home/greg/somewhere-else/.claude/worktrees/x", "/etc", PRIMARY]) {
+    for (const dir of [
+      "/home/greg/somewhere-else/.claude/worktrees/x",
+      "/etc",
+      PRIMARY,
+      // A prefix test passed each of these: none is a plain path, and the first is the primary.
+      `${WORKTREE}/../../..`,
+      `${PRIMARY}/.claude/worktrees/../..`,
+      `${externalWorktreeRoot()}/x/../../../../etc`,
+      externalWorktreeRoot(),
+      `${externalWorktreeRoot()}-old/x`,
+    ]) {
       const r = await call(routes, fakeReq({ body: removeBody({ mode: "run", worktreeDir: dir }) }));
       expect(r.status).toBeGreaterThanOrEqual(400);
       expect(String(r.json.code)).toMatch(/plan-refused|bad-request/);
@@ -1250,19 +1349,17 @@ describe("POST /api/actions/session — enacted", () => {
   });
 
   it("runs the removal in order, and STOPS when worktree:check says no", async () => {
-    const { io, ran } = fakeIo({
-      step: (_s, i) => (i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" }),
-    });
+    const { io, ran } = fakeIo({ step: checkSaysNo });
     const { routes } = harness({ io });
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("plan-failed");
     // THE ASSERTION THIS WHOLE FILE IS FOR: the sweep was never invoked.
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm"]);
-    expect(ran[1]?.argv[2]).toBe("worktree:check");
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`]);
+    expect(ran[2]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-check.ts`);
     const run = r.json.run as { steps: { status: string }[]; stoppedAt: number };
-    expect(run.stoppedAt).toBe(1);
-    expect(run.steps.map((s) => s.status)).toEqual(["passed", "failed"]);
+    expect(run.stoppedAt).toBe(2);
+    expect(run.steps.map((s) => s.status)).toEqual(["passed", "passed", "failed"]);
   });
 
   it("runs both steps when the check passes", async () => {
@@ -1271,8 +1368,9 @@ describe("POST /api/actions/session — enacted", () => {
     const r = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(r.status).toBe(200);
     expect(r.json.op).toBe("ran");
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm", "npm"]);
-    expect(ran.slice(1).map((x) => x.argv[2])).toEqual(["worktree:check", "worktree:sweep"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/node_modules/.bin/tsx`]);
+    expect(ran[2]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-check.ts`);
+    expect(ran[3]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-remove.ts`);
   });
 
   it("will not kill a session whose name no longer means that session", async () => {
@@ -1328,8 +1426,9 @@ describe("POST /api/actions/session — enacted", () => {
     await call(routes, fakeReq({ url: "/api/actions/cancel", body: { sessionId: "$99001", itemId: id } }));
     const again = await call(routes, fakeReq({ body: removeBody({ mode: "run" }) }));
     expect(again.status).toBe(200);
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm", "npm"]);
-    expect(ran.slice(1).map((x) => x.argv[2])).toEqual(["worktree:check", "worktree:sweep"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/node_modules/.bin/tsx`]);
+    expect(ran[2]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-check.ts`);
+    expect(ran[3]?.argv[1]).toBe(`${PRIMARY}/scripts/worktree-remove.ts`);
   });
 
   it("refuses a mode that does not go with the effect", async () => {
@@ -1912,18 +2011,16 @@ describe("what a refusal says about delivery, and what a page may conclude from 
     rawStatus: { kind: "idle" },
   } as unknown as Parameters<ReturnType<typeof makeActionsApi>["run"]>[0];
 
-  it("sends no delivery on a refusal that had already run two steps", async () => {
+  it("sends no delivery on a refusal that had already run its first steps", async () => {
     /* NOT AN OVERSIGHT, AND THE TEST IS HERE SO IT STAYS DELIBERATE. This
-       refusal arrives AFTER `git rev-parse` and `npm run worktree:check` have
-       actually run on the box, and it still has no opinion about delivery,
+       refusal arrives AFTER two `git` questions and `npm run worktree:check`
+       have actually run on the box, and it still has no opinion about delivery,
        because `delivery` is a fact about keystrokes and no keystroke was
        involved. The route must not invent one — a `delivery: "none"` here would
-       be the server signing its name to "nothing happened" over two commands
+       be the server signing its name to "nothing happened" over three commands
        that did. Absence is the honest answer, and the client reads it as
        `not-told`. */
-    const { io, ran } = fakeIo({
-      step: (_s, i) => (i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" }),
-    });
+    const { io, ran } = fakeIo({ step: checkSaysNo });
     const { routes } = harness({ io });
     const r = await call(
       routes,
@@ -1931,7 +2028,7 @@ describe("what a refusal says about delivery, and what a page may conclude from 
     );
     expect(r.status).toBe(409);
     expect(r.json.code).toBe("plan-failed");
-    expect(ran.map((x) => x.argv[0])).toEqual(["git", "npm"]);
+    expect(ran.map((x) => x.argv[0])).toEqual(["git", "git", `${PRIMARY}/node_modules/.bin/tsx`]);
     expect(r.json).not.toHaveProperty("delivery");
   });
 
@@ -2284,11 +2381,7 @@ describe("a refusal that carried a plan run reaches the card", () => {
     status: { kind: "idle" as const },
   } as unknown as Parameters<ActionsApi["run"]>[0];
 
-  const stoppingIo = () =>
-    fakeIo({
-      step: (_s, i) =>
-        i === 1 ? { ...OK_STEP, code: 1, stdout: "blocked: data/ has 3 files" } : { ...OK_STEP, stdout: "worktree-fixture\n" },
-    });
+  const stoppingIo = () => fakeIo({ step: checkSaysNo });
 
   it("keeps the steps the server described instead of reading them as silence", async () => {
     const { routes } = harness({ io: stoppingIo().io });
@@ -2300,15 +2393,15 @@ describe("a refusal that carried a plan run reaches the card", () => {
     const run = outcome.ok === false ? outcome.run : null;
     expect(run).not.toBe(null);
     expect(run?.completed).toBe(false);
-    expect(run?.stoppedAt).toBe(1);
+    expect(run?.stoppedAt).toBe(2);
     /* THE DENOMINATOR, and it was not on the wire until this stage: the run
-       carries the steps that RAN, so two outcomes and a `stoppedAt` are the
-       same list of facts whether the plan had two steps or three. `2 of 2`
+       carries the steps that RAN, so three outcomes and a `stoppedAt` are the
+       same list of facts whether the plan had three steps or four. `3 of 3`
        reads as complete. */
-    expect(run?.planned).toBe(3);
-    expect(run?.steps).toHaveLength(2);
-    expect(run?.steps.map((s) => s.status)).toEqual(["passed", "failed"]);
-    expect(run?.steps[1]?.verdict).toContain("exited 1");
+    expect(run?.planned).toBe(4);
+    expect(run?.steps).toHaveLength(3);
+    expect(run?.steps.map((s) => s.status)).toEqual(["passed", "passed", "failed"]);
+    expect(run?.steps[2]?.verdict).toContain("exited 1");
   });
 
   it("renders what the server said instead of saying it cannot tell", async () => {
@@ -2322,15 +2415,15 @@ describe("a refusal that carried a plan run reaches the card", () => {
     const html = renderToStaticMarkup(createElement(ActionOutcomeCard, { outcome, onRefresh: () => {} }));
     const text = strip(html);
     expect(text).not.toContain("This page cannot tell whether the action took effect");
-    // Two of three ran, which is the sentence `steps.length` alone cannot say:
-    // without `planned` this reads "2 of 2", and that reads as complete.
-    expect(text).toContain("2 of 3 steps ran");
+    // Three of four ran, which is the sentence `steps.length` alone cannot say:
+    // without `planned` this reads "3 of 3", and that reads as complete.
+    expect(text).toContain("3 of 4 steps ran");
     // And the heading cannot be read on its own: the step that stopped it is
-    // named, with the gate's verdict, and the third is absent because it never
+    // named, with the gate's verdict, and the last is absent because it never
     // ran.
-    expect(text).toContain("worktree:check");
+    expect(text).toContain("scripts/worktree-check.ts --root");
     expect(text).toContain("STOPPED THE PLAN");
-    expect(text).not.toContain("worktree:sweep");
+    expect(text).not.toContain("worktree-remove.ts");
   });
 
   it("does not read a server's SILENCE about a run as a completed run", async () => {

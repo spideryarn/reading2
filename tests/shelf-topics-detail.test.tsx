@@ -24,6 +24,7 @@ import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { LibraryEntry, LibraryTermsResponse } from "../src/types.js";
 import { ShelfTerms } from "../src/web/ShelfTerms.js";
+import { articleTopics } from "../src/web/article-topics.js";
 import { topArticles } from "../src/web/ShelfTermChip.js";
 import { topicHueStops } from "../src/web/topic-colour.js";
 
@@ -104,6 +105,7 @@ function Harness() {
     entryOf: entryFor,
     inScope: new Set(scopeSlugs),
     archived: false,
+    articleTopics: articleTopics(data.terms),
   });
 }
 

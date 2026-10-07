@@ -13,9 +13,8 @@
  * a two-pixel band at the bottom of a fixed rail is precisely the case where the
  * hand-rolled version goes wrong: it needs collision handling (flip to the other
  * side, shift along the edge), hover intent so sweeping the rail doesn't strobe,
- * and dismissal on escape. Floating UI is the engine Radix, Mantine and Tippy
- * all sit on, it is headless — it positions and it handles interaction, and
- * ships no styles, so the dark palette stays ours (styles.css § tooltip).
+ * and dismissal on escape. Floating UI is headless — it positions and handles interaction, and
+ * ships no styles, so the dark palette stays ours (tooltip.css § tooltip).
  *
  * Two things about the DOM shape below are load-bearing:
  *
@@ -28,7 +27,16 @@
  *    positioned in percentages and would otherwise spill), which would clip any
  *    tooltip rendered inside it to the width of the rail.
  */
-import { cloneElement, useEffect, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import {
+  cloneElement,
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 import {
   FloatingArrow,
   FloatingDelayGroup,
@@ -61,7 +69,7 @@ import {
  * rather than a wait. Closing is quick but not instant, so a wobble of the
  * mouse between two adjacent bands doesn't blink the panel out and back.
  */
-const DELAY = { open: 240, close: 90 } as const;
+export const DELAY = { open: 240, close: 90 } as const;
 
 /**
  * Groups tooltips so that once one is open, its neighbours open *instantly*
@@ -201,6 +209,28 @@ export function Tooltip({
     if (disabledWhileOpen) setOpen(false);
   }, [disabledWhileOpen, setOpen]);
   const arrowRef = useRef<SVGSVGElement>(null);
+  /**
+   * **Whether the last press on the trigger was a finger (or a pen) rather
+   * than a mouse.**
+   *
+   * `mouseOnly` below stops a tap's compatibility `mouseenter` *opening* a
+   * controlled card; nothing stopped its `mouseleave` *closing* one. Measured
+   * in Chrome with touch on, 2026-10-03, on a search result's score: the tap's
+   * click opened the card and a `mouseleave` synthesised about 100ms later
+   * shut it 20ms after it appeared, so on a touch screen the card could not
+   * be read at all (docs/plans/261003p-…). A card with `interactive` escaped
+   * only by accident, through `safePolygon`.
+   *
+   * It belongs to this opening, not to the mounted component forever: closing
+   * the card clears it, and a real mouse reaching or leaving the trigger (or
+   * reaching an interactive card directly) clears it even while the
+   * touch-opened card is still up. Thus a hybrid device does not need a mouse
+   * press before hover works normally again.
+   */
+  const byTouch = useRef(false);
+  useEffect(() => {
+    if (!open) byTouch.current = false;
+  }, [open]);
 
   /**
    * **What an interactive card does about focus when something asks it to
@@ -217,6 +247,10 @@ export function Tooltip({
    *   moved it on.
    */
   const changeOpen = (next: boolean, _event?: Event, reason?: OpenChangeReason) => {
+    /* A controlled card a finger opened is not closed by hover: see
+       `byTouch` above. Escape, a press elsewhere and the parent still close
+       it. */
+    if (controlledOpen !== undefined && !next && reason === "hover" && byTouch.current) return;
     if (interactive && !next) {
       // Read the committed DOM refs, including a trigger replaced in this
       // commit before Floating UI's element state has rerendered.
@@ -343,7 +377,44 @@ export function Tooltip({
   const { "aria-describedby": ownDescribedBy, ...childProps } = children.props as {
     "aria-describedby"?: string | undefined;
   };
-  const merged = getReferenceProps({ ...childProps, ref });
+  const ownPointerDown = (childProps as { onPointerDown?: (event: ReactPointerEvent) => void })
+    .onPointerDown;
+  const ownPointerEnter = (childProps as { onPointerEnter?: (event: ReactPointerEvent) => void })
+    .onPointerEnter;
+  const ownPointerLeave = (childProps as { onPointerLeave?: (event: ReactPointerEvent) => void })
+    .onPointerLeave;
+  const ownPointerCancel = (childProps as { onPointerCancel?: (event: ReactPointerEvent) => void })
+    .onPointerCancel;
+  const merged = getReferenceProps({
+    ...childProps,
+    ref,
+    onPointerDown(event: ReactPointerEvent) {
+      /* A mouse says "mouse"; a finger "touch", a stylus "pen". Anything
+         else, the empty string of a pointer nobody identified included, is
+         left as a mouse, which is the behaviour there was. */
+      byTouch.current = event.pointerType === "touch" || event.pointerType === "pen";
+      ownPointerDown?.(event);
+    },
+    onPointerEnter(event: ReactPointerEvent) {
+      /* A real mouse may follow a touch on a hybrid device without pressing.
+         Its entry is enough to end the touch exemption; touch and pen entries
+         precede their pointerdown and leave the decision to that press. */
+      if (event.pointerType === "mouse") byTouch.current = false;
+      ownPointerEnter?.(event);
+    },
+    onPointerLeave(event: ReactPointerEvent) {
+      /* The cursor may already be over the trigger when the finger taps it;
+         then its first real mouse event is the leave, with no new enter. */
+      if (event.pointerType === "mouse") byTouch.current = false;
+      ownPointerLeave?.(event);
+    },
+    onPointerCancel(event: ReactPointerEvent) {
+      /* A cancelled touch became a scroll or another gesture and will not
+         produce the click that could open this card. */
+      byTouch.current = false;
+      ownPointerCancel?.(event);
+    },
+  });
   const describedBy =
     [merged["aria-describedby"], ownDescribedBy].filter(Boolean).join(" ") || undefined;
 
@@ -362,7 +433,14 @@ export function Tooltip({
             /* The name goes through `getFloatingProps` beside the role `useRole`
                put there, so the two arrive together — and `undefined` for a
                plain tooltip, which takes its name from nothing. */
-            {...getFloatingProps({ "aria-label": interactive?.label })}
+            {...getFloatingProps({
+              "aria-label": interactive?.label,
+              onPointerEnter(event: ReactPointerEvent) {
+                /* A hybrid device's mouse can enter an interactive card
+                   directly, without crossing the trigger first. */
+                if (event.pointerType === "mouse") byTouch.current = false;
+              },
+            })}
           >
             <div className={`tooltip${className ? ` ${className}` : ""}`} style={styles}>
               {content}

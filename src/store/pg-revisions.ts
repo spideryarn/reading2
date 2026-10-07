@@ -71,11 +71,13 @@ import {
   articleRevisions,
   articles,
   jobs,
+  readerProfiles,
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
 import { isReservedSlug, shortIdInSlug } from "../ingest.js";
 import { isAdmin } from "../admin.js";
+import { autoModePosts } from "../auto-mode-steps.js";
 import { mintId } from "../ids.js";
 import { log } from "../log.js";
 import {
@@ -86,10 +88,11 @@ import {
   type ReaderFacingFailure,
 } from "../messages.js";
 import { currentOwnerId } from "../owner.js";
+import { renderProfile } from "../profile.js";
 import { hashBlocks } from "../source-hash.js";
 import { currentStepName } from "../step-order.js";
 import { checkTree } from "../tree-invariants.js";
-import type { Block, JobReset, OwnerId, StepName, Tree } from "../types.js";
+import { awaitingStructure, type Block, type JobReset, type OwnerId, type StepName, type Tree } from "../types.js";
 import { deriveLibraryScalars } from "../library-scalars.js";
 import { extraColumns, extraSteps } from "../reset.js";
 import {
@@ -101,8 +104,10 @@ import {
   type JobShape,
   type SharingStep,
 } from "../sharing-steps.js";
+import { blockOf } from "./block-rows.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { REVISION_PROJECTIONS, ownedSlug, requireSlug } from "./pg.js";
+import { violatesConstraint } from "./db-errors.js";
 import { slugIsTaken } from "./slug-is-taken.js";
 import { NO_INPUT_HASH, PIPELINE_RUN, structureCurrency } from "./artifacts.js";
 import { liveAttempt } from "./job-fence.js";
@@ -200,6 +205,8 @@ export const REVISION_CARRY_POLICY: Record<
 
   // Stage 2's reading of the piece.
   title: "carry",
+  /* With the title it is the original of: a draft that inherits one inherits both. */
+  titleOriginal: "carry",
   byline: "carry",
   // The byline's structured twin, written by the same step (plan 260929d).
   authors: "carry",
@@ -221,6 +228,8 @@ export const REVISION_CARRY_POLICY: Record<
      none of its own. */
   abstract: "carry",
   doi: "carry",
+  journal: "carry",
+  publishedYear: "carry",
 
   // Stage 1: what was fetched, and what came back.
   requestedUrl: "carry",
@@ -263,6 +272,18 @@ export const REVISION_CARRY_POLICY: Record<
 
   extractedHtml: "carry",
   stampedHtml: "carry",
+
+  /* The difficulty rating, all five together (the table refuses a copy that
+     takes only some). It is a judgement of the blocks, and the blocks carry:
+     a revision that does not run `blocks` keeps the same text, so it keeps
+     the rating of that text. **The time carries too**, because making a
+     revision is not rating the piece again. A revision that does run `blocks`
+     overwrites all five, with a new rating or with nulls (plan 261005j). */
+  readingLanguage: "carry",
+  readingIdeas: "carry",
+  readingDifficultyReason: "carry",
+  readingDifficultyModel: "carry",
+  readingDifficultyRatedAt: "carry",
 
   /* `tree`, `labels` and `arc` carry too, and they are the uncomfortable case:
      a `{ steps: ["blocks"] }` job would publish new paragraphs under the
@@ -741,6 +762,50 @@ export async function lockArticlesInSlugOrder<
 }
 
 /**
+ * **Tell an existing article the address it was asked for, if nobody has and
+ * it has published nothing.** Otherwise hand the row back untouched.
+ *
+ * `articles.asked_url` is written when the row is born, and this is the one
+ * exception. A failed import from before the column existed (2026-10-06) left
+ * a row with no published revision and a null here. Retry keeps that slug and
+ * copies the failed job's address, so the row is *found*, not created, and
+ * without this the paper would publish with a null and the next paste of the
+ * same short link would import and charge for it again. GPT Sol's K1 on
+ * docs/plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md.
+ *
+ * **Both conditions are needed, and each stops a different wrong write.**
+ *
+ * - *Never published* (`current_revision_id` is null). A job with no address
+ *   of its own, a refresh or a late step, is given the article's `final_url`
+ *   by `enqueue` (src/jobs.ts), and that answers nothing for an unpublished
+ *   article. So the only job that reaches an unpublished row with an address
+ *   is an import carrying what the reader pasted. On a published row the
+ *   address in hand is usually the paper's own, which nobody pasted.
+ * - *Still null*. The first address told is the one kept.
+ *
+ * The caller holds the row's `FOR UPDATE` lock, so the row read and the row
+ * written are the same one.
+ */
+async function rememberAskedUrl(
+  tx: Tx,
+  article: typeof articles.$inferSelect,
+  askedUrl: string | null,
+): Promise<typeof articles.$inferSelect> {
+  if (askedUrl === null || article.askedUrl !== null || article.currentRevisionId !== null) {
+    return article;
+  }
+  await tx.update(articles).set({ askedUrl }).where(eq(articles.id, article.id));
+  return { ...article, askedUrl };
+}
+
+/**
+ * The unique constraint on `articles.short_id`, by the name Postgres reports
+ * it under: drizzle/0044_article_short_id.sql, from `.unique()` on the column
+ * (src/db/schema.ts § `shortId`).
+ */
+const SHORT_ID_UNIQUE = "articles_short_id_unique";
+
+/**
  * The article row for this slug, **locked** — created first if it is not there.
  *
  * `lockArticle` can only lock a row that exists, and "there is no row yet" is
@@ -772,11 +837,19 @@ export async function lockOrCreateArticle(
    * row that already exists: nothing here ever changes a live article's
    * `processing`; only the publication that lands a tree does
    * (src/store/pg-session.ts).
+   *
+   * **`askedUrl` is the address the reader pasted**, kept in
+   * `articles.asked_url` so a short link that ended on a paper finds that
+   * paper again (src/db/schema.ts § `askedUrl`). It has no default, so every
+   * caller says which it is: a job's own address, or `null` for an upload and
+   * for a caller that is not creating an article on a reader's behalf. It is
+   * the one part of `birth` an existing row may still take, and only in the
+   * case `rememberAskedUrl` below describes.
    */
-  birth: { readonly processing?: "minimal" } = {},
+  birth: { readonly processing?: "minimal"; readonly askedUrl: string | null },
 ): Promise<typeof articles.$inferSelect> {
   const found = await lockArticle(tx, slug);
-  if (found) return found;
+  if (found) return await rememberAskedUrl(tx, found, birth.askedUrl);
 
   /* **The one name an article may not be born with**, and it is checked here
      rather than in `isSlug` because this is the only line in the repo that
@@ -811,15 +884,44 @@ export async function lockOrCreateArticle(
       slug,
       shortId: shortIdInSlug(slug) ?? mintId(),
       ...(birth.processing ? { processing: birth.processing } : {}),
+      askedUrl: birth.askedUrl,
     })
     /* Another transaction may have inserted this slug between our lock
        attempt and here — the lock cannot protect a row that does not exist
        yet. `do nothing` plus a re-read is the honest handling; `do update`
        would rewrite somebody's shelf state to defaults. */
     .onConflictDoNothing({ target: articles.slug })
-    .returning();
-  const article = inserted[0] ?? (await lockArticle(tx, slug));
-  if (article) return article;
+    .returning()
+    .catch((err: unknown) => {
+      /* **The other unique column, and `do nothing` above does not cover it.**
+         Some other article, anybody's, already has this short id. The minter
+         asks before it mints (src/jobs.ts § `mintSlug`), so what reaches here
+         is two imports minting one id at the same moment, or an id minted on
+         the line above for a slug that has none. Rare, and until 2026-10-07 it
+         left as a raw driver error. Plan 261007f, E10.
+
+         `permanent`: a retry keeps this slug (`slugForRetry`), so it would stop
+         here again. Adding the article afresh mints another id. The sentence
+         reaches the log and the advance's 409, not yet the reader's card
+         (docs/project/ingest-queue.md § When two imports mint the same id at
+         once). The statement
+         has failed, so the transaction is finished either way; nothing else is
+         asked of it. By the constraint's name, never the code alone
+         (src/store/db-errors.ts § `violatesConstraint`). */
+      if (violatesConstraint(err, SHORT_ID_UNIQUE)) {
+        throw new PublishRefused(slug, "permanent", [
+          "the short id on the end of this article's name is already in use by another " +
+            "article, so it could not be added. Trying this import again would stop in the " +
+            "same place. Add the article again, by pasting its address or choosing the file " +
+            "once more, and it will be given a new id",
+        ]);
+      }
+      throw err;
+    });
+  if (inserted[0]) return inserted[0];
+  /* Somebody else's insert won. Theirs is an existing row like any other. */
+  const raced = await lockArticle(tx, slug);
+  if (raced) return await rememberAskedUrl(tx, raced, birth.askedUrl);
 
   /* **Two readings of "we could not get this row", and they want different
      words.**
@@ -831,9 +933,11 @@ export async function lockOrCreateArticle(
      looking for a locking bug.
 
      Distinguished by asking, unfiltered, whether the row exists at all.
-     GPT Sol raised the confusion reviewing the ownership work, 2026-08-27;
-     what it does NOT do is let two readers keep the same URL, which is still an
-     open question rather than a thing that works. */
+     GPT Sol raised the confusion reviewing the ownership work, 2026-08-27.
+     Whether two readers could keep the same URL was an open question then and
+     is not one now: since 2026-08-31 every new slug ends in a random short id
+     (src/ingest.ts § `slugWithShortId`), so two readers who paste one address
+     get two slugs and an article each. */
   if (await slugIsTaken(slug, tx)) {
     /* `permanent`, and it is the known limit rather than a race: `articles.slug`
        is unique across the whole install, so nobody gives this name back. */
@@ -878,23 +982,7 @@ async function storedBlocks(tx: Tx | Db, revisionId: string): Promise<Block[]> {
     .where(eq(revisionBlocks.revisionId, revisionId))
     .orderBy(asc(revisionBlocks.ordinal));
 
-  return rows.map((row) => ({
-    id: row.id,
-    tag: row.tag,
-    kind: row.kind as Block["kind"],
-    ...(row.level === null ? {} : { level: row.level }),
-    text: row.text,
-    words: row.words,
-    html: row.html,
-    gistable: row.gistable,
-    ...(row.note === null ? {} : { note: row.note }),
-    ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
-    ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
-    ...(row.noteId === null ? {} : { noteId: row.noteId }),
-    ...(row.contextId === null || row.contextType === null
-      ? {}
-      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-  }));
+  return rows.map((row) => blockOf(row.id, row));
 }
 
 /**
@@ -921,15 +1009,17 @@ async function fenceJob(
   jobId: string,
   attemptId: string,
   draftRevisionId: string | null,
-): Promise<{ reset: JobReset | null }> {
+): Promise<{ reset: JobReset | null; reservesName: boolean }> {
   /* `returning` the job's `reset` because publication has to know whether it
      is a reset's, and this statement already holds that row's lock — so the
-     answer comes off the fenced row itself rather than a second read (Sol F7). */
+     answer comes off the fenced row itself rather than a second read (Sol F7).
+     `reserves_name` for the same reason: it is what says the job is an import
+     (`firstFullPublicationOfAnImport` in `publishRevisionIn`). */
   const fenced = await tx
     .update(jobs)
     .set({ draftRevisionId })
     .where(liveAttempt(jobId, attemptId))
-    .returning({ reset: jobs.reset });
+    .returning({ reset: jobs.reset, reservesName: jobs.reservesName });
   // Exactly one row, never `>= 1` and never ignored: zero rows here is the
   // fence doing its job, and it must reach the caller as a failure.
   const [row] = fenced;
@@ -1081,7 +1171,10 @@ async function beginDraftIn(
 ): Promise<BeginRevisionResult> {
   const { slug } = opts;
   {
-    const article = await lockOrCreateArticle(tx, slug);
+    /* No asked-for address: a job's claim has already locked or created this
+       row and told it (`openOrBeginJobDraft`), and `beginRevision` on its own
+       is a caller with no reader's pasted address in hand. */
+    const article = await lockOrCreateArticle(tx, slug, { askedUrl: null });
 
     const revisionId = randomUUID();
     const basedOn = article.currentRevisionId;
@@ -1226,10 +1319,17 @@ export interface OpenDraftResult extends BeginRevisionResult {
 export async function openOrBeginJobDraft(opts: {
   readonly slug: string;
   readonly job: { readonly id: string; readonly attemptId: string };
-  /** Tests only: the mode defaults to `STEP_START_DRAFT_SWEEP`. */
-  readonly sweep?: Partial<DraftSweepOptions>;
+  /** Tests only: threshold, batch size or race barrier. Production passes nothing. */
+  readonly sweep?: DraftSweepOptions;
   /** What the article is born as if this claim creates it — `lockOrCreateArticle`'s `birth`. */
   readonly processing?: "minimal";
+  /**
+   * The job's own address, for `articles.asked_url` — `lockOrCreateArticle`'s
+   * `birth`. Absent for an upload, which has none. It is an argument and is not
+   * read off the job row below because the article is locked, and may be
+   * created, *before* the job is: article lock before job lock, everywhere.
+   */
+  readonly askedUrl?: string;
 }): Promise<OpenDraftResult> {
   const { slug, job } = opts;
   requireSlug(slug);
@@ -1259,7 +1359,10 @@ export async function openOrBeginJobDraft(opts: {
      * is precisely the orphaned-draft bug this function exists to prevent. A row
      * that does not exist cannot be locked, so the row has to exist.
      */
-    const article = await lockOrCreateArticle(tx, slug, opts.processing ? { processing: opts.processing } : {});
+    const article = await lockOrCreateArticle(tx, slug, {
+      ...(opts.processing ? { processing: opts.processing } : {}),
+      askedUrl: opts.askedUrl ?? null,
+    });
 
     /**
      * **Locked, not merely selected.**
@@ -1387,10 +1490,7 @@ export async function openOrBeginJobDraft(opts: {
      * `current_revision_id` while the sweep decides. In a savepoint, so a sweep
      * that fails costs the reader nothing — see `sweepOnStepStart`.
      */
-    const sweep = await sweepOnStepStart(tx, article.id, {
-      mode: STEP_START_DRAFT_SWEEP,
-      ...opts.sweep,
-    });
+    const sweep = await sweepOnStepStart(tx, article.id, opts.sweep ?? {});
     const begun = await beginDraftIn(tx, { slug, job });
     /* **A reset's draft starts without the extras**, in the transaction that
        copied them, so there is no moment at which the draft has them. Read off
@@ -1605,9 +1705,10 @@ export async function beginStepRun(
 /**
  * This step has ended, and only the attempt that started it may say so.
  *
- * One fenced `UPDATE`, which is what the filesystem adapter's own comment has
- * been asking for since it was written. Two conditions carry the whole
- * protocol, and they refuse different things:
+ * First the owning job and draft are fenced by `requireLiveJobOwnsDraft`.
+ * Then one conditional `UPDATE` finishes the step, which is what the
+ * filesystem adapter's comment had asked for. Its two row conditions refuse
+ * different things:
  *
  * - **`attempt_id`** — somebody else's claim. A lapsed claimant whose lease was
  *   swept still holds a token and would otherwise finish a step the new
@@ -2051,6 +2152,18 @@ export interface PublishRevisionResult {
    */
   readonly successor: SuccessorOutcome | null;
   /**
+   * **What became of the `structure` job a stand-in tree needs** — `null` on
+   * every publication whose tree is not awaiting its structure, which is
+   * nearly all of them. `queued` is an import that opened early;
+   * `alreadyQueued` is a later publication still carrying the stand-in;
+   * `boundToOlderBase` is that publication finding a holder that can never
+   * publish over it, which `logPublication` warns about. Its own field rather
+   * than a second meaning of `successor`: a publication has one or the other,
+   * and a reader of either should not have to ask which job it is.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  readonly structureSuccessor: SuccessorOutcome | null;
+  /**
    * **What a reset's publication queued to make its extras again**, one
    * outcome per step of `jobs.reset.regenerate`, in that order. Empty for every
    * publication that is not a reset's, and for a reset that asked for none.
@@ -2058,6 +2171,15 @@ export interface PublishRevisionResult {
    * docs/plans/260928a-reset-and-regenerate-article.md.
    */
   readonly regenerated: readonly SuccessorOutcome[];
+  /**
+   * **The main-mode jobs an import's first full publication queued**, one
+   * outcome per request of `autoModePosts()` (src/auto-mode-steps.ts), in the
+   * order they were stamped. Empty for every other publication, and for a
+   * reader who has switched them off. `alreadyQueued` is the ordinary case of
+   * a reader's own identical press having got there first.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   */
+  readonly autoModes: readonly SuccessorOutcome[];
   /**
    * **A tree landed on a minimal paper** — `processing` flipped to `'full'` in
    * this transaction. The caller holding the job's reservation must charge it
@@ -2373,8 +2495,44 @@ export async function publishRevisionIn(
    * runs the successor* in the plan: the browser's `jobEngine` drives every
    * queued job the signed-in owner has, from any page.
    */
+  /**
+   * **A revision that publishes a stand-in tree buys the job that builds the
+   * real one, and nothing that reads the tree** — here, for the reason the
+   * labels successor below is here: the pointer and the job become true
+   * together, and an article that committed awaiting with nothing queued would
+   * show an outline of headings for ever.
+   *
+   * A first import that asked to open early publishes this
+   * (`awaitingStructure`, src/types.ts). While it is awaiting:
+   *
+   * - **no `labels` job**: it would label the leaves of a tree about to be
+   *   replaced, and the real tree's publication is `pending` and buys its own;
+   * - **no main-mode jobs**: they read the tree. They are queued further down,
+   *   by the publication that replaces this one.
+   *
+   * **Every awaiting publication asks, not only the first.** A later one that
+   * still carries the stand-in (an `assets` re-run, a standalone `fetch`)
+   * collapses onto the queued job by its work key, and queues a fresh one when
+   * the first has failed and gone. It is not a guaranteed way back: a holder
+   * bound to an older draft answers `boundToOlderBase` and cannot publish over
+   * this revision (GPT Sol, F3) — `logPublication` says so, and the reader's
+   * way out is the Structure band.
+   *
+   * `structure` is exclusive and this job is older than anything queued after
+   * this commit, so a mode a reader asks for meanwhile normally waits behind it.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  const awaiting = awaitingStructure(tree);
+  const structureSuccessor = awaiting
+    ? await enqueueSuccessorIn(tx, {
+        ownerId: article.ownerId as OwnerId,
+        slug,
+        steps: ["structure"],
+      })
+    : null;
+
   const successor =
-    draft.navLabelStatus === "pending"
+    !awaiting && draft.navLabelStatus === "pending"
       ? await enqueueSuccessorIn(tx, {
           ownerId: article.ownerId as OwnerId,
           slug,
@@ -2418,6 +2576,70 @@ export async function publishRevisionIn(
     }
   }
 
+  /**
+   * **An import's first full publication queues the main-mode jobs** — here,
+   * in the transaction that published, for the reason the labels successor is:
+   * every way an import can start ends at this line, and a browser that has
+   * gone away cannot forget to ask.
+   * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
+   *
+   * **Which publication**, off the job row the fence has just locked and the
+   * article row locked at the top:
+   *
+   * - not a reset, which has its own `regenerate` list above;
+   * - and either the job **reserved the article's name** (a new URL, an
+   *   upload, or a retry of either) while the article **served nothing** and
+   *   is **not a minimal paper** — or this publication is the one that turns a
+   *   minimal paper full (*Read this*).
+   *
+   * `reserves_name` rather than "there is a job": the test fixture loader
+   * publishes under a synthetic job that reserves nothing, and so does a job
+   * that adopted its slug from another live one (GPT Sol, F1 of the plan
+   * review). A mode job, a Rebuild and a job-less `publishRevision` fail the
+   * same clause or the next.
+   *
+   * **The reader's choice is read here, in this transaction**:
+   * `reader_profiles.auto_modes_off_at`, null or no row meaning on.
+   *
+   * **The jobs**: one per request, the single-step ones first and Skim's
+   * last, stamped one microsecond apart after the labels job — after the row
+   * that actually holds it, which `notBefore` is for (`enqueueSuccessorIn`).
+   * Unscoped, so a reader's own identical press joins the queued job; that
+   * needs the same profile in the key, so it is rendered here exactly as
+   * `resolveProfile` (src/routes.ts) renders it for a press — "about you" and
+   * this article's purpose — and left off when there is none.
+   *
+   * A successor insert that throws rolls the whole publication back, as the
+   * labels successor's does. Nothing is driven from here: the owner's browser
+   * drives every queued job they have, from any page.
+   *
+   * **An import that opened early has two first publications, and the modes
+   * belong to the second** (plan 261005j). The first carries the stand-in tree,
+   * which the modes must not read, so `!awaiting` keeps them out of it. The
+   * second is whichever publication replaces a stand-in with a real tree: the
+   * structure job's, a reader's *Build it*, a Rebuild. That job reserved no
+   * name and the article already serves something, so neither clause above
+   * lets it in — `replacesAStandIn` does, read off the revision this one
+   * replaces, under the article lock. One predicate and one call, so no
+   * publication can queue them twice; the reader's switch is read at whichever
+   * publication it is.
+   */
+  const jobThatMayQueueModes = fenced !== null && reset === null && !awaiting;
+  const firstFullPublicationOfAnImport =
+    jobThatMayQueueModes &&
+    ((fenced.reservesName && article.currentRevisionId === null && processing !== "minimal") ||
+      upgradedFromMinimal);
+  /* The one extra read, and only where the answer can matter. */
+  const replacesAStandIn =
+    jobThatMayQueueModes &&
+    !firstFullPublicationOfAnImport &&
+    article.currentRevisionId !== null &&
+    (await revisionAwaitsStructure(tx, article.currentRevisionId));
+  const autoModes =
+    firstFullPublicationOfAnImport || replacesAStandIn
+      ? await queueMainModesIn(tx, article, successor)
+      : [];
+
   return {
     revisionId,
     previousRevisionId: article.currentRevisionId,
@@ -2426,9 +2648,77 @@ export async function publishRevisionIn(
     /* Carried out of the transaction whole, so `logPublication` can say the
        right thing about it after the commit. See `SuccessorOutcome`. */
     successor,
+    structureSuccessor,
     regenerated,
+    autoModes,
     upgradedFromMinimal,
   };
+}
+
+/**
+ * Is `revisionId`'s tree the stand-in a first import opened with? One column
+ * of one row by primary key, and only the flag: the tree itself stays where it
+ * is. `awaitingStructure` (src/types.ts) is the same question of a tree in hand.
+ */
+async function revisionAwaitsStructure(tx: Tx, revisionId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ provisional: sql<string | null>`${articleRevisions.tree}->>'provisional'` })
+    .from(articleRevisions)
+    .where(eq(articleRevisions.id, revisionId))
+    .limit(1);
+  /* Compared here rather than cast into a `Tree`: the column is whatever JSON
+     was stored, and the one value that matters is the one `awaitingStructure`
+     names. */
+  const standIn: NonNullable<Tree["provisional"]> = "awaiting-structure";
+  return row?.provisional === standIn;
+}
+
+/**
+ * The main-mode jobs in the order they are queued: the ones that read nothing,
+ * then the rest (`autoModePosts`, src/auto-mode-steps.ts). One function so the
+ * insert loop and the log line index the same list.
+ */
+function autoModeJobs(): StepName[][] {
+  const { together, after } = autoModePosts();
+  return [...together, ...after];
+}
+
+/**
+ * Queue the main-mode jobs for `article`, unless its owner has switched them
+ * off. `publishRevisionIn` decides *whether this publication is one that
+ * queues them* and says why at the call; this is the reader's choice, the
+ * profile and the inserts.
+ *
+ * `labels` is what became of the labels successor, if this publication needed
+ * one: the modes are stamped after the job that holds it.
+ */
+async function queueMainModesIn(
+  tx: Tx,
+  article: typeof articles.$inferSelect,
+  labels: SuccessorOutcome | null,
+): Promise<SuccessorOutcome[]> {
+  const [reader] = await tx
+    .select({ profile: readerProfiles.profile, autoModesOffAt: readerProfiles.autoModesOffAt })
+    .from(readerProfiles)
+    .where(eq(readerProfiles.ownerId, article.ownerId))
+    .limit(1);
+  if (reader?.autoModesOffAt) return [];
+
+  const profile = renderProfile({ profile: reader?.profile ?? null, purpose: article.purpose });
+  const queued: SuccessorOutcome[] = [];
+  for (const [i, steps] of autoModeJobs().entries()) {
+    queued.push(
+      await enqueueSuccessorIn(tx, {
+        ownerId: article.ownerId as OwnerId,
+        slug: article.slug,
+        steps,
+        ...(profile ? { profile } : {}),
+        after: i + 1,
+        ...(labels ? { notBefore: labels.jobId } : {}),
+      }),
+    );
+  }
+  return queued;
 }
 
 /** `articles.processing` — the CHECK `articles_processing` holds it to these two. */
@@ -2832,6 +3122,15 @@ export function logPublication(
       ...(published.successor?.kind === "queued"
         ? { successorJobId: published.successor.jobId }
         : {}),
+      /* Present only when this revision reached the shelf on a stand-in tree
+         (an import that opened early, plan 261005j): the job that builds the
+         real one, and whether this publication queued it or joined it. */
+      ...(published.structureSuccessor
+        ? {
+            structureJobId: published.structureSuccessor.jobId,
+            structureJob: published.structureSuccessor.kind,
+          }
+        : {}),
       /* Present only on a reset's publication that asked for its extras to be
          made again: which jobs it queued, by id and outcome. Ids only. */
       ...(published.regenerated.length
@@ -2839,6 +3138,18 @@ export function logPublication(
             regenerated: published.regenerated.map((outcome) => ({
               kind: outcome.kind,
               jobId: outcome.jobId,
+            })),
+          }
+        : {}),
+      /* Present only on an import's first full publication by a reader who
+         has not switched them off: the main-mode jobs, by outcome, id and
+         step names. No prose, and never the profile they carry. */
+      ...(published.autoModes.length
+        ? {
+            autoModes: published.autoModes.map((outcome, i) => ({
+              kind: outcome.kind,
+              jobId: outcome.jobId,
+              steps: autoModeJobs()[i],
             })),
           }
         : {}),
@@ -2862,6 +3173,7 @@ export function logPublication(
    * article prose.
    */
   sayWhatBecameOfTheSuccessor(opts.slug, published);
+  sayWhatBecameOfTheStructureJob(opts.slug, published);
   /* After the commit, and only here. The article is now serving a tree that
      `checkTree` rejects — carried forward, not caused by this publication, and
      already in front of readers before it. Re-running `structure` repairs it.
@@ -2928,6 +3240,40 @@ function sayWhatBecameOfTheSuccessor(slug: string, published: PublishRevisionRes
     default: {
       const unreachable: never = successor;
       throw new Error(`unhandled successor outcome: ${JSON.stringify(unreachable)}`);
+    }
+  }
+}
+
+/**
+ * The same question of the `structure` job a stand-in tree needs, and the same
+ * exhaustive shape. `logPublication`'s own line carries the id and the kind;
+ * this adds the sentence for the arm that is not a success.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ */
+function sayWhatBecameOfTheStructureJob(slug: string, published: PublishRevisionResult): void {
+  const job = published.structureSuccessor;
+  if (!job) return;
+  switch (job.kind) {
+    /* Already in the line above (`structureJob`), and neither is news: one
+       bought the job, the other joined a job that will pick this revision up. */
+    case "queued":
+    case "alreadyQueued":
+      return;
+    case "boundToOlderBase":
+      /* The queued structure job is working from an earlier base, so its own
+         publication will be refused and this revision keeps its stand-in.
+         Nothing queued a second one. The reader sees the outline of headings
+         and, once that job has ended, the Structure band's offer to build it
+         (GPT Sol, F3 of the plan review). Ids only. */
+      logger.warn(
+        { slug, revisionId: published.revisionId, holderJobId: job.jobId },
+        "published on a stand-in tree without a structure job that can replace it: the queued one " +
+          "is bound to an earlier revision — once that job ends, run structure for this article",
+      );
+      return;
+    default: {
+      const unreachable: never = job;
+      throw new Error(`unhandled structure successor outcome: ${JSON.stringify(unreachable)}`);
     }
   }
 }
@@ -3159,26 +3505,6 @@ export const ABANDONED_DRAFT_MS = 6 * 60 * 60 * 1000;
 export const DRAFT_SWEEP_BATCH = 10;
 
 /**
- * `count` enumerates with the real predicate and deletes nothing; `delete`
- * deletes. There is no third mode — in particular, no whole-library one.
- */
-export type DraftSweepMode = "count" | "delete";
-
-/**
- * **What a job's first step does about its article's abandoned drafts.**
- *
- * `count`, until Greg approves the first deletion against production. The
- * on-demand design is decided (docs/project/cron-scheduler.md); what is not yet
- * approved is the first destructive run over real readers' data, and deploying
- * this with `delete` would *be* that run, unreviewed, on the next step anybody
- * started. In `count` mode every step start still runs the exact selection and
- * logs what it would have taken, so production measures itself. Flipping this
- * to `delete` is the approval, and it is a one-line commit.
- * docs/plans/260908f-prioritised-spideryarn-codebase-improvements.md § O.
- */
-export const STEP_START_DRAFT_SWEEP: DraftSweepMode = "count";
-
-/**
  * **The one definition of an abandoned draft**, shared by the sweep and by
  * `scripts/draft-sweep-inventory.ts` so that a count and a deletion can never be
  * of two different sets.
@@ -3215,9 +3541,10 @@ export function abandonedDraftCondition(olderThanMs: number): SQL {
 }
 
 export interface DraftSweepOptions {
-  readonly mode: DraftSweepMode;
   readonly olderThanMs?: number;
   readonly limit?: number;
+  /** One-off backlog only: restrict deletion to the exact ids independently surveyed. */
+  readonly revisionIds?: readonly string[];
   /**
    * **A test's barrier between enumerating and deleting**, and nothing else.
    * The race cases in tests/draft-sweep-on-step-start.test.ts commit a
@@ -3228,7 +3555,6 @@ export interface DraftSweepOptions {
 
 /** What one sweep did. `deleted` is the `DELETE`'s own row count, never the candidate count. */
 export interface SweptDrafts {
-  readonly mode: DraftSweepMode;
   /** How many the predicate named, up to the batch limit. */
   readonly candidates: number;
   /** True when the predicate named more than the batch — the rest wait for the next job. */
@@ -3238,7 +3564,13 @@ export interface SweptDrafts {
 
 /**
  * Delete **one article's** drafts that nobody owns and nobody is going to
- * publish — or, in `count` mode, say how many there are.
+ * publish.
+ *
+ * **It deletes; there is no mode that only counts.** There was one from
+ * 2026-09-11 until 2026-10-05, so that production could measure itself before
+ * the first destructive run. Greg approved that run on 2026-10-04
+ * (*"Q-draft-sweep yes"*) and the mode went with the question.
+ * docs/plans/261005j-draft-sweep-deletes-and-the-count-mode-goes.md.
  *
  * **Begin-time copying has a retention cost, and a review was right that nobody
  * had costed it.** A 360-block article is roughly 1.31 MiB of copied payload
@@ -3252,7 +3584,7 @@ export interface SweptDrafts {
  * **Scoped to the article the caller has already resolved**, by id rather than
  * by slug, and never the whole library: until 2026-09-11 this was a global
  * delete with no caller, and a global delete run because one reader started a
- * step would charge that reader for everybody's backlog. Its one caller is
+ * step would charge that reader for everybody's backlog. Its application caller is
  * `openOrBeginJobDraft`, on the branch that mints — the first step of every
  * job — and docs/project/cron-scheduler.md is the decision it implements.
  *
@@ -3278,8 +3610,8 @@ export interface SweptDrafts {
  * That argument needs read committed, and the function checks rather than
  * trusts it: under repeatable read step 3 would see step 1's snapshot again.
  *
- * `revision_blocks` and `revision_step_runs` cascade from the delete, and
- * `block_identities` deliberately does not: an id, once minted, is never
+ * `revision_blocks`, `revision_phrase_runs` and `revision_step_runs` cascade
+ * from the delete, and `block_identities` deliberately does not: an id, once minted, is never
  * deleted. docs/project/block-ids.md.
  *
  * It does not log: a line written inside a transaction announces something a
@@ -3292,19 +3624,21 @@ export async function sweepAbandonedDrafts(
 ): Promise<SweptDrafts> {
   const olderThanMs = opts.olderThanMs ?? ABANDONED_DRAFT_MS;
   const limit = opts.limit ?? DRAFT_SWEEP_BATCH;
+  if (opts.revisionIds?.length === 0) return { candidates: 0, more: false, deleted: 0 };
   const inThisArticle = eq(articleRevisions.articleId, articleId);
+  const inSurvey = opts.revisionIds ? inArray(articleRevisions.id, [...opts.revisionIds]) : undefined;
   const abandoned = abandonedDraftCondition(olderThanMs);
 
   /* One more than the batch, so "there is more" is a fact rather than a guess. */
   const found = await tx
     .select({ id: articleRevisions.id })
     .from(articleRevisions)
-    .where(and(inThisArticle, abandoned))
+    .where(and(inThisArticle, inSurvey, abandoned))
     .orderBy(asc(articleRevisions.createdAt), asc(articleRevisions.id))
     .limit(limit + 1);
   const ids = found.slice(0, limit).map((row) => row.id);
-  const enumerated = { mode: opts.mode, candidates: ids.length, more: found.length > limit };
-  if (opts.mode === "count" || ids.length === 0) return { ...enumerated, deleted: 0 };
+  const enumerated = { candidates: ids.length, more: found.length > limit };
+  if (ids.length === 0) return { ...enumerated, deleted: 0 };
 
   const [isolation] = (
     await tx.execute(sql`select current_setting('transaction_isolation') as level`)
@@ -3347,7 +3681,7 @@ export async function sweepAbandonedDrafts(
  */
 export type DraftSweepOutcome =
   | ({ readonly kind: "swept"; readonly ms: number } & SweptDrafts)
-  | { readonly kind: "failed"; readonly mode: DraftSweepMode; readonly ms: number; readonly error: string };
+  | { readonly kind: "failed"; readonly ms: number; readonly error: string };
 
 /**
  * Run the sweep inside a savepoint of the step-start transaction, and turn any
@@ -3383,7 +3717,6 @@ async function sweepOnStepStart(
     await tx.execute(sql`rollback to savepoint draft_sweep`);
     return {
       kind: "failed",
-      mode: opts.mode,
       ms: ms(),
       error: err instanceof Error ? err.name : typeof err,
     };
@@ -3394,7 +3727,7 @@ async function sweepOnStepStart(
 function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutcome): void {
   if (outcome.kind === "failed") {
     logger.warn(
-      { slug, articleId, mode: outcome.mode, ms: outcome.ms, error: outcome.error },
+      { slug, articleId, ms: outcome.ms, error: outcome.error },
       "abandoned-draft sweep failed; the step went ahead without it",
     );
     return;
@@ -3404,14 +3737,11 @@ function logDraftSweep(slug: string, articleId: string, outcome: DraftSweepOutco
     {
       slug,
       articleId,
-      mode: outcome.mode,
       candidates: outcome.candidates,
       more: outcome.more,
       deleted: outcome.deleted,
       ms: outcome.ms,
     },
-    outcome.mode === "count"
-      ? "abandoned draft revisions counted (count mode: nothing deleted)"
-      : "abandoned draft revisions swept",
+    "abandoned draft revisions swept",
   );
 }

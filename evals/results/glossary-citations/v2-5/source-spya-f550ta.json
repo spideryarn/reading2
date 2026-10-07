@@ -1,0 +1,114 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v2-5",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A rare, still-unexplained glowing sphere that appears during thunderstorms, lasts a few seconds, and vanishes with or without leaving traces. The article treats it as a real but poorly documented atmospheric phenomenon, studied mainly through eyewitness testimony rather than instruments."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A US camera network that continuously photographed the night sky for over a decade to track meteors, whose archives were later searched for rare, incidental images of ball lightning."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network of ground sensors that detects and records the location, timing, and electrical strength of lightning strokes across the country, used in the article to cross-check ball lightning sightings against real lightning data."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's equivalent lightning-detection network, used in the article to confirm the timing and strength of a strike reported alongside a ball lightning sighting at Neuruppin."
+    },
+    {
+      "name": "positive and negative lightning strokes",
+      "kind": "concept",
+      "aliases": [
+        "positive strokes",
+        "negative strokes"
+      ],
+      "senseHere": "Lightning classified by the sign of electric charge it carries to the ground: most strikes are negative, but a notable minority are positive and typically far more powerful, a pattern the article found unusually common among ball lightning cases."
+    },
+    {
+      "name": "spin quantization experiment",
+      "kind": "event",
+      "aliases": [
+        "1922 experiment"
+      ],
+      "background": "A landmark 1922 physics experiment showing that the magnetic orientation of atoms is restricted to discrete values rather than varying continuously, a foundational result in quantum mechanics."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who died while experimenting with atmospheric electricity in 1753, his death later being wrongly popularized as a ball lightning killing rather than an ordinary lightning accident."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or loss of feeling in a limb caused by a nearby lightning or ball lightning strike, distinct from longer-lasting psychological trauma from the same event."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A pioneering 19th-century French neurologist at Paris's Salpêtrière Hospital who taught Sigmund Freud and studied nervous disorders, including effects on patients who survived lightning-related encounters."
+    },
+    {
+      "name": "triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Lightning deliberately set off by launching a small rocket trailing a thin grounded wire into a thundercloud, letting researchers study strikes under controlled conditions rather than waiting for natural ones."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "Abrahamson and Dinniss soil strike theory"
+      ],
+      "senseHere": "An explanation proposing that ball lightning forms when a lightning strike vaporizes minerals in soil, creating a glowing ball of burning metal particles; the article cites a spectral analysis matching this theory's predicted elements."
+    },
+    {
+      "name": "slitless spectroscopy",
+      "kind": "term",
+      "aliases": [
+        "diffraction grating"
+      ],
+      "senseHere": "A photographic technique using a grating in front of a camera lens to split incoming light into its component colors without a narrow slit, letting researchers read the chemical makeup of a glowing object like ball lightning from its light alone."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "event",
+      "aliases": [
+        "Thottapillil's COST Action proposal"
+      ],
+      "background": "A European research-coordination initiative on the physics of lightning, organized under the EU's COST framework, which brought together around 30 researchers across Europe."
+    }
+  ]
+}

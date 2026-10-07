@@ -1,5 +1,5 @@
 /**
- * **A live conversation begun in Remember reaches the server AS Remember** —
+ * **A live conversation begun in Learn reaches the server AS Learn** —
  * through the real controller, down to the body it hands the transport.
  *
  * SPIDERYARN-READING2-70. The reducer puts the thread's kind on the `spoken`
@@ -9,7 +9,7 @@
  *
  * The second exchange is the other half: the server may name the conversation
  * something other than what this tab invented, and the next append goes to the
- * server's name — it must still say Remember.
+ * server's name — it must still say Learn.
  *
  * docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md
  */
@@ -19,7 +19,7 @@ import type { ChatMessage, ChatThread } from "../src/types.js";
 import { ChatController, type ChatEffects } from "../src/web/chat/controller.js";
 import { asOpId } from "../src/web/chat/model.js";
 
-const SLUG = "a-remember-article";
+const SLUG = "a-learn-article";
 const LOCAL = "spya-rklc01";
 const SERVER = "spya-rksv01";
 const AT = "2026-09-30T07:00:00.000Z";
@@ -36,7 +36,7 @@ it("sends the begun thread's kind on the first append, and again after the serve
   const bodies: { threadId: string; body: Record<string, unknown> }[] = [];
   const stored: ChatThread = {
     id: SERVER,
-    kind: "remember",
+    kind: "learn",
     title: "what I took from it",
     createdAt: AT,
     updatedAt: AT,
@@ -65,13 +65,14 @@ it("sends the begun thread's kind on the first append, and again after the serve
     settledAnswer: async () => null,
     stopAnswer: async () => ({ ok: true }),
     cancelThread: async () => ({ ok: true }),
+    markHintOpened: async () => ({ ok: false, error: "not in this test" }),
   };
   const c = new ChatController(SLUG, effects);
 
-  /* What Remember's arrival rule does: an empty conversation, in this tab only. */
+  /* What Learn's arrival rule does: an empty conversation, in this tab only. */
   c.dispatch({
     type: "thread.begun",
-    thread: { id: LOCAL, kind: "remember", title: "New Remember", createdAt: AT, updatedAt: AT, messages: [] },
+    thread: { id: LOCAL, kind: "learn", title: "New Learn", createdAt: AT, updatedAt: AT, messages: [] },
   });
 
   const first = await c.appendSpoken({
@@ -85,7 +86,7 @@ it("sends the begun thread's kind on the first append, and again after the serve
   });
   expect(first).toEqual({ ok: true, threadId: SERVER, tailId: "spya-rksa01" });
   expect(bodies[0]?.threadId).toBe(LOCAL);
-  expect(bodies[0]?.body).toHaveProperty("kind", "remember");
+  expect(bodies[0]?.body).toHaveProperty("kind", "learn");
 
   /* The live session adopts the server's name and claims the stored tail. */
   const second = await c.appendSpoken({
@@ -99,6 +100,6 @@ it("sends the begun thread's kind on the first append, and again after the serve
   });
   expect(second.ok).toBe(true);
   expect(bodies[1]?.threadId).toBe(SERVER);
-  expect(bodies[1]?.body).toHaveProperty("kind", "remember");
-  expect(c.getSnapshot().threads.map((t) => [t.id, t.kind])).toEqual([[SERVER, "remember"]]);
+  expect(bodies[1]?.body).toHaveProperty("kind", "learn");
+  expect(c.getSnapshot().threads.map((t) => [t.id, t.kind])).toEqual([[SERVER, "learn"]]);
 });

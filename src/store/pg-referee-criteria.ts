@@ -4,9 +4,12 @@
  *
  * **src/store/pg-searches.ts is this file's model, and it is worth reading
  * first**: the attempt fence, the article lock as the mutex, the `DB_NOW`
- * clock, the trim, and why every one of them is there. Nothing in that
- * reasoning changes here, so none of it is repeated. What is written out below
- * is only what a criterion has that a search run does not.
+ * clock, and why every one of them is there. Nothing in that reasoning changes
+ * here, so none of it is repeated. What is written out below is only what a
+ * criterion has that a search run does not — and one thing a search run has
+ * that a criterion no longer does: **the trim**. Searches drop their oldest
+ * past `MAX_RUNS`; criteria are never dropped, and `begin` refuses an add at
+ * `MAX_CRITERIA` instead (§ begin).
  *
  * ## The decision is not here
  *
@@ -34,7 +37,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { refereeCriteria } from "../db/schema.js";
@@ -46,11 +49,23 @@ import {
   type RefereeCriterionConfig,
   type RefereeResult,
 } from "../referee-criteria.js";
-import { CRITERION_SWEPT, withCriterion } from "../referee-criteria-store.js";
+import {
+  COMMENTS_CRITERION_FK,
+  CRITERION_HAS_COMMENTS,
+  CRITERION_SWEPT,
+  criteriaAtCeiling,
+  criterionRefusal,
+  withCriterion,
+} from "../referee-criteria-store.js";
 import { MAX_CRITERIA, type SavedCriterion } from "../saved-criteria.js";
 import { requireColour } from "../searches.js";
-import { MissingAttempt, type RefereeCriteriaStore, type SweepOptions } from "./contracts.js";
-import { guardDbStore } from "./db-errors.js";
+import {
+  MissingAttempt,
+  type CriterionFinish,
+  type RefereeCriteriaStore,
+  type SweepOptions,
+} from "./contracts.js";
+import { guardDbStore, violatesForeignKey } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
 
@@ -141,11 +156,12 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
 
   async begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     config: RefereeCriterionConfig,
     wantedId?: string,
     now: () => string = () => new Date().toISOString(),
-  ): Promise<{ row: SavedCriterion; attempt: string | undefined }> {
+  ): Promise<{ row: SavedCriterion; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = now();
@@ -153,9 +169,9 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
 
     const row = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
-      /* Inside the lock, so the fingerprint and the row are written against one
-         state of the article — pg-searches.ts § begin. */
-      const sourceHash = await sourceHashFor(articleId, tx);
+      /* The fingerprint is the caller's, of the blocks it is sending; the lock
+         orders the read of existing rows against the write — pg-searches.ts
+         § begin. */
       const existing = await criteriaFor(articleId, tx, slug);
       const { row: decided, kind } = withCriterion(
         existing,
@@ -190,6 +206,8 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
             sourceHash: decided.sourceHash ?? null,
             attemptId: attempt,
             attemptStartedAt: DB_NOW,
+            // Back to pending: the failed attempt's finish goes with its error.
+            finishedAt: null,
           })
           .where(
             and(
@@ -208,6 +226,42 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         const back = toCriterion(reset[0]);
         if (!back) throw new Error(`Criterion "${decided.id}" was written and cannot be read back.`);
         return back;
+      }
+
+      /* **A ceiling that refuses, not a trim that drops.** Until 2026-10-07 an
+         add past twenty deleted the oldest finished criterion to make room, and
+         a referee's criterion went without a word. Greg's answer that day: never
+         drop one silently; hold up to `MAX_CRITERIA` (200) and refuse the next
+         with a sentence. docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md
+
+         **It counts every row on the article** — pending, failed, with
+         comments or without. The current kind and diverging-shape constraints
+         ensure each config is readable. A raw `count(*)` also counts rows
+         outside that contract (e.g. written while constraints were disabled);
+         the loader hides those, so they cannot be deleted from the panel.
+         Counting them preserves the table bound, but cannot promise a visible
+         way out in a database that violates the contract.
+
+         A visible criterion with comments also refuses a delete until its
+         placements are cleared (`CRITERION_HAS_COMMENTS`).
+         **Under the article lock, which is the mutex.** Every `begin` on this
+         article takes `lockArticleRow` first, so two adds at 199 are counted
+         one after the other and the second sees the first's insert: two adds
+         cannot make 201. A delete does not take the lock, and does not need
+         to: it only ever lowers the count.
+
+         A reset adds no row, so it is never refused: a failed criterion can be
+         run again at the ceiling. */
+      const [counted] = await tx
+        .select({ n: count() })
+        .from(refereeCriteria)
+        .where(eq(refereeCriteria.articleId, articleId));
+      const n = counted?.n ?? 0;
+      if (n >= MAX_CRITERIA) {
+        logger.info({ slug, criteria: n }, "criterion not added: the article is at the ceiling");
+        // Thrown out of the callback, so nothing is written. The real count, so
+        // a list inherited above the ceiling is told the truth.
+        throw criterionRefusal(409, criteriaAtCeiling(n));
       }
 
       const [inserted] = await tx
@@ -230,43 +284,6 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         })
         .returning();
 
-      /* Trim to MAX_CRITERIA, excluding the row just written. The file keeps
-         the last N array elements and this keeps the N newest by timestamp;
-         pg-searches.ts § the trim works through exactly how far apart those two
-         can get and why the guarantee that matters — *the row this `begin`
-         returns survives this transaction* — is the one a reader needs.
-
-         **And a `pending` row past the cap is skipped, not deleted** — the rule
-         pg-searches.ts gained on 2026-10-01 and this copy did not, until
-         2026-10-03. A retry keeps its `created_at`, so the oldest row can be the
-         one still being answered; deleting it made its fenced `finish` update
-         nothing and the paid answer was gone on reload. It becomes trimmable
-         once it finishes or the sweep fails it. So the cap is twenty plus
-         however many older criteria are still running.
-         docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
-      const others = await tx
-        .select({ id: refereeCriteria.id, status: refereeCriteria.status })
-        .from(refereeCriteria)
-        .where(
-          and(
-            eq(refereeCriteria.articleId, articleId),
-            notInArray(refereeCriteria.id, [decided.id]),
-          ),
-        )
-        .orderBy(sql`${refereeCriteria.createdAt} desc`, sql`${refereeCriteria.id} desc`)
-        .offset(MAX_CRITERIA - 1);
-      const past = others.filter((r) => r.status !== "pending").map((r) => r.id);
-      if (past.length) {
-        await tx.delete(refereeCriteria).where(
-          and(
-            eq(refereeCriteria.articleId, articleId),
-            inArray(refereeCriteria.id, past),
-            // Repeated in SQL for the reason the reset's predicate is above.
-            ne(refereeCriteria.status, "pending"),
-          ),
-        );
-      }
-
       // `inserted!`: an insert with `returning()` yields the row it wrote.
       const back = toCriterion(inserted!);
       if (!back) throw new Error(`Criterion "${decided.id}" was written and cannot be read back.`);
@@ -280,23 +297,26 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
   async finish(
     slug: string,
     id: string,
-    patch: Partial<SavedCriterion>,
-    attempt?: string,
+    patch: CriterionFinish,
+    attempt: string,
   ): Promise<SavedCriterion | undefined> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
     /* Refused without an attempt rather than falling back to identity — the
-       token is optional in the interface because the filesystem store has none,
-       and accepting `undefined` here would silently reopen the cross-process
-       race the column exists to close. pg-searches.ts § finish. */
+       interface requires the token, and this is the same rule for a caller the
+       compiler did not see: accepting `undefined` here would silently reopen
+       the cross-process race the column exists to close. pg-searches.ts §
+       finish. */
     if (attempt === undefined) {
       throw new MissingAttempt("RefereeCriteriaStore.finish", "begin()");
     }
     /* And the status has to be one this run can end on: the attempt is released
        below whatever the patch says, so a patch leaving the row `pending` would
-       strip the fence off a row still waiting for an answer. */
-    if (patch.status !== "done" && patch.status !== "error") {
+       strip the fence off a row still waiting for an answer. `CriterionFinish`
+       says so in the type; a plain string here, as in pg-searches.ts. */
+    const status: string = patch.status;
+    if (status !== "done" && status !== "error") {
       /* **`status`, so the guard lets the sentence through.** A fence violation
          is a caller's bug that never reached the database, and its whole
          content is which invariant broke — scrubbed, it arrives as *"this app
@@ -316,7 +336,7 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
          is the sibling refusal in this same family. */
       throw Object.assign(
         new Error(
-          `RefereeCriteriaStore.finish must end a criterion: status was ${JSON.stringify(patch.status)}, ` +
+          `RefereeCriteriaStore.finish must end a criterion: status was ${JSON.stringify(status)}, ` +
             'expected "done" or "error".',
         ),
         { status: 500 },
@@ -326,18 +346,24 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
     /* `id`, `criterion` and the config columns are deliberately not settable
        here — a finish reports an answer, and changing the question while
        answering it is what `begin` is for. */
+    const fields: Partial<Pick<SavedCriterion, "results" | "model" | "error">> = patch;
     const rows = await db
       .update(refereeCriteria)
       .set({
-        ...(patch.status === undefined ? {} : { status: patch.status }),
-        ...(patch.results === undefined ? {} : { results: patch.results }),
-        ...(patch.model === undefined ? {} : { model: patch.model }),
-        ...(patch.error === undefined ? {} : { error: patch.error }),
+        status: patch.status,
+        // Preserve defined-field writes — pg-searches.ts § finish.
+        ...(fields.results === undefined ? {} : { results: fields.results }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way. Both columns or neither — the CHECK
         // says so, and half an attempt is a row that can never be swept or
         // never be finished.
         attemptId: null,
         attemptStartedAt: null,
+        /* **When the results landed, or the call failed** — in the fenced
+           statement, so an attempt the sweep buried stamps nothing. The guard
+           above has already refused a patch that does not end the criterion. */
+        finishedAt: DB_NOW,
       })
       .where(
         and(
@@ -361,9 +387,24 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
   async remove(slug: string, id: string): Promise<SavedCriterion[]> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
-    await db
-      .delete(refereeCriteria)
-      .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
+    /* The referee's own comments can be placed on a criterion, and
+       `comments_criterion_fk` (`no action`, src/db/schema.ts) refuses to leave
+       one pointing at nothing. That refusal is the design; it is caught here,
+       by name and before the guard below drops the name, so the referee is told
+       why rather than told the app is broken. Nothing is detached and nothing
+       is deleted. **Caught, not checked first**: a read for comments followed
+       by the delete can be raced by a placement, and the key cannot. */
+    try {
+      await db
+        .delete(refereeCriteria)
+        .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
+    } catch (err) {
+      if (violatesForeignKey(err, COMMENTS_CRITERION_FK)) {
+        logger.info({ slug, criterionId: id }, "criterion not deleted: comments are placed on it");
+        throw criterionRefusal(409, CRITERION_HAS_COMMENTS);
+      }
+      throw err;
+    }
     const remaining = await criteriaFor(articleId, db, slug);
     logger.info({ slug, criterionId: id, remaining: remaining.length }, "criterion deleted");
     return remaining;
@@ -385,7 +426,8 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
        says so. */
     await db
       .update(refereeCriteria)
-      .set({ colour })
+      // `colour_at` beside it, a cleared colour included; no other clock is named.
+      .set({ colour, colourAt: DB_NOW })
       .where(and(eq(refereeCriteria.articleId, articleId), eq(refereeCriteria.id, id)));
     return criteriaFor(articleId, db, slug);
   },
@@ -413,7 +455,14 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
 
     const swept = await db
       .update(refereeCriteria)
-      .set({ status: "error", error: CRITERION_SWEPT, attemptId: null, attemptStartedAt: null })
+      // `finished_at` is when the sweep ended the attempt — the only ending it had.
+      .set({
+        status: "error",
+        error: CRITERION_SWEPT,
+        attemptId: null,
+        attemptStartedAt: null,
+        finishedAt: DB_NOW,
+      })
       .where(stale)
       .returning({ id: refereeCriteria.id });
 

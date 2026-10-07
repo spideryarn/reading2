@@ -1,0 +1,905 @@
+{
+ "judgeModel": "anthropic/claude-sonnet-5",
+ "answers": {
+  "1": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs idea; took_up_their_case: na vs continuing workplace case\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs idea; took_up_their_case: na vs continuing workplace case"
+   }
+  },
+  "2": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites nonexistent reader notes (spya-ugwnw2, spya-m4gku9) not in the shown notes\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (mixes real note with fabricated ones)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites nonexistent reader notes (spya-ugwnw2, spya-m4gku9) not in the shown notes",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (mixes real note with fabricated ones)"
+   }
+  },
+  "3": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move vs case\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move vs case"
+   }
+  },
+  "4": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs idea (the closing question extends the idea, but most of the reply joins notes and unmarked article passages)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs idea (the closing question extends the idea, but most of the reply joins notes and unmarked article passages)"
+   }
+  },
+  "5": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs case\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs case"
+   }
+  },
+  "6": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside (one claim lacks a link)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside (one claim lacks a link)"
+   }
+  },
+  "7": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside: article quotes used as evidence, not outside claims\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside: article quotes used as evidence, not outside claims"
+   }
+  },
+  "8": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs idea vs article (sourcing section is long)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs idea vs article (sourcing section is long)"
+   }
+  },
+  "9": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs idea"
+   }
+  },
+  "10": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"connection\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article vs connection\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "connection",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article vs connection"
+   }
+  },
+  "11": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: connection vs article\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: connection vs article"
+   }
+  },
+  "12": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs article (source-marking section) vs idea\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs article (source-marking section) vs idea"
+   }
+  },
+  "13": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside: one citation link looks suspicious/possibly fabricated\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside: one citation link looks suspicious/possibly fabricated"
+   }
+  },
+  "14": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs connection\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs connection"
+   }
+  },
+  "15": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites note id spya-da9tvt, which does not exist among the reader's notes or prior conversation\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: world vs connection; invented note id vs legitimate cross-reference\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites note id spya-da9tvt, which does not exist among the reader's notes or prior conversation",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: world vs connection; invented note id vs legitimate cross-reference"
+   }
+  },
+  "16": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"a saved library piece ('A landscape of consciousness...') attributed to the reader that appears nowhere in their notes or profile\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (citation reused without engaging note content); outside (fabricated source rather than plain unverified claim)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "a saved library piece ('A landscape of consciousness...') attributed to the reader that appears nowhere in their notes or profile",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (citation reused without engaging note content); outside (fabricated source rather than plain unverified claim)"
+   }
+  },
+  "17": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"idea\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites note IDs spya-her4zk, spya-k6fpme, spya-ryg483 not in reader's actual notes\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case; invented note IDs vs genuine article passages\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "idea",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites note IDs spya-her4zk, spya-k6fpme, spya-ryg483 not in reader's actual notes",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case; invented note IDs vs genuine article passages"
+   }
+  },
+  "18": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites a nonexistent reader note [spya-qu7j89] as if it were one of their marked passages\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"invented citation id not in reader's actual notes\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites a nonexistent reader note [spya-qu7j89] as if it were one of their marked passages",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "invented citation id not in reader's actual notes"
+   }
+  },
+  "19": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"yes\", \"invented_what\": \"cites reader notes [spya-her4zk], [spya-k6fpme], [spya-k850tu] that aren't among the reader's 5 actual notes\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"invented citation IDs vs. article quotes; applied_profile_case judgment\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "yes",
+    "invented_what": "cites reader notes [spya-her4zk], [spya-k6fpme], [spya-k850tu] that aren't among the reader's 5 actual notes",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "invented citation IDs vs. article quotes; applied_profile_case judgment"
+   }
+  },
+  "20": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: world vs connection (last paragraph ties article to reader's case)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: world vs connection (last paragraph ties article to reader's case)"
+   }
+  },
+  "21": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"opens_with_verdict judgment; citation ID not in reader's note list\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "opens_with_verdict judgment; citation ID not in reader's note list"
+   }
+  },
+  "22": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"fabricated citation tag [spya-da9tvt] and claim that the article cites the Cambridge Declaration on Consciousness/octopuses, despite the reply's own search finding no mention of octopuses in the article\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (relies on prior Recall thread, not current notes); invented (contradicts its own search result); move (mixes case, idea, and world)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "fabricated citation tag [spya-da9tvt] and claim that the article cites the Cambridge Declaration on Consciousness/octopuses, despite the reply's own search finding no mention of octopuses in the article",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (relies on prior Recall thread, not current notes); invented (contradicts its own search result); move (mixes case, idea, and world)"
+   }
+  },
+  "23": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs idea\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs idea"
+   }
+  },
+  "24": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside claim about critics is general, not a named source; own_material borderline since it echoes note spya-zw2m7u's question without citing it\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside claim about critics is general, not a named source; own_material borderline since it echoes note spya-zw2m7u's question without citing it"
+   }
+  },
+  "25": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs connection\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs connection"
+   }
+  },
+  "26": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"invented (citations to ids not in listed notes); outside (METR/Redwood may be article-internal)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "invented (citations to ids not in listed notes); outside (METR/Redwood may be article-internal)"
+   }
+  },
+  "27": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs idea"
+   }
+  },
+  "28": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (builds on 'said' content but references note-linked claims like Artifactory/30-40%)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (builds on 'said' content but references note-linked claims like Artifactory/30-40%)"
+   }
+  },
+  "29": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"yes\", \"invented_what\": \"cites a note [spya-rnag5c] (patch standoff quote) not present among the reader's shown notes\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"yes\", \"hard\": \"move (world vs case), invented (unseen note id)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "yes",
+    "invented_what": "cites a note [spya-rnag5c] (patch standoff quote) not present among the reader's shown notes",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "yes",
+    "hard": "move (world vs case), invented (unseen note id)"
+   }
+  },
+  "30": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites a nonexistent note [spya-ryg483] with an invented article quote about 'the fact of the matter matters'\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"invented note id/quote vs. real notes; whether reader's remark counts as profile case or new case\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites a nonexistent note [spya-ryg483] with an invented article quote about 'the fact of the matter matters'",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "invented note id/quote vs. real notes; whether reader's remark counts as profile case or new case"
+   }
+  },
+  "31": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"opens_with_verdict (the 'Yes' answers the question rather than grading the reader); own_material classification (reply answers their question directly rather than quoting a note)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "opens_with_verdict (the 'Yes' answers the question rather than grading the reader); own_material classification (reply answers their question directly rather than quoting a note)"
+   }
+  },
+  "32": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs idea\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs idea"
+   }
+  },
+  "33": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs idea"
+   }
+  },
+  "34": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: world vs article since it also summarizes Dwarkesh's own reply\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: world vs article since it also summarizes Dwarkesh's own reply"
+   }
+  },
+  "35": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move vs article"
+   }
+  },
+  "36": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article"
+   }
+  },
+  "37": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case"
+   }
+  },
+  "38": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites a note id [spya-epw4h3] for a Chalmers passage that is not among the reader's actual notes\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"invented vs outside (fabricated citation id mixed with properly linked claims)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites a note id [spya-epw4h3] for a Chalmers passage that is not among the reader's actual notes",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "invented vs outside (fabricated citation id mixed with properly linked claims)"
+   }
+  },
+  "39": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material (none vs said), outside (citation tags vs true links)\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material (none vs said), outside (citation tags vs true links)"
+   }
+  },
+  "40": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"connection\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside: cites article passages with ids but frames as parallel to reader's own case, not truly external world claims\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "connection",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside: cites article passages with ids but frames as parallel to reader's own case, not truly external world claims"
+   }
+  },
+  "41": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case; own_material: notes vs said\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case; own_material: notes vs said"
+   }
+  },
+  "42": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article"
+   }
+  },
+  "43": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs idea; outside: article citations vs outside-world claims\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs idea; outside: article citations vs outside-world claims"
+   }
+  },
+  "44": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs idea\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs idea"
+   }
+  },
+  "45": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: borders on 'idea' since it also develops the article's internal distinction before applying it\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: borders on 'idea' since it also develops the article's internal distinction before applying it"
+   }
+  },
+  "46": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case"
+   }
+  },
+  "47": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material classification (new citation IDs vs. earlier conversation content)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "own_material classification (new citation IDs vs. earlier conversation content)"
+   }
+  },
+  "48": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs idea\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs idea"
+   }
+  },
+  "49": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs connection; own_material: notes vs said (citation reused from earlier conversation, not reader's own note)\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs connection; own_material: notes vs said (citation reused from earlier conversation, not reader's own note)"
+   }
+  },
+  "50": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"move: case vs connection\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "move: case vs connection"
+   }
+  },
+  "51": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"cites notes spya-cf8rt8 and spya-k850tu not among reader's actual notes\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"invented note IDs; move idea vs world\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "cites notes spya-cf8rt8 and spya-k850tu not among reader's actual notes",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "invented note IDs; move idea vs world"
+   }
+  },
+  "52": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"world\", \"applied_profile_case\": \"no\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside (whether spya- citation counts as linked article reference)\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "world",
+    "applied_profile_case": "no",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside (whether spya- citation counts as linked article reference)"
+   }
+  },
+  "53": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"idea\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs article (reply leans heavily on article detail to test reader's 'colony' idea)\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "idea",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs article (reply leans heavily on article detail to test reader's 'colony' idea)"
+   }
+  },
+  "54": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"no\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside; move\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "no",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside; move"
+   }
+  },
+  "55": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"idea\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"yes\", \"invented_what\": \"claims note [spya-k9s755] says the grader only checked the secret code, not the cheating-checker assumption it actually marks\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"own_material/invented: citation tag reused for a claim not in that note's marked passage\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "idea",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "yes",
+    "invented_what": "claims note [spya-k9s755] says the grader only checked the secret code, not the cheating-checker assumption it actually marks",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "own_material/invented: citation tag reused for a claim not in that note's marked passage"
+   }
+  },
+  "56": {
+   "raw": "{\"own_material\": \"none\", \"move\": \"article\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: article vs idea\"}",
+   "labels": {
+    "own_material": "none",
+    "move": "article",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: article vs idea"
+   }
+  },
+  "57": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"idea\", \"applied_profile_case\": \"yes\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"yes\", \"remarks_on_absence\": \"no\", \"hard\": \"move: idea vs case; opens_with_verdict: 'That tracks with' as mild affirmation\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "idea",
+    "applied_profile_case": "yes",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "yes",
+    "remarks_on_absence": "no",
+    "hard": "move: idea vs case; opens_with_verdict: 'That tracks with' as mild affirmation"
+   }
+  },
+  "58": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"case\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"none\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"whether spya-vys3vj counts as reader's own note or just an article-passage citation\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "case",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "none",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "whether spya-vys3vj counts as reader's own note or just an article-passage citation"
+   }
+  },
+  "59": {
+   "raw": "{\"own_material\": \"said\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"na\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"linked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"move: world vs article\"}",
+   "labels": {
+    "own_material": "said",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "na",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "linked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "move: world vs article"
+   }
+  },
+  "60": {
+   "raw": "{\"own_material\": \"notes\", \"move\": \"world\", \"applied_profile_case\": \"na\", \"took_up_their_case\": \"yes\", \"invented\": \"no\", \"invented_what\": \"\", \"outside\": \"unlinked\", \"opens_with_verdict\": \"no\", \"remarks_on_absence\": \"no\", \"hard\": \"outside: Searle/IIT claims flagged as unverified but not linked\"}",
+   "labels": {
+    "own_material": "notes",
+    "move": "world",
+    "applied_profile_case": "na",
+    "took_up_their_case": "yes",
+    "invented": "no",
+    "invented_what": "",
+    "outside": "unlinked",
+    "opens_with_verdict": "no",
+    "remarks_on_absence": "no",
+    "hard": "outside: Searle/IIT claims flagged as unverified but not linked"
+   }
+  }
+ }
+}

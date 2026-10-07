@@ -523,8 +523,8 @@ describe("a question the backend answers with a tool", () => {
     /* Both backend responses were billed, each once, under their own id. */
     const backendReports = metered.filter((m) => m.report?.kind === "backend").map((m) => m.report);
     expect(backendReports).toEqual([
-      { kind: "backend", responseId: "r1", inputTokens: 900, cachedInputTokens: 800, outputTokens: 40 },
-      { kind: "backend", responseId: "r2", inputTokens: 1_000, cachedInputTokens: 900, outputTokens: 30 },
+      { kind: "backend", responseId: "r1", status: "completed", inputTokens: 900, cachedInputTokens: 800, outputTokens: 40 },
+      { kind: "backend", responseId: "r2", status: "completed", inputTokens: 1_000, cachedInputTokens: 900, outputTokens: 30 },
     ]);
     h.unmount();
   });
@@ -633,6 +633,29 @@ describe("a question the backend answers with a tool", () => {
     expect(h.get().tools.at(-1)).toMatchObject({ name: "delegation", detail: expect.stringMatching(/^failed — .*server_error/) });
     expect(sent).toEqual([]);
     expect(h.get().phase).toBe("live");
+    h.unmount();
+  });
+
+  /* qi-p78m9ch9: a failed response is billed for what it used, and the report
+     used to carry no status, so the ledger wrote it down as completed. */
+  it("reports a failed backend response's tokens as failed, not as completed", async () => {
+    const h = await live({ wiring: wiringFor(ticketWith()), tailNow: () => TAIL });
+    await deliver(
+      delegated("d1", "r1"),
+      created("d1", "r1"),
+      backend("d1", {
+        type: "response.failed",
+        response: {
+          id: "r1",
+          status: "failed",
+          error: { message: "server_error" },
+          usage: { input_tokens: 700, input_tokens_details: { cached_tokens: 0 }, output_tokens: 5 },
+        },
+      }),
+    );
+    expect(metered.filter((m) => m.report?.kind === "backend").map((m) => m.report)).toEqual([
+      { kind: "backend", responseId: "r1", status: "failed", inputTokens: 700, cachedInputTokens: 0, outputTokens: 5 },
+    ]);
     h.unmount();
   });
 });
@@ -770,6 +793,11 @@ describe("the provider ending the call", () => {
     ["connection_lost", /connection was lost/],
     ["remote_hangup", /ended the call/],
     ["something_new", /conversation ended/],
+    /* Names every object inherits: the table answered with an object or a
+       function, which `??` lets through. docs/plans/261005h, Stage A. */
+    ["__proto__", /conversation ended/],
+    ["constructor", /conversation ended/],
+    ["toString", /conversation ended/],
   ])("session.closed %s says why, writes what was said and does not ask to close again", async (reason, sentence) => {
     const { spoken, speak } = recordingSpeak();
     const h = await live({ wiring: wiringFor(ticketWith()), speak, tailNow: () => TAIL });

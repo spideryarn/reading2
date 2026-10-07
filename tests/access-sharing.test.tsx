@@ -29,6 +29,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SHARING_COPY_FAILED,
   SHARING_NOT_PERSONALISED,
+  SHARING_OFF,
+  SHARING_OFF_LINK_UNKNOWN,
+  SHARING_OFF_WITH_LINK,
   SHARING_ON,
   SHARING_PERSONALISED,
   SHARING_RIGHTS_CONFIRM,
@@ -162,13 +165,14 @@ afterEach(async () => {
  * the exact value a test is about is worse than no default; every caller says
  * what it means.
  */
-async function mount(sharing: ArticleSharing | undefined): Promise<void> {
+async function mount(sharing: ArticleSharing | undefined, checking = false): Promise<void> {
   await act(async () => {
     root.render(
       createElement(AccessSharing, {
         slug: SLUG,
         title: "A piece",
         sharing,
+        checking,
         onVisibility: (forSlug: string, visibility: Visibility | null) => {
           /* The slug is asserted rather than ignored: the callback resolves
              after the reader may have moved on, and the receiver keys on it. */
@@ -281,6 +285,62 @@ it("tells the owner a shared article is listed, not merely reachable by link", (
     expect(copy).toMatch(/\blist(?:s|ed)(?: it)? publicly\b/i);
     expect(copy).not.toMatch(/with the link can read/);
   }
+});
+
+/**
+ * **"Only you can read this" is false while a private link is on** (plan
+ * 261005e). The control above this one on the card holds the link's state and
+ * the card passes it down, so the sentence for a private article is one of
+ * three: nobody else, anybody with the link, or no claim about a link at all
+ * when its state could not be read.
+ */
+describe("what a private article's line says when there may be a private link", () => {
+  async function mountWithLink(privateLinkOn: boolean | null | undefined): Promise<void> {
+    await act(async () => {
+      root.render(
+        createElement(AccessSharing, {
+          slug: SLUG,
+          title: "A piece",
+          sharing: PRIVATE,
+          ...(privateLinkOn === undefined ? {} : { privateLinkOn }),
+        }),
+      );
+    });
+    await settle();
+  }
+
+  it("says only you, with no link and when mounted on its own", async () => {
+    await mountWithLink(false);
+    expect(host.textContent).toContain(SHARING_OFF);
+    await mountWithLink(undefined);
+    expect(host.textContent).toContain(SHARING_OFF);
+  });
+
+  it("does not say only you while a link is on, and says who else", async () => {
+    await mountWithLink(true);
+    expect(host.textContent).not.toContain(SHARING_OFF);
+    expect(host.textContent).toContain(SHARING_OFF_WITH_LINK);
+    expect(SHARING_OFF_WITH_LINK).toMatch(/not public/i);
+    expect(SHARING_OFF_WITH_LINK).toMatch(/private link/i);
+  });
+
+  it("claims nothing about who can read when the link's state is not known", async () => {
+    await mountWithLink(null);
+    expect(host.textContent).not.toContain(SHARING_OFF);
+    expect(host.textContent).not.toContain(SHARING_OFF_WITH_LINK);
+    expect(host.textContent).toContain(SHARING_OFF_LINK_UNKNOWN);
+    expect(SHARING_OFF_LINK_UNKNOWN).not.toMatch(/only you/i);
+  });
+
+  it("leaves a public article's line alone, whatever the link is", async () => {
+    await act(async () => {
+      root.render(
+        createElement(AccessSharing, { slug: SLUG, title: "A piece", sharing: SHARED, privateLinkOn: true }),
+      );
+    });
+    await settle();
+    expect(host.textContent).toContain(SHARING_ON);
+  });
 });
 
 describe("turning it on", () => {
@@ -643,6 +703,35 @@ describe("when a write does not come back cleanly", () => {
  * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
  */
 describe("telling the rest of the page what changed", () => {
+  it("offers no control and reports no visibility while checking", async () => {
+    await mount(undefined, true);
+    expect(host.textContent).toContain("Checking who can read this");
+    expect(host.querySelectorAll("button, input")).toHaveLength(0);
+    expect(host.textContent).not.toContain("could not check");
+    expect(host.textContent).not.toContain("Shared since");
+    expect(reported).toEqual([]);
+    expect(calls).toEqual([]);
+  });
+
+  it("keeps a pending write and its answer ahead of a later checking prop", async () => {
+    hold = true;
+    await mount(PRIVATE);
+    press("Share with anyone");
+    tickTheBox();
+    press("Share it");
+    await mount(undefined, true);
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(host.querySelectorAll("button, input")).toHaveLength(0);
+    expect(reported).toEqual(["private", null]);
+
+    release();
+    await settle();
+    expect(host.textContent).toContain(SHARING_ON);
+    expect(host.textContent).toContain("Stop sharing");
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(reported).toEqual(["private", null, "public"]);
+  });
+
   /**
    * **`reported` is asserted whole, as a sequence.**
    *
@@ -1009,5 +1098,89 @@ describe("copying the link", () => {
     await settle();
     expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
     expect(announced()).toBe("Link copied.");
+  });
+
+  /* The next two were red against the hand-written handler this button had
+     until 2026-10-04: no per-press token, and a timer hung off an effect keyed
+     on the state. Both are `useCopy`'s now (plan 261004e, stage 3). */
+
+  it("lets the newest press win when an older one is refused afterwards", async () => {
+    const settlers: Array<{ ok(): void; no(): void }> = [];
+    setClipboard({
+      writeText: () =>
+        new Promise<void>((ok, no) => {
+          settlers.push({ ok, no: () => no(new Error("denied")) });
+        }),
+    });
+    await mount(SHARED);
+    press("Copy");
+    press("Copy");
+    expect(settlers).toHaveLength(2);
+
+    await act(async () => {
+      settlers[1]?.ok();
+      await Promise.resolve();
+    });
+    expect(buttonSays("Copied")).toBe(true);
+    // The first press is refused after the second worked. The clipboard holds
+    // the link, and this failure sentence does not time out: it would tell an
+    // owner to select the link by hand, for as long as they stayed.
+    await act(async () => {
+      settlers[0]?.no();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).not.toContain(SHARING_COPY_FAILED);
+    expect(announced()).toBe("Link copied.");
+    expect(buttonSays("Copied")).toBe(true);
+    expect(host.querySelector("[data-copy-status]")?.className).toContain("sr-only");
+  });
+
+  it("gives a second copy its own full time on screen", async () => {
+    setClipboard({ writeText: () => Promise.resolve() });
+    await mount(SHARED);
+    /* Fake timers only from here: `mount` and `settle` wait on real ones. */
+    vi.useFakeTimers();
+    try {
+      const flush = () =>
+        act(async () => {
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      press("Copy");
+      await flush();
+      expect(buttonSays("Copied")).toBe(true);
+
+      // 1000 ms into a 1500 ms tick, copy again.
+      act(() => vi.advanceTimersByTime(1000));
+      press("Copied");
+      await flush();
+      // 1000 ms later the first tick's timer has run out. The second copy is
+      // 1000 ms old and still has 500 ms to show.
+      act(() => vi.advanceTimersByTime(1000));
+      expect(buttonSays("Copied")).toBe(true);
+      expect(announced()).toBe("Link copied.");
+      // And it does go: 1600 ms after the second copy.
+      act(() => vi.advanceTimersByTime(600));
+      expect(buttonSays("Copy")).toBe(true);
+      expect(announced()).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the failure sentence up: it is an instruction, and does not time out", async () => {
+    setClipboard(undefined);
+    await mount(SHARED);
+    vi.useFakeTimers();
+    try {
+      press("Copy");
+      expect(announced()).toBe(SHARING_COPY_FAILED);
+      act(() => vi.advanceTimersByTime(60_000));
+      expect(announced()).toBe(SHARING_COPY_FAILED);
+      expect(host.querySelector("[data-copy-status]")?.className).not.toContain("sr-only");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -10,11 +10,19 @@
  * in the stored source, deterministically, with no model in it at all;
  * src/source-scan.ts is what calls it; this is what a referee reads.
  *
- * ## It belongs to the band, not to a sub-mode
+ * ## A sub-mode of its own, and a mark on its chip
  *
- * A hidden instruction is a fact about the *document*, so it bears on Criteria,
- * Claims, Mirror and Candidates alike. `RefereeBand` draws this above the
- * sub-mode chips and it stays there whichever panel is open.
+ * A hidden instruction is a fact about the *document*, so it bears on every
+ * sub-mode alike, and for that reason this lived above them all — first above
+ * the chips, then inside the band's Notices box, which opened itself for a
+ * finding (plan 261003k). On arXiv HTML a typesetter's zero-width spaces count
+ * as findings, so that was nearly every paper. Greg, 2026-10-07
+ * (`spya-y6590g`): *"Perhaps squirrel this info away as a sub-mode? It doesn't
+ * seem important enough to be right at the top of Criteria."* So it is the
+ * **Hidden text** sub-mode, drawn by `RefereeSubMode`, and what is left of it
+ * elsewhere is `sourceScanMark` below: a dot or a ring on its chip, and one
+ * sentence for a screen reader. The scan itself is still fetched once by the
+ * band. docs/plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md.
  *
  * ## Shut until there is something to read
  *
@@ -40,7 +48,7 @@
  * used sparingly (docs/project/url-state.md), and a column is a migration for
  * a checkbox — never arises.
  *
- * ## The four rules this component is under, and where each is enforced
+ * ## The five rules this component is under, and where each is enforced
  *
  * 1. **Never say "nothing found" when nothing was looked at.** The `switch` on
  *    `scan.examined` is exhaustive with a `never` in the default, and the
@@ -51,9 +59,9 @@
  *    never empty, and `WhatWasNotChecked` below is rendered on the examined arm
  *    unconditionally. Since that list is now behind the disclosure, **the
  *    headline carries the caveat itself** — the words *not a clean bill* are in
- *    the same sentence as *nothing found*, on screen whether the panel is open
- *    or shut. A clean result behind a collapse with nothing to say it is
- *    incomplete is what rule 2 forbids; a headline that says so is not that.
+ *    the same sentence as *nothing found*, whether this disclosure is open or
+ *    shut. A clean result behind a collapse with nothing to
+ *    say it is incomplete is what rule 2 forbids; a headline that says so is not that.
  * 3. **A label sorts a finding last; it never removes one.** `ordinary` is read
  *    off class and element names, so `class="sr-only"` on a paragraph of
  *    instructions earns it — docs/project/security.md says any UI over this must
@@ -61,11 +69,17 @@
  *    scan already returns them in that order; this sorts anyway, because a
  *    rendering rule that depends on the server having done it is a rule with
  *    nothing holding it. A labelled finding also counts as *found*, so a
- *    document with nothing but labelled findings opens the panel.
+ *    document with nothing but labelled findings opens the panel and marks
+ *    the chip. Identical findings are drawn as one row with a count
+ *    (`grouped`), and the label is part of what makes two identical, so a
+ *    labelled row is never folded into an unlabelled one.
  * 4. **Hidden text and visible text are not drawn with the same confidence.**
  *    A `"visible-instruction"` carries a required `caveat` — a paper *about*
  *    prompt injection quotes payloads for a living — and the row prints it.
  *    Hidden text has no innocent explanation and gets no such line.
+ * 5. **The panel is shut unless something was found.** `shown()` returns the
+ *    computed default beside the words, and only a non-empty finding list sets
+ *    `open`; a labelled finding still counts.
  *
  * **It reports and decides nothing.** No score, no verdict, no refusal, and it
  * blocks no model call. It is a way for a referee to find out that somebody
@@ -85,6 +99,15 @@ import type {
 } from "../injection-scan-types.js";
 import type { SourceScanState } from "./useSourceScan.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { ownLabel, plainWords } from "./lib/own-label.js";
+
+/*
+ * The three tables below are read by values the server sent, so each is read
+ * through `ownLabel` (lib/own-label.ts): a copy of the app older than the
+ * scanner meets kinds it has no words for. A kind or a blind spot then shows
+ * as the server's own word. An everyday explanation is left out, because this
+ * copy cannot say what it means; the finding itself stays.
+ */
 
 /** What each trick is, in words a referee reads rather than a property name. */
 const KIND_LABEL: Record<FindingKind, string> = {
@@ -111,6 +134,113 @@ const ORDINARY_LABEL: Record<OrdinaryExplanation, string> = {
   typography: "ordinary typography",
   "subject-matter": "this document appears to be about prompt injection",
 };
+
+/**
+ * **What each trick is, and what it would look like if it mattered**, in a
+ * sentence a referee reads under the row.
+ *
+ * Greg, 2026-10-07 (`spya-y6590g`), on a row that read *"Characters that render
+ * as nothing / math#footnote1.m1.ltx_Math > semantics > mrow > mo / 1×
+ * zero-width space U+200B"*: *"this is uninterpretable gibberish to the user,
+ * and secondly it looks innocuous."* So each kind says what it is in plain
+ * words. It is the same sentence whatever the document says, so it explains
+ * the mechanism and passes no judgement on this finding: the document cannot
+ * reach it. docs/plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md.
+ */
+const KIND_MEANS: Record<FindingKind, string> = {
+  "colour-on-background":
+    "Text coloured to match what is behind it, so a reader sees a blank and a model reads the words. " +
+    "A manuscript rarely has a reason to do this, so read what it says.",
+  "tiny-font":
+    "Text set too small for anybody to read. A model reads it at full size, so read what it says.",
+  hidden:
+    "Text the page tells the browser not to show at all. Menus and pop-ups do this as a matter of " +
+    "course; in the body of a paper, read what it says.",
+  "off-screen":
+    "Text pushed outside the visible page or clipped to nothing, where a reader never scrolls and a " +
+    "model reads it all the same.",
+  "invisible-characters":
+    "Characters that take up no space on screen: zero-width spaces, joiners, direction marks. Tools " +
+    "that typeset maths and web addresses put single ones in routinely, and one on its own holds no " +
+    "words. What can carry a whole hidden sentence is a run of Unicode tag characters, and when there " +
+    "are any, what they spell is quoted here.",
+  "visible-instruction":
+    "A sentence addressed to a model rather than to a reader, such as one telling it how to review " +
+    "the paper. It is printed where anyone can see it, so it may simply be quoted.",
+};
+
+/**
+ * Characters that draw nothing, and whitespace: what is left of a finding's
+ * quoted text once they are gone is what a reader would actually see.
+ */
+const DRAWS_NOTHING = /[\s­​-‏‪-‮⁠-⁤⁦-⁩﻿\u{E0000}-\u{E007F}]/gu;
+
+/**
+ * Direction controls in returned document strings can also make the browser
+ * visually reorder the evidence that names them. Show the code point instead. The
+ * source path and finding text are both document-written, so both pass through
+ * this boundary; React escaping alone does not neutralise Unicode bidi.
+ */
+const BIDI_CONTROL = /\p{Bidi_Control}/gu;
+
+/** Keep an attacker-written id, class or CSS value from becoming the whole panel. */
+const MAX_EVIDENCE_TEXT = 500;
+
+function visibleEvidence(value: string, cap = Number.POSITIVE_INFINITY): string {
+  const visible = value.length > cap ? `${value.slice(0, cap)}… [shortened]` : value;
+  return visible.replace(BIDI_CONTROL, (control) => {
+    const codePoint = control.codePointAt(0);
+    return codePoint === undefined ? "" : `⟦U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}⟧`;
+  });
+}
+
+/**
+ * **Findings that read the same are one row, with a count.**
+ *
+ * The key is every field a referee reads except `where`: the kind, the words,
+ * the evidence, the label and the caveat. So a payload is never folded into a
+ * pile of copies — its words differ from theirs, and it is a row of its own —
+ * and a labelled finding is never merged with an unlabelled one, which keeps
+ * rule 3's order. On the arXiv paper Greg was reading, 39 rows of one
+ * zero-width space each became one. Order is first appearance, over rows
+ * already `ordered`, so the unexplained still come first.
+ *
+ * **Two findings in one row may be two different things in the source** —
+ * `text` is capped, and `where` is a four-step hint with no sibling index —
+ * so a row never claims they are the same place: it says how many findings it
+ * stands for, and lists every distinct source path. A path is capped only when
+ * drawn: ids and classes belong to the document, so one must not fill the panel
+ * and push the finding's own words out of reach.
+ */
+interface Group {
+  key: string;
+  finding: ScanFinding;
+  /** How many findings this row stands for. */
+  count: number;
+  /** Every distinct `where`, in order, all of them shown. */
+  paths: string[];
+}
+
+export function grouped(rows: ScanFinding[]): Group[] {
+  const groups = new Map<string, Group>();
+  for (const finding of rows) {
+    const key = JSON.stringify([
+      finding.kind,
+      finding.text,
+      finding.detail,
+      finding.ordinary ?? null,
+      finding.kind === "visible-instruction" ? finding.caveat : null,
+    ]);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { key, finding, count: 1, paths: [finding.where] });
+    } else {
+      group.count++;
+      if (!group.paths.includes(finding.where)) group.paths.push(finding.where);
+    }
+  }
+  return [...groups.values()];
+}
 
 /** Each gap, said as the thing that was not looked at. */
 const BLIND_SPOT_LABEL: Record<BlindSpot, string> = {
@@ -154,7 +284,7 @@ function ordered(findings: ScanFinding[]): ScanFinding[] {
  * **One state of the panel: what it says shut, what it hides, and how worried a
  * referee should be.**
  *
- * All four together in one returned object rather than three functions
+ * All five together in one returned object rather than separate functions
  * switching over the same union, because the failure that matters is them
  * disagreeing — a headline saying *nothing was checked* over a tooltip saying
  * *nothing was found* is worse than either sentence alone.
@@ -300,6 +430,33 @@ function forScan(scan: SourceScan): Shown {
   }
 }
 
+/**
+ * **What the Hidden text chip carries**: nothing, a ring, or a dot.
+ *
+ * - `"found"` — something with no everyday label: a filled dot.
+ * - `"labelled"` — findings, every one wearing an everyday label: a ring.
+ * - `"none"` — nothing found, nothing checked, or no answer yet.
+ *
+ * **Any finding leaves a mark, because a label is forgeable.** A payload in
+ * `class="sr-only"` earns `screen-reader-only`, so a mark for unlabelled
+ * findings alone would let a document silence it by wearing a class name —
+ * GPT Sol's review of plan 261007h, finding 1. The two marks differ because
+ * arXiv's own page furniture carries two `navigation`-labelled findings on
+ * nearly every paper, and a dot lit on every article would say nothing. Both
+ * are `shown(state).open`, the rule that opens the panel, split by `warn`.
+ *
+ * Until 2026-10-07 this was `sourceScanOpens`, and it opened the band's
+ * Notices box above every sub-mode; plan 261007h moved the scan into a
+ * sub-mode of its own and left this mark as all of it that shows elsewhere.
+ */
+export type SourceScanMark = "none" | "labelled" | "found";
+
+export function sourceScanMark(state: SourceScanState): SourceScanMark {
+  const view = shown(state);
+  if (!view.open) return "none";
+  return view.warn ? "found" : "labelled";
+}
+
 export function SourceScanNotice({ state }: { state: SourceScanState }) {
   const view = shown(state);
   /**
@@ -315,11 +472,11 @@ export function SourceScanNotice({ state }: { state: SourceScanState }) {
   const open = choice ?? view.open;
 
   return (
-    <section className="ref-scan" aria-label="Hidden instructions in the source">
+    <section className="ref-scan" aria-label="Hidden text in the source">
       <h3 className="ref-scan-head">
         <Tooltip
           className="tip-soon"
-          content={<ControlTip head="Hidden instructions" what={WHAT_THIS_IS} how={view.worry} />}
+          content={<ControlTip head="Hidden text" what={WHAT_THIS_IS} how={view.worry} />}
         >
           <button
             type="button"
@@ -328,7 +485,7 @@ export function SourceScanNotice({ state }: { state: SourceScanState }) {
             onClick={() => setChoice(!open)}
           >
             <ShieldAlert size={13} aria-hidden="true" />
-            <span>Hidden instructions</span>
+            <span>Hidden text</span>
             {open ? (
               <ChevronDown size={12} aria-hidden="true" />
             ) : (
@@ -369,8 +526,8 @@ function Examined({
     <>
       {rows.length > 0 && (
         <ul className="ref-scan-list">
-          {rows.map((finding, i) => (
-            <Finding key={`${finding.where}-${finding.kind}-${String(i)}`} finding={finding} />
+          {grouped(rows).map((group) => (
+            <Finding key={group.key} group={group} />
           ))}
         </ul>
       )}
@@ -403,19 +560,35 @@ function Examined({
  * it whatever the document says — so this paragraph always has something in it,
  * which is the point: the reason it exists is that an empty list would render as
  * *we looked at everything*.
+ *
+ * **A blind spot this copy has no sentence for is still named**, in the
+ * server's own word. Dropping it would shorten the list, which is the same
+ * false claim in a smaller size.
  */
 function WhatWasNotChecked({ scan }: { scan: HtmlSourceScan }) {
   return (
     <p className="ref-scan-line ref-scan-blind">
       <strong>Not checked:</strong>{" "}
-      {scan.blindSpots.map((spot) => BLIND_SPOT_LABEL[spot]).join("; ")}
+      {scan.blindSpots.map((spot) => ownLabel(BLIND_SPOT_LABEL, spot) ?? plainWords(spot)).join("; ")}
       {scan.unreadableSelectors > 0 ? ` (${scan.unreadableSelectors} of them)` : ""}. Nor layering,
       masks, or anything a browser would have to draw to decide.
     </p>
   );
 }
 
-function Finding({ finding }: { finding: ScanFinding }) {
+/**
+ * **One row: what was found, the words themselves, what the trick is, and then
+ * the evidence for somebody who will go and look.**
+ *
+ * Plan 261007h put the plain words first and the CSS path and code points
+ * last and smaller, under *In the source*. Both stay: the rules say evidence
+ * is shown, and a referee who wants to check needs it.
+ */
+function Finding({ group }: { group: Group }) {
+  const { finding, count, paths } = group;
+  const ordinary = finding.ordinary === undefined ? undefined : ownLabel(ORDINARY_LABEL, finding.ordinary);
+  const means = ownLabel(KIND_MEANS, finding.kind);
+  const visible = finding.text.replace(DRAWS_NOTHING, "") !== "";
   return (
     /* `data-` attributes so tests/source-scan-notice.test.tsx can assert the
        *order* of the rows rather than only their presence — rule 3 is about
@@ -425,20 +598,35 @@ function Finding({ finding }: { finding: ScanFinding }) {
       className={`ref-scan-item${finding.ordinary === undefined ? "" : " explained"}`}
       data-kind={finding.kind}
       data-ordinary={finding.ordinary ?? "none"}
+      data-count={count}
     >
-      <span className="ref-scan-kind">{KIND_LABEL[finding.kind]}</span>
-      {finding.ordinary !== undefined && (
-        <span className="ref-scan-tag">{ORDINARY_LABEL[finding.ordinary]}</span>
+      <span className="ref-scan-kind">{ownLabel(KIND_LABEL, finding.kind) ?? plainWords(finding.kind)}</span>
+      {count > 1 && <span className="ref-scan-count">{count} times</span>}
+      {ordinary !== undefined && <span className="ref-scan-tag">{ordinary}</span>}
+      {visible ? (
+        <q className="ref-scan-text"><bdi>{visibleEvidence(finding.text)}</bdi></q>
+      ) : (
+        /* An empty pair of quote marks reads as a rendering bug. */
+        <span className="ref-scan-text ref-scan-empty">No visible words beside it.</span>
       )}
-      <span className="ref-scan-where">{finding.where}</span>
-      <q className="ref-scan-text">{finding.text}</q>
-      <span className="ref-scan-detail">{finding.detail}</span>
+      {means !== undefined && <span className="ref-scan-means">{means}</span>}
       {/* Required on the type, so it cannot be dropped by an edit here: a
           plainly-printed instruction has ordinary explanations that hidden text
           does not, and the two must not be drawn with the same confidence. */}
       {finding.kind === "visible-instruction" && (
         <span className="ref-scan-caveat">{finding.caveat}</span>
       )}
+      <span className="ref-scan-source">
+        In the source:{" "}
+        {paths.map((path, i) => (
+          <span key={path}>
+            {i > 0 ? "; " : ""}
+            <bdi className="ref-scan-where">{visibleEvidence(path, MAX_EVIDENCE_TEXT)}</bdi>
+          </span>
+        ))}{" "}
+        ·{" "}
+        <bdi className="ref-scan-detail">{visibleEvidence(finding.detail, MAX_EVIDENCE_TEXT)}</bdi>
+      </span>
     </li>
   );
 }

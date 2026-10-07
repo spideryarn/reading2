@@ -17,103 +17,13 @@
    it: an 18rem column has no room for a sentence and a number on one line, and
    the number is the one that gives way.
 
-   The head, the order buttons and the bar deliberately match `.gloss-*` rule
-   for rule. They are the same three controls doing the same three jobs, and a
-   second look for them would teach the reader they mean something else. What is
-   NOT shared is the row, which is a different thing entirely. */
-/* The title row is `.band-head`, § mode band. */
+   The head, the order buttons and the bar are the glossary's: `.band-head`
+   (§ mode band), `.gloss-sort*` and `.gloss-gate*` (glossary.css). They are the
+   same three controls doing the same three jobs, and a second look for them
+   would teach the reader they mean something else. Until 2026-10-07 the last
+   two were copies here, under `.quotes-rank*` and `.quotes-bar*` (plan 261007a
+   § K5). What is NOT shared is the row, which is a different thing entirely. */
 
-.quotes-rank {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.4rem 0.7rem;
-  border-bottom: 1px solid var(--rule);
-}
-/* The band's top row whenever it is drawn (no head then), so it clears the
-   (i) in the corner — mode-band.css § `.mode-band > .band-about`, plan 261001m. */
-.mode-band.has-about .quotes-rank { padding-right: calc(0.7rem + var(--band-about-room)); }
-.quotes-rank-btn {
-  padding: 0.1rem 0.4rem;
-  border: 1px solid transparent;
-  border-radius: 0.4rem;
-  background: none;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.84rem;
-  cursor: pointer;
-}
-/* Behind `(hover: hover)`, with `:active` beside it — glossary.css § the same
-   two lines carries the reasoning, and the two rows must not drift. */
-@media (hover: hover) {
-  .quotes-rank-btn:hover { color: var(--ink); background: var(--surface-raised); }
-}
-.quotes-rank-btn:active { color: var(--ink); background: var(--surface-raised); }
-.quotes-rank-btn.on {
-  border-color: var(--rule-strong);
-  background: var(--surface-raised);
-  color: var(--highlight-ink);
-}
-.quotes-rank-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-/* One line on a touch screen, after the base rule so it wins — glossary.css §
-   a touch screen has the decision and the rest of the treatment. */
-@media (pointer: coarse) {
-  .quotes-rank { flex-wrap: nowrap; }
-}
-
-/* The bar. Same rules as `.gloss-gate`, and the same reason for the native
-   range input: `accent-color` is one line where `::-webkit-slider-thumb` is the
-   track, the thumb, the focus ring and the dark-mode colours of all three in
-   two vendor dialects. */
-.quotes-bar {
-  padding: 0.4rem 0.7rem 0.5rem;
-  border-bottom: 1px solid var(--rule);
-}
-.quotes-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.quotes-bar-label {
-  color: var(--ink-faint);
-  font-size: 0.83rem;
-  text-transform: lowercase;
-}
-.quotes-bar-value {
-  margin-left: auto;
-  color: var(--ink-soft);
-  font-family: var(--font-mono);
-  font-size: 0.79rem;
-  white-space: nowrap;
-}
-.quotes-bar-reset {
-  display: flex;
-  align-items: center;
-  padding: 0.1rem;
-  border: none;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.quotes-bar-reset:hover { color: var(--ink); }
-.quotes-bar-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.quotes-bar-range {
-  display: block;
-  width: 100%;
-  margin: 0.3rem 0 0;
-  accent-color: var(--highlight-text);
-  cursor: pointer;
-}
-.quotes-bar-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-.quotes-bar-note {
-  margin: 0.3rem 0 0;
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.35;
-}
-
-.quotes-error,
 .quotes-quiet {
   margin: 0;
   padding: 0.7rem;
@@ -121,11 +31,10 @@
   font-size: 0.88rem;
   line-height: 1.45;
 }
-.quotes-error { color: var(--highlight-ink); }
 
 .quotes-empty { padding: 0.7rem; }
 .quotes-empty p { margin: 0 0 0.5rem; font-size: 0.91rem; color: var(--ink-soft); }
-.quotes-hint { color: var(--ink-faint) !important; font-size: 0.84rem !important; line-height: 1.45; }
+.quotes-empty .quotes-hint { color: var(--ink-faint); font-size: 0.84rem; line-height: 1.45; }
 .quotes-run { display: flex; flex-direction: column; gap: 0.4rem; }
 
 .quotes-stale {
@@ -280,6 +189,27 @@
   border-bottom: 1px solid var(--rule);
 }
 .quotes-where { flex: none; }
+
+/* **Under a finger, the ⓘ sits above its id rather than beside it.** Both
+   carry `.tap-target` (tap-target.css): the ⓘ's reaches 40 × 40, the id's is
+   bounded to its own width and 1.3rem tall. Side by side they were 2.3px apart,
+   so the ⓘ's target would have taken the id's left half; Greg's rule for that
+   is "the row grows instead" (2026-10-07). Stacked, the column is 40px wide —
+   narrower than the 54px pair it replaces, so the quote gets wider — and the
+   gap holds both targets' overhang. Row padding contains the first and last
+   targets too: otherwise a short row's id overlaps the next row's ⓘ, and
+   the first ⓘ is clipped at the list's top. At a 12px root the info target
+   reaches 12.2px above its button, held by 8px row + 6px side padding.
+   Plan 261007h § F5a. */
+@media (any-pointer: coarse) {
+  .quotes-row { padding-block: 8px; }
+  .quotes-row-side {
+    flex-direction: column;
+    align-items: center;
+    min-width: 40px;
+    gap: 18px;
+  }
+}
 
 /* One child now — the rerun button — but the column and the gap stay: they cost
    nothing and they are what a second row would land in. `.quotes-provenance`

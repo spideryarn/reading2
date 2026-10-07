@@ -38,10 +38,33 @@
  * gets the same replacement, from the same cause. `foldInLocalWrites` below is
  * the fix, and it arrived only when the "?" in the gutter turned a lost mark
  * into a second model call nobody asked for. GPT Sol, 2026-09-05.
+ *
+ * ## Since 2026-10-05 it can be asked again (`refresh`)
+ *
+ * The one-way rule only works for writers who tell this hook, and Chat's band
+ * never has: a conversation started, continued or deleted there left this list
+ * as it was until a reload. That did not show while every summary anyone
+ * looked at was made by `ChatDialog`. It does now that a caller mode draws a
+ * mark from a chat started in the band (Debate's claims; plan 261005i, F1).
+ *
+ * So `Reader` calls `refresh()` when the reader leaves Chat, and the chat
+ * controller calls it when a typed turn settles, even after the composer goes.
+ * A refetch is the race the paragraphs above
+ * describe, so it goes through the same `foldInLocalWrites`: whatever was
+ * added, touched or dropped while it was in the air wins over the answer, and
+ * an older request can never land after a newer one. The list is not emptied
+ * and `loaded` stays true while it is out, so no mark flickers.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ChatAnchor, ThreadSummary } from "../types.js";
+import {
+  type ChatAnchor,
+  isLensOrigin,
+  type LensOrigin,
+  sameOrigin,
+  type ThreadOrigin,
+  type ThreadSummary,
+} from "../types.js";
 import type { AskedQuestion } from "./comment-nav.js";
 import { apiFetch, readJson } from "./lib/api.js";
 
@@ -62,6 +85,20 @@ export interface ChatAnchorsApi {
   /** A thread went away — deleted, or cancelled before its first answer landed. */
   drop(threadId: string): void;
   /**
+   * The server stored a new thread under another id than the one `add` was
+   * given: the tab guesses a new conversation's id, and the server overrules a
+   * guess used by a *message* in the article, including one minted for this
+   * turn (src/chat.ts, `taken`, `withTurn`; a guess that is a conversation's
+   * id is that conversation). The row moves to the server's id, in place.
+   *
+   * No answer will ever name the guess, so left alone its row stays beside the
+   * real one and the paragraph counts one conversation twice. One operation
+   * rather than `drop` then `add`, so the row keeps its place and the
+   * bookkeeping for a request in the air moves in one step.
+   * docs/plans/261005n-chat-guessed-id-reconciled-with-the-stored-one.md
+   */
+  rename(from: string, to: string): void;
+  /**
    * A thread's title or newest answer changed.
    *
    * Only the fields a hover shows. Deliberately **not** called per token: the
@@ -69,6 +106,13 @@ export interface ChatAnchorsApi {
    * streams. `ChatDialog` calls it once, when a turn finishes.
    */
   touch(threadId: string, patch: Partial<ThreadSummary>): void;
+  /**
+   * Ask the server for the list again, because something that does not tell
+   * this hook may have changed it (Chat's band). Keeps what is on screen until
+   * the answer lands, and keeps anything done while it was in the air. A
+   * failure leaves the list as it was.
+   */
+  refresh(): void;
   error: string | null;
 }
 
@@ -159,6 +203,27 @@ export function askedQuestions(
 }
 
 /**
+ * **The margin's questions, less the one drawn as a card beside them.**
+ *
+ * While a block's conversation is a card in the Marginalia column
+ * (docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md § 6),
+ * that block's *Question · About this paragraph* line would sit directly above
+ * the card that is that question. So the margin's list goes without it, for as
+ * long as the card is up. **The margin's only**: the Comments drawer lists
+ * every question whether or not one is open.
+ *
+ * **The same array when nothing is dropped**, because the margin's notes are
+ * memoised on it and `memo(TableView)` on them.
+ */
+export function askedBesideCard<T extends { id: string }>(
+  asked: readonly T[],
+  cardThreadId: string | null,
+): readonly T[] {
+  if (cardThreadId === null || !asked.some((q) => q.id === cardThreadId)) return asked;
+  return asked.filter((q) => q.id !== cardThreadId);
+}
+
+/**
  * **The conversation a second press of "?" should open instead of buying.**
  *
  * The gutter's "?" spends a model call with no confirmation, so pressing it on
@@ -242,6 +307,55 @@ export function threadFor(
 }
 
 /**
+ * **The conversation that was started from this item in another mode**, for
+ * the item to draw its way back from. Derived from the summaries, so nothing
+ * is stored on the item's side (plan 261005i, D2).
+ *
+ * The match is exact (`sameOrigin`): a claim has no id, so its block and its
+ * words are its name, and a new search that words the claim differently no
+ * longer matches. The conversation is then still in Chat's list; only the
+ * mark goes. A lens never matches a claim, whatever its words; the chats
+ * started from a lens are listed by `lensThreads` below.
+ *
+ * The newest by `updatedAt`, `threadFor`'s rule. `kind === "chat"` positively,
+ * because the mark opens the floating dialog, which is chat's.
+ */
+export function threadForOrigin(
+  summaries: readonly ThreadSummary[],
+  origin: ThreadOrigin,
+): ThreadSummary | undefined {
+  let best: ThreadSummary | undefined;
+  for (const s of summaries) {
+    if (s.kind !== "chat" || !s.origin || !sameOrigin(s.origin, origin)) continue;
+    if (!best || s.updatedAt > best.updatedAt) best = s;
+  }
+  return best;
+}
+
+/** A chat's summary whose origin is a lens: what one line of Debate's *Your angles* is drawn from. */
+export type LensThread = ThreadSummary & { origin: LensOrigin };
+
+/**
+ * **Every chat that was started from an angle typed into Debate's box**,
+ * newest first: Debate's *Your angles*, the way back to them
+ * (plan 261005k, A). Derived from the summaries, as `threadForOrigin` is, so
+ * nothing is stored on Debate's side.
+ *
+ * A list and not a lookup: an angle is the reader's own free words with
+ * nothing in Debate to hang a mark on, and two chats started from the same
+ * words are two conversations, so each gets its line. `kind === "chat"`
+ * positively, for `threadForOrigin`'s reason.
+ */
+export function lensThreads(summaries: readonly ThreadSummary[]): LensThread[] {
+  const out: LensThread[] = [];
+  for (const s of summaries) {
+    if (s.kind !== "chat" || !s.origin || !isLensOrigin(s.origin)) continue;
+    out.push({ ...s, origin: s.origin });
+  }
+  return out.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/**
  * **The list that arrives from the server, with what happened while it was in
  * the air folded back in.**
  *
@@ -264,16 +378,42 @@ export function threadFor(
  * than a tie-break: the fetch was issued **before** any of these writes, so on
  * every one of them the local copy is the newer fact.
  */
+/**
+ * **Since `refresh` (2026-10-05) the local writes are recorded**, because a
+ * refetch does not empty the array first: `written` is the ids `add` or
+ * `touch` changed while this request was out, and only those rows win over the
+ * answer. A row the reader did not touch takes the server's newer copy, and a
+ * row the server no longer has goes. For the first fetch nothing changes: the
+ * array starts empty, so every row in it was written.
+ *
+ * **"The server no longer has it" needs the server to have had it.** A row
+ * `add` put here that no answer has ever contained (`unseen`) is not one the
+ * server dropped: its first question was refused, or the list was read before
+ * the insert. It stays, whenever it was added, until an answer names it or
+ * `drop` takes it. The first version removed it, and the floating dialog is
+ * drawn from this row, so a refused first question closed the dialog over its
+ * own reason.
+ * docs/postmortems/261005q-a-refetch-cannot-tell-never-had-from-no-longer-has.md
+ */
 function foldInLocalWrites(
   fetched: ThreadSummary[],
   local: ThreadSummary[],
-  dropped: ReadonlySet<string>,
+  flight: Flight,
+  unseen: ReadonlySet<string>,
 ): ThreadSummary[] {
-  const mine = new Map(local.map((s) => [s.id, s]));
-  const out = fetched.filter((s) => !dropped.has(s.id)).map((s) => mine.get(s.id) ?? s);
+  const mine = new Map(
+    local.filter((s) => flight.written.has(s.id) || unseen.has(s.id)).map((s) => [s.id, s]),
+  );
+  const out = fetched.filter((s) => !flight.dropped.has(s.id)).map((s) => mine.get(s.id) ?? s);
   const seen = new Set(out.map((s) => s.id));
-  for (const s of local) if (!seen.has(s.id)) out.push(s);
+  for (const s of mine.values()) if (!seen.has(s.id)) out.push(s);
   return out;
+}
+
+/** What the reader did while a request for the list was in the air. */
+interface Flight {
+  written: Set<string>;
+  dropped: Set<string>;
 }
 
 export function useChatAnchors(slug: string): ChatAnchorsApi {
@@ -282,17 +422,90 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   const [error, setError] = useState<string | null>(null);
 
   /**
-   * Conversations dropped while the first fetch was still in the air.
+   * The local writes made while a request is in the air.
    *
    * `null` once it has landed, because after that nothing replaces the array
    * and there is nothing to remember — a `Set` that went on growing for the
-   * life of the page would be a leak in the shape of a fix.
+   * life of the page would be a leak in the shape of a fix. A request that
+   * supersedes one still out inherits its record: those writes are newer than
+   * the new snapshot too, or as good as.
    */
-  const droppedInFlight = useRef<Set<string> | null>(null);
+  const flight = useRef<Flight | null>(null);
+  /**
+   * Conversations `add` put here that no answer from the server has contained
+   * yet (`foldInLocalWrites`). Bounded by what this tab started and the server
+   * never took; an answer that names one, or a `drop`, takes it out.
+   */
+  const unseen = useRef(new Set<string>());
+  /**
+   * Deletions made after each optimistic row was added. A refetch may name
+   * its stored id before the send does, letting the reader delete that id
+   * first. The delayed acknowledgement must not recreate it, even between
+   * list requests. Kept only while the row awaits a name; older deletions
+   * must not prevent a new conversation from using the same id.
+   */
+  const droppedSinceAdd = useRef(new Map<string, Set<string>>());
+  /** Server-confirmed ids for this article. `add` must not make one unseen again. */
+  const confirmed = useRef(new Set<string>());
+  /** The newest request. An older one's answer is not allowed to land. */
+  const request = useRef(0);
+  /** Whether any answer has landed for this article, so a failed *refresh* stays quiet. */
+  const landed = useRef(false);
+  /** A completion from a composer that has gone may only refresh its own mounted article. */
+  const activeSlug = useRef<string | null>(null);
+
+  const ask = useCallback(() => {
+    const mine = ++request.current;
+    flight.current ??= { written: new Set(), dropped: new Set() };
+    apiFetch(`/api/chat/${encodeURIComponent(slug)}?summary=1`)
+      .then((r) => readJson<{ threads?: ThreadSummary[]; error?: string }>(r))
+      .then((body) => {
+        if (request.current !== mine) return;
+        const during = flight.current ?? { written: new Set<string>(), dropped: new Set<string>() };
+        flight.current = null;
+        if (body.error) {
+          if (!landed.current) setError(body.error);
+        } else {
+          const fetched = body.threads ?? [];
+          /* Only an answer that lands confirms a row. Prune before taking
+             the snapshot: an optimistic row written before this flight must
+             take the server's first copy too. Keep ref mutations outside the
+             updater, which React may run twice. */
+          for (const s of fetched) {
+            confirmed.current.add(s.id);
+            unseen.current.delete(s.id);
+            droppedSinceAdd.current.delete(s.id);
+          }
+          const waiting = new Set(unseen.current);
+          setSummaries((local) => foldInLocalWrites(fetched, local, during, waiting));
+        }
+        landed.current = true;
+        setLoaded(true);
+      })
+      .catch((e: Error) => {
+        if (request.current !== mine) return;
+        flight.current = null;
+        /* A mark that is not drawn is not worth a message across the reading
+           view — the conversation is still in chat mode, and the reader has
+           lost a shortcut rather than their work. Kept for whoever wants to
+           show it, but nothing here insists.
+
+           Only the first load says it failed. A failed refresh leaves the
+           list that was already there, which is still the best one we have. */
+        if (!landed.current) setError(e.message);
+        landed.current = true;
+        setLoaded(true);
+      });
+  }, [slug]);
 
   useEffect(() => {
-    let live = true;
-    droppedInFlight.current = new Set();
+    activeSlug.current = slug;
+    /* Another article: nothing done to the last one's list applies. */
+    flight.current = null;
+    unseen.current = new Set();
+    droppedSinceAdd.current = new Map();
+    confirmed.current = new Set();
+    landed.current = false;
     setSummaries([]);
     setLoaded(false);
     /* The last article's failure is not this one's. It was harmless while only
@@ -300,34 +513,29 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
        now (plan 260930f), so a stale one would claim this article's questions
        failed to load. GPT Sol's plan review, finding 4. */
     setError(null);
-    apiFetch(`/api/chat/${encodeURIComponent(slug)}?summary=1`)
-      .then((r) => readJson<{ threads?: ThreadSummary[]; error?: string }>(r))
-      .then((body) => {
-        if (!live) return;
-        if (body.error) setError(body.error);
-        else {
-          const dropped = droppedInFlight.current ?? new Set<string>();
-          setSummaries((local) => foldInLocalWrites(body.threads ?? [], local, dropped));
-        }
-        droppedInFlight.current = null;
-        setLoaded(true);
-      })
-      .catch((e: Error) => {
-        if (!live) return;
-        /* A mark that is not drawn is not worth a message across the reading
-           view — the conversation is still in chat mode, and the reader has
-           lost a shortcut rather than their work. Kept for whoever wants to
-           show it, but nothing here insists. */
-        setError(e.message);
-        droppedInFlight.current = null;
-        setLoaded(true);
-      });
+    ask();
     return () => {
-      live = false;
+      /* Whatever is out is for an article, or a mount, that has gone. */
+      request.current++;
+      activeSlug.current = null;
     };
-  }, [slug]);
+  }, [ask, slug]);
+
+  const refresh = useCallback(() => {
+    if (activeSlug.current === slug) ask();
+  }, [ask, slug]);
 
   const add = useCallback((summary: ThreadSummary) => {
+    flight.current?.written.add(summary.id);
+    flight.current?.dropped.delete(summary.id);
+    if (!confirmed.current.has(summary.id)) unseen.current.add(summary.id);
+    /* An explicit add is newer than a deletion, even when this id appeared
+       in a previous conversation. Historical confirmation is not an
+       acknowledgement of this addition. */
+    for (const dropped of droppedSinceAdd.current.values()) dropped.delete(summary.id);
+    if (!droppedSinceAdd.current.has(summary.id)) {
+      droppedSinceAdd.current.set(summary.id, new Set());
+    }
     setSummaries((prev) =>
       prev.some((s) => s.id === summary.id)
         ? prev.map((s) => (s.id === summary.id ? summary : s))
@@ -336,19 +544,56 @@ export function useChatAnchors(slug: string): ChatAnchorsApi {
   }, []);
 
   const drop = useCallback((threadId: string) => {
-    /* Remembered as well as removed, and only while the first fetch is still in
-       the air: a deletion leaves nothing behind to compare the arriving
-       snapshot against, so without this the GET would quietly bring the
-       conversation back. See `foldInLocalWrites`. */
-    droppedInFlight.current?.add(threadId);
+    /* A current list request remembers the deletion: without it the GET
+       would quietly bring the conversation back. Pending additions also
+       remember it until their identity is reconciled. See `foldInLocalWrites`
+       and `rename`. */
+    flight.current?.dropped.add(threadId);
+    flight.current?.written.delete(threadId);
+    unseen.current.delete(threadId);
+    for (const dropped of droppedSinceAdd.current.values()) dropped.add(threadId);
+    droppedSinceAdd.current.delete(threadId);
     setSummaries((prev) => prev.filter((s) => s.id !== threadId));
   }, []);
 
   const touch = useCallback((threadId: string, patch: Partial<ThreadSummary>) => {
+    flight.current?.written.add(threadId);
     setSummaries((prev) =>
       prev.map((s) => (s.id === threadId ? { ...s, ...patch } : s)),
     );
   }, []);
 
-  return { summaries, loaded, add, drop, touch, error };
+  const rename = useCallback((from: string, to: string) => {
+    if (from === to) return;
+    /* Called from a turn's acknowledgement, which outlives its dialog
+       (ChatDialog.tsx § `onConfirmed`), so it can arrive for an article this
+       hook has left. `refresh`'s guard, for the same reason. */
+    if (activeSlug.current !== slug) return;
+    const discarded = droppedSinceAdd.current.get(from)?.has(to) ?? false;
+    droppedSinceAdd.current.delete(from);
+    /* A later deletion takes precedence over this creation acknowledgement.
+       Otherwise `to` takes `from`'s place in both records: `written` gets `to`
+       whether or not `from` was written during this flight. `from` needs no
+       entry in `dropped`: on the server it is a message's id, so no answer
+       lists it as a conversation. */
+    if (flight.current) {
+      flight.current.written.delete(from);
+      if (discarded) flight.current.dropped.add(to);
+      else {
+        flight.current.written.add(to);
+        flight.current.dropped.delete(to);
+      }
+    }
+    unseen.current.delete(from);
+    if (!discarded && !confirmed.current.has(to)) unseen.current.add(to);
+    setSummaries((prev) => {
+      if (discarded) return prev.filter((s) => s.id !== from && s.id !== to);
+      if (!prev.some((s) => s.id === from)) return prev;
+      /* A refetch may have named the real one first; then the guess just goes. */
+      if (prev.some((s) => s.id === to)) return prev.filter((s) => s.id !== from);
+      return prev.map((s) => (s.id === from ? { ...s, id: to } : s));
+    });
+  }, [slug]);
+
+  return { summaries, loaded, add, drop, rename, touch, refresh, error };
 }

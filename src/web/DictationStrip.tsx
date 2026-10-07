@@ -47,7 +47,7 @@ import { Download, Loader2, Mic, RotateCcw, Square, TriangleAlert, X } from "luc
 import { useEffect, useState } from "react";
 import { MicLevel } from "./MicLevel.js";
 import { type MicDevice, listInputs } from "./mic-devices.js";
-import { type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
+import { CAP_WARNING_MS, type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
 import type { DictationRecording, UseDictation } from "./useDictation.js";
 import { useNow } from "./useNow.js";
 import { useOnline } from "./useOnline.js";
@@ -60,12 +60,40 @@ export function deviceUnavailableWords(wanted: string | null, using: string | nu
 }
 
 /**
+ * **What a double press on Stop will do in this box**, for the three places
+ * that say so. Most boxes send. The command bar does not — "send" in this app
+ * means posting into a conversation — and its done action is whatever Enter
+ * does with the phrase: run the row it names, or ask what it meant. So it says
+ * Enter, which is true of both (Greg's yes to the bar, 2026-10-05, plan 261005a).
+ */
+export type DoneAction = "send" | "enter";
+const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: string }> = {
+  send: {
+    again: "Send when the words arrive",
+    button: "Turning your words into text, then sending",
+    strip: "Turning that into text, then sending…",
+  },
+  enter: {
+    again: "Press Enter when the words arrive",
+    button: "Turning your words into text, then pressing Enter",
+    strip: "Turning that into text, then pressing Enter…",
+  },
+};
+
+/**
  * What the strip says, in one place — because it is also what the live region
  * says, and the two must not be allowed to drift apart.
  */
-function dictationWords(d: UseDictation): string {
-  if (d.transcribing) return "Turning that into text…";
+function dictationWords(d: UseDictation, sendingAfter: boolean, done: DoneAction, ending: boolean): string {
+  if (d.transcribing) {
+    return sendingAfter ? DONE_WORDS[done].strip : "Turning that into text…";
+  }
   if (d.phase === "opening") return "Opening the microphone…";
+  /* **Before `quiet`**: being stopped in a minute is the more urgent of the
+     two, and it is true whether or not the microphone hears anything. The
+     seconds are not in this sentence because the live region says it — the
+     countdown is drawn beside it, where a screen reader is not read each tick. */
+  if (ending) return "Dictation stops within a minute";
   if (d.quiet) {
     /* **Not a diagnosis.** `quiet` means nothing crossed −55 dBFS for ten
        seconds, which a thinking reader in a quiet room produces too — so the
@@ -160,12 +188,32 @@ export function DictationButton({
   dictation,
   toggle,
   disabled,
+  again,
+  sendingAfter,
+  done = "send",
 }: {
   dictation: UseDictation;
   toggle(): void;
   disabled?: boolean | undefined;
+  /** What the double press does here, for the button's name. `DoneAction`. */
+  done?: DoneAction | undefined;
+  /**
+   * **The second press of a double press on Stop**: `useDictationField().again`,
+   * which is there only for the moment after Stop in which a second press
+   * counts. A double press also sends (Greg, spya-rp8676), and a `disabled`
+   * button is sent no click at all — so while this is given the button stays
+   * live, is named for what a press does, and its only press is this one. It
+   * never starts a dictation there. When the moment has passed, or the press
+   * was taken, this is gone and the button is disabled as it always was.
+   */
+  again?: (() => void) | undefined;
+  /** The second press was taken; the name says what happens next. */
+  sendingAfter?: boolean | undefined;
 }) {
   const busy = dictation.transcribing;
+  /* Live through the gap, for the second press. Not when the box itself has
+     switched the button off. */
+  const pressable = busy && again !== undefined && !disabled;
   /* **Read here rather than passed in**, so that all six boxes get it from one
      place and a seventh cannot forget. `false` only; see `useOnline.ts`. */
   /* **Only while idle**, because this one control is also Stop. Disabling it on
@@ -208,7 +256,11 @@ export function DictationButton({
         offline
           ? DICTATION_OFFLINE
           : busy
-            ? "Turning your words into text"
+            ? sendingAfter
+              ? DONE_WORDS[done].button
+              : pressable
+                ? DONE_WORDS[done].again
+                : "Turning your words into text"
             : dictation.armed
               ? "Stop dictating"
               : "Dictate"
@@ -230,8 +282,8 @@ export function DictationButton({
          microphone is already off; a press here can only mean "start again",
          and starting again two hundred milliseconds before the words arrive
          throws away the dictation the reader just gave. */
-      disabled={disabled || busy || offline}
-      onClick={toggle}
+      disabled={disabled || (busy && !pressable) || offline}
+      onClick={pressable ? again : toggle}
     >
       {busy ? (
         <Loader2 size={13} className="spin" />
@@ -259,15 +311,28 @@ export function DictationButton({
 export function DictationStrip({
   dictation,
   id,
+  sendingAfter = false,
+  done = "send",
 }: {
   dictation: UseDictation;
   /** For `aria-describedby` on the box, if the caller wants it. */
   id?: string | undefined;
+  /** What the double press does here, for the sentence. `DoneAction`. */
+  done?: DoneAction | undefined;
+  /** `useDictationField().sendingAfter`: a double press on Stop was taken. */
+  sendingAfter?: boolean | undefined;
 }) {
   const [picking, setPicking] = useState(false);
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const busy = dictation.armed || dictation.transcribing;
-  const words = dictationWords(dictation);
+  /* **The last minute before the cap** (`MAX_MS`, plan 261007b). The clock only
+     runs while there is a cap to run towards. Rounded up, and at or past the
+     deadline it says it is stopping: a tab coming back from hidden can draw
+     before the late cap runs, and 0:00 over a live microphone is not true. */
+  const now = useNow(dictation.endsAt === null ? null : 1000);
+  const left = dictation.armed && dictation.endsAt !== null ? dictation.endsAt - now : null;
+  const ending = left !== null && left <= CAP_WARNING_MS;
+  const words = dictationWords(dictation, sendingAfter, done, ending);
 
   /* The device list is fetched when the picker is opened rather than kept in
      sync all the time: `enumerateDevices` returns **blank labels until
@@ -305,17 +370,21 @@ export function DictationStrip({
            stay an observation rather than a diagnosis — `audio-level.ts` says
            why — and the warm colour is `.prof-mic-warn`'s: a fact worth
            knowing, not a failure. Greg, SPIDERYARN-READING2-7Z; plan 261001k. */
-        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}`}>
+        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}${ending ? " ending" : ""}`}>
           {dictation.armed && (
             <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
           )}
-          {dictation.quiet && (
+          {(dictation.quiet || ending) && (
             <TriangleAlert size={13} className="prof-quiet-icon" aria-hidden="true" />
           )}
           {dictation.transcribing && <Loader2 size={13} className="spin" aria-hidden="true" />}
           {/* The live region above is already saying this. */}
           <span className="prof-listening-what" aria-hidden="true">
-            {words}
+            {ending && left !== null
+              ? left <= 0
+                ? "Stopping dictation…"
+                : `Dictation stops in ${formatDuration(Math.ceil(left / 1000) * 1000)}`
+              : words}
           </span>
           {dictation.armed && dictation.startedAt !== null && (
             <Elapsed since={dictation.startedAt} />

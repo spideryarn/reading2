@@ -12,20 +12,35 @@ sessions.** Until then this page called it "the orchestrator"; the two mean the 
 new name is the one to use. It is the *actor*. The **fleet dashboard** is its face, and the two are
 built by different agents against the seam in [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
 
-Status as of 2026-09-08 evening: **both exist; one of them has not yet run where it will live.**
-`tools/fleet/` serves a live page on the box and the tailnet, with per-session status and the pending
-question for blocked sessions. `tools/overseer/` is built — the store, the clock, the differ, the
-daemon and the work classifier.
+The status this page recorded on the evening of 2026-09-08, and how half of it retired, is in
+[261007g-overseer-direction-history.md § Status](../plans/261007g-overseer-direction-history.md#status).
 
-**Half of that sentence retired itself at 16:04 the same evening, and the half that did not is the
-interesting one.** The retiring condition set here was *"events are accumulating in
-`~/.overseer/events.jsonl` under a unit that is `enabled`"*, and it was two conditions wearing one
-sentence. The first is now met: `~/.overseer/` holds 161 KB of `events.jsonl` and a `current.json`
-written minutes ago, against the real store root rather than a scratch one. The second is not:
-`systemctl is-active overseer.service fleet-dashboard.service` prints `inactive` twice, because both
-are running under `tmux`. **So nothing survives a reboot yet**, and what retires the rest of this
-paragraph is a unit that is `enabled` — not a process that happens to be up. [260908b](../plans/260908b-overseer-store-and-clock.md) is the plan and holds
-the evidence.
+## In this doc
+
+The page is long and was written in layers; a task usually lands in one section, so use this and
+jump. (Runbook for the Overseer itself: [overseer.md](overseer.md). Queue of deferred work:
+[overseer-queue.md](overseer-queue.md). Adding a dashboard tab:
+[fleet-dashboard-modes.md](fleet-dashboard-modes.md).)
+
+- [§ What we are going towards](#what-we-are-going-towards) — the aim, in a screen
+- [§ The horizon](#the-horizon) — Greg's tagged list of what the Overseer must eventually do; check a slice against it
+- [§ What the Overseer is](#what-the-overseer-is) — its job, its powers, what it is not
+- [§ The gates](#the-gates) — autonomy as principles, not a list of forbidden actions (the runbook form is overseer.md's four)
+- [§ The scheduler](#the-scheduler) — the library chosen and why (researched 2026-09-08)
+- [§ The store](#the-store) — `~/.overseer/`, what is written where
+- [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard) — the file seam between the actor and the page (`current.json`)
+- [§ The order of work](#the-order-of-work) — what to build first, and deferral rules
+- [§ Usage limits](#usage-limits) — what is observable about Claude's limits and why no API is called
+- [§ Reboot revival](#reboot-revival-and-the-thing-gjd-remote-resume-does-not-do) — surviving a reboot
+- [§ The four capabilities](#the-four-capabilities-and-what-each-really-needs) — what each needs
+- [§ What Greg asked for on 2026-09-08](#what-greg-asked-for-on-2026-09-08-in-his-own-words) — his words, kept whole
+- [§ A higher bar for robustness](#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling) — why the Overseer is held to more than dev
+- [§ Constraints already established](#constraints-already-established) — measured on the box; read before anything that talks to a session
+- [§ Attention, and who the Overseer is really watching](#attention-and-who-the-overseer-is-really-watching) — surfaces, push vs pull, the `idle` vocabulary, the work reading (the longest section)
+- [§ Access](#access) — Tailscale for now, and why
+- [§ The backlog, after the wide review](#the-backlog-after-the-wide-review) — what is built, what is not, and the next steps by priority
+- [§ Appendix: security and hardening, deferred](#appendix-security-and-hardening-deferred) — what was put off and why
+- [§ Principles](#principles) — the short list to check a design against
 
 ## What we are going towards
 
@@ -149,10 +164,8 @@ The division that follows:
   ([silent-success.md](../reusable/silent-success.md)).
 - **The dashboard is the face**, and belongs to whoever is building it — [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard).
 
-**Autonomy, widened by Greg the same evening.** This page said until then that the Overseer *"may
-dispatch scheduled jobs unattended, and nothing more"* — his choice from four options, the others
-being observe-and-notify-only, steering live sessions, and pausing/killing. **That is superseded.**
-Handed a proposed list to confirm, he took all of it and added to it:
+The autonomy Greg gave it on the evening of 2026-09-08 is below; the narrower choice it widened is in
+[261007g-overseer-direction-history.md § What the Overseer is](../plans/261007g-overseer-direction-history.md#what-the-overseer-is).
 
 > Yes, pretty much all of that Unattended list. Dispatch scheduled jobs, steer live sessions, tell
 > agents to pause/stagger/kill their own tests and/or webserver or other processes, route questions
@@ -373,9 +386,6 @@ the stream drops. The dashboard collects on a chain (60s from the *end* of each 
 after a failure), not on a fixed interval, because a collector that grazes every 12 seconds on a
 swapping box is worse than a gap in the history.
 
-**This paragraph used to end *"and falls back to its own `collect()` only when the server is
-unreachable"*, and that has not been true since the plan removed it** — corrected 2026-09-08 after
-the sentence was quoted in a review and then checked against the code.
 [`source.ts`](../../tools/overseer/source.ts) says so in its own header: *"it never calls
 `collect()`, and there is deliberately no local fallback that would"*, because a local collection
 would return a different contract — `FleetSnapshot` has no `health` field — and a second contract
@@ -437,9 +447,7 @@ holds.
 
 ### The seam is a file, not a function — `~/.overseer/current.json`
 
-Written 2026-09-08, once the Overseer existed and the sentence *"the Overseer writes a current-state
-file, the dashboard reads and renders it"* stopped being a plan and became something that needed a
-shape. These files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`) — **and not only these**:
+These files, all under `OVERSEER_STORE_DIR` (default `~/.overseer`) — **and not only these**:
 the work-reports store (`reports.jsonl` and its inbox directories,
 [260910e](../plans/260910e-work-reports-and-decisions-a-small-event-vocabulary.md)) lives in the same
 directory and is described in `tools/overseer/reports.ts`, so `ls` the directory before trusting
@@ -457,17 +465,8 @@ this table as a census:
 | `last-snapshot.json` | the differ's baseline — the last snapshot seen, so a restart emits changes rather than re-announcing the fleet | the daemon only |
 | `overseer.lock` | the single-writer claim | the daemon only |
 
-**This table said "four files" until 2026-09-08 12:15, and `last-snapshot.json` was the one missing**
-— the file that exists precisely so a restart does not re-announce all 21 sessions as new. It is the
-daemon's private working state rather than part of the seam, which is why it was easy to leave out
-and why it is listed anyway: a reader deciding what `~/.overseer` contains should not have to discover
-a fifth file by running `ls`.
-
-**And it said "five files" until 2026-09-08 evening, when `attention.json` turned out to be the sixth**
-— found by the Baseline census of plan [260908f](../plans/260908f-overseer-and-fleet-improvement-roadmap.md).
-Same class as the omission above and the same cure: it is the attention pass's private memory rather
-than part of the seam, so nothing outside the daemon reads it, and it is listed for exactly the reason
-`last-snapshot.json` is.
+How this table came to list the daemon's private files is in
+[261007g-overseer-direction-history.md § The seam is a file](../plans/261007g-overseer-direction-history.md#the-seam-is-a-file-not-a-function-overseercurrentjson).
 
 **Reads are lock-free and writers are single**, which is what makes this a seam rather than a
 coupling: `readCheckpoint()` takes no lock, and the daemon is the only writer of any of them. A
@@ -819,6 +818,17 @@ mechanism, and a paraphrase would lose it.
 > be ueful, etc). And then if I click on a session, show much more information about it in the right
 > column, e.g. input it requires from me, the recent messages, and anything else that might be
 > useful. Allow me to send steering messages to it, answer its questions, etc
+
+Since 2026-10-06 the left-hand column's cards carry a **hover preview**. Beside an open detail the
+cards are compact — a question keeps its prompt and drops its options — so pointing at one, or
+tabbing to it, shows what was dropped: the heading, the status and its detail, the
+description, where it runs, and the question's prompt with its option labels. It is there to help
+decide whether to switch session, not to act on one: nothing in it can be pressed, a long text or
+menu is cut and says so, and what a dialog would approve is left for the detail. Mouse and keyboard
+only — a tap already selects — and never on the selected card or on a full-width list, which already
+shows the option labels. It reads only the row the page was already pushed; nothing is fetched. The code is
+`tools/fleet/web/src/SessionPreview.tsx`, and the plan is
+[261006l](../plans/261006l-borrow-the-reading-app-s-machinery-for-the-fleet-dashboard.md) § Stage 2.
 
 > I want a way to add a New session, with a text input box, perhaps using `gjd-remote new-claude
 > -p ...` so that I can still use that machinery to manage things.
@@ -1194,30 +1204,14 @@ This also sharpens [§ Attention](#attention-and-who-the-overseer-is-really-watc
 expensive agent is the one working confidently on the wrong thing, and never asks. Add to it the
 agent that *did* ask and whose asking is invisible.
 
-**And the measurement that turns that last sentence into a number, 2026-09-08.** The fleet dashboard
-agent investigated which permission mode sessions actually start in, and the answer was a coin flip:
-**28 auto, 7 default across `gjd-remote` launches since 09-06** — two sessions launched 25 seconds
-apart from identical generated job scripts came up in opposite modes. A `default`-mode session runs
-normally until its first unapprovable call — a `git fetch`, a `git log`, `npm run worktree:setup`, an
-MCP read, so within the first minute of almost any brief here — and then waits for somebody who is
-asleep. **Longest single stalls: 7.38h, 6.34h, 5.75h, 5.35h, 5.33h, 4.30h — 34.9 agent-hours since
-Sunday**, independently reproducing an earlier finding of 41.6 agent-hours since 09-01. The longest
-stall in *any* always-auto session over three days is **21 minutes**.
+How often sessions came up in `default` mode before the launcher fixed it, and the measurement that
+showed the fix holding, are in
+[261007g-overseer-direction-history.md § `idle` is the bug](../plans/261007g-overseer-direction-history.md#idle-is-the-bug-the-vocabulary-describes-the-pane-not-the-work).
 
-**And the fix landed, measured 2026-09-08 12:20 — 35 `auto`, 1 `default`, against 28/7 before.**
 `gjd-remote new-claude` now passes `--permission-mode auto` explicitly, with the reasoning in a
 comment beside it rather than in a doc nobody opens. Greg asked for this on 2026-09-08 —
 *"if there's a tweak that ensures the fleet is in auto-permissions mode, let's do that"* — believing
 he had already done it, which he had not.
-
-**The measurement is worth more than the flag, because a flag being present is not a fleet being in
-auto mode.** Every transcript touched in the previous six hours was read for its **last**
-`permissionMode` checkpoint — the current mode, not the launch mode, so a session converted mid-life
-is counted where it actually is. **36 of 78 carried one**, which is the positive control: a probe that
-found none would be broken rather than reporting a clean fleet
-([silent-success.md](../reusable/silent-success.md)). And the single `default` is not a
-counter-example — a 17-line *"Reply with the single word: pong"* probe from 05:44 that never went
-through the launcher at all. **Nothing launched by `gjd-remote` came up in `default`.**
 
 **Nothing on this box notices**: `gjd-remote log` lists a stalled session as `running`, identical to a
 healthy one. So this is the sharpest available instance of *the agent that did ask and whose asking is
@@ -1268,7 +1262,11 @@ enriches rows that already look busy, and catches the backgrounded and wedged ca
 **8 of 23 live sessions had Remote Control broken**, measured 2026-09-08 — the feature that was
 originally offered as the reason this dashboard might be unnecessary. It is reliable at launch and
 unreliable an hour later, which is exactly when you would reach for it, and **the only evidence
-anywhere is one word at the bottom of a terminal nobody is looking at.**
+anywhere is one word at the bottom of a terminal nobody is looking at.** The word is `/rc failed`
+in the status bar (`tmux capture-pane -p -t <pane> | grep /rc`). `bridgeSessionId` in
+`~/.claude/sessions/<pid>.json` was the launch-time sign on 2026-09-07 (non-null in 11 of 19, with
+no flag passed); on 2026-10-05 one of eight files carried the field and it was null, so do not
+read it as the test.
 
 So the redundancy argument was right about launch and wrong about steady state. Recorded here rather
 than only in the dashboard's plan because it is the same shape as **A27**: a thing that reports fine
@@ -1406,9 +1404,8 @@ in isolation*, and isolation is exactly the condition under which a green suite 
 whether the thing runs. The tests are not weak; they are answering the narrower question, and both
 times the passing suite was the reason nobody looked.
 
-**One of the two is now closed**: the work classifier gained its caller on 2026-09-10 — see
-[§ Where the work reading now lives](#where-the-work-reading-now-lives-and-the-four-things-it-may-not-claim).
-It sat built-and-uncalled for two days, which is roughly how long the class takes to become invisible.
+When the work classifier gained its caller is in
+[261007g-overseer-direction-history.md § Built, tested](../plans/261007g-overseer-direction-history.md#built-tested-and-called-from-nothing-but-its-own-tests).
 
 **Three things catch it, in order of how mechanical they are.** Make the wiring a *type* obligation
 rather than an option, the way `QueuedItem.speaker` was made required so the compiler found 111 sites

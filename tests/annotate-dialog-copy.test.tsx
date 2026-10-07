@@ -15,8 +15,10 @@
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { HELP_TOPIC_FILES } from "../src/web/help/help-pages.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AnnotateDialog } from "../src/web/AnnotateDialog.js";
+import { AnnotateDialog, annotateKey } from "../src/web/AnnotateDialog.js";
+import { helpWords } from "./helpers/help-words.js";
 import { readerCss } from "./helpers/stylesheets.js";
 import type { BlockId } from "../src/types.js";
 
@@ -45,9 +47,12 @@ afterEach(() => {
  * Render the dialog over a passage — **into the same root every time**, which
  * is the whole point of the second passage below.
  *
- * `App` keeps one `AnnotateDialog` mounted and swaps its `anchor` as the reader
- * selects, so a test that unmounted between passages would be testing a
- * component this app does not have, and would agree with a stale tick.
+ * Until 2026-10-03 `Reader` kept one `AnnotateDialog` mounted and swapped its
+ * `anchor`, and this fixture modelled that unkeyed. Since then the whole box is
+ * keyed on the passage (`annotateKey`, plan 261003i D1), so a new selection
+ * remounts it — and this fixture keys it the same way, into the same root. The
+ * second-passage cases below still ask what they asked: no tick over B's words
+ * for a copy of A's.
  */
 function paint(
   opts: {
@@ -57,17 +62,19 @@ function paint(
     onCancel?: () => void;
   } = {},
 ): void {
+  const anchor = {
+    blockId: "spya-k3m9qt" as BlockId,
+    quote: opts.quote ?? QUOTE,
+    start: opts.start ?? 0,
+  };
   act(() => {
     root.render(
       <AnnotateDialog
-        anchor={{
-          blockId: "spya-k3m9qt" as BlockId,
-          quote: opts.quote ?? QUOTE,
-          start: opts.start ?? 0,
-        }}
+        key={annotateKey(anchor)}
+        anchor={anchor}
         placing={false}
         loaded
-        onSave={opts.onSave ?? (() => {})}
+        onSave={(draft) => opts.onSave?.(draft.id)}
         onCancel={opts.onCancel ?? (() => {})}
       />,
     );
@@ -214,6 +221,39 @@ describe("copying the selected passage", () => {
   });
 });
 
+/* **Rewritten on 2026-10-04 (plan 261004f).** These two cases pinned the help
+   page to the draft box's rules ("with yellow already picked", "The × and
+   Escape save the highlight", "If you only pressed Copy, closing leaves no
+   highlight"). Outside Referee mode a selection now stores its highlight at
+   once and the box is the comment's own, so each of those sentences became
+   false. What they guard is unchanged: the page must not promise more than the
+   code does. tests/selecting-applies-the-highlight.test.tsx is the behaviour. */
+describe("what the help page promises about selecting", () => {
+  it("says that a page-exit save is best effort, not certain", () => {
+    const copy = helpWords("comments");
+    expect(copy).toContain("Leaving or reloading the page in that moment still tries to save it");
+    expect(copy).toContain("a failed connection can lose it");
+    expect(copy).not.toContain("leaving the page all save it");
+  });
+
+  it("says the highlight is applied on selecting, and the three ways to undo or change it", () => {
+    const copy = helpWords("comments");
+    expect(copy).toContain("they are highlighted in yellow straight away");
+    expect(copy).toContain("click anywhere else and you are done");
+    expect(copy).toContain("Remove highlight");
+    expect(copy).toContain("Copy, don’t highlight");
+    expect(copy).toContain("Once you have written a note or changed the colour, Copy only copies");
+    expect(copy).toContain("the new highlight replaces the first");
+    /* The draft box's promises, which are no longer true outside Referee mode. */
+    expect(copy).not.toContain("with yellow already picked");
+    expect(copy).not.toContain("The × and Escape save the highlight");
+    /* The emphasis ends after the three words, so it reads as the exception
+       it is: held against the file, where the marks are. */
+    expect(HELP_TOPIC_FILES.comments).toMatch(/\*\*In Referee mode\*\* selecting works the old way/);
+    expect(copy).toContain("In Referee mode selecting works the old way");
+  });
+});
+
 /**
  * **Every one of these was red before GPT Sol's review of the built code**, and
  * every one of them is the same failure wearing a different hat: the button
@@ -231,9 +271,9 @@ describe("what it says is about the copy in front of you", () => {
     await settle();
     expect(icon()).toContain("clipboard-check");
 
-    // Inside the 1.6s window, and into the same mounted dialog — which is what
-    // App does. An unkeyed button sat here still showing the tick, over B's
-    // words, with A on the clipboard.
+    // Inside the 1.6s window, and into the same root — which is what Reader
+    // does. An unkeyed button sat here still showing the tick, over B's words,
+    // with A on the clipboard.
     paint({ quote: OTHER, start: 40 });
     expect(icon()).toContain("lucide-copy");
     expect(icon()).not.toContain("clipboard-check");

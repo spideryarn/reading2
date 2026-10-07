@@ -99,6 +99,16 @@ function outcomeOf(
   kind: ArtifactKind,
 ): ArtifactOutcome<unknown> {
   const key = at(slug, step, kind);
+  /* **Blocks with no rating recorded read as unrated**, as they do in Postgres,
+     where the rating is five nullable columns beside the block rows
+     (src/store/artifacts-pg.ts § `readReadingDifficulty`). So a test that
+     writes a `blocks` step's blocks and HTML and nothing else still finds the
+     step done here, exactly as it would there. Plan 261005j. */
+  if (kind === "readingDifficulty" && !held.has(key)) {
+    return held.has(at(slug, step, "blocks"))
+      ? { state: "ok", value: { rated: false } }
+      : { state: "absent" };
+  }
   if (!held.has(key)) return { state: "absent" };
   const value = held.get(key);
   return whyUnusable(kind, value) ? { state: "unusable" } : { state: "ok", value };

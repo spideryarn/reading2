@@ -49,8 +49,8 @@
  * **The trade that made:** the "actually writes" half now skips where there is
  * no database, where the source scan always ran. A check that always runs and
  * proves nothing is not the safer of those two — it is the more dangerous one,
- * because it reads as the check having been done. `pgReady` says out loud when
- * it skips, and `REQUIRE_POSTGRES=1` turns the skip into a failure.
+ * because it reads as the check having been done. Since 2026-09-05 it does not
+ * skip either: `pgReady` throws when there is no database, so the file fails.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -349,6 +349,15 @@ const LOOKUP_SENTINEL = "sentinel-3f9c1e-citation-finds-lookup quote";
  */
 const HIDDEN_ENTRY_SENTINEL = "spya-cvh234";
 
+/**
+ * `quiz_attempts`' other columns, and its second row: the mark, and an answer
+ * given under a batch that has since been replaced, with the question's words
+ * that keep that row readable. Plan 261005b.
+ */
+const QUIZ_REPLY_SENTINEL = "sentinel-3f9c1e-quiz-attempts-the-mark";
+const REPLACED_ANSWER_SENTINEL = "sentinel-3f9c1e-quiz-attempts-replaced-batch-answer";
+const REPLACED_QUESTION_SENTINEL = "sentinel-3f9c1e-quiz-attempts-replaced-batch-question";
+
 function sentinel(table: string): string {
   if (table === "block_identities") return DEPARTED_BLOCK_ID;
   if (table === "reading_time") return READING_TIME_SENTINEL;
@@ -546,6 +555,13 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         paperSelectionVersion: "paper-selection/1",
         paperReadAt: new Date(),
         paperPassages: [{ chunk: "c2", page: 2, text: "A passage the code found.", bears: "supports" }],
+        /* Plan 261003m stage 2: a kept web influence, so each of its columns
+           is filled and seen to leave in the zip. */
+        influence: 0.8,
+        influenceQuote: "widely cited as a seminal work in its field",
+        influenceSourceUrl: "https://example.org/about-a-cited-paper",
+        influenceSourceTitle: "A cited paper - Example",
+        influenceVersion: "citation-influence/1",
       });
     },
     /* On the block `beforeAll` gave an identity row: the composite foreign key
@@ -571,6 +587,31 @@ function fixtures(): Record<RollbackTable | BundledTable, Fixture> {
         articleId: ARTICLE_ID,
         tag: sentinel("article_tags"),
       });
+    },
+    /* Two finished quiz marks, **in two batches**: the read the panel uses is
+       scoped to the current batch, and the exports must not be — a row for a
+       batch *Write them again* has replaced is still the reader's (plan
+       261005b, GPT Sol's plan review finding 6). This article has no quiz at
+       all, so neither batch is "current" and both must still leave. */
+    quiz_attempts: async () => {
+      await db.insert(schema.quizAttempts).values([
+        {
+          articleId: ARTICLE_ID,
+          batchId: "spya-qzbnow",
+          questionId: "spya-qzqone",
+          question: "What does the piece say?",
+          answer: sentinel("quiz_attempts"),
+          reply: QUIZ_REPLY_SENTINEL,
+        },
+        {
+          articleId: ARTICLE_ID,
+          batchId: "spya-qzbold",
+          questionId: "spya-qzqone",
+          question: REPLACED_QUESTION_SENTINEL,
+          answer: REPLACED_ANSWER_SENTINEL,
+          reply: "A mark given under the batch that was replaced.",
+        },
+      ]);
     },
   };
 }
@@ -636,6 +677,9 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
     id: "An internal uuid naming nothing else in the zip; `shortId` is the reader-facing one.",
     currentRevisionId: "An internal uuid, and the zip holds exactly that revision already.",
     fixture: "Says this is the shipped demo article — about our deployment, not the reader's data.",
+    shareToken:
+      "The key of the article's private link: a credential, and a zip gets forwarded " +
+      "(src/store/export-bundle.ts § `shareToken`). `shareTokenAt` is kept.",
   },
   article_revisions: {
     id: "An internal uuid. `basedOnRevisionId` is kept because lineage is a fact about the piece.",
@@ -676,6 +720,7 @@ const COLUMNS_LEFT_OUT: Record<BundledTable, Readonly<Record<string, string>>> =
   reading_time: {},
   glossary_hidden_entries: {},
   article_tags: {},
+  quiz_attempts: {},
 };
 
 /** A property of `value`, or `undefined` if it is not an object. */
@@ -716,6 +761,7 @@ const ROWS_IN: Record<BundledTable, (parsed: unknown) => unknown[]> = {
   reading_time: (parsed) => listAt(parsed, "blocks"),
   glossary_hidden_entries: (parsed) => listAt(parsed, "entries"),
   article_tags: (parsed) => listAt(parsed, "tags"),
+  quiz_attempts: (parsed) => listAt(parsed, "attempts"),
 };
 
 /** Every key any of these rows carries. */
@@ -758,6 +804,7 @@ await pgReady({
     "spideryarn.reading_time",
     "spideryarn.glossary_hidden_entries",
     "spideryarn.article_tags",
+    "spideryarn.quiz_attempts",
   ],
 });
 
@@ -909,6 +956,26 @@ describe("what the record calls exported, both exports were watched writing", ()
     });
   }
 
+  /* The rollback names `quiz_attempts`' columns by hand too, and the panel's
+     own read drops every batch but the current one — so both outputs are held
+     to the mark as well as the answer, and to the row from a replaced batch
+     with its question's words. Plan 261005b, GPT Sol's plan review finding 6. */
+  it("carries every quiz answer into both outputs, a replaced batch's included", async () => {
+    const rollback = await readFile(path.join(out, SLUG, "quiz-attempts.json"), "utf8");
+    const bundle = bundled.get(ARTICLE_TABLE_COVERAGE.quiz_attempts.bundle.exported
+      ? ARTICLE_TABLE_COVERAGE.quiz_attempts.bundle.into
+      : "");
+    for (const text of [rollback, bundle]) {
+      expect(text).toContain(sentinel("quiz_attempts"));
+      expect(text).toContain(QUIZ_REPLY_SENTINEL);
+      expect(text).toContain(REPLACED_ANSWER_SENTINEL);
+      expect(text).toContain(REPLACED_QUESTION_SENTINEL);
+      expect(text).toContain("spya-qzbold");
+      /* When each happened: the row's own time, in both. */
+      expect(text).toMatch(/"createdAt": ?"20\d\d-/);
+    }
+  });
+
   /* The rollback enumerates `citation_finds`' fields by hand, so a new column is
      invisible to it until somebody adds it there — the title sentinel above
      would still pass. Plan 260929g R-6. */
@@ -921,6 +988,23 @@ describe("what the record calls exported, both exports were watched writing", ()
       expect(text).toContain(LOOKUP_SENTINEL);
       expect(text).toContain("fedcba9876543210");
       expect(text).toContain('"assessed"');
+    }
+  });
+
+  /* The same hole for `citation_investigations`: the rollback names its columns
+     by hand, and the answer sentinel passes without the influence columns
+     (plan 261003m stage 2). Each of the five, in both outputs. */
+  it("carries an investigation's web influence into both outputs", async () => {
+    const rollback = await readFile(path.join(out, SLUG, "citation-investigations.json"), "utf8");
+    const bundle = bundled.get(ARTICLE_TABLE_COVERAGE.citation_investigations.bundle.exported
+      ? ARTICLE_TABLE_COVERAGE.citation_investigations.bundle.into
+      : "");
+    for (const text of [rollback, bundle]) {
+      expect(text).toMatch(/"influence":\s*0\.8/);
+      expect(text).toContain("widely cited as a seminal work in its field");
+      expect(text).toContain("https://example.org/about-a-cited-paper");
+      expect(text).toContain("A cited paper - Example");
+      expect(text).toContain("citation-influence/1");
     }
   });
 

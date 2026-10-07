@@ -65,8 +65,15 @@ const ENTRY = /^\s*"(spya-[a-z0-9]{6})":\s*"(shipped|declined|awaiting)",?\s*$/;
 export function shippedIdsIn(generated: string): string[] {
   const shipped: string[] = [];
   let entries = 0;
+  /* Since 261007d the file holds a second map, of comments, after the endings.
+     Its lines name report ids too and are sentences, not endings, so they are
+     stepped over: from its declaration to its closing brace, and nowhere else.
+     A file from before then has no such block and reads as it always did. */
+  let inComments = false;
   for (const line of generated.split("\n")) {
-    if (!line.includes('"spya-')) continue;
+    if (line.startsWith("export const FEEDBACK_NOTE_COMMENTS")) inComments = true;
+    else if (inComments && line === "};") inComments = false;
+    if (inComments || !line.includes('"spya-')) continue;
     const match = ENTRY.exec(line);
     if (!match?.[1]) throw new Error(`${GENERATED_REPO_PATH}: a line this does not understand: ${JSON.stringify(line.trim())}`);
     entries++;

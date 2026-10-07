@@ -10,7 +10,7 @@
  * nothing on screen disagreeing. That is the failure `ThreadKind` exists to
  * prevent, and it is the one this file is for.
  *
- * Harness copied from tests/remember-route.test.ts, including the stubbed
+ * Harness copied from tests/learn-route.test.ts, including the stubbed
  * `fetch`: everything under test happens before the first model call.
  *
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
@@ -124,7 +124,7 @@ describe("a Candidates conversation can be started at all", () => {
 
   it("names all three kinds in the refusal, rather than the two it used to", async () => {
     const { body } = await post({ threadId: "spya-cnd2bc", question: "q", kind: "nonsense" });
-    for (const kind of ["chat", "remember", "candidates"]) expect(body).toContain(kind);
+    for (const kind of ["chat", "learn", "candidates"]) expect(body).toContain(kind);
   });
 });
 
@@ -144,7 +144,7 @@ describe("what a Candidates turn may not carry", () => {
     expect(body).toContain("cannot be anchored");
   });
 
-  it("400s a stance, which only means anything in Remember", async () => {
+  it("400s a stance, which only means anything in Learn", async () => {
     const { status } = await post({
       threadId: "spya-cnd2dd",
       question: "who could review this?",

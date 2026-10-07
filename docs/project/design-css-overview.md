@@ -1,7 +1,7 @@
 # Design and CSS: an overview
 
 **This is the map, and it is deliberately short.** It exists to answer one question —
-*where does a style live, and which mechanism owns it?* — because the answer is spread across four
+*where does a style live, and which mechanism owns it?* — because the answer is spread across several
 stylesheets and several other docs, and every new agent has to reconstruct it. What is written
 below is true and checked. What is missing is listed at the bottom, honestly, rather than left for
 you to discover.
@@ -21,12 +21,12 @@ Nothing here restates [web-client.md](web-client.md), [icons.md](icons.md) or
 | 1 | [`src/web/tailwind.css`](../../src/web/tailwind.css) | **the entry point.** The `@layer` statement, the Tailwind imports, the token bridge, the source-scanning rule |
 | 2 | `tailwindcss/theme.css` + `utilities.css` | Tailwind v4, prefixed `tw`, in layers `theme` and `utilities`. **Preflight is deliberately not imported** |
 | 3 | [`src/web/styles.css`](../../src/web/styles.css) | **nothing but `@import`s.** Imported by *file 1* so everything below it lands in `@layer app`, and it is the authoritative statement of the order the hand-written CSS loads in. A **new sheet takes two edits**: the `@import`, at the position you want it in the cascade, and the same name at the same position in `MANIFEST` in [`tests/styles-entry-is-imports-only.test.ts`](../../tests/styles-entry-is-imports-only.test.ts), which is the independent witness to that order |
-| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) last. Read `styles.css` for the rest of the order rather than guessing it from the file names |
-| 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the four font stacks, imported in turn by *file 3* |
+| 3a | [`src/web/styles/`](../../src/web/styles/) | every hand-written rule, one file per area, imported by *file 3*. Three positions in that order are load-bearing: [`tokens.css`](../../src/web/styles/tokens.css) first, because everything below reads its semantic names; [`narrow-window.css`](../../src/web/styles/narrow-window.css) near the end, because nearly every phone rule wins by being later rather than by specificity — its own header says so; and [`site.css`](../../src/web/styles/site.css) at the tail, with only `changelog.css`, `voices.css` and `logo-animations.css` after it. Read `styles.css` for the rest of the order rather than guessing it from the file names |
+| 4 | [`styles/tokens.css`](../../styles/tokens.css) | the brand palette and the font stacks (the `--font-*` tokens), imported in turn by *file 3* |
 | 5 | [`styles/colourscales.css`](../../styles/colourscales.css) | the three palettes that are **not** the brand — categorical, sequential, diverging — imported by *file 4*. See [colour-scales.md](colour-scales.md) |
 
-`wc -l src/web/styles.css src/web/styles/*.css` on 2026-09-06: 65 lines of `@import` over 37 files,
-15,951 lines in all.
+How big that is: `wc -l src/web/styles.css src/web/styles/*.css`, and `grep -c '@import' src/web/styles.css`
+for the number of sheets.
 
 The nesting is the load-bearing part. Importing `styles.css` from `main.tsx` alongside
 `tailwind.css` **does not work** — it lands unlayered, outranks every utility, and Tailwind
@@ -89,13 +89,23 @@ The semantic layer in [`src/web/styles/tokens.css`](../../src/web/styles/tokens.
 rules below read in reading-view terms rather than in shadcn surface names. *Soft* and *faint* run away from the ink — darker on the dark page,
 lighter on the light one.
 
+**Elevation is three tokens there too**, since 2026-10-07: `--shadow-pop` (tooltips, menus,
+pickers), `--shadow-dialog` (a panel over the prose, the command bar, the toast) and
+`--shadow-sheet` (the large modal surfaces). Extracted literals keep their dark values;
+CommandBar moves from Tailwind's `shadow-lg` to the dialog shadow in both themes. Light softens
+the token alphas to about 0.35–0.4 of Dark, as the marketing pages' `--site-lift` does. Write one of the three
+rather than a new `rgb(0 0 0 / …)`; in a `tw:` string, `tw:shadow-[var(--shadow-pop)]` compiles to
+a `box-shadow`. Not elevation, so not these: swatch rings, inset marks, table dividers, focus rings.
+
 ### Both of those are checked, because both had already happened
 
-[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads all four stylesheets and asserts
+[`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads every repository stylesheet the client loads —
+`tailwind.css`, the two token files, `styles/colourscales.css`, and the hand-written sheets resolved from the `@import` graph by
+`readerSheets()` in [`tests/helpers/stylesheets.ts`](../../tests/helpers/stylesheets.ts) — and asserts
 two things. Neither was a hypothetical; `§ outline mode` had six instances of the second and three
 of the first, and the panel was half unreadable on screen for four days before Greg's screenshot.
 
-- **A `var(--x)` with no fallback names a token that exists** — in one of the four sheets, or set as
+- **A `var(--x)` with no fallback names a token that exists** — in one of those sheets, or set as
   an inline style from `src/web` (the test reads those too, including the `--h${i}` family
   `annotate.ts` emits). An undefined custom property with no fallback is *invalid at computed value
   time*: the whole declaration is dropped and the property inherits. Nothing errors, and the rule
@@ -107,8 +117,8 @@ of the first, and the panel was half unreadable on screen for four days before G
 
 A third checks the same mistake in Tailwind's spelling: `tw:text-muted` is not the text colour —
 the bridge at the top of `tailwind.css` maps `--color-muted` to `--muted`, the surface — and
-`tw:text-muted-foreground` is. All 88 call sites in `src/web` are already the right one, so that
-check arrives with a clean baseline, which is the only time one is cheap to add.
+`tw:text-muted-foreground` is. Every call site in `src/web` was already the right one, so that
+check arrived with a clean baseline, which is the only time one is cheap to add.
 
 ### And the other direction: a utility nothing generates
 
@@ -143,39 +153,36 @@ The `--accent` warning above was already written in two files, in capitals, and 
 anyway with `--accent`'s neighbour. **A rule that is only written down is not a check**, which is
 why these now are.
 
-**There is exactly one colour that is not the orange, and it is `--hit-rgb`** — the wash over search
-results ([search.md](search.md)). It exists because a comment, a glossary term and a search hit can
+**Search has its own non-orange colour, `--hit-rgb`**, used as the fixed hue for literal results
+([search.md](search.md)). It exists because a comment, a glossary term and a search hit can
 all cover the same sentence, and three meanings separated only by opacity is one hue too few. That
 is not a guess: the version this project is an offshoot of drew all three in `#DB8A45` and got away
 with it only because it could never show two at once
 ([original-version/highlighting.md](original-version/highlighting.md)). On a near-black ground the
 failure is worse than muddled, it is invisible.
 
-It is held as **three space-separated numbers rather than as a colour**, because the confidence wash
-is `rgb(var(--hit-rgb) / <alpha>)` and that form is the one that takes a variable alpha. `--hit` is
+It is held as **three space-separated numbers rather than as a colour**, because a literal match's
+confidence edge is `rgb(var(--hit-rgb) / <alpha>)` and that form is the one that takes a variable alpha. `--hit` is
 the ordinary-colour alias beside it. Anything else that needs a second meaning on the prose should
 add a token here rather than reach for another alpha of the orange.
 
-**Since 2026-08-26 that sentence needs a second half.** Several saved searches can be showing at
-once, each in its own hue, so the search mark had to split into two channels: a low-chroma slate
-wash (`--hit-wash-rgb`) carrying the model's confidence, and one coloured rule per search underneath
-it carrying *which* search. `--hit-rgb` is now the panel's chrome colour rather than the wash's. The
+Several saved searches can be showing at once, each in its own hue, so the search mark has two
+channels: the top edge and ends carry the model's confidence, while one coloured rule per search
+along the bottom carries *which* search. `--hit-rgb` is the fallback edge and band colour for a
+literal match, which has no saved-search hue of its own. The
 eight hues are in [`colourscales.css`](../../styles/colourscales.css) and the reasoning is in
 [colour-scales.md](colour-scales.md) — including the two things that make a published palette wrong
 on this page, and the fact that slot 6 sits close enough to the brand orange to be worth knowing
 about.
 
-**And a third half since 2026-09-07, which adds a token rather than a hue.** Quotes are drawn in the
-prose as an *outline* — `--quote-stroke-rgb`, with `--quote-stroke-color` the alias beside it — and
-the width of that outline carries the quote's priority. The reason it is not another wash is that
-every channel a `<mark>` has was already spoken for: the fill says how confident a search is, the
-hue underneath says *which* search found it, and a fourth alpha of the slate would have been a
-second way of saying "somebody marked this". **Search hits fill; quotes outline.** If a future
-change needs a fill for quotes after all, the reason this was chosen has gone. The mechanism, the
-two tiers and what is still open — including the fact that this green is the same family as
-`--cat-2` rather than the unused hue it was first claimed to be — are in
-[quotes.md § The stroke](quotes.md#the-stroke-which-is-how-a-quote-says-how-much-it-matters) and
-[260907c](../plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md).
+**Quotes add a token rather than another search hue.** A quote is a fill, like a
+highlighter pen, in `--quote-prose-rgb` (a purple; `--quote-rgb` is the spine strip's, the same
+colour on the light page and a lighter one of the same hue on the dark), and its strength
+carries the quote's priority. **Quotes fill; search hits outline**, since 2026-10-03,
+when Greg swapped the two (`spya-xrgste`). `--hit-wash-rgb` is now only the pressed hit's faint wash
+and the quick hit's ring. The mechanism, the two tiers, why purple, and the month it was the other
+way round are in
+[quotes.md § A highlighter pen](quotes.md#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters).
 
 One trap worth repeating here because it is invisible: **mix colours in `oklab`, not `oklch`.**
 `--page` is written `oklch(0.145 0 0)`, a hue explicitly specified as 0 rather than missing, so
@@ -235,7 +242,7 @@ CSS, both in [`styles/mode-band.css`](../../src/web/styles/mode-band.css) § `.m
   measured layout (Outline's `--outln-pad-r`) applies it to every copy it measures.
 
 Plan [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md). The owner's
-*written for you* badge sits beside it, the same size, through `ModeSurface`'s `profile`, and
+profile icon sits beside it, the same size, through `ModeSurface`'s `profile`, and
 `--band-about-room` grows only when one rendered — plan
 [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
 
@@ -259,8 +266,7 @@ are native modal `<dialog>` elements in the browser's top layer, which is above 
 page by definition. That is the cheapest answer available for anything that must cover *everything*,
 and it is worth reaching for again rather than minting a bigger number.
 
-The full inventory is 31 declarations from 0 to 100, counted on 2026-09-06 with
-`grep -nE '^\s*z-index:' src/web/styles/*.css` — a dated example rather than a fact to maintain here.
+The full inventory is `grep -nE '^\s*z-index:' src/web/styles/*.css`, with values from 0 to 100.
 Run it before assuming a gap is free.
 
 ## What is not written down yet
@@ -273,8 +279,11 @@ will eventually have to decide whether they are a system or an accident:
 - **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
   settled — see [controls.md](controls.md) — but that is one row
   of one page agreeing with itself, not a scale, and it should not be read as one.
-- **Breakpoints.** Exactly one, `max-width: 760px`, plus the widths at which the columns are given
-  up, computed in JS rather than in CSS ([`layout.ts`](../../src/web/layout.ts)). The interesting
+- **Breakpoints.** The reading view has exactly one, `max-width: 731px` (`NARROW_WINDOW_MAX` in
+  [`layout.ts`](../../src/web/layout.ts), written as a literal in the stylesheets, and paired with
+  `max-height: 620px` where a short window needs the same rules), plus the widths at which the columns
+  are given up, computed in JS rather than in CSS (the same file). Outside it, the marketing pages add
+  `min-width: 640px` and `900px` in `site.css` and Illustrated adds `min-width: 1080px`. The interesting
   responsive behaviour is not in the stylesheet at all. (The spine used to be in that sentence too,
   collapsing from 13rem to a strip on width; the expanded rail was deleted on 2026-08-26 and it is
   now one width, on or off — 12px since 2026-08-28.)
@@ -282,16 +291,14 @@ will eventually have to decide whether they are a system or an accident:
   [`tailwind.css`](../../src/web/tailwind.css) flattens every animation and transition; narrower
   blocks under [`src/web/styles/`](../../src/web/styles/) remain, for the things that are *wrong*
   when reduced rather than merely fast (a tooltip's transform, the context panel's scroll-behaviour).
-  How many: `grep -rc "prefers-reduced-motion" src/web/styles/*.css` — **18 across 13 files** on
-  2026-09-06. `tailwind.css` said "four" until that day, and had been wrong by more than four times
+  How many: `grep -rc "prefers-reduced-motion" src/web/styles/*.css`. `tailwind.css` said "four" until 2026-09-06, and had been wrong by more than four times
   for long enough that nobody could say when it drifted. Written globally
   before most of the motion it guards exists — which is the lesson from the previous app, where
   the guard covered two class names while fifteen keyframe animations ran regardless. Individual
   durations are still per-rule.
 - **What "done" looks like.** Whether this project wants a design system, or whether this much
   well-commented CSS *is* the answer at this size, is genuinely undecided — and the number is the
-  sharp end of the question. Count it with `wc -l src/web/styles.css src/web/styles/*.css`; on
-  2026-09-06 that was 15,951 lines over 38 files. This line said "~1200" until 2026-09-03, and it
+  sharp end of the question. Count it with `wc -l src/web/styles.css src/web/styles/*.css`. This line said "~1200" until 2026-09-03, and it
   was right when it was written: there was one file and it was 1,211 lines on 2026-08-25.
 
 ## Under this doc
@@ -315,7 +322,7 @@ will eventually have to decide whether they are a system or an accident:
 - **[loading-spinner.md](loading-spinner.md)** — the two spinners and which a wait gets: the
   wordmark, running two of its hover animations at once, for a whole page waiting; `LoaderCircle`
   for anything inline.
-- **[marketing-pages.md](marketing-pages.md)** — `/` and `/features`: the `site-*` block in
+- **[marketing-pages.md](marketing-pages.md)** — `/`, `/features` and `/pricing`: the `site-*` block in
   [`styles/site.css`](../../src/web/styles/site.css) and the four rules in it, how to shoot a product screenshot that shows what it
   claims to, and the two ways a full-page capture of these pages lies to you.
 

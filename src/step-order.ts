@@ -54,12 +54,8 @@ export const STEP_ORDER = [
   "extract",
   "blocks",
   "structure",
-  /* **Immediately after `structure`, and its position here is not load-bearing
-     the way `quotes`, `timeline`, `quiz` and `illustrated` are.** It is in no
-     article-cache group — the label prompt sends an outline and a batch of
-     paragraphs, not the article the way `articleText` or `articleWithIds` do —
-     so its position affects no cache pair, and it is here because it is
-     the second half of stage 4 and reads the tree that step just cut.
+  /* **After `structure`, because it reads the tree that step just cut.**
+     Immediate adjacency is not required; this is the second half of stage 4.
 
      **Not in `DEFAULT_INGEST_STEPS`** (src/pipeline.ts), which is the entire
      point of the split: `structure` writes a pending manifest and the labels
@@ -67,7 +63,7 @@ export const STEP_ORDER = [
      on the 79.5–92% of stage 4 that this pass was.
 
      **And not in `FORCE_ONLY_WHEN_NAMED`** either, which is the opposite
-     decision from the one `arc` made in the same position — see the note there.
+     decision from `arc` — src/pipeline.ts § FORCE_ONLY_WHEN_NAMED.
      docs/plans/260906a-labels-leave-the-blocking-hierarchy-step.md. */
   "labels",
   /* After `structure` because it reads stage 4's `blocks.json` — the copy the reader
@@ -82,69 +78,66 @@ export const STEP_ORDER = [
   "arc",
   "tweets",
   "glossary",
-  /* Straight after `glossary`, and that is not cosmetic: the two send
-     byte-identical article bytes at the same effort, so a job asking for BOTH
-     pays for the article once (src/models.ts § ARTICLE_RENDERER). Two separate
-     jobs share nothing — `cacheArticle` (src/pipeline.ts) only marks a prefix
-     another step of the SAME job will read — so this buys the reader who asks
-     for both at once and nobody else. And it bought nobody anything at all
-     until 2026-09-03, when `quotes` started sending a breakpoint of its own:
-     see `cacheArticleForStep` (src/pipeline.ts). docs/project/quotes.md. */
+  /* **No two steps in this list share a cached article today, so no position
+     here is about the prompt cache.** From here to `simple` the comments used
+     to say otherwise — `glossary` with `quotes`, and `ideas` with `timeline`,
+     `quiz`, `faq` and `simple`, each "one cache group". They were, while effort
+     and article bytes were the whole cache key. The output schema is part of it
+     too, every stage has had its own since they moved to structured output, and
+     `sharesArticleCache` (src/pipeline.ts) now answers false for every distinct
+     pair — tests/article-cache-group.test.ts asserts the list of pairs is
+     empty, and is what goes red if two stages match on all three dimensions.
+     That function is the policy; do not restate its membership here.
+
+     So `quotes` is beside `glossary` because it always was: the same article
+     bytes at the same effort, which is two of three dimensions a share would need.
+     docs/project/quotes.md. */
   "quotes",
   "ideas",
-  /* Beside `ideas`, and that is the same argument `quotes` makes two rows up:
-     the two send byte-identical article bytes at the same effort and the same
-     `ids` renderer, so a job asking for BOTH pays for the article once
-     (src/models.ts § ARTICLE_RENDERER, § STAGE_EFFORT). Keeping the group close
-     together shortens the gap inside the provider's five-minute cache lifetime;
-     it is not required for a hit, because `cacheArticleForStep` is position-blind.
+  /* Beside `ideas`: the same article bytes, the same `ids` renderer and the
+     same effort (src/models.ts § ARTICLE_RENDERER, § STAGE_EFFORT) — and a
+     different output schema, so no shared cache; see the note above `quotes`.
 
      Off `DEFAULT_INGEST_STEPS`, like the four before it: it costs a model call
      over the whole article and it is a mode somebody goes to. */
   "timeline",
-  /* Beside `timeline`, for the third time and the same argument: `high` effort
-     and the `ids` renderer, so `ideas`, `timeline` and `quiz` (and, since
-     2026-09-16, `faq`) are one
-     cache group and this list keeps their calls close together. A `quiz` placed
-     elsewhere would still share: `cacheArticleForStep` examines every other
-     step in the job, in both directions. The proximity only reduces the chance
-     that the provider's five-minute cache expires between calls
-     (tests/article-cache-group.test.ts).
+  /* Beside `timeline`, with the same rendering and effort and, like it, its
+     own schema and no shared cache.
 
      Off `DEFAULT_INGEST_STEPS`, like the five before it: it costs a model call
      over the whole article and it is a thing somebody asks for.
      docs/plans/260831al-review-quiz-sub-mode.md. */
   "quiz",
-  /* Beside `quiz`, a fourth time for the same argument: `high` effort, the
-     `ids` renderer and the body-only evidence, so `ideas`, `timeline`, `quiz`
-     and `faq` are one cache group and this list keeps their calls close.
+  /* Beside `quiz`: `high` effort, the `ids` renderer and the body-only
+     evidence, like `ideas`, `timeline` and `quiz` — and its own schema.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call
      over the whole article that a reader asks for by opening the mode.
      docs/plans/260916d-faq-mode.md. */
   "faq",
-  /* Straight after `faq`, whose article bytes and fingerprint it shares — but
-     at `low` effort, so it is in no cache group (src/models.ts § STAGE_EFFORT).
+  /* Straight after `faq`, whose article bytes it shares, at
+     `low` effort (src/models.ts § STAGE_EFFORT).
+     Its fingerprint also covers the ordered paragraph pairs, rather than
+     FAQ's whole tree — src/relations.ts § inputFingerprint.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED`: one model call
-     over the whole article, started by the owner's press that turns Marginalia
-     on. docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
+     over the whole article, queued when an article is imported since
+     2026-10-05 (src/auto-mode-steps.ts) and otherwise started by the owner's
+     press that turns Marginalia on.
+     docs/plans/261003f-marginalia-relation-words-and-timeline-events.md. */
   "relations",
-  /* Beside `faq`, a fifth time for the same argument: `high` effort (measured
-     against `medium` in stage 1, src/models.ts § STAGE_EFFORT), the `ids`
-     renderer and the body-only evidence, so it is in the `ideas` … `faq`
-     cache group and this list keeps its call close to the others. Off `DEFAULT_INGEST_STEPS`
+  /* With the other body-only `ids` stages: `high` effort (measured against
+     `medium` in stage 1, src/models.ts § STAGE_EFFORT) and its own schema.
+     Off `DEFAULT_INGEST_STEPS`
      and in `FORCE_ONLY_WHEN_NAMED`: a model call over the whole article that a
      reader asks for through Summary's plain-words controls.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
   "simple",
   /* Off `DEFAULT_INGEST_STEPS`: nothing reads what it writes except the one
-     below. Straight after the `ideas` … `simple` cache group and in none: it
-     sends the same bytes but at `low` effort since 2026-10-01 (src/models.ts §
-     STAGE_EFFORT), so its place affects no cache pair. It was the slowest
+     below. It sends the same bytes as `ideas` … `simple`, at `low` effort
+     since 2026-10-01 (src/models.ts § STAGE_EFFORT). It was the slowest
      single model call in the app at 121–194 seconds measured at `high`; about
      42 s at `low`. docs/project/diagram.md § Sketch. */
   "sketch",
-  /* **Last, and after `sketch` for a reason no other pair here has**: this is
-     the only step whose input is another step's artefact. The order does not
+  /* **After `sketch`, because it paints that step's artefact.** The order does not
      *pull* the Sketch in — `useStepJob` posts `steps: [step]` and nothing puts
      a prerequisite in front of it — so the step refuses instead. What the order
      buys is that a run naming both draws before it paints.
@@ -157,23 +150,16 @@ export const STEP_ORDER = [
      ideas before it routes through them. It sat straight after `quotes` until
      stage 6 of plan 260928a gave it the Ideas.
 
-     **After the whole `ideas` … `simple` cache group**: it sends the quotes and
-     never the article, so its bytes match no other stage's. Placing it inside
-     the group would not prevent cache hits — that lookup is position-blind —
-     but would add needless time inside a five-minute cache lifetime
-     (tests/article-cache-group.test.ts). After `illustrated` too, so that step
-     stays beside the `sketch` it paints. Only named steps run, so this place
+     It sends the quotes and never the article. After `illustrated` too, so
+     that step stays beside the `sketch` it paints. Only named steps run, so this place
      never makes a job run the steps between.
      Off `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts).
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md. */
   "skim",
-  /* **Last, and it depends on nothing in this list.** Every other name here
-     reads an artefact something before it wrote; this one goes to the open web
-     and comes back with pages that answer the piece. It is last because it has
-     no place it must be — putting it between `ideas` and `simple` would add a
-     needless call inside that cache group's five-minute lifetime, and
-     putting it before `illustrated` would separate that step from the `sketch`
-     it paints.
+  /* **After `illustrated` and `skim`.** It reads the article and goes to the
+     open web for pages that answer the piece. It has no prerequisite among the
+     optional modes, and keeping it after `illustrated` leaves that step beside
+     the `sketch` it paints.
 
      Off `DEFAULT_INGEST_STEPS`, like the seven before it, and in
      `FORCE_ONLY_WHEN_NAMED` (src/pipeline.ts) — this is the second dearest
@@ -181,17 +167,14 @@ export const STEP_ORDER = [
      it in would spend that on somebody who pressed a button one band along.
      docs/plans/260905f-debate-mode-what-the-web-says-about-this-piece.md. */
   "debate",
-  /* **After `debate`, and like it in no cache group**: it sends `articleWithIds`
-     over every block, notes and bibliography included, so its bytes match no
-     other stage's and its position affects no cache pair. Off
+  /* **After `debate`**: it sends `articleWithIds` over every block, notes and
+     bibliography included, so its bytes match no other stage's. Off
      `DEFAULT_INGEST_STEPS` and in `FORCE_ONLY_WHEN_NAMED` — a model call over
      the whole article that a reader asks for by pressing the mode.
      docs/plans/260911g-citations-mode.md. */
   "citations",
-  /* **Last, and like `citations` in no cache group that its place could
-     break**: it sends Ideas' bytes but thinks at `medium`, and no other `ids`
-     stage does, so it shares a cached prefix with nothing and its position
-     affects no cache pair. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
+  /* **Last**: it sends Ideas' bytes and thinks at `medium`, which no other
+     `ids` stage does. Off `DEFAULT_INGEST_STEPS` — Greg asked for import to
      be as fast as possible — and in `FORCE_ONLY_WHEN_NAMED`: a model call over
      the whole article, queued by the add page's after-import box or a press on
      Metadata. docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */

@@ -89,6 +89,10 @@ vi.mock("../src/store/blobs.js", async (importOriginal) => {
 
 const SLUG = "store-export-bundle-fixture";
 const ARTICLE_ID = "00000000-0000-4000-8000-00000000b0d1";
+/** A private link's key on the fixture: 22 base64url characters, which the column's CHECK requires. */
+const SHARE_TOKEN = "ExPoRtBuNdLeFiXtUrE_-0";
+/** A short link with something private in its query, as a pasted address can have. */
+const ASKED_URL = "https://bit.ly/s1ExportBundle?k=AsKeDuRlFiXtUrE";
 const REVISION_ID = "00000000-0000-4000-8000-00000000b0d2";
 /** Three blocks, deliberately inserted out of order — see the ordering test. */
 const BLOCKS = ["spya-bnd234", "spya-bne234", "spya-bnf234"] as const;
@@ -115,7 +119,12 @@ const EXTRACTED = "<article><p>before the ids were stamped on</p></article>";
 const STAMPED = `<article><p data-spya-id="${BLOCKS[0]}">before the ids were stamped on</p></article>`;
 const PASSAGES = [{ blockIds: [BLOCKS[0]], why: "the passage the answer came from" }];
 
-/** A generated artefact that both export formats must carry whole. */
+/**
+ * A generated artefact that both export formats must carry whole. **A row from
+ * before 2026-10-04**, so it has the middle level the step no longer writes
+ * (plan 261004f): the bundle's file still carries it, and the page does not
+ * count it.
+ */
 const SIMPLE: SimpleSummary = {
   version: "simple/2",
   promptVersion: "simple-prompt/export-fixture",
@@ -139,7 +148,7 @@ const SIMPLE: SimpleSummary = {
       { text: "It then gives the answer.", ids: [BLOCKS[1]] },
       { text: "And it says where that answer stops.", ids: [BLOCKS[2]] },
     ],
-  },
+  } as SimpleSummary["levels"],
 };
 
 /** A second whole artefact, to hold the new export registration on both paths. */
@@ -279,6 +288,11 @@ describe("the bundle is the faithful projection", () => {
         opens: 3,
         visibility: "public",
         publicAt: new Date(),
+        /* A private link on it, so the zip has a key to leave out (plan 261005e). */
+        shareToken: SHARE_TOKEN,
+        shareTokenAt: new Date(),
+        /* The address the reader pasted, which is theirs and does cross (plan 261006i). */
+        askedUrl: ASKED_URL,
       })
       .onConflictDoNothing();
     await db
@@ -495,6 +509,53 @@ describe("the bundle is the faithful projection", () => {
     }
   });
 
+  /**
+   * **The private link's key is a credential, and a zip gets forwarded.**
+   *
+   * `article.json` is `rowJson` over the whole `articles` row, which ships
+   * every column nobody told it to drop, so `share_token` rode out in it the
+   * day the column was added. Anybody holding that key and the slug, which is
+   * in the same file, can read the article until its owner turns the link off.
+   *
+   * Over the whole zip and the rollback's files, for the reason the owner-uuid
+   * check above gives: the value is what must not be there, under any name.
+   * That a link exists, and since when, is sharing state and does cross.
+   */
+  it("leaves the private link's key out of every file, and keeps when it was made", async () => {
+    const article = parsed("article.json");
+    expect(article).not.toHaveProperty("shareToken");
+    expect(article.shareTokenAt).toEqual(expect.any(String));
+    /* The control: the fixture really has the key, so its absence is the code's doing. */
+    const [row] = await getDb()
+      .select({ token: schema.articles.shareToken })
+      .from(schema.articles)
+      .where(eq(schema.articles.id, ARTICLE_ID));
+    expect(row?.token).toBe(SHARE_TOKEN);
+    for (const [file, text] of bundled) {
+      expect(text, `${file} carries the private link's key`).not.toContain(SHARE_TOKEN);
+    }
+    const shelf = await readFile(path.join(out, SLUG, "shelf.json"), "utf8");
+    expect(shelf).not.toContain(SHARE_TOKEN);
+  });
+
+  /**
+   * **The address the reader pasted is theirs, so their own export keeps it**,
+   * in `article.json` and nowhere else. It arrives there with no line of code:
+   * `rowJson` ships every `articles` column nobody told it to drop. This pins
+   * that it was a decision (plan 261006i, GPT Sol's K7), and that the string,
+   * which can carry a token in its query, is not also copied into the page a
+   * reader opens or into the rollback's files.
+   */
+  it("keeps the address the article was asked for, in article.json alone", async () => {
+    expect(parsed("article.json").askedUrl).toBe(ASKED_URL);
+    for (const [file, text] of bundled) {
+      if (file === "article.json") continue;
+      expect(text, `${file} carries the asked-for address`).not.toContain("AsKeDuRlFiXtUrE");
+    }
+    const shelf = await readFile(path.join(out, SLUG, "shelf.json"), "utf8");
+    expect(shelf).not.toContain("AsKeDuRlFiXtUrE");
+  });
+
   it("leaves out a file with nothing in it, and keeps the README", () => {
     expect(bundled.has("README.md")).toBe(true);
     expect(bundled.get("README.md")).toContain("The block id contract");
@@ -525,11 +586,14 @@ describe("the bundle is the faithful projection", () => {
   /* Sol's plan review of 261001b, P2-7: the page counted `paragraphs`, which a
      `simple/2` row does not have, and a zero row is dropped — so every level
      would have vanished from the page while the JSON beside it carried them. */
-  it("counts every plain-words level on the page", () => {
+  it("counts every plain-words level on the page, and not the removed middle one", () => {
     const page = bundled.get("index.html");
     if (!page) throw new Error("no index.html");
     expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(brief\)<\/span>/)?.[1]).toBe("2");
-    expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(simple\)<\/span>/)?.[1]).toBe("2");
+    /* The stored row has a middle level of two paragraphs, and the JSON beside
+       the page carries it; no read shows it, so the page does not count it. */
+    expect(page).not.toContain("plain-words paragraphs (simple)");
+    expect((parsed("augmentations/simple-summary.json") as { levels: Record<string, unknown[]> }).levels.simple).toHaveLength(2);
     expect(page.match(/<b>([0-9,]+)<\/b><span>plain-words paragraphs \(fuller\)<\/span>/)?.[1]).toBe("3");
   });
 
@@ -603,7 +667,7 @@ describe("the bundle is the faithful projection", () => {
     const threads = parsed("augmentations/chat.json").threads as { kind: string }[];
     expect(threads[0]?.kind).toBe("candidates");
 
-    /* Until 2026-10-02 `export.ts` mapped anything that was not `remember` to
+    /* Until 2026-10-02 `export.ts` mapped anything that was not `remember` (now `learn`) to
        `chat`, so a reader's Candidates thread came back as an ordinary chat,
        silently, and this test pinned that contrast. Adding Tutorial as a fourth
        kind made it a loss of the same shape, so the rollback now writes every

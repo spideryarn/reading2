@@ -29,9 +29,8 @@
  * `popstate` for everything else. One query string, one listener.
  */
 import { createParser, debounce } from "nuqs";
-import { SIMPLE_LEVELS, type DebateBears, type IdentificationLevel, type SimpleLevel, type SkimDepth } from "../types.js";
+import type { DebateBears, SkimDepth } from "../types.js";
 import { isSpideryarnId } from "../ids.js";
-import { isIdentificationLevel } from "./debate-levels.js";
 import { DIAGRAMS, type DiagramKind } from "./diagram.js";
 import type { ScatterAxis, ScatterHue } from "./scatter.js";
 import { DEFAULT_BY } from "./library-columns.js";
@@ -271,7 +270,7 @@ export { isMode };
 import { type BandMode, DEFAULT_MODE, MODES, type Mode, isMarginaliaModeWord, modeFromParam } from "../modes.js";
 export { type BandMode, DEFAULT_MODE, MODES, type Mode };
 
-/* Referee's four sub-modes, from src/web/referee-views.ts and re-exported here
+/* Referee's sub-modes, from src/web/referee-views.ts and re-exported here
    for the same reason the three above are: this file is where a component looks
    for the vocabulary a parameter is drawn from. Unlike `modes.js` above, that
    module lives *inside* src/web/ — nothing on the server reads a sub-mode, and
@@ -348,6 +347,34 @@ export function marginInSearch(search: string): boolean {
  * for the trip into chat — which is the entry Back should use.
  */
 export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
+
+/**
+ * **Which conversations Chat's list is narrowed to, by where they came from**
+ * — `?chatfrom=chats`, `debate`, `learn` or `passage`. Since 2026-10-05
+ * the list shows every conversation about the article (report `spya-hyfqkq`,
+ * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md
+ * D5), and this is its filter.
+ *
+ * **No parser default**: absent is *All*. An unknown word parses to `null`,
+ * which is All too. A word whose source this article has no conversation from
+ * is replaced with All by the band, once the list has answered
+ * (`ConversationBand`), so a filter cannot hide everything with nothing on
+ * screen to say why. `replace`, like `?debatethread=`: it narrows a list
+ * rather than moving to a new view.
+ *
+ * `learn` is one word for Recall, Tutorial and Explore together. Which
+ * conversation belongs to which word is `chatFrom` in thread-source.ts; the
+ * words are here so this eager file does not import that one. It was
+ * `remember` until 2026-10-06 and is not aliased: an old `?chatfrom=remember`
+ * is an unknown word, which reads as All.
+ */
+export const CHAT_FROM_WORDS = ["chats", "debate", "glossary", "citations", "learn", "passage"] as const;
+export type ChatFrom = (typeof CHAT_FROM_WORDS)[number];
+
+export const chatFromParam = createParser<ChatFrom>({
+  parse: (v) => (CHAT_FROM_WORDS.includes(v as ChatFrom) ? (v as ChatFrom) : null),
+  serialize: (v) => v,
+}).withOptions({ history: "replace" });
 
 /**
  * Which glossary term is selected, or none for a list nobody has picked from.
@@ -439,8 +466,11 @@ export const eventParam = parseAsBlockId.withOptions({ history: "replace" });
  * A depth the route does not offer is not refused here — this parser cannot see
  * the route — but `effectiveDepth` (src/web/skim-route.ts) draws the
  * deepest offered pass below it. **A `?stop=` on the route wins over this**
- * (`locate`): each pass walks only its own stops (plan 260929e), so the stop's
- * own pass is drawn whatever the depth says.
+ * (`locate`): the asked pass is drawn only when the stop is walked in it, and
+ * otherwise the stop's own — the shallowest it is in. A stop is in one pass
+ * (plan 260929e) unless the route carries it into a deeper one too (`again`,
+ * plan 261003l), so on a route with no carried stop the depth never matters
+ * once a stop is named.
  */
 export const depthParam = createParser<SkimDepth>({
   parse: (v) => (v === "1" ? 1 : v === "2" ? 2 : v === "3" ? 3 : null),
@@ -453,8 +483,9 @@ export const depthParam = createParser<SkimDepth>({
  *
  * `replace`: stepping along the route is traversal, and twenty stops must not
  * cost twenty presses of Back — comment-jump.ts's argument for its arrows. A
- * stop on the route draws its own pass; one on no pass (a stale link, a quote
- * chosen again) falls back to the asked pass's first stop, in `locate`.
+ * stop on the route draws the asked pass when it is walked there, else its own
+ * (see `depthParam`); one on no pass (a stale link, a quote chosen again) falls
+ * back to the asked pass's first stop, in `locate`.
  */
 export const stopParam = parseAsBlockId.withOptions({ history: "replace" });
 
@@ -640,7 +671,8 @@ export const citeOrderParam = createParser<CiteOrder>({
 
 /**
  * How high a work has to score to stay on screen in the prioritised order —
- * `?citebar=`, `(2 × relevance + influence) / 3` on 0–1.
+ * `?citebar=`, `priorityOf` in CitationsPanel.tsx on 0–1: weighted when both
+ * scores are known, relevance alone when influence is unknown.
  *
  * **No default, deliberately**, for `gateParam`'s reason: absent means nobody
  * has touched it, which the panel resolves to `CITATION_BAR_DEFAULT`
@@ -731,7 +763,7 @@ export const faqBarParam = createParser<number>({
  * **`quick` sits between them** (2026-10-02, docs/plans/261002e-quick-search-v1.md):
  * the same saved, ticked, coloured runs as `meaning`, asked of a fast model
  * that scores every paragraph in about a second instead of quoting and
- * reasoning in half a minute. Wherever the panel talks about the draft or the
+ * reasoning in about ten seconds. Wherever the panel talks about the draft or the
  * saved list, `quick` behaves as `meaning` does — `asksTheServer` below — and
  * it differs only in the `kind` it asks with.
  */
@@ -1004,7 +1036,8 @@ export const confParam = createParser<number>({
 }).withOptions({ history: "replace", limitUrlUpdates: debounce(200) });
 
 /* ---------------------------------------------------------- summary mode --
-   One control: `summary`, which of the three plain-words levels is open.
+   One control: `summary`, which of Summary's three views is open — two
+   plain-words lengths and the thread.
 
    There used to be more. A `len` control chose between three generated lengths
    until 2026-08-31 (docs/plans/260831s-gist-only-summaries.md); a `gists` view
@@ -1145,34 +1178,70 @@ export const diagramHueParam = createParser<ScatterHue>({
   .withOptions({ history: "replace" });
 
 /**
- * Which plain-words level Summary shows — `brief`, `simple` or `fuller`, a few
- * short paragraphs in everyday words at three lengths (`SIMPLE_LEVELS` in
- * src/types.ts, whose names are these URL values;
- * docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
- * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md).
- * *Which thing, within this mode*, so the shape of `?remember=` and
+ * **Summary's three views**, in the order the band's control draws them: the
+ * piece in plain words at two lengths, and the piece as a numbered thread.
+ * Greg, 2026-10-03 (spya-thpsnd): *"it could just be briefer, fuller, and tweet
+ * thread as three buttons somehow."*
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
+ *
+ * A vocabulary of its own rather than `SIMPLE_LEVELS` (src/types.ts), which
+ * names what the `simple` step **writes**: Brief and Fuller, and since
+ * 2026-10-04 no middle level (plan 261004f). The thread is a different step's
+ * artefact altogether.
+ */
+export const SUMMARY_VIEWS = ["brief", "fuller", "thread"] as const;
+export type SummaryView = (typeof SUMMARY_VIEWS)[number];
+
+/** The view Summary opens on, named once for the parser and `summaryInSearch`. */
+const DEFAULT_SUMMARY_VIEW: SummaryView = "brief";
+
+const isSummaryView = (v: string | null): v is SummaryView =>
+  v !== null && (SUMMARY_VIEWS as readonly string[]).includes(v);
+
+/**
+ * Which view Summary shows — `brief`, `fuller` or `thread`
+ * (docs/plans/260930i-simple-summaries-eli15-sub-mode.md,
+ * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md,
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md).
+ * *Which thing, within this mode*, so the shape of `?learn=` and
  * `?referee=`: in the URL, because it changes the whole band, and pushed,
  * because switching is a deliberate act Back should undo.
  *
  * **`brief` is the default**, and is omitted from the address: Greg,
  * 2026-10-01 (8N, spya-zw479b), *"In summary mode, default to the brief summary
- * when it opens for the first time"* — Simple and Fuller are written out, while
+ * when it opens for the first time"* — Fuller and Thread are written out, while
  * Brief stays absent; `last-view.ts` remembers the resulting view
  * (docs/plans/261002c-summary-opens-on-brief.md).
- * `simple` was the default until then. `gists`, the outline this mode drew
- * until 2026-10-01, is no longer a value, so an old `?summary=gists` reads as
- * `brief` — the same degrade-to-the-default rule as every other parser here.
+ * `simple` was the default until then, and a value until 2026-10-03; `gists`,
+ * the outline this mode drew until 2026-10-01, went before it. An old
+ * `?summary=simple` or `?summary=gists` reads as `brief` — the same
+ * degrade-to-the-default rule as every other parser here.
  *
- * **Writing it never spends.** Only a press on a plain-words control (the
- * slider, an end button or a command-bar row) arms the run; Back, a pasted link
- * and a last-view restore arrive here and buy nothing.
+ * **Writing it never spends on the plain-words side.** Only a press on Brief or
+ * Fuller (the band's control or a command-bar row) arms that run; Back, a
+ * pasted link and a last-view restore arrive here and buy nothing. **`thread`
+ * is the exception, and a deliberate one**: its band writes the thread when its
+ * owner arrives and there is none (useAutoRun.ts § `useAutoRunOnArrival`), so
+ * a restore never opens it (last-view.ts).
  */
-export const summaryParam = createParser<SimpleLevel>({
-  parse: (v) => (SIMPLE_LEVELS.includes(v as SimpleLevel) ? (v as SimpleLevel) : null),
+export const summaryParam = createParser<SummaryView>({
+  parse: (v) => (isSummaryView(v) ? v : null),
   serialize: (v) => v,
 })
-  .withDefault("brief")
+  .withDefault(DEFAULT_SUMMARY_VIEW)
   .withOptions({ history: "push" });
+
+/**
+ * **Which view a carried `?summary=` names**, degraded as `summaryParam`
+ * degrades it — `diagramInSearch`'s twin, for the one caller that has no React
+ * state to read: the bar on the metadata page (Dock.tsx). On the reading view
+ * the bar is handed the parsed state instead, because the address lags a press
+ * (activation.ts § `PressContext`).
+ */
+export function summaryInSearch(search: string): SummaryView {
+  const asked = new URLSearchParams(search).get("summary");
+  return isSummaryView(asked) ? asked : DEFAULT_SUMMARY_VIEW;
+}
 
 /* ---------------------------------------------------------- structure mode --
    docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
@@ -1189,7 +1258,7 @@ export type StructureView = (typeof STRUCTURE_VIEWS)[number];
  * Which of Structure's views is open — `fisheye` (the default, omitted) or
  * `expanded`. Greg, 2026-10-01 (spya-gxyhcc): "Add a toggle to Structure mode
  * to switch between the Fisheye submode (which should be the default …) and
- * Expanded mode". The shape of `?remember=` and `?summary=`: in the URL because
+ * Expanded mode". The shape of `?learn=` and `?summary=`: in the URL because
  * it changes the whole band, pushed because switching is a deliberate act Back
  * should undo, and an unknown value opens the default. Nothing to generate, so
  * writing it never spends.
@@ -1203,16 +1272,17 @@ export const structureParam = createParser<StructureView>({
 
 /* ------------------------------------------------------------ referee mode --
    The mode for somebody who has been asked to peer-review the piece. One
-   parameter, and it names which of the four sub-modes is open.
+   parameter, and it names which of the five sub-modes is open.
    docs/plans/260831an-referee-mode-for-peer-reviewers.md. */
 
 /**
- * Which of Referee's four sub-modes is open.
+ * Which of Referee's five sub-modes is open.
  *
  * `criteria` is the referee's own criteria run over the piece, `claims` is what
  * it promises against where it delivers, `mirror` is the model reading the
- * referee's own comments rather than the paper, and `candidates` is the
- * editor's question of who should review it. Genuinely different things to be
+ * referee's own comments rather than the paper, `candidates` is the editor's
+ * question of who should review it, and `hidden` is the check of the
+ * document's own source for text hidden from the reader. Genuinely different things to be
  * looking at rather than skins on one, so it belongs in the URL like every
  * other bit of view state (docs/project/url-state.md).
  *
@@ -1234,20 +1304,27 @@ export const refereeParam = createParser<RefereeView>({
   .withDefault(DEFAULT_REFEREE_VIEW)
   .withOptions({ history: "push" });
 
-/* ---------------------------------------------- Remember's three sub-modes --
-   docs/plans/260831al-review-quiz-sub-mode.md. */
+/* ----------------------------------------------- Learn's four sub-modes --
+   docs/plans/260831al-review-quiz-sub-mode.md. The key was `?remember=` until
+   2026-10-06 and is not aliased: an old link opens Learn at Recall
+   (docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md;
+   last-view.ts § `NEVER_REMEMBERED` keeps such a link a link). */
 
 /** Free recall, or the questions the piece asks you back. */
 /* In the order the chips are drawn: Recall, Tutorial (since 2026-10-02,
    docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md),
-   Quiz. */
-export const REMEMBER_VIEWS = ["recall", "tutorial", "quiz"] as const;
-export type RememberView = (typeof REMEMBER_VIEWS)[number];
+   Explore (since 2026-10-03,
+   docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
+   Quiz. The three conversations sit together and the one that is not a
+   conversation comes last. */
+export const LEARN_VIEWS = ["recall", "tutorial", "explore", "quiz"] as const;
+export type LearnView = (typeof LEARN_VIEWS)[number];
 
 /**
- * Which part of Remember is open — `recall` (the default, omitted), `tutorial`
- * or `quiz`. Tutorial is a conversation like Recall, with its own one thread,
- * so `?thread=` follows it exactly as it follows Recall; only Quiz clears it.
+ * Which part of Learn is open — `recall` (the default, omitted), `tutorial`,
+ * `explore` or `quiz`. Tutorial and Explore are conversations like Recall, each
+ * with its own one thread, so `?thread=` follows them exactly as it follows
+ * Recall; only Quiz clears it.
  *
  * **This does not break url-state.md's rule the way `?stance=` would have.** A
  * stance changes nothing on screen and is therefore component state; a sub-mode
@@ -1257,14 +1334,14 @@ export type RememberView = (typeof REMEMBER_VIEWS)[number];
  * switching is a deliberate act on the view and Back should undo it.
  *
  * **Its collision with `?thread=` is defined rather than left to fall out**,
- * because `?mode=remember&remember=quiz&thread=<id>` would otherwise leave a
- * Remember conversation selected and invisible. The three rules are implemented
- * in `RememberBand` (src/web/App.tsx), not here, because they are navigations
+ * because `?mode=learn&learn=quiz&thread=<id>` would otherwise leave a
+ * Learn conversation selected and invisible. The three rules are implemented
+ * in `LearnBand` (src/web/App.tsx), not here, because they are navigations
  * rather than parsing:
  *
- * - switching to Quiz sets `remember=quiz` **and clears `thread`, in one
+ * - switching to Quiz sets `learn=quiz` **and clears `thread`, in one
  *   navigation** — two would put a half-state on the Back stack;
- * - opening a Remember conversation sets `remember=recall` and `thread=<id>`,
+ * - opening a Learn conversation sets `learn=recall` and `thread=<id>`,
  *   also in one;
  * - a pasted URL carrying both: **Quiz wins**, and `thread` is dropped with a
  *   *replace*, so the reader's Back button does not land them on the broken
@@ -1280,67 +1357,77 @@ export type RememberView = (typeof REMEMBER_VIEWS)[number];
  * An unknown value degrades to the default rather than throwing, the same rule
  * as every other parser in this file.
  */
-export const rememberParam = createParser<RememberView>({
-  parse: (v) => (REMEMBER_VIEWS.includes(v as RememberView) ? (v as RememberView) : null),
+export const learnParam = createParser<LearnView>({
+  parse: (v) => (LEARN_VIEWS.includes(v as LearnView) ? (v as LearnView) : null),
   serialize: (v) => v,
 })
   .withDefault("recall")
   .withOptions({ history: "push" });
 
+/**
+ * **Which part of Learn a query string names**, through `learnParam`, so
+ * an unknown word is Recall here as it is on the reading view — `diagramInSearch`'s
+ * reason. For the metadata page's Learn link, which has no nuqs state to ask
+ * (Dock.tsx § `modeLinkHref`).
+ */
+export function learnInSearch(search: string): LearnView {
+  const named = new URLSearchParams(search).get("learn");
+  return (named === null ? null : learnParam.parse(named)) ?? learnParam.defaultValue;
+}
+
 /* --------------------------------------------------------------- debate -- */
 
 /**
- * **How firmly a page has to identify this article to stay on Debate's list** —
- * `?name=named`, `?name=quoted` or `?name=linked`.
+ * **Which of Debate's two searches the band draws** — `?debate=claims`, since
+ * 2026-10-03 (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
  *
- * The fourth threshold in the app and the first categorical one, and that is the
- * only thing about it that is new. `?gate=`, `?bar=` and `?conf=` all carry a
- * number because the fact under them is a score; the fact under this one is
- * **the name of the strongest evidence found** that a page is about this piece —
- * it links the address, it quotes the article's own words, or it names the title
- * — so the word is what a link carries. There is a rank inside the panel,
- * because `applyThreshold` needs one, and it is deliberately not in the URL: a
- * number here would be our arithmetic dressed as a measurement, which is the
- * composite this whole feature refused
- * (docs/plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md § 2).
+ * `reception` is what others have written about the piece itself; `claims` is
+ * what has been written about the claims it makes. *Which thing, within this
+ * mode*, so the shape of `?summary=` and `?referee=`: in the URL, because it
+ * changes the whole band, and pushed, because switching is a deliberate act
+ * Back should undo. **`reception` is the default** and is omitted from the
+ * address; an unknown value reads as Reception.
  *
- * **A word needs none of what `?bar=` needs.** `snapToStop` exists because a
- * hand-written `?bar=0.63` lands between two real scores and the thumb and the
- * list then disagree about where the bar is (`QuotesPanel.tsx`). A word is a
- * stop or it is nothing, so an unrecognised `?name=` parses to `null` — which is
- * the same thing an absent one means, *nobody has touched it*, resolved by the
- * panel to `DEBATE_LEVEL_DEFAULT`.
+ * **Writing it never spends.** Debate searches when its owner presses — the
+ * mode's button, or either sub-mode's command-bar row, which arm the one
+ * `debate` run (activation.ts § `subModeTarget`). Back, a pasted link and a
+ * last-view restore arrive here and buy nothing.
  *
- * **No parser default, deliberately**, the call `?gate=`, `?bar=` and `?conf=`
- * all make: the constant stays in one file, and *the reader chose the default*
- * stays distinguishable from *the reader chose nothing*, which is what the
- * slider's reset button is drawn from.
- *
- * `replace` and **not debounced**: there are three stops, so a drag writes at
- * most twice and there is nothing to rate-limit — but Back should still undo the
- * `?mode=debate` that got you here rather than a step of the slider.
+ * `?name=` stood here until the same day: the identification threshold
+ * (`named`, `quoted`, `linked`), whose default hid the rows the search was
+ * changed to find. It is read by nothing now, so a link carrying it shows
+ * every row. debate-levels.ts has the story.
  */
-export const nameParam = createParser<IdentificationLevel>({
-  parse: (v) => (isIdentificationLevel(v) ? v : null),
+export const DEBATE_VIEWS = ["reception", "claims"] as const;
+export type DebateView = (typeof DEBATE_VIEWS)[number];
+
+export const debateParam = createParser<DebateView>({
+  parse: (v) => ((DEBATE_VIEWS as readonly string[]).includes(v) ? (v as DebateView) : null),
   serialize: (v) => v,
-}).withOptions({ history: "replace" });
+})
+  .withDefault("reception")
+  .withOptions({ history: "push" });
 
 /**
- * **How Debate's list is ordered** — `?debateby=`, since 2026-09-29
+ * **How Reception's list is ordered** — `?debateby=`, since 2026-09-29
  * (SPIDERYARN-READING2-5P, docs/plans/260929h-debate-mode-clearer-sources-and-orders.md).
  *
- * `prioritised`, `claim` (*by claim*), `date` or `stance`. The parser's default
- * is `prioritised`, as Greg asked — and on a debate whose rows cannot support
- * it (every one before stage 2's `debate/3`, and every visitor's) the panel
- * draws *by claim* instead (debate-order.ts § `effectiveDebateOrder`), which is
- * Glossary's `?sort=` arrangement. An unknown value parses to the default.
+ * `prioritised` (*as found*, the default and absent), `date` or `stance`. The
+ * panel draws what the rows can support (debate-order.ts §
+ * `effectiveReceptionOrder`), which is Glossary's `?sort=` arrangement. An
+ * unknown value parses to the default. **Claims ignores it**: that sub-mode is
+ * always grouped by claim.
+ *
+ * `claim` was a fourth value until 2026-10-03, when *by claim* became the
+ * Claims sub-mode. An old `?debateby=claim` never reaches this parser: it is
+ * rewritten to `?debate=claims` first (router.ts § `liftLegacyDebateBy`).
  *
  * **Its own key**, for `citeby`'s reason: every parameter survives a mode
  * switch, so a shared `?sort=` would carry one mode's order into another. `push`,
  * like `?citeby=`: changing the order is a deliberate act on the view, and Back
  * should undo it.
  */
-export const DEBATE_ORDERS = ["prioritised", "claim", "date", "stance"] as const satisfies readonly DebateOrder[];
+export const DEBATE_ORDERS = ["prioritised", "date", "stance"] as const satisfies readonly DebateOrder[];
 /* And the other way: every `DebateOrder` is in the list, or this line stops compiling. */
 const _everyDebateOrderListed: Exclude<DebateOrder, (typeof DEBATE_ORDERS)[number]> extends never ? true : never =
   true;
@@ -1354,17 +1441,21 @@ export const debateOrderParam = createParser<DebateOrder>({
   .withOptions({ history: "push" });
 
 /**
- * **How directly a page has to bear on its claim to stay on Debate's list** —
+ * **How directly a page has to bear on its claim to stay on Claims' list** —
  * `?bears=loosely`, `?bears=partly` or `?bears=directly`; the relevance bar,
- * shown only while *prioritised* is the order drawn.
+ * shown in Claims when some row carries the judgment.
  *
- * `?name=`'s shape exactly, for `?name=`'s reasons: **the word, not a number**
- * (three named stops of one model judgment — a number would read as a
- * measurement), **no parser default** (absent is *nobody has touched it*,
- * which the panel resolves to `RELEVANCE_DEFAULT` in debate-order.ts — and that
- * default is `loosely`, which hides nothing), an unknown word parses to `null`,
- * and `replace`, not debounced. It filters claim rows only; `?name=` owns the
- * rows about this piece. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F5, F7.
+ * **The word, not a number**: these are three named stops of one model
+ * judgment, and a number would read as a measurement. **No parser default**,
+ * the call `?gate=`, `?bar=` and `?conf=` all make: absent is *nobody has
+ * touched it*, which the panel resolves to `RELEVANCE_DEFAULT` in
+ * debate-order.ts (`loosely`, which hides nothing), so the constant stays in
+ * one file and *the reader chose the default* stays distinguishable from *the
+ * reader chose nothing* — which is what the slider's reset button is drawn
+ * from. An unknown word parses to `null`. `replace` and not debounced: there
+ * are three stops, so a drag writes at most twice, but Back should still undo
+ * the `?mode=debate` that got you here rather than a step of the slider.
+ * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F5, F7.
  */
 export const DEBATE_BEARS_WORDS = ["directly", "partly", "loosely"] as const satisfies readonly DebateBears[];
 /* And the other way: every `DebateBears` is in the list, or this stops compiling. */
@@ -1724,10 +1815,10 @@ export const libraryTopicsViewParam = createParser<"detail">({
  * (docs/plans/261002c-commands-do-more-and-an-interface-model-vision.md).
  *
  * **A closed list, not any section's id.** A section is otherwise local state
- * — open or shut is not worth linking to (Metadata.tsx § Section says why) —
+ * — open or shut is not worth linking to (PageSection.tsx § Section says why) —
  * so this is an address only for the places something in the app sends a
  * reader, and each one is a decision. The value is the section's id without
- * its `sec-` prefix (Metadata.tsx § `sectionId`), which
+ * its `sec-` prefix (PageSection.tsx § `sectionId`), which
  * tests/metadata-section-param.test.tsx holds against the page itself, so a
  * renamed heading cannot leave a value here that opens nothing. Anything else
  * parses to `null` and does nothing, as a mangled `?at=` does.

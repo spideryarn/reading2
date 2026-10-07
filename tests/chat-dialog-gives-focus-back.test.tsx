@@ -138,6 +138,7 @@ function mount(target: Parameters<typeof ChatDialog>[0]["target"] = DRAFT) {
         onOpenFull={() => {}}
         onCreated={() => {}}
         onDropped={() => {}}
+        onRenamed={() => {}}
       />,
     ),
   );
@@ -374,6 +375,7 @@ describe("under StrictMode, which is what the app actually runs", () => {
             onOpenFull: () => {},
             onCreated: () => {},
             onDropped: () => {},
+            onRenamed: () => {},
           }),
         ),
       ),

@@ -64,6 +64,8 @@ import { Link } from "./Link.js";
 import { nameOfThrown, recordLog } from "./log-buffer.js";
 import { captureClientFailure } from "./monitoring.js";
 import { LIBRARY_HREF } from "./router.js";
+import { RELOAD_GRACE_MS, reloadIfStale, reloadPage } from "./stale-shell.js";
+import { Button } from "@/components/ui/button";
 
 /**
  * What `React.lazy` is handed.
@@ -133,9 +135,17 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
       >
         <p>
           Part of Spideryarn didn’t arrive, so this page can’t be drawn. That’s a fault
-          here, not anything you did — most often this app was updated while your tab sat
-          open, and the piece this page needed had moved. Reloading the page usually fixes
-          it. [chunk]
+          here, not anything you did — most often Spideryarn was updated while you had it
+          open, and the piece this page needed had moved. Reloading usually fixes it.
+          [chunk]
+        </p>
+        {/* A button, because the advice above cannot otherwise be followed in
+            the app opened from a home-screen icon: no reload button, no address
+            bar. Before 2026-10-03 the sentence was the whole of it. */}
+        <p className="tw:mt-4">
+          <Button type="button" variant="outline" size="sm" onClick={() => reloadPage()}>
+            Reload
+          </Button>
         </p>
         <p className="tw:mt-4 tw:opacity-70">
           <button
@@ -154,6 +164,41 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
       </div>
     );
   }
+}
+
+/**
+ * What a failed load does before React hears of it: if this copy of the app
+ * has outlived a deploy, reload rather than show the escape.
+ *
+ * From Greg's iPad report, 2026-10-03 (spya-u6uba0). The app opened from a
+ * home-screen icon is never reloaded, so it is routinely several deploys old —
+ * Sentry had this escape on his account three times that week — and the escape
+ * says to reload in the one place with no way to. stale-shell.ts has
+ * the mechanism and its one-reload limit; the plan is
+ * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
+ *
+ * **In the loader rather than in the boundary**, so the reader never sees the
+ * escape flash before the page goes, and a copy that was merely old sends
+ * Sentry nothing — it is not a fault.
+ *
+ * **Hold the rejection while the reload starts**, so Suspense keeps the
+ * spinner rather than flashing the escape before the document is replaced.
+ * A reload call has no success acknowledgement, though: if the browser leaves
+ * this document in place, the original failure is released after a short
+ * grace period rather than leaving the reader on a spinner for ever.
+ *
+ * **The original error is what is rethrown**, always — the check failing is
+ * not the failure the boundary should report.
+ */
+async function orReloadIfStale(err: unknown): Promise<never> {
+  let leaving = false;
+  try {
+    leaving = await reloadIfStale();
+  } catch {
+    leaving = false;
+  }
+  if (leaving) await new Promise<void>((resolve) => setTimeout(resolve, RELOAD_GRACE_MS));
+  throw err;
 }
 
 /**
@@ -180,7 +225,7 @@ export function LazyPage({ load, routeKey }: { load: PageLoader; routeKey: strin
        review of this file, 2026-09-05, F9. */
     void attempt;
     void routeKey;
-    return lazy(load);
+    return lazy(() => load().catch(orReloadIfStale));
   }, [load, routeKey, attempt]);
   return (
     <ChunkBoundary key={`${routeKey}:${attempt}`} onRetry={() => setAttempt((n) => n + 1)}>

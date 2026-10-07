@@ -26,12 +26,14 @@
  * It is the same rule applied at both ends of a wire that has a database and a
  * year in the middle of it.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 
 export type SketchStatus = "loading" | "ready" | "none" | "error";
@@ -64,6 +66,11 @@ export interface UseSketch {
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
   /**
+   * A redraw was pressed on the picture still on screen, and has neither
+   * replaced it nor failed — the redraw waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /**
    * **Draw it if nobody has** — unforced, for the automatic run and for the
    * button in the empty state.
    *
@@ -84,18 +91,54 @@ export interface UseSketch {
   regenerate(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
+}
+
+/**
+ * **The picture on screen and everything that arrived with it, as one value**
+ * — so the facts about a picture cannot outlive it. They were six `useState`s,
+ * and the branch for a reply with nothing drawable in it cleared the picture
+ * and left its four flags standing. useIdeas.ts § `IdeasAnswer` is the same
+ * remedy. `faults` is deliberately not in here: with nothing drawable, what
+ * the checker refused is the only account of why.
+ * docs/plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md § 3.
+ */
+interface SketchShown {
+  /** Validated and safe to paint. */
+  sketch: Sketch;
+  /**
+   * **Which stored picture this is**, for Regenerate's hold (rewrite-hold.ts).
+   * A sketch carries no clock of its own — `Sketch` has no `generatedAt` — so
+   * this is the stored `sketch` value itself, as the server sent it. **Never
+   * the response beside it**: `stale`, `outdated` and `profileChanged` change
+   * with no job having drawn anything, and would read as a replacement (GPT
+   * Sol's plan review of 261004c, F12). Nor the checked scene, which changes
+   * with the article's block order.
+   */
+  drawn: string;
+  stale: boolean;
+  outdated: boolean;
+  profiled: boolean;
+  profileChanged: boolean;
 }
 
 export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSketch {
   const [status, setStatus] = useState<SketchStatus>("loading");
-  const [sketch, setSketch] = useState<Sketch | null>(null);
+  const [shown, setShown] = useState<SketchShown | null>(null);
   const [faults, setFaults] = useState<SketchFault[]>([]);
-  const [stale, setStale] = useState(false);
-  const [outdated, setOutdated] = useState(false);
-  const [profiled, setProfiled] = useState(false);
-  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * **Keyed on the ids, not on the array.** `blockOrder` is derived in the
@@ -113,6 +156,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/sketch/${encodeURIComponent(slug)}`);
       if (!current()) return;
@@ -120,13 +164,11 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         // The ordinary case, not a fault: `sketch` is off DEFAULT_INGEST_STEPS,
         // so most articles have never had one drawn. This is what the button is
         // for.
-        setSketch(null);
+        setShown(null);
         setFaults([]);
-        setStale(false);
-        setOutdated(false);
-        setProfiled(false);
-        setProfileChanged(false);
+        landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -140,44 +182,70 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
          something got past both — an import, a hand-edited column, a schema
          from before `accept` existed. A panel that took it as `ready` would
          draw an empty band and report success, which is the failure this whole
-         feature keeps having to be defended against. */
+         feature keeps having to be defended against.
+
+         **No picture, so no facts about one** — `shown` is null and the four
+         flags go with it. The faults stay: they say why there is nothing. */
       if (checked.scenes.length === 0) {
-        setSketch(null);
+        setShown(null);
         setFaults(report.faults);
+        landed(started, res, null);
+        saidNoneFor.current = slug;
         setStatus("none");
         setError(null);
         return;
       }
 
-      setSketch(checked);
+      const identity = JSON.stringify(loaded.sketch);
+      landed(started, res, identity);
+      setShown({
+        sketch: checked,
+        drawn: identity,
+        stale: loaded.stale,
+        outdated: loaded.outdated,
+        /* `!= null` rather than truthiness: the field is `string | null |
+           undefined` and only `null` and absent mean "drawn without one".
+
+           **Off the stored value, not `checked`.** `readSketch` rebuilds the
+           scene and does not carry `profileHash` across, so reading it there
+           was always `false`: no picture ever drew its *written for you*
+           badge, and the redraw in that badge's panel could not be reached.
+           Found by tests/rewrite-hold.test.tsx, 2026-10-04. */
+        profiled: (loaded.sketch as { profileHash?: unknown } | null)?.profileHash != null,
+        profileChanged: loaded.profileChanged,
+      });
       setFaults(report.faults);
-      setStale(loaded.stale);
-      setOutdated(loaded.outdated);
-      /* `!= null` rather than truthiness: the field is `string | null |
-         undefined` and only `null` and absent mean "drawn without one". */
-      setProfiled(checked.profileHash != null);
-      setProfileChanged(loaded.profileChanged);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
-  }, [slug, order]);
+  }, [slug, order, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. A picture already on screen stays there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (shown === null) setStatus("loading");
+    await reload();
+  }, [shown, reload]);
 
   const queue = useStepJob(slug, "sketch", refresh, "watches-queue");
 
@@ -188,11 +256,13 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     },
     [queue],
   );
+  const hold = useRewriteHold({ slug, step: "sketch", identity: shown?.drawn ?? null, queue, fresh, refresh });
+  const held = hold.run;
   const regenerate = useCallback(
     async () => {
-      await queue.start({ force: true });
+      await held(() => queue.start({ force: true }));
     },
-    [queue],
+    [queue, held],
   );
 
   /* **Armed by the Sketch chip, and since 2026-09-06 by the bar's Diagram
@@ -205,21 +275,23 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
 
   return {
     status,
-    sketch,
+    sketch: shown?.sketch ?? null,
     faults,
-    stale,
-    outdated,
-    profiled,
-    profileChanged,
+    stale: shown?.stale ?? false,
+    outdated: shown?.outdated ?? false,
+    profiled: shown?.profiled ?? false,
+    profileChanged: shown?.profileChanged ?? false,
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     ensure,
     regenerate,
     refresh,
+    retryRead,
     cancel: queue.cancel,
   };
 }

@@ -58,8 +58,10 @@
  * up — the mode has one URL parameter, `?referee=mirror`, and that is all.
  */
 import type { MirrorComment, MirrorRemark, MirrorRemarkKind, MirrorResult } from "../referee-mirror-types.js";
+import { worthRetrying } from "../messages.js";
 import type { BlockId } from "../types.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useMirror, type MirrorApi } from "./useMirror.js";
 import { signedValence } from "./valence.js";
 
@@ -95,6 +97,20 @@ function runLabel(api: MirrorApi): string {
   return api.result ? "Read them again" : "Read my comments back to me";
 }
 
+/**
+ * **How to read this panel**: the honest description of the input rather than
+ * a promise about the output. This call is not given the article, so "it says
+ * nothing about the paper" is a fact about what went to the model.
+ * src/referee-mirror.ts § the three constraints.
+ *
+ * Visible text above the button until 2026-10-03, when Greg chose to move each
+ * panel's how-to-read sentences behind a button (plan 261003m). Exported for
+ * `HowToRead` in modes/referee/RefereeMode.tsx, which is where it is drawn.
+ */
+export const MIRROR_IS_NOT_GIVEN_THE_PAPER =
+  "The model reads your own comments and remarks on them. It is not given the paper, and it " +
+  "says nothing about whether the paper is any good.";
+
 export function MirrorView({
   api,
   onJump,
@@ -104,23 +120,25 @@ export function MirrorView({
 }) {
   return (
     <div className="mir">
-      {/* Above the button, and it is the honest description of the input rather
-          than a promise about the output: this call is not given the article, so
-          "it says nothing about the paper" is a fact about what went to the
-          model. src/referee-mirror.ts § the three constraints. */}
-      <p className="mir-what">
-        The model reads your own comments and remarks on them. It is not given the paper, and it
-        says nothing about whether the paper is any good.
-      </p>
-
-      <button
-        type="button"
-        className="mir-run"
-        onClick={api.ask}
-        disabled={api.status === "running"}
-      >
-        {runLabel(api)}
-      </button>
+      {/* `MIRROR_IS_NOT_GIVEN_THE_PAPER` opened the panel here until
+          2026-10-03; it is behind the band's *How to read this* button now
+          (RefereeMode.tsx § HowToRead). */}
+      {/* **No button under a failure another try cannot fix** (an account out
+          of credit, a refusal that will be repeated): the sentence below says
+          so, and *Try again* beside it would invite a second full-price call
+          for the same answer. `worthRetrying` reads the sentence's code, as
+          `JobProgress` and Search's rows do (src/messages.ts). Offered for
+          every failure until 2026-10-07. */}
+      {(api.status !== "failed" || worthRetrying(api.error)) && (
+        <button
+          type="button"
+          className="mir-run"
+          onClick={api.ask}
+          disabled={api.status === "running"}
+        >
+          {runLabel(api)}
+        </button>
+      )}
 
       {api.status === "failed" && api.error && <p className="mir-error">{api.error}</p>}
 
@@ -292,6 +310,10 @@ function Coverage({ coverage }: { coverage: MirrorResult["coverage"] }) {
  * A total `Record` rather than a lookup with a fallback, so a sixth kind is a
  * red compile here as well as in the validator —
  * docs/project/typechecking.md.
+ *
+ * Total for the kinds this copy was built with. The kind on a remark comes off
+ * the wire, so the badge reads it through `ownLabel` (lib/own-label.ts) and a
+ * kind from a newer server shows as its own word.
  */
 const KIND_LABEL: Record<MirrorRemarkKind, string> = {
   specificity: "Hard for an author to act on",
@@ -346,7 +368,7 @@ function Remark({
   return (
     <li className="mir-remark" data-kind={remark.kind}>
       <p className="mir-head">
-        <span className="mir-kind">{KIND_LABEL[remark.kind]}</span>
+        <span className="mir-kind">{ownLabel(KIND_LABEL, remark.kind) ?? plainWords(remark.kind)}</span>
         {/* **This badge carried a card, and the card is gone**, 2026-09-02. Its
             first paragraph restated the badge — *"A randomised trial tested
             feedback of this shape"* under a label reading *A kind tested in a

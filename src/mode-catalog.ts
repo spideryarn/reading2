@@ -91,7 +91,7 @@ export interface ModeCatalogEntry {
    * tests/mode-catalog.test.ts holds the convention so the fifteenth matches
    * the fourteen it will sit beside.
    *
-   * A blurb is sometimes doing more work than it looks. `remember`'s ends
+   * A blurb is sometimes doing more work than it looks. `learn`'s ends
    * *"not saved notes or flashcards"* because the mode's **name** promises two
    * things it does not do, and that denial is the named cost of the 2026-09-01
    * rename — if the line is ever shortened, the denial is the part to keep.
@@ -123,7 +123,7 @@ export interface ModeCatalogEntry {
    *    sentence beginning *"Opening it runs…"* is false on three of the four.
    *    Four of the fourteen said exactly that in first draft and GPT Sol caught
    *    all four (2026-09-07). Write about the **artefact and where it comes
-   *    from** — *"one model pass over the article, written once and then
+   *    from** — *"one model call over the article, written once and then
    *    stored"* — which is true wherever the card is read and is also what
    *    makes `how` an intrinsic fact about the mode, and so a legitimate
    *    tenant of this file rather than a Dock string parked in it.
@@ -157,19 +157,35 @@ export interface ModeCatalogEntry {
   /**
    * **Other words a reader might type meaning this mode.**
    *
-   * Destination synonyms, and deliberately **sparse**: two to four each, and an
-   * empty list where nothing natural exists. This is not a keyword-stuffing
-   * field. Every alias widens what the command bar's matcher will accept, and
-   * the cost of a loose one is not a missed match — it is the *wrong* mode
-   * ranked first for somebody who typed the right thing.
+   * Destination synonyms, and **as many as a reader would naturally type**:
+   * six to twelve a mode. Until 2026-10-04 this said *deliberately sparse, two to
+   * four each*, and that stance is superseded:
    *
-   * Three rules, all of them checked in tests/mode-catalog.test.ts because
-   * none of them is visible at the point somebody adds a word:
+   * > In the command bar, add more aliases. So, for example, structure mode
+   * > could have aliases for hierarchy, table of contents, TOC, headings, etc.
+   * >
+   * > — Greg, 2026-10-04 (report spya-uzkmn3)
+   *
+   * The matcher asks whether a nickname *contains* what was typed and never
+   * the reverse (src/web/command-match.ts § `TIERS`), so `contents` did not
+   * catch `table of contents`: a phrase a reader would type whole has to be
+   * written out whole.
+   *
+   * What still limits a word is what the old stance was protecting. The cost
+   * of a loose one is not a missed match — it is the *wrong* row ranked first
+   * for somebody who typed the right thing. Seven rules, the first four checked
+   * in tests/mode-catalog.test.ts and the rest in
+   * tests/command-match-mode-aliases.test.ts, which types every word here into
+   * the whole list the bar holds, because none of them is visible at the point
+   * somebody adds a word:
    *
    *  1. **Unique across every mode.** Two modes claiming `terms` makes the bar
    *     ambiguous, and an ambiguous bar is worse than a bare one.
-   *  2. **Never another mode's label.** Typing `search` must open Search and
-   *     not something that borrowed the word.
+   *  2. **Never another row's label, unless both open the same place.** Typing
+   *     `search` must open Search and not something that borrowed the word. The
+   *     rows are the modes, their sub-modes, the pages and the actions.
+   *     `recall`, `sketch` and `reception` are chips of the mode that lists
+   *     them, so the chip's row comes first and lands where the mode would.
    *  3. **Stored already-canonical** — lowercase, trimmed, and internal runs of
    *     whitespace collapsed to one space. The matcher normalises what the
    *     reader types before comparing; an alias with a capital or a stray space
@@ -177,6 +193,28 @@ export interface ModeCatalogEntry {
    *     collapse is the part that is easy to forget, and forgetting it lets
    *     `"peer review"` and `"peer  review"` pass a uniqueness check on raw text
    *     and then collide the moment anybody types either (GPT Sol, 2026-09-07).
+   *  4. **Not twice in one mode.**
+   *  5. **Typed in full, it puts its own mode first.** The one that is easy to
+   *     break: a word that *starts with* a nickname of a mode later in the bar
+   *     takes that nickname from it. `questions and answers` on FAQ would put
+   *     FAQ above Chat for `question`, and `highlights` on Quotes would put
+   *     Quotes above Search for `highlight`; both were left out for that.
+   *  6. **It does not take a word that is a page's or an action's own.**
+   *     Comments answers to `notes`, Feedback to `help`. The modes come first
+   *     in the list, so a mode nickname that starts with one of those wins it.
+   *     Two older words already do, and the test names them rather than
+   *     hiding them: `annotations` (Marginalia over Comments) and `sources`
+   *     (Citations over Metadata's `source`).
+   *  7. **It does not start with a verb the argument parser owns** — `find`,
+   *     `search`, `look up`, `define`, `tag` and the rest of `VERBS` in
+   *     src/web/command-match.ts — or the bar would also offer *Find “in
+   *     page” in this article*. A bare verb is fine (`find`, `define`). The
+   *     collision matrix in tests/command-match-arguments.test.ts runs the
+   *     parser over every word here.
+   *
+   * **Eight modes lend these words to their *Run again* row** (`rerunNames`
+   * in src/web/rerun-commands.ts): `rerun jargon` forces the glossary. So a
+   * word on one of those modes must also be a fair name for the step.
    *
    * They name a **destination**, never an action. `summarise` is fine, because
    * opening Summary is what produces one. A phrase like *"jump to where it
@@ -238,19 +276,27 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        when they want the piece and nothing else. `article` first because that
        is what they are asking for; the mode's own name is a description of
        what is missing rather than of what they get. */
-    aliases: ["article", "text", "reading"],
+    aliases: ["article", "text", "reading", "just the article", "prose", "original", "no mode", "no panel"],
     experimental: false,
   },
   chat: {
     description: "Ask about this article — answers point back at the paragraphs they came from",
     how: "Nothing runs until you ask. It can reach past the article when it needs to — the open web, your other saved articles, a page this one links to — and where an answer used one of those, a strip above it says so.",
-    aliases: ["ask", "question"],
+    /* Not `ai`: *AI processing* is a row's own name (article-commands.ts).
+       Not `discussion`, which belongs to neither this nor Debate: on Debate it
+       would take `discuss` from here, and here it is already found by it. */
+    aliases: ["ask", "question", "talk", "discuss", "conversation", "assistant"],
     experimental: false,
   },
   glossary: {
     description: "The terms this piece uses in a non-obvious way, defined from the piece itself",
-    how: "The list is one model pass over the whole article, written once and then stored, so it is instant every time after the first. Terms are defined from this piece rather than from a dictionary, and once they exist they are underlined in the prose in every mode, not only this one.",
-    aliases: ["define", "terms", "definitions"],
+    how: "The list is one model call over the whole article, written once and then stored, so it is instant every time after the first. Terms are defined from this piece rather than from a dictionary, and once they exist they are underlined in the prose in every mode, not only this one.",
+    /* Not `concepts`: a reader could as well mean Ideas, and `rerun concepts`
+       would then force the wrong list. */
+    aliases: [
+      "define", "terms", "definitions", "vocabulary", "jargon", "dictionary", "key terms", "terminology",
+      "lexicon",
+    ],
     experimental: false,
   },
   search: {
@@ -259,8 +305,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     /* `highlight` because highlighting is what search *does to the page* rather
        than a separate thing to press — the two dimmed placeholders this mode
        was built out of are one mode now, and the word should still land.
-       docs/project/search.md. */
-    aliases: ["find", "highlight"],
+       docs/project/search.md.
+
+       Nothing longer may start with `find` or `search`: those are the argument
+       parser's verbs, so `find in page` would be read as a search for *in
+       page* (rule 7 on `aliases`). `look for` is not one of its verbs. */
+    aliases: ["find", "highlight", "locate", "look for", "ctrl f", "ctrl+f", "cmd f", "keyword", "semantic search"],
     experimental: false,
   },
   referee: {
@@ -268,31 +318,57 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
       "Reviewing this for somebody? Your criteria, its claims, and a second look at your own notes",
     /* **"No model call" and not "nothing"**, which was the draft: the mode does
        start a source scan on mount, so the flat claim was false — GPT Sol,
-       2026-09-07. And "the one it opens on" rather than naming Criteria,
-       because `?referee=` is persistent query state that survives leaving the
-       mode (params.ts), so which sub-mode it opens on is not invariant. */
-    how: "This button starts no model call: the sub-modes inside arm themselves, and the one it opens on has nothing to run until you have written a criterion. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you.",
+       2026-09-07. "Can start" because an existing Claims list is reused
+       (`useAutoRun` retires the activation when the artefact is ready).
+       `?referee=` survives leaving the mode, so its opening panel need not
+       be Criteria and cannot be described as waiting for a criterion. */
+    how: "This button starts no model call. Of the chips inside, only Claims can start one; every other run waits for its own button. It never returns a verdict — no accept or reject, no score, no grade. That judgement is yours, and the mode refuses to make it for you.",
     /* The three words this mode was deliberately *not* named, and they are free
        to point here: `review` was vacated by the `review` → `remember` rename,
        and `reviewer` was passed over only because it would have sat beside it.
        `referee` is what journals call the person; `review` is what everyone
        else calls the job. src/modes.ts § referee has the whole argument. */
-    aliases: ["review", "reviewer", "peer review"],
+    /* Not `critique`: Debate has `critiques`, and Referee comes first in the
+       bar, so the shorter word here would take every start of the longer one.
+       Not `criteria`, which is the chip's own row. */
+    aliases: ["review", "reviewer", "peer review", "peer reviewer", "referee report", "assess", "assessment"],
     experimental: true,
   },
   summary: {
-    description: "The piece in plain words, at the length you choose — brief, simple or fuller",
-    /* Checked against src/simple-summary.ts: one job writes every level (a
-       call each, side by side) and stores them together, and every paragraph
-       keeps one to three passage ids. Until 2026-10-01 this mode was the
-       tree's gists at Parts or Sections, written at ingest; that outline went
-       (plan 261001p), and Structure is where the gists are drawn now. */
-    how: "A model writes all three lengths in one go, the first time you ask, and they are kept. Each paragraph links to the passages it rests on — the article says it better.",
+    description: "The piece restated: in plain words, brief or fuller, or as a thread of short posts",
+    /* Checked against the source, claim by claim (docs/project/mode.md § The
+       card on the button):
+       - "writes the plain-words lengths in one go … kept": src/simple-summary.ts
+         — one job writes every level (a call each, side by side) and stores
+         them together; every paragraph keeps one to three passage ids. A third
+         level, Simple, is still written and not shown (plan 261003l), so this
+         says "the lengths" and no number.
+       - "the thread is one more pass over the whole article": the `tweets`
+         step, one messages-wire call over `articleWithIds` (src/tweets.ts §
+         generateTweets).
+       - "each post points to the passages it came from": `Tweet.blocks`,
+         validated against the blocks sent (src/tweets.ts § checkBlocks); a post
+         whose ids were all dropped keeps its text and draws no link, and a
+         thread from before `tweets/5` has none — hence "points", not "links".
+       - "a post over the length limit is kept as written and marked":
+         `buildThread` keeps each post's text and counts it; the band marks an
+         overrun.
+       About the mode, not the press — a visitor reads what is stored and
+       starts nothing. No price. Until 2026-10-01 this mode was the tree's gists
+       at Parts or Sections (plan 261001p); until 2026-10-03 the thread was a
+       mode of its own, Tweets. */
+    how: "A model writes the plain-words lengths in one go, the first time you ask, and they are kept; each paragraph links to the passages it rests on — the article says it better. The thread is one more pass over the whole article: each post points to the passages it came from, and a post over the length limit is kept as written and marked.",
     /* Both spellings, because the reader's keyboard is not ours to choose.
-       `simple` is not here: the bar has a *Summary › Simple* row that goes
-       there (src/web/sub-modes.ts, plan 261001d). `gist` went with the outline
-       on 2026-10-01 — nothing in Summary is a gist any more. */
-    aliases: ["summarise", "summarize"],
+       **Not `tweets`, `thread` or `twitter`**, though mode.md § Retiring a mode
+       says to give the successor the retired name: those words belong to the
+       *Summary › Thread* row (src/web/sub-modes.ts § `SUMMARY_SUB_MODES`). On
+       this row they would select Summary at whatever view the address names —
+       Brief, by default — and could start the plain-words run (GPT Sol, F3 of
+       the 261003l review). `gist` went with the outline on 2026-10-01 and came
+       back on 2026-10-04 as a word for the piece restated, which is what this
+       mode now is. **Not `abstract`**: a paper has one of its own, and this
+       is not it. Not `brief`, which is the chip's row. */
+    aliases: ["summarise", "summarize", "tldr", "tl;dr", "gist", "overview", "synopsis", "key points", "recap"],
     experimental: false,
   },
   diagram: {
@@ -309,50 +385,85 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     how: "The Sketch — the picture you get unless you ask for another — is a model reading the argument and drawing it, which is about a minute of work the first time and stored afterwards. Its empty state names what that costs before anything runs.",
     /* `sketch` is the artefact a press actually draws, and it is the word the
        empty state and the pipeline both use, so a reader who has seen the mode
-       once will type it. */
-    aliases: ["sketch", "picture", "visual"],
+       once will type it. **Not `figure`, `image` or `illustration`**: the
+       first two are the pictures the article came with, and the third is the
+       Illustrated chip's word. */
+    aliases: [
+      "sketch", "picture", "visual", "drawing", "chart", "graph", "argument map", "mind map", "visualisation",
+      "visualization",
+    ],
     experimental: true,
   },
   ideas: {
     description:
       "The propositions this piece needs you to hold — the ones it assumes, and the ones it adds",
-    how: "One model pass over the article, written once and then stored. The split between what you have to bring and what the piece adds is the model's reading rather than something the article marks, and each idea carries the passages it was drawn from, where they can still be found.",
+    how: "One model call over the article, written once and then stored. The split between what you have to bring and what the piece adds is the model's reading rather than something the article marks, and each idea carries the passages it was drawn from, where they can still be found.",
     /* **Not `claims`**, which was the first draft and which GPT Sol caught on
        2026-09-07: Referee has a built sub-mode labelled exactly "Claims", so
        the commonest word for a proposition is already spoken for by a different
        mode's control. A textual uniqueness test cannot see that — the collision
        is with a label inside another mode, not with an alias — so it is a thing
        a person has to notice. `premises` is the unoverloaded word. */
-    aliases: ["premises", "propositions", "assumptions"],
+    aliases: ["premises", "propositions", "assumptions", "arguments", "key ideas", "main ideas", "theses", "beliefs"],
     experimental: false,
   },
-  remember: {
+  learn: {
     description:
-      "Work the piece into memory through Recall, a short Tutorial or a Quiz — not saved notes or flashcards",
-    how: "Recall waits on you: nothing runs until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. Its replies point back to the passages they use. Tutorial waits on you too, then takes short turns: a little of the piece, then a question for you to answer in your own words.",
+      /* Rewritten 2026-10-05 with the name (plan 261005l). *Remember* wrongly
+         suggested saved memories, and the sentence ended by denying them;
+         *Learn* suggests a course, so it denies that instead. Explore's half
+         follows Greg's widening of it the same day: your own view, and where
+         the piece may be weak (spya-mvmpks). */
+      "Take the piece in and think it through: Recall, a short Tutorial, a Quiz, or Explore your own view of it and where it may be weak — not a course or flashcards",
+    /* **Two sentences about the whole mode, since 2026-10-04.** It was a
+       110-word walk through Recall, Tutorial and Explore; Greg (spya-usyhwy):
+       *"it's like one big paragraph. Prefer smaller paragraphs or bullet
+       points"*, and *"each submode button should have its own tooltip"*. So
+       what each part does is on its chip (QuizPanel.tsx § `LEARN_VIEW_HOW`)
+       and listed in the band's (i) (LearnAbout.tsx).
+       Claims: no conversation turn runs before the reader's first message;
+       Quiz's questions are one stored batch written from the article, and
+       each answer is marked against it (src/quiz.ts, src/quiz-mark.ts). It
+       describes the mode, not a press, so it is true for the Help page too. */
+    how: "Recall, Tutorial and Explore are conversations, and each waits on you: the AI does not reply until you say or type something. Quiz writes its questions from the piece and marks your answers against it.",
     /* `recall` is this mode's own default sub-mode, so the word lands where the
        reader expects.
 
        **`quiz` is deliberately absent**, and it is the clearest example of the
-       rule these aliases follow. Quiz is one of Remember's *other* sub-modes, and
+       rule these aliases follow. Quiz is one of Learn's *other* sub-modes, and
        opening the mode lands on Recall (`params.ts`), so `quiz` here would name
        a destination and then not go there. GPT Sol found this, 2026-09-07.
-       Since 2026-10-01 a command *can* encode `{ mode: "remember", remember:
-       "quiz" }` — the bar's *Remember › Quiz* row (src/web/sub-modes.ts, plan
-       261001d) — and that row, not an alias here, is where `quiz` lands. */
-    aliases: ["recall"],
-    experimental: true,
+       Since 2026-10-01 a command *can* encode `{ mode: "learn", learn:
+       "quiz" }` — the bar's *Learn › Quiz* row (src/web/sub-modes.ts, plan
+       261001d) — and that row, not an alias here, is where `quiz` lands.
+       `test me` is left out for the same reason, and `flashcards` because the
+       description denies it. Both spellings of *practise*. */
+    /* `remember` since 2026-10-05: it was the mode's name until then, and the
+       word a reader already knows should still find it, as `trajectory` finds
+       Skim. `learn` left the list the same day, because it is the name now.
+       The sub-mode rows get the old compounds (*remember quiz*) from
+       command-match.ts § `FORMER_PARENT_NAMES`. */
+    aliases: ["recall", "remember", "memorise", "memorize", "study", "revise", "revision", "practice", "practise"],
+    /* In every reader's bar since 2026-10-05. Greg, 2026-10-04 (spya-cnqcjf):
+       *"I think recall submode for sure. I think quiz mode as well. And then
+       let's try tutorial too."* Explore, the fourth part, stays behind the
+       switch one level down (src/web/sub-modes.ts § `LEARN_SUB_MODES`).
+       docs/project/experimental-features.md. */
+    experimental: false,
   },
   quotes: {
     description: "The lines worth keeping — the piece's own sentences, chosen and checked against it",
     how: "The model only locates a line; the words you read are sliced out of the article itself, so nothing here is the model's typing. What that proves is that the sentence is in the piece, not who wrote it — a quotation the article left unmarked cannot be told from its own prose.",
-    aliases: ["quotations", "excerpts"],
+    /* Not `highlights`: Search has `highlight`, and Quotes comes first in the
+       bar, so the longer word here would take the shorter one from it. `quote`
+       needs no entry — it is the start of the mode's own name. */
+    aliases: ["quotations", "excerpts", "extracts", "passages", "pull quotes", "key quotes", "best lines"],
     experimental: false,
   },
   timeline: {
     description: "When the piece says these things happened, in order — and how sure it actually is",
-    how: "One model pass over the article, written once and then stored. Anything the piece never dated stays undated rather than being guessed at, and the order is the model's reading of the piece rather than a sort by date.",
-    aliases: ["chronology", "dates", "events"],
+    how: "One model call over the article, written once and then stored. Anything the piece never dated stays undated rather than being guessed at, and the order is the model's reading of the piece rather than a sort by date.",
+    aliases: ["chronology", "dates", "events", "history", "sequence", "chronological", "time line", "order of events"],
     experimental: true,
   },
   debate: {
@@ -376,15 +487,19 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        in an *alias*, which they only meet by having typed it themselves.
        `responses` was refused because `Response` means four things in `src/`;
        that objection is about code and does not reach a reader's keyboard.
-       src/modes.ts § debate. */
-    aliases: ["critiques", "reception", "responses"],
+       src/modes.ts § debate. `reception` has also been a chip of this mode
+       since 2026-10-03, and the one it opens on. */
+    aliases: [
+      "critiques", "reception", "responses", "criticism", "reactions", "commentary", "rebuttals",
+      "counterarguments", "what others say", "replies",
+    ],
     experimental: true,
   },
   citations: {
     description: "The works this piece cites, each with a link — ranked by how much the piece leans on them",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "one model pass … written once and then stored": the `citations` step,
+       - "one model call … written once and then stored": the `citations` step,
          one messages-wire call over `articleWithIds`, written to the
          `citations` column (src/citations.ts, src/pipeline.ts § STEPS).
        - "every address … is one the article gave, found by code": `linkFor` in
@@ -423,10 +538,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        price — mode.md § The card on the button.
        docs/plans/260911g-citations-mode.md,
        docs/plans/260929g-check-a-cited-paper-supports-the-claim.md. */
-    how: "One model pass over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
+    how: "One model call over the article, written once and then stored. Every address shown for a work is one the article itself gave — a DOI, an arXiv id or its own link, found by code rather than typed by the model — and where it gave none the row offers a Scholar search, marked as a search. Whoever owns the article can Dig deeper into any row, which first searches the web for the work: a result that plainly matches can become the link of a row that had only a search, never of one the article linked, and its search extract — usually the abstract, never the full work — is read against what the article uses the work for, quoting only words found in that extract. Then a stronger model writes a longer reading, from search extracts, of how the work bears on the article. How influential a work is comes from the model's memory, not from a citation count.",
     /* `works cited` is two words on purpose: `canonical` collapses whitespace
        and lower-cases, so it is stored already in the form a reader types. */
-    aliases: ["references", "bibliography", "sources", "works cited"],
+    aliases: [
+      "references", "bibliography", "sources", "works cited", "refs", "reference list", "cited works",
+      "literature", "further reading",
+    ],
     experimental: true,
   },
   structure: {
@@ -458,8 +576,13 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        Outline's nicknames and Outline is now this. `hierarchy`, `toc` and
        `contents` came from Hierarchy on 2026-09-29 for the same reason, when
        it retired into this mode.
-       docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md. */
-    aliases: ["columns", "outline", "tree", "map", "hierarchy", "toc", "contents"],
+       docs/plans/260929d-remove-hierarchy-mode-and-heading-numbers.md.
+       `table of contents` and `headings` are Greg's own examples of 2026-10-04
+       (see `aliases` above); `contents` never caught the first. */
+    aliases: [
+      "columns", "outline", "tree", "map", "hierarchy", "toc", "contents", "table of contents", "headings",
+      "headers", "sections", "chapters",
+    ],
     /* **Out of the switch since 2026-09-10.** It was behind it as an
        instrument — a third structural view for Greg to compare against the
        other two, kept off an ordinary reader's bar while the comparison ran.
@@ -473,7 +596,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "The questions a careful reader would ask this piece, and where it responds",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "one model pass over the article, written once and stored": the `faq`
+       - "one model call over the article, written once and stored": the `faq`
          step, one messages-wire call over `articleWithIds`, written to the `faq`
          column and replaced on a re-run (src/faq.ts, src/pipeline.ts § STEPS).
        - "no answer is written": `FaqQuestion` has `question` and `passages` and
@@ -490,11 +613,12 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          to. No frequency score exists: nobody's asking is counted.
        Not the "checked against it" sentence, which the panel's (i) already
        says (GPT Sol D3). About the mode, not the press, and no price. */
-    how: "One model pass over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first; reading order, most central and hardest are one tap away.",
-    /* Not `questions`: `question` is Chat's, and a prefix of it would tie the two
-       in the command bar. `faq` itself is this mode's label, which an alias may
-       not repeat (tests/mode-catalog.test.ts). */
-    aliases: ["faqs", "frequently asked questions"],
+    how: "One model call over the article, written once and stored. No answer is written: each question points to passages of the piece itself. The broadest, most central questions come first; reading order, most central and hardest are one tap away.",
+    /* Not `questions`, and nothing that starts with it — `questions and
+       answers` — because `question` is Chat's and FAQ comes first in the bar:
+       the longer word here would take it. `faq` itself is this mode's label,
+       which an alias may not repeat (tests/mode-catalog.test.ts). */
+    aliases: ["faqs", "frequently asked questions", "q&a", "q and a", "qa", "common questions", "key questions"],
     /* A new mode on an unmeasured prompt — docs/project/experimental-features.md. */
     experimental: true,
   },
@@ -502,7 +626,7 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
     description: "A route through the piece's quotes, a little deeper each time round",
     /* **Checked against the source, claim by claim** (docs/project/mode.md §
        The card on the button):
-       - "a short model pass over its quotes": the `skim` step reads the
+       - "a short model call over its quotes": the `skim` step reads the
          stored Quotes, the tree and the profile; `renderPrompt` in
          src/skim.ts sends each quote's words, section path and priority,
          and never the article's prose.
@@ -515,40 +639,15 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
          (`SKIM_NO_QUOTES`), and the band asks for `quotes` before it
          (`precededBy`, src/web/useSkim.ts).
        About the mode, not the press, and no price. */
-    how: "A short model pass over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
+    how: "A short model call over the article's Quotes and its key Ideas — never the rest of its prose — puts the Quotes in an order and gives each a depth, so each pass covers as many of the Ideas as the quotes reach, shaped by your profile if you have one. When there are no Quotes or Ideas yet, they are made first; finding the Ideas is the longer part.",
     /* "spiral" and "route" are the two words Greg used for it in the brief —
        docs/project/skim.md. `trajectory` was the mode's own word until
        2026-10-01 (261001r), and Greg asked to keep it as a keyword. */
-    aliases: ["spiral", "route", "trajectory"],
+    aliases: ["spiral", "route", "trajectory", "skim read", "speed read", "quick read", "preview", "scan"],
     /* Behind the switch from 2026-09-28 until later that day, when Greg asked
        for it in the mainstream: "take Skim and Quotes modes out of
        Experimental features" — docs/project/experimental-features.md. Still
        owners-only (`POLICY.skim`, src/web/visitor.ts). */
-    experimental: false,
-  },
-  tweets: {
-    /* `NOT_A_MODE.tweets` in src/web/Dock.tsx until 2026-09-29, when the thread
-       page became this mode (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md). */
-    description: "The article as a numbered thread of short posts",
-    /* **Checked against the source, claim by claim** (docs/project/mode.md §
-       The card on the button):
-       - "one model pass over the whole article": the `tweets` step, one
-         messages-wire call over `articleWithIds` (src/tweets.ts § generateTweets).
-       - "not part of adding a piece": `DEFAULT_INGEST_STEPS` excludes `tweets`
-         (src/pipeline.ts).
-       - "each post points to the passages it came from": `Tweet.blocks`,
-         validated against the blocks sent (src/tweets.ts § checkBlocks); a post
-         whose ids were all dropped keeps its text and draws no link, and a
-         thread from before `tweets/5` has none — hence "points", not "links",
-         and no promise that every post does.
-       - "nothing is shortened to fit": `buildThread` keeps each post's text
-         (trimmed) and counts it; the band marks an overrun.
-       About the mode, not the press — a visitor reads the stored thread and
-       starts nothing. No price. */
-    how: "One model pass over the whole article, written once and kept — it is not part of adding a piece, so a thread exists only where somebody asked for one. Each post points to the passages it came from, and nothing is shortened to fit: a post over the length limit is kept as written and marked.",
-    /* The command bar's Tweets *page* row carried these until the page went. */
-    aliases: ["thread", "twitter", "x", "social"],
-    /* The page it replaces was on everybody's bar. */
     experimental: false,
   },
   marginalia: {
@@ -558,18 +657,23 @@ export const MODE_CATALOG: Record<Mode, ModeCatalogEntry> = {
        top-level parts (src/structure.ts § `questionFor`), the sentence at the
        top is the arc (src/arc.ts), and the stamps are the stored ideas, read
        and never generated (src/web/marginalia/MarginaliaColumn.tsx). The one
-       thing turning it on generates is its own relation words — so, but, vs
-       (src/relations.ts, plan 261003f); other modes' lists are only read. The
+       thing it generates is its own relation words — so, but, vs
+       (src/relations.ts, plan 261003f), asked for the first time the owner's
+       column is shown (src/web/useRelations.ts, plan 261005d), never on
+       import; other modes' lists are only read. The
        width is
        `fitView`'s `margW` (src/web/layout.ts): below it the column is not
        drawn. */
-    how: "Turning it on marks where the argument turns, with one model pass that puts so, but or vs beside those paragraphs. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
-    /* `annotations` was the mode's own word until 2026-10-01 (261001n). */
-    aliases: ["annotations", "margin notes", "margin", "sidenotes"],
-    /* **Behind the switch**: a first experiment with a column on the right,
-       which Greg asked to "play with" (SPIDERYARN-READING2-7K). Nothing in it
-       is finished enough to put on every reader's bar.
-       docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md. */
-    experimental: true,
+    how: "It marks where the argument turns, with so, but or vs beside those paragraphs. One model call makes those words, the first time the article's owner opens the column; the notes are there meanwhile and the words join them when they are ready. Everything else is read, never made here: the questions come with the article's parts, the sentence at the top is where the argument has got to, and ideas, FAQ, Timeline, Debate and citations appear once they have been made in their own modes. It needs a wide window; on a narrow one the notes are hidden.",
+    /* `annotations` was the mode's own word until 2026-10-01 (261001n); the
+       Comments row has it too and this row wins it. **Nothing here may start
+       with `notes`**, which is the Comments row's. */
+    aliases: ["annotations", "margin notes", "margin", "margins", "sidenotes", "side notes", "marginal notes"],
+    /* **Out from behind the switch on 2026-10-05.** It went in on 2026-10-01
+       as a first experiment with a column on the right. Greg, 2026-10-04
+       (spya-vv54j2): "Let's take the annotations mode out of experimental
+       features, i.e. make it a mainstream feature available to everybody."
+       docs/plans/261005d-marginalia-out-of-the-experimental-switch.md. */
+    experimental: false,
   },
 };

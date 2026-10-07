@@ -44,7 +44,7 @@ import {
   citeReadNotIdentified,
   verdictText,
 } from "../src/web/CitationsPanel.js";
-import { ProseHoverCard } from "../src/web/ProseHoverCard.js";
+import { type CiteActions, ProseHoverCard } from "../src/web/ProseHoverCard.js";
 import { annotateHtml, citeMarks, termMarks } from "../src/web/annotate.js";
 import { buildNoteIndex } from "../src/web/notes-view.js";
 import type { Block, BlockId, CitedWork, GlossaryEntry } from "../src/types.js";
@@ -151,7 +151,17 @@ const TERM: GlossaryEntry = {
 const jumped: BlockId[] = [];
 const openedTerms: string[] = [];
 
-function Harness({ works, entries, owner }: { works: CitedWork[]; entries: GlossaryEntry[]; owner: boolean }) {
+function Harness({
+  works,
+  entries,
+  owner,
+  citeActions = null,
+}: {
+  works: CitedWork[];
+  entries: GlossaryEntry[];
+  owner: boolean;
+  citeActions?: CiteActions | null;
+}) {
   /* Both scans, and then concatenated per block — which is what `TableView`
      does, and is the only way to get the merged `<mark class="term cite">` the
      overlap case is about. Computing only one of them would have made that test
@@ -198,6 +208,7 @@ function Harness({ works, entries, owner }: { works: CitedWork[]; entries: Gloss
         canAddToShelf={false}
         showInSpideryarn={owner}
         termActions={null}
+        citeActions={citeActions}
         onOpenTerm={(id) => openedTerms.push(id)}
         onJump={(id) => jumped.push(id)}
         onFollowNote={() => {}}
@@ -257,8 +268,13 @@ function hover(target: Element): void {
 let host: HTMLDivElement;
 let root: Root;
 
-function paint(works: CitedWork[] = WORKS, entries: GlossaryEntry[] = [], owner = true): void {
-  act(() => root.render(<Harness works={works} entries={entries} owner={owner} />));
+function paint(
+  works: CitedWork[] = WORKS,
+  entries: GlossaryEntry[] = [],
+  owner = true,
+  citeActions: CiteActions | null = null,
+): void {
+  act(() => root.render(<Harness works={works} entries={entries} owner={owner} citeActions={citeActions} />));
 }
 
 beforeEach(() => {
@@ -282,7 +298,7 @@ const card = () => document.querySelector(".prose-card");
 const cite = (n: number) => host.querySelectorAll("mark.cite")[n] as HTMLElement;
 
 describe("resting on a citation", () => {
-  it("draws the work: its title, who wrote it and when, and what the piece uses it for", () => {
+  it("draws the work: its title, who wrote it and when, and nothing of ours about it", () => {
     paint();
     expect(card()).toBe(null);
     hover(cite(0));
@@ -290,9 +306,11 @@ describe("resting on a citation", () => {
     expect(text).toContain("Elements of Episodic Memory");
     expect(text).toContain("Tulving");
     expect(text).toContain("1983");
-    /* The one line that is ours rather than the author's — Fable, 2026-09-16:
-       "That is the augmentation; the citation itself is the author's." */
-    expect(text).toContain("The piece takes its account of retrieval cues from it.");
+    /* Until 2026-10-03 the card also drew `why`, the one line that was ours
+       rather than the author's. Greg, spya-zmdb7y: it restates the citing
+       paragraph and reads as what the paper says, so it waits for a check
+       (plan 261003j; "what the card says after Look it up" has that half). */
+    expect(text).not.toContain("The piece takes its account of retrieval cues from it.");
   });
 
   it("links a work the article gave an address for, and says where the address came from", () => {
@@ -407,7 +425,10 @@ describe("what the card says we have read", () => {
     paint();
     hover(cite(0));
     expect(read()).toBe(CITE_NOT_READ);
-    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
+    /* Nothing the model wrote about the work, until something was checked
+       against it (Greg, spya-zmdb7y, plan 261003j). */
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")).toBeNull();
+    expect(card()?.textContent).not.toContain(TULVING.why);
     /* A searched row too: a Scholar search is not the work either. */
     hover(cite(1));
     expect(read()).toBe(CITE_NOT_READ);
@@ -459,6 +480,9 @@ describe("what the card says after Look it up", () => {
     paint([looked, KAPLAN, BROADBENT]);
     hover(cite(0));
     expect(read()).toBe(citeReadAssessed(310, "arxiv.org"));
+    /* The claim the verdict is about, labelled as the article's. */
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-label")?.textContent).toBe(CITE_WHY_LABEL);
+    expect(card()?.querySelector(".prose-card-part-why .prose-card-text")?.textContent).toBe(TULVING.why);
     const verdict = card()?.querySelector(".prose-card-cite-verdict");
     expect(verdict?.querySelector(".prose-card-label")?.textContent).toBe(CITE_VERDICT_LABEL);
     expect(verdict?.querySelector(".prose-card-cite-verdict-text")?.textContent).toBe(verdictText("partly"));
@@ -503,8 +527,8 @@ describe("what the card says after Look it up", () => {
     expect(card()?.querySelector(".prose-card-cite-quote")).toBeNull();
   });
 
-  /* Plan 260930a § UI: *Investigate* lives in the band, not on the hover card —
-     neither its button nor a kept answer. */
+  /* Plan 260930a § UI: a kept *Dig deeper* answer lives in the band, not on the
+     hover card. The button is the card's since 261004b; see the next describe. */
   it("shows nothing of Investigate, even on a work that has a kept answer", () => {
     const investigated: CitedWork = {
       ...TULVING,
@@ -526,6 +550,8 @@ describe("what the card says after Look it up", () => {
     hover(cite(0));
     expect(card()).not.toBeNull();
     expect(card()?.textContent).not.toMatch(/DISTINCTIVE INVESTIGATION|Investigat/);
+    /* So no claim either: the card draws nothing that was checked against it. */
+    expect(card()?.textContent).not.toContain(TULVING.why);
     expect(card()?.querySelector(".cite-investigate, .cite-inv")).toBeNull();
   });
 });
@@ -582,5 +608,75 @@ describe("the card says when the work is already an article here", () => {
     expect(card()).not.toBeNull();
     expect(card()?.querySelector(".cite-here")).toBeNull();
     expect(card()?.textContent).not.toContain("Private copy");
+  });
+});
+
+
+/* Report `spya-c2qmbg`, Greg, 2026-10-03: *"What I was hoping is that it would
+   have a button for dig deeper in the tooltip."* Plan 261004b. */
+describe("Dig deeper from the card", () => {
+  const INVESTIGATION: NonNullable<CitedWork["investigation"]> = {
+    answer: "A kept answer.",
+    sources: [{ url: "https://arxiv.org/abs/1" }],
+    extractsRead: 1,
+    longestExtractWords: 10,
+    matchedHost: null,
+    searches: 1,
+    searchesFrom: "x",
+    model: "test",
+    at: "2026-09-30T09:00:00.000Z",
+    contextHash: "ctx",
+    promptVersion: "1",
+  };
+  const button = () =>
+    [...(card()?.querySelectorAll("button") ?? [])].find((b) => /dig/i.test(b.textContent ?? "")) as
+      | HTMLButtonElement
+      | undefined;
+  const actions = (over: Partial<CiteActions> = {}): CiteActions & { dug: string[] } => {
+    const dug: string[] = [];
+    return { dig: (id) => dug.push(id), digging: null, ...over, dug };
+  };
+
+  it("starts the dig for that work, and closes the card", () => {
+    const a = actions();
+    paint(WORKS, [], true, a);
+    hover(cite(0));
+    expect(button()?.textContent).toBe("Dig deeper");
+    act(() => button()?.click());
+    expect(a.dug).toEqual([TULVING.id]);
+    expect(card()).toBe(null);
+  });
+
+  it("keeps the Scholar search beside it on a row the article gave no link for", () => {
+    paint(WORKS, [], true, actions());
+    hover(cite(1));
+    expect(button()).toBeDefined();
+    expect(card()?.querySelector('a[href*="scholar.google.com"]')?.textContent).toContain("search Scholar");
+  });
+
+  it("says again on a work that has a kept answer", () => {
+    paint([{ ...TULVING, investigation: INVESTIGATION }, KAPLAN, BROADBENT], [], true, actions());
+    hover(cite(0));
+    expect(button()?.textContent).toBe("Dig deeper again");
+  });
+
+  it("is disabled while any dig runs, and says so on the work being dug", () => {
+    const a = actions({ digging: KAPLAN.id });
+    paint(WORKS, [], true, a);
+    hover(cite(0));
+    expect(button()?.disabled).toBe(true);
+    expect(button()?.textContent).toBe("Dig deeper");
+    act(() => button()?.click());
+    expect(a.dug).toEqual([]);
+    paint(WORKS, [], true, actions({ digging: TULVING.id }));
+    expect(button()?.textContent).toBe("Digging deeper…");
+    expect(button()?.disabled).toBe(true);
+  });
+
+  it("is not drawn without the owner's actions", () => {
+    paint(WORKS, [], false, null);
+    hover(cite(0));
+    expect(card()).not.toBeNull();
+    expect(button()).toBeUndefined();
   });
 });

@@ -2,7 +2,7 @@
  * **The Quiz band** — the questions the article would ask, and what the reader
  * made of them.
  *
- * The other half of Remember. Free recall asks the reader what they took from
+ * The other half of Learn. Free recall asks the reader what they took from
  * the article; this asks the questions the article itself would ask, from a
  * batch written once and cached as an artefact (src/quiz.ts).
  *
@@ -79,6 +79,20 @@
  * half; the `batchId` effect is the batch half, and that one also releases the
  * old request, which is otherwise still holding `useQuiz`'s single live slot
  * and leaves the new batch's Answer button enabled and inert.
+ *
+ * ## A kept answer is put back in one place
+ *
+ * Finished marks are stored since 2026-10-05 (report spya-e8ujxn), and coming
+ * back to a question — by Previous, by reopening Quiz, by a reload — shows the
+ * answer and its mark again. **One effect does it, after every effect that can
+ * move the walk**, and not `move` itself: the batch reset, the filter and an
+ * arrival can all write `at` in one commit, and an arrival at the question
+ * already open goes round `move` altogether, so a restore inside `move` could
+ * leave one question's answer in another's box. It fills an empty box under a
+ * question with no attempt, and nothing else — never a draft, never a live
+ * mark. The restored attempt is marked `restored`, which the verdict effect
+ * skips. docs/plans/261005b-quiz-answers-are-kept-and-restored.md, GPT Sol's
+ * plan review F3 and F4.
  */
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
@@ -99,7 +113,7 @@ import type { Section } from "./position.js";
 import { lastBefore, questionIsRead, type ReadSoFar, readShareLabel, shareRead } from "./read-filter.js";
 import { SharePie } from "./SharePie.js";
 import type { Attempt, UseQuiz } from "./useQuiz.js";
-import { REMEMBER_VIEWS, type RememberView } from "./params.js";
+import type { LearnView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -107,16 +121,19 @@ import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { ICON_BUTTON_CLASS, IconButton } from "./IconButton.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { ReadError } from "./ReadError.js";
 import { Button } from "./components/ui/button.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
 import { armActivation } from "./activation.js";
-import { REMEMBER_SUB_MODES } from "./sub-modes.js";
+import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 import { withVoice } from "./voice.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
@@ -159,15 +176,15 @@ function questionCount(n: number): string {
  * src/quiz.ts calls a hint rather than a finding, and not evidence trimmed
  * from a question that was kept.
  *
- * **It opens with Quiz's own sentence, not Remember's catalog words**: the
- * band is Remember's, but `MODE_CATALOG.remember.how` is about Recall ("waits
- * on you … nudges you to remember"), which is wrong on this half. So this band does not
- * pass `mode` to `ModeSurface`, and the card leads with the sub-mode's words
- * from `REMEMBER_SUB_MODES` instead — always, so the (i) is there in every
- * state, as `mode` would have made it.
+ * **It opens with Quiz's own sentence, not Learn's catalog words**: the
+ * catalog now describes the whole mode, so it would lead a Quiz card with the
+ * three conversation parts before reaching Quiz. This band therefore does not
+ * pass `mode` to `ModeSurface`; the card leads with Quiz's sub-mode words from
+ * `LEARN_SUB_MODES` instead — always, so the (i) is there in every state,
+ * as `mode` would have made it.
  */
 function QuizAbout({ quiz }: { quiz: Quiz | null }) {
-  const what = <p>{REMEMBER_SUB_MODES.quiz.description}.</p>;
+  const what = <p>{LEARN_SUB_MODES.quiz.description}.</p>;
   if (!quiz) return what;
   const n = quiz.questions.length;
   const { malformed, duplicate, unanchored } = quiz.dropped;
@@ -175,7 +192,9 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
   return (
     <>
       {what}
-      <p>{questionCount(n)}.</p>
+      {/* "in all": the whole batch, where the band's "Question n of N" counts
+          only what *Only what I've read* leaves in (plan 261006g). */}
+      <p>{questionCount(n)} in all.</p>
       {left > 0 && (
         <p>
           {left === 1
@@ -194,15 +213,15 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
 }
 
 /**
- * **Recall | Tutorial | Quiz**, at the top of the Remember band.
+ * **Recall | Tutorial | Explore | Quiz**, at the top of the Learn band.
  *
  * A control rather than two links, because the two are one choice — and it is
- * rendered by `RememberBand` and handed to whichever panel is showing, so that
- * both halves of Remember carry the same control in the same place rather than
+ * rendered by `LearnBand` and handed to whichever panel is showing, so that
+ * both halves of Learn carry the same control in the same place rather than
  * each growing its own.
  *
  * The navigation rules it triggers (clear `thread` in one step; Quiz wins a
- * pasted collision) are `RememberBand`'s, in src/web/App.tsx. This component only
+ * pasted collision) are `LearnBand`'s, in src/web/App.tsx. This component only
  * says which half is open and asks for the other.
  *
  * **Words, not icons, and that was weighed** (SPIDERYARN-READING2-71, plan
@@ -212,9 +231,40 @@ function QuizAbout({ quiz }: { quiz: Quiz | null }) {
  * enough to stand alone; "say what you took from it" versus "the article asks"
  * is not. GPT Sol's plan review, finding 4.
  */
-export function RememberSubModeToggle({
+/**
+ * **The second paragraph of each chip's card**: what a press would not have
+ * told you. Greg, 2026-10-04 (spya-wbhrm7): *"Provide rich tooltips for the
+ * remember mode submode buttons"*, and the same day (spya-usyhwy) *"each
+ * submode button should have its own tooltip"*. The first paragraph is the
+ * command bar's line (`LEARN_SUB_MODES`).
+ *
+ * Recall's sentences were `MODE_CATALOG.learn.how` until that day, when the
+ * catalog's paragraph was cut to what is true of the whole mode. Each claim,
+ * against the source:
+ *  - Recall, Tutorial: no turn runs before the reader's first message; the
+ *    prompts are in src/converse.ts, and Tutorial is built for a reader who
+ *    has not read the piece (docs/project/learn-mode.md § Tutorial).
+ *  - Explore: highlights and notes go in the digest with every turn; earlier
+ *    conversations go as a list it may open, not as their text
+ *    (src/reader-notes.ts; GPT Sol's plan review, finding 1).
+ *  - Quiz: the press arms `quiz` (below), and the marker is given the whole
+ *    article with the question's evidence passages (src/quiz-mark.ts; finding 4).
+ * Exported for tests/learn-header-cards.test.tsx.
+ */
+export const LEARN_VIEW_HOW: Readonly<Record<LearnView, string>> = {
+  recall:
+    "The AI does not reply until you have said or typed what you took from the piece. One adaptive voice corrects briefly, then usually nudges you to remember a little more; if you are stuck, it fills the gap instead. It is asked to point its replies back to the passages they use.",
+  tutorial:
+    "It waits on you too. It is about what the author says, and it works even if you have not read the piece yet.",
+  explore:
+    "It is sent your highlights and notes, plus a list of your earlier conversations. It can open one of those and may search the web when useful.",
+  quiz: "Pressing it writes the questions if there are none yet. A model compares each answer with the article, using the question's reference passages.",
+};
+
+export function LearnSubModeToggle({
   slug,
   value,
+  experimental,
   onChange,
 }: {
   /**
@@ -225,52 +275,88 @@ export function RememberSubModeToggle({
    * file, so a test that clicks the real chip is a test of the real rule.
    */
   slug: string;
-  value: RememberView;
-  onChange(next: RememberView): void;
+  value: LearnView;
+  /**
+   * **Whether the reader's experimental-features switch is on**, which decides
+   * whether the Explore chip is drawn and nothing else (sub-modes.ts §
+   * `visibleLearnViews`). Required, for `DiagramPanel`'s reason: a new mount
+   * site cannot forget it and quietly show a chip the switch is hiding. The
+   * chip for the part the reader is in is always drawn, so the row has one
+   * pressed. docs/project/experimental-features.md.
+   */
+  experimental: boolean;
+  onChange(next: LearnView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, value);
   return (
     /* No `role="group"`: each button already says what it is and whether it is
        pressed, and the two honest alternatives are worse — a `fieldset` needs a
        `legend` this band has no room for, and a `tablist` promises arrow-key
        navigation that would then have to be written and kept. */
-    <div className="remember-submode">
-      {REMEMBER_VIEWS.map((view) => (
-        <button
-          key={view}
-          type="button"
-          className={`remember-submode-btn${value === view ? " on" : ""}`}
-          /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
-             buttons, not a tablist, and claiming to be a tablist without the
-             arrow-key handling a tablist promises is worse than not claiming
-             it. */
-          aria-pressed={value === view}
-          onClick={() => {
-            /* **The gesture seam for the questions.** Pressing Quiz with none
-               written writes them — Greg's rule about opening a mode, one level
-               down (src/web/activation.ts). Here, in a real `onClick`, and
-               deliberately *not* inside the `setBoth` the caller runs:
-               `?remember=` is query state, so Back and Forward move it too, and
-               retracing your steps through this toggle must not buy a model
-               call. Recall arms nothing — it is a conversation the reader
-               starts, and there is no empty artefact for a press to fill.
+    /* Drawn as the part-switcher every mode shares (mode-band.css § the
+       part-switcher, plan 261007h § F2), at the left of its row like every
+       other mode's; the toggle buttons and their `aria-pressed` are unchanged. */
+    <div ref={group} className="learn-submode summ-views">
+      {/* A card on every chip, the way the other five sub-mode rows have one
+          (StructureMode.tsx § `StructureViewToggle`): `TooltipGroup` so that
+          reading along the row is one gesture, `keepSide` so a card is not
+          thrown onto the chips beside it. The card is for a pointer and for
+          keyboard focus; a finger's tap presses the chip, which is why the
+          conversation band's (i) lists the visible parts as well (LearnAbout.tsx §
+          `LearnSubModesAbout`). */}
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {visibleLearnViews(experimental, value).map((view) => (
+          <Tooltip
+            key={view}
+            placement="bottom"
+            keepSide
+            className="tip-soon"
+            content={
+              <ControlTip
+                head={LEARN_SUB_MODES[view].label}
+                what={`${LEARN_SUB_MODES[view].description}.`}
+                how={LEARN_VIEW_HOW[view]}
+              />
+            }
+          >
+            <button
+              type="button"
+              className={`learn-submode-btn summ-view-btn${value === view ? " on" : ""}`}
+              /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
+                 buttons, not a tablist, and claiming to be a tablist without the
+                 arrow-key handling a tablist promises is worse than not claiming
+                 it. */
+              aria-pressed={value === view}
+              onClick={() => {
+                /* **The gesture seam for the questions.** Pressing Quiz with none
+                   written writes them — Greg's rule about opening a mode, one level
+                   down (src/web/activation.ts). Here, in a real `onClick`, and
+                   deliberately *not* inside the `setBoth` the caller runs:
+                   `?learn=` is query state, so Back and Forward move it too, and
+                   retracing your steps through this toggle must not buy a model
+                   call. Recall arms nothing — it is a conversation the reader
+                   starts, and there is no empty artefact for a press to fill.
 
-               **Armed before the `value === view` check, not after**, so that
-               pressing Quiz while already *in* Quiz mints a press. That is the
-               rule the bar's own mode buttons follow — pressing the mode you are
-               in re-arms it (tests/modes-that-start-themselves.test.tsx § "runs
-               it when the mode pressed is the one already open") — and it is the
-               only way back from a read that failed, because a failed read keeps
-               the press and re-reads, and nothing re-fires without a new nonce.
-               GPT Sol, 2026-09-06. */
-            if (view === "quiz") armActivation(slug, "quiz");
-            /* The sub-mode itself does not change, and writing the same value to
-               the URL would push a history entry that goes nowhere. */
-            if (value !== view) onChange(view);
-          }}
-        >
-          {REMEMBER_SUB_MODES[view].label}
-        </button>
-      ))}
+                   **Armed before the `value === view` check, not after**, so that
+                   pressing Quiz while already *in* Quiz mints a press. That is the
+                   rule the bar's own mode buttons follow — pressing the mode you are
+                   in re-arms it (tests/modes-that-start-themselves.test.tsx § "runs
+                   it when the mode pressed is the one already open") — and it is the
+                   only way back from a read that failed, because a failed read keeps
+                   the press and re-reads, and nothing re-fires without a new nonce.
+                   GPT Sol, 2026-09-06. */
+                if (view === "quiz") armActivation(slug, "quiz");
+                /* The sub-mode itself does not change, and writing the same value to
+                   the URL would push a history entry that goes nowhere. */
+                if (value !== view) onChange(view);
+              }}
+            >
+              {LEARN_SUB_MODES[view].label}
+            </button>
+          </Tooltip>
+        ))}
+      </TooltipGroup>
     </div>
   );
 }
@@ -298,12 +384,12 @@ export function QuizPanel({
   sections?: QuizSections | undefined;
   /**
    * The reader's reading so far — src/web/read-filter.ts. **Absent means
-   * reading time is off**, and then there is no tick-box and every question is
+   * reading time is off** (a visitor; every owner has it), and then there is no tick-box and every question is
    * walked, exactly as before: an empty level map would otherwise read as
    * "read nothing" and hide the whole quiz.
    */
   readSoFar?: ReadSoFar | undefined;
-  /** The Recall | Tutorial | Quiz control, built by `RememberBand`. */
+  /** The Recall | Tutorial | Explore | Quiz control, built by `LearnBand`. */
   subMode?: React.ReactNode;
   /** Every block this article has, id to plain text — the "is this real" check
       every citation chip in the band is drawn through. */
@@ -331,10 +417,11 @@ export function QuizPanel({
    * nothing left to record.
    *
    * Deliberately not in the URL: the rule `?at=` and `?thread=` serve is that a
-   * shared link lands you where the link-maker was, and what a link would frame
-   * here is an answer that does not survive a reload anyway. It arrives with
-   * stored attempts. docs/plans/260831al-review-quiz-sub-mode.md § Which
-   * question is open.
+   * shared link lands you where the link-maker was, and a quiz is the owner's
+   * alone. (Until 2026-10-05 the reason given was that the answer did not
+   * survive a reload. It does now, and where the walk opens is worked out from
+   * the kept answers instead — `resumedBatch`, below.)
+   * docs/plans/260831al-review-quiz-sub-mode.md § Which question is open.
    */
   const [at, setAt] = useState(0);
   /**
@@ -446,6 +533,15 @@ export function QuizPanel({
    * from the front itself rather than from the old batch's index.
    */
   const filterBatch = useRef(quiz?.batchId);
+  /* Whether the arrival effect will run in this commit. A handled arrival
+     cannot keep overruling later filter presses if its owner leaves it in
+     the props. */
+  const arrivalSeen = useRef<{
+    batchId: string | undefined;
+    arrival: QuizArrival | null | undefined;
+  }>({ batchId: quiz?.batchId, arrival: undefined });
+  const takingArrival =
+    arrivalSeen.current.batchId !== quiz?.batchId || arrivalSeen.current.arrival !== arrival;
   /* A replacement batch reaches render before either reset effect reaches the
      state it owns. Do not paint the new batch at the old batch's index in that
      gap: even when that index happens to be included, its question would sit
@@ -457,6 +553,14 @@ export function QuizPanel({
   useEffect(() => {
     const from = filterBatch.current === quiz?.batchId ? at : 0;
     filterBatch.current = quiz?.batchId;
+    /* An explicit destination owns this navigation, including its cleanup.
+       Letting the filter clear first would lose a same-question draft or
+       abort its mark even though the arrival writes the right index last. */
+    if (
+      takingArrival &&
+      arrival?.batchId === quiz?.batchId &&
+      questions.some((q) => q.id === arrival?.questionId)
+    ) return;
     if (!filterActive || included[from] !== false) return;
     const target = includedAt.find((i) => i >= from) ?? lastBefore(includedAt, from);
     if (target !== undefined) {
@@ -468,13 +572,70 @@ export function QuizPanel({
       setTyped("");
       setShowAnswer(false);
     }
-  }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId]);
+  }, [filterActive, included, includedAt, at, owner.attempt, typed, quiz?.batchId, takingArrival, arrival, questions]);
+
+  /**
+   * **Open at the first question not yet answered.** Greg, 2026-10-05, on the
+   * plan's Q-quiz-resume: *"yes, first unanswered question"*. Until then a
+   * reader who came back was put on question one with their answer showing,
+   * and pressed Next past everything they had done.
+   *
+   * **Once for a batch, before any question of it is drawn** — `resuming`
+   * below holds the question back until this has run. That is what keeps it
+   * from being a second thing that moves the reader: nothing is on screen to
+   * be moved from, no draft or mark exists to lose, and the restoring effect
+   * further down sees no question and so cannot fill the box of the one being
+   * left (postmortem 261005d is that mistake, made by an arrival). Answers
+   * that arrive later — another device, *Try again* after a read that could
+   * not say — fill the box of the question open and move nothing.
+   *
+   * - **Among the steps the reader may land on**, so it waits for the reading
+   *   levels as the walk does, and an unread question is not "the first
+   *   unanswered".
+   * - **Every one answered opens at the first.** There is no next thing to do,
+   *   so the start of the path, with its answer showing, is the least
+   *   surprising place; the last question would look like a quiz left half way.
+   * - **A question asked for by name wins** — the arrival effect below is the
+   *   later writer, and when the arrival is seen here first (the levels still
+   *   loading) the batch is counted as opened rather than chosen again once
+   *   they load. An arrival for another batch, or for no question, is not one.
+   * - Not an arrival by Next, so the step shows its premise.
+   *
+   * After the batch reset and the filter effect, whose `setAt` this overrides.
+   */
+  const [resumedBatch, setResumedBatch] = useState<string | undefined>(undefined);
+  const resuming = quiz != null && resumedBatch !== quiz.batchId;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per batch, when the walk can say where the reader may land; the kept answers and the filter are read as they stand
+  useEffect(() => {
+    /* A 404 resets the walk, so the same batch returning needs a fresh choice
+       too. Its previous completion must not outlive the questions. */
+    if (!quiz) {
+      setResumedBatch(undefined);
+      return;
+    }
+    if (!resuming) return;
+    const named =
+      arrival?.batchId === quiz.batchId && questions.some((q) => q.id === arrival.questionId);
+    if (!named && waitingForReading) return;
+    setResumedBatch(quiz.batchId);
+    if (named) return;
+    const to =
+      includedAt.find((i) => {
+        const q = questions[i];
+        return q !== undefined && !owner.kept.has(q.id);
+      }) ?? includedAt[0];
+    if (to === undefined) return;
+    /* Not `move`: there is no draft or mark to take away — the batch reset has
+       just cleared them, and nothing has been drawn since. */
+    setAt(to);
+    setArrivedByNext(false);
+  }, [quiz?.batchId, resuming, waitingForReading, arrival]);
 
   /**
    * **Land on a question pressed in the prose** — `QuizArrival`.
    *
-   * **Declared after the batch reset and the filter effect, on purpose**: all
-   * three can run in one commit — the band mounting with an arrival, or a new
+   * **Declared after the batch reset, the filter and the opening effect, on
+   * purpose**: all four can run in one commit — the band mounting with an arrival, or a new
    * batch — and the last `setAt` is the one that lands. It is idempotent, so
    * StrictMode running it twice lands in the same place; only the hand-back is
    * repeated, and the owner clears an arrival only if it is still the one it
@@ -483,20 +644,18 @@ export function QuizPanel({
    * - **Another batch's arrival is taken and ignored** — finding 1.
    * - **The question already open is not moved to**, `pick`'s rule: `move`
    *   aborts a mark in flight and drops the draft (finding 3). Its index is
-   *   still written last, though: the filter effect just above can be trying to
-   *   move off this unread question in the same commit. Writing the requested
-   *   index again lets the arrival win without clearing the attempt.
+   *   still written last, and the filter yields to a new valid arrival before
+   *   it can clear any answer state.
    * - **The tick-box gives way.** The reader asked for this question by name, so
    *   if *Only what I've read* would hide it — or the reading levels are still
    *   loading, while the walk waits — it is turned off, visibly, rather than
    *   the walk landing somewhere else.
    * - A jump is not an arrival by Next, so the step shows its premise.
    */
-  const arrivalBatch = useRef(quiz?.batchId);
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs for a new arrival or a new batch; `move` is recreated every render and the rest is read as it stands
   useEffect(() => {
-    const sameBatch = arrivalBatch.current === quiz?.batchId;
-    arrivalBatch.current = quiz?.batchId;
+    const sameBatch = arrivalSeen.current.batchId === quiz?.batchId;
+    arrivalSeen.current = { batchId: quiz?.batchId, arrival };
     if (!arrival || !quiz) return;
     if (arrival.batchId === quiz.batchId) {
       const to = questions.findIndex((q) => q.id === arrival.questionId);
@@ -518,9 +677,10 @@ export function QuizPanel({
     onArrivalTaken?.(arrival);
   }, [arrival, quiz?.batchId]);
 
-  /** Undefined while the step at `at` is filtered out — see the effect above. */
+  /** Undefined while the step at `at` is filtered out, and until the batch has
+      been opened somewhere — see the effects above. */
   const question: QuizQuestion | undefined =
-    changingBatch || waitingForReading || included[at] === false ? undefined : questions[at];
+    changingBatch || resuming || waitingForReading || included[at] === false ? undefined : questions[at];
   /* The reader's place, counted among the steps they may land on. */
   const position = includedAt.indexOf(at) + 1;
   const nextAt = includedAt.find((i) => i > at);
@@ -538,15 +698,20 @@ export function QuizPanel({
    * as typing, and the whole point is to get what the reader remembers out
    * rather than what they can be bothered to type.
    */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: typed,
     onChange: setTyped,
     box,
     context: { kind: "article", slug: owner.slug },
-    transcribe: sendForTranscription,
+    transcribe,
     /* One box per question: an answer offered back under a different question
        would be the wrong answer. */
     keep: keepDictation(`quiz:${owner.slug}:${question?.id ?? ""}`),
+    /* A double press on Stop also answers (dictation.md § A double press). */
+    onDone: () => submit(),
+    /* One box across every question: an answer goes to the one it was said to. */
+    doneKey: question?.id,
   });
 
   /**
@@ -621,8 +786,9 @@ export function QuizPanel({
    *
    * **The option passed over was clearing the attempt on any edit**, which is
    * one line and needs no new field. It is wrong for this feature: the mark is
-   * the thing the reader is editing *against*, nothing stores it, and a
-   * keystroke aimed at a typo would take it away for good. Quiz is not a test
+   * the thing the reader is editing *against*, and a keystroke aimed at a typo
+   * would take it off the screen (it is kept since 2026-10-05, but it would
+   * come back only on leaving the question and returning). Quiz is not a test
    * and losing your feedback for touching the box is a punishment. Comparing
    * instead keeps the mark readable, says plainly whose answer it is about, and
    * comes back by itself if the reader puts the old words back.
@@ -728,13 +894,19 @@ export function QuizPanel({
    * Guarded on the question being in this batch, because the attempt can
    * outlive a batch by one render — the reset effect clears it, but the prop
    * arrives before the clear lands.
+   *
+   * **A restored attempt is not a new mark, and is skipped.** It is `done`
+   * with no verdict — verdicts are not stored — which is exactly the shape
+   * "the latest mark could not be judged" has, so recording it would delete a
+   * verdict earned this visit every time the reader pressed Previous. GPT
+   * Sol's plan review of 261005b, F4.
    */
   useEffect(() => {
     if (verdictBatch.current !== quiz?.batchId) {
       verdictBatch.current = quiz?.batchId;
       return;
     }
-    if (attempt?.status !== "done") return;
+    if (attempt?.status !== "done" || attempt.restored) return;
     const { questionId, verdict } = attempt;
     if (!questions.some((q) => q.id === questionId)) return;
     setVerdicts((was) => {
@@ -745,6 +917,47 @@ export function QuizPanel({
       return next;
     });
   }, [attempt, questions, quiz?.batchId]);
+
+  /**
+   * **Put a kept answer back** — the box and the mark together, for the
+   * question actually on screen.
+   *
+   * **Declared after the batch reset, the filter, the arrival and the verdict
+   * effects, on purpose**, so their scheduled moves take precedence. State
+   * writes do not change this effect's captured values: a valid arrival to a
+   * different question must wait for its destination to render before we
+   * restore. It is keyed on the batch, the id of
+   * the question drawn, and that question's kept answer — so it runs when the
+   * walk lands somewhere (however it got there), and again when kept answers
+   * arrive after the question did.
+   *
+   * **It only ever fills a vacancy**: no attempt at all, and an empty box. A
+   * draft, a mark in flight, a failed mark and a finished one are all left
+   * alone. And **`typed` and the attempt are read, not depended on** — keyed
+   * on them, a reader who typed over nothing and then cleared the box would
+   * have their old answer jump back in under the caret.
+   *
+   * `question` is undefined while a batch is changing or the step at `at` is
+   * filtered out, so nothing is restored under a question the panel has not
+   * committed to. Idempotent, so StrictMode's second run changes nothing.
+   */
+  const shownId = question?.id;
+  const keptHere = shownId === undefined ? undefined : owner.kept.get(shownId);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate triggers — landing on a question, or its kept answer arriving; `typed` and the attempt are read as they stand (see above), and `showKept` is read fresh
+  useEffect(() => {
+    if (shownId === undefined || !keptHere) return;
+    /* The arrival effect above schedules state; this closure still sees the
+       question from before that move. Wait for its destination to render. */
+    if (
+      arrival &&
+      arrival.batchId === quiz?.batchId &&
+      arrival.questionId !== shownId &&
+      questions.some((q) => q.id === arrival.questionId)
+    ) return;
+    if (owner.attempt !== null || typed !== "") return;
+    setTyped(keptHere.answer);
+    owner.showKept(shownId);
+  }, [quiz?.batchId, shownId, keptHere]);
 
   /**
    * **Whether the question on screen carries its premise.** The rule is
@@ -814,7 +1027,7 @@ export function QuizPanel({
      way**, box empty or not: a browser that shows no rough words leaves the box
      empty while it listens, and the transcript lands through `setTyped` after a
      move — under the *next* question. GPT Sol's plan review, finding 2. */
-  const listening = dictate.dictation.armed || dictate.readOnly;
+  const listening = dictate.busy;
   const stepByKey = useRef<(dir: -1 | 1) => boolean>(() => false);
   stepByKey.current = (dir) => {
     if (!question || unmarked || listening) return false;
@@ -876,13 +1089,7 @@ export function QuizPanel({
     return i >= 0 && included[i] === true;
   };
 
-  const cannotAnswer =
-    !typed.trim() ||
-    tooLong ||
-    marking ||
-    owner.stale ||
-    dictate.readOnly ||
-    dictate.dictation.armed;
+  const cannotAnswer = !typed.trim() || tooLong || marking || owner.stale || dictate.busy;
   const answerName = marking ? "Marking…" : mine?.status === "failed" && !superseded ? "Try again" : "Answer";
 
   const submit = () => {
@@ -895,7 +1102,7 @@ export function QuizPanel({
        two-pass design must not produce, and it would be marked as the reader's
        own answer. The same pair chat's composer carries, for the same reason.
        docs/project/dictation.md § Adding it to a box. */
-    if (dictate.readOnly || dictate.dictation.armed || !question) return;
+    if (dictate.busy || !question) return;
     const answer = typed.trim();
     if (answer === "" || tooLong || marking || owner.stale) return;
     void owner.mark(question.id, answer);
@@ -905,10 +1112,10 @@ export function QuizPanel({
     <ModeSurface
       label="Quiz"
       feature="gloss quiz"
-      /* Quiz is Remember's other half, so its (i) opens with Remember's
+      /* Quiz is Learn's other half, so its (i) opens with Learn's
           catalog words (mode-catalog.ts has no `quiz`, on purpose). */
       about={<QuizAbout quiz={quiz && owner.status === "ready" ? quiz : null} />}
-      /* **A fragment, because `subMode` is an optional prop.** `RememberBand`
+      /* **A fragment, because `subMode` is an optional prop.** `LearnBand`
           passes one on every render, so an empty row is not a state a reader
           can reach — but `head={subMode}` would hand the surface `undefined`
           for any caller that did not, and the row would vanish rather than sit
@@ -917,7 +1124,7 @@ export function QuizPanel({
         <>
           {/* The mode's name went on 2026-09-05 — the Dock says it (§ Stage 5 of
               docs/plans/260905d-declutter-the-reading-view-top-bars.md). The row
-              stays for the Recall | Tutorial | Quiz control, which is the one thing here
+              stays for the Recall | Tutorial | Explore | Quiz control, which is the one thing here
               the Dock does *not* say. */}
           {subMode}
           {/* Written for your profile, and the Regenerate in its panel — Greg,
@@ -962,9 +1169,9 @@ export function QuizPanel({
       }
     >
 
-      {owner.error && <p className="gloss-error">{owner.error}</p>}
+      {owner.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
+      {owner.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the questions…</BandWaiting>}
 
       {owner.status === "none" && (
         <div className="gloss-empty">
@@ -1000,8 +1207,23 @@ export function QuizPanel({
             />
           )}
 
+          {/* **"Could not read" is not "none".** The questions are here and the
+              reader's earlier answers to them are not: said once, quietly,
+              with the read again — `retryRead` is a GET and never spends.
+              Only when nothing is held for this batch; a later read that
+              cannot say leaves what an earlier one brought (useQuiz.ts §
+              `fromServer`). GPT Sol's plan review of 261005b, F5. */}
+          {owner.keptUnread && questions.length > 0 && (
+            <p className="gloss-quiet">
+              Your earlier answers could not be loaded.{" "}
+              <Button type="button" size="xs" variant="outline" onClick={() => void owner.retryRead()}>
+                Try again
+              </Button>
+            </p>
+          )}
+
           {waitingForReading && questions.length > 0 && (
-            <p className="gloss-quiet">Looking for what you have read…</p>
+            <BandWaiting className="gloss-quiet">Looking for what you have read…</BandWaiting>
           )}
 
           {filterActive && questions.length > 0 && includedAt.length === 0 && (
@@ -1024,11 +1246,25 @@ export function QuizPanel({
                   {/* Dropped while the box holds something that has not been
                       marked, because this line sits directly above that box and
                       reads as a claim about what is in it. The tick in the list
-                      below keeps its own meaning — *you got a finished mark for
-                      this question at some point this session* — which stays
-                      true whatever the reader is typing now. */}
+                      below keeps its own meaning — *you have a finished mark
+                      for this question* — which stays true whatever the reader
+                      is typing now. */}
                   {answered.has(question.id) && !superseded && " — answered"}
                 </p>
+                {/* **What "of N" leaves out, said wherever "of N" is.** This
+                    sentence was under the list, which is closed until asked
+                    for — so the band said "Question 1 of 5" and the (i) card
+                    "12 questions", both true and neither explained. Moved, not
+                    repeated (GPT Sol's F3 on plan 261006g), and it names the
+                    whole batch so the two figures meet. */}
+                {hiddenCount > 0 && (
+                  <p className="gloss-hint">
+                    There are {questions.length} in all:{" "}
+                    {hiddenCount === 1
+                      ? "the other one is about a passage you have not read yet."
+                      : `the other ${hiddenCount} are about passages you have not read yet.`}
+                  </p>
+                )}
                 {/* **The premise, as a lead-in rather than part of the
                     question**: its own element, quieter, above the stem. The
                     question reads as a whole without it — the prompt insists —
@@ -1111,7 +1347,7 @@ export function QuizPanel({
                     </span>
                   )}
                 </div>
-                <DictationStrip dictation={dictate.dictation} />
+                <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
                 {mine && (
                   <Mark
@@ -1203,22 +1439,15 @@ export function QuizPanel({
                   onJump={onJump}
                 />
 
+                {/* How many the filter leaves out is said beside the count
+                    above, list open or closed. */}
                 {listing && (
-                  <>
-                    <QuestionList
-                      questions={questions.filter((_, i) => included[i])}
-                      currentId={question.id}
-                      answered={answered}
-                      onPick={pick}
-                    />
-                    {hiddenCount > 0 && (
-                      <p className="gloss-hint">
-                        {hiddenCount === 1
-                          ? "One more is about a passage you have not read yet."
-                          : `${hiddenCount} more are about passages you have not read yet.`}
-                      </p>
-                    )}
-                  </>
+                  <QuestionList
+                    questions={questions.filter((_, i) => included[i])}
+                    currentId={question.id}
+                    answered={answered}
+                    onPick={pick}
+                  />
                 )}
 
                 {lookAgain.length > 0 && (
@@ -1245,7 +1474,7 @@ export function QuizPanel({
  * **"Where to look again"** — places, never a verdict.
  *
  * Names sections and nothing else: no count, no score, no "you got", which is
- * the line docs/project/remember-mode.md § The prompt is the feature draws for
+ * the line docs/project/learn-mode.md § The prompt is the feature draws for
  * the marks, and this block inherits it. The section's name jumps the prose to
  * its first block, which is the (re-)read Greg asked for; the icon beside it
  * goes back to its first missed question, drawn only when there is one the
@@ -1414,6 +1643,16 @@ function Mark({
       {attempt.status === "failed" && attempt.error && (
         <p className="gloss-error">{attempt.error}</p>
       )}
+      {/* The mark is whole and usable; what failed is keeping it. Quiet, under
+          the mark it is about, and it stays with it across Next and Previous
+          for the rest of the visit — after which it is true. Not an error
+          colour: nothing the reader did went wrong and there is nothing to
+          retry but answering again. GPT Sol's plan review of 261005b, F7. */}
+      {attempt.status === "done" && attempt.notSaved && (
+        <p className="gloss-count">
+          This answer could not be saved, so it will not be here when you come back.
+        </p>
+      )}
     </>
   );
 }
@@ -1515,8 +1754,8 @@ function QuestionList({
             aria-current={q.id === currentId ? "true" : undefined}
             onClick={() => onPick(q.id)}
           >
-            {/* Answered is session state and means one thing: a mark that
-                reached `done`. `useQuiz` is the only place an id gets in. */}
+            {/* Answered means one thing: a mark that reached `done`, this
+                visit or an earlier one — the keys of `useQuiz`'s `kept`. */}
             <span className="quiz-list-tick" aria-hidden="true">
               {answered.has(q.id) ? "\u2713" : ""}
             </span>
@@ -1576,7 +1815,7 @@ function Mic({ dictate, disabled }: { dictate: UseDictationField; disabled: bool
   if (!dictate.dictation.supported) return null;
   return (
     <span className="quiz-mic">
-      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} />
+      <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} />
       <span className="quiz-mic-label">
         {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
       </span>

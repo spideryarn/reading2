@@ -513,6 +513,24 @@ describe("the row it builds", () => {
       expect(row.computedCostNanos).toBeGreaterThan(0);
     }
   });
+
+  /* Plan docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md. */
+  it("says a stopped response was an ordinary stop, and says nothing on any other row", () => {
+    for (const status of ["cancelled", "incomplete"] as const) {
+      const row = accept(response({ status }));
+      expect(row.outcome).toBe("aborted");
+      expect([status, row.failureClass]).toEqual([status, "abort"]);
+      /* The browser does not report how far the response had got. */
+      expect(row.failurePhase).toBeNull();
+      expect(row.failureStatus).toBeNull();
+    }
+    for (const status of ["completed", "failed"] as const) {
+      const row = accept(response({ status }));
+      expect([status, row.failureClass, row.failurePhase, row.failureStatus]).toEqual([status, null, null, null]);
+    }
+    const heard = accept(transcription());
+    expect([heard.failureClass, heard.failurePhase, heard.failureStatus]).toEqual([null, null, null]);
+  });
 });
 
 /* ------------------------------------- a split that cannot be priced -- */
@@ -769,6 +787,8 @@ describe("GPT-Live: reading a report off the wire", () => {
     ).toEqual({
       kind: "backend",
       responseId: "resp_1",
+      /* A tab opened before the status was reported sends none: kept, as not said. */
+      status: null,
       inputTokens: 811,
       cachedInputTokens: 0,
       outputTokens: 20,
@@ -943,12 +963,47 @@ describe("GPT-Live: one backend response", () => {
     expect(row.eventKind).toBe("backend");
     expect(row.requestedModel).toBe(GPT_LIVE_BACKEND_MODEL);
     expect(row.providerEventId).toBe("resp_abc");
-    expect(row.providerStatus).toBe("completed");
     expect(row.reportedInputTokens).toBe(811);
     expect(row.cacheReadTokens).toBe(0);
     expect(row.outputTokens).toBe(20);
     expect(row.voiceSeconds).toBeNull();
     expect(row.inputTextTokens).toBeNull();
+  });
+
+  /* qi-p78m9ch9. The report used to carry no status and every row was written
+     `ok / completed`, so a failed backend response was invisible to the
+     failure counts. Mapped as a Realtime response's status is. */
+  it("records how the response ended, and prices it the same whatever that was", () => {
+    const completed = acceptBackend({ ...body, status: "completed" });
+    expect([completed.outcome, completed.providerStatus, completed.failureClass]).toEqual(["ok", "completed", null]);
+
+    const failed = acceptBackend({ ...body, status: "failed" });
+    expect([failed.outcome, failed.providerStatus, failed.failureClass]).toEqual(["error", "failed", null]);
+
+    const incomplete = acceptBackend({ ...body, status: "incomplete" });
+    expect([incomplete.outcome, incomplete.providerStatus, incomplete.failureClass]).toEqual([
+      "aborted",
+      "incomplete",
+      "abort",
+    ]);
+
+    for (const row of [failed, incomplete]) {
+      expect(row.computedCostNanos).toBe(completed.computedCostNanos);
+      expect(row.costSource).toBe("computed");
+      expect(row.id).toBe(completed.id);
+    }
+  });
+
+  it("keeps a report from a tab that predates the status, and claims no status for it", () => {
+    const row = acceptBackend(body);
+    expect([row.outcome, row.providerStatus, row.failureClass]).toEqual(["ok", null, null]);
+    expect(row.computedCostNanos).toBe(81_100 + 10_000);
+  });
+
+  it("refuses a status that is not one a backend response ends on", () => {
+    for (const status of ["cancelled", "in_progress", "", 3, null, undefined, true, {}, []]) {
+      expect(() => parseLiveUsage({ ...body, status })).toThrow(/status/);
+    }
   });
 
   it("is one row per response id, however often it is reported", () => {

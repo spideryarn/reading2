@@ -1,0 +1,3 @@
+ALTER TABLE "spideryarn"."article_revisions" ADD COLUMN "published_year" integer;--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD CONSTRAINT "article_revisions_published_year" CHECK ("spideryarn"."article_revisions"."published_year" between 1000 and 2999);--> statement-breakpoint
+ALTER TABLE "spideryarn"."article_revisions" ADD CONSTRAINT "article_revisions_published_day_or_year" CHECK ("spideryarn"."article_revisions"."published_at" is null or "spideryarn"."article_revisions"."published_year" is null);

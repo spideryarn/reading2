@@ -138,14 +138,14 @@ export function ModeSurface({
    * **Required, because there are no unlabelled bands.** An `<aside>` is a
    * landmark; an unnamed one is announced as "complementary" and a reader
    * moving by landmark cannot tell Chat from Quotes. Several panels vary it
-   * with state — Chat says "Remember what you took from this article" in
-   * Remember mode — so it is a value rather than a constant.
+   * with state — Chat says "Recall what you took from this article" in
+   * Learn mode — so it is a value rather than a constant.
    */
   label: string;
   /**
    * The mode's own hook class, appended to `mode-band`: `"srch"`, `"chat"`,
    * `"gloss ideas"`. Space-separated is deliberate — Chat's is conditional
-   * (`chat remember`) and Glossary's carries two.
+   * (`chat learn`) and Glossary's carries two.
    *
    * **Optional, because two bands genuinely have no hook class**: the visitor
    * band in `PublicChrome.tsx` and `FeatureBoundary`'s fallback are both a bare
@@ -223,7 +223,7 @@ export function ModeSurface({
    */
   about?: ReactNode;
   /**
-   * **The owner's *written for you* badge**, already rendered (`WrittenForYou`),
+   * **The owner's profile icon**, already rendered (`WrittenForYou`),
    * which this puts in the corner beside the (i) — the same place and the same
    * size in every mode. Greg, 2026-10-02 (spya-hf4svm): *"We've added (i) and
    * profile icons to every mode. Great. But their position/sizing/alignment

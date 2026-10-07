@@ -7,7 +7,9 @@
  * clamps, `validateResults`. This file is the smaller thing that has to be
  * shared with the browser: the shape of one saved row, so the panel is typed
  * against exactly what `GET /api/referee/criteria/:slug` sends rather than
- * against a second declaration of it.
+ * against a second declaration of it. The ceiling and its refusal sentence
+ * also live here, so the browser can recognise a refused add without importing
+ * the store.
  *
  * **It is `SearchRun` one directory over**, and deliberately so — same
  * `status`-written-before-the-model-call, same `sourceHash`, same reader-chosen
@@ -67,12 +69,63 @@ export interface SavedCriterion {
 }
 
 /**
- * How many criteria one article keeps.
+ * **How many criteria one article can hold: a ceiling, not a trim.** At this
+ * many, adding another is refused with `CRITERIA_AT_CEILING`
+ * (below); nothing is ever dropped to make room.
  *
- * A cap for the reason `MAX_RUNS` in src/searches.ts is one: nothing in the
- * feature deletes anything and a list that only grows is a slow leak. Smaller
- * than search's thirty, because a referee form has a dozen questions on it and
- * a hundred saved criteria is not a referee's list, it is a leak with prose in
- * it. Oldest go first.
+ * It was 20, with the oldest finished criterion deleted to make room: chosen
+ * by an agent on 2026-09-01 (b9f1d2a53) by analogy with `MAX_RUNS` in
+ * src/searches.ts, not asked for. That threw away a referee's own words
+ * without saying so, and could not add at all when the one to drop had
+ * comments on it. Greg chose a ceiling of 200 that refuses, on 2026-10-07;
+ * his words are in docs/project/referee-mode.md § a criterion with comments on it.
+ *
+ * 200 is far past any referee form (a dozen questions) and still a bound on a
+ * table a script could otherwise fill.
  */
-export const MAX_CRITERIA = 20;
+export const MAX_CRITERIA = 200;
+
+/**
+ * **What a referee is told when the article already holds `MAX_CRITERIA`.** A
+ * 409, from `begin` in src/store/pg-referee-criteria.ts, before any stream
+ * opens: nothing is written and nothing is deleted. It replaced, on 2026-10-07,
+ * a trim that dropped the oldest criterion to make room without saying so
+ * (docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+ *
+ * The number is spelled from the constant, so the sentence cannot name a
+ * ceiling the store does not enforce.
+ *
+ * **And it takes the real count, `n`.** A list can already be past the
+ * ceiling: the old trim spared criteria still being answered, so one could be
+ * inherited above 200 (production's largest was 4 on 2026-10-07, so this is
+ * for correctness, not for a reader we know of). There "200" and "Delete one"
+ * would both be false, so the sentence names `n` and how many deletes leave
+ * room for one more. At exactly the ceiling it is `CRITERIA_AT_CEILING`, word
+ * for word. GPT Sol's C2 in the plan above.
+ */
+export function criteriaAtCeiling(n: number): string {
+  if (n <= MAX_CRITERIA) {
+    return (
+      `This article already has ${MAX_CRITERIA} criteria, which is as many as it can hold. ` +
+      "Delete one to add another."
+    );
+  }
+  return (
+    `This article already has ${n} criteria, and it can hold ${MAX_CRITERIA}. ` +
+    `Delete ${n - (MAX_CRITERIA - 1)} to add another.`
+  );
+}
+
+/** The sentence at exactly the ceiling — the one nearly every refusal says. */
+export const CRITERIA_AT_CEILING = criteriaAtCeiling(MAX_CRITERIA);
+
+/**
+ * **Is this the ceiling's refusal, at any count?** The browser keeps a refused
+ * add as a draft (src/web/criterion-refusal-drafts.ts) only for this refusal,
+ * and the sentence is the only thing the 409 carries. Read the count back out
+ * and rebuild the sentence, so the two forms stay one definition.
+ */
+export function isCriteriaAtCeiling(message: string): boolean {
+  const n = /^This article already has (\d+) criteria/.exec(message)?.[1];
+  return n !== undefined && criteriaAtCeiling(Number(n)) === message;
+}

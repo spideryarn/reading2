@@ -1,5 +1,6 @@
 /* outline-mode.css — Structure mode's narrow face in the mode band: the whole
-   document as one nested list that never scrolls. OutlinePanel.tsx, outline.ts.
+   document as one nested list. Its fisheye scrolls when the least it may draw
+   does not fit; Expanded always scrolls. OutlinePanel.tsx, outline.ts.
    It was Outline mode until 2026-09-10, and kept its name and its classes when
    it became Structure's list (docs/plans/260910g-structure-mode-subsumes-outline.md).
 
@@ -7,18 +8,23 @@
    its text column switched off. Different feature, same word. */
 
 /* ------------------------------------------------- § structure list face ----
-   The whole document as one nested list that never scrolls, in the mode band.
+   The whole document as one nested list, in the mode band.
    The shell is `.mode-band` far above; everything here is what goes inside it.
 
    Read OutlinePanel.tsx and outline.ts first, and docs/plans/260828aw-outline-mode.md
    for why the list is shaped this way. Three things here are load-bearing
    rather than decorative:
 
-   **The panel does not scroll, and that is the feature.** `overflow: hidden`,
-   never `auto`. A wheel over it moves the article, exactly as it does over the
-   gist columns' context panels — the reader's scroll is never taken off them.
-   If the list overflows, the fit chose the wrong rung and the fade at the foot
-   says so; the answer is a lower rung, never a scrollbar.
+   **The band does not scroll, and the list inside it scrolls only at the
+   floor.** `overflow: hidden` on the band, never `auto`. While the list fits,
+   a wheel over it moves the article — the reader's scroll is not taken off
+   them. The fit takes the tallest rung that fits, down to rung 3: every part,
+   the sections of the part the reader is in, and the summary of the section
+   they are in. Until 2026-10-03 it went on down to rung 1 and never scrolled;
+   Greg (spya-s46j8f) would rather scroll to see the whole top level than lose
+   the sections and the summary, so when rung 3 does not fit the LIST scrolls
+   (§ a list that scrolls, at the foot of this file).
+   docs/plans/261003k-structure-fisheye-list-always-shows-the-current-sections-and-summary-and-scrolls.md
 
    **The tiers step in SIZE, never in length.** Which rows get more words is
    decided in outline.ts by the ladder; what varies with distance here is only
@@ -78,14 +84,11 @@
 
 .outln-row {
   /* **A grid, so the number sits BESIDE the title instead of above it.**
-     `.outln-text` becomes `display: -webkit-box` under the line clamp
-     (`.outln-list.clamp`, the floor since 2026-09-10; every row until then),
-     and that is a *block-level* box: as an inline-flow sibling of
-     `.outln-num` it took a line of its own, so every numbered row was two lines tall. Nothing
-     errored and nothing measured wrong — the clamp still said one line, and
-     the fit measures real markup so it saw the truth — the panel just spent
-     half its height on numbers, and the header's "one line per row" was false
-     for every row that had a number.
+     While all titles were clamped to one line (until 2026-09-10) `.outln-text`
+     was `display: -webkit-box`, a *block-level* box: as an inline-flow sibling
+     of `.outln-num` it took a line of its own, so every numbered row was two
+     lines tall. Nothing errored and nothing measured wrong — the panel just
+     spent half its height on numbers.
 
      The grid also gives the title a hanging indent and starts every sibling's
      title at the same x, which is most of what makes a run of them read as a
@@ -138,7 +141,7 @@
 
    Smaller and quieter than the title, but NOT fainter than `--ink-faint`. The
    step that makes a number subordinate is the size and the colour it already
-   has (0.63 against a title's 0.78 or 0.97); dropping it further is walking
+   has (0.64 against a title's 0.78 or 0.97); dropping it further is walking
    back toward the 1.2:1 that started this. */
 .outln-num {
   grid-column: 1;
@@ -211,14 +214,14 @@
    what each one's about." Structure's column rows never clamped, and this list
    is Structure's narrow face now, so the two faces agree.
 
-   What the clamp had been protecting is the fit, and the fit mostly does not
-   need it: OutlinePanel measures every rung as real hidden markup and takes
-   the largest that fits, so a wrapped title makes a rung taller and a short
-   band simply gets a lower rung — fewer gist sentences, no paragraph rows —
-   rather than an overflow. That is the trade, named: whole titles over depth
-   of detail on a short band. Where not even rung 1 — every part — fits whole,
-   the clamp comes back as the floor (`.outln-list.clamp` below). `overflow-wrap: anywhere` stays so a URL in a navLabel breaks
-   rather than running off a panel that cannot scroll.
+   What the clamp had been protecting is the fit, and the fit does not need
+   it: OutlinePanel measures every rung as real hidden markup and takes the
+   largest that fits, so a wrapped title makes a rung taller and a short band
+   gets a lower rung — no paragraph rows, no arc — rather than an overflow.
+   From 2026-09-10 to 2026-10-03 the clamp was kept as the floor, for a band
+   that could not hold even every part whole; the floor is a scroll now
+   (§ a list that scrolls), so the clamp is gone. `overflow-wrap: anywhere`
+   stays so a URL in a navLabel breaks rather than running off the band.
    docs/plans/260910g-structure-mode-subsumes-outline.md. */
 .outln-text {
   /* Named, never auto-placed. Auto-placement would put the title in whichever
@@ -230,21 +233,6 @@
   grid-column: 2;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-/* **The one-line clamp, kept as the floor.** When not even rung 1 — every part
-   — fits with its titles whole, OutlinePanel falls back to the clamped
-   candidates, and the list is what it was before 2026-09-10: one line a row,
-   cut at the edge, all of it on screen. Better a cut title than a part missing
-   off the foot of a panel that cannot scroll (OutlinePanel.tsx § `fit`).
-   `-webkit-line-clamp` rather than `nowrap` + ellipsis, because these rows can
-   hold a long unbroken token, and line-clamp is what the gist columns use. */
-.outln-list.clamp .outln-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 1;
-  line-clamp: 1;
-  overflow: hidden;
 }
 
 /* **Structure's type scale, declared once for both of its faces.** The list
@@ -307,20 +295,26 @@
 
 /* **The ink half of the hover, and it sits here so it beats `.read` above.**
    A raised surface under unlifted faint text is a net LOSS of contrast —
-   4.44:1 on `--surface-raised` against 5.27:1 on the band's own `--panel` — so
+   4.44:1 on `--surface-raised` against 5.27:1 on the band's own `--panel` when
+   this was written (0.63; 4.62 and 5.33 since 0.64, plan 261007h) — so
    the pointer was making a row *harder* to read, which is the opposite of what
    a hover is for. Lifting the ink fixes it at the source and takes the whole
    class with it, rather than hunting for a hover grey that happens to be dark
    enough for every one of the four faint states. Sol, 2026-08-30. */
 .outln-row:hover,
 .outln-row:hover .outln-text { color: var(--ink); }
-/* `--highlight`, never `--accent`: tokens.css defines `--accent` as a raised
+/* The orange, never `--accent`: tokens.css defines `--accent` as a raised
    dark SURFACE (shadcn's meaning), so a ring drawn in it is nearly invisible
    against the panel — and the native outline is suppressed on the list, so
-   this ring is the only focus indicator there is. The § tokens header at the
-   top of this file says exactly this: anything meaning "the orange" says
-   `--highlight`. GPT Sol caught it, 2026-08-28. */
-.outln-row.focused { box-shadow: inset 0 0 0 2px var(--highlight, currentColor); }
+   this ring is the only focus indicator there is. GPT Sol caught it,
+   2026-08-28.
+
+   And `--highlight-text`, the orange that is legible as a mark in both themes,
+   not raw `--highlight`: that is 2.2:1 on the light band. Inset, because the
+   list scrolls and the band hides its overflow. `OutlinePanel` sets `focused`
+   on a row whether or not the list has keyboard focus, so a mouse reader sees
+   this ring too. */
+.outln-row.focused { box-shadow: inset 0 0 0 2px var(--highlight-text); }
 
 /* The sentence on the current section, and the arc sentence on the current
    part. Prose, so they take the reading face at reading size rather than the
@@ -341,8 +335,8 @@
 }
 .outln-arc { color: var(--ink-soft); font-style: italic; }
 
-/* The candidates being measured. Laid out for real — same width, same styles,
-   same wrapping — and simply not painted. `visibility: hidden` rather than
+/* The candidates being measured. Laid out for real at the non-scrolling list's
+   width, with the same styles, and simply not painted. `visibility: hidden` rather than
    `display: none`, which would give every candidate a height of zero and make
    the fit choose rung 5 every time, silently. */
 .outln-measure {
@@ -370,16 +364,26 @@
    exists, so it needs no such mark; `UseArc.working` is still there for whatever wants to
    say so next. */
 
-/* **Expanded** — `?structure=expanded`, every part and section with its gist
-   (docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md). The one
-   time this band scrolls, and it is the LIST that scrolls rather than the band,
-   so the Fisheye / Expanded toggle above it stays where the reader left it.
-   `.mode-band` is already a flex column, so the list takes what is left. The
-   foot padding moves onto the list so the last row can scroll clear of the dock. */
-.mode-band.outln.outln-expanded .outln-list {
+/* ------------------------------------------------ § a list that scrolls ----
+   Two cases, one rule, keyed on `data-outline-scroll` (OutlinePanel.tsx):
+
+   **Expanded** — `?structure=expanded`, every part and section with its gist
+   (docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md).
+
+   **The fisheye at its floor** — rung 3 did not fit, so it is drawn anyway
+   (the header of this file; plan 261003k).
+
+   It is the LIST that scrolls rather than the band, so the Fisheye / Expanded
+   toggle above it stays where the reader left it. `.mode-band` is already a
+   flex column, so the list takes what is left. The foot padding moves onto the
+   list so the last row can scroll clear of the dock. `overscroll-behavior`
+   stops a drag that reaches the list's end from carrying on into the article
+   underneath, which on a phone is a page the band is covering. */
+.mode-band.outln[data-outline-scroll="1"] > .outln-list {
   flex: 1 1 0%;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-bottom: 0.75rem;
 }
 

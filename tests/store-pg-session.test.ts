@@ -2,14 +2,15 @@
  * The transactional store session: artefacts, postcondition, step completion,
  * publication and job transition, in **one** transaction or none of them.
  *
- * `tests/store-session.test.ts` is the other half of the seam, where there is
- * no transaction to hold and the file says so out loud. This is the Postgres
- * half — `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md —
- * and everything here is a claim that could not be made on the filesystem.
+ * `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md.
+ * It was the Postgres half of a seam with two sessions; the filesystem one and
+ * its test (`tests/store-session.test.ts`) were deleted on 2026-10-07, and the
+ * cases of that test that asserted a rule this session keeps are here (the run
+ * phase's six reads) and in tests/check-product.test.ts.
  *
  * ## The eight, and what each is for
  *
- * Sixteen cases. Three of them are checks on the other thirteen rather than on the
+ * Seventeen cases. Three of them are checks on the other fourteen rather than on the
  * session: the first asks whether the returned object is still guarded, the
  * lock-order one exists because deleting `lockArticleFor` leaves every other
  * case green, and the last one compiles rather than runs.
@@ -59,6 +60,8 @@
  *     settled one line later has to close it — the ordering case 10 cannot see.
  * 14. `settleJob` takes an ending and nothing else. Compile-time; there is no
  *     other kind of case a narrowing can have.
+ * 15. The run phase is handed six read methods and nothing that writes. Ported
+ *     from the deleted filesystem session's test on 2026-10-07.
  *
  * ## Why it drives the real coordinator for half of them
  *
@@ -204,6 +207,7 @@ import { hashBlocks } from "../src/source-hash.js";
 import {
   type ArtifactOutcome,
   type ArtifactReads,
+  type ArtifactStore,
   NO_INPUT_HASH,
   PIPELINE_RUN,
 } from "../src/store/artifacts.js";
@@ -229,6 +233,7 @@ import type {
   Tree,
   TweetThread,
 } from "../src/types.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { insertWhenSlotFree } from "./helpers/running-slot.js";
 import { cleanUpThenRelease, takeRunLockAndSetUp } from "./helpers/lock-lifecycle.js";
@@ -542,14 +547,11 @@ interface StepLog {
  * `PipelineStep<"arc">["run"]` returns `ConvertedProduct`, where `parts` is
  * required. That is the compile-time half of the same rule and it is working.
  *
- * The runtime half still has to be tested, and it is not redundant. The
- * transactional session asks `checkProduct` with an **empty** unconverted set,
- * so it refuses a product with no `parts` for *every* step — including the four
- * still on the legacy list, whose types permit `{ detail }` today. A type is
- * also only a claim about this repository's own callers. So the fixture reaches
+ * The runtime half still has to be tested, and it is not redundant:
+ * `checkProduct` refuses a product with no `parts` for *every* step, and a type
+ * is only a claim about this repository's own callers. So the fixture reaches
  * past the compiler on purpose, in one place, with the reason written down —
- * rather than each call site casting, or the whole test being rewritten around
- * a still-legacy step and quietly ceasing to say anything about a converted one.
+ * rather than each call site casting.
  */
 function fakeArc(
   produce: (ctx: StepContext, store: ArtifactReads) => Promise<StepProduct>,
@@ -740,6 +742,7 @@ function contextFor(slug: string): StepContext {
     power: "standard",
     slug,
     report: () => {},
+    preview: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
   };
@@ -794,26 +797,6 @@ async function failedDraftOf(articleId: string) {
     throw new Error(`expected exactly one failed draft for article ${articleId}, found ${rows.length}`);
   }
   return rows[0]!.id;
-}
-
-/**
- * Wait until some other backend is really blocked by `pid` — or say so and fail.
- *
- * **A sleep cannot make this claim**, and the version of the lock case that
- * slept a second could not tell a commit waiting on a row lock from a commit
- * that was merely slower than the sleep. `pg_blocking_pids` names the blocker,
- * so the answer is about *this* transaction rather than about the laptop. Copied
- * from tests/store-job-draft.test.ts, which reached the same conclusion first.
- */
-async function waitUntilBlockedBy(pid: number): Promise<void> {
-  for (let i = 0; i < 200; i++) {
-    const found = await db().execute(
-      sql`select count(*)::int as n from pg_stat_activity where ${pid} = any(pg_blocking_pids(pid))`,
-    );
-    if (Number((found.rows[0] as { n: number | string }).n) > 0) return;
-    await new Promise((r) => setTimeout(r, 25));
-  }
-  throw new Error(`nothing ever queued behind backend ${pid} — the commit under test never blocked`);
 }
 
 /** The arc text on a revision, or null — the marker every write assertion reads. */
@@ -1004,55 +987,71 @@ describe("the transactional session", () => {
    * before the stage ran. So without `checkProduct` the step is marked done,
    * the job moves on, and the article keeps last week's arc under a green tick.
    */
-  mine("refuses a missing part that the carried artefact would have hidden", async () => {
-    const slug = `${SLUG_PREFIX}carried`;
-    await publishArticle(slug, "the carried arc");
-    const claimed = await claimWithSession(slug, ["arc", "tweets"]);
-    const ctx = contextFor(slug);
+  // Both refusals must retain the begun run and the claim, not just reject.
+  // The absent-parts case preserves deleted store-session case 6. Watched red on
+  // 2026-10-07 with `commit` closing the run before it refuses absent parts:
+  // `the step is not done: expected 'error' to be 'running'`.
+  for (const fixture of [
+    {
+      name: "empty",
+      test: "refuses a missing part that the carried artefact would have hidden",
+      product: { detail: "nothing at all", parts: {} },
+      refusal: /returned a product missing arc/,
+    },
+    {
+      name: "absent",
+      test: "refuses a product with no parts without closing its begun step",
+      product: { detail: "nothing at all" },
+      refusal: /returned no artefacts to write/,
+    },
+  ]) {
+    mine(fixture.test, async () => {
+      const slug = `${SLUG_PREFIX}carried-${fixture.name}`;
+      await publishArticle(slug, "the carried arc");
+      const claimed = await claimWithSession(slug, ["arc", "tweets"]);
+      const ctx = contextFor(slug);
 
-    /* The state that makes this test mean something, asserted rather than
-       assumed: the draft really can answer `read` with an arc. */
-    const carried = await claimed.session.reads.read(slug, "arc", "arc");
-    expect(carried?.entries[0]?.text).toBe("the carried arc");
+      /* The state that makes this test mean something, asserted rather than
+         assumed: the draft really can answer `read` with an arc. */
+      const carried = await claimed.session.reads.read(slug, "arc", "arc");
+      expect(carried?.entries[0]?.text).toBe("the carried arc");
 
-    await claimed.session.beginStep(slug, "arc");
-    const release: JobTransition = {
-      kind: "release",
-      jobId: claimed.jobId,
-      attempt: claimed.attempt,
-      steps: claimed.steps,
-      fields: {},
-    };
+      await claimed.session.beginStep(slug, "arc");
+      const release: JobTransition = {
+        kind: "release",
+        jobId: claimed.jobId,
+        attempt: claimed.attempt,
+        steps: claimed.steps,
+        fields: {},
+      };
 
-    await expect(
-      claimed.session.commit(
-        ctx,
-        fakeArc(async () => ({ detail: "nothing at all" })),
-        claimed.attempt,
-        /* `{}` rather than absent, because an empty object is the sneakier of
-           the two: it is truthy, it has none of the declared kinds, and it
-           would call `write` with nothing in it. */
-        { detail: "nothing at all", parts: {} },
-        release,
-      ),
-      /* **The sentence, not merely a rejection.** `checkProduct` refuses before
-         the transaction opens, so nothing has been near the database — and the
-         session goes through `guardDbStore`, which until 2026-08-30 replaced
-         this with *"this app asked its database for something it would not
-         do"*. That is false, and it drops the half naming the artefact. See
-         `ProductRefused` in src/store/artifacts.ts. */
-    ).rejects.toThrow(/returned a product missing arc/);
+      await expect(
+        claimed.session.commit(
+          ctx,
+          fakeArc(async () => ({ detail: "nothing at all" })),
+          claimed.attempt,
+          fixture.product,
+          release,
+        ),
+        /* **The sentence, not merely a rejection.** `checkProduct` refuses before
+           the transaction opens, so nothing has been near the database — and the
+           session goes through `guardDbStore`, which until 2026-08-30 replaced
+           this with *"this app asked its database for something it would not
+           do"*. That is false, and it drops the half naming the artefact. See
+           `ProductRefused` in src/store/artifacts.ts. */
+      ).rejects.toThrow(fixture.refusal);
 
-    expect(await arcTextOf(claimed.revisionId), "the carried arc must be untouched").toBe(
-      "the carried arc",
-    );
-    expect((await runRow(claimed.revisionId, "arc"))?.status, "the step is not done").toBe(
-      "running",
-    );
-    const job = await jobRow(claimed.jobId);
-    expect(job?.status, "the claim was not released").toBe("running");
-    expect(job?.draftRevisionId).toBe(claimed.revisionId);
-  });
+      expect(await arcTextOf(claimed.revisionId), "the carried arc must be untouched").toBe(
+        "the carried arc",
+      );
+      expect((await runRow(claimed.revisionId, "arc"))?.status, "the step is not done").toBe(
+        "running",
+      );
+      const job = await jobRow(claimed.jobId);
+      expect(job?.status, "the claim was not released").toBe("running");
+      expect(job?.draftRevisionId).toBe(claimed.revisionId);
+    });
+  }
 
   /* ------------------------------------------------------------------ 3 -- */
 
@@ -1526,7 +1525,7 @@ describe("the transactional session", () => {
          whole class of check docs/reusable/silent-success.md is about. Watched:
          with `lockArticleFor` replaced by a 1.5s sleep, the old assertion stayed
          green and this one says "nothing ever queued behind backend N". */
-      await waitUntilBlockedBy(pid);
+      await waitUntilBlockedBy(pid, { what: "the commit" });
       expect(settled, "the commit ran to completion without the article row").toBe(false);
 
       /* **Whether the lock is taken before or after the artefact write is not
@@ -1888,5 +1887,48 @@ describe("the transactional session", () => {
       // @ts-expect-error a release may not be settled through this door.
       session.settleJob(release);
     expect(typeof refused).toBe("function");
+  });
+
+  /* ----------------------------------------------------------------- 15 -- */
+
+  /**
+   * **The run phase gets six reads and no way back to a write.**
+   *
+   * `session.reads` is what a stage is handed while it works. If it were the
+   * whole store — or carried `write`, `beginStep` or `finishStep` along with
+   * the reads — the narrowing would be a type only, and one cast would have a
+   * stage writing outside the transaction that is supposed to hold the step
+   * together. Ported on 2026-10-07 from the deleted filesystem session's test,
+   * where it was asked of `fsStoreSession`; nothing asked it of this one.
+   *
+   * Mutation, watched red that day: `reads` built from `pgArtifactsIn` (the
+   * whole store) instead of `readsPgArtifacts` → `expected [ 'beginStep',
+   * 'finishStep', 'has', …(6) ] to deeply equal [ 'has', …(5) ]`.
+   */
+  mine("hands the run phase six read methods, and not the store behind them", async () => {
+    const slug = `${SLUG_PREFIX}reads`;
+    await publishArticle(slug, "the carried arc");
+    const claimed = await claimWithSession(slug, ["arc"]);
+
+    expect(Object.keys(claimed.session.reads).sort()).toEqual([
+      "has",
+      "hasEarlierBlocks",
+      "interrupted",
+      "read",
+      "readBaseline",
+      "stampFor",
+    ]);
+    // The cast is the point: this is what a stage that wanted to write would do.
+    const reached = claimed.session.reads as unknown as ArtifactStore;
+    expect(reached.write).toBeUndefined();
+    expect(reached.beginStep).toBeUndefined();
+    expect(reached.finishStep).toBeUndefined();
+    /* The read and existence check answer about this draft: a facade of
+       undefineds would pass the shape checks above. */
+    expect((await claimed.session.reads.read(slug, "arc", "arc"))?.entries[0]?.text).toBe(
+      "the carried arc",
+    );
+    expect(await claimed.session.reads.has(slug, "arc", ["arc"])).toBe(true);
+    expect(await claimed.session.reads.has(slug, "tweets", ["tweets"])).toBe(false);
   });
 });

@@ -20,6 +20,22 @@ per-document "Reading Intent" were both stored, both displayed, and neither ever
 So the textareas are the easy half and the least of it. That is why this doc is mostly about the
 wiring.
 
+## In this doc
+
+- [§ Two boxes, one string](#two-boxes-one-string) — the About you and Why-I'm-reading boxes, caps, normalising, autosave
+- [§ Where it goes in the prompt](#where-it-goes-in-the-prompt) — adding a profiled call: after the breakpoint, and the `PROFILE_RULES` that every prompt carries
+- [§ The glossary](#the-glossary-is-the-case-this-feature-is-really-for) — why difficulty scores need the profile
+- [§ Provenance](#provenance-what-was-this-written-with-and-is-it-still-true) — `profileHash`, the staleness rule, and the "changed" badge
+- [§ No control, one label](#no-control-one-label) — the provenance icon, and why there is no "use my profile" checkbox
+- [§ What editing your profile costs](#what-editing-your-profile-costs) — why one typo fix marks every artefact "profile changed"
+- [§ The microphone](#the-microphone-and-what-it-took-to-make-it-believable) — dictation into the boxes, the level meter, the errors (history of a long debugging run)
+- [§ And then it was still broken](#and-then-it-was-still-broken-and-the-microphone-was-not) — the Teams virtual device that produced digital silence, and what that changed (history)
+- [§ The page's six sections](#the-pages-six-sections) — `/profile` layout, which sections fold, the contents list
+- [§ Where the pieces are](#where-the-pieces-are) — every file and test, profile and microphone
+- [§ What is still open](#what-is-still-open) — known gaps
+- [§ The sticker came off](#the-sticker-came-off) — (history) the "unreliable" mark on the microphone, and the promise that replaced it
+- [§ See also](#see-also)
+
 ## Two boxes, one string
 
 | Box | Scope | Stored | Edited at |
@@ -29,7 +45,7 @@ wiring.
 
 The purpose is asked for in two more places since 2026-09-30, both writing through
 [`src/web/purpose.ts`](../../src/web/purpose.ts): the add page's *Why are you reading this?*, saved
-before the modes are queued, and Skim's *What do you want from this piece?* over a ready
+as it is typed (below), and Skim's *What do you want from this piece?* over a ready
 route with none set ([skim.md](skim.md),
 [plan 260930e](../plans/260930e-ask-why-you-are-reading-and-a-trajectory-for-that-intent.md)).
 Metadata is still where it is edited.
@@ -39,23 +55,49 @@ never touched, the reading view asks *Why are you reading this?* once, in a smal
 if the article still has none — a one-shot `sessionStorage` mark from the add page, owner only
 ([`src/web/PurposePrompt.tsx`](../../src/web/PurposePrompt.tsx),
 [plan 261001s](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)).
-The add page's box also says, under it, that it is not saved until Save and open.
+
+**The add page's box saves as you type** since 2026-10-04 (Greg: *"B with a small debounce of some
+kind"*): one second after the last keystroke, on blur, and on the way out, as soon as the article's row
+exists; words typed before that are held and saved the moment it does. The reason is timing. The
+server queues the first modes when the import publishes, with the purpose stored by then
+([plan 261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
+so a purpose saved at a button after the import was always too late for them. A reader still typing
+at that moment still misses. On a re-add the box shows the purpose already stored, so an emptied box
+clears it. The saving is a small class of its own, bound to one article's slug
+([`src/web/add-purpose.ts`](../../src/web/add-purpose.ts)), because one add page can change which
+article it is about (a new address, a Retry) and `useAutosavedText` cannot be re-pointed;
+[plan 261004l](../plans/261004l-the-add-page-purpose-box-saves-as-you-type.md) has why, and what
+is still best effort. Its saves name the reader they were typed by, and are not sent if the account
+has changed by the time they leave
+([ingest-queue.md § The add page](ingest-queue.md#the-three-traps-in-a-page-whose-whole-job-is-one-effect)).
 
 Both were files until 2026-09-05 — `data/reader.json` and `data/<slug>/shelf.json` — deleted along
 with the rest of the filesystem store.
 
 **Both boxes save themselves** two seconds after the reader stops typing, as well as on blur and
-⌘↵, say *Saving…* and then a green-ticked *Saved*, and ask before the page closes with a save
-pending. Greg, 2026-09-30: *"make it clearer when it has saved … if I try and close the page before
-it has saved, either warn the user, or auto-save"*. The box, its timer and its status line are
+⌘↵, and ask before the page closes with a save pending. **The line under the box is quiet unless a
+save failed**: it reads *Saves as you type.* throughout, a faint green tick (tooltip *Saved*) appears
+when a save lands and fades after two seconds, and only a refusal takes the line over, as *Not saved
+— reason*, until the reader edits or retries. Reduced motion keeps the two-second hold and removes
+the fade ([`profile.css`](../../src/web/styles/profile.css)). The add page stays quiet while waiting
+for the article to exist, and still shows failures if the import stops or its read gives up.
+
+> The "Why are you reading this?" autosave is good. can we make it a bit less visually intrusive, e.g. a faint green tick that appears when it saves (with a tooltip) and then fades away, with no scary "unsaved" indicator. and/or perhaps a 1s rather than 0.7s debounce is fine to avoid it appearing too often and distracting the user
+>
+> — Greg, 2026-10-05
+
+The autosave itself is
+Greg's, 2026-09-30: *"make it clearer when it has saved … if I try and close the page before it has
+saved, either warn the user, or auto-save"*. The box, its timer and its status line are
 `ProfileBox`; the save behind it — one at a time, never written back over words typed since — is
 [`useAutosavedText`](../../src/web/useAutosavedText.ts), which any other box holding saved text can
 use. [261001l](../plans/261001l-autosave-about-you-and-honest-mic-fallback.md).
 
 Both are **reader state**: they survive re-extraction and the pipeline cannot undo them. That is the
 argument [`src/shelf.ts`](../../src/shelf.ts) already makes for the renamed title, and it holds here
-word for word — a re-extraction rewrites `meta.json`, and anything of the reader's stored in there
-dies quietly weeks later.
+word for word — a re-extraction rewrites the article's metadata (`meta.json`, in the days it was a
+file; columns on `article_revisions` now), and anything of the reader's stored in there dies quietly
+weeks later.
 
 [`src/profile.ts`](../../src/profile.ts) joins the two into **one string**, and it is the only module
 that knows there were two:
@@ -108,8 +150,8 @@ overweight this and give a really distorted summary"*. Read clause by clause aga
 three of its five rules already had an equivalent and **two did not**: *never add, sharpen, or bend a
 claim to fit*, and *keep the piece's own proportions* — and there was nothing about proportions in
 `PROFILE_RULES` at all. Those two moved rather than going in the bin — **into
-`src/summarise.ts`'s own `SYSTEM`, not into `PROFILE_RULES`**, and that
-distinction was a correction rather than a preference. The shared string reaches *seven* prompts, and
+`src/summarise.ts`'s own `SYSTEM` (a file deleted on 2026-08-31 with the summary step), not into `PROFILE_RULES`**, and that
+distinction was a correction rather than a preference. The shared string reached *seven* prompts then (it reaches more now), and
 *"if the article does not say it, it does not go in"* is exactly backwards for two of them: `ideas`
 defines its more valuable half as what the piece *never states*, and a glossary entry's `background`
 is explicitly not the article's knowledge. A profiled ideas run could have obeyed the shared rule by
@@ -135,7 +177,10 @@ article never changes. [prompt-caching.md](prompt-caching.md) records the same m
 | `glossary` | `system[0]`, breakpoint on it | the user message |
 | `tweets` | `system[0]`, breakpoint on it | the user message |
 | `quiz` | `system[0]`, breakpoint on it | the user message, after the skeleton |
-| `summarise` | the user prompt — not cached, on purpose | near the top, with the other framing |
+
+The table is the calls that set the pattern, not every profiled call (a `summarise` row went with its
+stage on 2026-08-31): each other caller of `profileSection` in `src/*.ts` says in its own docstring
+where it puts the profile.
 
 The positioning rule inside the varying part is one rule, not two: **the thing the model must
 actually do goes last.** So chat and explain put the profile before the question; the batch stages
@@ -167,10 +212,54 @@ request is worse than no claim. GPT Sol's review, 2026-08-26. The real fence, if
 enough, is a check on the tool call's arguments in [`src/chat-tools.ts`](../../src/chat-tools.ts) —
 not more prompt.
 
+### The command bar's suggestions: the one exception
+
+**One call does turn the profile into words that leave, and it is an exception to the rule above,
+not a reading of it.** When the owner presses *Suggest what to do here* in the command bar
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)), a small
+model is shown both boxes and writes up to three searches, names up to two modes, and writes at
+most one question for chat. The searches and the question are made from what the reader wrote.
+
+Greg was asked ([Q-bar-4]): *"Should the command bar's model be allowed to read your reader
+profile, so your 'Why you're reading this' note can prompt it to propose actions?"*
+
+> Q-bar-4 yes
+>
+> — Greg, 2026-10-04
+
+**Why it is allowed here and nowhere else.** In chat, a model deciding by itself to put the profile
+into a web search is something the reader never sees. Here the words are shown to the reader as a
+list, each with a reason, and nothing is done with any of them until the reader presses that one.
+The press is the reader's, on words they have read.
+
+**Where the words can then go.** A pressed search is a quick search like any other
+([search.md](search.md#quick-search-a-meaning-search-in-about-a-second)): it is sent to the quick
+search model with the article's passages, it is stored, and a stored search is shown to visitors if
+the article is shared. A pressed question lands in Chat's box unsent; once the reader sends it, chat
+may search the web with it. The privacy page says both
+([privacy.md § The command bar's suggestions are made from the profile](privacy.md#the-command-bars-suggestions-are-made-from-the-profile)).
+
+**Keeping personal details out is asked of a model. It is not enforced.** The call has rules of its
+own, not `PROFILE_RULES` (which forbids exactly this, and stays word for word as it is for every
+other prompt). They tell the model to build the searches and the question from the *topic* of the
+reason for reading, and to leave out anything about the person, from either box: a personal detail
+can sit in the reason too. *About you* is there so the model can tell a first read from an expert's
+when it picks modes; it is told never to take search words from it. Nothing in the code can tell a
+topic from a personal detail, so nothing checks the answer for one, and no doc or page may say the
+details are kept out. What a run of made-up readers showed is in
+[261005b](../investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md).
+
+The prompt is `SUGGEST_SYSTEM` in
+[`src/command-suggest-call.ts`](../../src/command-suggest-call.ts). The model does not see the
+article. The list is kept in the browser for the visit and dropped when either box is saved; it is
+never stored on the server and never logged.
+
 ### The rules live in `SYSTEM`, and they are always there
 
-`PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to all seven profiled system prompts —
-explain, converse (twice), glossary, sketch, summarise, ideas and tweets —
+`PROFILE_RULES` in [`src/profile.ts`](../../src/profile.ts) is appended to every profiled system prompt —
+`grep -n PROFILE_RULES src/*.ts` is the list: explain, converse, glossary, sketch, ideas, tweets,
+quotes, skim, link-summary, simple-summary and citation-investigate (the quiz carries its own rules,
+below) —
 **whether or not the reader has a profile**. Two reasons, and the second decided it: `SYSTEM` sits
 ahead of the article in explain and converse, so a varying one would split the cache in two and
 re-write the whole article whenever the reader toggled; and a rule that only appears alongside the
@@ -209,15 +298,39 @@ profileHash?: string | null;
 | Value | Means | Stale? |
 |---|---|---|
 | absent | written before this existed | **no** |
-| `null` | written deliberately *without* a profile | **no** |
+| `null` | written without a profile | once they have one |
 | a hash | written from that profile | only if it differs from now |
 
-**`null` is never stale**, and that line is the whole design. A plain artefact was written on
-purpose: until 2026-09-13 by a reader who unticked the *Use your profile* box and paid for it, and
-since then by a reader with no profile, or by a Find more continuing a list that was already plain
-(§ [No control, one label](#no-control-one-label)). Telling them it is out of date would be the app
-complaining about its own result. `undefined` is never stale for a gentler reason: nobody's existing
-artefacts should light up about a profile they never had.
+**A first profile counts as a change.**
+
+> B treat a first profile as a change
+>
+> — Greg, 2026-10-05, answering `[Q-first-profile-offers-a-rewrite]`
+> ([261004f](../plans/261004f-stop-writing-the-simple-summary-level.md))
+
+Until then `null` was never stale. That rule came from when writing without a profile was a choice:
+until 2026-09-13 a reader could untick a *Use your profile* box and pay for a plain artefact, and
+telling them it was out of date would have been the app complaining about its own result
+(§ [No control, one label](#no-control-one-label)). Writing a first profile now offers the same
+rewrite an edit does. It only offers:
+nothing is rewritten by itself.
+
+What that reaches, all through `withProfileChanged` in `src/routes.ts`: Summary, Glossary, Ideas,
+Thread, Quiz, Sketch and Quotes show the changed badge, with *Regenerate* in its panel wherever the
+mode has one (Quotes has none), and Summary also shows *Write it again* under the paragraphs.
+Illustrated says its Sketch was drawn before the profile said what it says now, and its one press
+redraws the Sketch before painting (the paint step refuses such a Sketch, so the picture cannot
+inherit `null` again). Skim already counted none → some. The badge has its own words for this case —
+*Written without your profile* — in
+[`WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx).
+
+The badge describes what was used, rather than claiming the reader had no profile then: older
+opt-outs and plain-list top-ups also carry `null`. A glossary's *Find more* on a plain list still
+continues it plain, so the badge stays until *Regenerate* is pressed.
+
+`undefined` is never stale: nobody's oldest artefacts should light up about a profile they never
+had. It is told from `null` by the stored document: direct writers stamp a hash or `null`, and
+Illustrated preserves its Sketch's stamp, including absence.
 
 **Clearing your profile marks nothing stale — but only if you clear *both* boxes.** `profileIsStale`
 compares against the *rendered* profile, and that is the join of the global half and the article's
@@ -279,8 +392,8 @@ list then stamped with the new hash. A lie about provenance, written by us, into
 
 So `existingFor` takes the incoming profile hash and refuses on any difference, which sends the run
 down the rewrite path where `idsByTerm` keeps the reader's `?term=` links alive. Note it is
-**stricter than `profileIsStale`**: there, `null` never counts, because a reader should not be
-nagged. Here any difference counts, because the question is not "should we warn them" but "may these
+**stricter than `profileIsStale`**: there, a cleared profile does not count. Here any difference
+counts, because the question is not "should we warn them" but "may these
 two lists be merged" — and entries written for a physicist may not be merged with entries written for
 nobody in particular.
 
@@ -321,18 +434,24 @@ extra you ask for, so absent means no; the profile is the default this app now w
 > — Greg, 2026-09-12, from an iPad, reading an article in summary mode
 
 **Every new run uses the profile, and nothing in a reading view offers to change that.** The one
-thing on screen about the profile is a *label* on the text — *written for you*, or *older profile*
-([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)) — and it opens the profile panel
-below. **In Glossary it is an icon without the words** since 2026-09-29, at the end of the sort row,
-to save a phone a row; the panel it opens then says the same sentence at its top, and the other modes
-keep the words ([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
-the per-article half, on the metadata page — and, since 2026-10-02, in the panel the label opens
+thing on screen about the profile is a provenance icon on the text
+([`src/web/WrittenForYou.tsx`](../../src/web/WrittenForYou.tsx)), and it opens the profile panel
+below. **It has no words, in every mode, since 2026-10-04**: a person, or a person with
+a pencil in a warmer colour for text written for a profile you have since changed. Glossary's went
+first, on 2026-09-29, to save a phone a row
+([260929a](../plans/260929a-compact-glossary-header-and-kind-icons.md)); Quiz's was the last with
+the words *written for you* / *older profile*. Greg, 2026-10-04
+(`spya-pmjy40`): *"Just the little profile icon should be sufficient with a rich tooltip, and the
+same goes for any other modes."* So the icon has a card on hover and focus, while the panel is
+closed, saying which of the two it is; the panel says the same sentence at its top, which is where a
+finger reads it ([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)). The profile itself is edited on `/profile` (the Command bar's Profile row reaches it) and, for
+the per-article half, on the metadata page — and, since 2026-10-02, in the panel the icon opens
 (below). The way to not be profiled is to empty both boxes; that
 is a real loss of control, and it is the one Greg asked for.
 
 ```
-  ┌─ GLOSSARY ─────────────────────────── ✓ written for you ─┐   ← the LABEL, which
-  │  Threshold ▁▂▃▅▇                                          │     opens THE PANEL
+  ┌─ GLOSSARY ──────────────────────────────────────── ⓤ ─┐   ← the ICON, which
+  │  Threshold ▁▂▃▅▇                                      │     opens THE PANEL
   │  ⚠ These terms describe an older version of the article.   │
   │                                   [ Find them again ]      │   ← nothing beside
   └────────────────────────────────────────────────────────────┘     the spend
@@ -372,32 +491,27 @@ was absent for a reader with no profile; the 👤 button beside it opened the pa
 that had started itself showed *Using your profile* in the checkbox's place (2026-08-31).
 
 **All of that row is gone**, not only the checkbox: an explanation of a choice nobody is offered is
-clutter, and Greg's reason was a tidier, more compact interface. The label's half of Fable's split
+clutter, and Greg's reason was a tidier, more compact interface. The provenance half of Fable's split
 still stands. What is lost with the row is the way into the panel for a reader with **no** profile —
 the badge appears only on text written for one — so a first profile is now found through `/profile`
 and the Command bar, not from beside a button. `useHasProfile`, the hook that asked whether to draw
 the checkbox, went with it.
 
-One thing the label does **not** do: it goes on describing an artefact that was written for a profile
+One thing the icon does **not** do: it goes on describing an artefact that was written for a profile
 after the reader clears theirs. That is deliberate — it *was* written for you, and the badge is about
-the text rather than about the current state of the world. The label stays until the artefact is
+the text rather than about the current state of the world. The icon stays until the artefact is
 rewritten.
 
-Where the label is:
+Where the icon is:
 
-| Surface | Label |
+| Surface | Mark |
 |---|---|
-| glossary | on the head line |
-| ideas | on the head line |
-| quotes | on the head line |
-| tweets | beside the counts |
-| sketch, summaries, chat, Remember, explain | — |
+| glossary, ideas, quotes, Summary (Thread included), Learn's Quiz | the person icon in the band's corner, beside the (i) |
+| sketch | the same icon, in the picture's own bar |
+| chat, Learn's conversations, explain | — |
 
-(The summaries panel lost its label and its checkbox before this; the table said otherwise until
-2026-09-13.)
-
-**Chat gets no label**, because an answer is not an artefact anybody rewrites, so there is nothing
-for a label to describe. Every answer uses the profile, except the reading-candidates list
+**Chat gets no icon**, because an answer is not an artefact anybody rewrites, so there is nothing
+for one to describe. Every answer uses the profile, except the reading-candidates list
 (`CandidatesPanel`), which asks for none on purpose.
 
 **Explain never had a control, deliberately.** It has no pre-flight moment — the call fires when you
@@ -424,7 +538,7 @@ accepted that loss — passed as the panel's optional `consequence`
 diagram below is the panel as it was first built, with an `Edit →` link where each box now is.
 
 ```
-  ✓ written for you
+  ⓤ profile icon
           │ click
           ▼
   ┌─────────────────────────────────────────┐
@@ -511,6 +625,38 @@ reaches these panels"* — is reversed, and narrowly: it is the reader's own wor
 being shown back to the reader. `useProfile: boolean` on a generate request is
 unchanged, because a client that could *supply* profile text is a way to put an
 arbitrary string into a prompt.
+
+### Regenerate waits for its own result
+
+One press must not buy two rewrites. A finished job leaves the queue before its result has been
+read, and until that read lands the old text is still on screen with its old `profileChanged` — so
+Regenerate would be offered again. From the press until the new artefact is read, **every forced
+control in that mode is held**: the panel's Regenerate, and *Write it again*, *Find them again*,
+*Find more* / *Write a new list* beside the text, on a stale or unprofiled artefact too. It began
+with the modes whose Regenerate is in this panel (Quiz, Summary, Thread, Ideas, Glossary and
+Sketch), and since 2026-10-07 it also holds the forced controls that are not: Illustrated's *Paint
+again*, Quotes' *Find more* and *Choose them again*, and the button on the stale banner in Timeline,
+FAQ, Debate and Citations ([261007b](../plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md)), and Skim's *Plan it again*
+([261007e](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md);
+[skim.md](skim.md) says what that hold does about the Quotes and Ideas a route's job may make
+first). Every artefact hook with a forced run now has one.
+
+The hold is kept outside the band, so closing the mode during the run and coming back does not lose
+it. Three things release it: a read **the server answered** shows a different artefact; the job
+failed or was cancelled; or the job is over and a read *started after that* shows the same
+artefact. *Over* is the job listed as finished, or the job engine saying so with the mode closed: it
+heard the job end, or found it gone from a list asked after the job was made. Until 2026-10-07 only
+the first counted, so a job that failed while the mode was closed and was trimmed from the list
+before it reopened left the control dead until a reload. A read answered from the offline copy is not
+the server's word and releases nothing. While
+the mode is held with nothing running it says the new version hasn't loaded yet and offers *Try
+again*, which only reads.
+
+**What it does not cover:** a full page reload forgets the hold, so a reader who reloads during a
+rewrite can be offered a second one. The rule, and the two races it is shaped by, are in
+[`src/web/rewrite-hold.ts`](../../src/web/rewrite-hold.ts); each sequence is a test in
+[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)
+([261004c § 2a](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
 
 ## What editing your profile costs
 
@@ -704,6 +850,69 @@ after is a real failure and offers nothing.
 The measurements, both reviews and the two bugs the tests found after the reviews are in
 [260827k-microphone-device-and-recording.md](../plans/260827k-microphone-device-and-recording.md).
 
+## The page's six sections
+
+`/profile` ([`src/web/ProfilePage.tsx`](../../src/web/ProfilePage.tsx)) has six sections, and
+since 2026-10-03 three of them start shut. Greg, feedback report `spya-ka3cau`:
+
+> In the meta data page, we have a nice table of contents on the left-hand side, I think with a
+> search bar as well. And most of the sections are default collapsed, except for the important
+> ones. Let's consider doing the same thing for the profile page. So the important ones that we
+> should keep open are probably account, plan, and about you. And then I think the others could
+> perhaps be default collapsed.
+>
+> — Greg, 2026-10-03
+
+| Section | | Why |
+|---|---|---|
+| **Account**, **Plan**, **About you** | open, and not collapsible | what a reader comes here for. *Plan* is where the quota's refusal sends them for a button, so its heading must not be something that can hide it |
+| **Settings**, **Recently read**, **What's running** | collapsible, shut on arrival | looked at now and then. The heading is a button with a chevron, as on Metadata |
+
+They are the Metadata page's `Section`, moved to
+[`src/web/PageSection.tsx`](../../src/web/PageSection.tsx) so there is one copy of the folding
+([web-client.md § Shared code (client)](web-client.md#shared-code-client)). Open or shut is local
+state: it is not in the URL and is not remembered, so the three start shut on every visit. None is
+`keepMounted`. Settings' saves live in a store outside the component or on the device, and the two
+read-outs are fed by fetches the page owns, so shutting a section cancels nothing.
+
+**The contents list and its search box are in the left margin**, as on Metadata, from 1024px wide
+up. **Below that they are above the page**, in its own column: the search box, then a *Contents*
+button that opens the list, shut until pressed. On `/profile` that is under the one-line
+introduction and above *Account*; on Metadata, under the title and the Archive/Share row and above
+the first section. An iPad in portrait and a phone did not get them at all until 2026-10-07:
+
+> On something like a portrait iPhone, obviously it's not wide enough. So perhaps we should then
+> put the search bar and table of contents above the actual contents of the page, like the metadata
+> or the profile page, because I think that's a useful piece of functionality for helping people
+> navigate.
+>
+> — Greg, 2026-10-06, feedback report `spya-vwf00u`
+
+It is one `<nav>` with two placements, not two lists, which is why each page mounts it inside
+`<main>` at the narrow one's spot. A typed query shows its matches without *Contents* being
+pressed, and the button is not drawn while it does. Shut by default is the one product choice in
+it: about fifteen rows a finger can press are a phone's whole first screen.
+[Plan 261007c](../plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md).
+
+Pressing an entry opens that section if it is
+shut, scrolls to it and flashes it. 261003k left this as a question, and Greg's answer was:
+
+> Q-profile-contents-list I don't understand the question. Probably B
+>
+> — Greg, 2026-10-03
+
+B was this. It is Metadata's own component,
+[`src/web/PageContents.tsx`](../../src/web/PageContents.tsx), which reads the page's sections off
+the DOM, so there is no second list of the six. **A new section needs `keywords`** (a type error
+without them): the words a reader would type into that box. The search uses its own billing
+synonym table, `PROFILE_SYNONYMS` in `ProfilePage.tsx`: *bill* and
+*usage* find *Plan*. Metadata's article-action groups do not belong here; *hide experimental
+features* must still find *Settings*, and *archived articles* must not promise them under
+*Recently read*, which excludes them.
+[Plan 261003n](../plans/261003n-profile-gets-the-contents-list-and-search-box.md).
+[`tests/profile-sections-collapsed.test.tsx`](../../tests/profile-sections-collapsed.test.tsx)
+holds which three sections are which, and that the list reaches them.
+
 ## Where the pieces are
 
 The experimental switch is the existing per-reader setting beside the profile; its layers are
@@ -714,7 +923,7 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
 | [`src/profile.ts`](../../src/profile.ts) | render, normalise, hash, the staleness rule, `PROFILE_RULES`, `profileSection` — the filesystem store was deleted 2026-09-05 |
 | [`src/shelf.ts`](../../src/shelf.ts) | `MAX_TITLE_CHARS`, and `loadShelf` for fixtures — `purpose` writes moved to Postgres |
 | [`src/store/contracts.ts`](../../src/store/contracts.ts) | `ReaderStore`, and `ShelfStore.patch`'s third key |
-| [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | `reader_profiles`, one row per owner |
+| [`src/store/pg-reader.ts`](../../src/store/pg-reader.ts) | `reader_profiles`, one row per owner. It also holds two settings: the experimental switch, and `auto_modes_off_at`, whether an import generates the main modes ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)) |
 | [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) | `articles.purpose` — the per-article half |
 | [`src/routes.ts`](../../src/routes.ts) | `GET`/`PATCH /api/reader`, `resolveProfile`, `withProfileChanged` |
 | [`src/web/SettingsSection.tsx`](../../src/web/SettingsSection.tsx) | the Settings card on the same page — [experimental-features.md](experimental-features.md), which is about what the app shows rather than what the model is told |
@@ -762,7 +971,7 @@ traced in [experimental-features.md § Where it lives](experimental-features.md#
   nobody, with the owner's personalisation as a separate layer on top, was designed and part-built,
   and Greg deferred it as *someday maybe* on 2026-10-01: personal value comes first —
   [261001m](../plans/261001m-shared-mode-output-for-everyone-personalisation-as-an-addendum.md).
-- **Two tabs.** Last write wins, which is what `shelf.json` already does.
+- **Two tabs.** Last write wins. (It was what `shelf.json` did, before the filesystem store went.)
 - **Not multi-user.** One reader, one profile, which is what [auth.md](auth.md) says this app is —
   though the Postgres half is keyed by `owner_id` from the start.
 

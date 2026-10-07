@@ -29,6 +29,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isSpideryarnId } from "../ids.js";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type {
   AddedTerm,
   AskedTermAnswer,
@@ -41,12 +42,14 @@ import type {
   Job,
 } from "../types.js";
 import { ASKED_TERM_REFUSED, parseAskedTerm } from "../asked-term.js";
-import { wentQuiet } from "../messages.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { readAnswerStream, StreamStalled } from "./lib/sse.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
+import { readAnswerStream } from "./lib/sse.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 type GlossaryStatus = "loading" | "none" | "ready" | "error";
 
@@ -188,8 +191,8 @@ function isCitation(data: unknown): data is Citation {
  * ## Generations, not a flag
  *
  * **The mechanism now lives in [`useOrderedRead`](./useOrderedRead.ts)**, shared
- * with the seven other artefact readers, which had none of it and each lost the
- * race this hook was fixed for
+ * with the other artefact readers. The seven there were on 2026-09-02 had none
+ * of it, and each lost the race this hook was fixed for
  * (docs/plans/260902o-adding-a-mode-the-recurring-edits-and-how-to-make-them-one.md
  * § T2.1). The reasoning stays here, because this is where it was worked out and
  * the glossary is the surface that exercises every verb of it.
@@ -224,7 +227,11 @@ export interface GlossaryRead {
   profileChanged: boolean;
   /** `GlossaryResponse.panelRun`, passed through; absent when the server did not say. */
   panelRun?: "append" | "rewrite" | undefined;
+  /** Which reads the server itself answered — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /**
    * Fetch again **only if nothing is already fetching** — the band's mount.
    *
@@ -324,6 +331,16 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [profileChanged, setProfileChanged] = useState(false);
   const [panelRun, setPanelRun] = useState<"append" | "rewrite" | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
   /* The hide write may outlive the article it started on. Kept beside the
      other per-article state so the render-time slug reset below can clear it
      before the next article's children see a pending id from this one. */
@@ -344,10 +361,19 @@ export function useGlossaryRead(slug: string): GlossaryRead {
    */
   const load = useCallback(
     async (current: () => boolean): Promise<void> => {
+      const started = begin();
       try {
-        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`);
+        /* The header asks for "none yet" as `200 null` rather than a 404, which
+           a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+           is still read the same way, for a server that has not heard of the
+           header — the minutes of a deploy. */
+        const res = await apiFetch(`/api/glossary/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<GlossaryResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case, not a fault: most articles have no glossary, and
              this is what the panel's button is for. */
           setGlossary(null);
@@ -356,12 +382,20 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           setProfiled(false);
           setProfileChanged(false);
           setPanelRun(undefined);
+          landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
-        const loaded = await readJson<GlossaryResponse>(res);
-        if (!current()) return;
+        /* Only an explicit `null` means none yet, and a reply without its
+           artefact is published nowhere: a `MalformedReply`, so the reader gets
+           `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+           stays. */
+        if (typeof loaded?.glossary !== "object" || loaded.glossary === null) {
+          throw new MalformedReply("the glossary reply has no glossary");
+        }
+        const profiled = loaded.glossary.profileHash != null;
         setGlossary(loaded.glossary);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
@@ -369,10 +403,12 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            undefined` and only `null` and absent mean "written without one". A
            `!!` here would be right today and wrong the moment somebody stores an
            empty string. */
-        setProfiled(loaded.glossary.profileHash != null);
+        setProfiled(profiled);
         setProfileChanged(loaded.profileChanged);
         setPanelRun(loaded.panelRun);
+        landed(started, res, loaded.glossary.generatedAt);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
@@ -381,7 +417,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            and nothing rendered the message — but the panel renders it, and it
            is now the same read. The prose simply draws no underlines when there
            are no entries, which is what it already did. */
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* **A failed revalidation must not take the list away.** The panel
            renders entries only when `status` is `ready`, so setting `error`
            unconditionally meant a reader who opened the band over a perfectly
@@ -390,13 +426,22 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            Only the opening read has nothing to fall back on. GPT Sol, reviewing
            the built code. The error is shown either way; `GlossaryPanel` puts
            it above the list. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   const { reload, refresh, armRefresh } = useOrderedRead(load);
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Terms already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (glossary === null) setStatus("loading");
+    await reload();
+  }, [glossary, reload]);
+
   /* A run that finishes after the reader left the band still reaches the prose.
      useCitations.ts § An always-mounted read is not an
      always-fresh read. */
@@ -550,7 +595,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           /* The 404 and the two 409s are decided before the stream opens, so
              they are ordinary JSON and `readJson` throws their sentence. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         opened = true;
         const done = await readAnswerStream(res.body, {
@@ -581,11 +626,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         }
       } catch (err) {
         if (controller.signal.aborted || !mine()) return true;
-        setLookFailed({
-          id,
-          message:
-            err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
-        });
+        setLookFailed({ id, message: describeFetchFailure(err as Error) });
         /* See the section above: the answer may be stored anyway. Only once the
            stream had opened — a refusal before it stored nothing.
 
@@ -656,8 +697,11 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         await refresh();
       } catch (err) {
         if (!current()) return;
-        throw new Error(
-          `${hidden ? "Hiding" : "Unhiding"} that term did not go through. ${(err as Error).message}`,
+        /* The panel and the hover card print this as it is thrown, so the
+           cause goes through the one rule first: the server's own refusal
+           stays, and the browser's words for a dropped connection do not. */
+        throw new ReaderFacingError(
+          `${hidden ? "Hiding" : "Unhiding"} that term did not go through. ${describeFetchFailure(err as Error)}`,
         );
       } finally {
         /* A request for the new article may already own the same entry id.
@@ -679,7 +723,9 @@ export function useGlossaryRead(slug: string): GlossaryRead {
     profiled,
     profileChanged,
     panelRun,
+    fresh,
     error,
+    retryRead,
     reload,
     refresh,
     patchEntry,
@@ -728,6 +774,8 @@ export interface UseGlossary {
   error: string | null;
   /** The job writing this article's glossary, if one is. Null otherwise. */
   job: Job | null;
+  /** The job list has answered once, so `job === null` means no run rather than not known yet. */
+  loaded: boolean;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: StepFailure | null;
   /**
@@ -739,6 +787,11 @@ export interface UseGlossary {
   stalled: boolean;
   /** The POST has gone and the queue has not seen it yet. `StepJob.starting`. */
   starting: boolean;
+  /**
+   * A forced run (`more`) was pressed on the list still on screen, and has
+   * neither replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /**
    * Write the list — always for the reader's profile, if they have one. The
    * *Use your profile* checkbox that could ask for a plain list was removed on
@@ -760,6 +813,8 @@ export interface UseGlossary {
   more(useProfile?: boolean): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
   refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
   /** Dig deeper into one term — `GlossaryRead.look`, passed through. Resolves `false` if not admitted. */
   look(id: string): Promise<boolean>;
@@ -866,8 +921,9 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
      request already in flight read the old one. See `refresh` on
      `GlossaryRead` for the sequence this gets wrong the other way. This was the
      one thing the copies did *not* agree about — none of the others had a
-     trailing fetch to reach for — until 2026-09-02, when all eight moved onto
-     src/web/useOrderedRead.ts and all eight now pass `refresh` here. */
+     trailing fetch to reach for — until 2026-09-02, when the eight there were
+     then moved onto src/web/useOrderedRead.ts, whose `refresh` is what is
+     passed here. */
   const queue = useStepJob(slug, "glossary", refresh, "watches-queue");
 
   const run = useCallback(
@@ -885,8 +941,23 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
    * nowhere else. The automatic run below therefore posts the identical request
    * this button does, without anything having to be changed to make it true.
    */
-  const find = useCallback(() => run(false), [run]);
-  const more = useCallback((useProfile = true) => run(true, useProfile), [run]);
+  const find = useCallback(async () => {
+    await run(false);
+  }, [run]);
+  /* **The forced verb holds the list it was pressed on** (rewrite-hold.ts).
+     The list's clock is the identity, and an append re-stamps it as a rewrite
+     does — which is all the release claims: the job wrote. It is not read as
+     proof the list was rewritten. */
+  const hold = useRewriteHold({
+    slug,
+    step: "glossary",
+    identity: glossary?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
+  const more = useCallback((useProfile = true) => held(() => run(true, useProfile)), [held, run]);
 
   /* `reload` rather than `refresh`: the way out of a failed read is to read
      again, and `reload` joins a request already in flight rather than making a
@@ -979,7 +1050,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
              before the server opens the stream, so it is an ordinary JSON error
              and `readJson` throws its sentence. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         /* **`asked` is what `readAnswerStream` returns, and it returns only on a
            `done` frame.** Every other ending throws, so the draft can never be
@@ -1010,9 +1081,7 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
         if (controller.signal.aborted || !current()) return;
         /* The draft stays: the reader has read it, and the sentence says what
            it is. */
-        setAskFailed(
-          err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
-        );
+        setAskFailed(describeFetchFailure(err as Error));
       } finally {
         /* **Only if it is still ours.** `clearAsked` hands the box back the
            moment it disowns a request, and a later `ask` may already own
@@ -1073,12 +1142,15 @@ export function useGlossary(slug: string, read: GlossaryRead): UseGlossary {
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    loaded: queue.loaded,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     find,
     more,
     refresh,
+    retryRead: read.retryRead,
     cancel: queue.cancel,
     look,
     lookDraft,

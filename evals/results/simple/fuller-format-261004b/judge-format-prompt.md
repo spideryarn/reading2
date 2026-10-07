@@ -1,0 +1,1 @@
+Read the file `evals/results/simple/fuller-format-261004b/format-pairs.md` in this repository, in full, and do exactly what its opening instructions say. Read no other file: in particular not the key file beside it. Do not edit anything. Your whole answer is the list of lines it asks for, one per pair, for all 12 pairs.

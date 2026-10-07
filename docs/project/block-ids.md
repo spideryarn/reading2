@@ -1,5 +1,7 @@
 # Block ids
 
+Up: [architecture.md](architecture.md)
+
 The spine. Every other artefact in Spideryarn addresses text by block id, so this is the one
 decision that is expensive to revisit — see
 [AGENTS.md § The one contract that matters](../../AGENTS.md#the-one-contract-that-matters).
@@ -7,6 +9,21 @@ decision that is expensive to revisit — see
 Assigned by [`src/blocks.ts`](../../src/blocks.ts) (pipeline stage 3,
 [architecture.md § Pipeline](architecture.md#pipeline)); the id itself is minted by
 [`src/ids.ts`](../../src/ids.ts).
+
+## In this doc
+
+- [§ Intent](#intent) — what the ids are for, in Greg's terms
+- [§ The format](#the-format) — what an id looks like, before parsing or matching one
+- [§ Why random and not sequential](#why-random-and-not-sequential) — why ids are not positions, and how they survive a re-run
+  - [Surviving stage 2](#surviving-stage-2-which-is-the-case-that-actually-matters) — a re-extraction changed or lost ids
+  - [The freshness guard](#the-freshness-guard-and-the-two-ways-it-was-wrong) — a re-run kept, or refused to keep, the previous ids
+  - [Two passes](#two-passes-and-the-second-one-refuses-to-guess) — how an old block is matched to a new one
+  - [The cost we accepted](#the-cost-we-accepted) — what random ids give up, including range checks
+- [§ What gets an id](#what-gets-an-id) — which elements are blocks, and why something you want to point at has none
+- [§ The article's own links](#the-articles-own-links) — in-page `href`s and footnotes that must resolve to a block
+- [§ Showing an id](#showing-an-id) — putting an id in front of a reader, or in a URL
+- [§ If this ever changes](#if-this-ever-changes) — what a format change would have to migrate
+- [§ See also](#see-also) — the neighbouring docs
 
 ## Intent
 
@@ -144,14 +161,17 @@ nothing will rewrite them.
 
 ### The freshness guard, and the two ways it was wrong
 
-`blocksMatchTheirHtml` in [`src/pipeline.ts`](../../src/pipeline.ts) asks two things.
+`blocksMatchTheirHtml` in [`src/pipeline.ts`](../../src/pipeline.ts) and the Metadata page
+(`isCurrent` in [`src/store/pg.ts`](../../src/store/pg.ts)) call
+`blocksAreWhatTheirHtmlProduces` in [`src/blocks.ts`](../../src/blocks.ts), on the raw stored blocks.
+That function owns the three checks and their reasoning:
 
 1. **Every id in the blocks artefact is in the stamped HTML.** Cheap, and it settles the commonest
    failure — stage 2 re-ran and wiped the ids — before anything is parsed.
-2. **Re-derive the blocks from the extracted HTML and compare**, through `splitIntoBlocks`: the same
-   splitter, the same sanitiser, the same everything except which ids were handed out.
-   `blockIdentityFree` is the projection that takes the ids out — every field of a `Block` except
-   `id`, with `spya-` id attributes and `#spya-…` fragments normalised out of the stored `html`.
+2. **Replay stage 3 with the stored blocks as its id baseline and compare the stamped HTML
+   byte for byte.** This catches changes outside blocks too.
+3. **Compare every field of every block, including ids and link targets.** Nothing is normalised
+   out; ignoring ids would hide the very binding this stage must preserve.
 
 Question 1 alone was enough **by accident** until 2026-08-31. On disk `extract.extractedHtml` and
 `blocks.stampedHtml` were the same path (`PATHS` in
@@ -192,9 +212,9 @@ every filesystem article reports this step not-done at once rather than quietly 
 for it to break.
 
 **What it still does not prove.** Question 1 is membership, not binding: two ids swapped between
-elements, or one parked on an unrelated wrapper, both pass. Question 2 says stage 3 would produce the
-same blocks, not that these blocks carry the ids a reader's comments name — `assertIdsCarried` is
-what holds that, at write time. The end state is a generation token stage 3 writes into both
+elements, or one parked on an unrelated wrapper, both pass that check alone. The full replay says
+stage 3 would produce the same output, not that these blocks carry the ids a reader's comments name
+— `assertIdsCarried` is what holds that, at write time. The end state is a generation token stage 3 writes into both
 artefacts, and it has nowhere to live yet: in Postgres the blocks artefact is rows, and
 `STAMP_SOURCE` in [`src/store/artifacts.ts`](../../src/store/artifacts.ts) lists no entry for
 `blocks`, so a `stamp` for this step reads back `null`. **That absence is a reason to do the storage

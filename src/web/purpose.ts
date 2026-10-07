@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
-import { forgetSummaries } from "./link-facts.js";
+import { profileSaved } from "./profile-saved.js";
 
 /**
  * Store the purpose, and answer with **what the server stored** — it trims and
@@ -17,27 +17,76 @@ import { forgetSummaries } from "./link-facts.js";
  * typed. `null` clears it.
  *
  * **A caller that means "leave it alone" must not call this with `null`.** The
- * add page never does (plan 260930e F1): its box starts empty even on a re-add
- * of an article that already has a purpose, so an empty draft there is not a
- * request to erase a sentence the reader cannot see.
+ * add page sends it only once its box has read and shown what is stored
+ * (plan 260930e F1, kept by src/web/add-purpose.ts): before that an empty box
+ * is not a request to erase a sentence the reader cannot see.
  *
- * Rejects with the server's sentence on failure.
+ * Rejects with the server's sentence on failure. **A rejection does not mean
+ * nothing was stored**: the server answers after the write, so a reply lost on
+ * the way back rejects here over a sentence that is on the shelf. A caller that
+ * is about to say which it was asks `storedPurpose` below first.
+ *
+ * `madeFor` is the reader these words are for, when the caller can outlive a
+ * change of reader: the add page's session sends its last words after the
+ * page has gone. Sent as anybody else, the write is not sent and this rejects
+ * (`NotThisReader` in lib/api.ts;
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2).
+ * The boxes in the reading view name the reader they were mounted for
+ * (lib/made-for.ts), since their saves are made after an unmount or an idle
+ * timer; Skim's line, pressed and sent at once, names nobody.
  */
-export async function savePurpose(slug: string, purpose: string | null): Promise<string | null> {
+export async function savePurpose(
+  slug: string,
+  purpose: string | null,
+  madeFor: string | null = null,
+): Promise<string | null> {
   const body = await readJson<{ purpose: string | null }>(
-    await apiFetch(`/api/library/${encodeURIComponent(slug)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ purpose }),
-    }),
+    await apiFetch(
+      `/api/library/${encodeURIComponent(slug)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ purpose }),
+      },
+      madeFor,
+    ),
   );
   /* **The link cards' summaries were written from the old sentence.** They are
      cached per tab in front of a server that would have noticed
      (src/web/link-facts.ts § `forgetSummaries`), so without this a reader who
      changes their purpose and hovers a link they hovered before reads the
-     answer written for the sentence they just replaced. */
-  forgetSummaries();
+     answer written for the sentence they just replaced. `profileSaved`
+     forgets them, and tells the command bar its list from why you are reading
+     is old (src/web/profile-saved.ts). */
+  profileSaved();
   return body.purpose ?? null;
+}
+
+/**
+ * **What the server holds for this article's purpose right now**, or `null`
+ * when that cannot be established. For a caller whose save rejected and who
+ * must not say "not saved" over a sentence that was (SkimPurpose.tsx).
+ *
+ * Only a fresh server 200 that could read the shelf is an answer. `apiFetch`
+ * answers a GET whose transport failed out of the saved copy, with a real 200
+ * and `x-spideryarn-offline: copy` (lib/api.ts § `attempt`), and a copy written
+ * before the save says nothing about it; Metadata.tsx § `stillOnTheServer` has
+ * the same rule for the same reason.
+ */
+export async function storedPurpose(slug: string): Promise<{ purpose: string | null } | null> {
+  try {
+    const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`);
+    if (res.headers.get("x-spideryarn-offline") === "copy" || res.status !== 200) return null;
+    const body = await readJson<{ purpose?: unknown; purposeFailed?: unknown } | null>(res);
+    /* A successful status is not evidence that we read a purpose. Missing or
+       ill-typed fields cannot establish that the words are absent. */
+    if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
+    if (body.purpose !== null && typeof body.purpose !== "string") return null;
+    if (body.purposeFailed !== undefined && body.purposeFailed !== false) return null;
+    return { purpose: body.purpose };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -47,14 +96,26 @@ export async function savePurpose(slug: string, purpose: string | null): Promise
  * as every caller's `savePurpose` does. For `useAutosavedText`'s `leave`.
  *
  * One copy, for the box on Metadata, the first-open prompt and the profile
- * panel, which until 2026-10-02 each wrote this request out for themselves.
+ * panel, which until 2026-10-02 each wrote this request out for themselves,
+ * and since plan 261004l the add page's box.
+ *
+ * Forgets the link summaries as it sends and again when the write settles —
+ * useProfile.ts § `leaveProfile` says why it takes both.
+ *
+ * `madeFor` as `savePurpose` has it: nothing is sent unless that reader is
+ * the one this tab last saw.
  */
-export function leavePurpose(slug: string, text: string): void {
-  leavingFetch(`/api/library/${encodeURIComponent(slug)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ purpose: text === "" ? null : text }),
-  });
+export function leavePurpose(slug: string, text: string, madeFor: string | null = null): void {
+  profileSaved();
+  void leavingFetch(
+    `/api/library/${encodeURIComponent(slug)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ purpose: text === "" ? null : text }),
+    },
+    madeFor,
+  ).then(profileSaved);
 }
 
 /**

@@ -53,6 +53,7 @@
  * hover card (docs/project/tooltips.md); the spine is 1.5rem wide and has nowhere
  * to put a strip.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
@@ -60,7 +61,7 @@ import {
   ChevronDown,
   ChevronUp,
   LoaderCircle,
-  Network,
+  type Network,
   PenLine,
   Route,
   Waypoints,
@@ -86,7 +87,15 @@ import { type UseProjection, useProjection } from "./useProjection.js";
 import { RAMP_STEPS, laneTerms, type ScatterAxis, type ScatterHue } from "./scatter.js";
 import type { SummaryNode } from "./tree.js";
 import { useRenderCount } from "./perf.js";
-import { CHAIN_MS, measureRow, stepTarget } from "./keynav.js";
+import {
+  chainedRow,
+  endChain,
+  measureRow,
+  startChain,
+  stepTarget,
+  type Chain,
+  type JumpEnded,
+} from "./keynav.js";
 import { activeSectionIndex } from "./position.js";
 import { armActivation } from "./activation.js";
 import { DIAGRAM_SUB_MODES } from "./sub-modes.js";
@@ -100,6 +109,7 @@ import { useSketchCaption } from "./useSketch.js";
 import { ILLUSTRATED_WAIT, ILLUSTRATED_WORK, IllustratedView } from "./IllustratedView.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { voiceClass, withVoice } from "./voice.js";
 
 /**
@@ -113,10 +123,12 @@ import { voiceClass, withVoice } from "./voice.js";
  * `QuotesAccess` are built on (src/web/reader-capability.ts), and GPT Sol's
  * recommendation when it reviewed this stage.
  *
- * **The visitor arm is what pins `kind` to `force`**, and that is the whole
- * safety property: `force` is the only picture that draws from the tree the
- * page already holds. `drift` and `trail` need `useProjection`'s POST to draw
- * anything, and `sketch` and `illustrated` mount children that auto-run a job.
+ * **The visitor arm is what pins `kind` to `sketch`**, and that is the whole
+ * safety property: a visitor's Sketch is the stored one this arm carries, or
+ * a sentence saying there is none, and `SketchView`'s visitor arm has no slug
+ * to run a job with. `drift` and `trail` need `useProjection`'s POST to draw
+ * anything, and `illustrated` mounts a child that auto-runs a job. (The pin
+ * was to `force` when this was written; the code below is the authority.)
  * docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
  */
 export type DiagramAccess =
@@ -130,6 +142,14 @@ export type DiagramAccess =
    * told exactly that and offered nothing — `SketchView`'s visitor arm.
    */
   | { kind: "visitor"; sketch?: PublicSketch | undefined };
+
+/**
+ * **Take the article to a block because the picture is being walked**, and
+ * call `ended` when that jump is over — however it ended, and also when the
+ * reader was already there and nothing moved (keynav.ts § `JumpEnded`). The
+ * step buttons hand one; the picture's arrow keys keep no aim and do not.
+ */
+export type FollowJump = (id: BlockId, ended?: JumpEnded) => void;
 
 interface Props {
   access: DiagramAccess;
@@ -185,8 +205,14 @@ interface Props {
    * paragraph shows; walking the picture must not, or the first step would hide
    * the picture being walked. Defaults to `onJump`. GPT Sol, plan review of
    * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
+   *
+   * **It is also told how to say the jump is over** (`FollowJump`), which the
+   * step buttons need and `onJump` cannot give them. A property rather than a
+   * method on purpose: a method's parameters are checked loosely, and
+   * `onFollow={jumpTo}` — whose second parameter is a flash aim, not this —
+   * would compile and hand the callback to the wrong argument.
    */
-  onFollow?(id: BlockId): void;
+  onFollow?: FollowJump;
   /**
    * Every block of the article, in order — what the Force picture's graph is
    * built from (src/web/graph.ts), and what the two scatters name their lanes
@@ -241,7 +267,7 @@ interface Props {
  * **It is not a gate and must not be read as one.** Hiding a chip hides a
  * control; it authorises nothing. What actually stops a stranger buying a
  * picture is `access` — a visitor gets no picker at all and is pinned to
- * `force` — plus `requireUser` on the two endpoints that spend.
+ * `sketch` — plus `requireUser` on the two endpoints that spend.
  * docs/project/security-map.md, docs/project/experimental-features.md.
  */
 const KIND_UI: Record<
@@ -388,8 +414,8 @@ const NEEDS_GRAPH = new Set<DiagramKind>(["force"]);
  * The collapse set, which is empty and stays empty — see `collapsed` in the
  * panel for why, and why it is a constant rather than a deletion.
  *
- * Module-level so it is one object for the life of the page: it is a dependency
- * of the `graph` and `layout` memos, and a fresh `new Set()` per render would
+ * Module-level so it is one object for the life of the page: it is used inside
+ * the `graph` and `layout` memos, and a fresh `new Set()` dependency per render would
  * make both of them miss on every render — which on Force is a 300-tick physics
  * simulation.
  */
@@ -590,20 +616,26 @@ const PART_HUES = 8;
  * are the ones moving it. The next measurement overwrites it either way, so an
  * interrupted jump corrects itself rather than leaving a lie on screen.
  */
-function useReaderRow(enabled: boolean): [number | null, (row: number) => void] {
-  const [row, setRow] = useState<number | null>(null);
+function useReaderRow(enabled: boolean, chain: { current: Chain | null }): [number | null, (row: number) => void] {
+  const [position, setPosition] = useState<{ row: number | null }>({ row: null });
   useEffect(() => {
     if (!enabled) {
       /* Back to `?at=` rather than the last row measured before the toggle:
          a stale number is worse than a coarse one, because nothing later can
          tell it is stale. */
-      setRow(null);
+      setPosition((previous) => previous.row === null ? previous : { row: null });
       return;
     }
     let frame = 0;
     const measure = () => {
       frame = 0;
-      setRow(measureRow());
+      const invalidated = chain.current !== null && chainedRow(chain.current, true) === null;
+      if (invalidated) chain.current = null;
+      const next = measureRow();
+      /* Losing an aim changes canStep even if the measured row repeats (a
+         cancelled or clamped aim can be ahead of it). A fresh position then
+         renders that change; ordinary unchanged samples retain their object. */
+      setPosition((previous) => !invalidated && previous.row === next ? previous : { row: next });
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -624,17 +656,17 @@ function useReaderRow(enabled: boolean): [number | null, (row: number) => void] 
       ro?.disconnect();
       if (frame) cancelAnimationFrame(frame);
     };
-  }, [enabled]);
+  }, [enabled, chain]);
   /* Gated on `enabled` so a press on a picture reading `?at=` does not set state
      nothing will read — the return below would throw the value away, and the
      render would happen anyway. */
   const assume = useCallback(
     (next: number) => {
-      if (enabled) setRow(next);
+      if (enabled) setPosition((previous) => previous.row === next ? previous : { row: next });
     },
     [enabled],
   );
-  return [enabled ? row : null, assume];
+  return [enabled ? position.row : null, assume];
 }
 
 export function DiagramPanel({
@@ -646,7 +678,15 @@ export function DiagramPanel({
   onKind,
   atRow,
   onJump,
-  onFollow = onJump,
+  /* `onJump` does not say when its jump is over, so with no `onFollow` a step
+     counts it as over at once: the aim then stands only while the page is at
+     the pixel the press found it on (keynav.ts § `Chain`). Reader, the one
+     caller in the app, always hands `onFollow`; a new caller whose jump glides
+     must too, or a press mid-glide measures a row half way. */
+  onFollow = (id, ended) => {
+    onJump(id);
+    ended?.();
+  },
   blocks,
   axis,
   onAxis,
@@ -738,12 +778,23 @@ export function DiagramPanel({
      dependency and offers to remove it, and taking that fix would leave an
      effect that runs once and clears nothing on any later press. The same shape,
      and the same reason, as the `attempt` counter in useProjection.ts. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: see above — `kind` is the trigger, and the offered fix silently disables this
+  /* **And the stored root node, for the same reason one step further on**: the picture's
+     *tree* can be replaced under an unchanged `kind`. An article opened before
+     its structure is built swaps a stand-in tree for the real one live
+     (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+     GPT Sol's F1). No pointer-leave fires for a node replaced under the
+     pointer, so the held hover would stop the follow-scroll exactly as above —
+     and the builders' node ids are positional, so an id that *survives* the
+     swap can name a different passage, which is why this does not ask whether
+     the node is still drawn. The derived `root` is also rebuilt when images
+     arrive, but `root.node` is the same stored node in that redraw: a real
+     hover or keyboard focus should survive it. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `kind` and the stored root node are reset triggers.
   useEffect(() => {
     setHover(null);
     setRoving(null);
     setHasFocus(false);
-  }, [kind]);
+  }, [kind, root?.node]);
 
   const scroller = useRef<HTMLDivElement | null>(null);
 
@@ -911,7 +962,10 @@ export function DiagramPanel({
     // `similar.pairs` is a *stable* array — the hook hands back the same one
     // until a new answer lands — so this rebuilds exactly twice per article:
     // once immediately without the embeddings, once when they arrive.
-    [root, wantsGraph, blocks, collapsed, similar.pairs],
+    //
+    // `collapsed` is not listed: it aliases the module constant NOTHING_COLLAPSED,
+    // so its identity cannot change. A picture that makes it state again must add it here.
+    [root, wantsGraph, blocks, similar.pairs],
   );
 
   /* **The two scatters, and only those two.** Same narrow gate as `similar`
@@ -922,7 +976,7 @@ export function DiagramPanel({
      is not wired up — `similar.ts` still embeds the article itself, so a cold
      Force → Drift buys them twice. ⟨Sol⟩, 2026-08-30. See useProjection.ts. */
   const wantsPoints = NEEDS_POINTS.has(kind);
-  /* Unreachable for a visitor anyway, because `kind` is pinned to `force`
+  /* Unreachable for a visitor anyway, because `kind` is pinned to `sketch`
      above and `wantsPoints` is false for it — and gated here regardless. Two
      independent reasons a POST cannot happen is the right number for a request
      that spends: the pin is a product rule and could be relaxed by somebody who
@@ -983,7 +1037,13 @@ export function DiagramPanel({
    * its own last press aimed at. State is a frame behind and a chain is not
    * state at all.
    */
-  const [measuredRow, assumeRow] = useReaderRow(drawingPoints);
+  /* A row number belongs to this article and picture's ladder. A fresh holder
+     makes a replaced mapping visible to render immediately; the sampler also
+     reattaches and measures the new rows. Older endings still update only the
+     individual press object they captured. */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: these are invalidation triggers — a numeric aim belongs to one block map and picture, even when scrollY is unchanged.
+  const chain = useMemo<{ current: Chain | null }>(() => ({ current: null }), [blocks, root, kind]);
+  const [measuredRow, assumeRow] = useReaderRow(drawingPoints, chain);
   const readerRow = measuredRow ?? atRow;
 
   /**
@@ -1054,7 +1114,8 @@ export function DiagramPanel({
       graph,
       scatter,
     );
-  }, [root, kind, box, collapsed, words, graph, scatter, followsReader]);
+    // `collapsed` is not listed, for the reason given at `graph` above.
+  }, [root, kind, box, words, graph, scatter, followsReader]);
 
   /**
    * **`drawnKind` was here, and its removal is the point of this change.**
@@ -1193,25 +1254,28 @@ export function DiagramPanel({
    * `SCROLL_MS`, firing exactly the scroll events a hand would, so a second
    * press mid-flight measures a row half way between two rungs and lands short
    * — two presses, one rung of movement. So the row the last press *aimed at*
-   * stands for `CHAIN_MS`, which is the glide plus a margin, and after any real
-   * pause the world is measured afresh.
+   * stands while that press's jump is unfinished, and after it ends for as long
+   * as the page is still at the pixel it ended on. The rule and its reasons are
+   * keynav.ts § `Chain`; this file only has to get the jump's ending to it.
    *
-   * **A timer rather than `glideTarget()`, which was the first attempt.** The
-   * glide clears its own handle in the same tick as its final `scrollTo`
-   * (scroll.ts § tick), so between that and the scroll event it causes there is
-   * a gap where nothing is in flight and the measurement is still mid-air. A
-   * press in the gap steps from the wrong row, rarely and invisibly. ⟨Sol⟩,
-   * 2026-08-31. The timer has no gap, and `CHAIN_MS` is already the constant
-   * for exactly this.
+   * **The ending is forwarded, not inferred** — `onFollow` is handed
+   * `() => endChain(mine)` and Reader carries it through `jumpTo` and
+   * `beginJump` to `scrollToBlock`'s own report. `glideTarget()` cannot stand
+   * in for it: under reduced motion the page moves at once and the jump settles
+   * a frame later, after its re-check, and for that frame nothing is "in
+   * flight" while a centred row sits below the reading line with no arrival
+   * anchor yet — a measurement there names the row before it (⟨Sol⟩,
+   * 2026-10-05, plan 261005h P-7). After a *smooth* glide settles there is no
+   * such gap: its last frame moves the page before it reports, and `measureRow`
+   * reads the layout as it then is. (A comment here from 2026-08-31 said
+   * otherwise, and was the reason for a 600 ms timer, `CHAIN_MS`, until
+   * 2026-10-05.)
    *
-   * The reader taking the page back drops it, on the same two events
-   * `scroll.ts`'s own `bail` listens for. **Not `pointerdown`**, which keynav
-   * can afford to include and this cannot: here the press *is* a pointerdown,
-   * so dropping on it would clear the chain a moment before every click that
-   * sets one.
+   * The reader taking the page back also drops it outright, below. **Not on
+   * `pointerdown` inside the step bar**, which keynav can afford to include
+   * and this cannot: here the press *is* a pointerdown, so dropping on it would
+   * clear the chain a moment before every click that sets one.
    */
-  const chain = useRef<number | null>(null);
-  const chainTimer = useRef(0);
   useEffect(() => {
     /**
      * **Anything the reader does that is not another press of these buttons
@@ -1237,7 +1301,6 @@ export function DiagramPanel({
     const drop = (e: Event) => {
       if ((e.target as Element | null)?.closest?.(".diag-step")) return;
       chain.current = null;
-      window.clearTimeout(chainTimer.current);
     };
     for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
       window.addEventListener(type, drop, { passive: true });
@@ -1246,10 +1309,9 @@ export function DiagramPanel({
       for (const type of ["wheel", "touchstart", "pointerdown", "keydown"]) {
         window.removeEventListener(type, drop);
       }
-      window.clearTimeout(chainTimer.current);
     };
-  }, []);
-  const stepFrom = (): number => chain.current ?? measureRow();
+  }, [chain]);
+  const stepFrom = (): number => chainedRow(chain.current, true) ?? measureRow();
 
   /**
    * One step through the article, and the picture follows because it is drawn
@@ -1274,12 +1336,11 @@ export function DiagramPanel({
     /* The mark moves now rather than a frame later, when the scroll this is
        about to start gets measured — see `assume` in `useReaderRow`. */
     assumeRow(row);
-    chain.current = row;
-    window.clearTimeout(chainTimer.current);
-    chainTimer.current = window.setTimeout(() => {
-      chain.current = null;
-    }, CHAIN_MS);
-    onFollow(stop.blockId);
+    /* This press's own object, so that the older jump this one is about to
+       cancel ends *its* chain and not this one (keynav.ts § `Chain`). */
+    const mine = startChain(row, stop.blockId);
+    chain.current = mine;
+    onFollow(stop.blockId, () => endChain(mine));
   };
   /**
    * Whether that press would go anywhere, for the greyed-out look.
@@ -1289,21 +1350,30 @@ export function DiagramPanel({
    * `measureRow` reads a rect per row of the article.
    *
    * The chain is the half that matters, and leaving it out was a bug ⟨Sol⟩
-   * found: it does not clear when the scroll-derived state catches up, it
-   * clears on a timer, so a Previous that had just stepped off the first rung
-   * went on announcing itself unavailable while working, and a Next that had
-   * just landed on the last rung went on looking live while doing nothing —
-   * for as long as the reader kept pressing. Reading a ref in render is
-   * ordinarily how you get a value nothing re-renders for; here the press that
-   * writes it also calls `setRoving`, so a render always follows.
+   * found: it does not end when the scroll-derived state catches up, it ends
+   * by its own rule (keynav.ts § `Chain`), so a Previous that had just stepped
+   * off the first rung went on announcing itself unavailable while working,
+   * and a Next that had just landed on the last rung went on looking live
+   * while doing nothing — for as long as the reader kept pressing. **Render
+   * reads the cached pixel answer; a press also validates the target's layout.**
+   * The existing row sampler validates that layout outside render and publishes
+   * a fresh position when it discards an aim, even if the measured row has not
+   * changed. The press that writes an aim also updates the mark and roving
+   * state. The visual answer can still lag a change until the sampler runs;
+   * the press checks the page immediately without adding layout reads here.
    */
   const canStep = (dir: -1 | 1) =>
-    starts.length > 0 && stepTarget(starts, chain.current ?? rowForRung, dir) !== null;
+    starts.length > 0 && stepTarget(starts, chainedRow(chain.current) ?? rowForRung, dir) !== null;
 
   /* The pointer's position, mirrored into a ref so the follow-scroll below can
      read it without re-running every time the pointer leaves the picture. */
   const hovering = useRef(false);
   hovering.current = hover !== null;
+
+  /* The kinds row's bar scrolls sideways when the band is too narrow for it;
+     the chosen picture stays in view (useRevealChosen.ts). */
+  const kindBar = useRef<HTMLDivElement>(null);
+  useRevealChosen(kindBar, kind);
 
   /**
    * **The picture scrolls to keep up with the reader.**
@@ -1394,9 +1464,9 @@ export function DiagramPanel({
    *
    * Preorder is exactly what a flattened tree widget wants, and `layout.nodes`
    * is already in it — so Up and Down are one step in an array rather than a
-   * traversal. Left and Right are the tree-specific half: on an open parent
-   * Left closes it, otherwise it goes *to* the parent; Right opens a closed
-   * parent, otherwise it steps into the first child.
+   * traversal. Left and Right are the tree-specific half: Left goes to the
+   * parent and Right steps into the first child. Folding was removed; neither
+   * key opens or closes nodes now.
    *
    * **↑ and ↓ move the article as well as the tabstop**, which is not what the
    * tree pattern says and is what Greg asked for: *"make sure the up/down
@@ -1408,11 +1478,11 @@ export function DiagramPanel({
    * reversible thing this app does — so following focus costs nothing and turns
    * the picture into something you can read the article *with* rather than
    * something you read and then leave. It is the documented follow-focus
-   * variant, and the pattern the gist columns beside this panel already use.
+   * variant, and the pattern the gist columns beside this panel used until
+   * they went on 2026-09-29.
    *
-   * ← and → do **not** follow, on the two pictures where they mean open and
-   * close: folding a part away is a statement about the picture and should not
-   * move the reader out of the paragraph they are in. On the two scatters,
+   * ← and → do **not** follow on the two tree pictures: they move focus through
+   * the structure without moving the prose. On the two scatters,
    * where sideways is just another word for a step, they do.
    */
   const onKeyNav = (e: React.KeyboardEvent, node: DiagramNode) => {
@@ -1566,7 +1636,7 @@ export function DiagramPanel({
           *absent* for a visitor, and an element that is in the DOM is one a
           later change can reveal.
 
-          `kind` is pinned to `force` above regardless, so this is the
+          `kind` is pinned to `sketch` above regardless, so this is the
           presentation half of a rule enforced elsewhere; the enforcement is not
           here. docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 2.
 
@@ -1580,6 +1650,12 @@ export function DiagramPanel({
           docs/project/experimental-features.md. */}
       {owns && (
       <div className="diag-kinds" role="radiogroup" aria-label="Which diagram">
+        {/* **The row, then the bar inside it**: `.diag-kinds` is the band's top
+            row (its padding, its rule, the room for the (i)), and the joined
+            outline of the part-switcher every mode shares (mode-band.css § the
+            part-switcher, plan 261007h § F2) has to be a box of its own. The
+            radiogroup stays on the row, so its radios are where they were. */}
+        <div ref={kindBar} className="diag-kind-bar summ-views">
         <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
           {visibleKinds(experimental, kind).map((k) => {
             const ui = KIND_UI[k];
@@ -1634,7 +1710,7 @@ export function DiagramPanel({
                      the cost of the tab stops;
                      tests/arrows-belong-to-the-article.test.tsx holds it. */
                   tabIndex={0}
-                  className={`diag-kind${k === kind ? " on" : ""}`}
+                  className={`diag-kind summ-view-btn${k === kind ? " on" : ""}`}
                   onClick={() => {
                     /* **The gesture seam for the sketch**, and the reason the
                        token is minted here rather than in `onKind`: `?diagram=`
@@ -1663,6 +1739,7 @@ export function DiagramPanel({
             );
           })}
         </TooltipGroup>
+        </div>
       </div>
       )}
 
@@ -2005,7 +2082,7 @@ export function DiagramPanel({
                 attribute the browser cannot parse falls back to *black*, and a
                 black arrowhead on a near-black page is an arrow that is simply
                 not there. One token shared with `.diag-link-sequence` cannot
-                fail that way. See styles.css § diagram mode. */}
+                fail that way. See diagram.css § diagram mode. */}
             <defs>
               <marker
                 id="diag-arrow"
@@ -2278,12 +2355,7 @@ function Waiting({ projection }: { projection: UseProjection | null }) {
       </p>
     );
   }
-  return (
-    <p className="diag-wait" role="status">
-      <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" />
-      Reading the article paragraph by paragraph…
-    </p>
-  );
+  return <BandWaiting className="diag-wait">Reading the article paragraph by paragraph…</BandWaiting>;
 }
 
 /**

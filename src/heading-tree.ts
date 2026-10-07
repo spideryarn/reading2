@@ -61,7 +61,8 @@
  */
 
 import { isStructural } from "./block-policy.js";
-import { PREAMBLE_TITLE } from "./heading-text.js";
+import { PREAMBLE_TITLE, sameHeading, UNTITLED_WINDOW_TITLE } from "./heading-text.js";
+import { cutIntoWindows, MAX_BATCH } from "./labels.js";
 import { appendSupplement, splitBlocks } from "./supplement.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 
@@ -128,6 +129,78 @@ function pickLevel(counts: Map<number, number>, min: number): number | null {
   return null;
 }
 
+interface Segment {
+  lo: number;
+  hi: number;
+}
+
+/** Cut [cuts[0], hi] at every index in `cuts`. */
+const segmentsFrom = (cuts: number[], hi: number): Segment[] =>
+  cuts.map((lo, s) => ({ lo, hi: s + 1 < cuts.length ? cuts[s + 1]! - 1 : hi }));
+
+/** The words a reader would actually read in a segment — headings excluded. */
+function proseWords(body: Block[], seg: Segment): number {
+  let sum = 0;
+  for (let i = seg.lo; i <= seg.hi; i++) {
+    const b = body[i]!;
+    if (headingLevel(b) === null) sum += b.words;
+  }
+  return sum;
+}
+
+/**
+ * Rule 2: a stub segment merges into the one after it (a heading introduces
+ * what follows), and a trailing run of stubs merges back into the last real
+ * segment. One left-to-right pass, so a run of stubs chains into whichever
+ * real segment comes next.
+ */
+function mergeStubs(segments: Segment[], isStub: (seg: Segment) => boolean): Segment[] {
+  const merged: Segment[] = [];
+  let pendingLo: number | null = null;
+  for (const seg of segments) {
+    const lo: number = pendingLo ?? seg.lo;
+    if (isStub(seg)) {
+      pendingLo = lo;
+      continue;
+    }
+    merged.push({ lo, hi: seg.hi });
+    pendingLo = null;
+  }
+  if (pendingLo !== null) {
+    const last = merged.at(-1);
+    const hi = segments.at(-1)!.hi;
+    if (last) last.hi = hi;
+    else merged.push({ lo: pendingLo, hi });
+  }
+  return merged;
+}
+
+/** How many headings the body has at each level, and rule 1's choice among them. */
+function sectionLevelOf(body: Block[]): { levels: Map<number, number>; sectionLevel: number | null } {
+  const levels = new Map<number, number>();
+  for (const b of body) {
+    const level = headingLevel(b);
+    if (level !== null) levels.set(level, (levels.get(level) ?? 0) + 1);
+  }
+  return { levels, sectionLevel: pickLevel(levels, 3) ?? pickLevel(levels, 2) };
+}
+
+/** Indices in [lo, hi] of headings at `level` or shallower. */
+function headingCuts(body: Block[], lo: number, hi: number, level: number): number[] {
+  const cuts: number[] = [];
+  for (let i = lo; i <= hi; i++) {
+    const l = headingLevel(body[i]!);
+    if (l !== null && l <= level) cuts.push(i);
+  }
+  return cuts;
+}
+
+/** The level sub-sections cut at: the next one down, chosen once for the whole article. */
+function subLevelOf(levels: Map<number, number>, sectionLevel: number): number {
+  const deeper = [...levels.keys()].filter((l) => l > sectionLevel).sort((a, b) => a - b);
+  return deeper[0] ?? sectionLevel;
+}
+
 export function buildHeadingTree(
   blocks: Block[],
   slug: string,
@@ -139,12 +212,8 @@ export function buildHeadingTree(
      (src/structure.ts), so a bibliography can never sit inside a section. */
   const { body, groups } = splitBlocks(blocks);
 
-  const levels = new Map<number, number>();
-  for (const b of body) {
-    const level = headingLevel(b);
-    if (level !== null) levels.set(level, (levels.get(level) ?? 0) + 1);
-  }
-  const sectionLevel = pickLevel(levels, 3) ?? pickLevel(levels, 2);
+  const { levels, sectionLevel } = sectionLevelOf(body);
+  const isStub = (seg: Segment): boolean => proseWords(body, seg) < stubThreshold;
 
   const nodes: Record<NodeId, TreeNode> = {};
   let counter = 0;
@@ -171,52 +240,6 @@ export function buildHeadingTree(
       });
       parent.children.push(leaf.id);
     }
-  };
-
-  interface Segment {
-    lo: number;
-    hi: number;
-  }
-
-  /** Cut [lo, hi] at every index in `cuts` (which must include `lo`). */
-  const segmentsFrom = (cuts: number[], hi: number): Segment[] =>
-    cuts.map((lo, s) => ({ lo, hi: s + 1 < cuts.length ? cuts[s + 1]! - 1 : hi }));
-
-  /** The words a reader would actually read in [lo, hi] — headings excluded. */
-  const proseWords = (seg: Segment): number => {
-    let sum = 0;
-    for (let i = seg.lo; i <= seg.hi; i++) {
-      const b = body[i]!;
-      if (headingLevel(b) === null) sum += b.words;
-    }
-    return sum;
-  };
-
-  /**
-   * Rule 2: a stub segment merges into the one after it (a heading introduces
-   * what follows), and a trailing run of stubs merges back into the last real
-   * segment. One left-to-right pass, so a run of stubs chains into whichever
-   * real segment comes next.
-   */
-  const mergeStubs = (segments: Segment[]): Segment[] => {
-    const merged: Segment[] = [];
-    let pendingLo: number | null = null;
-    for (const seg of segments) {
-      const lo: number = pendingLo ?? seg.lo;
-      if (proseWords(seg) < stubThreshold) {
-        pendingLo = lo;
-        continue;
-      }
-      merged.push({ lo, hi: seg.hi });
-      pendingLo = null;
-    }
-    if (pendingLo !== null) {
-      const last = merged.at(-1);
-      const hi = segments.at(-1)!.hi;
-      if (last) last.hi = hi;
-      else merged.push({ lo: pendingLo, hi });
-    }
-    return merged;
   };
 
   /**
@@ -251,13 +274,9 @@ export function buildHeadingTree(
          that navigates worse than the flat section. */
       let subSegments: Segment[] = [];
       if (subLevel !== null && section.depth < 2) {
-        const candidates: number[] = [];
-        for (let i = seg.lo + 1; i <= seg.hi; i++) {
-          const level = headingLevel(body[i]!);
-          if (level !== null && level <= subLevel) candidates.push(i);
-        }
+        const candidates = headingCuts(body, seg.lo + 1, seg.hi, subLevel);
         if (candidates.length >= 2) {
-          subSegments = mergeStubs(segmentsFrom([seg.lo, ...candidates], seg.hi));
+          subSegments = mergeStubs(segmentsFrom([seg.lo, ...candidates], seg.hi), isStub);
         }
       }
       if (subSegments.length >= 2) {
@@ -281,13 +300,9 @@ export function buildHeadingTree(
   let parts = 0;
   let flat = sectionLevel === null;
   if (sectionLevel !== null) {
-    const cuts: number[] = [];
-    for (let i = 0; i < body.length; i++) {
-      const level = headingLevel(body[i]!);
-      if (level !== null && level <= sectionLevel) cuts.push(i);
-    }
+    const cuts = headingCuts(body, 0, body.length - 1, sectionLevel);
     if (cuts[0] !== 0) cuts.unshift(0);
-    const segments = mergeStubs(segmentsFrom(cuts, body.length - 1));
+    const segments = mergeStubs(segmentsFrom(cuts, body.length - 1), isStub);
     /* Fewer than two survivors means the headings carried no prose structure —
        fowler's catalogue front-matter — and one section wrapping the whole
        article is a worse rendering of "no structure" than none. */
@@ -297,8 +312,7 @@ export function buildHeadingTree(
       /* The next level down, chosen once for the whole article rather than per
          part, so two chapters with h3s and h4s respectively do not nest by
          different rules. */
-      const deeper = [...levels.keys()].filter((l) => l > sectionLevel).sort((a, b) => a - b);
-      addSections(root, segments, deeper[0] ?? sectionLevel);
+      addSections(root, segments, subLevelOf(levels, sectionLevel));
       parts = root.children.length;
     }
   }
@@ -327,4 +341,269 @@ export function buildHeadingTree(
     flat,
     parts,
   };
+}
+
+/* ------------------------------------------------- the bounded tree -- */
+
+/** What one bounded build chose, alongside the tree itself. */
+export interface BoundedHeadingTreeResult {
+  tree: Tree;
+  /** True when the parts are runs of windows rather than the author's sections. */
+  flat: boolean;
+  /** Depth-one body parts. */
+  parts: number;
+  /** Depth-two sections: the author's sub-headings, and the windows. */
+  sections: number;
+}
+
+/** Its own pair, so a stored tree says which of the two builders in this file made it. */
+export const BOUNDED_TREE_VERSION = "headings-bounded/1";
+export const BOUNDED_TREE_GENERATOR = "deterministic-headings-bounded";
+
+/* Lives in src/heading-text.ts beside `PREAMBLE_TITLE`, so the browser can tell it is ours. */
+export { UNTITLED_WINDOW_TITLE };
+
+/** A window's title is at most this much of its opening block. */
+const WINDOW_TITLE_WORDS = 8;
+const WINDOW_TITLE_CHARS = 60;
+/** Words with a letter in them that a block needs before its opening titles a window. */
+const WINDOW_TITLE_MIN_WORDS = 3;
+
+/** Repeated headings become furniture at this heuristic threshold, even genuine recurring labels such as "Exercises". */
+export const REPEATED_HEADING_MIN = 5;
+
+/** Root, two parts, two sections each, a leaf apiece: the least a depth-3 tree can be. */
+export const MIN_BOUNDED_BODY = 4;
+
+const hasText = (b: Block): boolean => b.text.trim() !== "";
+
+/** The opening words of `text`, cut at a word, with an ellipsis only when something was cut. */
+function openingWords(text: string): string {
+  /* Four dots or more is a contents line's leader, not an ellipsis. */
+  const all = text.replace(/(?:\.\s*){4,}/g, " ").trim().split(/\s+/);
+  const kept: string[] = [];
+  for (const word of all.slice(0, WINDOW_TITLE_WORDS)) {
+    if (kept.length > 0 && [...kept, word].join(" ").length > WINDOW_TITLE_CHARS) break;
+    kept.push(word);
+  }
+  /* A title is a label, not a sentence: checkTree advises against the full stop. */
+  const title = kept.join(" ").slice(0, WINDOW_TITLE_CHARS).replace(/[.,;:!?]+$/, "");
+  if (title === "") return UNTITLED_WINDOW_TITLE;
+  return kept.length < all.length ? `${title}…` : title;
+}
+
+/** What a node will be called, and the heading it is quoting if it is. */
+type Titled = Pick<TreeNode, "title" | "sourceHeading" | "titleFrom">;
+
+interface PlannedPart extends Titled {
+  seg: Segment;
+  sections: (Titled & { seg: Segment })[];
+}
+
+/**
+ * `body` as the heading rules should see it: a heading repeated down the
+ * document is a PDF's running page header transcribed as one, so it is shown to
+ * them as ordinary text and cuts, counts for and titles nothing. So is the
+ * article's own title once it appears twice. Compared by `sameHeading`, so a
+ * curly apostrophe on some pages does not split the count.
+ */
+function demoteFurniture(body: Block[], articleTitle: string | undefined): Block[] {
+  const seen: { text: string; count: number }[] = [];
+  const kindOf = body.map((b) => {
+    if (headingLevel(b) === null) return null;
+    const kind = seen.find((k) => sameHeading(k.text, b.text)) ?? { text: b.text, count: 0 };
+    if (kind.count === 0) seen.push(kind);
+    kind.count++;
+    return kind;
+  });
+  const title = articleTitle?.trim();
+  /* And a "heading" with no letter in it: a scene break or a page number. */
+  const isFurniture = (kind: { text: string; count: number }): boolean =>
+    !/\p{L}/u.test(kind.text) ||
+    kind.count >= REPEATED_HEADING_MIN || (!!title && kind.count > 1 && sameHeading(kind.text, title));
+  return body.map((b, i) => {
+    const kind = kindOf[i];
+    /* No words either, so a window is not titled by its opening "words". */
+    return kind && isFurniture(kind) ? { ...b, kind: "text" as const, words: 0 } : b;
+  });
+}
+
+/**
+ * Where the parts and sections of a bounded tree fall, and what each is called.
+ * `body` is `demoteFurniture`'s, and indices into it are indices into the real one.
+ */
+function planBoundedParts(body: Block[]): { planned: PlannedPart[]; flat: boolean } {
+  const quoting = (i: number): Titled => ({ title: body[i]!.text, sourceHeading: body[i]!.text });
+  /** A heading with words in it. One without titles nothing: checkTree refuses an empty title. */
+  const isTitleHeading = (i: number): boolean => headingLevel(body[i]!) !== null && hasText(body[i]!);
+
+  /** The heading [lo, hi] opens on, allowing a stub's worth of prose before it as rule 2 does. */
+  const openingHeading = (seg: Segment, not: number | null): number | null => {
+    let prose = 0;
+    for (let i = seg.lo; i <= seg.hi && prose < MIN_SEGMENT_PROSE_WORDS; i++) {
+      if (isTitleHeading(i) && i !== not) return i;
+      if (headingLevel(body[i]!) === null) prose += body[i]!.words;
+    }
+    return null;
+  };
+
+  /**
+   * The heading it opens on, else the opening words of its first non-heading
+   * block with three letter-containing words, else a heading anywhere in it,
+   * else the stock title. `not`
+   * is the heading the parent wears, so a part's first section does not repeat
+   * the part.
+   */
+  const titleOf = (seg: Segment, not: number | null): Titled => {
+    const opens = openingHeading(seg, not);
+    if (opens !== null) return quoting(opens);
+    /* A paragraph of real words first: a scene break ("#"), a page number or a
+       one-word line of dialogue opens many windows and names none. */
+    for (let i = seg.lo; i <= seg.hi; i++) {
+      const b = body[i]!;
+      if (headingLevel(b) !== null || b.words === 0 || !hasText(b)) continue;
+      if ((b.text.match(/\S*\p{L}\S*/gu) ?? []).length < WINDOW_TITLE_MIN_WORDS) continue;
+      const title = openingWords(b.text);
+      /* The author's words, and the node says so: src/types.ts § `TreeNode.titleFrom`. */
+      return title === UNTITLED_WINDOW_TITLE ? { title } : { title, titleFrom: "opening-words" };
+    }
+    for (let i = seg.lo; i <= seg.hi; i++) if (isTitleHeading(i)) return quoting(i);
+    return { title: UNTITLED_WINDOW_TITLE };
+  };
+
+  /** The shared cut (src/labels.ts § `cutIntoWindows`), over this body's own idea of a heading. */
+  const windows = (seg: Segment, atLeast: number): Segment[] =>
+    cutIntoWindows(seg, { max: MAX_BATCH, atLeast, isHeading: (i) => headingLevel(body[i]!) !== null });
+
+  /** `own` is the heading the part wears, if it wears one. */
+  const partOf = (seg: Segment, own: number | null, cut: Segment[]): PlannedPart => ({
+    seg,
+    ...(own !== null ? quoting(own) : titleOf(seg, null)),
+    sections: cut.map((w) => ({ seg: w, ...titleOf(w, own) })),
+  });
+
+  const { levels, sectionLevel } = sectionLevelOf(body);
+  const whole: Segment = { lo: 0, hi: body.length - 1 };
+
+  if (sectionLevel !== null) {
+    const cuts = headingCuts(body, 0, whole.hi, sectionLevel);
+    if (cuts[0] !== 0) cuts.unshift(0);
+    const isStub = (seg: Segment): boolean => proseWords(body, seg) < MIN_SEGMENT_PROSE_WORDS;
+    /* A one-block part cannot hold a section (a sole child covering its parent
+       is refused by checkTree), so it merges as a stub does. */
+    const segments = mergeStubs(segmentsFrom(cuts, whole.hi), (seg) => seg.lo === seg.hi || isStub(seg));
+    if (segments.length >= 2) {
+      const subLevel = subLevelOf(levels, sectionLevel);
+      const planned = segments.map((seg) => {
+        const own = headingCuts(body, seg.lo, seg.hi, 6).find((i) => isTitleHeading(i)) ?? null;
+        /* One sub-heading is enough here, where `buildHeadingTree` wants two:
+           this part must be cut somewhere, and the author's cut beats ours. */
+        const subs = mergeStubs(
+          segmentsFrom([seg.lo, ...headingCuts(body, seg.lo + 1, seg.hi, subLevel)], seg.hi),
+          isStub,
+        );
+        return partOf(seg, own, subs.length >= 2 ? subs.flatMap((sub) => windows(sub, 1)) : windows(seg, 2));
+      });
+      return { planned, flat: false };
+    }
+  }
+
+  /* No usable headings. Four windows at least, so there can be two parts of
+     two. Parts are near-equal runs of windows, about as many as each then has
+     sections. */
+  const all = windows(whole, MIN_BOUNDED_BODY);
+  const count = Math.max(2, Math.min(Math.floor(all.length / 2), Math.ceil(Math.sqrt(all.length))));
+  const planned: PlannedPart[] = [];
+  for (let p = 0, at = 0; p < count; p++) {
+    const take = Math.floor(all.length / count) + (p < all.length % count ? 1 : 0);
+    const run = all.slice(at, at + take);
+    at += take;
+    const seg = { lo: run[0]!.lo, hi: run.at(-1)!.hi };
+    planned.push(partOf(seg, openingHeading(seg, null), run));
+  }
+  return { planned, flat: true };
+}
+
+/**
+ * **The tree for a document no model can be asked about in one call**: the
+ * shape a model's tree has (root, parts, sections, every body block a leaf at
+ * depth 3) with no section holding more than `MAX_BATCH` leaves.
+ *
+ * Both halves of that are for a consumer that cannot cope with less. The client
+ * takes one section depth for the whole article (src/web/position.ts §
+ * `sectionDepth`), and the labels step writes a section's labels in one call
+ * (src/labels.ts § `planBatches`, which cuts one only when its packed batch
+ * cannot be asked), so a flat or mixed-depth tree breaks the first and one long
+ * run under a heading makes the second a call too big to trust.
+ * docs/plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md.
+ *
+ * Parts are `buildHeadingTree`'s, by the same two rules. Sections are a part's
+ * sub-headings, and any run longer than the bound is cut into near-equal
+ * consecutive windows. Without usable headings the windows are the sections and
+ * runs of them are the parts.
+ *
+ * Throws on a body under four blocks, which cannot have this shape.
+ */
+export function buildBoundedHeadingTree(
+  blocks: Block[],
+  slug: string,
+  articleTitle?: string,
+): BoundedHeadingTreeResult {
+  const { body, groups } = splitBlocks(blocks);
+  if (body.length < MIN_BOUNDED_BODY) {
+    throw new Error(
+      `A bounded headings tree needs at least ${MIN_BOUNDED_BODY} body blocks and "${slug}" has ${body.length}.`,
+    );
+  }
+
+  const headingBody = demoteFurniture(body, articleTitle);
+  const { planned, flat } = planBoundedParts(headingBody);
+  const whole: Segment = { lo: 0, hi: body.length - 1 };
+
+  const nodes: Record<NodeId, TreeNode> = {};
+  let counter = 0;
+  const add = (parent: TreeNode | null, seg: Segment, extra: Partial<TreeNode>): TreeNode => {
+    const node: TreeNode = {
+      id: `n${String(++counter).padStart(4, "0")}`,
+      depth: parent ? parent.depth + 1 : 0,
+      parent: parent ? parent.id : null,
+      children: [],
+      range: [body[seg.lo]!.id, body[seg.hi]!.id],
+      title: "",
+      ...extra,
+    };
+    nodes[node.id] = node;
+    parent?.children.push(node.id);
+    return node;
+  };
+
+  const rootTitle = [articleTitle ?? "", ...headingBody.filter((b) => headingLevel(b) !== null).map((b) => b.text), slug]
+    .map((t) => t.trim())
+    .find((t) => t !== "");
+  const root = add(null, whole, { title: rootTitle ?? slug });
+  let sections = 0;
+  for (const { seg, sections: inside, ...titled } of planned) {
+    const part = add(root, seg, titled);
+    for (const { seg: at, ...sectionTitled } of inside) {
+      const section = add(part, at, sectionTitled);
+      sections++;
+      for (let i = at.lo; i <= at.hi; i++) {
+        const b = body[i]!;
+        /* A heading leaf carries its own text, as in `buildHeadingTree`. */
+        const label = b.kind === "heading" && isStructural(b) ? b.text : undefined;
+        add(section, { lo: i, hi: i }, label ? { navLabel: label } : {});
+      }
+    }
+  }
+
+  const tree: Tree = {
+    version: BOUNDED_TREE_VERSION,
+    generator: BOUNDED_TREE_GENERATOR,
+    slug,
+    rootId: root.id,
+    nodes,
+    /* The same marker, for the same reason: no gists, and checkTree's exemption is keyed on it. */
+    provisional: "headings",
+  };
+  return { tree: appendSupplement(tree, groups), flat, parts: planned.length, sections };
 }

@@ -8,7 +8,7 @@
  *
  * The error is surfaced rather than swallowed, and here that matters more than
  * on the users page. This endpoint's one convincing failure is an empty array —
- * the filesystem store's 501, a permissions problem — and an empty *inbox* is a
+ * a permissions problem, say — and an empty *inbox* is a
  * perfectly ordinary answer. "Nobody has reported a bug" and "we could not read
  * the reports" must not look the same. docs/reusable/silent-success.md.
  */

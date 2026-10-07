@@ -14,6 +14,7 @@
  */
 
 import type { Mode } from "../modes.js";
+import type { SummaryView } from "./params.js";
 
 /**
  * The painted width of the rail, in px. Mirrors `--spine-w` in styles.css —
@@ -48,15 +49,17 @@ export const SPINE_W = 12;
 
 /* **The narrowest a gist column read at, when there were gist columns** — and
    still a term of the phone breakpoint, which is why it outlived them.
-   Exported for `tests/spine-width.test.ts` alone: both breakpoints in styles.css
-   are `GIST_MIN + PROSE_MIN + SPINE_W − 1`, performed by hand because a `@media`
-   query cannot read a custom property, and that test is the only thing that can
-   notice when one of them moves and the others don't. **The mode crossover is
+   Exported because the narrow-window boundary is
+   `GIST_MIN + PROSE_MIN + SPINE_W − 1`. CSS has to perform that sum by hand —
+   a media query cannot read a custom property — and `tests/spine-width.test.ts`
+   is what notices when one of its copies moves. **The mode crossover is
    deliberately not among them** — it moves with `?spine=0`, which no query can
    see, so the stylesheet is told it by a class instead (`.band-covers`, written
    from `fit.modeW`). That test asserts its absence. */
 export const GIST_MIN = 176; // 11rem — the narrowest a gist still reads at
 export const PROSE_MIN = 544; // 34rem — the width the reading column is defended at
+/** The last viewport width at which the reading view uses its narrow-window rules. */
+export const NARROW_WINDOW_MAX = GIST_MIN + PROSE_MIN + SPINE_W - 1;
 
 /**
  * **The narrowest the reading column may actually be, as against the width it
@@ -130,7 +133,7 @@ export const MODE_PROSE_FLOOR = 400; // 25rem
  * there is nothing: the article had the whole window and sat hard against the
  * left of it, with 800px of empty page to its right on a 1600px screen. Greg,
  * 2026-09-03: *"In Plain mode, can you centre the text on the page?"* Capping
- * the column is what leaves a margin for `styles.css` § plain, centred to
+ * the column is what leaves a margin for narrow-window.css § `.reader.text-alone` to
  * divide between the two sides.
  *
  * **The condition is "no band", not "Plain"** — the mode is not what makes the
@@ -166,7 +169,7 @@ export const PROSE_ALONE_MAX_REM = 49;
 
 /**
  * **One cell of the prose gutter, in rem and in px — the two halves of
- * `--blk-slot: max(1.5rem, 24px)` in styles.css § tokens.**
+ * `--blk-slot: max(1.5rem, 24px)` in shell.css.**
  *
  * A copy, and copies are what this file spends its comments warning about, so
  * it needs its reason: **CSS knows the reader's root font size and this file
@@ -292,15 +295,21 @@ export type BandShape = "standard" | "structure" | "wide" | "roomy";
  * Marginalia press's `notesFit`, which had each written the same ternary.
  * Structure's two columns want a band of their own width where they fit
  * (`structureColumnsBand`, docs/plans/260928a-structure-two-columns-readable.md).
- * Tweets' posts are prose, so theirs may grow to a prose column's measure —
- * Greg, 2026-09-29: *"It could be quite a wide left-hand column if that will
+ * The thread's posts are prose, so theirs may grow to a prose column's measure
+ * — Greg, 2026-09-29: *"It could be quite a wide left-hand column if that will
  * help to make it be readable."* Summary's paragraphs get a touch more room
  * (`ROOMY_IDEAL_REM`).
+ *
+ * **The thread is Summary's third view since 2026-10-03**, so Summary's band
+ * is the wide one while `?summary=thread` is showing and the roomy one
+ * otherwise, and the view is part of the question. `summary` is the parsed
+ * state the Reader holds, and it counts only inside Summary: the parameter
+ * outlives the mode, as `?diagram=` does.
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  */
-export function bandShapeFor(mode: Mode): BandShape {
+export function bandShapeFor(mode: Mode, summary: SummaryView): BandShape {
   if (mode === "structure") return "structure";
-  if (mode === "tweets") return "wide";
-  if (mode === "summary") return "roomy";
+  if (mode === "summary") return summary === "thread" ? "wide" : "roomy";
   return "standard";
 }
 
@@ -380,7 +389,7 @@ export interface Fit {
   /**
    * **How much horizontal room the mode band takes from the table.** Set as
    * `--mode-w` on `.reader`; every rule that has to make room for the band
-   * reads it from there (styles.css § mode band).
+   * reads it from there (mode-band.css § mode band).
    *
    * It is `0` in two cases, and reading it as "there is no band" is wrong in
    * the second: Plain, where there genuinely is no band — and **a window under
@@ -393,9 +402,9 @@ export interface Fit {
    */
   modeW: number;
   /**
-   * **The article is the only thing on this page** — no band, just the prose
-   * across the whole window. It is where `PROSE_ALONE_MAX_REM` and the auto
-   * margins in styles.css § plain, centred come in.
+   * **No mode band beside the prose.** Marginalia may still be
+   * beside it (`fitMargin`). It is where `PROSE_ALONE_MAX_REM` and the auto
+   * margins in narrow-window.css § `.reader.text-alone` come in.
    */
   alone: boolean;
   /**
@@ -447,7 +456,7 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * The crossover `fitMode` turns on, lifted out so there is exactly one
  * statement of it. Below this width the band stops taking room from the prose
  * and is laid over it instead — see the long note inside `fitMode` for why that
- * is the design and not a failure, and styles.css § a band with no room for the
+ * is the design and not a failure, and narrow-window.css § a band with no room for the
  * other half of it.
  *
  * **It is `MODE_PROSE_FLOOR` and not `PROSE_MIN`**, and that distinction is what
@@ -463,7 +472,7 @@ function modeSpine(showSpine: boolean | null): SpineMode {
  * rail was on would miss a phone by twelve pixels, and one that guessed it was
  * off would warn a reader whose band fits perfectly well. Getting that wrong
  * from a hand-copied breakpoint is the accident this codebase has already had
- * once — see `App.tsx` § `band-covers`.
+ * once — see `Reader.tsx` § `band-covers`.
  *
  * **It answers a hypothetical when no band is open**, and that is the point:
  * `SmallScreenHint` is the other caller, and its whole job is to say what will
@@ -513,11 +522,36 @@ export interface FitInput {
 
 /**
  * **The marginalia column's width**: ~20 characters of note at its
- * narrowest, ~36 at its widest. Notes are a step smaller than the prose
+ * narrowest, ~36 at `MARG_IDEAL`, which is the most it ever takes room from
+ * the prose or a band for. Notes are a step smaller than the prose
  * (marginalia.css), so these are much narrower than a band.
  */
 export const MARG_MIN = 200; // 12.5rem
 export const MARG_IDEAL = 288; // 18rem
+/**
+ * **The widest the column gets, on a wide window** — Greg, 2026-10-05, about
+ * the chat card that lives here: *"it still seemed pretty narrow. Maybe if
+ * the screen is wide we allow the Marginalia column to be a bit wider"*.
+ * About 48 characters of note; past that a 13px line is too long to read.
+ */
+export const MARG_WIDE = 384; // 24rem
+/** The window width from which the prose moves left for the chat card, and the
+    most it moves: `shiftForCard`. */
+export const PROSE_SHIFT_FROM = 1600;
+export const PROSE_SHIFT_MAX = 100;
+
+/**
+ * **The column, widened into room that is already there.** `margW` is what the
+ * fit settled on (at most `MARG_IDEAL`) and `room` is everything right of the
+ * prose's right edge. The fit is finished before this is asked: nothing is
+ * reserved for the extra, so the prose and a band are exactly where they were,
+ * and a window with no spare room right of the column gets the column it
+ * always had. Whole pixels, because the room beside centred prose is a half
+ * as often as not.
+ */
+function widened(margW: number, room: number): number {
+  return Math.max(margW, Math.min(Math.floor(room), MARG_WIDE));
+}
 
 /**
  * **The prose with a column of notes to its right** — Marginalia mode.
@@ -528,7 +562,10 @@ export const MARG_IDEAL = 288; // 18rem
  *  1. **The prose stays where Plain puts it** — centred, at the Plain cap —
  *     while the room left beside it already holds the column. Nothing is
  *     reserved then (`margReserve` 0), so turning the mode on does not move a
- *     word of the article.
+ *     word of the article. When that room is more than the column, the column
+ *     grows into it, up to `MARG_WIDE` (`widened`). **From `PROSE_SHIFT_FROM`
+ *     the prose does move**, left by up to `PROSE_SHIFT_MAX`, for the chat
+ *     card: `shiftForCard`.
  *  2. **Then the column pushes the centred prose left**, by reserving room on
  *     `.reader`'s right: the table is centred (`.text-alone`) in a content box
  *     `avail − margReserve` wide, so its right edge sits at
@@ -561,7 +598,13 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
   }
   const margW = clamp(avail - PROSE_MIN, MARG_MIN, MARG_IDEAL);
   const proseW = Math.min(plainW, avail - margW);
-  const margReserve = Math.max(0, 2 * margW + proseW - avail);
+  const columnReserve = Math.max(0, 2 * margW + proseW - avail);
+  /* The table is centred in what the reserve leaves, so reserving twice the
+     shift moves it left by the shift. */
+  const beside = (avail - columnReserve - proseW) / 2;
+  const margReserve =
+    columnReserve + 2 * shiftForCard(windowWidth, beside, beside + columnReserve, rootFontPx);
+  const margLeft = spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW;
   return {
     widths: [proseW],
     tableW: proseW,
@@ -570,10 +613,46 @@ function fitMargin(windowWidth: number, showSpine: boolean | null, rootFontPx: n
     spine,
     modeW: 0,
     alone: true,
-    margW,
+    /* Rule 1's room, when the centred prose leaves more than the column. */
+    margW: widened(margW, windowWidth - margLeft),
     margReserve,
-    margLeft: spineWidth(spine) + (avail - margReserve - proseW) / 2 + proseW,
+    margLeft,
   };
+}
+
+/**
+ * **How far the prose moves left of centre on a wide window, so the chat card
+ * in the column has more room.** Greg, 2026-10-06: *"re wider margin for chat
+ * card: B give it more room on wide windows"*. B was: from about 1600px, shift
+ * the prose left a little, keeping its width, so the margin and the card get
+ * about 100px more. The prose is no longer centred there.
+ *
+ * `left` and `right` are the page either side of the prose before the shift.
+ * Three limits: `PROSE_SHIFT_MAX`; what the card can use, since it stops at
+ * `CHAT_CARD_MAX` (so at 1920px the shift is 54px, and from about 2030px the
+ * prose is centred again); and half of `left`, which only binds at a large
+ * root and keeps the prose clear of the rail.
+ *
+ * **A step at `PROSE_SHIFT_FROM`**: the prose jumps 100px as a window is
+ * dragged across it. Below it nothing changes, which is what was asked.
+ *
+ * Only with no band (`fitMargin`). Beside a band the prose is not centred and
+ * the band has already taken the page left of it.
+ */
+function shiftForCard(windowWidth: number, left: number, right: number, rootFontPx: number): number {
+  if (windowWidth < PROSE_SHIFT_FROM) return 0;
+  const cardFull = CHAT_CARD_MAX + MARG_GAP_REM * rootFontPx + CHAT_DOCK_GUTTER;
+  return Math.max(0, Math.min(PROSE_SHIFT_MAX, cardFull - right, left / 2));
+}
+
+/** Keep the title over the prose whenever the column or the card's shift has
+ * moved it left of centre: the masthead centres in the same narrowed box the
+ * table does. Until 2026-10-06 this applied from `PROSE_SHIFT_FROM` only, and
+ * from an iPad's width to about 1400px the title sat up to about 145px right
+ * of the prose (qi-kfmr6j93; measured in 261006c). Beside a band the title has its own rule, which reads
+ * `--marg-reserve` itself (narrow-window.css § the title over the column). */
+export function margTitleReserve(fit: Fit): number {
+  return fit.alone ? fit.margReserve : 0;
 }
 
 /**
@@ -618,7 +697,9 @@ function fitBoth(
     spine,
     modeW,
     alone: false,
-    margW,
+    /* Into the spare room the capped prose leaves right of the column — after
+       the band took its share around the unwidened one. */
+    margW: widened(margW, margReserve),
     margReserve,
     margLeft: spineWidth(spine) + modeW + proseW,
   };
@@ -638,7 +719,7 @@ function fitBoth(
  * 738px measure is 850px of empty page rather than a wide reading column. See
  * `PROSE_ALONE_MAX_REM` for why the cap is phrased as "alone" rather than
  * "Plain", `proseAloneMaxPx` for why it is a function of the root rather than
- * one number, and styles.css § plain, centred for the auto margins that put the
+ * one number, and narrow-window.css § `.reader.text-alone` for the auto margins that put the
  * leftover on both sides instead of one. Below the cap the prose takes the
  * whole window, however narrow — a 390px phone gets a 378px column, and the
  * page never scrolls sideways.
@@ -723,7 +804,7 @@ function fitMode(
    * table* — it is written straight out as `--mode-w`, which five rules in
    * styles.css subtract from the two sticky bars and add to `.reader`'s
    * padding. On a phone the band takes none: it is `position: fixed`, so
-   * styles.css § a narrow window simply widens it to the whole window and it
+   * narrow-window.css § a band with no room simply widens it to the whole window and it
    * sits on top of the article. Everything else on the page can then keep the
    * geometry it has when no band is open at all.
    *
@@ -748,7 +829,7 @@ function fitMode(
    * that era's, deliberately, because it is a reproduction and not a
    * description.
    *
-   * `styles.css` § a band with no room used to be a plain
+   * narrow-window.css § a band with no room used to be a plain
    * `@media (max-width: 843px)`, which knows nothing about `?spine=0`, and
    * between **832 and 843 with the rail off** the two disagreed: this function
    * handed the band 288–299px and squeezed the table to make room, while the
@@ -889,3 +970,110 @@ function bandWidth(avail: number, bandShape: BandShape, rootFontPx: number): num
 function spareBeyondTheMeasure(avail: number, rootFontPx: number): number {
   return Math.min(avail - proseAloneMaxPx(rootFontPx), wideIdeal(rootFontPx));
 }
+
+/**
+ * **The block chat panel, docked over the marginalia column** rather than
+ * floating over the prose.
+ * docs/plans/261003p-block-chat-spinner-and-docking-in-the-marginalia-column.md.
+ *
+ * `CHAT_DOCK_MIN` is the narrowest the panel is worth docking at: below it the
+ * panel floats in the corner exactly as it always has, because a 200px chat is
+ * worse than an overlapping one. `CHAT_DOCK_INSET` is how far right of the
+ * column's edge the panel starts, so the prose's gutter icons stay clear; the
+ * stylesheet adds it to `left`, and ChatDialog.tsx hands it over as
+ * `--chat-dock-inset` so that this is the only copy. `CHAT_DOCK_GUTTER` is the
+ * page kept between the panel and the window's right edge.
+ */
+/* **Sized so that a full column is enough room.** The unwidened column is at most
+   `MARG_IDEAL` (288px), and with a band open it is pressed against the
+   window's edge, so the room there is 288 less the inset and the gutter. The
+   first numbers (272, 10, 12) left 266 and the panel never docked beside a
+   band below 1658px, which is the layout the report was filed from. With
+   these a full column gives 272px. A column narrower than `CHAT_DOCK_MIN`
+   plus the two still floats. */
+export const CHAT_DOCK_MIN = 256; // 16rem
+export const CHAT_DOCK_INSET = 8;
+export const CHAT_DOCK_GUTTER = 8;
+
+/**
+ * **How much room a docked chat panel has, in px — or `null` for "do not dock,
+ * float".** Pure: the live `Fit` and the window width it was fitted to.
+ *
+ * `fit.margLeft` is the table's right edge, which is where the column starts
+ * (`fitMargin`, `fitBoth`); `windowWidth` is the same number both were given,
+ * with the notch and the scrollbar already out of it, so the difference is
+ * everything right of the prose. The inset and the gutter come off **before**
+ * the minimum is applied — GPT Sol on the plan, F3: taken off afterwards, a
+ * panel that just qualified would run into the window's edge.
+ *
+ * **Gated on `margW`, not on the room.** With no column `margLeft` is `0` and
+ * the arithmetic would report the whole window; and a column that was asked
+ * for but has no room (`margW` 0 — a phone, a narrow iPad) is not showing.
+ *
+ * **The room, not the width.** The panel is `min(26rem, the room)` and the
+ * `26rem` is the stylesheet's (dialogs.css § `.chat-dialog.docked`), which is
+ * the one place that knows the root font size without being told.
+ */
+export function chatDock(fit: Fit, windowWidth: number): number | null {
+  if (fit.margW <= 0) return null;
+  const room = windowWidth - fit.margLeft - CHAT_DOCK_INSET - CHAT_DOCK_GUTTER;
+  return room >= CHAT_DOCK_MIN ? room : null;
+}
+
+/**
+ * **Where the block chat goes while the marginalia column is showing** — on
+ * trial. `"card"` draws the conversation in the column, level with the block
+ * it is about and scrolling with it (option B); `"dock"` is the panel fixed
+ * over the bottom of the column (option A, `chatDock` above), which stays
+ * built and is what the card falls back to whenever it cannot be drawn.
+ * Read in one place, `Reader`; going back is this one word.
+ * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md § 8.
+ *
+ * The annotation is the point: without it the constant's type is the literal
+ * and the other arm reads as dead code to the compiler.
+ */
+export const BLOCK_CHAT_IN_COLUMN: "card" | "dock" = "card";
+
+/**
+ * The gutter between the prose cell and the column's text, in rem —
+ * marginalia.css § `--marg-gap`, which stays the stylesheet's to declare.
+ * tests/layout-margin.test.ts holds the two to one number.
+ */
+export const MARG_GAP_REM = 1.25;
+/** The widest the card gets: 36rem, a comfortable measure for chat text. The
+    notes themselves stay at `--marg-w`. */
+export const CHAT_CARD_MAX = 576;
+
+/**
+ * **How wide the chat card is, in px — or `null` for "no card here".** Pure,
+ * beside `chatDock` and from the same `Fit`.
+ *
+ * **The room right of the prose, not the notes' 288px** (report spya-ntb7p6):
+ * on a wide window the centred prose leaves far more beside it than the
+ * column, and a chat answer at 272px ran two to four words a line. So the
+ * card takes what is there, up to `CHAT_CARD_MAX`.
+ *
+ * **The gap comes off before the minimum and the cap.** The card starts
+ * `--marg-gap` past the cell's edge, on the column's one left edge, and that
+ * gap is rem, so it needs the root size. Left out, a card that just qualified
+ * ran 12px past a 1440px window (GPT Sol on the plan, F2). The right-hand
+ * gutter and the minimum are the dock's: below `CHAT_DOCK_MIN` there is no
+ * card, and `Reader` falls back to the dock or the floating panel.
+ *
+ * Gated on `margW` for `chatDock`'s reason.
+ */
+export function chatCard(
+  fit: Fit,
+  windowWidth: number,
+  rootFontPx = DEFAULT_ROOT_PX,
+): number | null {
+  if (fit.margW <= 0) return null;
+  const room = windowWidth - fit.margLeft - MARG_GAP_REM * rootFontPx - CHAT_DOCK_GUTTER;
+  return room >= CHAT_DOCK_MIN ? Math.min(room, CHAT_CARD_MAX) : null;
+}
+
+/** What marks the card's host in the DOM (`Reader` renders it into the anchor
+    block's cell). The card sits inside `td.text` and is not prose, so anything
+    that reads "which block is this in" off the nearest row asks for this
+    first — ProseHoverCard.tsx § `read`. */
+export const CHAT_CARD_HOST_ATTR = "data-chat-card-host";

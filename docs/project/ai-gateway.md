@@ -2,6 +2,27 @@
 
 Up: [architecture.md](architecture.md)
 
+## In this doc
+
+- [§ What it replaced](#what-it-replaced) — the two-vendor world before OpenRouter (history)
+- [§ One gateway, five wires](#one-gateway-five-wires) — adding a provider or wire; what `provider` means
+- [§ What the Skin gives us](#what-the-skin-gives-us-that-neither-half-had-alone) — why Messages-over-OpenRouter
+- [§ The four things that fail silently](#the-four-things-that-fail-silently) — when a call looks fine and is not
+- [§ What it cost](#what-it-cost) — the three money pockets, credits versus BYOK
+- [§ What an article costs to arrive](#what-an-article-costs) — the per-article figure
+- [§ Two spellings of one model](#two-spellings-of-one-model-and-why-both-survive) — `CAPABLE_MODEL` and friends
+- [§ What every call is written down as](#what-every-call-is-written-down-as) — the `ai_calls` row, its columns, the timing columns
+  - [§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong) — before summing any duration
+  - [§ A transport blip is retried](#transport-retry) — why a call appears as several rows
+  - [§ How a stream ends](#stream-end) — aborted, truncated, finished
+- [§ The three calls allowed round the outside](#the-three-calls-allowed-round-the-outside-and-the-test-that-keeps-them-to-three) — what bypasses the gateway
+- [§ The exception that arrived](#the-exception-that-arrived-and-what-it-costs-the-rule) — OpenAI realtime for live conversation
+- [§ What stops a reader spending our money](#what-stops-a-reader-spending-our-money-and-what-does-not) — caps and abuse
+- [§ A proposed second exception](#a-proposed-second-exception-calls-paid-by-the-readers-chatgpt-plan) — not built
+- [§ The box's key has a monthly limit](#the-boxs-key-has-a-monthly-limit-and-it-runs-out) — when local calls start failing
+- [§ The one thing still open](#the-one-thing-still-open) — the refusals contradiction
+- [§ See also](#see-also)
+
 Every paid model call this app makes goes through **OpenRouter**, and every one of them is
 *recorded*. Since 2026-08-27 that holds for the pipeline, chat, embeddings, dictation, quick search and
 the PDF reader alike.
@@ -33,7 +54,7 @@ because the browser tells it**, posting what each turn cost to `/api/live/:sessi
 the server prices it and writes an ordinary `ai_calls` row. That landed on 2026-09-02 (Stage 2B) and
 `src/live.ts` came out of `UNMETERED_SPEND` the same day — the register's second table means *money
 leaves and no row appears*, so leaving it there would have made the report overclaim in the one
-direction it exists to prevent. The two live-mode evals under `evals/live/` are still in it.
+direction it exists to prevent. The live-mode evals under `evals/live/` are still in it.
 
 **It is still not a declared bypass, and the reason changed on 2026-09-02.** It used to be that a
 `Declaration` for it could not be *typed*: `ProviderAccount` had no `"openai"` and `Wire` had no
@@ -74,7 +95,7 @@ having happened with a cost of `null`, and counted as unpriced rather than as fr
 is the whole point and an earlier version of this sentence lost it by saying "every one of them
 records what it cost" — which is the claim a spend report would then be built on.
 
-Since 2026-08-28 "recorded" also means **kept** — a row per call, in Postgres or in a JSONL file, and
+Since 2026-08-28 "recorded" also means **kept** — a row per call, in Postgres, and
 `npm run cost` reads them back. See [what every call is written down as](#what-every-call-is-written-down-as).
 
 > Presumably we want to do this in a way that's reusable (i.e. whenever we make an AI call, we do it
@@ -120,11 +141,11 @@ like**. Only the first collapsed.
 | | speaks | used by | code |
 |---|---|---|---|
 | **Messages** | Anthropic's Messages protocol, via OpenRouter's Anthropic-compatible endpoint (`/api/v1/messages`, which OpenRouter calls the "Anthropic Skin") | the pipeline stages — every `Task` whose `TASK_WIRE` entry is `"messages"`, which `PIPELINE_TASKS` reads off ([`src/models.ts`](../../src/models.ts)) | [`src/messages-stream.ts`](../../src/messages-stream.ts) |
-| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Dig deeper* ([citations.md](citations.md)), *Dig deeper*'s forced search on all three (`dig-deeper-search`) and the glossary's and a comment's answer (`dig-deeper`, [glossary.md](glossary.md#digging-deeper-into-a-term)) — Citations' answer is `citation-investigate`, with `citations-find` and `citation-paper-passages` when needed — quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **chat** | OpenAI's chat/completions shape | explain, chat, search, Citations' *Look it up* and *Dig deeper* ([citations.md](citations.md)), *Dig deeper*'s forced search on all three (`dig-deeper-search`) and the glossary's and a comment's answer (`dig-deeper`, [glossary.md](glossary.md#digging-deeper-into-a-term)) — Citations' answer is `citation-investigate`, with `citations-find`, `citation-paper-passages` and `citation-influence` when needed — quiz marking and **the quiz's hidden verdict** ([quiz.md](quiz.md#whether-the-reader-got-it-right-is-asked-somewhere-else)), the referee runs, PDF reading, and two pipeline steps (`debate`, and the PDF's front matter) — plus jobs with no reader waiting, such as **`shelf-topics`** ([shelf-terms.md § The model's judgement](shelf-terms.md#the-models-judgement)) and `env-proposal` ([hetzner-remote-server-box.md](hetzner-remote-server-box.md)). Examples, not the list: `AI_JOB_WIRE` in [`src/models.ts`](../../src/models.ts) is the list | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **embeddings** | `/api/v1/embeddings` — OpenAI-shaped, different endpoint | turning a paragraph into a vector | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **images** | `/api/v1/images` — `data: [{b64_json}]`, no `choices` anywhere in it | the Illustrated diagram sub-mode | [`src/ai-call.ts`](../../src/ai-call.ts) |
 | **transcription** | `/api/v1/audio/transcriptions` — a base64 recording in, `{text}` out, and a `usage` counting **seconds rather than tokens** | dictation, since 2026-09-07 | [`src/ai-call.ts`](../../src/ai-call.ts) |
-| **decisions** | `/api/alpha/decisions` — a `state` and typed questions in, `{answers}` of probabilities out, no text at all | quick search (`search-quick`, `openRouterDecisions`), since 2026-10-02 — [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second). Before that only the shelf-topics eval's declared bypass spoke it | [`src/ai-call.ts`](../../src/ai-call.ts) |
+| **decisions** | `/api/alpha/decisions` — a `state` and typed questions in, `{answers}` of probabilities out, no text at all | quick search (`search-quick`, `openRouterDecisions`), since 2026-10-02 — [search.md § Quick search](search.md#quick-search-a-meaning-search-in-about-a-second) — and the command bar's pick (`command-pick`), since 2026-10-03. The seam reads two kinds of answer: `noul`, a yes/no as a probability, which quick search asks, and `choice`, one of several named options with a probability for each, which the pick asks. (The pick's second call, `command-pick-words`, is an ordinary **chat** job on GPT Luna — [`src/command-pick-call.ts`](../../src/command-pick-call.ts).) Before quick search only the shelf-topics eval's declared bypass spoke it | [`src/ai-call.ts`](../../src/ai-call.ts) |
 
 The heading still says five: it is kept for the anchors that point at it, and the table, not the
 heading, is the count — six product wires since the decisions one, seven counting live
@@ -164,6 +185,13 @@ then the same `finally` owns the call.
 
 Early `break`, a throw, an abort, a missing `[DONE]`, a 429, a body that will not read — all of them
 cross it.
+
+A refused call is priced if the provider priced it. Every seam in `src/ai-call.ts` reads `usage` out
+of the response body **before** it judges the status, so a 429 or a 5xx whose body carries a cost
+gets that cost on its error row. The image seam has done this since 2026-09-03, after a 429 that had
+already cost a plate; `openRouterJson` and the streaming seam's `refuse` followed on 2026-10-04
+(`meterBody`). No refusal on the chat wire has been seen carrying usage, so for those two this is a
+guarantee about our code, not an observation about the provider. The body is still never quoted.
 
 **The Messages gateway was not that until 2026-08-28.** It wraps the Anthropic SDK, so the call
 belongs to the SDK's stream object — and `streamMessage` used to hand that object back, so a stage
@@ -450,8 +478,9 @@ credits are bought rather than on a per-token markup.
 assets`, of which only `structure` calls a model. Glossary, quotes, ideas, timeline, quiz, sketch,
 debate, arc and tweets are each a step a reader *goes to*, and none of them is in the price above.
 
-[open-questions.md § Q7](open-questions.md#q7) is what this answers, and
 [billing.md § The quota](billing.md) is what a reader is charged against it — a slot, not a token.
+The per-token economics of a *search* pass, cold and warm, are a different measurement:
+[evals/results/](../../evals/results/README.md).
 
 ## Two spellings of one model, and why both survive
 
@@ -476,6 +505,16 @@ Since 2026-08-28 a finished call is not only reported, it is **kept**: one row i
 awaited before the collector closes. [`src/store/ai-calls.ts`](../../src/store/ai-calls.ts) reads it
 back for `npm run cost`. The reasoning, the column list, and the four decisions taken
 in Greg's absence are in [260827q-ai-cost-tracking.md](../plans/260827q-ai-cost-tracking.md).
+
+**The table is `aiCalls` in [`src/db/schema.ts`](../../src/db/schema.ts)** (`spideryarn.ai_calls`).
+**What it records about time is three columns and nothing finer:** `started_at` and `finished_at`
+(the whole call) and `duration_ms` (the whole call, nullable only on a realtime row). There is no
+first-token or time-to-first-byte column anywhere in the schema, so a latency-to-first-token figure
+is new data to capture, not a fold of what is stored; a new column is a migration
+([database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once) says
+how one is named and generated, and [§ Step two: apply the migrations](database.md#step-two-apply-the-migrations)
+how it is applied). How not to add `duration_ms` up is
+[§ `durationMs` is per call](#durationms-is-per-call-and-three-different-ways-of-adding-it-up-are-wrong).
 
 ### `upstream` — the endpoint OpenRouter selected, not the frame's label
 
@@ -619,8 +658,8 @@ re-litigated without one:
 - **Postgres only, and it never reads whole rows.** The aggregate is a `GROUP BY` in
   [`src/store/ai-calls-spend-pg.ts`](../../src/store/ai-calls-spend-pg.ts) — `CostStore` was
   deliberately *not* widened, on GPT Sol's call: *"Do not widen `CostStore` merely to preserve
-  filesystem parity for a pricing query whose source of truth is Postgres."* On the filesystem store
-  the report refuses and says so.
+  filesystem parity for a pricing query whose source of truth is Postgres."* (The filesystem store
+  it was refusing on went on 2026-09-05; the aggregate is Postgres's alone now.)
 - **The categories are named for the mechanism, not for a provenance the schema cannot prove.**
   `scope_kind` does **not** separate ingest from reading: a reader asking for Glossary posts to
   `POST /api/jobs` and is recorded `job_step`, exactly like base ingest. So the category is
@@ -740,8 +779,9 @@ test, red, alongside the real files with the wrapper taken back out.
 new tail is one line — `await stageCli(import.meta.url, main)` — which folds the guard,
 `loadEnvLocal()` and `withLedger("cli", …)` together, so the leak above stops being a line somebody
 has to remember to copy (`stageCli` in [`src/cli-ledger.ts`](../../src/cli-ledger.ts);
-docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight are on it; the other five still carry
-the old pair, because they were dirty with other agents' work on the day.
+docs/plans/260828aj-simplification-wave-2.md §2.5). Three of the eight were on it that day and the other
+five still carried the old pair; the stage CLIs have since left for the queue (above), and
+`src/pdf-read.ts` is the paid CLI that ends this way now.
 
 The tempting way to accept two tails is to ask something weaker of each, which is the failure this
 gate already had once. So the two are checked separately, and the new one is checked *harder*: the
@@ -769,6 +809,147 @@ nine spellings that were in the tree — three of which were wrong, in both dire
 [`tests/is-main.test.ts`](../../tests/is-main.test.ts) runs the same table of inputs against the
 real one and against all three broken ones, and says which rows each broken one gets wrong.
 
+### A transport blip is retried, and every attempt is a row <a id="transport-retry"></a>
+
+Both wires give a call up to three goes when an attempt fails **before the provider has answered**.
+The numbers are shared ([`src/transport-retry.ts`](../../src/transport-retry.ts)): three attempts,
+a wait of about half a second and then about a second and a half, and the statuses that mean "not
+now", which are 408, 409, 500, 502, 503, 504 and 529. A Stop or a deadline during the wait ends the
+call at once, as the abort it is. Any other status is a verdict on the request and is not sent
+again. **A 429 is never retried here**: a rate limit is a queue, and the callers that meet one
+(`src/structure-deepen.ts`, `src/pdf-read.ts`, `src/embeddings.ts`) each answer it with
+`Retry-After` and their own policy.
+
+**Each attempt is its own `SpendRecord`** on both wires, so a call that blipped once is two rows,
+`error` then `ok`, and `aiCalls` on a step's log line reads 2. *One record, one network attempt*
+still holds. The wait between attempts is not a call and writes no row.
+
+**Each row says which go it was, and a failed one says where and why** (since 2026-10-06,
+[261006b](../plans/261006b-count-ai-calls-that-die-part-way-and-transport-retries.md)). Four
+nullable columns: `attempt`, `failure_phase`, `failure_class` and `failure_status`. What each
+means, and when it is null, is on the column in [`src/db/schema.ts`](../../src/db/schema.ts);
+the closed list of causes is [`src/call-failure.ts`](../../src/call-failure.ts). Three things
+the names do not say:
+
+- **A retry is a row with `attempt > 1`, and nothing else records one.** The failed row carries no
+  "was retried" flag, because it is written before the wait, and a Stop during the wait means no
+  attempt follows.
+- **`failure_phase` is drawn at each seam's own acceptance line**, not at "what the retry covers".
+  The two differ in one case: a whole-call seam that gets 503 headers and then cannot read the body
+  is `before_answer`, and is not asked again.
+- **`failure_class` is mapped, never sanitised.** No text from an error is stored, so the column
+  can sit in a table that holds no prose.
+
+**What the columns cannot say.** `attempt` is null on a call made with `retryTransport: false`
+(below), so the PDF reader's and the embeddings' own retries are not counted.
+
+**An `aborted` row says who stopped it** (since 2026-10-06,
+[261006d](../plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md)). Its
+`failure_class` is `stall` when our stall clock stopped a provider that had gone silent, `deadline`
+when a recognised deadline expired while the attempt was active, and `abort` for anything else,
+a reader's Stop included. A deadline can cap one call, a turn, a processing step or a whole
+pipeline job; it does not establish how long that particular provider request ran.
+On gateway rows, `failure_phase` and `failure_status` are filled as on an error, and `outcome`
+stays `aborted`.
+`abortClass` in [`src/call-failure.ts`](../../src/call-failure.ts) is the one rule. Three things to
+know about what it tells apart:
+
+- **The pipeline's deadline on a whole job** (`DeadlineReached` in `src/jobs.ts`) is a `deadline`
+  since [261006f](../plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md):
+  it extends `CallDeadlineReached`. Previously classified job-deadline stops say `abort`;
+  older rows can have no class.
+- **A `deadline` is any `AbortSignal.timeout` on the call's signal**, whoever set it, plus the
+  clocks that say so by name (`CallDeadlineReached`, the job's among them). Every one that reaches
+  a gateway today is ours; that is a convention, not a guarantee.
+- **An `aborted` row with no class does not say.** It is a row from before this was recorded. The
+  counts treat it as *not classified*, never as "not a stall".
+
+**The realtime wire (`src/live.ts`) classes its own stops, without a gateway.** A response row is
+`aborted` when OpenAI's status is `cancelled` or `incomplete`, and since 261006f it carries the
+class `abort` with no phase and no status: no timer of ours sends `response.cancel`, so a terminal
+event that arrived was the reader talking over the model, or the reply hitting its length cap or a
+content filter. An unfinished response without a terminal usage report has no response row.
+Our time limits and a lost connection can close a conversation without that report; closing it
+does not create a response row.
+
+On an OpenRouter stream, an in-band provider error already observed remains an error even if a
+later body read aborts (the F9 fix).
+The counts are on `/admin/costs` and in `npm run cost:analyse`:
+[admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries). Each retry, each
+call that dies part-way, and each call a stall or a deadline stopped, also writes one `warn` line:
+`ai transport retry`, `ai call died part-way` and `ai call stopped by our clock`. A reader's Stop
+writes none.
+
+**Three failures were recorded as something else until 2026-10-06**, and are now `error` rows
+with `failure_phase = mid_answer`: an in-band error chunk on the OpenRouter stream (it was
+`aborted`), a `2xx` whose JSON will not parse (it was `ok`), and a `2xx` that carries an error
+envelope where the answer should be (it was `ok`). No caller's return value or own retry changed.
+The effect on the figures is in [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries).
+
+What differs between the wires is where "before the provider has answered" ends.
+
+**The Messages wire** (`streamMessage`, since 2026-10-03). The line is `message_start`. Before it,
+a failed connection, a timeout, a `200` that opened with a transient `error` event (overloaded,
+timeout, API error, or no type at all) and a transient status are all retried. Once the response
+has begun nothing is, because listeners have heard it. The SDK's own retry stays off
+(`maxRetries: 0`), because it would put three attempts behind one row.
+`MeteredCall.attempts()` is how a caller that publishes its own request count (Simple, Labels)
+stays in step with the ledger.
+
+**The OpenRouter seams** (`src/ai-call.ts`, all five, since 2026-10-05). The line is the response
+headers, which is tighter. Two failures are retried and nothing else:
+
+- `fetch` itself rejected with a `TypeError`. That is what a dropped connection looks like, and no
+  response existed.
+- the status was a transient one **and the body priced nothing**. A refusal that carries a cost
+  was billed, and is not bought again.
+
+A `200` of any kind is never retried: not one whose body will not read, not one that does not
+parse, and on the stream not one that breaks before its first frame or dies mid-answer. A `200` on
+this wire means OpenRouter accepted the work and may be billing it. On the stream, `end` is cleared
+at the start of every attempt, and `onActivity` is called before the wait and again after it, so a
+caller's stall clock does not count the backoff as provider silence.
+
+**One predicate says which failures may be asked again:** `worthAskingAgain(err)` in
+`src/ai-call.ts`. Two facts feed it that only the gateway has. `ProviderRefused.priced` says
+whether the meter saw a cost in the refusal's body. And an error from `fetch` itself is remembered
+at `send`, because by the time a caller catches a `TypeError` it cannot tell a dead connection from
+a `200` whose body broke.
+
+**A caller can switch the gateway's retry off** with `retryTransport: false`, when it already owns
+the decision. Without that the loops multiply: nine requests for one PDF chunk on a bad minute.
+Five callers pass it:
+
+| Caller | Why |
+| --- | --- |
+| `pdf` (`src/pdf-read.ts`) | Its own loop retries through a width gate the gateway cannot see. That loop asks `worthAskingAgain` about a refusal, so it retries an unpriced 5xx and never a priced one. For any other thrown error it is older and wider than the rule above: it asks again after any non-abort throw, including a `200` whose body broke. |
+| `embeddings` (`embedBatch`) | Its own loop gives five goes and honours `Retry-After`. It asks `worthAskingAgain` about a thrown error, so a dropped connection is retried and a broken `200` is not, and it does not retry a priced 5xx. |
+| `shelf-topics` (every call in `src/shelf-terms/model-topics.ts`) | Naming a level and the filing pass are each already run once more on any failure. |
+| `pdf-figure-locate` | `MAX_LOCATE_CALLS` promises at most eight model calls an article and counts asks. A hidden retry would make that twenty-four requests. |
+| `command-pick`, `command-pick-words` | The two calls share one five-second deadline, and a failure already falls back to the bar's own list. |
+
+Two trade-offs, both taken on purpose:
+
+- **A retried attempt's cost is unknown, not zero.** A connection can drop after the provider took
+  the work. The failed row is *unpriced*, and the retry may pay twice for the first moment of a
+  call. The *priced refusal is not retried* rule covers the case where the provider tells us;
+  nothing covers the case where it does not. It is dearest on an Illustrated plate and on the three
+  calls that run a billed web search (`dig-deeper-search`, `citations-find`, `debate`).
+- **On the OpenRouter seams a caller's own count is not kept in step.** Simple's `checkCalls`,
+  quick search's `tally.requests` and Illustrated's "N call(s)" count asks, so after a retried blip
+  the ledger has one more row than the count. The ledger is the truth. The one count that is a
+  spend cap, the figure locator's, opts out instead.
+
+It exists because of one import: the Arc call's connection failed 595 ms into a cold-started
+function, nothing retried, and the job failed
+([261003m](../plans/261003m-a-transport-blip-fails-an-import-one-countable-retry-on-the-messages-wire.md)).
+The audit of the other wires, and the retry on them, is
+[261005j](../plans/261005j-the-other-ai-wires-fail-a-whole-call-on-one-dropped-connection-a-countable-retry-on-the-openrouter-seams.md).
+A call that fails after acceptance still fails on both wires. The gateway does not retry it;
+the caller-owned loops above may, notably the PDF reader after a broken `200` body. The recorded
+counts, including unnumbered part-way failures, are in
+[admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries).
+
 ### Aborted is a cause, not a coincidence
 
 Both wires used to record *any* failure raised while a signal happened to be aborted as `"aborted"`.
@@ -783,12 +964,12 @@ this; the bill was still using the weaker question.
 
 ### How a stream ends, and who decides what that means <a id="stream-end"></a>
 
-**One classification, seven callers, and the callers still decide.**
+**One classification, shared by chat/completions streaming callers, and the callers still decide.**
 [`classifyEnd`](../../src/ai-call.ts) turns a finished `openRouterStream` run into a
 `StreamOutcome` — `finished`, `truncated`, `filtered`, `wants-tools`, `provider-failed`,
 `abandoned`, `timed-out`, `went-quiet`, `unterminated`, or `unknown-finish-reason` with the reason
-and the terminator beside it. Every streaming caller switches on it with a `never` default, so a
-tenth way for a stream to end is a compile error at every site rather than a branch somebody forgot.
+and the terminator beside it. Callers that decide from it switch on it with a `never` default, so a
+new way for a stream to end is a compile error at every site rather than a branch somebody forgot.
 
 **Why it reports rather than decides.** The callers genuinely disagree, on evidence, about what
 `finish_reason: "length"` means: fatal to a quiz mark, success-with-a-flag to chat, left to the
@@ -873,8 +1054,9 @@ types were never what stood in the way.
 - `UNMETERED_SPEND`, in the same file — **the spend a `Declaration` cannot describe**, printed on
   every run by `unmetered()` in [`scripts/ai-cost.ts`](../../scripts/ai-cost.ts). A declaration has a
   `ProviderAccount` and a `Wire`; these have both now and still cannot be declared, because a
-  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. Two
-  entries: the two live-mode evals under `evals/live/`, and
+  `Declaration` is spent through `declaredFetch`, which wraps a request this process made. The
+  file lists them all (more than these two today, among them `scripts/run-claude.ts`); the two this
+  section began with are the live-mode evals under `evals/live/`, and
   [`scripts/run-codex.ts`](../../scripts/run-codex.ts) — the GPT Sol reviews this repo asks for on
   every plan, which spawn another vendor's CLI on a third account and so are invisible to the
   capability scan as well as to the ledger.
@@ -1045,19 +1227,39 @@ here:
 The research is
 [260929a](../research/260929a-paying-for-model-calls-with-the-reader-s-own-ai-subscription.md).
 
+## The box's key has a monthly limit, and it runs out
+
+The OpenRouter key in the box's `.env.local`, which every local call and every eval spends, has a
+monthly limit that Greg sets in OpenRouter's dashboard: $300 until 2026-10-05, $400 since. On
+2026-10-05 it was spent by the 5th of the month, and stayed at nothing for five hours until Greg
+raised it.
+
+**What it looks like**: every call fails in under a second with
+`Anthropic SDK request failed, status 403. [ai-refused]`. The real answer underneath is
+`Key limit exceeded (monthly limit)`. An eval probe exits 0 and writes one failed result file a
+slug, which have to be deleted before a re-run, since it will not overwrite them.
+
+**Before planning a paid eval, ask the key**: `GET https://openrouter.ai/api/v1/key` with the key
+as the bearer token answers `limit` and `limit_remaining`, free
+(`scripts/ai-cost.ts` § `reconcile` makes the same call). If nothing remains, only Greg can raise
+it: tell the Overseer, do the work that needs no model, and do not ship a prompt change
+unmeasured. Never reach for another key or another route to a model; the limit is the point.
+Production has its own key, and this says nothing about it.
+
 ## The one thing still open
 
 OpenRouter's own Messages reference contradicts itself about refusals: its example shows
-`stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. All seven stages branch on
-`message.stop_reason === "refusal"`, and if that branch stops firing each one tries to parse a
-refusal sentence as JSON — `summarise.ts` worst of all, treating it as a
-repairable parse error, buying a second call, and then salvaging the batch as merely missing
-summaries.
+`stop_details.type: "refusal"` beside `stop_reason: "end_turn"`. A stage that checked only
+`message.stop_reason === "refusal"` would, if that branch stopped firing, try to parse a refusal
+sentence as JSON — `summarise.ts` (gone with Summary mode, 2026-08-31) was the worst of them,
+treating it as a repairable parse error, buying a second call, and then salvaging the batch as
+merely missing summaries.
 
 It could not be settled by probe: triggering a genuine refusal means composing a harmful request,
 which is not a thing to do to check a field name. The answer is not a probe anyway — a check that
 accepts *either* shape is correct whichever way OpenRouter's documentation gets fixed, and costs one
-clause.
+clause. That check is `wasRefused` in `src/messages-stream.ts`, and since 2026-10-04 the ordinary
+stages reach it through `finishedText` in the same file rather than each calling it.
 
 ## See also
 

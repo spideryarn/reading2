@@ -62,6 +62,7 @@ import {
   REAUTH_REQUIRED_HEADING,
   SESSION_UNCONFIRMED,
   SESSION_UNCONFIRMED_CHIP,
+  SHARED_BY_PRIVATE_LINK,
   SHARED_WITH_YOU,
   SIGN_IN_AGAIN,
   VIEW_ONLY,
@@ -74,6 +75,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { useRenderCount } from "./perf.js";
 import { addressParts, GuessedSourceLink } from "./Masthead.js";
 import { LOGIN_HREF, PRIVACY_HREF, TAKEDOWN_HREF } from "./router.js";
+import type { PublicSharedBy } from "../public-types.js";
 import { CONTACT_EMAIL } from "../site-text.js";
 import type { SourceGuess } from "../types.js";
 import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.js";
@@ -98,22 +100,29 @@ import { anAccountWouldHelp, visitorSentence, type VisitorGap } from "./visitor.
  * what "reading"/"outline" and the mode name were drawn with, so this read as
  * one more fact about the page rather than a new kind of thing. Those went on
  * 2026-09-05 (App.tsx § the controls bar) and this chip is now the class's only
- * consumer, which is why styles.css § `.mode` says so: nothing is left to
+ * consumer, which is why shell.css § `.mode` says so: nothing is left to
  * quietly change the shape from underneath it.
  */
-export function ViewOnlyChip({ sessionUnconfirmed }: { sessionUnconfirmed: boolean }) {
+export function ViewOnlyChip({
+  sessionUnconfirmed,
+  sharedBy,
+}: {
+  sessionUnconfirmed: boolean;
+  /** Which way in, so the hover does not say "shared publicly" over a private link. */
+  sharedBy: PublicSharedBy;
+}) {
   return (
     <span
       className="mode on"
-      title={sessionUnconfirmed ? SESSION_UNCONFIRMED : SHARED_WITH_YOU}
+      title={sessionUnconfirmed ? SESSION_UNCONFIRMED : sharedSentence(sharedBy)}
     >
       <Lock size={11} className="tw:mr-1 tw:inline tw:align-[-1px]" />
       {VIEW_ONLY}
       {/* **The half of the unconfirmed-session state that has to survive a
           narrow window.** `SharedNotice` below carries the sentence and the
-          action, and on a narrow window it is hidden whenever a mode band is
-          open (styles.css § a narrow window) — so at that width, with a
-          band open, this chip is the only thing left saying why the page has
+          action, and it is hidden when a mode band covers the article
+          (narrow-window.css § a band with no room) — while that band covers,
+          this chip is the only thing left saying why the page has
           gone read-only, and *the action is not reachable at all*. That is a
           stated trade-off rather than an oversight: closing the band brings the
           notice and its button straight back, and the alternative — a third
@@ -153,9 +162,18 @@ export function ViewOnlyChip({ sessionUnconfirmed }: { sessionUnconfirmed: boole
 export function SharedNotice({
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
   source,
 }: {
   signedIn: boolean;
+  /**
+   * **How this visitor was let in**, as the server said it
+   * (`PublicArticle.sharedBy`). `"link"` leads with the private-link line in
+   * place of the public one; the three banner lines below are the same for
+   * both. Required, so a caller cannot draw *shared publicly* over a private
+   * link by leaving it out. Plan 261005e.
+   */
+  sharedBy: PublicSharedBy;
   /**
    * **Where the piece came from**, or absent to draw no source line at all —
    * which is what the visitor's details page passes, because its own
@@ -179,10 +197,10 @@ export function SharedNotice({
 }) {
   return (
     /* **`shared-notice` is a hook for one rule and not styling.** In the reading
-       view this box sits between the masthead and the controls bar, and on a
-       narrow window `.reader:has(.mode-band) .masthead` is
+       view this box sits between the masthead and the controls bar. With a
+       covering band `.reader.band-covers:has(.mode-band) .masthead` is
        `display: none` — the band goes full width and the article's identity
-       goes with it (styles.css § a narrow window). Without the same rule here
+       goes with it (narrow-window.css § a band with no room). Without the same rule here
        the notice became the first element on the page, at `y: 0`, underneath
        the fixed corner logo: measured 2026-08-29 at 820px, logo `(0,0,136,44)`
        against notice `(32,0,768,66)`, both illegible where they crossed.
@@ -192,7 +210,7 @@ export function SharedNotice({
        that has to survive is the `ViewOnlyChip` in the controls bar, which is
        sticky and stays. That split is why there are two of these at all. */
     <div className="shared-notice tw:mx-auto tw:mb-4 tw:max-w-3xl tw:rounded-md tw:border tw:border-rule tw:bg-surface-raised tw:px-4 tw:py-3 tw:font-sans tw:text-sm tw:text-ink-faint">
-      <p className="tw:m-0">{SHARED_WITH_YOU}</p>
+      <p className="tw:m-0">{sharedSentence(sharedBy)}</p>
       {source && <BannerSource url={source.url} guess={source.guess} />}
       <p className="tw:mt-2 tw:mb-0">
         {BANNER_TAKEDOWN_BEFORE}{" "}
@@ -230,6 +248,23 @@ export function SharedNotice({
       {!signedIn && <SignUp reason="to read your own articles this way" />}
     </div>
   );
+}
+
+/**
+ * The notice's first line and the chip's hover: which of the two ways in this
+ * is. One function, so the box and the bar cannot say different things.
+ */
+function sharedSentence(sharedBy: PublicSharedBy): string {
+  switch (sharedBy) {
+    case "public":
+      return SHARED_WITH_YOU;
+    case "link":
+      return SHARED_BY_PRIVATE_LINK;
+    default: {
+      const unreachable: never = sharedBy;
+      return unreachable;
+    }
+  }
 }
 
 /** The banner's links: the house link colour, underlined on hover, as /privacy draws them. */

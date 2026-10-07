@@ -47,7 +47,12 @@ vi.mock("nuqs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("nuqs")>()),
   useQueryState: () => [null, () => {}],
 }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { Metadata } = await import("../src/web/Metadata.js");
 const { PublicMetadataPage } = await import("../src/web/PublicPages.js");
@@ -174,6 +179,7 @@ async function visitor(meta: Partial<Meta>, sourceGuess?: SourceGuess) {
         /* This file is about where the piece came from; the session is beside
            the point, so it is the ordinary answer. App.tsx § ArticleAccess. */
         sessionUnconfirmed: false,
+        sharedBy: "public",
       }),
     );
   });
@@ -371,5 +377,93 @@ describe("the visitor's metadata page", () => {
 
     expect(host.textContent).toContain("A piece");
     expect(host.textContent).toContain("words");
+  });
+});
+
+describe("when and where it was published, under the title", () => {
+  const facts = () => host.querySelector("[data-metadata-facts]")?.textContent ?? "";
+
+  it("prints the publisher's calendar day and the journal", async () => {
+    await owner({ source: "pdf", journal: "Entropy", publishedAt: "2024-05-31" });
+    expect(facts()).toContain("Entropy");
+    /* The words are the reader's locale's; the day is not. */
+    expect(facts()).toMatch(/Published (31 May|May 31),? 2024/);
+  });
+
+  it("reads the day off a web page's own timestamp, in the publisher's zone", async () => {
+    await owner({ url: URL_, siteName: "Noema", publishedAt: "2024-03-11T23:30:00-05:00" });
+    expect(facts()).toMatch(/Published (11 Mar|Mar 11),? 2024/);
+  });
+
+  it("says nothing about a date the article does not have", async () => {
+    await owner({ url: URL_, siteName: "Noema" });
+    expect(facts()).toContain("Noema");
+    expect(facts()).not.toContain("Published");
+  });
+
+  it("ends an item with the separator, so a wrapped row on a phone never starts with one", async () => {
+    await owner({ url: URL_, siteName: "Noema", journal: "Entropy", publishedAt: "2024-05-31", fetchedAt: "2026-10-01T00:00:00Z" });
+    const items = [...(host.querySelector("[data-metadata-facts]")?.children ?? [])].map((el) => el.textContent ?? "");
+    expect(items.length).toBeGreaterThanOrEqual(4);
+    expect(items.filter((text) => text.trimStart().startsWith("·"))).toEqual([]);
+    /* Every item but the last carries one, and the last carries none. */
+    expect(items.slice(0, -1).every((text) => text.trimEnd().endsWith("·"))).toBe(true);
+    expect(items.at(-1)).not.toContain("·");
+  });
+
+  it("names a journal once when the site has the same name", async () => {
+    await owner({ url: URL_, siteName: "Entropy", journal: "entropy" });
+    expect(facts().match(/entropy/gi)).toHaveLength(1);
+  });
+
+  it("names a journal once despite surrounding whitespace in the site name", async () => {
+    await owner({ siteName: " Entropy ", journal: "entropy" });
+    expect(facts().match(/entropy/gi)).toHaveLength(1);
+  });
+
+  /* Plan 261004h: a paper the registry dates only to a year. */
+  it("prints the year alone for a paper with no day, and no made-up day", async () => {
+    await owner({ source: "pdf", journal: "Neuron", publishedYear: 2011 });
+    const published = [...(host.querySelector("[data-metadata-facts]")?.children ?? [])]
+      .map((el) => el.textContent?.replace("·", "").trim())
+      .find((text) => text?.startsWith("Published"));
+    expect(published).toBe("Published 2011");
+  });
+
+  describe("on the visitor's page", () => {
+    /* A visitor's meta is the public payload: `published` is the day alone,
+       under its own name (src/public-types.ts § `PublicMeta.published`). */
+    const shared = (meta: Partial<Meta> & { published?: string }) => visitor(meta as Partial<Meta>);
+    const line = () => host.querySelector("[data-public-facts]")?.textContent ?? "";
+
+    it("prints the journal and the day", async () => {
+      await shared({ byline: "A Writer", journal: "Entropy", published: "2024-05-31" });
+      expect(line()).toContain("Entropy");
+      expect(line()).toMatch(/Published (31 May|May 31),? 2024/);
+    });
+
+    it("prints the year alone for a paper with no day", async () => {
+      await shared({ journal: "Neuron", publishedYear: 2011 });
+      expect(line()).toMatch(/Published 2011$/);
+    });
+
+    it("names a journal once when the site has the same name, and no date it was not sent", async () => {
+      await shared({ siteName: " Entropy ", journal: "entropy" });
+      expect(line().match(/entropy/gi)).toHaveLength(1);
+      expect(line()).not.toContain("Published");
+    });
+
+    it("does not read the owner's field: a `publishedAt` on a visitor's meta prints nothing", async () => {
+      await shared({ siteName: "Noema", publishedAt: "2024-03-11T23:30:00-05:00" });
+      expect(line()).not.toContain("Published");
+    });
+  });
+
+  it("gives identical facts different React keys", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    await owner({ byline: "Entropy", journal: "Entropy" });
+    expect(facts().match(/Entropy/g)).toHaveLength(2);
+    expect(errors.mock.calls.flat().join(" ")).not.toMatch(/same key/i);
+    errors.mockRestore();
   });
 });

@@ -79,10 +79,25 @@ const REACT_185 =
   "non-minified dev environment for full errors and additional helpful warnings.";
 
 describe("an exception nobody wrote for a reader", () => {
+  it("does not recognise the retired Find it allowance code as an authored sentence", () => {
+    expect(authoredSentence(new Error("An obsolete allowance refusal. [cite-resting]"))).toBeNull();
+  });
+
   it("does not put React's own sentence in front of a reader", () => {
     const said = describeFetchFailure(new Error(REACT_185));
     expect(said).not.toContain("React");
     expect(said).toBe(PAGE_FAULT.message);
+  });
+
+  it("says PAGE_FAULT for a reply of the wrong shape, and reports it", async () => {
+    /* `MalformedReply` is the typed way for a hook to refuse a reply it cannot
+       use: the reader gets the page's own sentence, never the diagnostic. */
+    const { MalformedReply, ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+    const broken = new MalformedReply("the quiz reply has no questions");
+    expect(broken).not.toBeInstanceOf(ReaderFacingError);
+    expect(broken.name).toBe("MalformedReply");
+    expect(describeFetchFailure(broken)).toBe(PAGE_FAULT.message);
+    expect(captured).toEqual([{ err: broken, options: { neverAuthored: true } }]);
   });
 
   it("is reported with its message withheld, whatever code it happens to end in", () => {
@@ -118,23 +133,22 @@ describe("a sentence that was written for a reader", () => {
     expect(authoredSentence(new Error(sentence))).toBe(sentence);
   });
 
-  it("uses the declared sentence at both formerly uncoded 5xx throw sites", () => {
-    /* The registry assertion above is not enough: reverting either throw site
+  it("uses the declared sentence at the formerly uncoded 5xx throw site", () => {
+    /* The registry assertion above is not enough: reverting the throw site
        to its old bare string would leave it green while the reader once again
-       got `UNEXPECTED_FAILURE`. These are private helpers with database-shaped
-       dependencies, so pin the small wiring seam directly. */
+       got `UNEXPECTED_FAILURE`. It is a private helper with database-shaped
+       dependencies, so pin the small wiring seam directly.
+
+       There were two until 2026-10-04: the other was *Find it*'s 503
+       (`CITATION_FIND_RESTING`) in src/citation-find.ts, which went with the
+       `POST …/find` route that threw it. */
     const shelf = readFileSync(
       path.resolve(import.meta.dirname, "..", "src", "store", "pg-shelf.ts"),
-      "utf8",
-    );
-    const citations = readFileSync(
-      path.resolve(import.meta.dirname, "..", "src", "citation-find.ts"),
       "utf8",
     );
     expect(shelf).toMatch(
       /new Error\(DELETE_HELD_BY_UNSETTLED_SLOT\.message\),\s*\{ status: 500 \}/,
     );
-    expect(citations).toContain("httpError(503, CITATION_FIND_RESTING.message)");
   });
 
   it("passes the server's own { error } through, from a real readJson", async () => {
@@ -300,6 +314,7 @@ describe("the chat controller's own catches", () => {
       settledAnswer: async () => null,
       stopAnswer: never,
       cancelThread: never,
+      markHintOpened: never,
       ...overrides,
     });
   }
@@ -411,9 +426,11 @@ describe("every file that describes its failures through it", () => {
    * `PAGE_FAULT`**, and nothing else would notice: the hooks' own tests mostly
    * assert that *an* error appeared (GPT Sol, code review F6). So a file whose
    * `catch` hands errors to `describeFetchFailure` may not `throw new Error(`
-   * at all — a sentence for the reader is a `ReaderFacingError`, and a
-   * diagnostic belongs somewhere that is not on this path. The list is found,
-   * not written, so a new caller is covered the day it arrives.
+   * at all — a sentence for the reader is a `ReaderFacingError`, a reply of
+   * the wrong shape is a `MalformedReply` (which says by its class that the
+   * reader gets `PAGE_FAULT`), and any other diagnostic belongs somewhere that
+   * is not on this path. The list is found, not written, so a new caller is
+   * covered the day it arrives.
    */
   it("throws no plain Error for it to swallow", () => {
     const web = path.resolve(import.meta.dirname, "..", "src", "web");

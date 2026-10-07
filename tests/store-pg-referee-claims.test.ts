@@ -38,8 +38,9 @@
  * old one swept — are the only thing that distinguishes it from a store that
  * sweeps everything the moment a second tab loads the page.
  *
- * **Skips when there is no database**, loudly; `REQUIRE_POSTGRES=1` turns the
- * skip into a failure. docs/project/testing.md § When a skip is not acceptable.
+ * **Fails when there is no database**, rather than skipping
+ * (tests/helpers/pg-ready.ts, since 2026-09-05).
+ * docs/project/testing.md § When a skip is not acceptable.
  */
 
 import { eq, sql } from "drizzle-orm";
@@ -56,6 +57,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { currentOwnerId, type OwnerId, runInRequest, setRequestOwner } from "../src/owner.js";
 import type { Claim, ClaimsRun } from "../src/referee-claims.js";
+import type { ClaimsFinish } from "../src/store/contracts.js";
 import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
@@ -366,6 +368,116 @@ describe("the Postgres claims store", { timeout: 20_000 }, () => {
     await getDb().delete(refereeClaims).where(eq(refereeClaims.articleId, ARTICLE_ID));
     expect(await store.finish(SLUG, { status: "done", claims: [aClaim()] }, lastAttempt)).toBeNull();
     expect(await store.load(SLUG)).toBeNull();
+  });
+
+  /* ------------------------------------- claims are empty unless the run is done -- */
+
+  /**
+   * **`referee_claims_empty_unless_done`: `status = 'done' or
+   * jsonb_array_length(claims) = 0`.** Written in 2026-09 and taken out again
+   * because the filesystem store could not refuse the same row; that store went
+   * on 2026-09-05 and the CHECK came back on 2026-10-07
+   * (docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md
+   * § Stage 3).
+   *
+   * What it rests on, and each link is a case below: `begin` writes `[]` on the
+   * insert and on the upsert; `finish` and the sweep only ever match a
+   * `pending` row, which is therefore empty; and an `error` finish cannot carry
+   * claims, because `ClaimsFinish` is a union whose `error` arm types them as
+   * the empty tuple.
+   */
+  describe("claims are empty unless the run is done", () => {
+    /** The name of the constraint a write tripped, wherever drizzle put it. */
+    async function refusedBy(write: () => Promise<unknown>): Promise<string | undefined> {
+      try {
+        await write();
+        return "nothing: the write went in";
+      } catch (err) {
+        const e = err as { constraint?: string; cause?: { constraint?: string } };
+        return e.constraint ?? e.cause?.constraint;
+      }
+    }
+
+    const stored = async () => {
+      const [row] = await getDb()
+        .select({ status: refereeClaims.status, claims: refereeClaims.claims })
+        .from(refereeClaims)
+        .where(eq(refereeClaims.articleId, ARTICLE_ID));
+      return row;
+    };
+
+    it("the database refuses claims on a pending run and on a failed one", async () => {
+      const db = getDb();
+      const { attempt } = await store.begin(SLUG, HASH);
+
+      // Claims under a spinner: the half-applied write the comment used to shrug at.
+      expect(
+        await refusedBy(() =>
+          db.update(refereeClaims).set({ claims: [aClaim()] }).where(eq(refereeClaims.articleId, ARTICLE_ID)),
+        ),
+      ).toBe("referee_claims_empty_unless_done");
+
+      await store.finish(SLUG, { status: "done", claims: [aClaim()], model: "m" }, attempt);
+      expect((await stored())?.claims).toHaveLength(1);
+
+      /* A finished answer cannot be relabelled with its claims still on it, in
+         either direction. Each is a partial UPDATE of `status` alone. */
+      for (const status of ["error", "pending"]) {
+        expect(
+          await refusedBy(() =>
+            db.update(refereeClaims).set({ status }).where(eq(refereeClaims.articleId, ARTICLE_ID)),
+          ),
+          status,
+        ).toBe("referee_claims_empty_unless_done");
+      }
+      expect((await stored())?.status).toBe("done");
+    });
+
+    it("every ordinary ending leaves a row the rule allows", async () => {
+      /* From `done` with claims, which is where the last case left the row: the
+         upsert in `begin` moves the status and empties the claims in ONE
+         statement, so there is no instant at which the row is illegal. */
+      const again = await store.begin(SLUG, HASH);
+      expect(await stored()).toEqual({ status: "pending", claims: [] });
+
+      // An error, written as the route writes it (`claims: []`) and without.
+      await store.finish(SLUG, { status: "error", error: "the provider refused", claims: [] }, again.attempt);
+      expect(await stored()).toEqual({ status: "error", claims: [] });
+      const third = await store.begin(SLUG, HASH);
+      await store.finish(SLUG, { status: "error", error: "again" }, third.attempt);
+      expect(await stored()).toEqual({ status: "error", claims: [] });
+
+      // The sweep.
+      await store.begin(SLUG, HASH);
+      await ageRunBy(CLAIMS_ORPHAN_GRACE_MS + 60_000);
+      await store.sweep(SLUG, false);
+      expect(await stored()).toEqual({ status: "error", claims: [] });
+
+      // A done run with nothing in it, and one with something.
+      const fifth = await store.begin(SLUG, HASH);
+      await store.finish(SLUG, { status: "done", claims: [] }, fifth.attempt);
+      expect(await stored()).toEqual({ status: "done", claims: [] });
+      const sixth = await store.begin(SLUG, HASH);
+      await store.finish(SLUG, { status: "done", claims: [aClaim()] }, sixth.attempt);
+      expect((await stored())?.claims).toHaveLength(1);
+    });
+
+    it("an error finish cannot carry claims: the compiler refuses it, and so does the database", async () => {
+      const { attempt } = await store.begin(SLUG, HASH);
+
+      /* **The compiler's half.** `npm run typecheck` reads this file; if the
+         `error` arm of `ClaimsFinish` is ever widened back to `Claim[]`, the
+         directive below is unused and the typecheck fails on this line. */
+      // @ts-expect-error an error finish may carry `claims: []` and nothing else
+      const smuggled: ClaimsFinish = { status: "error", error: "x", claims: [aClaim()] };
+
+      /* **The database's half**, for a caller that got past the compiler (a
+         cast, a `.js` script). The write is refused whole: no half-finished
+         row, and the attempt is still this run's to finish properly. */
+      await expect(store.finish(SLUG, smuggled, attempt)).rejects.toThrow();
+      expect(await stored()).toEqual({ status: "pending", claims: [] });
+      expect((await store.finish(SLUG, { status: "error", error: "x" }, attempt))?.status).toBe("error");
+    });
   });
 
   /* ------------------------------------------------ the paper is not theirs -- */

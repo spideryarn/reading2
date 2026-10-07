@@ -71,7 +71,8 @@ export const RESET_ROLE = {
   timeline: "extra",
   quiz: "extra",
   faq: "extra",
-  /* Made on demand by the owner's press that turns Marginalia on, off
+  /* Queued after import with the main modes, or made on demand by the owner's
+     press that turns Marginalia on when none was stored. Off
      DEFAULT_INGEST_STEPS, a whole column: the modes' shape, though it is not a
      mode of its own. */
   relations: "extra",

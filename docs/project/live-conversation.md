@@ -1,5 +1,7 @@
 # Live conversation
 
+Up: [reading-view-overview.md](reading-view-overview.md) · the typed chat it joins: [chat-tools.md](chat-tools.md)
+
 Talking to the article, out loud, in the middle of a chat. Press **Live** in the composer and the
 reader is in a spoken conversation with a companion that has the whole piece in front of it; press
 Send, or Live again, and they are back to typing in the same thread.
@@ -19,6 +21,22 @@ reader can read the whole thing back a week later. That is the requirement every
 > I should be able to use that button to start a new conversation, or resume an existing one, and when I hang up I should be able to resume or switch to typing/dictation.
 >
 > — Greg, 2026-09-06
+
+## In this doc
+
+- [§ The controls must say what is happening](#the-controls-must-say-what-is-happening) — the Live button's states and wording
+- [§ Where the pieces are](#where-the-pieces-are) — which file does what; start here to find code
+- [§ Which model, and why not GPT-Live yet](#which-model-and-why-not-gpt-live-yet) — the engine choice
+- [§ The audio never touches our server](#the-audio-never-touches-our-server) — the privacy and cost shape
+- [§ The meter](#the-meter) — what the usage meter counts and shows
+- [§ The three orderings, and why each is a rule](#the-three-orderings-and-why-each-is-a-rule) — why turns can land out of order
+- [§ The write, and the one guard that is also the idempotency](#the-write-and-the-one-guard-that-is-also-the-idempotency) — how a spoken turn is saved once
+- [§ What a spoken row carries that a typed one does not](#what-a-spoken-row-carries-that-a-typed-one-does-not) — extra fields on a spoken message
+- [§ Three things that are not obvious and cost an afternoon each](#three-things-that-are-not-obvious-and-cost-an-afternoon-each) — gotchas before debugging
+- [§ The second engine: GPT-Live, behind Experimental](#the-second-engine-gpt-live-behind-experimental) — the other engine and its switch
+- [§ The lifecycle, which is the most failure-prone part](#the-lifecycle-which-is-the-most-failure-prone-part) — connect, hang up, resume; where it breaks
+- [§ What is not built](#what-is-not-built) — known gaps
+- [§ See also](#see-also)
 
 ## The controls must say what is happening
 
@@ -68,13 +86,13 @@ microphone opened, a response event is not proof that sound played, and the prev
 not proof that Chat displayed or stored it. The repair and its evidence are in
 [260906f](../plans/260906f-repair-realtime-chat.md).
 
-Keep the existing Live control in an open Remember conversation too; it shares this reading
-companion. Remember-specific spoken reply stances are not implemented. The earlier claim below
+Keep the existing Live control in an open Recall conversation too; it shares this reading
+companion. Recall-specific spoken reply stances are not implemented. The earlier claim below
 that this control was not built was stale: `94ddccd42` deliberately labelled it in that composer,
 and `028676677` preserved it through the Review-to-Remember rename. New list-level spoken
 conversations start in Chat.
 
-**A live conversation started in Remember's empty conversation is stored as Remember.** Remember
+**A live conversation started in Recall's empty conversation is stored as a `learn` thread.** Recall
 opens straight into a conversation that exists only in the tab, so pressing Live there makes the
 first spoken exchange the write that creates it. The spoken append names the kind the tab has for
 it (`SpokenTurn.kind` in [`src/chat.ts`](../../src/chat.ts)), used only when creating the thread.
@@ -99,6 +117,7 @@ empty conversation — SPIDERYARN-READING2-70,
 | [`src/web/live/LiveStatus.tsx`](../../src/web/live/LiveStatus.tsx) | The state pill, connecting steps, input level, notices, errors with Try again, and the Advanced disclosure (device, noise reduction, Reconnect). |
 | [`src/web/live/LiveTail.tsx`](../../src/web/live/LiveTail.tsx), [`tail.ts`](../../src/web/live/tail.ts) | The unsaved words, in the thread after the saved turns, grouped by exchange. |
 | [`src/web/live/stall.ts`](../../src/web/live/stall.ts) | Which stall a live session is in, if any — the pure rules behind the notice and **Reconnect**. |
+| [`src/web/live/tap.ts`](../../src/web/live/tap.ts) | `TalkMode`, and the pure rule for what a refused tap-to-talk event leaves behind: the mode, the microphone, whether the turn is forgotten, the sentence. A refusal can arrive late, after Done's commit has gone, and then must not undo that turn. The hook keeps the effects. |
 | [`src/web/live/tool-responses.ts`](../../src/web/live/tool-responses.ts) | Realtime only. One continuation after a response's tool results settle; a newer spoken turn supersedes the old continuation. |
 | [`src/web/PassageLinks.tsx`](../../src/web/PassageLinks.tsx) | Shared live and saved passage references, using stable block ids. |
 | [`src/chat.ts`](../../src/chat.ts) `withSpokenTurn` | The write: both rows, both `done`, one transaction. |
@@ -261,7 +280,12 @@ own, read off the wire by [`gpt-live/meter.ts`](../../src/web/live/gpt-live/mete
 - **`backend` — the text model's tokens**, one row per backend response id. Priced on the model the
   session row names, cached input at its own rate. `LIVE_BACKEND_PRICES` in
   [`src/pricing.ts`](../../src/pricing.ts) says where each number came from, and names the
-  long-context tier it does not model.
+  long-context tier it does not model. A handled terminal event with usable token totals is
+  billed even when it failed or was cut short, and its report says so: `failed` is written as
+  `error`, `incomplete` as `aborted`, the raw word kept in `provider_status`. A report from a tab
+  still running code from before the status field carries no status and is kept as `ok` with a
+  null `provider_status`
+  ([the plan](../plans/261006g-gpt-live-backend-report-carries-its-terminal-status.md)).
 
 **The create call is the server's own, and it bills fifteen seconds.** So
 `POST /api/chat/:slug/:threadId/live-session` writes the session row *before* it asks OpenAI — the
@@ -570,7 +594,7 @@ one still running.
   in total, so a forgotten tab bills minutes rather than the hour OpenAI would allow. Only the reader's own voice resets the idle
   clock — a session that kept itself alive by answering its own last question would be exactly the
   case the cap is for.
-- **Live conversation in the comment dialog.** Chat and the existing Remember composer share
+- **Live conversation in the comment dialog.** Chat and the existing Recall composer share
   the thread-backed controls; comments do not yet have them.
 - **On GPT-Live:** tap to talk, microphone placement, and anything that finishes tool work with the
   tab closed. Speaker segments are not stored as rows — pairs are a projection of them, and segment

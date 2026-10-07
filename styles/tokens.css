@@ -25,8 +25,9 @@
  * `app/globals.css`, which was itself a shadcn project. The migration had almost nothing to bridge.
  *
  * Consequences worth knowing before you edit anything here:
- *   - This file is imported inside `@layer app` (see src/web/tailwind.css). Custom properties are
- *     unaffected by layering, so these resolve exactly as before.
+ *   - This file is imported inside `@layer app` (see src/web/tailwind.css). Custom properties
+ *     cascade like any other declaration, layers included: the same name declared in a later
+ *     layer, or outside any layer, would win over the value here.
  *   - `shadcn add` and `shadcn init` will try to write their own palette. Revert it. A generated
  *     light `:root` loaded after this one turns the page white and the orange near-invisible.
  *   - Names match the original app where they exist there, so anything copied across keeps working.
@@ -48,29 +49,29 @@
        the letters hold this between their beats (src/web/styles/logo-animations.css § Strain). */
     --wordmark-ink: var(--foreground);
 
-    /* The search wash — and it is deliberately NOT the orange.
+    /* The fixed search hue — and it is deliberately NOT the orange.
        docs/project/original-version/highlighting.md records the exact mistake this avoids: that
        app drew search hits, glossary terms and semantic highlights all in #DB8A45, separated only
        by opacity, and got away with it only because it could never show two at once. We can — a
        comment, a selected term and a search hit can all land on one sentence — so the third mark
        needs a different hue rather than a different alpha. On a near-black page that matters twice
        over: a low-alpha orange here is not subtle, it is invisible.
-       Held as three numbers, not as a colour, because the confidence wash is `rgb(var(--hit-rgb) /
-       <alpha>)` and the space-separated form is the one that takes a variable alpha. */
+       Held as three numbers, not as a colour, because a literal match's
+       confidence-bearing outline is `rgb(var(--hit-rgb) / <alpha>)` and the
+       space-separated form is the one that takes a variable alpha. */
     --hit-rgb: 96 178 214;
     --hit: rgb(var(--hit-rgb));
-    /* And the wash behind the words, which since 2026-08-26 is NOT --hit-rgb.
-       With several searches showing at once, each in its own categorical hue
-       (styles/colourscales.css), the two channels had to be split: the wash
-       carries the model's confidence and the rules under it carry which search
-       found the words. A coloured wash would then be a third thing competing
-       with eight — and worse, a *blue* wash is one of the eight, so a reader
-       would have to learn that this particular blue means something different
-       from the blue two lines up.
+    /* The low-chroma wash used only inside a pressed search hit since
+       2026-10-03. Before then it sat behind every hit and carried confidence,
+       while the categorical rules carried which search found the words. A
+       coloured wash would have been a third thing competing with eight — and
+       worse, a *blue* wash is one of the eight, so a reader would have had to
+       learn that this particular blue meant something different from the blue
+       two lines up.
 
-       So it is deliberately low-chroma: a slate that reads as "marked" without
-       reading as any of the palette's answers to "marked by which". Alpha is
-       always applied to it, hence the triplet — see the note above. */
+       It remains deliberately low-chroma: a slate that reads as "pressed"
+       without reading as any of the palette's answers to "marked by which".
+       Alpha is always applied to it, hence the triplet — see the note above. */
     --hit-wash-rgb: 148 158 168;
     /* The ordinary-colour alias, exactly as `--hit` is for `--hit-rgb`. Every
        triplet here needs one: a bare `148 158 168` is not a colour, so
@@ -81,40 +82,65 @@
        else entirely. */
     --hit-wash: rgb(var(--hit-wash-rgb));
 
-    /* **The quote outline** — the fourth channel in the prose, and the only one
-       that is a stroke. Search fills, quotes outline: hue means *which search
-       found this*, the wash means *how sure it was*, and neither had room for
-       "and this one is a quote" without taking something away from search.
-       Greg's call, 2026-09-06. docs/project/quotes.md § The stroke.
+    /* **The quote fill** — a quote is drawn like a highlighter pen, and a
+       search hit as an outline. Greg, 2026-10-03 (`spya-xrgste`), reversing his
+       own call of 2026-09-06, when it was the other way round and this token
+       was `--quote-stroke-rgb`. docs/project/quotes.md § A highlighter pen;
+       docs/plans/261003l-quotes-filled-like-a-highlighter-pen-and-search-hits-outlined.md.
 
-       **A green, and specifically not the orange.** The obvious choice was
-       `--highlight`, on the belief that the brand orange was unused in the
-       prose marks. It is not: `mark.cmt` and `mark.term` both wear it, so an
-       orange outline round a passage that also carries a comment would merge
-       with the comment's underline and hide the one affordance in the prose
-       that can be clicked. Checked in Chrome, 2026-09-07 — the green sits a
-       device row below the comment's orange and both stay legible.
+       **A purple, because the reader now has fills of their own.** A reader's
+       highlight is a wash in one of four hues (`--hl-*`, src/web/styles/tokens.css):
+       yellow 100, green 150, blue 270, pink 350. Until this was a fill it was a
+       green at hue ~163, which as a wash is the reader's green highlight. Hue
+       310 sits 40 degrees from the reader's blue and 40 from their pink, and
+       tests/quote-fill.test.ts fails if a later edit to either set brings them
+       closer than that.
 
-       **It is NOT away from the categorical palette, and the first draft of
-       this comment claimed it was.** `--cat-2-rgb` is `47 191 149`, a bluish
-       green, and this is `122 200 160` — the same family (GPT Sol, 2026-09-07).
-       The defence is the *channel*, not the hue: a search is a wash behind the
-       words and a quote is a line around them, so even in one colour family the
-       two cannot be read as the same thing. The case that would genuinely bite
-       — a green outline over a green `--cat-2` wash — needs a quote and a
-       search drawn at once, which the reader cannot reach today because one
-       mode's marks are on the page at a time.
+       **Not the teal the plan first chose** (hue 205, the wider gap): the same
+       purple hue is the spine strip's (spine.css § .spine-quote), and the spine's
+       reading-time area is a cyan at hue 200 (`--read-time`).
 
-       **So the hue is an open question rather than a settled one**, recorded in
-       260907c § Open questions. Every one of the eight slots plus the brand
-       orange and the slate wash is spoken for, so "a hue nothing else uses" was
-       never actually available; violet is the least-used gap if Greg wants one.
+       **Not the orange**: `mark.cmt` and `mark.term` wear it, and a comment's
+       underline is the one mark in the prose that can be clicked.
 
-       Held as three numbers because the stroke is drawn at partial alpha. */
-    --quote-stroke-rgb: 122 200 160;
-    /* The alias every triplet here needs — see `--hit-wash` above for the
-       invalid-declaration trap that makes it worth writing out. */
-    --quote-stroke-color: rgb(var(--quote-stroke-rgb) / 0.95);
+       **Not away from the categorical palette either** — `--cat-14` is a purple
+       at hue 303, one of the eight only a reader can pick. The defence is the
+       channel: a search is a line round the words and a quote is a wash behind
+       them.
+
+       Held as three numbers because the spine strip is drawn at partial alpha. */
+    --quote-rgb: 204 151 243;
+    /* **The fill in the prose has a colour of its own on the dark page**, since
+       2026-10-05. `--quote-rgb` above is a pale lavender, right for a 2px strip
+       on the spine's panel and grey-purple as a faint wash over near-black.
+       Greg, on an iPad: "the purple Quote-highlights in dark mode on an iPad
+       screen were a little hard to see. I don't mind if they're slightly
+       different from the Spine". So the prose fill is this deeper, more
+       saturated purple at the same hue (310), and the spine strip keeps
+       `--quote-rgb`. On the light page the two are one colour.
+
+       Darker than the lavender, so it is drawn at a higher strength, and at
+       that strength the ink, soft ink, links and opaque search bands are more
+       readable. Some translucent search outlines and the cross-reference rule
+       lose contrast; the independent review records those trade-offs. docs/project/quotes.md § A deeper purple in the dark prose;
+       docs/plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md.
+
+       **A fifth less chroma since 2026-10-06.** It was `151 48 208`, and Greg
+       the next day: "Now the purple Quote highlighting is a little toooo
+       saturated. Just dial it down a bit." Same hue and lightness.
+       docs/plans/261006e-dark-quote-fill-a-little-less-saturated.md. */
+    --quote-prose-rgb: 143 70 189;
+    /* **How strong the fill is, per tier** (annotations.css § quote fills
+       multiplies these by the fade). Per theme since 2026-10-05, and these
+       belong to `--quote-prose-rgb`: change the colour and they have to be
+       summed again. The blue search colour (`--cat-4`), whose outline over a
+       quote clears 3:1 at full confidence, and the soft ink in a block drawn on `--muted`
+       hold the heavy one near 0.60; the step between the tiers holds the
+       light one under it. tests/quote-fill.test.ts has the sums. The heavy
+       one was 0.60 until 2026-10-06: the less saturated purple is a little
+       lighter over `--muted`, and at 0.60 the soft ink there fell to 4.42. */
+    --quote-fill-light: 0.48;
+    --quote-fill-heavy: 0.58;
 
     /* The sheet an article's pictures are printed on, deliberately light in
        either appearance.
@@ -153,7 +179,11 @@
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.97 0 0);
     --muted: oklch(0.245 0 0);
-    --muted-foreground: oklch(0.63 0 0);
+    /* 0.64, not 0.63, since 2026-10-07: at 0.63 the faint grey read 4.44:1 on
+       `--surface-raised` (the dock's labels, the hover cards' buttons), under
+       the 4.5 bar. One step, everywhere: 4.62 on raised, 5.88 on the page.
+       tests/appearance-palette.test.ts; plan 261007h § F6. */
+    --muted-foreground: oklch(0.64 0 0);
     /* CAREFUL: --accent here is shadcn's meaning — a raised dark *surface* for hover
        states — NOT the brand highlight colour. If you import this file into a
        stylesheet that already uses --accent to mean "the orange", every highlight
@@ -163,6 +193,15 @@
     --accent: oklch(0.269 0 0);
     --accent-foreground: oklch(0.97 0 0);
     --destructive: oklch(0.65 0.2 27.325);
+    /* The error-TEXT colour: the word "failed" on a status row. Not
+       `--destructive`, which is a fill (the destructive Button, the failed
+       count chip) and is tuned as one: as small text it reads 4.37:1 on the
+       raised surface here. This is the same hue and chroma, lighter, and was
+       chosen by measuring in Chrome against the three surfaces a status row
+       sits on: 6.65:1 on --page, 6.19:1 on --panel, 5.22:1 on
+       --surface-raised. Meant for full opacity; tests/appearance-palette.test.ts
+       holds all three at 4.5:1 in both themes. */
+    --danger: oklch(0.7 0.2 27.325);
     /* Required by every Radix overlay shadcn builds on (popover, dropdown,
        tooltip content). The value is the raised-panel grey that styles.css
        already calls --surface-raised: on a dark page, up is forward. */
@@ -202,9 +241,6 @@
     /* ---- sidebar / left rail ----------------------------------------- */
     /* Slightly *lighter* than --background, not darker: on a dark page a panel lifts forward. */
     --sidebar: oklch(0.19 0 0);
-    --sidebar-foreground: oklch(0.97 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-border: oklch(0.27 0 0);
 
     /* ---- shape ------------------------------------------------------- */
     --radius: 0.625rem;
@@ -215,7 +251,6 @@
        Greg asked to be "a bit bigger" (2026-09-28). 44px, the usual touch-target minimum.
        docs/project/controls.md § The numbers. */
     --control-h-lg: 2.75rem;
-    --header-height: 4rem;
 
     /* ---- type -------------------------------------------------------- */
     /* GEIST IS THE BASE FACE AND THE CHROME. It is self-hosted from
@@ -275,8 +310,8 @@
     /* 17px x 1.4 = 23.8px. Theirs, from the research doc named in this file's header —
        arithmetic rather than evidence, but good arithmetic, and the thing that makes a page
        look considered rather than assembled. Every vertical gap in the reading column is a
-       multiple of a THIRD of it; --block-pad below is that third, and it is what the rules
-       are written against.
+       multiple of a QUARTER of it; --block-pad below is that quarter, and it is what the rules
+       are written against. (It was a third until the gap came down; § --block-pad.)
 
        Deliberately scoped to the reading column. The chrome keeps its per-rule rem values;
        sweeping 1,800 lines of styles.css onto a scale is a different job and Greg scoped this
@@ -366,7 +401,10 @@
 
     --hit-rgb: 0 114 178;
     --hit-wash-rgb: 112 122 134;
-    --quote-stroke-rgb: 0 138 98;
+    --quote-rgb: 127 66 166;
+    --quote-prose-rgb: 127 66 166;
+    --quote-fill-light: 0.2;
+    --quote-fill-heavy: 0.32;
 
     --background: oklch(0.985 0 0);
     --foreground: oklch(0.2 0 0);
@@ -380,6 +418,10 @@
     --accent: oklch(0.93 0 0);
     --accent-foreground: oklch(0.2 0 0);
     --destructive: oklch(0.55 0.2 27.325);
+    /* Error text on the light surfaces: darker than the fill above, as Dark's
+       is lighter than its fill. Measured 5.83:1 on --page, 5.44:1 on --panel,
+       6.09:1 on --surface-raised. */
+    --danger: oklch(0.52 0.2 27.325);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.2 0 0);
     --destructive-foreground: oklch(0.985 0 0);
@@ -387,9 +429,6 @@
     --border: oklch(0.885 0 0);
     --input: oklch(0.85 0 0);
     --sidebar: oklch(0.96 0 0);
-    --sidebar-foreground: oklch(0.2 0 0);
-    --sidebar-accent: oklch(0.92 0 0);
-    --sidebar-border: oklch(0.885 0 0);
     /* The focus ring, darkened with the orange-as-a-line token: the raw orange is
        ~2.6:1 on this page, under the 3:1 a focus indicator needs (WCAG 1.4.11).
        Every hand-written focus outline and native `accent-color` reads

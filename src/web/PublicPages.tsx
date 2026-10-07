@@ -19,7 +19,7 @@
 import { ExternalLink } from "lucide-react";
 
 import type { Article, SourceGuess } from "../types.js";
-import type { PublicArtefacts } from "../public-types.js";
+import type { PublicArtefacts, PublicMeta, PublicSharedBy } from "../public-types.js";
 import {
   BANNER_SOURCE_GUESS_CANONICAL,
   BANNER_SOURCE_GUESS_MATCHING,
@@ -30,7 +30,8 @@ import { Dock } from "./Dock.js";
 import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { carriedSearch, readHref, TAKEDOWN_HREF, type ArticleView } from "./router.js";
-import { webSource } from "./SourceLink.js";
+import { publishedOf } from "./relative-time.js";
+import { journalBesideSite, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { SharedNotice } from "./PublicChrome.js";
@@ -108,6 +109,7 @@ export function PublicMetadataPage({
   available,
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
 }: {
   slug: string;
   article: Article;
@@ -116,12 +118,29 @@ export function PublicMetadataPage({
   signedIn: boolean;
   /** For the notice below only — reader-capability.ts § sessionUnconfirmed. */
   sessionUnconfirmed: boolean;
+  /** For the notice below only — reader-capability.ts § sharedBy. */
+  sharedBy: PublicSharedBy;
 }) {
   const { meta } = article;
   const stats = articleStats(article);
   useDocumentTitle(pageTitle({ kind: "read", title: meta.title, view: "metadata" }));
 
-  const facts = [meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
+  /* **Where and when it was published, for a visitor too.** Greg, 2026-10-04:
+     "Q-visitor-page yes" — the journal and the publication date, these two
+     facts and no others (plan 261004h). A visitor's `article` is the public
+     payload (article/access.ts), so its meta is a `PublicMeta`: the date is
+     `published`, the calendar day alone, or `publishedYear` for a paper dated
+     only to a year. Never the owner's `publishedAt`, which is not sent. In the
+     order the owner's page prints them. */
+  const shared: PublicMeta = meta;
+  const published = publishedOf({ publishedAt: shared.published, publishedYear: shared.publishedYear })?.label;
+  const facts = [
+    shared.byline,
+    journalBesideSite(shared.journal, shared.siteName),
+    shared.siteName,
+    published ? `Published ${published}` : undefined,
+    shared.lang,
+  ].filter(Boolean) as string[];
 
   return (
     <>
@@ -133,7 +152,9 @@ export function PublicMetadataPage({
           {meta.title}
         </h1>
         {facts.length > 0 && (
-          <p className="tw:m-0 tw:mb-2 tw:text-sm tw:text-ink-faint">{facts.join(" · ")}</p>
+          <p data-public-facts className="tw:m-0 tw:mb-2 tw:text-sm tw:text-ink-faint">
+            {facts.join(" · ")}
+          </p>
         )}
         {/* **Where the piece came from, for a visitor too.** Greg, 2026-08-30:
             *"I think Public-readable articles should show their provenance-url
@@ -153,7 +174,7 @@ export function PublicMetadataPage({
             does not disclose which absence was behind it. */}
         <SourceRow url={webSource(meta)} guess={article.sourceGuess} />
 
-        <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} />
+        <SharedNotice signedIn={signedIn} sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />
 
         <section className="tw:mt-8">
           <h2 className="tw:m-0 tw:mb-2 tw:text-sm tw:font-semibold tw:text-ink">The piece</h2>

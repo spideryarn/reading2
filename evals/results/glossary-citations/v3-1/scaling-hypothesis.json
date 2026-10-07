@@ -1,0 +1,153 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "v3-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis",
+        "weak scaling hypothesis"
+      ],
+      "senseHere": "The idea that intelligence emerges simply from making neural networks, their training data, and compute much larger, without needing fundamentally new algorithms. The article splits this into a 'strong' version (scale alone suffices, OpenAI's bet) and a 'weak' version (the right algorithms must still be found piece by piece, though each piece scales, DeepMind's view)."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A model's ability, after training, to pick up and perform brand-new tasks on the fly from a few examples or instructions given at runtime, rather than needing separate retraining for each task. GPT-3 shows this by solving things like arithmetic or translation purely from prompts, something its training never explicitly aimed at."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The author's name for the pattern where, against usual expectations, hard problems in deep learning become easier to solve as models, data, and compute grow larger, producing more stability, generalization, and new abilities rather than diminishing returns."
+    },
+    {
+      "name": "Transformer",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A neural network architecture built around 'self-attention,' letting every part of an input directly weigh every other part when processing it. Introduced in 2017, it became the dominant architecture for language models including GPT-3, valued mainly for being efficient to train at scale compared to older recurrent networks."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [],
+      "background": "A robotics researcher known for forecasting decades in advance that cheap enough hardware for insect-, then animal-, then human-level AI would arrive on a timeline tied to Moore's law, and for the related paradox that reasoning is easy for computers while perception and movement are hard."
+    },
+    {
+      "name": "OpenAI",
+      "kind": "organization",
+      "aliases": [
+        "OA"
+      ],
+      "senseHere": "The article portrays OpenAI as the one organization that has staked its strategy on the strong scaling hypothesis being literally true, restructuring itself into a capped-profit company specifically to raise the money needed to keep scaling models like GPT-3.",
+      "background": "An AI research company, creator of GPT-3, originally founded as a nonprofit before creating a for-profit subsidiary to fund large-scale compute."
+    },
+    {
+      "name": "AlphaZero",
+      "kind": "work",
+      "aliases": [
+        "AlphaGo Zero"
+      ],
+      "background": "A DeepMind program that mastered chess, Go, and shogi purely through self-play reinforcement learning, without studying any human games, pairing a neural network with tree search."
+    },
+    {
+      "name": "Bitter Lesson",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The observation that, across decades of AI research, methods relying on massive computation and general-purpose learning have consistently beaten methods built on hand-coded human knowledge, a pattern the article treats as supporting the scaling hypothesis."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "senseHere": "In the article, DeepMind stands for the 'weak scaling hypothesis' camp, believing AGI requires painstakingly reverse-engineering brain-like modules one at a time, each of which can itself be scaled up, rather than betting everything on scaling one simple architecture.",
+      "background": "A London-based AI research lab, now part of Google, known for projects such as AlphaGo and AlphaZero that combine deep learning with search and reinforcement learning."
+    },
+    {
+      "name": "MuZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "A DeepMind successor to AlphaZero that learns to plan and play games at a superhuman level without even being told the rules, by training a neural network end-to-end to predict rewards instead of using hand-coded tree search."
+    },
+    {
+      "name": "OpenAI Five",
+      "kind": "work",
+      "aliases": [
+        "OA5"
+      ],
+      "background": "An OpenAI system that learned to play the team video game Dota 2 at a professional level through large-scale reinforcement learning self-play, notable for staying stable as batch sizes and training scale grew very large."
+    },
+    {
+      "name": "double descent",
+      "kind": "term",
+      "aliases": [],
+      "background": "A pattern where a model's test error first falls, then rises as the model grows larger (as classical overfitting theory predicts), but then falls again as the model grows larger still, contradicting the usual story that bigger models always overfit more."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "The idea that a large randomly-initialized neural network contains many smaller 'winning ticket' subnetworks, one of which, if trained alone, would perform nearly as well as the whole network. Training the full network partly works by letting it find one of these promising subnetworks."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The author's term for the argument that training a model purely to predict the next piece of text forces it, as an unavoidable side effect, to progress from crude letter and word statistics all the way up to genuine reasoning and world-understanding, since only real understanding can remove the last, hardest-to-predict errors."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A situation where computers already powerful enough to run advanced AI methods exist and are being used for other purposes, so a leap in AI capability becomes possible almost overnight once someone finally applies that available computing power to AI."
+    },
+    {
+      "name": "Ilya Sutskever",
+      "kind": "person",
+      "aliases": [],
+      "background": "A co-founder and chief scientist of OpenAI, and one of the researchers most associated with pushing deep learning toward ever-larger scale, having worked on earlier breakthroughs such as AlexNet and sequence-to-sequence learning."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Treating a system as if it has beliefs, desires, and goals, and predicting its behavior on that basis, because doing so is a useful shortcut even when the system may not literally be an agent underneath.",
+      "background": "A concept from philosopher Daniel Dennett, who argued that describing something as 'wanting' or 'trying' is often the most practical way to predict complex behavior, regardless of whether the system has real intentions."
+    },
+    {
+      "name": "Daniel Dennett",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher known for work on consciousness and the mind, and for proposing the 'intentional stance,' the idea that treating a system as a goal-pursuing agent is often the most useful way to predict its behavior."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "work",
+      "aliases": [
+        "GoL",
+        "Game of Life"
+      ],
+      "senseHere": "Used in the article as a test case for whether a simple, agency-free rule system can still invite agent-like thinking, since its patterns naturally get perceived as entities such as 'gliders' moving through empty space.",
+      "background": "A cellular automaton invented by mathematician John Conway in 1970, where cells on a grid turn on or off each step by simple fixed rules based on their neighbors, yet can produce complex, long-lived moving patterns."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "TM"
+      ],
+      "senseHere": "Used in the article as the most general possible model of computation, to test whether even content-free, rule-following processes could still push a trained model toward agent-like behavior, especially when the model must infer which rules are currently in play.",
+      "background": "An abstract mathematical model of a computer, consisting of a tape and a set of rules for reading, writing, and moving along it, used to define what is computable in principle."
+    }
+  ]
+}

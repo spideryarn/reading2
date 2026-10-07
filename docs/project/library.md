@@ -30,6 +30,25 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 - **What a card says, and the numbers on it** — [§ What a card says](#what-a-card-says-and-why).
 - **Searching the shelf** — [§ Finding an article](#finding-an-article-and-finding-a-passage-in-one).
 
+## In this doc
+
+- [§ The routes](#the-routes) — which path is which page, the `/api/library` verbs, and what permanent delete takes with it
+- [§ What you can do to a card](#what-you-can-do-to-a-card) — the buttons, archive and Undo, rename, shelf tags, the tooltip, and why a button is disabled rather than hidden
+- [§ Finding an article](#finding-an-article-and-finding-a-passage-in-one) — the search box, passages, topics, and archived hits
+- [§ Sorting the shelf](#sorting-the-shelf) — sort order, cards versus table, hidden columns, "a first few then ask", TanStack Table
+- [§ What a card says, and why](#what-a-card-says-and-why) — Shared badge, unread papers, where the numbers come from, the title fallback
+- [§ Adding an article](#adding-an-article-the-box-submits-now) — the add box (the queue itself is ingest-queue.md)
+- [§ The free-allowance box](#the-free-allowance-box) — what a free reader sees under the add box
+- [§ `meta.json`](#metajson-and-the-articles-identity) — the article's title, byline and source, and where they live now
+- [§ Two readers, one article](#two-readers-one-article) — each has their own copy; what they share, and the two test files that keep it true
+- [§ When this becomes Postgres](#when-this-becomes-postgres) — (history) why the shelf's row shape was chosen
+- [§ Where the code is](#where-the-code-is) — every file and test behind the shelf
+- [§ A repeat visit draws the shelf](#a-repeat-visit-draws-the-shelf-before-the-server-answers) — the saved copy that paints first, and who wins
+- [§ The five opened most recently](#the-five-opened-most-recently-are-fetched-while-the-shelf-is-on-screen) — the preload of recent articles
+- [§ Offline](#offline-the-shelf-lists-only-what-it-can-open) — what the shelf shows with no network
+- [§ The fixture](#the-fixture-was-always-on-the-shelf) — (history) the `example/` article, and how it is seeded now
+- [§ See also](#see-also)
+
 ## The routes
 
 | Path | Page |
@@ -37,7 +56,7 @@ Postgres on 2026-09-01, and the only store on 2026-09-05 — [§ When this becom
 | `/` | the library — [`src/web/Library.tsx`](../../src/web/Library.tsx) |
 | `/read/<slug>` | the reading view — [web-client.md](web-client.md) |
 | `/read/<slug>/metadata` | everything we know about the article — [260825e-metadata-page.md](../plans/260825e-metadata-page.md) |
-| `/read/<slug>/tweets` | redirects to `?mode=tweets`, the thread as a mode since 2026-09-29 — [260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
+| `/read/<slug>/tweets` | redirects to `?mode=summary&summary=thread`: the thread was a mode from 2026-09-29 ([260929f](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) and is Summary's Thread view since 2026-10-03 ([261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); the page it was, [260825g](../plans/260825g-tweet-thread-page.md) |
 | `/add/<a whole URL>` | queue that article and watch it — [ingest-queue.md § The add page](ingest-queue.md#the-add-page) |
 | `/design` | every token, face and component variant on one page — [design-css-overview.md](design-css-overview.md) |
 
@@ -47,10 +66,9 @@ The shelf's own API surface grew on 2026-08-26: `GET /api/library` (now taking `
 shape and the specific pattern has to win — otherwise the search box would read as a request to
 rename an article called "search".
 
-`DELETE /api/library/:slug` joined them on 2026-09-06 and **nothing calls it yet** — the control
-that will is Stage D of
-[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md), and
-until it lands this is reachable only by a `curl`. It destroys the article and everything cascading
+`DELETE /api/library/:slug` joined them on 2026-09-06; **the control that calls it is `DeletePermanently`
+on the article's metadata page** ([`src/web/Metadata.tsx`](../../src/web/Metadata.tsx), Stage D of
+[260906h-delete-an-article-permanently.md](../plans/260906h-delete-an-article-permanently.md)). It destroys the article and everything cascading
 off it, answers 404 for a slug that is not yours and 409 while an import is running on it, and
 there is no undo: *Archive* below is the reversible ending, and this is the other one.
 
@@ -77,8 +95,8 @@ active. `EnqueueTicket` in [`src/store/jobs.ts`](../../src/store/jobs.ts) has bo
 `tests/article-delete-pg.test.ts` § *what a delete can take out from under a request already in
 flight* holds the article row open so each race happens on purpose rather than by luck.
 
-**This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
-route with two views rather than two routes (three until 2026-09-29, when the tweets page became `?mode=tweets`): same article, same fetch, same bottom bar, so
+The last two arrived together, and they are one
+route with two views rather than two routes (three until 2026-09-29, when the tweets page became a mode, and since 2026-10-03 Summary's Thread view): same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
 ([`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). The article payload is fetched
 above that branch, so stepping
@@ -112,10 +130,9 @@ third segment as much as an unrecognised first one, so `/read/x/nonsense` and `/
 answer. [`router.ts`](../../src/web/router.ts) is the list, and it is the only one;
 [`NotFoundPage.tsx`](../../src/web/NotFoundPage.tsx) is a heading, a sentence and a link home.
 
-**It was the shelf until 2026-09-03**, and this paragraph said so: *"There is no 404 page on
-purpose: a mistyped address lands you on the shelf, which is both a useful place to be and
-self-explanatory."* Greg went to `/asdf`, got the homepage and asked where the 404 was, which
-answers the second half. The shelf is useful and it is *silent*: a link that has rotted and a link
+What it was before 2026-09-03 is in
+[261007g-library-history.md § An address nobody minted](../plans/261007g-library-history.md#an-address-nobody-minted).
+The shelf is useful and it is *silent*: a link that has rotted and a link
 that was never right both look exactly like a link that worked.
 [260903j-not-found-page.md](../plans/260903j-not-found-page.md) has the reversal, the addresses that
 still fall through to the shelf (the root in its three spellings, and `/add` with nothing after it),
@@ -149,8 +166,8 @@ that works until the day it doesn't.
 as a property of nuqs. It is not: in nuqs 2.10 it takes a call to `enableHistorySync()`, and until
 [`main.tsx`](../../src/web/main.tsx) made one, every `useQueryState` went on serving the previous
 page's query string after one of our navigations, and nothing cancelled the debounced `?at=` queue
-when the reading view unmounted. Caught by a cross-model review on 2026-08-25, and written up in
-[260825e-metadata-page.md § What the plan got wrong](../plans/260825e-metadata-page.md#found-by-the-cross-model-review).
+when the reading view unmounted. How it was caught is in
+[261007g-library-history.md § Fifty lines of router](../plans/261007g-library-history.md#fifty-lines-of-router-not-react-router).
 The argument for hand-rolling the router depends on that one call; if it goes, this section goes
 with it.
 
@@ -303,8 +320,9 @@ default and does not fetch until turned on (`?archived=1`, a direct link include
 faceted-search-topic-pills and/or sort to look through the Archived articles easily too)"*
 (SPIDERYARN-READING2-4V, plan
 [260929a](../plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)).
-Until then it was a **Show archived** disclosure at the foot of the shelf with a second, plainer
-list, which neither the sort nor the row cap reached. Now the two arrays are combined in
+What it was until then is in
+[261007g-library-history.md § Archive](../plans/261007g-library-history.md#archive-and-undo-is-the-confirmation).
+Now the two arrays are combined in
 `Library.tsx` *before* TanStack sorts, so the sort, the fixture sink, the row cap, search, Unread,
 topics and "n of m" apply to both as one list, in both views. Each archived row says **Archived**
 on its card and its table row (`ArchivedMark`, keyed on the entry's own `archivedAt`), and offers
@@ -344,7 +362,7 @@ is answered at its own link and named in no list. (That query is all there is to
 still renders a 404 in [`App.tsx`](../../src/web/App.tsx), and the showcase page that will use it is
 [260904b](../plans/260904b-pricing-page-and-public-showcase.md).)
 
-The clause went in on 2026-09-04, when GPT Sol asked which way the asymmetry ran. The first version
+The first version
 had no clause, on the rule above — visibility is a property of the work, archiving is a property of
 one person's shelf — and the consequence is what settles it: without it an owner loses sight of the
 article on their own shelf while strangers go on finding it, and since the payload carries no
@@ -390,8 +408,7 @@ number is the server's: `/api/library/search` with the archive left out also ret
 `archivedArticles`, a count of archived articles with a matching passage (`countArchivedMatches` in
 [`pg-shelf.ts`](../../src/store/pg-shelf.ts), the same predicates as the passages, uncapped). So it is
 about the text, and says "mention". The public number is the cards that match by the card rule, off
-the one public read `Library` shares with the Include public section. It replaced the sentence
-*"Archived articles aren't searched — turn on Include archived"*. Plan 261002b § Part D.
+the one public read `Library` shares with the Include public section. Plan 261002b § Part D.
 
 **On a phone, the shelf opens with one line** saying Spideryarn is best on a bigger screen, until
 dismissed — the article banner's sibling, [touch.md § One banner, once](touch.md#one-banner-once-when-both-will-not-fit).
@@ -409,6 +426,9 @@ article Metadata. This should be easy to reverse, and by default the Homepage sh
 archived articles."* All of it already worked, and had for nine days. **He could not tell, because
 the button was called Delete.**
 
+The unchanged storage vocabulary and the earlier deferral of permanent deletion are in
+[260904d § History moved from library.md](../plans/260904d-archive-articles-centre-the-text-and-a-done-key.md#history-moved-from-librarymd-2026-10-07).
+
 So the fix was the word, and that is the lesson worth keeping: *a reader cannot tell a reversible
 act from a destructive one by watching the row disappear — only the label says which it was.* The
 label, the icon and the destructive red were three ways of saying the same wrong thing, so all three
@@ -416,15 +436,6 @@ moved: **Archive** on a box glyph, at the shelf's ordinary weight rather than in
 reserves for what cannot be undone. `tests/shelf-archive-label.test.tsx` pins the label to
 `shelf.archive` in both renderers, and `tests/metadata-page-order.test.tsx` pins the section
 heading, so it cannot drift back quietly.
-
-Nothing under the interface changed: no schema change, no API change, no store change.
-`archived_at`, `?archived=1` and `shelf.archive` were always the words in the database, on the wire
-and in the client, so the rename **narrowed** the vocabulary rather than adding to it.
-
-**Permanent deletion was deferred**, deliberately and in writing, though Greg's report raised it —
-*"maybe there should also be a way to permanently delete"*. It gets its own plan: one production
-database, real readers' articles, and a mis-tap that nothing can undo is a different kind of feature
-from this one.
 
 #### The same act on the article's own page, where the undo never expires
 
@@ -550,9 +561,6 @@ text.
 |---|---|
 | `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
 
-The filesystem half — `data/<slug>/shelf.json`, and the writes in `src/shelf.ts` — was deleted on
-2026-09-05.
-
 Columns on `articles` and **not** on `article_revisions`, which is the load-bearing part: a revision
 is one extraction, and re-extracting must not un-archive an article, forget its title or reset the
 count. Reader state outlives revisions — the same rule `block_identities` exists to enforce for block
@@ -561,6 +569,9 @@ ids ([block-ids.md](block-ids.md)).
 Opens are a counter and a timestamp, deliberately **not** an event log. The tooltip can say "opened
 6 times, last on Tuesday" and can never say "three times this week". If that second question ever
 matters, the answer is a table of events, not another column.
+
+A rename, a purpose edit, an archive and a Put back each stamp `articles.updated_at` — stored, not
+shown, and the only trace of a Put back, which nulls `archived_at`. An open does not move it.
 
 `POST /api/library/:slug/open` is called by the **client**, from the reading view's mount — not by
 the server from inside `GET /api/article/:slug`. A GET that writes is a GET that a prefetch, a retry
@@ -588,8 +599,8 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
   `owner_id` — ownership comes through the article, as for every table under `articles`. Reader
   state, so on `articles` and not on a revision, for § Shelf state's reason.
 - **One write, additive**: `PATCH /api/library/:slug/tags { add?, remove? }` answers the tags after.
-  Two tabs cannot clobber each other the way a replace-the-set PUT would, and the command bar's
-  later "add a tag of X" is `{ add: [X] }` through the same client function
+  Two tabs cannot clobber each other the way a replace-the-set PUT would, and a single add or
+  remove from anywhere is one small request through the same client function
   ([`src/web/article-tags.ts`](../../src/web/article-tags.ts)). The edit locks the article row, so
   the 30-per-article cap holds under a race —
   [`tests/store-tags-pg.test.ts`](../../tests/store-tags-pg.test.ts) has the test that goes red
@@ -603,6 +614,16 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
 - **A Tags row above Topics** ([`ShelfTagFilter.tsx`](../../src/web/ShelfTagFilter.tsx)), built on the
   client from the entries' own tags and narrowing by the Topics row's rules — AND across every chip in
   both rows, one count — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above).
+- **A command, and a button chat can offer**, since 2026-10-03: *tag as X*, *add a tag of X*,
+  *untag X* in the command bar give *Add the tag “x”* / *Remove the tag “x”*, showing the tag as
+  `normaliseTag` will store it; a tag it refuses is still a row, whose Enter says why
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The
+  bar edits through a **tags controller on its shelf row** (`ShelfRow.tags`,
+  [`CommandBar.tsx`](../../src/web/CommandBar.tsx)), not through `editArticleTags` directly: on
+  Metadata that controller is the `TagEditor`'s own save, so the editor on screen follows, and the
+  two admit one write at a time ([`Metadata.tsx`](../../src/web/Metadata.tsx) § `saveTags`). Chat's
+  button is the same proposal —
+  [chat-tools.md § Command buttons](chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
 
 ### The tooltip
 
@@ -624,8 +645,7 @@ for either; nobody has wired that read into it.
 One box **directly above the list**, with **two matchers behind it** — which is the same shape the
 in-article search already has ([search.md](search.md)), deliberately rather than coincidentally.
 
-It sat at the very top of the page until 2026-09-03, above the box for *adding* an article and
-separated from the list it filters by everything in between. Greg: *"Move the search bar so it's
+Greg: *"Move the search bar so it's
 just above the list of articles."* The order the page renders in is now **add box and its jobs →
 errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
 ([`Library.tsx`](../../src/web/Library.tsx)).
@@ -637,6 +657,17 @@ else already has the focus, or when the box is not on screen (Back can mount the
 `takesFocusOnArrival` in `Library.tsx` has the reasons;
 [260929g](../plans/260929g-shelf-search-focus-and-metadata-chord.md) § Part A has the cost.
 
+**One cross clears it, and so does Escape.**
+
+> Little cross button to clear the search on the logged in homepage shelf.
+>
+> — Greg, 2026-10-04, SPIDERYARN-READING2-C7 (`spya-wzmvva`)
+
+It is now the house cross (`styles/close.css` § `.close-x`) with the
+browser's hidden (`.own-clear`), and pressing it puts the cursor back in the box unless a finger or
+pen pressed it. Plan
+[261004f](../plans/261004f-shelf-search-clear-cross-that-can-be-seen.md).
+
 1. **The cards, filtered in the browser.** Case- and accent-folded substring match over `title`,
    `byline`, `siteName` and `gist` — exactly the four fields a card renders, because matching
    something invisible looks like a bug from the outside. Free, instant, no request.
@@ -647,6 +678,17 @@ else already has the focus, or when the box is not on screen (Back can mount the
    rather than left to the default, because on 2026-08-26 that default became `meaning`
    ([search.md § the URL](search.md#match-defaults-to-meaning-and-used-to-default-to-words)); this is
    the one link in the app that produces a bare `?find=`, so it is the one that had to say so.
+
+**The passages obey Unread, the topics and the tags, and not the box a second time.** The allowed
+articles are `narrowShelf` with an empty query (`passagesIn` in `Library.tsx`), not the cards on
+screen: the cards have the box's match on title, author and blurb applied, and taking them would
+hide the passage of an article whose body matches and whose card does not. The
+narrowing is in the browser, after the server's cap, so the lines under the list count what was left
+out (*"3 more passages are in articles that do not match everything chosen above"*) and never say
+that nothing matches. While the archived listing is loading or unavailable, those lines say only
+that passages found are not shown: missing shelf details establish neither reading history nor
+filter membership. `tests/shelf-passages-obey-the-filters.test.tsx`; plan
+[261007a K3](../plans/261007a-ui-sweep-k3-shelf-filter-and-false-copy.md).
 
 | Store | How |
 |---|---|
@@ -705,8 +747,8 @@ The answer to the last sentence is one line, and it is the whole design:
 
 **One sort state, two renderers.**
 
-Six chips above the shelf — **Last opened**, **Added**, **Title**, **Length**, **Times opened**,
-**Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
+Seven chips above the shelf — **Last opened**, **Added**, **Published**, **Title**, **Length**,
+**Times opened**, **Questions** — plus an **Unread** filter and a **cards / table** toggle. The chips drive both views
 identically, so switching between them keeps your place in the order: there is only one order.
 Clicking the key you are already on reverses it; clicking a key you are not on starts at *that key's*
 natural end, so going from "newest first" to Title gives you A-to-Z rather than Z-to-A;
@@ -718,6 +760,39 @@ they hand back to a real date, because nobody counts in days at that range. The 
 always one hover away in [the details tooltip](#the-tooltip). The clock is re-read once a minute so
 a shelf left open does not quietly go stale — [`relative-time.ts`](../../src/web/relative-time.ts)
 and [`useNow.ts`](../../src/web/useNow.ts).
+
+**Published is the exception: it is a day, not an instant, and it is printed as the date.**
+
+> In the logged in homepage, enable sorting the Shelf by publication date where available. And I
+> guess if it's not available, use your judgment about what's best to do. Keep things simple.
+>
+> — Greg, 2026-10-03 (report `spya-t3es7k`)
+
+It is the publisher's own string (`Meta.publishedAt`), where only the calendar day in the
+publisher's frame means anything, so the order and the printed date both come from its first ten
+characters — [`calendarDay`](../../src/web/relative-time.ts) says what goes wrong otherwise. And
+"published 3 days ago" would be a fact about the reader's week rather than about the piece.
+
+**An article with no publication date sorts last, both ways**, like any missing value
+([§ Three rules a browser cannot check](#three-rules-a-browser-cannot-check)). That group is large:
+a PDF, or a paper added with only its metadata, has a date only if it was imported on or after
+2026-10-04 and a registry confirmed its DOI and states a whole day or a year
+([content-extraction.md](content-extraction.md#the-journal-and-the-publication-day-from-a-registry)).
+A web page has one only if its publisher states it
+and it was extracted on or after 2026-08-31; that includes a DOI URL that resolves to a web page.
+Falling back to the Added date was passed
+over, because a 1990 paper fetched yesterday would then lead "newest first"
+([261003m](../plans/261003m-shelf-sorts-by-publication-date.md)).
+
+**A paper dated only to a year sorts among the dated ones**, since 2026-10-04. Where the registry
+states a year and no whole day, the article has `publishedYear` instead of `publishedAt`, and the
+chip, the column, the row card and the card's note all read the pair through one function,
+[`publishedOf`](../../src/web/relative-time.ts). It prints the year alone, `2011`, and sorts at the
+start of that year: beside the pieces dated in 2011, and level with one dated 1 January 2011. That
+start-of-year number is a sort key only, never stored and never printed as a day. Leaving such
+papers with the undated ones was passed over, because most older print papers would then sit
+outside the sort built for them
+([261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md)).
 
 The two views are not a real one and a decoration. **The card is a decision aid** — what the piece
 says, how long it will take — and keeps the blurb. **The table is a comparison** — how this article
@@ -759,7 +834,15 @@ is the source of truth for those facts, including values whose columns are hidde
 old `Details` card stays on the cards view; in the table it repeated the row. The title remains the
 one-tap route into the article on touch rather than becoming a reveal-then-commit control.
 
-**The five data columns can be hidden; Article and Actions cannot.** The title is the row's identity
+**Published is a chip always and a column only if asked for.** It starts hidden, and the Columns
+count reads 1 on a table nobody has touched, which is how a reader learns it is there. The table was
+already as wide as the page at 1440px; a sixth data column made it 78px wider and pushed Actions
+out of sight. While it is hidden the row card carries the date, and a table sorted by Published
+keeps its order and its chip. A reader who shows it is remembered under a second key, because a
+list of hidden ids cannot say "shown" and a list saved before the column existed must not read as
+"show it" — [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
+
+**The six data columns can be hidden; Article and Actions cannot.** The title is the row's identity
 and route into the article, while Actions are controls rather than a value a card can preserve.
 [`libraryColumns`](../../src/web/library-columns.tsx) owns that distinction. The **Columns** menu is
 the discoverable keyboard-and-touch route; a header's right-click or long-press menu is the shortcut.
@@ -812,8 +895,7 @@ which is what a list of things that *arrived* wants; a shelf is not an inbox. Wh
 likely to want off it is the piece you were half-way through an hour ago, and under Added that sat
 wherever it happened to have been fetched — for anything imported in a batch, nowhere near the top.
 
-The chip row leads with whatever the default is, so Last opened is now leftmost. That rule did not
-change; the default did. Both live in `DEFAULT_BY` and `CHIP_ORDER` in
+The chip row leads with whatever the default is, so Last opened is now leftmost. Both live in `DEFAULT_BY` and `CHIP_ORDER` in
 [`library-columns.tsx`](../../src/web/library-columns.tsx), and the default writes **no parameters
 at all** into the URL, so a bare `/` and `?by=opened` are the same shelf.
 
@@ -829,7 +911,7 @@ It is a **single** key, not `opened` then `added`. The compound version orders t
 block at the foot better and lights *two* chips on a shelf nobody has clicked, which reads as a sort
 somebody else left behind.
 
-Two of the six keys are Greg's "actions/interactions performed", and they are the only two we can
+Two of the keys are Greg's "actions/interactions performed", and they are the only two we can
 honestly count: opens and questions are the only reader interactions stored as numbers. Chat threads
 and saved searches are deliberately not counted, for the same reason [the tooltip](#the-tooltip)
 won't say them.
@@ -846,6 +928,26 @@ That is `CARD_NOTES` in [`library-columns.tsx`](../../src/web/library-columns.ts
 clearest reason a headless table was the right kind of library: TanStack owns the ordering and has
 no opinion at all about how a row is drawn, so this feature survived the switch untouched. A
 batteries-included grid would have made it a fight.
+
+### The card says when the piece was published
+
+On the line under the title, after the author and the site: `Rich Sutton · incompleteideas.net ·
+13 Mar 2019 · ~6 min · 21 blocks`. Greg, 2026-10-04 (report `spya-cqjhbn`):
+
+> Show the publication date in the logged-in homepage Shelf
+
+It is printed by
+[`publishedOf`](../../src/web/relative-time.ts), the same reader the sort and the Metadata page use,
+so a paper dated only to a year says `2017` and a piece with no date says nothing. **Bare, with no
+"published" in front**: beside the author and the site a date reads as the piece's own, and the
+times that belong to the reader (added, opened) are on the bottom row. While the shelf is sorted by
+Published the note on the bottom row says the date as well; that repeat is known and left
+([261005e](../plans/261005e-an-end-of-article-mark-and-the-publication-date-on-the-shelf-card.md)).
+The Table view is unchanged: its Published column still starts hidden.
+
+**Each `·` belongs to the fact before it.** On a phone the line wraps, and it wraps between facts.
+The dot is drawn after each fact but the last, so the upper line ends with a dot and the lower one
+starts with a fact. The cards on `/read/public` do the same.
 
 ### Three rules a browser cannot check
 
@@ -935,10 +1037,55 @@ so using it here would put a sentence about the opening where the reader expects
 article — and it would look completely right. The fallbacks are `summary` and then Readability's
 `excerpt`, both of which at least mean the whole thing; failing those, no blurb at all.
 
+**Under the meta line, the topics the article is in**: up to four pills, or three and `+N`. They
+are labels, and part of the card's link —
+[shelf-terms.md § On each card and table row](shelf-terms.md#on-each-card-and-table-row). The table
+has the same line under each title. While the shelf is expected to have topics, every card holds
+that line's height, blank until its pills arrive and blank for an article in no topic, so the pills
+landing does not move the shelf.
+
 The reading time comes from [`src/reading-time.ts`](../../src/reading-time.ts), which exists so that
 the card and the masthead cannot drift. They run on opposite sides of the wire, so nothing would ever
 have told us the card said 47 minutes and the masthead 54 — see
 [silent-success.md](../reusable/silent-success.md).
+
+**It is body words at 238 a minute, adjusted for how hard the piece is when a model has rated
+it.** 238 is the average for an adult reading English non-fiction silently (Brysbaert 2019); it was
+a folk 230 until 2026-10-05. Greg asked whether the number takes difficulty into account
+(`spya-jew7ds`), and chose a model's rating over a word-length formula, because the formula sees
+long words and not hard ideas in plain ones, which was his example:
+
+> yes, either difficult language and/or difficult ideas both slow down reading time.
+>
+> — Greg, 2026-10-05
+
+- **The rating** is language 1 to 5, ideas 1 to 5, and one sentence saying why, from one cheap call
+  at the end of the `blocks` step over a sample of about 3,000 words
+  ([`src/reading-difficulty.ts`](../../src/reading-difficulty.ts), job `reading-difficulty`). It
+  never fails an import: a piece it could not rate is left unrated.
+- **The multiplier** is one small table per scale, multiplied, between 0.84 and 1.40, applied
+  before rounding. The tables and the bounds live in `src/reading-time.ts` and nowhere else. They
+  are provisional: argued from published studies of other readers, not measured on ours.
+- **Stored** as five columns on the revision, with the model and the time, carried forward by any
+  revision that does not split the blocks again. A visitor's page gets the two numbers and the
+  sentence, so its minutes match the owner's.
+- **An article imported before 2026-10-05 has no rating** and reads at the flat rate until a
+  backfill is run, which is a write to production and not yet written.
+- **The card behind the number says all of this** —
+  [`ReadTimeCard.tsx`](../../src/web/ReadTimeCard.tsx), on the masthead's minutes and on
+  Metadata's *Read time* tile: the words, 238 as the starting rate, the model's two ratings and its
+  sentence, the range most adults fall in with the same adjustment, that it does not know who is
+  reading, and the notes it left out. Unrated, it says so.
+
+The numbers and the paid check of the call are in
+[261005b](../investigations/261005b-reading-time-difficulty-multiplier-coefficients-and-where-the-rating-comes-from.md);
+the plan is
+[261005j](../plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md),
+the earlier research
+[261005a](../research/261005a-reading-time-estimates-and-text-difficulty.md), and the card's first
+version [261005c](../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md).
+The spine's reading-time chart keeps its own 230 on purpose ([reading-time.md](reading-time.md)): it
+is the unit of a brightness scale and also supplies the gutter card's estimate for a single block.
 
 **A paper not yet read through is a card too** (plan 261001m, Greg: *"Each paper should be shown on
 the shelf as normal, but indicate in the UI that it hasn't been AI-processed yet"*). It has no blocks
@@ -1007,7 +1154,7 @@ address two things claim: `isReservedSlug` in [`src/ingest.ts`](../../src/ingest
 
 **Nobody is signed in, so the shelf has three ceilings rather than one.** 200 rows, a `left()` cap on
 every text column it returns (`PUBLIC_CARD_CHARS`) because nothing bounds a title or an `<h1>` and a
-fetched document may be 32 MB, and a partial index on `(public_at desc nulls last, slug) where
+fetched document may be 50 MB, and a partial index on `(public_at desc nulls last, slug) where
 visibility = 'public'` so the row cap bounds the database's work and not only the reply. All three
 came out of GPT Sol's review of the built code, 2026-09-04; the argument for each is in
 [`src/store/public-library.ts`](../../src/store/public-library.ts) and
@@ -1055,27 +1202,17 @@ card and the page.
 Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by
 one function, [`deriveLibraryScalars`](../../src/library-scalars.ts), which runs at **publish**,
 inside the transaction that writes the blocks and the tree, writing the five columns the shelf then
-reads. (Until 2026-09-05 the filesystem store ran it at read instead, over the artefacts the
-directory walk had just loaded, since there was no publish transaction to hang it on.)
+reads.
 
 `describeArticle` in [`src/library-scalars.ts`](../../src/library-scalars.ts) *receives* those five
 and assembles the card. It used to derive them itself, which made it a second implementation — and
 the two had **already diverged once**, over the `excerpt` rung of the blurb's fallback, found in
 review rather than by a test.
 
-**On the Postgres side that was also the shelf's whole cost.** Deriving per request meant reading
-every block row of every article — `text`, `html` and the generated `fts` vector — and running each
-one through the jsdom sanitiser, on every homepage load, in order to add up some word counts. Six
-articles on a laptop against a local Supabase:
+What deriving per request cost is in
+[260828c § History moved from library.md](../plans/260828c-library-read-latency.md#history-moved-from-librarymd-2026-10-07).
 
-```
-                          before      after
-  statements per call     13 (1+2N)   2
-  row JSON per call       641 KB      4 KB
-  wall clock (median)     558 ms      3 ms
-```
-
-The four ticks went the same way. `has.glossary` was `row.revision.glossary != null` on a JSONB
+`has.glossary` was `row.revision.glossary != null` on a JSONB
 document the query had dragged across the wire; it is now `is not null`, evaluated in Postgres, and
 the document stays on the server. So does the tree, which is 37 KB on one article and was read to
 count two kinds of node.
@@ -1116,11 +1253,8 @@ pointing the button at it means there is one thing that starts an ingest rather 
 stays, and its job is now the one it always covered: showing you the runs *this* page did not start,
 from another tab, from an article page, or from the CLI.
 
-**This section used to describe a stub.** It said the box printed four commands for you to run
-yourself, and that *"running the pipeline from a request handler means background jobs, progress,
-partial failure and a retry path — real work, and not what the experiment is about yet"*. That was
-true and it was the right call for a day. Greg asked for the real thing on 2026-08-25, and it kept
-the shape the stub promised: the input stayed, and the command list became the progress list.
+The stub this box replaced on 2026-08-25 is in
+[261007g-library-history.md § Adding an article](../plans/261007g-library-history.md#adding-an-article-the-box-submits-now).
 
 The queue, the choice of p-queue over the Redis- and Postgres-backed alternatives, what
 "idempotent" does and does not mean yet, and why it polls rather than streaming, are all in
@@ -1135,8 +1269,7 @@ have lands you back on it instead of shelving a second copy —
 failure: a stage that goes wrong stops the job, says which stage and why, and offers a Retry that
 skips whatever already worked.
 
-`pipelineCommands` is gone. It existed to print those four commands, and a list of shell commands
-that nothing executes drifts from the pipeline silently. The stages are documented in
+The stages are documented in
 [setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages), which is where they belong,
 and they still run by hand.
 
@@ -1168,9 +1301,10 @@ plan arrives, and nothing if the read fails — `/profile` is where a failed rea
 
 The shelf needs a title, a byline, a source and a date, and until now nothing wrote them down —
 `data/<slug>/` held blocks, a tree and an arc, and the reading view derived a title from the first
-`<h1>`. So stage 2 now writes [`data/<slug>/meta.json`](architecture.md#storage) on every run,
-which is where it was always meant to be
-([architecture.md § Stage ownership](architecture.md#stage-ownership)):
+`<h1>`. So stage 2 produces this metadata on every run, which is where it was always meant to be
+([architecture.md § Stage ownership](architecture.md#stage-ownership)). It was a file,
+`data/<slug>/meta.json`, until 2026-09-05; it is columns on `article_revisions` now, and this is the
+shape:
 
 ```json
 { "slug": "…", "title": "…", "byline": "…", "siteName": "…",
@@ -1179,25 +1313,73 @@ which is where it was always meant to be
 
 Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 
-- **The slug is passed in, and used to be read off the output filename.** Stage 3 named its blocks
-  file after the HTML file and stage 4 named the data directory after *that*, so the basename was
-  what the rest of the pipeline would call this article — and deriving it from the URL a second time
-  would have been right for `npm run extract <url>` and wrong the moment anyone passed an explicit
-  filename, with an article that had no byline as the only symptom. There is no filename to read one
+- **The slug is passed in, and used to be read off the output filename.** There is no filename to read one
   off any more: `runExtract` takes the slug, and the command line that could pass one went on
   2026-09-05.
 - **It is rewritten every run**, because re-extracting is how you refresh a page and the fetch date
   should follow.
 
-An article whose `meta.json` predates this still lists: the title falls back to the first `<h1>` and
-the date to the mtime of `blocks.json`. It just has no byline and no source link.
-`npm run extract -- <slug> --force` fixes it.
+An article with no stored title still lists: the title falls back to the first `<h1>`
+([`src/library-scalars.ts`](../../src/library-scalars.ts)), and the date is `fetched_at` with the article's `created_at`
+as its fallback (`ADDED_AT` and `listArticles` in `src/store/pg.ts`). A missing byline or source just is not shown.
+`npm run extract -- <slug> --force` re-runs the stage.
+
+## Two readers, one article
+
+Greg, 2026-10-06, on what should happen when two people import the same piece:
+
+> They should both have their own copy with their own AI processing. … One of them has a public
+> article and one of them has their own copy with their own processing. What about if they both get
+> made public? Well, maybe then we have two versions of the same article public. I mean, it seems
+> sort of wasteful and weird, but I couldn't see a better way of dealing with things because the two
+> public articles might have slightly different AI processing, especially if, you know, one or both
+> of these has had a profile.
+
+That is what happens, and this section is the one place that says so.
+
+- **Two rows, two addresses.** Each import is its own `articles` row with its own owner, and a slug
+  is unique across everybody, so the two copies are `/read/why-trees-spya-k3m9qt` and
+  `/read/why-trees-spya-x7p2ha`
+  ([ingest-queue.md § Every slug carries a short id](ingest-queue.md#every-slug-carries-a-short-id-so-nothing-has-to-step-aside)).
+- **"You already have this" looks only at your own shelf.** A second paste by the same reader
+  comes back to their own article; it never finds somebody else's.
+- **Everything a model wrote, and everything the reader did, belongs to one copy**: mode output,
+  checkpoints, chat, comments, tags, reading time. So a profile shapes only its owner's copy.
+- **What the two copies share has no owner and nothing of a reader in it**: the fetched file and
+  the pictures, stored once under their hash, and public facts about outside pages (link previews,
+  the bibliographic registry). Nothing deletes the stored bytes, so one reader deleting their
+  article cannot break the other's pictures.
+- **Sharing is a setting on your own copy.** One public and one private, or both public, are all
+  fine. Both public means two cards on the public shelf with the same title and nothing to tell
+  them apart; whether that should change is a question waiting for Greg
+  ([261007f § Questions for Greg](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#questions-for-greg)).
+- **Charging is per reader.** Each import is its own slot; sharing halves only the sharer's
+  ([billing.md](billing.md)).
+- **Pasting somebody's Spideryarn link into Add is refused**, with a sentence saying to open it or
+  to paste the original address (`isOwnReadingPage`,
+  [`src/own-reading-page.ts`](../../src/own-reading-page.ts)). Our reading page is an app, not the
+  piece, so there was never anything there to import.
+- **In Citations, a link to a work already here can go to a stranger's public copy rather than your
+  own**, when theirs was matched by DOI or arXiv id and yours only by title
+  ([citations.md](citations.md)). Between equally sure matches, yours wins.
+
+The two-reader import, sharing, deletion, upload, billing, private-link and per-reader-state cases
+run with two accounts against Postgres:
+[`tests/two-readers-one-article-pg.test.ts`](../../tests/two-readers-one-article-pg.test.ts)
+(import, sharing, deleting, uploads, a name from before short ids) and
+[`tests/two-readers-one-article-billing-pg.test.ts`](../../tests/two-readers-one-article-billing-pg.test.ts)
+(charging, the cheap bulk import and *Read this*, private links). Their owner-scoping guards for
+article lookup, deletion, public resolution, usage, cheap-import duplicates, share links and AI
+cost attribution were each watched going red when removed
+([261007f § Progress](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
+The pasted-link refusal is pinned in `tests/own-reading-page.test.ts`; Citations ordering is pinned
+in `tests/cited-in-spideryarn.test.ts`.
 
 ## When this becomes Postgres
 
-**Done, since 2026-09-01, and since 2026-09-05 the only store there is** — kept here because the
-left column below is what the filesystem store actually did, and the reasoning for the move still
-holds. See [database.md](database.md) for the store as a whole, and
+What the filesystem store did, row by row against what replaced it, is in
+[260825f § History moved from library.md](../plans/260825f-postgres-migration.md#history-moved-from-librarymd-2026-10-07).
+See [database.md](database.md) for the store as a whole, and
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) for the schema and the risks.
 
 `src/store/pg.ts`, reached through `src/store/index.ts`, is the seam now; it is the only place that
@@ -1207,15 +1389,7 @@ knows articles are Postgres rows. Above it the client sees two types, both shape
 - `LibraryEntry` — one shelf record, `GET /api/library` ([`src/types.ts`](../../src/types.ts))
 
 Every field of `LibraryEntry` is a scalar a column could hold. Nothing in it is a path, a directory
-name that means something, or a nested artefact. So the migration was:
-
-| Then (filesystem, gone 2026-09-05) | Now |
-|---|---|
-| `listArticles()` walks `data/*/`, reads three JSON files per directory | one `SELECT` over an `articles` table |
-| counts (`words`, `blocks`, `parts`, `sections`) derived per request | columns, written once at ingest |
-| `addedAt` from `meta.fetchedAt`, falling back to file mtime | a `fetched_at` column, no fallback |
-| `comments` counted by reading `comments.json` | `SELECT count(*)` or a denormalised column |
-| the `example/` fixture, always listed, flagged `fixture: true` | a seed row, listed like any other article — see [§ The fixture was always on the shelf](#the-fixture-was-always-on-the-shelf) |
+name that means something, or a nested artefact.
 
 The one thing that must survive the move unchanged is **block ids** — they are the join key for
 everything a reader has ever pointed at, and they are minted once and preserved. Read
@@ -1235,6 +1409,7 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/lib/table-sort.ts`](../../src/web/lib/table-sort.ts) | **reusable**: sorting state ⇄ URL, the collator, and `sinkLast` |
 | [`src/web/ShelfControls.tsx`](../../src/web/ShelfControls.tsx) | the controls that are the shelf's own: Unread, cards-or-table, and where Columns sits |
 | [`src/web/shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts) | which table columns this browser has hidden, and the guarded storage behind it |
+| [`src/web/ShelfTerms.tsx`](../../src/web/ShelfTerms.tsx), [`src/web/ShelfRowTopics.tsx`](../../src/web/ShelfRowTopics.tsx), [`src/web/ShelfPhoneHint.tsx`](../../src/web/ShelfPhoneHint.tsx), [`src/web/shelf-narrow.ts`](../../src/web/shelf-narrow.ts), [`src/web/library-home-title.ts`](../../src/web/library-home-title.ts) | the topics row ([shelf-terms.md](shelf-terms.md)), the topics on a card, the phone hint, the narrow-window switch, and the homepage's tab title ([page-titles.md](page-titles.md)) |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the card, the five buttons, rename-in-place, the details tooltip — shared by both views |
 | [`src/web/TitleEditor.tsx`](../../src/web/TitleEditor.tsx) | **renaming, wherever the reader is** — the editor, the `PATCH`, and the heading-with-a-pencil the masthead and the metadata page both use |
 | [`src/web/IconButton.tsx`](../../src/web/IconButton.tsx) | the 28px icon-only button every row of them agrees on |
@@ -1254,8 +1429,10 @@ the derived tree is regenerated wholesale, so its node ids must never become for
 | [`src/web/useLibrarySearch.ts`](../../src/web/useLibrarySearch.ts) | the debounced half of the box, and dropping late responses |
 | [`src/web/library-hits.ts`](../../src/web/library-hits.ts) | **the four parameters a hit's link must carry**, the browser's fold, and the query-term rule |
 | [`src/reading-time.ts`](../../src/reading-time.ts) | `~54 min`, said once for both the card and the masthead |
-| [`src/routes.ts`](../../src/routes.ts) | `GET /api/library`, and the six job routes |
-| [`src/extract.ts`](../../src/extract.ts) | stage 2, now writing `meta.json` |
+| [`src/routes.ts`](../../src/routes.ts) | `GET /api/library`, `PATCH`/`DELETE /api/library/:slug`, and the job routes |
+| [`src/extract.ts`](../../src/extract.ts) | stage 2, which produces the article's metadata (the shape in § `meta.json`) |
+| [`src/web/Metadata.tsx`](../../src/web/Metadata.tsx) | the metadata page, and `DeletePermanently`, the only caller of `DELETE /api/library/:slug` |
+| [`tests/article-delete-pg.test.ts`](../../tests/article-delete-pg.test.ts) | what a permanent delete takes out, and the races it must survive |
 | [`tests/library.test.ts`](../../tests/library.test.ts), [`tests/router.test.ts`](../../tests/router.test.ts), [`tests/ingest.test.ts`](../../tests/ingest.test.ts) | the shelf, the routes, the slugs |
 | [`tests/shelf.test.ts`](../../tests/shelf.test.ts), [`tests/library-search.test.ts`](../../tests/library-search.test.ts) | archive, rename, opens — and the search that must survive a re-extraction |
 | [`tests/article-rename.test.tsx`](../../tests/article-rename.test.tsx) | the pencil on the article and on its metadata page, mounted — cancelled, cleared, unchanged, and a write that fails |
@@ -1372,13 +1549,8 @@ failed to clear is a copy we would go on serving.
 
 ## The fixture was always on the shelf
 
-Until 2026-09-05, `example/` was listed under the slug `example`, flagged, and sorted below the real
-articles, on every clone unconditionally — a fresh clone had no `data/` at all, and an empty homepage
-reads as a broken app rather than an empty shelf. It was listed under its **directory name** and not
-under the slug inside its own `meta.json` — that one names the full Noema article the fixture is an
-excerpt of, and listing it there would collide with the real thing. `loadArticle("example")` resolved
-by falling through (`src/api.ts`, the filesystem reader, deleted that day with the store it read
-from).
+How it was listed before 2026-09-05 is in
+[261007g-library-history.md § The fixture](../plans/261007g-library-history.md#the-fixture-was-always-on-the-shelf).
 
 **Under Postgres it is not automatic.** `npm run setup` seeds the fixture into the local database on
 one development account ([`scripts/db-seed-dev.ts`](../../scripts/db-seed-dev.ts)) and it is then
@@ -1387,6 +1559,10 @@ listed the ordinary way, on that account's shelf, still flagged and still sorted
 
 ## See also
 
+- [shelf-terms.md](shelf-terms.md) — the topics row above the shelf
+- [public-shelf.md](public-shelf.md) — `/read/public`, the other shelf; [public-readable-sharing.md](public-readable-sharing.md) — what we say about republishing
+- [page-titles.md](page-titles.md) — what the tab says on the homepage and every other page
+- [privacy.md](privacy.md) — what permanent delete does and does not remove
 - [url-state.md](url-state.md) — the query string half of a link, and why position replaces history
 - [feedback.md](feedback.md) — the **Feedback** button, which since 2026-09-08 is a control in this
   page's own masthead row rather than a fixed corner beside it

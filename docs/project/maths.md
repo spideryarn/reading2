@@ -1,6 +1,6 @@
 # Maths — TeX in the prose, drawn as maths
 
-Part of [reading-view-overview.md](reading-view-overview.md).
+Up: [reading-view-overview.md](reading-view-overview.md)
 
 > Importing this file worked ok, but all the equations and formulae are being displayed as raw
 > latex. Can we somehow render them them to display them nicely within the text?
@@ -19,7 +19,10 @@ general way of representing LaTeX that might also be useful for HTML imports too
 Nothing stored changes: the render is recomputed on every load, so it can be altered or deleted with
 no migration. The reasoning, the options passed over and GPT Sol's review are in
 [260912d-render-latex-equations-in-the-reading-view.md](../plans/260912d-render-latex-equations-in-the-reading-view.md);
-the code is `src/web/maths.ts`, and its header is the detail behind every line below.
+the code is [`src/web/maths.ts`](../../src/web/maths.ts), and its header is the detail behind every
+line below. The shared TeX rules are [`src/maths-tex.ts`](../../src/maths-tex.ts); the tests are
+[`tests/maths.test.ts`](../../tests/maths.test.ts) and
+[`tests/maths-parity.test.ts`](../../tests/maths-parity.test.ts).
 
 ## What counts as maths
 
@@ -69,7 +72,10 @@ so this adds a consumer of the policy rather than an exception to it
 ([security-map.md](security-map.md)).
 
 temml, its stylesheet and its one small font are a lazy chunk, fetched only when a block has a span.
-A load that fails leaves the TeX exactly as it was. The stylesheet is needed, not decorative: it is
+A load that fails leaves the TeX exactly as it was. The default loader first asks whether a different
+build is live and can reload safely (`src/web/stale-shell.ts` § `reloadIfStale`); the article stays
+held while it asks and while a requested reload starts (`src/web/maths.ts` § `renderArticleMaths`).
+The stylesheet is needed, not decorative: it is
 what lays display maths out as a block in Safari and Firefox. Display maths scrolls sideways inside
 its own box at phone width, like a code block ([narrow-windows.md](narrow-windows.md)).
 

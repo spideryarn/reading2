@@ -25,9 +25,9 @@
  * sends can choose a price — because the button this route draws is the thing
  * that posts to `/api/billing/checkout`.
  *
- * Skips loudly with no database (tests/helpers/pg-ready.ts). Check a change with
- * `REQUIRE_POSTGRES=1 npx vitest run tests/billing-usage-route.test.ts` and read
- * the count — a skip looks exactly like a pass.
+ * Fails, rather than skips, with no database (tests/helpers/pg-ready.ts, since
+ * 2026-09-05). Check a change with
+ * `npx vitest run tests/billing-usage-route.test.ts` and read the count.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -96,7 +96,6 @@ function signedInAs(owner: string): Verifier {
 }
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   await seedAuthUser(pool, { id: OWNER, email: `usage-${OWNER}@example.invalid` });
 });
@@ -106,14 +105,12 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from auth.users where id::text like $1", [RUBBLE]).catch(() => {});
   await pool.end();
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   /* Ledger before account: `ingest_events.owner_id` has no foreign key into
      `billing_accounts`, but doing it in this order keeps the sweep readable as
      "the slots, then the plan". */
@@ -126,7 +123,6 @@ async function sweep(): Promise<void> {
 
 /** A tier's Stripe price, **read from the table** rather than named here. */
 async function tierRow(id: string): Promise<{ priceId: string; name: string; limit: number }> {
-  if (!pool) return { priceId: "", name: "", limit: 0 };
   const { rows } = await pool.query<{
     stripe_price_id: string | null;
     product_name: string;
@@ -181,7 +177,6 @@ async function givenAccount(fields: {
   /** The timestamp a Portal cancellation writes, leaving the boolean false. */
   cancelAt?: Date | null;
 }): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, status, price_id,
@@ -220,7 +215,6 @@ async function givenAccount(fields: {
 async function givenIngests(
   rows: { succeededAt?: Date | null; releasedAt?: Date | null }[],
 ): Promise<void> {
-  if (!pool) return;
   for (const row of rows) {
     /* `reserved_at` a day before the earliest thing that can settle it: the
        schema checks that a terminal timestamp never precedes it. */
@@ -439,7 +433,6 @@ describe("GET /api/billing/usage", () => {
    * is unreachable cannot also be handed to the route.
    */
   it("cannot even hold a row that claims a plan with no subscription behind it", async () => {
-    if (!pool) return;
     const tier = await readerTier();
     const period = livePeriod();
     const write = pool.query(

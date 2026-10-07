@@ -93,7 +93,7 @@ import type { ArtifactKind } from "../src/store/artifacts.js";
 import { STEPS, STEP_ORDER, stepIsDone } from "../src/pipeline.js";
 import type { StepContext } from "../src/pipeline.js";
 import { memoryArtefacts } from "./helpers/memory-artefacts.js";
-import { mintId } from "../src/ids.js";
+import { mintId, mintUniqueId } from "../src/ids.js";
 import { mintAttempt } from "../src/store/jobs.js";
 import {
   NotTheLiveAttempt,
@@ -211,6 +211,7 @@ describe("what a step counts as done", () => {
       power: "standard",
       slug: "nothing-here",
       report: () => {},
+      preview: () => {},
       signal: new AbortController().signal,
       // Nothing here sends the article anywhere, so there is no prefix to pay for.
       cacheArticle: false,
@@ -388,7 +389,7 @@ async function makeFixture(): Promise<void> {
       blockId: b.blockId,
       ordinal: b.ordinal,
       tag: "p",
-      kind: "text",
+      kind: "text" as const,
       text: b.text,
       words: 1,
       html: `<p>${b.text}</p>`,
@@ -1143,7 +1144,7 @@ describe("writing artefacts into a draft", () => {
   const begun = async (
     tx: Tx,
     claimed: JobDraftRef,
-    step: "structure" | "arc" | "blocks" | "fetch" | "extract",
+    step: "structure" | "arc" | "blocks" | "fetch" | "extract" | "metadata",
   ) => {
     await beginStepRun(
       { revisionId: claimed.revisionId, stepName: step, job: { id: claimed.jobId, attemptId: claimed.attemptId } },
@@ -1268,6 +1269,208 @@ describe("writing artefacts into a draft", () => {
     });
   });
 
+  /* Plan 261004h: the year alone, for a paper whose registry record states no
+     whole day. It goes through every mapping `journal` does. */
+  it("carries a paper's DOI, journal and year through the columns, and clears the year for a day", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      const paper = { slug: SLUG, title: "A paper", doi: "10.1016/j.neuron.2011.01.001", journal: "Neuron", publishedYear: 2011 };
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: paper }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toMatchObject(paper);
+      const [row] = await tx
+        .select({ year: articleRevisions.publishedYear, day: articleRevisions.publishedAt })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row).toEqual({ year: 2011, day: null });
+
+      /* A later extraction that finds a whole day has no year, and the column
+         must not keep the old one beside it: the table refuses a row with both. */
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "A paper", publishedAt: "2011-03-10" } }, {});
+      const back = await readArtefact(claimed, tx, SLUG, "extract", "meta");
+      expect(back).toMatchObject({ publishedAt: "2011-03-10" });
+      expect(back).not.toHaveProperty("publishedYear");
+    });
+  });
+
+  /* Plan 261005g: the title as it arrived, beside the one import tidied. */
+  it("keeps a tidied title's original through the column, and clears it when the next title needed none", async () => {
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "extract");
+      const tidied = { slug: SLUG, title: "The Order of Time", titleOriginal: "THE ORDER OF TIME" };
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: tidied }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).toMatchObject(tidied);
+      const [row] = await tx
+        .select({ original: articleRevisions.titleOriginal })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, claimed.revisionId));
+      expect(row).toEqual({ original: "THE ORDER OF TIME" });
+
+      await writeArtefacts(claimed, tx, SLUG, "extract", { meta: { slug: SLUG, title: "The Order of Time" } }, {});
+      expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).not.toHaveProperty("titleOriginal");
+    });
+  });
+
+  it("is refused a day beside a year, or a year that is not one, by the table itself", async () => {
+    /** The CHECK that refused, read off the driver's error under drizzle's wrapper. */
+    const refusedBy = async (set: { publishedAt?: string | null; publishedYear?: number | null }): Promise<string | undefined> => {
+      try {
+        await getDb().transaction(async (tx) => {
+          await tx.update(articleRevisions).set(set).where(eq(articleRevisions.id, ref.revisionId));
+          throw new RollBack();
+        });
+        return undefined;
+      } catch (err) {
+        if (err instanceof RollBack) return undefined;
+        const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+        expect(cause?.code).toBe("23514");
+        return cause?.constraint;
+      }
+    };
+    expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: 2011 })).toBe("article_revisions_published_day_or_year");
+    expect(await refusedBy({ publishedAt: null, publishedYear: 999 })).toBe("article_revisions_published_year");
+    expect(await refusedBy({ publishedAt: null, publishedYear: 3000 })).toBe("article_revisions_published_year");
+    /* And each alone goes in, so the refusals above are about the pair and the bounds. */
+    expect(await refusedBy({ publishedAt: null, publishedYear: 2011 })).toBeUndefined();
+    expect(await refusedBy({ publishedAt: "2011-03-10", publishedYear: null })).toBeUndefined();
+  });
+
+  /* Plan 261005j: the difficulty rating, an artefact of its own beside the
+     blocks, held in five columns. The reads that show it are in
+     tests/reading-difficulty-pg.test.ts. */
+  describe("the reading-difficulty rating", () => {
+    const RATED = {
+      rated: true,
+      language: 2,
+      ideas: 4,
+      reason: "Short sentences, but each paragraph asks you to hold a new idea.",
+      model: "test/rater-1",
+      ratedAt: "2026-10-05T09:30:00.000Z",
+    } as const;
+
+    const columns = async (tx: Tx, revisionId: string) => {
+      const [row] = await tx
+        .select({
+          language: articleRevisions.readingLanguage,
+          ideas: articleRevisions.readingIdeas,
+          reason: articleRevisions.readingDifficultyReason,
+          model: articleRevisions.readingDifficultyModel,
+          ratedAt: articleRevisions.readingDifficultyRatedAt,
+        })
+        .from(articleRevisions)
+        .where(eq(articleRevisions.id, revisionId));
+      return row;
+    };
+
+    it("writes a rating into its five columns and reads the same artefact back", async () => {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: RATED }, {});
+        expect(await columns(tx, claimed.revisionId)).toEqual({
+          language: 2,
+          ideas: 4,
+          reason: RATED.reason,
+          model: "test/rater-1",
+          ratedAt: new Date(RATED.ratedAt),
+        });
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual(RATED);
+      });
+    });
+
+    it("nulls all five when the step writes unrated, and reads back as unrated", async () => {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: RATED }, {});
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: { rated: false } }, {});
+        expect(await columns(tx, claimed.revisionId)).toEqual({
+          language: null,
+          ideas: null,
+          reason: null,
+          model: null,
+          ratedAt: null,
+        });
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual({ rated: false });
+      });
+    });
+
+    it("is left alone by a metadata-only write, which owns none of its columns", async () => {
+      /* GPT Sol's F2 on the plan: every `meta` write clears every column it
+         owns, so a rating kept among them would be wiped by an administrator
+         running `metadata` alone over an article whose body has not changed. */
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        await writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: RATED }, {});
+        await begun(tx, claimed, "metadata");
+        await writeArtefacts(claimed, tx, SLUG, "metadata", { meta: { slug: SLUG, title: "A new title" } }, {});
+        await begun(tx, claimed, "extract");
+        await writeArtefacts(
+          claimed,
+          tx,
+          SLUG,
+          "extract",
+          { meta: { slug: SLUG, title: "Another title" }, extractedHtml: "<p>x</p>" },
+          {},
+        );
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual(RATED);
+        // And the pipeline's own `Meta` does not grow the rating: it is not `meta`'s.
+        expect(await readArtefact(claimed, tx, SLUG, "extract", "meta")).not.toHaveProperty("readingDifficulty");
+      });
+    });
+
+    it("refuses a rating that is not one, before anything is written", async () => {
+      await withClaim(async (tx, claimed) => {
+        await begun(tx, claimed, "blocks");
+        for (const bad of [
+          { ...RATED, language: 6 },
+          { ...RATED, ideas: 2.5 },
+          { ...RATED, reason: "  " },
+          { ...RATED, model: "" },
+          { ...RATED, ratedAt: "yesterday" },
+          { rated: true },
+        ]) {
+          await expect(
+            writeArtefacts(claimed, tx, SLUG, "blocks", { readingDifficulty: bad as never }, {}),
+          ).rejects.toThrow(/reading-difficulty/);
+        }
+        expect(await readArtefact(claimed, tx, SLUG, "blocks", "readingDifficulty")).toEqual({ rated: false });
+      });
+    });
+
+    it("is refused half-written, or out of range, by the table itself", async () => {
+      const whole = {
+        readingLanguage: 2,
+        readingIdeas: 4,
+        readingDifficultyReason: "Because.",
+        readingDifficultyModel: "test/rater-1",
+        readingDifficultyRatedAt: new Date("2026-10-05T09:30:00.000Z"),
+      };
+      const refusedBy = async (set: Partial<Record<keyof typeof whole, number | string | Date | null>>): Promise<string | undefined> => {
+        try {
+          await getDb().transaction(async (tx) => {
+            await tx.update(articleRevisions).set(set as never).where(eq(articleRevisions.id, ref.revisionId));
+            throw new RollBack();
+          });
+          return undefined;
+        } catch (err) {
+          if (err instanceof RollBack) return undefined;
+          const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+          expect(cause?.code).toBe("23514");
+          return cause?.constraint;
+        }
+      };
+      // The positive control: all five together go in.
+      expect(await refusedBy(whole)).toBeUndefined();
+      for (const missing of Object.keys(whole) as (keyof typeof whole)[]) {
+        expect(await refusedBy({ ...whole, [missing]: null }), missing).toBe(
+          "article_revisions_reading_difficulty_all_or_none",
+        );
+      }
+      expect(await refusedBy({ ...whole, readingLanguage: 0 })).toBe("article_revisions_reading_language");
+      expect(await refusedBy({ ...whole, readingLanguage: 6 })).toBe("article_revisions_reading_language");
+      expect(await refusedBy({ ...whole, readingIdeas: 0 })).toBe("article_revisions_reading_ideas");
+      expect(await refusedBy({ ...whole, readingIdeas: 6 })).toBe("article_revisions_reading_ideas");
+    });
+  });
+
   it("replaces the blocks wholesale, in the order it was given", async () => {
     await withClaim(async (tx, claimed) => {
       await begun(tx, claimed, "blocks");
@@ -1279,6 +1482,48 @@ describe("writing artefacts into a draft", () => {
       expect(back?.blocks).toHaveLength(2);
     });
   });
+
+  it("writes an article of 4,000 blocks and reads every one back in order", async () => {
+    /* **More blocks than one statement can carry.** Postgres' wire protocol
+       allows 65,535 bound parameters, and a block row binds 17, so the single
+       insert `writeBlocks` used to make took 3,855 blocks and failed at 3,856
+       with `08P01: bind message has … parameter formats but 0 parameters` —
+       which the reader was told to retry (measured, 2026-10-04,
+       scripts/eval-big-imports.ts M2). Watched red on that error before the
+       insert was batched.
+
+       **The ids are random, so the order assertion is about `ordinal` and
+       nothing else** — the same reason the fixture's three sort backwards. It
+       was watched red a second time by writing the index *within a batch* as
+       the ordinal, which is the mistake batching invites: every batch then
+       starts again at 0. The schema refuses that before any assertion here
+       does (`revision_blocks_revision_ordinal`, 23505), and the id and ordinal
+       comparisons below are what would say so if that constraint ever went. */
+    const taken = new Set<string>();
+    const many: Block[] = Array.from({ length: 4000 }, (_, i) => ({
+      id: mintUniqueId(taken),
+      tag: "p",
+      kind: "text",
+      text: `paragraph ${i}`,
+      words: 2,
+      html: `<p>paragraph ${i}</p>`,
+      gistable: true,
+    }));
+    await withClaim(async (tx, claimed) => {
+      await begun(tx, claimed, "blocks");
+      await writeArtefacts(claimed, tx, SLUG, "blocks", { blocks: { blocks: many } }, {});
+      const back = (await readArtefact(claimed, tx, SLUG, "blocks", "blocks"))?.blocks ?? [];
+      expect(back).toHaveLength(4000);
+      expect(back.map((b) => b.id)).toEqual(many.map((b) => b.id));
+      for (const i of [0, 2000, 3999]) expect(back[i], `block ${i}`).toEqual(many[i]);
+      const ordinals = await tx
+        .select({ ordinal: revisionBlocks.ordinal })
+        .from(revisionBlocks)
+        .where(eq(revisionBlocks.revisionId, claimed.revisionId))
+        .orderBy(revisionBlocks.ordinal);
+      expect(ordinals.map((r) => r.ordinal)).toEqual(many.map((_, i) => i));
+    });
+  }, 60_000);
 
   it("deletes every block when it is handed none", async () => {
     /* **The decision, and it is the opposite of what the importer did.**

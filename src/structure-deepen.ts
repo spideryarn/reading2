@@ -82,10 +82,10 @@ import { link, mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { retryAfterMs } from "./ai-call.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { WidthGate, allOrStop, sleepUnlessAborted, type GateWindow } from "./concurrency.js";
 import { log } from "./log.js";
+import { parseRetryAfter } from "./retry-after.js";
 import {
   CASCADE_RECIPE,
   ExpansionRefused,
@@ -123,6 +123,7 @@ import {
 import type { BuildReport, ModelNode } from "./structure.js";
 import type { ModelPower } from "./models.js";
 import {
+  messageText,
   messagesWireBody,
   streamMessage,
   wasRefused,
@@ -667,8 +668,14 @@ export class ExpansionTruncated extends Error {
  * verdict about the answer, so it is not a redraw and does not spend
  * `MAX_EXPANSION_REDRAWS`.
  *
- * Three, matching src/pdf-read.ts § `TRANSPORT_ATTEMPTS`, which is the only other
+ * Three, matching src/pdf-read.ts § `TRANSPORT_ATTEMPTS`, which was the only other
  * loop in this repo that asks the same upstream the same question again.
+ *
+ * **Since 2026-10-03 there is a third, underneath this one**, and "sent" above
+ * means sent *by this loop*: the gateway re-sends a call whose transport failed
+ * before the answer began (src/transport-retry.ts § `TRANSPORT_ATTEMPTS`). It
+ * never retries a 429, so the two loops answer different failures; they only
+ * multiply in a run that meets both, where the worst case is nine requests.
  */
 const EXPANSION_ATTEMPTS = 3;
 
@@ -848,7 +855,7 @@ export function liveExpansionExecutor(power: ModelPower, signal?: AbortSignal): 
       message = await call.finalMessage();
     } catch (err) {
       if (err instanceof Anthropic.APIError && err.status === 429) {
-        throw new ExpansionRateLimited(err.headers ? retryAfterMs(err.headers) : null);
+        throw new ExpansionRateLimited(err.headers ? parseRetryAfter(err.headers.get("retry-after"), Date.now()) : null);
       }
       throw anthropicCallFailed(err);
     }
@@ -859,10 +866,7 @@ export function liveExpansionExecutor(power: ModelPower, signal?: AbortSignal): 
     }
     if (message.stop_reason === "max_tokens") throw new ExpansionTruncated();
     return {
-      text: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join(""),
+      text: messageText(message),
       /* Off `finalMessage()` rather than off the raw `message_delta`, which is
          what `CallMeter` reads. The four fields here are the ones the SDK's own
          `Usage` type names, so they survive the merge; the TTL split and the

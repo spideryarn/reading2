@@ -1,0 +1,137 @@
+[
+ {
+  "id": "spya-fufa4n",
+  "kind": "meaning",
+  "criterion": "Limitations",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-b8ab9e",
+    "confidence": 95
+   },
+   {
+    "blockId": "spya-t90mpt",
+    "confidence": 95
+   }
+  ]
+ },
+ {
+  "id": "spya-uusd5t",
+  "kind": "meaning",
+  "criterion": "results",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-vwc792",
+    "confidence": 95
+   },
+   {
+    "blockId": "spya-zz8q69",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-f2g408",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-rmssw4",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-dcepy8",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-pgpck8",
+    "confidence": 55
+   },
+   {
+    "blockId": "spya-f3vbvp",
+    "confidence": 50
+   }
+  ]
+ },
+ {
+  "id": "spya-k3td5u",
+  "kind": "meaning",
+  "criterion": "linear algebra",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": [
+   {
+    "blockId": "spya-ft0zvv",
+    "confidence": 85
+   },
+   {
+    "blockId": "spya-bkcvuq",
+    "confidence": 95
+   },
+   {
+    "blockId": "spya-csux0a",
+    "confidence": 90
+   },
+   {
+    "blockId": "spya-hbx0rq",
+    "confidence": 80
+   },
+   {
+    "blockId": "spya-dy4aud",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-zubvtq",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-xtvpa0",
+    "confidence": 78
+   },
+   {
+    "blockId": "spya-y5e8ck",
+    "confidence": 75
+   },
+   {
+    "blockId": "spya-rngpgp",
+    "confidence": 72
+   },
+   {
+    "blockId": "spya-bygxh5",
+    "confidence": 60
+   },
+   {
+    "blockId": "spya-k757zr",
+    "confidence": 70
+   },
+   {
+    "blockId": "spya-wjs5qx",
+    "confidence": 40
+   }
+  ]
+ },
+ {
+  "id": "spya-rbxajp",
+  "kind": "meaning",
+  "criterion": "sleep",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": []
+ },
+ {
+  "id": "spya-c33zqb",
+  "kind": "meaning",
+  "criterion": "human memory",
+  "status": "done",
+  "model": "anthropic/claude-sonnet-5",
+  "hits": []
+ },
+ {
+  "id": "spya-yd2b7t",
+  "kind": "quick",
+  "criterion": "dreaming",
+  "status": "done",
+  "model": "typesafe/jev-1.13-20260917",
+  "hits": []
+ }
+]

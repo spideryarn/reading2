@@ -1,7 +1,13 @@
 # High-powered AI
 
-Parent: [reading-view-overview.md](reading-view-overview.md). The build, and every decision behind
-it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
+Up: [reading-view-overview.md](reading-view-overview.md). Tests:
+[`high-power-models.test.ts`](../../tests/high-power-models.test.ts),
+[`high-power-routes.test.ts`](../../tests/high-power-routes.test.ts),
+[`high-power-step.test.ts`](../../tests/high-power-step.test.ts),
+[`billing-high-power.test.ts`](../../tests/billing-high-power.test.ts),
+[`add-high-power.test.ts`](../../tests/add-high-power.test.ts),
+[`metadata-high-power-switch.test.tsx`](../../tests/metadata-high-power-switch.test.tsx). The build,
+and every decision behind it, is [260930f](../plans/260930f-high-powered-ai-per-article.md) (the switch, for the administrator)
 and [260930k](../plans/260930k-high-power-for-readers-and-cost-only-for-admins.md) (readers, and what
 it costs them), and [261002k](../plans/261002k-high-powered-ai-at-import.md) (choosing it while
 the article is added).
@@ -59,11 +65,25 @@ above are unchanged; only the moment is earlier. The build is
   for a web page, before `extract` for a PDF, whose front matter is read on the capable tier. Later
   than that, the line under the box says some of it *may* have used Sonnet; exactly which steps
   cannot be told from the page, because the runner reads the setting before it marks a step running.
-- **The main modes it queues at the end wait for the switch to answer**, so none of them claims
-  first and reads Sonnet. The navigation to the article does not wait.
-- **It is a page's intent**, like *Generate the main modes*: a tab closed before the job is claimed
-  sends nothing, and the article imports on Sonnet. An import that fails after the switch keeps the
+- **The main modes run on Opus when the switch was committed before the first of them starts.**
+  Each step reads the article's power as it starts (`readStepPower`), and no main-mode job starts
+  until the `labels` job ahead of it has ended. The page sends the switch as soon as the article row
+  exists, which is long before publication. **What is no longer promised**: until 2026-10-04 the
+  page held the modes until the switch request *answered*, however long that took. The server queues
+  them at publication now ([261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
+  so a mode step that starts before the switch commits uses the standard model; later steps read
+  the setting again. A late tick, or labels ending quickly after failure or cancellation, can leave
+  very little time for the switch to commit. A tick in the last second is still sent at completion,
+  and the navigation to the article does not wait for it.
+- **It is a page's intent**: a tab closed before the job is claimed
+  sends nothing, and the article imports on Sonnet. (*Generate the main modes* was one too until
+  2026-10-04; it is the reader's setting now.) An import that fails after the switch keeps the
   charge on its article row, under the never-refunded rule; its *Retry* does not charge again.
+- **It is one reader's intent.** The retry is not sent with another reader's token, so a change of
+  account on an open add page cannot charge whoever signed in
+  ([ingest-queue.md § The add page](ingest-queue.md#the-three-traps-in-a-page-whose-whole-job-is-one-effect)).
+  If the first reader comes back within the retry second, their own tick can still reach their own
+  article.
 
 Deferred, and a billing change if built: the charge riding the job itself (admitted at
 `POST /api/jobs`, switched server-side at the first capable-tier step), which would survive a closed
@@ -113,7 +133,7 @@ Simple is not part of the default ingest and already uses Opus whenever it is re
 
 | | |
 |---|---|
-| The setting | `articles.high_power_since timestamptz null` — null is off. Written by `PUT /api/article/:slug/high-power` (`{ on: boolean }`), scoped to the caller's **own** article. A reader's switch-on goes through `chargeAndSwitchOnHighPower` ([`src/billing/admission.ts`](../../src/billing/admission.ts)): the charge row and the column commit in one transaction. The administrator's switch goes through the admin-checked, uncharged `highPowerStore.switchOnForAdmin`; every switch-off goes through the off-only `highPowerStore.switchOff` |
+| The setting | `articles.high_power_since timestamptz null` — null is off. Written by `PUT /api/article/:slug/high-power` (`{ on: boolean }`), scoped to the caller's **own** article. A reader's switch-on goes through `chargeAndSwitchOnHighPower` ([`src/billing/admission.ts`](../../src/billing/admission.ts)): the charge row and the column commit in one transaction. The administrator's switch goes through the admin-checked, uncharged `highPowerStore.switchOnForAdmin`; every switch-off goes through the off-only `highPowerStore.switchOff`. Each real transition, on or off, also stamps `articles.updated_at` — switching off nulls `high_power_since`, so that is the only record of when; a repeat of the state it is already in moves neither |
 | Whether it applies | `articlePower` in [`src/models.ts`](../../src/models.ts) reads whether the column is set; `powerFor` then applies the one task exception, Simple. Until 2026-09-30 the column also required an administrator owner, because nothing charged a reader. Now the only writer that sets it for a reader charges in the same transaction |
 | Which model | The model's two spellings, the stored name and the wire address, are `HIGH_POWER_MODEL` and `HIGH_POWER_MODEL_OPENROUTER` in [`src/high-power-model.ts`](../../src/high-power-model.ts), a leaf so `src/ai-call.ts` can use `isHighPowerModel` without an import cycle; `src/models.ts` re-exports and explains them. `powerFor(task, articlePower)` selects the effective power where a task has a policy exception; `modelFor(task, power)` / `resolveModel(task, power)` resolve that selection. `power` is a **required** argument all the way down (`StepContext.power`, `streamMessage`'s options, every request-path stream), so a call that forgets to decide does not compile. Chosen over an `AsyncLocalStorage` scope because its failure is silent and it loses context across a streamed response |
 | Freshness | `generationKey` / `sameGenerator`: the stamp comparison and the two citation fingerprints treat Sonnet and Opus as one generation. Checkpoint keys (labels batches, the whole-document call, deepening) stay exact, because there the question is *which model paid for this answer* |

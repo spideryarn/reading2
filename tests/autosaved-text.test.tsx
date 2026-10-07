@@ -10,12 +10,15 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { reloadVeto } from "../src/web/safe-to-reload.js";
+import { SaveStatus } from "../src/web/ProfileBox.js";
 import { type AutosavedText, useAutosavedText } from "../src/web/useAutosavedText.js";
 
 /** Each save the hook started, in order, with a way to answer it. */
-let sent: Array<{ text: string; ok(stored: string): void; fail(message: string): void }> = [];
+let sent: Array<{ text: string; ok(stored: string): void; fail(message: string): void; reject(reason: unknown): void }> = [];
 let left: string[] = [];
 let syncFailure: Error | null = null;
+let leaveFailure: Error | null = null;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -26,14 +29,15 @@ function Probe() {
     save: (text) => {
       if (syncFailure) throw syncFailure;
       return new Promise<string>((resolve, reject) => {
-        sent.push({ text, ok: resolve, fail: (m) => reject(new Error(m)) });
+        sent.push({ text, ok: resolve, fail: (m) => reject(new Error(m)), reject });
       });
     },
     leave: (text) => {
+      if (leaveFailure) throw leaveFailure;
       left.push(text);
     },
   });
-  return null;
+  return createElement(SaveStatus, { save: t.state });
 }
 const get = (): AutosavedText => {
   if (!t) throw new Error("no render");
@@ -44,6 +48,7 @@ beforeEach(() => {
   sent = [];
   left = [];
   syncFailure = null;
+  leaveFailure = null;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -51,9 +56,15 @@ beforeEach(() => {
   act(() => get().seed("Stored"));
 });
 
-afterEach(() => {
+afterEach(async () => {
   act(() => root.unmount());
   host.remove();
+  /* Answer whatever is still out. A box that unmounts with newer words behind
+     an unanswered save holds the tab until that save settles (unload-guard.ts),
+     and that hold is module state the next test would inherit. */
+  await act(async () => {
+    for (const s of sent) s.ok(s.text);
+  });
 });
 
 describe("what lands after a save", () => {
@@ -82,6 +93,30 @@ describe("what lands after a save", () => {
     act(() => get().commit());
     await act(async () => sent[0]?.fail("Over the limit"));
     expect(get().state).toEqual({ kind: "error", message: "Over the limit" });
+  });
+
+  it.each([new Error(""), "network failed", undefined, null])(
+    "keeps a failure visible even when its rejection has no Error message (%s)",
+    async (reason) => {
+      act(() => get().setDraft("Words to keep"));
+      act(() => get().commit());
+      await act(async () => sent[0]?.reject(reason));
+      expect(get().state).toEqual({ kind: "error", message: "The request failed." });
+      expect(host.querySelector(".prof-save")?.textContent).toContain("Not saved — The request failed.");
+      expect(get().draft).toBe("Words to keep");
+      expect(get().saved).toBe("Stored");
+      expect(get().inFlight).toBe(false);
+    },
+  );
+
+  /* The idle timer arms only on `dirty`. A refusal of older text shown over
+     newer words would leave them unsent until the next keystroke or blur. */
+  it("does not call newer words refused when an older save fails", async () => {
+    act(() => get().setDraft("Too much"));
+    act(() => get().commit());
+    act(() => get().setDraft("Less"));
+    await act(async () => sent[0]?.fail("Over the limit"));
+    expect(get().state.kind).toBe("dirty");
   });
 
   it("drops a failed attempt's error when the reader changes the draft", async () => {
@@ -141,6 +176,23 @@ describe("one save at a time", () => {
     act(() => get().commit());
     await act(async () => sent[0]?.fail("network"));
     expect(sent.map((s) => s.text)).toEqual(["one", "one two"]);
+  });
+
+  it("keeps a refusal visible when another blur queued the same words", async () => {
+    act(() => get().setDraft("Words to keep"));
+    act(() => get().commit());
+    act(() => get().commit());
+    await act(async () => sent[0]?.fail("The shelf is unavailable."));
+    expect(sent.map((s) => s.text)).toEqual(["Words to keep"]);
+    expect(get().state).toEqual({ kind: "error", message: "The shelf is unavailable." });
+    expect(host.querySelector(".prof-save")?.textContent).toContain("Not saved — The shelf is unavailable.");
+    expect(get().inFlight).toBe(false);
+
+    // A later explicit retry still works.
+    act(() => get().commit());
+    expect(sent).toHaveLength(2);
+    await act(async () => sent[1]?.ok("Words to keep"));
+    expect(get().state.kind).toBe("saved");
   });
 
   it("does not leave the queue stuck when save throws before returning a promise", async () => {
@@ -231,6 +283,46 @@ describe("leaving", () => {
 
     await act(async () => sent[0]?.ok("an older draft"));
     expect(left).toEqual(["the newest words"]);
+  });
+
+  /* **A box that has gone can still be holding the only copy of the newest
+     words.** Between the unmount and the older save settling, they exist
+     nowhere but in this hook's callback, and the field that would have warned
+     about leaving is no longer on the page. `/changelog` reloads itself for a
+     new build, so that window has to say no (GPT Sol's F12, plan 261005d). */
+  it("holds off a page reload while the newest words wait behind an older save", async () => {
+    expect(reloadVeto()).toBeNull();
+    act(() => get().setDraft("an older draft"));
+    act(() => get().commit());
+    act(() => get().setDraft("the newest words"));
+
+    act(() => root.render(null));
+    expect(reloadVeto()).toBe("unsaved");
+
+    await act(async () => sent[0]?.ok("an older draft"));
+    expect(left).toEqual(["the newest words"]);
+    expect(reloadVeto()).toBeNull();
+  });
+
+  it("lets go of that hold when the older save fails, too", async () => {
+    act(() => get().setDraft("an older draft"));
+    act(() => get().commit());
+    act(() => get().setDraft("the newest words"));
+    act(() => root.render(null));
+    expect(reloadVeto()).toBe("unsaved");
+
+    await act(async () => sent[0]?.fail("no"));
+    expect(reloadVeto()).toBeNull();
+  });
+
+  it("lets go of that hold when the last-chance send itself throws", async () => {
+    act(() => get().setDraft("an older draft"));
+    act(() => get().commit());
+    act(() => get().setDraft("the newest words"));
+    act(() => root.render(null));
+    leaveFailure = new Error("leave threw");
+    await act(async () => sent[0]?.ok("an older draft"));
+    expect(reloadVeto(), "a failed send must not hold the tab for good").toBeNull();
   });
 
   it("does not send a last-chance duplicate after a successful save", async () => {

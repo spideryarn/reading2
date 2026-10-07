@@ -39,13 +39,32 @@
  * the box is pinned by its bottom edge so it grows upward, and the whole box
  * scrolls so the header then leaves out of the top. So: three parts, only the
  * middle one scrolls, and a stable height once there is a transcript. The
- * matching rules are in styles.css § the floating panels.
+ * matching rules are in dialogs.css § the floating chat panel.
+ *
+ * ## Three places, one panel
+ *
+ * Floating in the corner; docked over the Marginalia column (plan 261003p);
+ * or, on trial since 261004k, a card in that column level with the block it
+ * is about. `Reader` decides and this component is told (`dockRoom`, `card`).
+ * It is the same `<aside>` in all three, drawn through one portal whose
+ * container is moved — § One panel, one container, moved, below — so a
+ * change of place never remounts the conversation.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LoaderCircle, MessageSquare, Square, X } from "lucide-react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
 
-import type { BlockId, ChatAnchor, ThreadSummary } from "../types.js";
+import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
 import { Composer, Conversation } from "./ChatPanel.js";
+import { chatDraftsFor } from "./chat-draft.js";
+import { answerOpening } from "../answer-opening.js";
 import { askAboutBlock, HELP_QUESTION } from "./chat-handoff.js";
 import { shortBlockId } from "./BlockRef.js";
 /* **The client's own creation window, imported rather than restated.** This
@@ -54,9 +73,11 @@ import { shortBlockId } from "./BlockRef.js";
    quietly stop being true. src/web/chat/effects.ts says why it is three
    minutes. */
 import { OPEN_TIMEOUT_MS } from "./chat/effects.js";
+import { CHAT_DOCK_INSET } from "./layout.js";
 import { useChat } from "./useChat.js";
 import { useEscapeToClose } from "./useEscapeToClose.js";
 import { keyboardInsetStyle, useVisualViewport } from "./useVisualViewport.js";
+import { withVoice } from "./voice.js";
 
 /**
  * What the panel is open on.
@@ -74,14 +95,27 @@ export type ChatTarget =
       /** The passage, or a paragraph's opening words — shown above the box. */
       opening: string;
       /**
-       * Text to start the box with.
-       *
-       * Set when the reader typed a follow-up into the explanation panel: their
-       * words are carried across and **not sent**. Firing a question typed in
-       * one box from another is a model call they did not quite ask for, which
-       * is the thing this whole change is about.
+       * Text to start the box with: carried across and **not sent**, unless
+       * `sendNow` says the reader has already asked it. Both of today's
+       * senders set `sendNow`, so this alone has no caller; it is what the
+       * field means without it.
        */
       question?: string;
+      /**
+       * **The reader has already asked: send `question` as the panel opens,
+       * once, and draw no box.** With no words, the passage itself is the
+       * question (`askAboutBlock`: *Explain this passage.*).
+       *
+       * Two senders: the follow-up box under an explanation, whose button is
+       * *Ask in chat*, and the comment box's **Ask AI**. Until 2026-10-06
+       * both carried the words across to wait for a second press. Greg
+       * (spya-x896vu): *"When I click "ask in Chat" anywhere, automatically
+       * submit the input (rather than just prefilling the input box and
+       * waiting for me to hit send)"*. A second field beside `question`, not
+       * a change to what `question` means, for the reason `help` below
+       * gives. docs/plans/261006j-ask-in-chat-sends-the-question.md, D4, D6.
+       */
+      sendNow?: true;
       /**
        * The comment this conversation is being started from, if it is.
        *
@@ -145,6 +179,119 @@ interface Props {
   /** Told when a thread appears or goes, so the prose can draw or drop its mark. */
   onCreated(summary: ThreadSummary): void;
   onDropped(threadId: string): void;
+  /**
+   * The server stored the thread `onCreated` announced under another id.
+   * Required, so no caller can leave the summary under the guess: the dialog
+   * would close on the first frame (useChatAnchors.ts § `rename`).
+   */
+  onRenamed(guess: string, real: string): void;
+  /**
+   * An answer in this panel has just stopped arriving: finished, failed or
+   * stopped. Whoever holds the thread summaries asks for them again, so a mark
+   * that shows a conversation's latest line (a Debate claim's) follows a
+   * follow-up asked here. Once per answer, never per token. Plan 261005i, F1.
+   */
+  onSettled?(): void;
+  /**
+   * **The room the panel has over the marginalia column, in px — or `null` to
+   * float in the corner as it always has.** layout.ts § `chatDock` decides;
+   * `Reader` passes it.
+   *
+   * A class and two custom properties on the same `<aside>`, and nothing else:
+   * a window dragged across the threshold with a question half typed must keep
+   * it, so docking can never be a different element or a different branch.
+   * Optional, so a caller with no column has nothing to say.
+   */
+  dockRoom?: number | null;
+  /**
+   * **The card: a host in the anchor block's cell to be drawn in, and how wide
+   * — or `null` for the panel above** (docked if `dockRoom` says so, else
+   * floating). `Reader` decides, and hands a host only when it has one in
+   * hand, so "no card" always falls back to something visible.
+   * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md.
+   *
+   * It wins over `dockRoom` rather than replacing it: `Reader` passes both, and
+   * the room is what the panel falls back to the moment the host goes.
+   */
+  card?: ChatCardPlace | null;
+  /**
+   * **A count of the presses that asked for a conversation to be open** —
+   * the gutter's chip, the "?", a mark, the margin's line, the Comments drawer.
+   * They write `?thread=` and nothing else, so a press naming the conversation
+   * already open changes nothing this panel could otherwise see, and a
+   * collapsed card would sit there ignoring it (GPT Sol on the plan, F1).
+   */
+  reopen?: number;
+}
+
+/** Where the card goes: `Reader`'s host element, and layout.ts § `chatCard`'s width. */
+export interface ChatCardPlace {
+  host: HTMLElement;
+  width: number;
+}
+
+/**
+ * **The three places the one panel can be**, decided on every render from the
+ * two props. A union so that a card cannot also carry a dock's room, and the
+ * class, the style and the attach point are read off one value.
+ */
+type Placement =
+  | { kind: "float" }
+  | { kind: "dock"; room: number }
+  | { kind: "card"; host: HTMLElement; width: number };
+
+/**
+ * **What a move would lose, read before it happens.** Re-parenting a DOM node
+ * keeps React's state and drops the browser's: the focused element blurs, and
+ * every scroller under it goes back to the top.
+ */
+interface Kept {
+  focus: HTMLElement | null;
+  scroll: (readonly [HTMLElement, number])[];
+}
+
+function scrollOffsets(root: HTMLElement): Kept["scroll"] {
+  const out: (readonly [HTMLElement, number])[] = [];
+  for (const el of root.querySelectorAll<HTMLElement>("*")) if (el.scrollTop > 0) out.push([el, el.scrollTop]);
+  return out;
+}
+
+function keep(root: HTMLElement): Kept {
+  const at = document.activeElement;
+  return {
+    focus: at instanceof HTMLElement && root.contains(at) ? at : null,
+    scroll: scrollOffsets(root),
+  };
+}
+
+function putBack(kept: Kept): void {
+  for (const [el, top] of kept.scroll) if (el.scrollTop !== top) el.scrollTop = top;
+  /* `preventScroll`: the panel has moved, the reader has not. */
+  if (kept.focus?.isConnected && document.activeElement !== kept.focus)
+    kept.focus.focus({ preventScroll: true });
+}
+
+/**
+ * **The collapsed card's second line**: an answer on its way, else the first
+ * line of the latest answer, else how many questions there are. The cut is the
+ * one `summarise` makes for a summary's `lastLine` (src/routes.ts), by the same
+ * `answerOpening`: plain words, no markdown, no block references. But this
+ * reads the live transcript, so it is right while the summary is still stale.
+ */
+type CardLine =
+  | { kind: "answering" }
+  | { kind: "answer"; text: string }
+  | { kind: "questions"; count: number };
+
+function cardLine(thread: ChatThread, streaming: boolean): CardLine {
+  if (streaming) return { kind: "answering" };
+  for (let i = thread.messages.length - 1; i >= 0; i--) {
+    const m = thread.messages[i];
+    if (m?.role !== "assistant") continue;
+    const first = answerOpening(m.text);
+    if (first) return { kind: "answer", text: first };
+  }
+  return { kind: "questions", count: thread.messages.filter((m) => m.role === "user").length };
 }
 
 export function ChatDialog({
@@ -159,6 +306,11 @@ export function ChatDialog({
   onNewConversation,
   onCreated,
   onDropped,
+  onRenamed,
+  onSettled,
+  dockRoom = null,
+  card = null,
+  reopen = 0,
 }: Props) {
   const {
     threads,
@@ -172,7 +324,7 @@ export function ChatDialog({
     cancelAndDiscard,
     remove,
     error,
-  } = useChat(slug);
+  } = useChat(slug, onSettled);
 
   const thread = target.kind === "thread" ? threads.find((t) => t.id === target.threadId) : undefined;
 
@@ -188,14 +340,38 @@ export function ChatDialog({
      gets its own initial value in the render that mounts its Composer. An effect
      is too late: Composer seeds local state from `draft` once, so it would keep
      the previous thread's half-typed question even after the parent cleared its
-     copy. */
+     copy.
+
+     **That is the passage arm's draft, and only its.** A conversation's unsent
+     words are the article's (src/web/chat-draft.ts), the same entry Chat
+     mode's composer reads and writes, because the two are one conversation
+     seen from two places and never at once: entering Chat unmounts this
+     dialog, and leaving Chat can mount it on the conversation that was open.
+     Two private copies would be two different half-questions, and a delete
+     pressed here would leave Chat's copy behind for a conversation that is
+     gone. GPT Sol's review of
+     docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md,
+     F5. A passage draft is about a paragraph and belongs to no conversation
+     yet, so it stays here. */
+  const drafts = chatDraftsFor(slug);
   const draftTarget = target.kind === "draft" ? `draft:${target.anchor.blockId}` : `thread:${target.threadId}`;
-  const initialDraft = target.kind === "draft" ? (target.question ?? "") : "";
+  /* A question that is sent as the panel opens (`sendNow`) is not also left
+     in the box to be sent again. */
+  const initialDraft = target.kind === "draft" && !target.sendNow ? (target.question ?? "") : "";
   const [draftState, setDraftState] = useState(() => ({ target: draftTarget, text: initialDraft }));
-  const draft = draftState.target === draftTarget ? draftState.text : initialDraft;
+  const threadTarget = target.kind === "thread" ? target.threadId : null;
+  const draft =
+    threadTarget !== null
+      ? (drafts.thread(threadTarget) ?? "")
+      : draftState.target === draftTarget
+        ? draftState.text
+        : initialDraft;
   const setDraft = useCallback(
-    (text: string) => setDraftState({ target: draftTarget, text }),
-    [draftTarget],
+    (text: string) => {
+      if (threadTarget !== null) drafts.setThread(threadTarget, text);
+      else setDraftState({ target: draftTarget, text });
+    },
+    [draftTarget, threadTarget, drafts],
   );
   const focused = useRef(0);
 
@@ -379,9 +555,101 @@ export function ChatDialog({
    * reader has just typed, and the composer is where they are.
    */
   const [openedAs] = useState(() => target.kind);
-  /** The panel itself, so the cleanup can ask whether the focus it is about to destroy was inside it. */
+  /** The panel itself, so a change of conversation can ask whether the caret was in its composer. */
   const box = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+
+  /**
+   * ## One panel, one container, moved
+   *
+   * The `<aside>` is **always** drawn through a portal into one `<div>` this
+   * component makes once, and that `<div>` is what moves: into the card's host
+   * in the anchor block's cell, or back to `home` — a mount point where the
+   * panel has always been in the tree, inside `.reader`, so the docked rule
+   * still finds `--marg-left`. Plan 261004k § 1.
+   *
+   * **The portal's target never changes, so nothing under it remounts.** The
+   * first design switched `createPortal` on and off, and GPT Sol's probe (F5)
+   * showed what that costs: React keeps this component and remounts everything
+   * drawn through the portal, so `Conversation` lost its scroll position and an
+   * open question editor, and a running dictation was aborted by its own
+   * cleanup. A window dragged across the threshold with a question half typed,
+   * a section folded over an open chat, Marginalia switched off — each is a
+   * move, and none of them may be a remount.
+   *
+   * **Events are unaffected by where the container sits.** React bubbles
+   * through the React tree, so a click or a mouse-up in the card never reaches
+   * `TableView`'s handlers on the cell it is physically inside: no row is
+   * selected, no selection is read, no comment opens.
+   */
+  const [container] = useState(() => {
+    if (typeof document === "undefined") return null;
+    const el = document.createElement("div");
+    el.className = "chat-dialog-mount";
+    return el;
+  });
+  const home = useRef<HTMLDivElement | null>(null);
+  /**
+   * **Attached as the mount point's ref lands, not in an effect.** React
+   * attaches a ref before it runs the layout effects of the siblings after it,
+   * and the portal is the sibling after: so the panel is in the document by the
+   * time the composer inside it measures its own `scrollHeight` to size itself
+   * (ChatPanel.tsx § Height follows content). A detached textarea measures 0.
+   * tests/chat-dialog-in-column.test.tsx holds the order.
+   */
+  const setHome = useCallback(
+    (el: HTMLDivElement | null) => {
+      home.current = el;
+      if (el && container && container.parentNode === null) el.appendChild(container);
+    },
+    [container],
+  );
+
+  /* **A host that has left the document is not somewhere to draw** (plan § 3,
+     never nothing). `Reader` learns its host has gone from a ref callback, one
+     commit after the cell that held it was unmounted. */
+  const place: Placement =
+    card?.host.isConnected === true
+      ? { kind: "card", host: card.host, width: card.width }
+      : dockRoom !== null
+        ? { kind: "dock", room: dockRoom }
+        : { kind: "float" };
+  const cardHost = place.kind === "card" ? place.host : null;
+  const cardWidth = place.kind === "card" ? place.width : null;
+
+  /**
+   * **Read on the render that is about to move it**, for `composerHeld`'s
+   * reason below: it is the only moment the answer exists. When the card's
+   * cell is unmounted in the same commit that takes the card away (Marginalia
+   * switched off, a resize under the threshold), the container has left the
+   * document — and the focus and every scroll offset with it — before any
+   * effect of this component runs.
+   */
+  /* Save even when the host prop still names the current parent: Reader can
+     replace that host in this commit, before its ref reports the new node. */
+  const kept = container !== null ? keep(container) : null;
+  /* **No dependency list, on purpose**: the host can leave the document
+     without any prop of this component changing, so where the container is has
+     to be checked after every commit. It is two comparisons when nothing has
+     moved. */
+  useLayoutEffect(() => {
+    if (!container) return;
+    /* Asked again here: the host can be unmounted by the very commit this
+       effect belongs to. */
+    const to = cardHost?.isConnected ? cardHost : home.current;
+    if (!to) return;
+    /* The width is the host's to carry: it is the positioned box
+       `useMarginLayout` measures, and the panel is in flow inside it. */
+    if (to === cardHost && cardWidth !== null) {
+      const width = `${cardWidth}px`;
+      if (to.style.getPropertyValue("--chat-card-w") !== width)
+        to.style.setProperty("--chat-card-w", width);
+    }
+    if (container.parentNode !== to) {
+      to.appendChild(container);
+      if (kept) putBack(kept);
+    }
+  });
 
   /**
    * ## Opening an existing conversation lands the keyboard somewhere
@@ -406,7 +674,12 @@ export function ChatDialog({
    */
   useEffect(() => {
     if (openedAs !== "thread") return;
-    closeRef.current?.focus();
+    /* **`preventScroll`, for the card.** The floating and docked panels are
+       fixed to the window, where focus scrolls nothing. The card is in the
+       page: a cold `?thread=` with `at=` somewhere else would be dragged to
+       the card by this focus, against the position the address asked for
+       (plan 261004k § Focus must not scroll the page). */
+    closeRef.current?.focus({ preventScroll: true });
   }, [openedAs]);
 
   /**
@@ -426,31 +699,82 @@ export function ChatDialog({
    * reopened thread's composer", which this is not — the condition below is
    * exactly that the reader was already typing.
    *
-   * So: only when focus was in the composer that is going away, and only on the
-   * draft → thread transition. A reader who sent from the keyboard shortcut with
-   * focus elsewhere is left where they are, and `?thread=` opened cold still
-   * lands on the close control above.
+   * So: only when focus was in the composer that is going away. A reader who
+   * sent from the keyboard shortcut with focus elsewhere is left where they
+   * are, and `?thread=` opened cold still lands on the close control above.
    */
-  const wasDraft = useRef(target.kind === "draft");
   /**
-   * Read **on the swapping render itself**, which is the only moment the answer
-   * exists: the outgoing composer is still focused and still in the document,
-   * and React has not committed the replacement yet. A first attempt sampled on
-   * the previous *draft* render instead and was always false, because the reader
-   * had not started typing when that render happened — the test said so.
+   * ## The caret follows the composer
+   *
+   * Draft → thread was the first case and not the only one. `Conversation` is
+   * keyed on the thread's id, so **every** change of conversation under a
+   * mounted dialog unmounts the composer: thread → thread (Back and Forward;
+   * another paragraph's chip or "?" in Safari, where a pressed button takes no
+   * focus), and thread → draft, where the draft arm's `focusNonce={1}` is
+   * already spent if the dialog opened as a draft. qi-7dvah74y, plan 261004l
+   * § B.
+   *
+   * One rule covers them, and it asks about the DOM rather than about `target`:
+   * **a commit that removes a composer holding focus owes the focus to the
+   * composer that replaces it.** The composer is its `<form>` — the box, and
+   * the Send a first question may have been pressed with — and nothing wider:
+   * not Close, not the footer's controls, not the question editor, which is a
+   * rewrite of one question in the conversation being left and has no
+   * replacement in the next (GPT Sol's plan review, F4).
+   *
+   * Read **on the render itself**, which is the only moment the answer exists:
+   * the outgoing composer is still focused and still in the document, and
+   * React has not committed the replacement yet. A first attempt sampled on the
+   * previous render instead and was always false, because the reader had not
+   * started typing when that render happened — the test said so.
    */
-  const swapping = wasDraft.current && target.kind === "thread";
-  const caretWasInside =
-    swapping && typeof document !== "undefined"
-      ? box.current?.contains(document.activeElement) === true
-      : false;
+  const focusedNow = typeof document === "undefined" ? null : document.activeElement;
+  const composerHeld =
+    focusedNow instanceof HTMLElement && box.current?.contains(focusedNow) === true
+      ? focusedNow.closest<HTMLElement>(".chat-composer")
+      : null;
+  /**
+   * **Owed, rather than paid at once**, because the replacement may not be
+   * there yet: a conversation whose transcript is still arriving draws a
+   * spinner and no composer. It is paid on the first commit that has one, and
+   * forgiven if the reader has put focus anywhere in the meantime.
+   */
+  const caretOwed = useRef(false);
+  /* A focus visit followed by blur between commits still cancels the debt.
+     Sampling only activeElement below would mistake that for uninterrupted
+     waiting on the replacement. */
+  useLayoutEffect(() => {
+    const forgive = () => {
+      caretOwed.current = false;
+    };
+    document.addEventListener("focusin", forgive);
+    return () => document.removeEventListener("focusin", forgive);
+  }, []);
+  /* **A layout effect, after the move above**: the card changes cell in the
+     same commit as a switch to another paragraph's conversation, and focus
+     cannot be given to a box that is not in the document yet. No dependency
+     list, for the reason the move has none. */
+  useLayoutEffect(() => {
+    if (composerHeld && !composerHeld.isConnected) caretOwed.current = true;
+    if (!caretOwed.current) return;
+    const at = document.activeElement;
+    if (at !== null && at !== document.body) {
+      caretOwed.current = false;
+      return;
+    }
+    const next = box.current?.querySelector<HTMLTextAreaElement>(".chat-composer textarea");
+    if (!next) return;
+    caretOwed.current = false;
+    /* `preventScroll`: the card is in the page, and the reader has not moved. */
+    next.focus({ preventScroll: true });
+  });
   useEffect(() => {
-    wasDraft.current = target.kind === "draft";
-    if (!caretWasInside) return;
-    box.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
-  }, [target.kind, caretWasInside]);
-  useEffect(() => {
-    const panel = box.current;
+    /* **The mount point, not the `<aside>`**, since 261004k: the aside is in a
+       container that may be sitting in the card's host, which this component
+       does not own and React will not detach. `home` is React's, so it is the
+       element whose leaving the document means this dialog has. With no
+       document there is no portal and the aside is drawn in place. */
+    const panel: HTMLElement | null = container ? home.current : box.current;
     const back = opened.opener;
     const row = opened.row;
     return () => {
@@ -465,8 +789,8 @@ export function ChatDialog({
          real must be left on it. Here "real" means anything outside this
          panel. */
       const at = document.activeElement;
-      const ours = at === null || at === document.body || panel?.contains(at) === true;
-      if (!ours) return;
+      const ours =
+        at === null || at === document.body || (container ?? panel)?.contains(at) === true;
       /**
        * **Deferred, because a cleanup is not proof of an unmount.**
        *
@@ -490,6 +814,13 @@ export function ChatDialog({
        */
       queueMicrotask(() => {
         if (panel?.isConnected !== false) return;
+        /* A real unmount. The container goes with it — React removed the
+           `<aside>` from it, but in the card it is sitting in `Reader`'s host,
+           which nobody else will empty. Here rather than in a cleanup of its
+           own for the reason this is deferred: StrictMode's cycle must not
+           detach a panel that is staying. */
+        container?.remove();
+        if (!ours) return;
         if (back?.isConnected) {
           back.focus();
           return;
@@ -504,7 +835,7 @@ export function ChatDialog({
         document.querySelector<HTMLButtonElement>('.dock button[aria-label="Comments"]')?.focus();
       });
     };
-  }, [opened]);
+  }, [opened, container]);
 
   /**
    * The answer currently arriving, if one is.
@@ -524,6 +855,80 @@ export function ChatDialog({
    * they have been having, and the button changes meaning accordingly.
    */
   const firstAnswer = streaming && thread?.messages.length === 2;
+
+  /**
+   * ## The card collapses to one line, and only the reader collapses it
+   *
+   * Plan 261004k § 5. An expanded card pushes every later note down the
+   * column; collapsed, it is about one note tall and they go back beside their
+   * blocks. **Nothing collapses by itself**: it opens expanded, always, and
+   * stays that way until the reader presses Collapse.
+   *
+   * **The conversation it was pressed on and the `reopen` count at the time,
+   * not a flag.** An id, for `timedOut`'s reason above: a boolean would carry
+   * over to the next conversation opened in the slot. And the count, so that
+   * any press asking for a conversation to be open — including this one, which
+   * is already open and so changes no other prop — makes the comparison below
+   * false, with no effect to reset anything (GPT Sol on the plan, F1).
+   *
+   * **Only the card, and only a conversation that has loaded.** The floating
+   * and docked panels have nothing to collapse to, so a card that falls back
+   * to one (a folded section, a narrower window) is shown whole and collapses
+   * again when it returns. A draft has no collapsed state: it is already
+   * short, and collapsing it would hide the box it was opened to type in.
+   */
+  const [shut, setShut] = useState<{ threadId: string; reopen: number } | null>(null);
+  const selectedThread = target.kind === "thread" ? target.threadId : null;
+  /* A mounted URL change leaves the former conversation behind. Its collapse
+     must not return if the reader comes back to that thread later. */
+  useLayoutEffect(() => {
+    if (shut && shut.threadId !== selectedThread) setShut(null);
+  }, [shut, selectedThread]);
+  const collapsible = place.kind === "card" && thread !== undefined;
+  const collapsed = collapsible && shut?.threadId === thread.id && shut.reopen === reopen;
+  const shutRef = useRef<HTMLButtonElement>(null);
+  const collapseRef = useRef<HTMLButtonElement>(null);
+  /** The transcript's offsets at the press: a hidden scroller forgets its own. */
+  const shutScroll = useRef<Kept["scroll"]>([]);
+  const wasCollapsed = useRef(collapsed);
+  useLayoutEffect(() => {
+    if (wasCollapsed.current === collapsed) return;
+    wasCollapsed.current = collapsed;
+    if (!collapsed) putBack({ focus: null, scroll: shutScroll.current });
+    /* **The keyboard follows the press**, because the control that was pressed
+       has just been hidden: Collapse → the card, the card → Collapse. Only
+       when the focus was ours to move — a card expanded by a press on the
+       gutter's chip leaves the reader on the chip. */
+    const at = document.activeElement;
+    const ours = at === null || at === document.body || container?.contains(at) === true;
+    if (ours) (collapsed ? shutRef : collapseRef).current?.focus({ preventScroll: true });
+  }, [collapsed, container]);
+
+  /**
+   * **The composer is brought into view when it is typed in, in the card.**
+   *
+   * The fixed panel stays above an iPad's keyboard by its bottom anchor
+   * (`--kb-inset`); the card has none. It is page content, which Safari scrolls
+   * a focused field into view for, and its height is capped to the visible
+   * viewport — and this asks as well, on focus and whenever the visible
+   * viewport changes under a focused composer. `nearest`, so a composer already
+   * in view moves nothing. **Not proved on the box**: desktop Chrome at an
+   * iPad's size has no Safari keyboard (GPT Sol on the plan, F6).
+   */
+  const inCard = place.kind === "card";
+  const showComposer = useCallback(() => {
+    const composer = box.current?.querySelector<HTMLElement>(".chat-composer");
+    if (!composer?.contains(document.activeElement)) return;
+    /* Drafts compose in the footer; loaded threads compose in the body. */
+    const el = composer.closest<HTMLElement>("footer") ?? composer;
+    /* jsdom has no `scrollIntoView`. */
+    if (el && typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
+  }, []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `visible` is the re-run trigger — the keyboard arriving or leaving is a new visible viewport, and the effect reads the DOM.
+  useEffect(() => {
+    if (!inCard) return;
+    showComposer();
+  }, [inCard, visible, showComposer]);
 
   const ask = useCallback(
     (question: string) => {
@@ -551,7 +956,26 @@ export function ChatDialog({
         ...(quote ? { quote } : {}),
         question,
       });
-      const id = send(null, text, at, {
+      const id: string = send(null, text, at, {
+        /* **Data in `onConfirmed`, navigation in `onThreadId`**, and the split
+           is the controller's (chat/controller.ts § `detach`): the first
+           survives this dialog closing and the second does not. A dialog
+           closed before the first frame must still have its summary renamed,
+           or the list asked for again when the answer stops puts the real row
+           beside the guess; it must not have `?thread=` moved under whatever
+           the reader is looking at now.
+
+           For this typed send the controller calls them in this order in one
+           tick, so the summary and the address change in one commit. The
+           dialog is drawn only while the list has a row for `?thread=`
+           (Reader.tsx § `overlay`); a commit
+           between the two would close it mid-answer. Words typed while waiting
+           are kept under the thread's id, so they move too. */
+        onConfirmed: (real) => {
+          if (real === id) return;
+          drafts.moveThread(id, real);
+          onRenamed(id, real);
+        },
         onThreadId: (real) => onThread(real),
         anchor: target.anchor,
         /* **The "?" says so on the wire.** The draft has known which button
@@ -568,11 +992,12 @@ export function ChatDialog({
       });
       onThread(id);
       /* The prose is told at once, with the id we have. If the server mints a
-         different one, `onThread` above corrects the URL and the summary is
-         reconciled on the next load — a mark briefly keyed on a guess is a mark
-         in the right place under the wrong name, which is invisible and
-         self-healing. Not drawing it at all until the round trip lands is the
-         visible failure: the reader asks, and the words they selected go blank. */
+         different one, the two callbacks above rename the summary and correct the
+         URL together. Until 2026-10-05 only the URL followed, on the theory
+         that a mark keyed on a guess was invisible and self-healing; it closed
+         this dialog mid-answer and then counted the conversation twice. Not
+         drawing it at all until the round trip lands is the visible failure:
+         the reader asks, and the words they selected go blank. */
       onCreated({
         id,
         title: text.slice(0, 60),
@@ -580,15 +1005,15 @@ export function ChatDialog({
         updatedAt: new Date().toISOString(),
         anchor: target.anchor,
         /* Always a chat. This dialog is what a selection in the prose opens,
-           and a Remember turn has no selection to open from — the route refuses
-           an anchor sent with `kind: "remember"`. So every mark the reading view
+           and a Learn turn has no selection to open from — the route refuses
+           an anchor sent with `kind: "learn"`. So every mark the reading view
            draws belongs to a chat, which is the property the overlay in
            App.tsx relies on. */
         kind: "chat",
         turns: 1,
       });
     },
-    [target, send, at, onThread, onCreated],
+    [target, send, at, onThread, onCreated, onRenamed, drafts],
   );
 
   /**
@@ -615,12 +1040,44 @@ export function ChatDialog({
    * there was deleted on 2026-09-05 once a test proved its absence could not be
    * observed — the reasoning is in App.tsx beside `helpAboutBlock`.
    */
+  /**
+   * **This draft is already asked, by either effect below**: a "?" press, or
+   * a `sendNow`. It is drawn as *Asking…* with no composer for the frame or
+   * two it exists, for the reason the body's note gives.
+   */
+  const sendsItself = target.kind === "draft" && (target.help === true || target.sendNow === true);
   const sentHelpFor = useRef<string | null>(null);
   useEffect(() => {
     if (target.kind !== "draft" || !target.help) return;
     if (sentHelpFor.current === target.anchor.blockId) return;
     sentHelpFor.current = target.anchor.blockId;
     ask(HELP_QUESTION);
+  }, [target, ask]);
+
+  /**
+   * **A question the reader has already asked sends itself too, once**
+   * (`sendNow` on the target), and the latch is the "?"'s above with one
+   * difference: it holds the passage *and the words*, and it is let go when
+   * the target stops being such a draft. `ask` turns the draft into a
+   * conversation in the same tick (`onThread`, and `Reader` clears its draft
+   * there), so the latch is only ever needed for the re-runs listed above,
+   * StrictMode's among them. Letting go is what makes the same question asked
+   * again later, of the same passage, a second send rather than a silent
+   * nothing. docs/plans/261006j-ask-in-chat-sends-the-question.md, D4.
+   */
+  const sentNowFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (target.kind !== "draft" || !target.sendNow || target.help) {
+      sentNowFor.current = null;
+      return;
+    }
+    /* Empty is Ask AI with nothing written: `ask` turns it into "Explain
+       this passage." */
+    const question = target.question?.trim() ?? "";
+    const key = `${target.anchor.blockId}\n${question}`;
+    if (sentNowFor.current === key) return;
+    sentNowFor.current = key;
+    ask(question);
   }, [target, ask]);
 
   /**
@@ -668,21 +1125,75 @@ export function ChatDialog({
     </button>
   );
 
-  return (
+  const line = collapsed ? cardLine(thread, streaming) : null;
+  const placeClass = place.kind === "card" ? " in-column" : place.kind === "dock" ? " docked" : "";
+
+  const aside = (
     <aside
       ref={box}
-      className="chat-dialog"
+      /* The template form, like `.cmt-dialog`'s: tests/linky-is-scoped.test.ts
+         looks for the scoping class at the start of a `className`. */
+      className={`chat-dialog${placeClass}${collapsed ? " collapsed" : ""}`}
       /* `.cmt-dialog`'s geometry and `.cmt-dialog`'s problem: pinned to the
          bottom of the layout viewport, which on iOS is behind the keyboard —
          and this one has a composer in it, so the keyboard is the normal state.
-         See CommentDialog.tsx and useVisualViewport.ts. */
-      style={keyboardInsetStyle(visible)}
+         See CommentDialog.tsx and useVisualViewport.ts.
+
+         Docked, it keeps all of that and moves sideways only: the room and the
+         inset are written here for dialogs.css § `.chat-dialog.docked` to read,
+         the inset from layout.ts so the stylesheet has no second copy of it.
+
+         In the column it has no geometry of its own to write — the host
+         carries the width — and keeps `--kb-inset` for its `max-height`. */
+      style={
+        place.kind !== "dock"
+          ? keyboardInsetStyle(visible)
+          : ({
+              ...keyboardInsetStyle(visible),
+              "--chat-dock-room": `${place.room}px`,
+              "--chat-dock-inset": `${CHAT_DOCK_INSET}px`,
+            } as CSSProperties)
+      }
       role="dialog"
       aria-label="Chat about this passage"
+      onFocus={inCard ? showComposer : undefined}
     >
-      <header>
+      {/* **Collapsed, the whole card is this one button** — and the rest of the
+          panel is hidden rather than unmounted, because `Conversation` owns an
+          open question editor and a running dictation, and a press on Collapse
+          should cost the reader neither. The title is the reader's own words
+          and the answer's line the model's, each in its face (fonts.md). */}
+      {collapsed && line && (
+        <button
+          ref={shutRef}
+          type="button"
+          className="chat-card-shut"
+          aria-expanded={false}
+          title="Open this conversation again"
+          onClick={() => setShut(null)}
+        >
+          <span className="chat-card-head">
+            <MessagesSquare size={12} aria-hidden="true" />
+            <span className="chat-dialog-title">{thread.title}</span>
+            <ChevronDown size={14} aria-hidden="true" />
+          </span>
+          {line.kind === "answering" ? (
+            <span className="chat-card-line">
+              <LoaderCircle className="chat-dialog-spinner" size={12} aria-hidden="true" />
+              answering…
+            </span>
+          ) : line.kind === "answer" ? (
+            <span className={withVoice("chat-card-line", "ai")}>{line.text}</span>
+          ) : (
+            <span className="chat-card-line">
+              {line.count} {line.count === 1 ? "question" : "questions"}
+            </span>
+          )}
+        </button>
+      )}
+      <header hidden={collapsed}>
         <span className="chat-dialog-label">
-          <MessageSquare size={12} aria-hidden="true" />
+          <MessagesSquare size={12} aria-hidden="true" />
           {target.kind === "draft" ? (
             <>Ask about {shortBlockId(target.anchor.blockId)}</>
           ) : (
@@ -694,13 +1205,34 @@ export function ChatDialog({
             )
           )}
         </span>
-        {stopControl}
+        <span className="chat-dialog-tools">
+          {collapsible && (
+            <button
+              ref={collapseRef}
+              type="button"
+              className="chat-dialog-collapse"
+              aria-expanded={true}
+              aria-label="Collapse"
+              title="Collapse to one line. The conversation stays open."
+              onClick={() => {
+                if (container) shutScroll.current = scrollOffsets(container);
+                setShut({ threadId: thread.id, reopen });
+              }}
+            >
+              <ChevronUp size={18} aria-hidden="true" />
+            </button>
+          )}
+          {stopControl}
+        </span>
       </header>
 
-      <div className="chat-dialog-body">
-        {target.kind === "draft" && target.help ? (
+      <div className="chat-dialog-body" hidden={collapsed}>
+        {sendsItself ? (
           /* **A help draft is a draft for one paintless instant, and must not
-              say so.** The auto-send is a passive effect, and React does not
+              say so.** (Nor a follow-up already asked, since 2026-10-06:
+              `sendsItself`. GPT Sol's review of plan 261006j, PR-5: a
+              composer here would also take focus and raise a phone's
+              keyboard before the send.) The auto-send is a passive effect, and React does not
               promise a passive effect runs before paint — so the ordinary draft
               body below can reach the screen, showing a composer and the words
               "Nothing is asked until you send" over a press that has already
@@ -778,8 +1310,14 @@ export function ChatDialog({
             focused={focused}
             draft={draft}
             onDraft={setDraft}
+            visible={!collapsed}
+            /* The card's height is its content's; the corner and the dock have
+               the panel's. Said here, not left to a stylesheet, because the
+               transcript's room is sized in JS (ChatPanel.tsx § A streamed
+               answer stays where it starts). */
+            sized={inCard ? "content" : "fixed"}
             /* Always a chat. This dialog is what a selection in the prose opens,
-               and a Remember turn cannot be anchored to one. */
+               and a Learn turn cannot be anchored to one. */
           kind="chat"
         />
         ) : loadFailed ? (
@@ -806,11 +1344,11 @@ export function ChatDialog({
         )}
       </div>
 
-      <footer>
+      <footer hidden={collapsed}>
         {/* Nothing under a help draft either, for the reason the body gives:
             the question is already sent, so a composer offering to send it is
             the same contradiction one row down. */}
-        {target.kind === "draft" && target.help ? null : target.kind === "draft" ? (
+        {sendsItself ? null : target.kind === "draft" ? (
           <Composer
             slug={slug}
             onSend={ask}
@@ -855,6 +1393,9 @@ export function ChatDialog({
                 className="linky chat-dialog-delete"
                 onClick={() => {
                   remove(thread.id);
+                  /* Its unsent words go with it, so Chat mode does not find
+                     them waiting for a conversation that is gone. */
+                  drafts.dropThread(thread.id);
                   onDropped(thread.id);
                   onClose();
                 }}
@@ -894,6 +1435,7 @@ export function ChatDialog({
                 className="linky chat-dialog-delete"
                 onClick={() => {
                   cancelAndDiscard(thread.id, tail.id);
+                  drafts.dropThread(thread.id);
                   onDropped(thread.id);
                   onClose();
                 }}
@@ -907,5 +1449,15 @@ export function ChatDialog({
         {error && <p className="chat-dialog-error">{error}</p>}
       </footer>
     </aside>
+  );
+
+  /* No document, no container to portal into: drawn in place. */
+  if (!container) return aside;
+  return (
+    <>
+      {/* Before the portal, on purpose — `setHome` above. */}
+      <div ref={setHome} className="chat-dialog-home" />
+      {createPortal(aside, container)}
+    </>
   );
 }

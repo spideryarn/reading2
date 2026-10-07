@@ -83,7 +83,7 @@ const CROSSREF_ANSWER = {
 };
 
 describe("the seeded politeness rows", () => {
-  it("has one service row each, and 2 + 1 slots", async () => {
+  it("has one service row each, and 2 + 1 + 1 slots", async () => {
     expect(
       await rows<{ service: string; slots: number }>(sql`
         select s.service, count(l.slot)::int as slots
@@ -93,6 +93,8 @@ describe("the seeded politeness rows", () => {
     ).toEqual([
       { service: "crossref", slots: 2 },
       { service: "datacite", slots: 1 },
+      /* The citation index, since 2026-10-04 (plan 261004h): a third service on the same limiter. */
+      { service: "openalex", slots: 1 },
     ]);
   });
 });
@@ -111,7 +113,8 @@ describe("the claim", () => {
   it("is refused over a fresh answer, and taken over a stale one without losing it", async () => {
     const first = await store.claim(nn, FRESHNESS, CLAIM_LEASE_MS);
     expect(first).not.toBeNull();
-    expect(await store.write(first!, { kind: "not-found" })).toBe(true);
+    /* A miss is stored, and `write` says when: null is only ever a lost claim (plan 261005i, GPT Sol's F1). */
+    expect(await store.write(first!, { kind: "not-found" })).toBeInstanceOf(Date);
     expect(await store.claim(nn, FRESHNESS, CLAIM_LEASE_MS)).toBeNull();
     await getDb().execute(
       sql`update spideryarn.bibliographic_records set fetched_at = now() - interval '8 days' where id = ${nn}`,
@@ -155,7 +158,7 @@ describe("the claim", () => {
     const fresh = await store.claim(nn, FRESHNESS, CLAIM_LEASE_MS);
     expect(fresh).not.toBeNull();
 
-    expect(await store.write(stale!, { kind: "not-found" })).toBe(false);
+    expect(await store.write(stale!, { kind: "not-found" })).toBeNull();
 
     expect(await store.read(nn, FRESHNESS)).toEqual({ answer: null, claimed: true });
     await store.release(fresh!);
@@ -214,8 +217,184 @@ describe("the cache", () => {
         authors: [{ family: "Maingret", given: "Nicolas" }, { family: "A Consortium" }],
         year: 2016,
         venue: "Nature Neuroscience",
+        /* Read back from `published_day`: the second answer came from the cache. */
+        published: "2016-05-16",
         doi: "10.1038/nn.4304",
+        /* Crossref was asked and gave no count: the moment is kept, the count is not. */
+        citedByCountReadAt: expect.any(String) as string,
       },
+    });
+  });
+
+  describe("Crossref's citation count (plan 261005i)", () => {
+    const doi = "10.1000/counted";
+    const work = id(doi);
+    const counted = (count?: number) => ({
+      message: {
+        DOI: doi,
+        title: ["Dreams and memory consolidation"],
+        ...(count === undefined ? {} : { "is-referenced-by-count": count }),
+      },
+    });
+    const DATASET = { data: { attributes: { titles: [{ title: "A dataset" }], creators: [], doi } } };
+    const notFound = (url: string) => new FetchFailure("not-found", url, "HTTP 404", { status: 404, retryAfterMs: null });
+    const columns = () =>
+      rows<{ state: string; source: string | null; cited_by_count: number | null; read: boolean; same: boolean | null }>(sql`
+        select state, source, cited_by_count, cited_by_count_read_at is not null as read,
+               cited_by_count_read_at = fetched_at as same
+          from spideryarn.bibliographic_records where id = ${work}`);
+    /** A record as the code before this feature left it: found, from Crossref, fetched just now, never asked for its count. */
+    const preFeature = () =>
+      getDb().execute(sql`
+        insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at)
+        values (${work}, 'found', 'crossref', 'Dreams and memory consolidation', '{}', '{}', ${doi}, now())`);
+
+    it("round-trips the count and the moment it was read, which is the moment the answer was stored", async () => {
+      const fetchJson = vi.fn(async () => counted(357));
+      const first = await lookupWork(work, { store, fetchJson });
+      expect(first).toMatchObject({ kind: "found", record: { citedByCount: 357 } });
+      const readAt = (first as { record: { citedByCountReadAt?: string } }).record.citedByCountReadAt;
+      expect(readAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+      expect(Math.abs(Date.parse(readAt!) - Date.now())).toBeLessThan(60_000);
+      /* The cached read gives the same moment the write returned. */
+      expect(await lookupWork(work, { store, fetchJson })).toEqual(first);
+      expect(fetchJson).toHaveBeenCalledTimes(1);
+      expect(await columns()).toEqual([{ state: "found", source: "crossref", cited_by_count: 357, read: true, same: true }]);
+    });
+
+    it("keeps a zero as a zero, not as no count", async () => {
+      const first = await lookupWork(work, { store, fetchJson: async () => counted(0) });
+      expect(first).toMatchObject({ record: { citedByCount: 0 } });
+      expect(await lookupWork(work, { store, fetchJson: async () => counted(99) })).toEqual(first);
+    });
+
+    it("does not call a Crossref record fresh until somebody has asked for its count, and asks once", async () => {
+      await preFeature();
+      expect(await store.read(work, FRESHNESS)).toEqual({ answer: null, claimed: false });
+      const fetchJson = vi.fn(async () => counted(12));
+      expect(await lookupWork(work, { store, fetchJson })).toMatchObject({ record: { citedByCount: 12 } });
+      expect(await lookupWork(work, { store, fetchJson })).toMatchObject({ record: { citedByCount: 12 } });
+      expect(fetchJson).toHaveBeenCalledTimes(1);
+    });
+
+    it("is fresh once Crossref was asked and gave no count: asked-and-none is not never-asked", async () => {
+      /* The loop this column exists to stop: `cited_by_count is null` alone would ask on every call. */
+      const fetchJson = vi.fn(async () => counted());
+      const first = await lookupWork(work, { store, fetchJson });
+      expect((first as { record: object }).record).not.toHaveProperty("citedByCount");
+      expect(await columns()).toEqual([{ state: "found", source: "crossref", cited_by_count: null, read: true, same: true }]);
+      expect(await store.claim(work, FRESHNESS, CLAIM_LEASE_MS)).toBeNull();
+      expect(await lookupWork(work, { store, fetchJson })).toEqual(first);
+      expect(fetchJson).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves a DataCite record fresh with no read moment: there is nothing to go back for", async () => {
+      await getDb().execute(sql`
+        insert into spideryarn.bibliographic_records (id, state, source, title, authors_family, authors_given, doi, fetched_at)
+        values (${work}, 'found', 'datacite', 'A dataset', '{}', '{}', ${doi}, now())`);
+      const seen = await store.read(work, FRESHNESS);
+      expect(seen.answer).toMatchObject({ kind: "found", record: { source: "datacite" } });
+      expect(await store.claim(work, FRESHNESS, CLAIM_LEASE_MS)).toBeNull();
+    });
+
+    it("keeps a pre-feature record eligible after a failed refresh, and its old answer in the table", async () => {
+      await preFeature();
+      const down = vi.fn(async (url: string) => {
+        throw new FetchFailure("server-error", url, "HTTP 500", { status: 500, retryAfterMs: null });
+      });
+      expect(await lookupWork(work, { store, fetchJson: down })).toEqual({ kind: "unavailable", why: "error" });
+      expect(await lookupWork(work, { store, fetchJson: down })).toEqual({ kind: "unavailable", why: "error" });
+      expect(down).toHaveBeenCalledTimes(2);
+      expect(await columns()).toEqual([{ state: "found", source: "crossref", cited_by_count: null, read: false, same: null }]);
+      const up = vi.fn(async () => counted(3));
+      expect(await lookupWork(work, { store, fetchJson: up })).toMatchObject({ record: { citedByCount: 3 } });
+      await lookupWork(work, { store, fetchJson: up });
+      expect(up).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears the count and its moment when the refresh finds DataCite's record, or nothing, in Crossref's place", async () => {
+      const stale = () =>
+        getDb().execute(sql`
+          update spideryarn.bibliographic_records set fetched_at = now() - interval '181 days' where id = ${work}`);
+      await lookupWork(work, { store, fetchJson: async () => counted(357) });
+      await stale();
+      const toDatacite = await lookupWork(work, {
+        store,
+        fetchJson: async (url) => {
+          if (url === crossrefUrl(doi)) throw notFound(url);
+          return DATASET;
+        },
+      });
+      expect(toDatacite).toMatchObject({ kind: "found", record: { source: "datacite" } });
+      expect((toDatacite as { record: object }).record).not.toHaveProperty("citedByCount");
+      expect((toDatacite as { record: object }).record).not.toHaveProperty("citedByCountReadAt");
+      expect(await columns()).toEqual([{ state: "found", source: "datacite", cited_by_count: null, read: false, same: null }]);
+
+      await getDb().execute(sql`delete from spideryarn.bibliographic_records where id = ${work}`);
+      await lookupWork(work, { store, fetchJson: async () => counted(357) });
+      await stale();
+      expect(
+        await lookupWork(work, {
+          store,
+          fetchJson: async (url) => {
+            throw notFound(url);
+          },
+        }),
+      ).toEqual({ kind: "not-found" });
+      expect(await columns()).toEqual([{ state: "not-found", source: null, cited_by_count: null, read: false, same: null }]);
+    });
+
+    it("says when it stored a DataCite record too, so a stored answer is never read as a lost claim", async () => {
+      const claim = await store.claim(work, FRESHNESS, CLAIM_LEASE_MS);
+      const at = await store.write(claim!, {
+        kind: "found",
+        record: { id: work, source: "datacite", title: "A dataset", authors: [], doi },
+      });
+      expect(at).toBeInstanceOf(Date);
+      expect(await columns()).toEqual([{ state: "found", source: "datacite", cited_by_count: null, read: false, same: null }]);
+    });
+
+    it("is refused, by the table itself, a count that is not Crossref's found record's, or has no moment", async () => {
+      const refusedBy = async (query: ReturnType<typeof sql>): Promise<string | undefined> => {
+        try {
+          await getDb().execute(query);
+          return undefined;
+        } catch (err) {
+          const cause = (err as { cause?: { code?: string; constraint?: string } }).cause;
+          expect(cause?.code).toBe("23514");
+          return cause?.constraint;
+        }
+      };
+      const found = (source: string, count: string, readAt: string) => sql`
+        insert into spideryarn.bibliographic_records
+          (id, state, source, title, authors_family, authors_given, doi, fetched_at, cited_by_count, cited_by_count_read_at)
+        values (${work}, 'found', ${source}, 'A title', '{}', '{}', ${doi}, now(), ${sql.raw(count)}, ${sql.raw(readAt)})`;
+      expect(await refusedBy(found("datacite", "12", "now()"))).toBe("bibliographic_records_cited_by_count");
+      expect(await refusedBy(found("crossref", "-1", "now()"))).toBe("bibliographic_records_cited_by_count");
+      expect(await refusedBy(found("crossref", "12", "null"))).toBe("bibliographic_records_cited_by_count");
+      /* A read moment says "Crossref was asked", so only a Crossref record has one. */
+      expect(await refusedBy(found("datacite", "null", "now()"))).toBe("bibliographic_records_cited_by_count_read_at");
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, state, fetched_at, cited_by_count_read_at)
+          values (${work}, 'not-found', now(), now())`),
+      ).toBe("bibliographic_records_cited_by_count_read_at");
+      /* A claim has SQL NULL state and source: `= 'found'` would evaluate NULL and let these through
+         (docs/postmortems/261004a-a-nullable-state-turns-a-check-into-permission.md). */
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, claimed_until, cited_by_count, cited_by_count_read_at)
+          values (${work}, now(), 12, now())`),
+      ).toBe("bibliographic_records_cited_by_count");
+      expect(
+        await refusedBy(sql`
+          insert into spideryarn.bibliographic_records (id, claimed_until, cited_by_count_read_at)
+          values (${work}, now(), now())`),
+      ).toBe("bibliographic_records_cited_by_count_read_at");
+      /* And the good shapes go in. */
+      expect(await refusedBy(found("crossref", "2147483647", "now()"))).toBeUndefined();
+      await getDb().execute(sql`delete from spideryarn.bibliographic_records where id = ${work}`);
+      expect(await refusedBy(found("crossref", "null", "now()"))).toBeUndefined();
     });
   });
 
@@ -264,6 +443,13 @@ describe("the cache", () => {
         insert into spideryarn.bibliographic_records (id, state, source, authors_family, authors_given, doi, fetched_at)
         values ('doi:10.1000/x', 'found', 'crossref', '{}', '{}', '10.1000/x', now())`),
     ).toBe("bibliographic_records_shape");
+    /* A claim has SQL NULL state. `state = 'found'` makes this CHECK
+       evaluate NULL, which Postgres accepts; it must instead reject the day. */
+    expect(
+      await refusedBy(sql`
+        insert into spideryarn.bibliographic_records (id, claimed_until, published_day)
+        values ('doi:10.1000/claim-with-day', now(), '2024-05-31')`),
+    ).toBe("bibliographic_records_published_day");
     /* And the good shapes go in, so the refusals above are about the shapes. */
     expect(
       await refusedBy(sql`insert into spideryarn.bibliographic_records (id, claimed_until) values ('arxiv:hep-th/9901001', now())`),

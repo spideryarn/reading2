@@ -49,8 +49,12 @@ import {
   searchRuns,
 } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
+import { MANAGED_HEAD_END, MANAGED_HEAD_START, composeShell } from "../src/public/page-head.js";
 import { pgPublicReader } from "../src/store/public-reader.js";
+import { PUBLIC_ONLY } from "../src/store/public-access.js";
+import { publicHeadOf } from "./helpers/public-head.js";
 import { blockHashQuery } from "../src/store/pg.js";
 import { inputFingerprint as crossrefsFingerprint } from "../src/crossrefs-fingerprint.js";
 import { citedMetaFingerprintOf } from "../src/source-hash.js";
@@ -875,7 +879,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    */
   it("and its head is 404 as well, so a preview cannot name it", async () => {
     expect((await articleRow())?.visibility).toBe("private");
-    await expect(pgPublicReader.loadHead(SLUG)).rejects.toThrow(/No article artefacts/);
+    await expect(pgPublicReader.loadHead(SLUG, PUBLIC_ONLY)).rejects.toThrow(/No article artefacts/);
   });
 
   it("refuses to be published without the rights confirmation", async () => {
@@ -951,8 +955,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * The same fixture, refused above and served here — the positive control that
    * makes the 404 mean something rather than `publicSlug` matching nothing.
    */
-  it("and now the head has the four values a preview is built from", async () => {
-    const head = await pgPublicReader.loadHead(SLUG);
+  it("and now the head has the five values a preview is built from", async () => {
+    const head = await publicHeadOf(SLUG);
     expect(head.slug).toBe(SLUG);
     /* Whatever the fixture's title is, it is a string rather than the absence
        of one — the composer's clamping and escaping are unit-tested in
@@ -964,6 +968,9 @@ describe("sharing one article", { timeout: 60_000 }, () => {
        two projections really are different, in a database rather than in a
        generated string. */
     expect(head).toHaveProperty("gist");
+    /* Names for the card, filtered by `publicAuthorNames` (tests/public-dto.test.ts).
+       This fixture has no structured authors, so none. */
+    expect(head.authors).toEqual([]);
     /* **The candidate canonical arrives raw, and is refused downstream.** This
        fixture's `final_url` carries a signed query parameter on purpose, which
        is the hazard: publishing it would hand out the signature, and stripping
@@ -976,7 +983,53 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* And nothing that renders came with it. A head read that quietly grew a
        `blocks` or a `tree` key is the failure this whole projection exists to
        make impossible, and it would not show up in any assertion above. */
-    expect(Object.keys(head).sort()).toEqual(["canonical", "gist", "slug", "title"]);
+    expect(Object.keys(head).sort()).toEqual(["authors", "canonical", "gist", "image", "slug", "title"]);
+    /* No image manifest on this fixture, so no picture of the article's own. */
+    expect(head.image).toBeNull();
+  });
+
+  /**
+   * **The article's own first picture reaches the head, from the database, as
+   * two fields and no address.** Greg, 2026-10-05: *"go with the lead image for
+   * now"*. tests/lead-image.test.ts holds the choosing and the composing; what
+   * only a database can say is that the head projection selects the manifest
+   * at all, and that what comes back is `{sha256, ext}` and not the entry, whose
+   * `url` is the publisher's. GPT Sol, plan review.
+   */
+  it("carries the article's own first stored picture, and nothing of where it came from", async () => {
+    const db = getDb();
+    const sha = "d".repeat(64);
+    const publisher = "https://cdn.publisher.example/lead-photo.jpg";
+    const manifest = {
+      version: "assets/2",
+      sourceHash: "x",
+      fetchedAt: "2026-10-05T00:00:00.000Z",
+      entries: [
+        { url: "https://cdn.publisher.example/pixel.gif", status: "stored", sha256: "e".repeat(64), ext: "gif", contentType: "image/gif", bytes: 43 },
+        { url: publisher, status: "stored", sha256: sha, ext: "jpeg", contentType: "image/jpeg", bytes: 180_000 },
+      ],
+    };
+    try {
+      await db.update(articleRevisions).set({ assets: manifest as never }).where(eq(articleRevisions.id, REVISION_ID));
+      const head = await publicHeadOf(SLUG);
+      expect(head.image).toEqual({ sha256: sha, ext: "jpeg" });
+      expect(JSON.stringify(head)).not.toContain("publisher.example");
+      const html = composeShell(
+        `<html><head>${MANAGED_HEAD_START}${MANAGED_HEAD_END}</head><body></body></html>`,
+        head,
+      );
+      expect(html).toContain(`property="og:image" content="https://www.spideryarn.com/api/public/asset/${SLUG}/${sha}.jpeg"`);
+      expect(html).not.toContain("publisher.example");
+
+      /* Only a failed entry: there is no copy of ours, so there is no picture. */
+      await db
+        .update(articleRevisions)
+        .set({ assets: { ...manifest, entries: [{ url: publisher, status: "failed", reason: "blocked", at: "2026-10-05T00:00:00.000Z" }] } as never })
+        .where(eq(articleRevisions.id, REVISION_ID));
+      expect((await publicHeadOf(SLUG)).image).toBeNull();
+    } finally {
+      await db.update(articleRevisions).set({ assets: null }).where(eq(articleRevisions.id, REVISION_ID));
+    }
   });
 
   it("wrote exactly one event, saying who and from what to what", async () => {
@@ -1389,6 +1442,57 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
+   * **Where and when it was published, from the real columns** — the journal
+   * and the publication date cross, at the precision we hold; the DOI and the
+   * abstract beside them in the same row do not (plan 261004h). Through the
+   * real reader and route, because the DTO's own test is handed its row and
+   * cannot see a projection that forgot a column.
+   */
+  it("sends a visitor the journal and the day or the year, and never the DOI", async () => {
+    const db = getDb();
+    const set = (values: { publishedAt: string | null; publishedYear: number | null }) =>
+      db
+        .update(articleRevisions)
+        .set({ journal: "Entropy", doi: "10.3390/e26060481", abstract: "ABSTRACT_SENTINEL", ...values })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    const visitorMeta = async () => {
+      const r = await call("GET", `/api/public/article/${SLUG}`);
+      expect(r.status).toBe(200);
+      expect(r.text).not.toContain("10.3390");
+      expect(r.text).not.toContain("ABSTRACT_SENTINEL");
+      return (r.body as { meta: Record<string, unknown> }).meta;
+    };
+    try {
+      await set({ publishedAt: "2024-05-31T23:30:00-05:00", publishedYear: null });
+      const dated = await visitorMeta();
+      expect(dated).toMatchObject({ journal: "Entropy", published: "2024-05-31" });
+      expect(dated).not.toHaveProperty("publishedAt");
+      expect(dated).not.toHaveProperty("publishedYear");
+
+      await set({ publishedAt: null, publishedYear: 2011 });
+      const yearOnly = await visitorMeta();
+      expect(yearOnly).toMatchObject({ journal: "Entropy", publishedYear: 2011 });
+      expect(yearOnly).not.toHaveProperty("published");
+
+      /* And the owner's own reads carry the year: the article, and the shelf row. */
+      const owned = await call("GET", `/api/article/${SLUG}`, { as: OWNER });
+      expect((owned.body as { meta: Record<string, unknown> }).meta).toMatchObject({
+        journal: "Entropy",
+        doi: "10.3390/e26060481",
+        publishedYear: 2011,
+      });
+      const shelf = await call("GET", "/api/library", { as: OWNER });
+      const row = (shelf.body as { articles: { slug: string; publishedYear?: number }[] }).articles.find((a) => a.slug === SLUG);
+      expect(row?.publishedYear).toBe(2011);
+    } finally {
+      await db
+        .update(articleRevisions)
+        .set({ journal: null, doi: null, abstract: null, publishedAt: null, publishedYear: null })
+        .where(eq(articleRevisions.id, REVISION_ID));
+    }
+  });
+
+  /**
    * **And the deleted metadata path is still 404 for an article that *is*
    * shared** — which is the control on the case above.
    *
@@ -1465,7 +1569,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
    * disclosure is the thing that must not move, and it is asserted first.
    */
   it("changes the owner's tab at mount, which is the accepted cost of hiding the rename", async () => {
-    const head = await pgPublicReader.loadHead(SLUG);
+    const head = await publicHeadOf(SLUG);
 
     /* **The property that must never regress, first.** Everything above an
        assertion is a lid on it, and this is the one worth the whole case. */
@@ -1762,7 +1866,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
               setHeader() {},
               end() {},
             } as unknown as ServerResponse;
-            await servePublicApi({ res, path, method: "GET" }).catch((err: Error) => {
+            await servePublicApi({ res, path, method: "GET", key: null }).catch((err: Error) => {
               /* The two misses throw a 404, which is an answer rather than a
                  fault. Anything else is a real failure and must surface. */
               if ((err as { status?: number }).status !== 404) throw err;
@@ -1934,7 +2038,7 @@ describe("sharing one article", { timeout: 60_000 }, () => {
       await runInRequest(async () => {
         /* Ownerless, like every other visit to this namespace. */
         expect(() => currentOwnerId()).toThrow(/before the request was authenticated/);
-        await servePublicApi({ res, path: "/api/public/library", method: "GET" });
+        await servePublicApi({ res, path: "/api/public/library", method: "GET", key: null });
       });
       expect(status).toBe(200);
       return (JSON.parse(text) as { entries: { slug: string }[] }).entries.map((e) => e.slug);
@@ -2025,23 +2129,24 @@ describe("sharing one article", { timeout: 60_000 }, () => {
   });
 
   /**
-   * **Two publishes at once produce one event, and that is the row lock's job.**
+   * **Two publishes at once produce one event — and it is the billing lock that
+   * queues them, not the article's.**
    *
-   * Sol's finding 6, and it caught a real gap: removing `.for("update")` from
-   * pg-visibility.ts left the whole suite green, so the lock this feature's
-   * comment makes a point of explaining was untested.
+   * Only the owner can change an article's visibility, so two `set` calls on one
+   * article always share one `billing_accounts` row, and `set` takes that lock
+   * first. The second publish waits there, reads `public` once the first has
+   * committed, and no-ops. This test stays green with `.for("update")` deleted
+   * from `lockedArticleQuery` (checked by doing it, 2026-10-05), and until that
+   * day it was named and commented as the row lock's test. What the row lock is
+   * for is the next case.
    *
-   * Both requests are started before either is awaited, so they are genuinely
-   * in flight together rather than one after the other — the mistake that makes
-   * most "concurrent" tests sequential and green on broken code
-   * (docs/reusable/silent-success.md, and the note on async test mocks).
-   *
-   * Both must answer 200: the loser of the race is not an error, it is somebody
-   * asking for a state that by then already holds, which is the idempotent case.
-   * What must be exactly one is the **event**, because the log is a history and
-   * "Alice pressed the button twice" is not a fact about the document.
+   * What it does show: the two are serialised, and the second is the idempotent
+   * case. Both must answer 200 — the loser is not an error, it is somebody asking
+   * for a state that by then already holds. What must be exactly one is the
+   * **event**, because the log is a history and "Alice pressed the button twice"
+   * is not a fact about the document.
    */
-  it("writes one event when two publishes race", async () => {
+  it("writes one event when two publishes race, queued on the owner's billing row", async () => {
     /* From private, so there is a real transition for the two to contend over. */
     await call("PUT", `/api/article/${SLUG}/visibility`, {
       body: { visibility: "private" },
@@ -2055,27 +2160,19 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /**
      * **The window is forced open from outside, rather than hoped for.**
      *
-     * The first version of this test just fired both `PUT`s with `Promise.all`
-     * and asserted one event. It passed — and it passed with `.for("update")`
-     * deleted, which is the mutation it was written to catch. Measured on this
-     * laptop: two requests over a local socket do not overlap, the first
-     * transaction finishes before the second reads, and the concurrency the
-     * test is named for never happens. A concurrency test that has to be lucky
-     * is the shape docs/reusable/silent-success.md keeps describing, and the
-     * note on async test mocks names this exact variant.
+     * Two `PUT`s fired with `Promise.all` over a local socket do not overlap:
+     * the first transaction finishes before the second begins, and the test is
+     * sequential (docs/reusable/silent-success.md, and the note on async test
+     * mocks). So a third connection holds the article row, and both requests
+     * are in flight before it lets go:
      *
-     * So a third connection takes the row's write lock first and holds it. Both
-     * requests then reach their own read with the row already locked, and what
-     * happens next is precisely the difference the code is making:
+     * - the first takes the billing row and stops at the article — on its
+     *   locked read, or on its `update` if that read were unlocked;
+     * - the second stops at the billing row, behind the first.
      *
-     * - **with `for update`** — both block on the *read*. Releasing lets one
-     *   through; it sees `private`, writes, commits. The other then reads
-     *   `public` and no-ops. One event.
-     * - **without it** — neither read blocks, so both see `private` before the
-     *   release, and both then write and both insert. Two events.
-     *
-     * Deterministic rather than timing-dependent, and it is the lock's own
-     * semantics doing the work rather than a `setTimeout`.
+     * Releasing lets the first through; it writes and commits. Only then does
+     * the second read, and it reads `public`. One event either way, which is
+     * why this cannot tell whether the article read is locked.
      */
     const { Pool } = await import("pg");
     const holder = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
@@ -2084,6 +2181,8 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     let race: Promise<[Reply, Reply]>;
     try {
       await client.query("begin");
+      const backend = await client.query<{ pid: number | string }>("select pg_backend_pid() as pid");
+      const holderPid = Number(backend.rows[0]?.pid);
       await client.query("select id from spideryarn.articles where id = $1 for update", [
         ARTICLE_ID,
       ]);
@@ -2093,11 +2192,14 @@ describe("sharing one article", { timeout: 60_000 }, () => {
         call("PUT", `/api/article/${SLUG}/visibility`, { body, as: OWNER }),
       ]);
 
-      /* Long enough for both requests to have reached the database and be
-         waiting on the row. If either had *not* got that far, the release below
-         would simply let them run one after the other — which is the old,
-         useless version of this test, so the wait is what makes it the new one. */
-      await new Promise((r) => setTimeout(r, 300));
+      /* **Both requests are queued behind this transaction, on Postgres's word.**
+         If either had *not* got that far, the release below would simply let
+         them run one after the other. It slept 300 ms here until 2026-10-04.
+
+         Two distinct backends whose chains *reach* the holder, not two that
+         name it: the second request waits on the first, on the billing row,
+         and only the first waits on this connection. */
+      await waitUntilBlockedBy(holderPid, { waiters: 2, what: "the two publishes" });
       await client.query("commit");
     } finally {
       client.release();
@@ -2121,6 +2223,93 @@ describe("sharing one article", { timeout: 60_000 }, () => {
     /* And both callers were told the same `public_at`, rather than one of them
        being handed a stamp that was overwritten a millisecond later. */
     expect(first.body.publicAt).toBe(second.body.publicAt);
+  });
+
+  /**
+   * **A share waits for a *Read this* that is landing, and that is the row
+   * lock's job.**
+   *
+   * `set` reads `processing` to refuse sharing a paper not yet read through.
+   * The writer of that column is publication — `publishRevisionIn`
+   * (src/store/pg-revisions.ts) flips `minimal` to `full` under the article
+   * lock and takes **no** billing lock (src/store/pg-jobs.ts says none may be).
+   * So the billing lock cannot order a share against it; only `for update` on
+   * the article read can.
+   *
+   * A second connection does what that publication does to the row — the
+   * `update`, uncommitted — and the share is started behind it:
+   *
+   * - **with `for update`** — the share's read blocks, sees `full` once the
+   *   holder commits, and goes through.
+   * - **without it** — the read does not block, sees the committed `minimal`,
+   *   and refuses a paper that was a moment from being shareable.
+   *
+   * Red with `.for("update")` deleted: the share answers 409 while the row is
+   * still held.
+   */
+  it("waits for a Read this that is landing, rather than refusing on a stale minimal", async () => {
+    const db = getDb();
+    await call("PUT", `/api/article/${SLUG}/visibility`, {
+      body: { visibility: "private" },
+      as: OWNER,
+    });
+    await db.delete(articleVisibilityChanges).where(eq(articleVisibilityChanges.articleId, ARTICLE_ID));
+    await db.update(articles).set({ processing: "minimal" }).where(eq(articles.id, ARTICLE_ID));
+
+    const { Pool } = await import("pg");
+    const holder = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+    const client = await holder.connect();
+    try {
+      /* **The control**: committed `minimal` really is refused, so the 200
+         below is the holder's `full` being seen and not a share that never
+         looks at the column. */
+      const refused = await call("PUT", `/api/article/${SLUG}/visibility`, {
+        body: { visibility: "public", rightsConfirmed: true },
+        as: OWNER,
+      });
+      expect(refused.status).toBe(409);
+      expect((await articleRow())?.visibility).toBe("private");
+
+      await client.query("begin isolation level read committed");
+      const backend = await client.query<{ pid: number | string }>("select pg_backend_pid() as pid");
+      const holderPid = Number(backend.rows[0]?.pid);
+      await client.query("update spideryarn.articles set processing = 'full' where id = $1", [ARTICLE_ID]);
+
+      const share = call("PUT", `/api/article/${SLUG}/visibility`, {
+        body: { visibility: "public", rightsConfirmed: true },
+        as: OWNER,
+      });
+
+      /* Whichever comes first: Postgres saying the share is queued behind the
+         holder, or the share answering. An answer here is the bug — it was
+         given while the row it depends on was still being written. */
+      const blocked = waitUntilBlockedBy(holderPid, { what: "the share" }).then(() => null);
+      let early: Reply | null;
+      try {
+        early = await Promise.race([share, blocked]);
+      } finally {
+        /* Let the poll finish before the holder is released, so a red run
+           does not leave it querying behind the next case. */
+        await blocked.catch(() => {});
+      }
+      expect(
+        early && { status: early.status, error: early.body.error },
+        "the share answered without waiting for the article row",
+      ).toBeNull();
+
+      await client.query("commit");
+      const answer = await share;
+      expect(answer.status).toBe(200);
+      expect(answer.body.visibility).toBe("public");
+      expect(await events()).toHaveLength(1);
+    } finally {
+      /* A failed assertion must not hand the connection back holding the row,
+         or leave the fixture minimal for every case after this one. */
+      await client.query("rollback").catch(() => {});
+      client.release();
+      await holder.end();
+      await db.update(articles).set({ processing: "full" }).where(eq(articles.id, ARTICLE_ID));
+    }
   });
 
   /**
@@ -2333,7 +2522,7 @@ describe("a public article whose revision has no blocks", { timeout: 60_000 }, (
       .where(eq(articles.id, BONELESS_ID));
     expect(row?.visibility).toBe("public");
 
-    await expect(pgPublicReader.loadHead(BONELESS_SLUG)).rejects.toThrow(/No article artefacts/);
+    await expect(pgPublicReader.loadHead(BONELESS_SLUG, PUBLIC_ONLY)).rejects.toThrow(/No article artefacts/);
   });
 
   /**
@@ -2346,7 +2535,7 @@ describe("a public article whose revision has no blocks", { timeout: 60_000 }, (
    * it fetched and the other asks in SQL.
    */
   it("and by the article read as well, which counts the blocks it fetched", async () => {
-    await expect(pgPublicReader.loadArticle(BONELESS_SLUG)).rejects.toThrow(/No article artefacts/);
+    await expect(pgPublicReader.loadArticle(BONELESS_SLUG, PUBLIC_ONLY)).rejects.toThrow(/No article artefacts/);
   });
 });
 
@@ -2443,7 +2632,7 @@ describe("a public article with neither a title nor an <h1>", { timeout: 60_000 
   afterAll(cleanTitleless);
 
   it("gives the head the same title the client is about to set", async () => {
-    const head = await pgPublicReader.loadHead(TITLELESS_SLUG);
+    const head = await publicHeadOf(TITLELESS_SLUG);
     const r = await call("GET", `/api/public/article/${TITLELESS_SLUG}`);
     /* A precondition rather than a claim: without a payload there is no client
        title to disagree with, and the failure below would be about the wrong
@@ -2608,7 +2797,7 @@ describe("a public article whose only title is its first <h1>", { timeout: 60_00
   afterAll(cleanHeaded);
 
   it("finds the same <h1> in SQL that the payload finds in TypeScript", async () => {
-    const head = await pgPublicReader.loadHead(HEADED_SLUG);
+    const head = await publicHeadOf(HEADED_SLUG);
     const r = await call("GET", `/api/public/article/${HEADED_SLUG}`);
     expect(r.status, "the fixture must be served at all").toBe(200);
     const client = (r.body as { meta: { title: string | null } }).meta.title;

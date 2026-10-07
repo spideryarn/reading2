@@ -2,6 +2,33 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+This doc is long, and a read stops about line 860. **Jump with these.**
+
+- [§ Asking about an entry in chat](#asking-about-an-entry-in-chat) — **the *Ask in chat* button**
+  (Glossary and Citations; also the pattern to copy when another mode wants one): origin, line under
+  the buttons, what the server does not check. Line ~941.
+- [§ Looking a term up](#looking-a-term-up) — the box for a word the article does not contain (a
+  different *Ask in chat*, with no origin)
+- [§ Digging deeper into a term](#digging-deeper-into-a-term) — Dig deeper, the web-search answer
+- [§ Where it lives, and why that cost nothing](#where-it-lives-and-why-that-cost-nothing) — the
+  band's place in the page
+- [§ What is generated, and when](#what-is-generated-and-when) — the stage, Find more, regeneration
+- [§ The two bugs this feature is shaped around](#the-two-bugs-this-feature-is-shaped-around) — read
+  before changing the prompt or the dedup
+- [§ Finding the term in the prose](#finding-the-term-in-the-prose) — the matching rule, underlines,
+  the hover card
+- [§ Hiding an entry](#hiding-an-entry) · [§ What we deliberately do not do](#what-we-deliberately-do-not-do)
+- [§ What an entry says, and which half came from where](#what-an-entry-says-and-which-half-came-from-where)
+  — the two fields, provenance as the label, register traps
+- [§ The scores, and the condition attached to keeping them](#the-scores-and-the-condition-attached-to-keeping-them)
+  — prioritised order, the threshold slider
+- [§ Finding more](#finding-more) — appending to a list; ids inherited across regeneration
+- [§ Staleness, and the force cascade](#staleness-and-the-force-cascade)
+- [§ Six ways to break this quietly](#six-ways-to-break-this-quietly) — the checklist before a change
+- [§ What is still open](#what-is-still-open) · [§ See also](#see-also)
+
 The terms an article uses in a non-obvious way, defined **from the article itself**, in the band
 between the spine and the prose. Every one of them is underlined in the prose, in every mode, and
 pointing at one shows its entry without opening the band at all.
@@ -56,7 +83,7 @@ until you know what they are for.
  │             │ interoception d·66 c·61                        │
  │             │ …                   │                         │
  ├─────────────┴─────────────────────┴─────────────────────────┤
- │ ⊞Hierarchy ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
+ │ ⊞Structure ▤Summary 📖Glossary ● 🔍Search ⌸Chat  …            │
  └─────────────────────────────────────────────────────────────┘
 
  The bar's five modes, with Glossary lit. Questions, Tweets and Metadata sit
@@ -123,12 +150,8 @@ was built:
 > bottom-bar (the default).
 
 So the glossary is the third implementation of the slot described in
-[260826a-chat-mode.md](../plans/260826a-chat-mode.md), and it needed **no new layout arithmetic at all**. `fitView`
-in [`layout.ts`](../../src/web/layout.ts) already knew about the slot rather than about chat; the
-whole change there was one line in `App.tsx` (in
-[`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) since 2026-09-06) — `chatting` became
-`mode !== "hierarchy"` (`toc` until the mode was renamed on 2026-08-29). That is the evidence that the reframing was right, and it is worth recording
-because the reframing looked at the time like extra ceremony for one feature.
+[260826a-chat-mode.md](../plans/260826a-chat-mode.md), and it needed **no new layout arithmetic at all**.
+How this came to be is in [261007g-glossary-history.md § Where it lives, and why that cost nothing](../plans/261007g-glossary-history.md#where-it-lives-and-why-that-cost-nothing).
 
 Two consequences worth knowing:
 
@@ -193,20 +216,60 @@ glossary is the one of the five that already had this right: forcing this step *
 own one was deleted on 2026-09-01 as a second way to do this
 ([setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages)).
 
-### The run row: Find more, or Find terms again
+### The run row: Find more, or Write a new list
 
 > There used to be a Find More button in Glossary mode. Add it back, at the top of the column
 >
 > — Greg, 2026-10-02 (spya-s660yh)
 
+> In glossary, there's a find terms again button. I don't know what that does. I want a find more
+> button that finds a bunch more.
+>
+> — Greg, 2026-10-04 (spya-try2v7)
+
 The owner's one run button is the band's **first row**, above *Look up a term*, on every finished
-list. It was the band's foot until 2026-10-03, and hidden there on an outdated list. Its press is
-always the forced run, in the list's own profile setting (`more(profiled)`), but the forced run does
-not always append: `existingFor` merges only when the article, the prompt version and the profile
-all match. So the button is labelled by what it will do — **Find more** when it appends, **Find
-terms again** when it rewrites — and the glossary read says which: `panelRun` on
-`GET /api/glossary/:slug`, from `panelRunKind` in [src/glossary.ts](../../src/glossary.ts), computed
-in the route beside `profileChanged` because the profile half needs the reader's current profile.
+list. Its press is always the forced run, in the list's own profile setting (`more(profiled)`), but
+the forced run does not always append: `existingFor` merges only when the article and the profile match and the list's
+prompt version is one today's prompt may add to. So the button is labelled by what it will do —
+**Find more** when it appends, **Write a new list** when it rewrites — and the glossary read says
+which: `panelRun` on `GET /api/glossary/:slug`, from `panelRunKind` in
+[src/glossary.ts](../../src/glossary.ts), computed in the route beside `profileChanged` because the
+profile half needs the reader's current profile.
+
+**The command bar presses this button too, since 2026-10-04** — *Glossary › Find more*
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The row is
+drawn only when the read says `panelRun: "append"`, and the band makes the press, through the same
+`more(profiled)`, only if a fresh Find more is what the row is offering then: no job — on a job
+list asked for after the press, not the one the tab already had — no
+*Starting…*, no failure, no forced run waiting for its list
+(`glossaryFindMoreOffered` in [find-more.ts](../../src/web/find-more.ts); the run row's own first
+branch reads its `freshRunOffered`). It never presses *Write a new list*. **An absent `panelRun` is
+where the two part**: for an older cached response the button's label falls back to
+`stale || outdated`, which cannot see a changed profile, and may say *Find more*; the command treats
+no verdict as no.
+
+**An appendable list an older prompt wrote is added to, since 2026-10-04**
+([261004f](../plans/261004f-glossary-find-more-always-adds-across-prompt-versions.md)).
+`appendableVersion` is the rule, in one place for the run and the label: `glossary/4` up to the
+current version. Below 4 the code cannot safely establish both facts: version 1 has another
+entry shape, while version 2 and some version 3 lists used the old `sourceHash`; version 3 was not
+bumped when that hash changed, so its stamp cannot distinguish the two. Above the current version,
+an older build must not add to a newer build's list. The list is stamped with the current version
+afterwards, because that stamp is what the store checks a write against and what lets an unforced
+run skip, and `oldestVersion` on the artefact records the oldest prompt an entry came from, so the
+stamp does not vouch for the older entries.
+
+**What that gives up:** a prompt improvement no longer reaches an appendable old list through this button.
+Its older entries stay as they were written, beside new ones, and nothing in the client rewrites an
+appendable list whose article and profile have not changed. That was already so for a current list
+since *Start again* went ([below](#there-was-a-start-again-beside-it-and-it-went)). *Hide* takes an
+entry off the reader's own view.
+
+**The rewrite that is left says why, on screen**: under *Write a new list* is one sentence (the
+article, the profile or how we write glossaries has changed, so this replaces the list; terms you
+added are kept). A tooltip alone was not enough: a touch screen never shows one. And **a *Find
+more* that found nothing says so** (*No more terms worth adding turned up*), from `lastAdded` on
+the artefact, as Quotes does.
 That includes the case `profileChanged` leaves out on purpose: a list written for a profile the
 reader has since **cleared** is run plainly, so it rewrites. A rewrite keeps the terms the reader
 added (they are outside the document) and, when the article has not changed, the ids of terms it
@@ -383,12 +446,8 @@ opened. Four things follow, and three of them are the interesting part:
   [`useGlossary.ts`](../../src/web/useGlossary.ts) is **one opening GET** and no job poller, and the
   band still owns everything with a job in it — which was always the expensive half.
 
-  For a day there were **two** GETs: this one, and the band fetching the same URL again from
-  `status: "loading"` when it opened. So the panel said *"Looking for a glossary…"* over a list
-  that was already on screen, underlined, in the prose behind it — and on the Postgres store that
-  second request read most of the article out of the database to compute one boolean. Since
-  2026-08-27 `Reader` owns the read and the band takes it as a prop.
-  [260827am-glossary-read-latency.md](../plans/260827am-glossary-read-latency.md) has the measurements.
+  Since 2026-08-27 `Reader` owns the read and the band takes it as a prop.
+  How this came to be is in [261007g-glossary-history.md § The underline is always there](../plans/261007g-glossary-history.md#the-underline-is-always-there).
 
   The band still **revalidates** when it opens, behind the list already showing, and that is not
   optional: `useJobs` treats its first poll as a baseline and does not announce a job that had
@@ -434,11 +493,6 @@ Three details worth knowing before changing it:
   a pointer opened follows the words as it always did. [touch.md](touch.md) and
   [260827ak-touch-glossary-card.md](../plans/260827ak-touch-glossary-card.md).
 
-  **This paragraph said the opposite until 2026-09-03** — *"a tap … never fires the leaving event"* —
-  and so did the comment on the handler. It is the false belief itself, written down in two places,
-  and it is what made a second document-level listener look safe to leave unguarded: `pointerleave`
-  closed the card 220ms after every tap, for a week, on every touch device.
-  [260903g](../postmortems/260903g-the-touch-card-closed-itself-on-every-tap.md).
 - **The mouse click stays inert.** Pressing a mark with a pointer does what pressing prose has
   always done, which is select it. The way to the full entry is the button in the card's foot, which
   opens the band on that term — and on a finger, tapping the words again.
@@ -503,14 +557,9 @@ on every term, inline, in every article, always. That is the prose acquiring mar
 write, at the model's suggestion rather than the reader's — a small violation of
 [principle 5](vision.md#principles), and the thing our own review of their feature said to drop.
 
-What happened instead was Greg's call, 2026-08-25, chosen over a jump-only alternative: **selecting a
-term underlines its occurrences, and only while it is selected.** Reader-initiated, so the principle
-holds — and it answers the question the list otherwise raises on every entry, which is *where does
-this piece actually use that*.
+How this came to be is in [261007g-glossary-history.md § What we deliberately do not do](../plans/261007g-glossary-history.md#what-we-deliberately-do-not-do).
 
-**That half was reversed on 2026-08-26** — see [The underline is always there](#the-underline-is-always-there)
-above, which says what survived of it and what did not. What is still true is the rest of this
-section: the icon never came back, the click is still inert, and the *explanation* is still something
+What is still true is the rest of this section: the icon never came back, the click is still inert, and the *explanation* is still something
 the reader asks for rather than something the page pushes at them.
 
 ## What an entry says, and which half came from where
@@ -620,16 +669,13 @@ measure of statistical dependence"*. The WRITING rules now name the reader (curi
 studied this field), forbid a second lookup, lead with the plain meaning, allow a one-clause example
 — from the article in `senseHere`, the model's own only in `background` — and say plainer means
 equally specific. Two new worked BAD/GOOD pairs carry the register and the field boundary, for the
-reason the section above gives. The concept-allusion pair was added in round-2 review after
-`after-6` still put the ordinary meanings of *Müller-Lyer illusion* and *pareidolia* in `senseHere`;
-`after-7` and `after-8` reran it, but ordinary definitions still landed in `senseHere` as often as
-under the old prompt. The bump marked every owner's older glossary *outdated*, which at the time
-drew the *written by a different version* banner as the migration; since 2026-09-29 that banner is
+reason the section above gives. The bump marked every owner's older glossary *outdated*, which at
+the time drew the *written by a different version* banner as the migration; since 2026-09-29 that banner is
 gone and an outdated glossary is not announced — Greg, SPIDERYARN-READING2-55
 ([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). It also hid
 *Find more* on such a list, because its run would replace rather than append; that hid the button
 on most lists, Greg's included, and since 2026-10-03 the button is back, at the top of the band,
-labelled for what it will do — [§ The run row](#the-run-row-find-more-or-find-terms-again).
+labelled for what it will do — [§ The run row](#the-run-row-find-more-or-write-a-new-list).
 [260926a](../plans/260926a-plainer-summaries-and-glossary.md).
 
 ### Name the thing, not the topic
@@ -641,6 +687,44 @@ not a fussy naming preference. Occurrences are matched on the name and its alias
 the article**, and those two entries only found their blocks because `JFK` and `MLK` happened to be
 aliases. The prompt now names both as examples of what not to do, and the re-run gave
 *John F. Kennedy* and *Martin Luther King Jr.*
+
+### A cited work is not a term
+
+> It looks as though there is at least one glossary item in this article that's actually a paper,
+> Saha et al. I don't think the glossary should include citations. That's what citations are for.
+>
+> — Greg, 2026-10-03, spya-zn97q5
+
+The prompt invited it: *"works … named without introduction"* earn entries, and a paper cited as
+"Saha et al." is one. Since `glossary/9` the prompt draws the line at **cited against discussed**. A
+work the piece only points at as a source, and its authors where they are named only as that
+citation, is not meant to get an entry or be an alias; [Citations](citations.md) lists them. The
+test the prompt gives is the name's job in the piece: only there to say where a claim came from, or
+something the reader needs to know to follow it. A person the piece tells about, and a work it
+examines, still get entries, and a person it both tells about and cites keeps theirs. An idea a
+cited paper introduced gets an entry only under a name the piece itself uses for it.
+
+The alias half matters as much as the entry half: an alias is what the prose underlines, so
+`Turner (2001)` as an alias of a real term put a glossary underline on a citation.
+
+Behind the prompt, `citesByEtAl` in [`src/glossary.ts`](../../src/glossary.ts) drops any model
+entry or alias containing a word followed by "et al". That guarantees the reported "Saha et al."
+shape; a standalone entry named "et al." survives, but a longer real phrase containing it can be a
+false positive. Author-and-year forms are left to the prompt: code cannot tell "Stenhoff (1999)"
+from "Blade Runner (1982)".
+
+**What it does and costs**, measured in
+[261003g](../investigations/261003g-glossary-citation-entries-before-and-after-the-rule.md): on a
+review paper dense with citations, entries named for a cited book went from four runs in five to
+none in fifteen, and confirmed citation aliases from six to two. Five author-shaped candidates were not
+classified, so two is a lower bound, not the total residual rate. The list is about two entries
+shorter there, and now and then much shorter. The small essay samples showed no clear regression,
+but were too small to call unchanged.
+
+A term the reader [looks up themselves](#looking-a-term-up) is not filtered: that is their request.
+A list written before `glossary/9` keeps its citation entries until its step next runs
+([Staleness](#staleness-and-the-force-cascade)); **Hide** removes one meanwhile. Plan:
+[261003o](../plans/261003o-glossary-keeps-cited-works-out-citations-are-not-terms.md).
 
 <a id="checking-a-term-on-the-web"></a>
 
@@ -758,17 +842,12 @@ rest of the filesystem store; `loadLookups` survives only as a fixture reader fo
 `tests/helpers/seed-reader-state.ts`. A lookup is *reader state*, which by this repo's own rule lives
 beside the artefact rather than in it; sharing a file with the generating stage would have been
 unfixable rather than merely racy, because that stage holds its read across a minute-long model call.
-Worse, `glossary.json` is written with a bare `writeFile`, and a truncated one reads as `null` — which
-the panel reports as *"Nobody has found the terms for this one yet"*, the whole glossary gone and
-nothing saying so. `loadGlossary` attaches lookups at read time, so the panel still just sees
-`entry.lookup`.
+`loadGlossary` attaches lookups at read time, so the panel still just sees `entry.lookup`.
 
 **It is `explain` with a different selection** — the same function comments use
 ([`src/explain.ts`](../../src/explain.ts)), handed the dig's findings, with the matching glossary form — the name or an alias — as
 the quote and, since 2026-09-04, **the first block of the article that uses it** as the anchor, found by
-scanning rather than read out of `entry.blocks`. It was `entry.blocks[0]` and nothing else, which
-made a term used in five places uncheckable the moment the first of them changed — see
-[The two ways it refuses](#the-two-ways-it-refuses-and-why-they-used-to-be-one) below.
+scanning rather than read out of `entry.blocks`.
 That is not opportunism: our review of the previous version argued a
 glossary should be *the same mechanism as comments with a different prompt* rather than a second
 system, and this is the first half of that. It also means the article prefix is **cached and shared**,
@@ -804,15 +883,9 @@ out. `Tooltip.tsx` rather than a `title=` attribute, so it works on focus too.
 #### The two ways it refuses, and why they used to be one
 
 A lookup needs a **passage** to anchor the question to, and there are two quite different reasons it
-may not find one. They shared a sentence until 2026-09-04, and that sentence named the term and said
-it *"does not appear in this article"* — so a reader met it under a row headed with that term, beside
-the entry's own definition, and reported it:
+may not find one.
 
-> I tried to use the glossary check the web option, but it said that the phrase in the glossary when
-> I was checking didn't exist even though it clearly did, because there was a glossary entry for it
-> and I can see it right there on the page.
->
-> — a reader, 2026-09-04
+How this came to be is in [261007g-glossary-history.md § The two ways it refuses, and why they used to be one](../plans/261007g-glossary-history.md#the-two-ways-it-refuses-and-why-they-used-to-be-one).
 
 **The question is asked of the article, never of `entry.blocks`.** `anchorIn`
 ([`term-lookup.ts`](../../src/term-lookup.ts)) scans the blocks as they are now for the first one
@@ -865,6 +938,61 @@ for an unquoted term — its own prompt, saying honestly that the glossary named
 alludes to — is a real option and nobody has decided it.
 [The postmortem](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) has the rest.
 
+### Asking about an entry in chat
+
+Since 2026-10-06 the open entry has a second button beside Dig deeper, **Ask in chat**. Dig deeper
+is unchanged. Asked what should happen to Dig deeper once a chat can remember the entry it was
+started from:
+
+> let's start with adding the "Ask in chat" button
+>
+> — Greg, 2026-10-06
+
+What the owner gets:
+
+- **The button** goes to Chat and opens a fresh conversation with the term quoted and a question
+  after it, then sends that question. The press is the Send since 2026-10-06
+  ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)), and Back returns to the Glossary.
+- **A line under the buttons once a chat exists**: how many questions were asked, and how the
+  chat's latest answer begins. Pressing it opens that conversation beside the Glossary
+  (`?thread=`, the mode unchanged). The button stays, so a second chat can be started.
+- **In Chat's list** the conversation has the Glossary's icon, with a card that names the term, and
+  the filter above the list gains *Glossary*.
+- **A visitor has neither** the button nor the line.
+
+It is Debate's *Check this claim in chat* with a different origin, and nearly all of it is that
+machinery: read [debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat) first. What
+is this mode's own:
+
+- **The origin is the entry's id, and a snapshot of its name**:
+  `{ mode: "glossary", itemId, quote }`. **It is matched by the mode and the id alone**
+  (`sameOrigin` in [`src/types.ts`](../../src/types.ts)), so the line survives a regeneration that
+  rewords the entry, which a claim's does not. The name is kept so the chat's title
+  (*Glossary: qualia*) and the card in Chat's list need no look-up and still read once the entry
+  has gone. An id is not inherited across every regeneration
+  ([§ Where the previous list comes from](#where-the-previous-list-comes-from-and-the-four-answers-it-can-give)):
+  when it is not, the line goes and the conversation stays in Chat's list.
+- **The name is cut to 300 characters before it is sent** (`originName`, `MAX_ORIGIN_NAME_CHARS`),
+  because a glossary name has no length limit of its own and the route refuses a longer snapshot.
+  The question that is sent uses the shared bounded quote (`fencedQuote` in `chat-handoff.ts`),
+  with a visible ellipsis for very long names so it still fits Chat's question limit.
+- **The server never looks the id up.** It checks the shape and nothing else, so a chat about an
+  entry that has since been hidden or regenerated away is still a chat.
+- **It is offered on a term the article never quotes**, where Dig deeper is disabled: Dig deeper
+  needs a passage to anchor to, and a chat does not.
+- **It is not the *Ask in chat* the *Look up a term* box offers** for a word the article does not
+  contain ([§ Looking a term up](#looking-a-term-up)). That one has no entry to remember, records
+  no origin, and is unchanged.
+- **The hover card in the prose has no *Ask in chat*.** Its Dig deeper is as it was.
+
+The button and the line are shared with Debate and Citations:
+[`OriginChat.tsx`](../../src/web/OriginChat.tsx) and
+[`origin-chat.css`](../../src/web/styles/origin-chat.css). The seed is `askAboutGlossaryEntry` in
+[`chat-handoff.ts`](../../src/web/chat-handoff.ts). The plan is
+[261006d](../plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md); the journey through
+the whole app is held by
+[`glossary-and-citations-ask-in-chat.test.tsx`](../../tests/glossary-and-citations-ask-in-chat.test.tsx).
+
 ### Looking a term up
 
 A reader asked for one, the day after the bug above:
@@ -890,6 +1018,16 @@ so the article's proper-noun list (`vocabulary-sources.ts` § names, which the p
 miss the commonest case while looking confident. A guess here is
 [the postmortem's fault](../postmortems/260904c-the-glossary-said-the-term-was-not-there.md) in a
 friendlier tone.
+
+**The command bar and chat can send a term here** (2026-10-03): *look up X* in the bar, or a
+button in a chat answer, opens the entry when the **visible** glossary has the term, and otherwise
+moves to this band and hands the box the term, which makes its one ordinary ask. That move must
+**never arm generate-on-open** and never ride in the URL — two paid runs for one press, and a link
+that spends — so the term waits in a one-shot, in-memory hand-off, and the row exists only once the
+glossary read has settled with a glossary in it:
+[`glossary-ask-handoff.ts`](../../src/web/glossary-ask-handoff.ts), held by
+`tests/glossary-ask-from-the-command-bar.test.tsx` (one ask, no job).
+[reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar).
 
 **The article's own words are what the model is told about**, not the reader's — type *attention
 head* at a piece that says *Attention Heads* and the quote is the plural, because that is the text
@@ -927,15 +1065,23 @@ reported it. Each says what was established and what the reader can do about it:
 | the characters are there, but never with a boundary on both sides — *axiom* against *axiomatic* | `[gl-ask-part-word]` | try the words as the piece writes them; chat is still offered |
 | there is no prose to search at all | `[gl-ask-no-prose]` | **not a claim about the term** — the branch exists so an empty scan cannot be reported as an answer |
 
-**Ask in chat carries the question, and spends nothing.** Pressing it opens a **fresh** conversation
-in chat mode with an editable question about the term already in the box — *What does "axiom" mean,
-and does it have anything to do with what this article is saying?* — and the caret in it. Nothing is
-sent until the reader presses Send; the conversation that was open, and the floating panel's own
-draft about a passage, are left as they were.
+**Ask in chat asks the question.** Pressing it opens a **fresh** conversation in chat mode and
+sends a question about the term as its first — *What does "axiom" mean, and does it have anything
+to do with what this article is saying?* The conversation that was open, and the floating panel's
+own draft about a passage, are left as they were. Until 2026-10-06 the question waited in the box
+for Send; Greg, that day: *"When I click "ask in Chat" anywhere, automatically submit the input
+(rather than just prefilling the input box and waiting for me to hit send)"*. Which buttons send,
+and the two that still wait, are in
+[261006j](../plans/261006j-ask-in-chat-sends-the-question.md).
 
 > fresh
 >
 > — Greg, 2026-09-11, choosing a new conversation over putting the question into the one already open
+
+The same route has a second sender since 2026-10-04: the button on a Summary paragraph
+([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)).
+And a third since 2026-10-05, the first whose conversation remembers where it was started: the
+button on a Debate claim ([debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat)).
 
 Four things it has to get right, each with a test:
 
@@ -1071,20 +1217,22 @@ hands the model a FORBIDDEN list naming every term already present, so it never 
 result is stamped `glossary/2`, the banner disappears, and the original weak entry survives wearing a
 "background" label whose tooltip says the article did not say it. Certified rather than replaced.
 
-**What it does now is refuse, and inherit the ids.** A version change regenerates the prose, which is
-what *Find them again* promises; `idsByTerm` gives a fresh entry the id the old list used for the same
+**What it does now, for a `glossary/1` list, is refuse and inherit the ids.** The rewrite regenerates
+the prose; `idsByTerm` gives a fresh entry the id the old list used for the same
 name or alias, so `?term=` links and stored lookups survive a rewrite that the sentences do not. Names
 are display; ids are identity.
+
+**That refusal covered every older prompt until 2026-10-04; now it covers only the versions outside
+the appendable range.** From `glossary/4` on the entries are the same shape, the "certified rather
+than replaced" argument above does not apply: no label on an older entry lies, though its register
+and the policy that selected it may differ. The list is added to —
+[§ The run row](#the-run-row-find-more-or-write-a-new-list).
 
 ### Where the previous list comes from, and the four answers it can give
 
 **From the `ArtifactStore`, not from a path** — `previousGlossaryFrom` in
 [`src/glossary.ts`](../../src/glossary.ts), since 2026-08-28. Both jobs above depend on it: whether
-to *append* (`existingFor`) and whose ids to *inherit* (`idsByTerm`). Until then it was
-`readGlossary(dir)` inside the stage, whose every failure is one `null` — and the moment the
-pipeline's artefacts leave the filesystem that read fails on every run while looking exactly like a
-first pass, so *Find more terms* silently becomes *replace the glossary*, `passes` resets to 1, and
-every `?term=` link goes dead ([260827aa-delete-the-importer.md](../plans/260827aa-delete-the-importer.md)).
+to *append* (`existingFor`) and whose ids to *inherit* (`idsByTerm`).
 
 | | what it means | what happens |
 |---|---|---|
@@ -1121,10 +1269,7 @@ because reordering a list is a deliberate act on the view.
 ### The scores the prompt required, and did not get
 
 The prompt **requires** both scores on every entry, so a missing one is the model disobeying rather
-than taking an offer — unlike quotes, where omitting one is allowed. Until 2026-09-03 nothing
-counted either that or a score `score()` refused for being the wrong type or out of range, so a model
-that started answering `"high"` for `0.8` would have quietly stopped the panel offering *prioritised*
-order with no log line moving ([silent-success.md](../reusable/silent-success.md)).
+than taking an offer — unlike quotes, where omitting one is allowed.
 
 `GlossaryScoreDrops` in [glossary.ts](../../src/glossary.ts) counts four things —
 `difficultyAbsent`, `difficultyRejected`, `centralityAbsent`, `centralityRejected` — per field, in
@@ -1260,17 +1405,39 @@ and [search.md](search.md) now do the same thing in the same words, and the rule
 once, in [`src/web/threshold.ts`](../../src/web/threshold.ts) — including **an unscored entry
 surviving every position of the bar**, which is Greg's *"in the interim, always show them"*.
 
-That reverses an argument this repo had written down and defended, in
-[search.md § Prioritised](search.md#prioritised-place-order-with-a-bar-under-it): *a glossary is a
-reference list, and a term you cannot find is a term you have lost.* It did not survive contact.
 The bar is on screen with its number, the foot line says how many it is holding back, and dragging
 it left is one gesture — a term is not lost when the control that hid it is the control in your
 hand. [260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md).
 
 ## Finding more
 
-The [run row](#the-run-row-find-more-or-find-terms-again) is the one button at the top of the
+The [run row](#the-run-row-find-more-or-write-a-new-list) is the one button at the top of the
 column. Its forced run appends only when `existingFor` accepts the list; otherwise it rewrites.
+Each append pass asks for `suggestedCount(words)` more, at most 20, and every pass records how many
+entries it added (`lastAdded`).
+
+### Each entry keeps the time it was added
+
+`GlossaryEntry.addedAt`, since 2026-10-03, and the twin of `Quote.addedAt`
+([quotes.md](quotes.md)). The list's `generatedAt` is re-stamped by every pass, so without a time
+of its own an entry from the first pass could not be told from one the third pass added. Greg,
+2026-10-03: *"Store when it happened."*
+
+- **A pass stamps what it adds, once**, with the same clock read as its `generatedAt`
+  (`buildGlossary`).
+- **The time belongs to the id, not to the name or the prose.** `merge` keeps the incumbent's
+  whichever name wins, and a rewrite that inherits an id inherits its time with it (`idsByTerm`,
+  `InheritedEntry`). A rewrite after the article's text moved inherits nothing, so those entries
+  are new and say so.
+- **Absence is kept, not filled.** An entry stored before the field existed has none and never gets
+  one — not from a merge with a timed entry, not from a rewrite. It was already there, and the
+  list's `generatedAt` is only an upper bound for it.
+
+**It is shown nowhere yet**, and it is in no hash, no freshness check, no dedupe rule and no prompt.
+The public projection does not copy it ([`src/public/dto.ts`](../../src/public/dto.ts)). A term the
+reader added themselves is not in the document, so it has no `addedAt`; its time is its
+`glossary_lookups` row's. [`tests/glossary-added-at.test.ts`](../../tests/glossary-added-at.test.ts);
+plan [261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md) § stage 3.
 
 ### There was a *Start again* beside it, and it went
 
@@ -1289,8 +1456,10 @@ wrong". Three things had made that argument weaker than it reads.
 - **"Too long, too noisy" is the threshold's job now**, and has been since it started hiding rather
   than grouping — one gesture, no model call
   ([260903c](../plans/260903c-threshold-sliders-hide-below-threshold-items.md)).
-- **Some recovery survives**, because `existingFor` refuses to append when the source hash, the
-  prompt version or the profile differs. An edit, a prompt bump or a changed profile therefore
+- **Some recovery survives**, because `existingFor` refuses to append when the source hash or the
+  profile differs, or when the prompt version is outside the appendable range
+  ([§ The run row](#the-run-row-find-more-or-write-a-new-list)). An edit, a changed profile or a
+  pre-`glossary/4` list therefore
   rewrites rather than appends — and `idsByTerm` inherits the ids, so the reader's `?term=` links
   survive it. (This listed the *use my profile* checkbox too, until the checkbox was removed on
   2026-09-13 — [reader-profile.md](reader-profile.md#no-control-one-label).)
@@ -1324,13 +1493,6 @@ caller that does not exist. The case for deleting the route outright is real (at
 contract to maintain, tests for something no reader can reach, and git keeps the implementation);
 it was weighed and lost to Fable's, and this paragraph is what the next person needs to reopen it.
 ⟨Sol, 2026-09-05⟩
-
-`deleteGlossary` still refuses to touch the committed `example/` fixture. That guard was load-bearing
-while `articleDir` fell through to `example/` for any slug with no output of its own, including one
-that does not exist — the one committed directory in the repo was a `DELETE` away from any unknown
-article. Since stage 1a, `candidateDirs` resolves `example/` for the fixture's own slug and no other,
-so what the guard now stops is a `DELETE` addressed to `example` itself, which is nobody's to write
-to.
 
 **In Postgres the delete can also answer 409**, if a queued or running job already holds a draft for
 the article — deleting the published glossary underneath a job in flight would otherwise be
@@ -1376,10 +1538,9 @@ whether the next run **appends** to the list or starts it again, so a fingerprin
 re-cut tree would go on adding terms to a glossary written about a differently-shaped article.
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
-Until 2026-08-28 this was a hand-written `glossaryIsCurrent` in `src/glossary.ts` doing the same
-three comparisons. `stamp` replaced it, the function kept only its own tests alive, and a comment in
-`pipeline.ts` wrongly said the CLI still needed it — so it was deleted. `isStale` stays: it is the
-pure half, and the API response uses it to tell the panel the list is out of date.
+How this came to be is in [261007g-glossary-history.md § Staleness, and the force cascade](../plans/261007g-glossary-history.md#staleness-and-the-force-cascade).
+
+`isStale` stays: it is the pure half, and the API response uses it to tell the panel the list is out of date.
 
 `hashBlocks` moved out of `src/tweets.ts` into [`src/source-hash.ts`](../../src/source-hash.ts) for
 this, and that is not tidying: two stages computing "the same" fingerprint two ways can only ever
@@ -1398,7 +1559,7 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
 1. **Change the matching rule on one side.** `src/term-match.ts` is imported by the stage and by the
    reading view. Inlining a "quick" regex in either half makes the occurrence list and the underlines
    disagree, and neither will error.
-2. **Sort the entries in the artefact.** `glossary.json` stores document order. Sorting on write
+2. **Sort the entries in the artefact.** The stored glossary is in document order. Sorting on write
    would make `?sort=document` mean whatever the last writer felt like, and the panel's default order
    would silently become a ranking.
 3. **Trust `url`.** It came out of a language model and the panel renders it as an `href`.
@@ -1415,14 +1576,15 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
    laptop. `article_revisions.glossary` is published whole to everyone a shared link is shared with
    ([`public-reader.ts`](../../src/store/public-reader.ts)) and the public DTO strips only
    `entry.lookup` — so the entry leaves with the article, and *Find more terms* may merge it away on
-   the way. This is why the [Look up a term](#looking-a-term-up) box stores
-   nothing. It needs its own owner-scoped table before it needs a UI.
+   the way. This is why a term the reader adds through the [Look up a term](#looking-a-term-up)
+   box lives in its own owner-scoped table (`glossary_lookups`), not in the document.
 
 ## What is still open
 
-- **The hover card has no keyboard route at all**, and that is the one open question here with a
-  real cost attached. The marks are injected HTML, so they are not focusable and cannot take
-  `aria-describedby`; the card is reachable by pointer and by nothing else. Making every run a tab
+- **The hover card itself has no keyboard route** (the entry has one, through G, above), and that
+  is the one open question here with a real cost attached. The marks are injected HTML, so they are
+  not focusable and cannot take `aria-describedby`; the card is reachable by pointer and by nothing
+  else. Making every run a tab
   stop is not the answer — a long article has several hundred of them, and tabbing through the
   article's prose to reach a definition is worse than the gap. A GPT Sol review, 2026-08-26,
   suggested the two least-bad shapes: **one focusable control per paragraph** ("the terms used here")
@@ -1431,17 +1593,14 @@ lengthen the reader's glossary as a side effect of re-fetching the article.
   done is honest labelling: the card is `role="dialog"` rather than `role="tooltip"`, because WAI's
   tooltip pattern says outright that a tooltip does not take focus and should not contain focusable
   controls, and this one holds a link and a button.
-- **The hover state machine has no test**, and it is the part of this feature most likely to be
+- **The hover state machine's mouse path has little test** (the touch path has one,
+  `tests/hover-card-touch.test.tsx`), and it is the part of this feature most likely to be
   wrong: it is timers, a delegated listener and two pieces of mutable closure state, and the one real
   bug in it so far — a pointer that crossed a term and moved on within the open delay cancelled
   nothing, so the card opened at a word nobody was pointing at — was found by *reading* it, not by
-  running it. Testing it needs a component harness this repo does not have
-  ([testing.md](testing.md) is about pure functions), so adding one is a dependency decision rather
-  than a chore. Until then the marks and the merge are covered by `tests/annotate.test.ts` and the
+  running it. The jsdom component tests (`useHoverCard` is mounted for real in several) are the way
+  to cover it. The marks and the merge are covered by `tests/annotate.test.ts`, and the mouse
   interaction is covered by a person.
-- **Nothing generates a glossary for the fixture.** `example/` has no `glossary.json`, so the panel
-  there always offers the button and the button writes into `data/`, which the fixture is not. That
-  is consistent with the thread page and equally unsatisfying on both.
 - **No keyboard traversal of the term list.** ↑ / ↓ belong to the article
   ([keyboard.md](keyboard.md)) and taking them inside the band needs a focus story the band does not
   have yet. Same gap chat has — and the same gap is why the ‹ › stepper added to the occurrence line

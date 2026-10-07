@@ -34,7 +34,10 @@ const micro = async (n = 8) => {
 };
 
 /** A controller with one turn open and every window it opened closed again. */
-async function opened(): Promise<{ c: ChatController; sink: TurnSink }> {
+async function opened(
+  onSettled?: () => void,
+  settledAnswer: ChatEffects["settledAnswer"] = async () => null,
+): Promise<{ c: ChatController; sink: TurnSink }> {
   let sink: TurnSink | null = null;
   const effects: ChatEffects = {
     loadThreads: () => new Promise(() => {}),
@@ -45,11 +48,12 @@ async function opened(): Promise<{ c: ChatController; sink: TurnSink }> {
       return new Promise(() => {});
     },
     appendSpoken: () => new Promise(() => {}),
-    settledAnswer: async () => null,
+    settledAnswer,
     stopAnswer: async () => ({ ok: true }),
     cancelThread: async () => ({ ok: true }),
+    markHintOpened: async () => ({ ok: false, error: "not in this test" }),
   };
-  const c = new ChatController(SLUG, effects);
+  const c = new ChatController(SLUG, effects, onSettled);
   const at = "2026-09-15T11:00:00.000Z";
   const reply: ChatMessage = { id: REPLY, role: "assistant", text: "", createdAt: at, status: "pending" };
   c.startTurn({
@@ -85,6 +89,34 @@ function text(c: ChatController): string {
 }
 
 describe("when the chat store tells its listeners", () => {
+  it("reports a detached turn's completion once, after recovery if its stream is lost", async () => {
+    const settled = vi.fn();
+    let found!: (message: ChatMessage) => void;
+    const { c, sink } = await opened(settled, () => new Promise((resolve) => { found = resolve; }));
+    c.detach();
+    sink.disconnected("connection lost");
+    await task();
+    expect(settled, "disconnect is not the answer settling").not.toHaveBeenCalled();
+    found({ id: REPLY, role: "assistant", text: "Recovered answer", status: "done",
+      createdAt: "2026-10-05T10:00:00Z" });
+    await micro();
+    await task();
+    expect(settled).toHaveBeenCalledTimes(1);
+    expect(text(c)).toBe("Recovered answer");
+  });
+
+  it("reports a detached turn's ordinary completion once", async () => {
+    const settled = vi.fn();
+    const { c, sink } = await opened(settled);
+    c.detach();
+    sink.done({ text: "Done", citations: [], searches: 0, model: "m" });
+    await task();
+    expect(settled).toHaveBeenCalledTimes(1);
+    sink.done({ text: "duplicate", citations: [], searches: 0, model: "m" });
+    await task();
+    expect(settled).toHaveBeenCalledTimes(1);
+  });
+
   it("tells them once at once, then once more at the task boundary with the latest", async () => {
     const { c, sink } = await opened();
     const seen: string[] = [];

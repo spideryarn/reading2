@@ -346,6 +346,28 @@ describe("the states either side of an answer", () => {
     expect(buttons("Try again").length).toBe(1);
   });
 
+  /* `worthRetrying` (src/messages.ts) reads the bracketed code. An account
+     with no credit refuses the same comments again, so the sentence stays and
+     the invitation goes, as `JobProgress` and Search's rows have it. Offered
+     for every failure until 2026-10-07 (plan 261007a § K4, G2-08). */
+  it("keeps the sentence and offers no button when trying again cannot help", () => {
+    paint(
+      api({
+        status: "failed",
+        result: null,
+        error: "This app's account with the AI service has run out of credit. [ai-no-credit]",
+      }),
+    );
+    expect(host.querySelector(".mir-error")?.textContent).toContain("[ai-no-credit]");
+    expect(buttons("Try again")).toHaveLength(0);
+    expect(host.querySelector(".mir-run")).toBeNull();
+  });
+
+  it("still offers Try again under a failure that says it may pass", () => {
+    paint(api({ status: "failed", result: null, error: "The AI service is busy right now. [ai-busy]" }));
+    expect(buttons("Try again")).toHaveLength(1);
+  });
+
   it("offers the run before anything has been asked for", () => {
     paint(api({ status: "idle", result: null }));
     const [run] = buttons("Read my comments back to me");
@@ -410,4 +432,25 @@ describe("coverage is only claimed when the question was actually put", () => {
     );
     expect(text().toLowerCase()).not.toContain("criteria");
   });
+});
+
+/* A remark kind a newer server sends to a copy built before it. The badge is a
+   table read by that value. docs/plans/261005h, Stage A. */
+describe("a remark kind this copy of the app was built before", () => {
+  const remarkOf = (kind: string) => ({ ...ALL_FIVE[0], kind }) as unknown as MirrorRemark;
+  const badge = () => host.querySelector(".mir-kind")?.textContent;
+
+  it("labels a kind it knows (the control)", () => {
+    paint(api({ result: done({ remarks: [ALL_FIVE[0]!] }) }));
+    expect(badge()).toBe("Hard for an author to act on");
+  });
+
+  it.each(["a-newer-kind", "__proto__", "constructor", "toString"])(
+    "shows %s as the server's own word, and keeps the remark",
+    (kind) => {
+      paint(api({ result: done({ remarks: [remarkOf(kind)] }) }));
+      expect(badge()).toBe(kind.replaceAll("-", " "));
+      expect(text()).toContain("An author cannot tell from this which part of the design you mean.");
+    },
+  );
 });

@@ -63,7 +63,7 @@ const { ColumnsMenu, DataTable, SortChips, useSortedTable } = await import(
 const { sinkLast } = await import("../src/web/lib/table-sort.js");
 const { TooltipGroup } = await import("../src/web/Tooltip.js");
 const { ShelfControls } = await import("../src/web/ShelfControls.js");
-const { HIDDEN_COLUMNS_KEY, useShelfHiddenColumns } = await import(
+const { HIDDEN_COLUMNS_KEY, SHOWN_COLUMNS_KEY, useShelfHiddenColumns } = await import(
   "../src/web/shelf-hidden-columns.js"
 );
 const { adminColumns } = await import("../src/web/admin-columns.js");
@@ -328,13 +328,19 @@ async function hideFromMenu(label: string): Promise<void> {
   expect(menu(), "Escape did not close the Columns menu").toBeNull();
 }
 
+/** The same click: the menu's items are toggles. Named for what the test means. */
+const showFromMenu = hideFromMenu;
+
+/* What a reader who has chosen nothing sees. **Published is not among them**:
+   it starts hidden, because a sixth data column made the table wider than the
+   page on a desktop and pushed Actions out of sight (plan 261003m). */
 const ALL_HEADERS = ["Article", "Added", "Last opened", "Opens", "Comments", "Words", "Actions"];
 
 /* ------------------------------------------------------- the Columns menu -- */
 
 describe("the Columns menu", () => {
   /**
-   * **Five data columns.** Added belongs in the menu even though its exact date
+   * **Six data columns.** Added belongs in the menu even though its exact date
    * is already in the card; hiding it removes the relative date from the row.
    */
   it("offers every data column and never Article or Actions", () => {
@@ -342,12 +348,21 @@ describe("the Columns menu", () => {
     openColumns();
     expect(checkboxes().map((el) => flat(el.textContent))).toEqual([
       "Added",
+      "Published",
       "Last opened",
       "Times opened",
       "Comments",
       "Length",
     ]);
-    for (const el of checkboxes()) expect(el.getAttribute("aria-checked")).toBe("true");
+    /* Every one ticked but Published, which starts hidden. */
+    expect(checkboxes().map((el) => el.getAttribute("aria-checked"))).toEqual([
+      "true",
+      "false",
+      "true",
+      "true",
+      "true",
+      "true",
+    ]);
   });
 
   it("hides a column's header and every cell under it, stays open, and brings it back", () => {
@@ -369,8 +384,9 @@ describe("the Columns menu", () => {
   it("says how many are hidden, in its badge and its accessible name", async () => {
     paint();
     const before = columnsTrigger();
-    expect(before.getAttribute("aria-label")).not.toMatch(/hidden/);
-    expect(flat(before.textContent)).toBe("Columns");
+    /* One at rest: Published, which is how a reader learns it is there. */
+    expect(before.getAttribute("aria-label")).toMatch(/^Columns\b.*\b1 hidden\b/);
+    expect(flat(before.textContent)).toMatch(/^Columns\s*1$/);
     expect(before.hasAttribute("title"), "the trigger used an inaccessible native tooltip").toBe(
       false,
     );
@@ -378,8 +394,8 @@ describe("the Columns menu", () => {
     await hideFromMenu("Length");
     await hideFromMenu("Comments");
     const after = columnsTrigger();
-    expect(after.getAttribute("aria-label")).toMatch(/^Columns\b.*\b2 hidden\b/);
-    expect(flat(after.textContent)).toMatch(/^Columns\s*2$/);
+    expect(after.getAttribute("aria-label")).toMatch(/^Columns\b.*\b3 hidden\b/);
+    expect(flat(after.textContent)).toMatch(/^Columns\s*3$/);
   });
 
   it("carries a rich card explaining what hiding does not change", async () => {
@@ -562,6 +578,44 @@ describe("remembered in this browser", () => {
     remount();
     expect(headers()).not.toContain("Words");
     expect(headers()).toContain("Comments");
+  });
+
+  /**
+   * **Published starts hidden, and showing it is what gets remembered.** The
+   * hidden list cannot say "shown", so a column that starts hidden has a key of
+   * its own for the reader who turned it on. And a list saved before Published
+   * existed does not name it, which must not read as "show it".
+   */
+  it("starts with Published hidden, and remembers a reader who shows it", async () => {
+    paint();
+    expect(headers()).not.toContain("Published");
+    await showFromMenu("Published");
+    expect(headers()).toContain("Published");
+    expect(JSON.parse(store.get(SHOWN_COLUMNS_KEY) ?? "null")).toEqual(["published"]);
+    remount();
+    expect(headers()).toContain("Published");
+
+    await hideFromMenu("Published");
+    expect(JSON.parse(store.get(SHOWN_COLUMNS_KEY) ?? "null")).toEqual([]);
+    expect(JSON.parse(store.get(HIDDEN_COLUMNS_KEY) ?? "null")).toEqual([]);
+    remount();
+    expect(headers()).not.toContain("Published");
+  });
+
+  it("keeps Published hidden for a reader whose saved list predates it", () => {
+    store.set(HIDDEN_COLUMNS_KEY, '["length"]');
+    paint();
+    expect(headers()).toEqual(ALL_HEADERS.filter((h) => h !== "Words"));
+  });
+
+  it.each([
+    ["not JSON", "{not json"],
+    ["a column that does not start hidden", '["length"]'],
+    ["ids we do not have", '["nonsense",42]'],
+  ])("keeps Published hidden when the shown list holds %s", (_, raw) => {
+    store.set(SHOWN_COLUMNS_KEY, raw);
+    paint();
+    expect(headers()).toEqual(ALL_HEADERS);
   });
 
   it("shows everything, and does not crash, when storage throws", async () => {

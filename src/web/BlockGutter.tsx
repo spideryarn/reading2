@@ -44,7 +44,7 @@
  * one-line paragraph has room for one 24px target beside it, a two-line one for
  * two, a three-line one for three; the gutter is a size container and a
  * `@container` query draws the first however-many fit, with the last slot
- * becoming the "…" whenever something is left over. styles.css § the gutter has
+ * becoming the "…" whenever something is left over. gutter.css § the gutter has
  * the table and the arithmetic.
  *
  * **Source order is the priority order** — that is why the mark is first in
@@ -93,14 +93,14 @@
  * argument is in the plan § Rejected, because anybody looking at four icons
  * will have it again.
  *
- * **A visitor's gutter is the permalink and nothing else** — one element at the
- * head of the column, not four with three of them blank, because none of these
- * is a placeholder, and no "…", because there is nothing behind it. The chat
+ * **A visitor's gutter has the permalink and any shared owner's mark.** When
+ * there is a mark, the disclosure can expose the permalink beneath it; without
+ * a mark there is only one control and no "…". The chat
  * button is absent rather than dead: opening a conversation costs a
  * model call, which is not theirs to spend, so `onChatAbout` is optional and the
  * button exists only where the callback does. The bookmark
- * never draws for them either, for a different reason — the marks in it are the
- * reader's own, and a visitor has none. The "?" is gated on the same callback
+ * never draws for them either: visitors cannot create marks, though shared
+ * owner's marks can be shown. The "?" is gated on the same callback
  * pattern as the chat button and for the same reason. The callback *is* the capability, the
  * way `onRenamed` is on Masthead.tsx — one fact rather than a boolean beside a
  * handler that can disagree with it. It used to render for everybody and the
@@ -135,15 +135,13 @@ import {
   CircleHelp,
   Ellipsis,
   Link2,
-  MessageSquare,
+  MessagesSquare,
   TriangleAlert,
   X,
 } from "lucide-react";
 import type { BlockId, Comment } from "../types.js";
 import { blockHref, blockPermalink, shortBlockId } from "./BlockRef.js";
-
-/** How the last copy went. `idle` is also "the reader has moved on". */
-type CopyState = "idle" | "copied" | "failed";
+import { useCopy } from "./useCopy.js";
 
 /** Long enough to read a tick, short enough not to look like a mode. */
 const SETTLE_MS = 1500;
@@ -279,37 +277,22 @@ export function BlockGutter({
   onJump,
   announce,
 }: Props) {
-  const [copy, setCopy] = useState<CopyState>("idle");
   /**
-   * One timer and one token, and both are about the same thing: a clipboard
-   * write is a promise, so its result can arrive after the reader has moved on.
-   *
-   * GPT Sol found two ways that went wrong, 2026-08-31. Click twice and the
-   * *older* write can settle last, replacing the newer tick with its own
-   * result; click and navigate away, and the continuation still calls
-   * `setCopy` and starts a timer after the cleanup has run. `op` is bumped on
-   * every press and checked in every continuation, so a stale one is simply
-   * dropped.
+   * How the last copy went; `idle` is also "the reader has moved on". A
+   * clipboard write is a promise, so its result can arrive after a newer press
+   * or after the reader has navigated away. `useCopy` drops both, and owns the
+   * timer that takes the tick away again: useCopy.ts has the reasoning.
    */
-  const op = useRef(0);
+  const { state: copyState, copy } = useCopy({ copiedMs: SETTLE_MS, failedMs: SETTLE_MS });
   /** The bookmark button's own press token — see its `onClick`. */
   const marking = useRef(0);
-  const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** For the bookmark button, which has a promise of its own to outlive. */
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
-      if (settle.current) clearTimeout(settle.current);
     };
-  }, []);
-  const later = useCallback((state: CopyState, mine: number) => {
-    if (!alive.current || mine !== op.current) return;
-    setCopy(state);
-    if (settle.current) clearTimeout(settle.current);
-    settle.current = setTimeout(() => {
-      if (alive.current) setCopy("idle");
-    }, SETTLE_MS);
   }, []);
 
   /**
@@ -381,29 +364,17 @@ export function BlockGutter({
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       const said = shortBlockId(id);
-      const mine = ++op.current;
-      const failed = () => {
-        later("failed", mine);
-        if (alive.current && mine === op.current) {
-          announce(`Couldn't copy the link to ${said}.`);
-        }
-      };
-      /* A statement, not `navigator.clipboard?.writeText(…)`: where there is no
-         clipboard object the optional chain evaluates to undefined and `.catch`
-         throws on it. ChatPanel.tsx has the long version. */
-      if (!navigator.clipboard) {
-        failed();
-        return;
-      }
-      navigator.clipboard
-        .writeText(blockPermalink(id))
-        .then(() => {
-          later("copied", mine);
-          if (alive.current && mine === op.current) announce(`Copied the link to ${said}.`);
-        })
-        .catch(failed);
+      /* Announced from inside `useCopy`'s callback, which runs only for the
+         newest press on a mounted component: a stale result says nothing. */
+      copy(blockPermalink(id), (outcome) => {
+        announce(
+          outcome.result === "copied"
+            ? `Copied the link to ${said}.`
+            : `Couldn't copy the link to ${said}.`,
+        );
+      });
     },
-    [id, announce, later, onJump],
+    [id, announce, copy, onJump],
   );
 
   /**
@@ -411,7 +382,7 @@ export function BlockGutter({
    *
    * **The row decides how many of these controls are drawn, and this is the way
    * to the rest of them.** A one-line paragraph has room for exactly one 24px
-   * target and a two-line one for two (styles.css § the gutter has the
+   * target and a two-line one for two (gutter.css § the gutter has the
    * arithmetic), so on a short row the last slot that fits becomes the "..."
    * and pressing it releases the gutter's own height. Greg, 2026-09-05:
    * *"for short paragraphs we simply show a `...` button that reveals them all?
@@ -442,6 +413,7 @@ export function BlockGutter({
    * from wherever a reader has just clicked is worse than leaving it.
    */
   const goTo = useRef<"head" | "more" | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` is the trigger, not an input — the focus moves after the render that drew or removed the controls, and where to is read from the `goTo` ref.
   useEffect(() => {
     const where = goTo.current;
     goTo.current = null;
@@ -579,10 +551,11 @@ export function BlockGutter({
 
           A `Bookmark` rather than the flag or speech bubble Greg offered,
           because comments.md is explicit that a comment *is* a bookmark — the
-          words and the AI answer are both optional — and because a second
-          message-square a slot away from the chat button would read as a second
-          chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
-          uses in the prose, so the gutter and the passage read as one thing.
+          words and the AI answer are both optional — and because the one-bubble
+          family now means comments while the two-bubble button below means
+          chat (docs/project/icons.md). Its colour is `--highlight`, which is
+          exactly what `mark.cmt` uses in the prose, so the gutter and the
+          passage read as one thing.
 
           **It is the head of the column**, which is what a mark has to be: a
           mark that is not beside its own words is not a mark, and the foot of a
@@ -625,7 +598,7 @@ export function BlockGutter({
           `BlockRef` still jumps everywhere else — gist ranges and model
           citations — and is untouched. */}
       <a
-        className={`blk-permalink${copy === "failed" ? " failed" : ""}`}
+        className={`blk-permalink${copyState === "failed" ? " failed" : ""}`}
         href={blockHref(id, linkBase)}
         /* The tooltip Greg asked for, carrying the full id. **`data-tip`, read
            by the reading view's one delegated card** (BlockLinkCard.tsx §
@@ -636,9 +609,9 @@ export function BlockGutter({
            tooltip at all (spya-jc0vm6, *"Make sure they all have tooltips"*).
            Every control in this column does the same. */
         data-tip={
-          copy === "copied"
+          copyState === "copied"
             ? `Copied — ${id}`
-            : copy === "failed"
+            : copyState === "failed"
               ? `Couldn't copy. Use the link's own menu — ${id}`
               : `${id} — click to copy a link to this paragraph`
         }
@@ -648,9 +621,9 @@ export function BlockGutter({
         aria-label={`Link to this paragraph, ${id}`}
         onClick={onCopy}
       >
-        {copy === "copied" ? (
+        {copyState === "copied" ? (
           <Check size={GLYPH} aria-hidden="true" />
-        ) : copy === "failed" ? (
+        ) : copyState === "failed" ? (
           <TriangleAlert size={GLYPH} aria-hidden="true" />
         ) : (
           <Link2 size={GLYPH} aria-hidden="true" />
@@ -689,7 +662,13 @@ export function BlockGutter({
              singular, so the count on screen was the one thing a screen reader
              could not hear. Nothing about the count is decoration.
 
-             With no conversation on the block, both are unchanged. */
+             With no conversation on the block, both are unchanged.
+
+             **The glyph is Chat's own two bubbles**, since 2026-10-06. It was
+             one bubble, which reads as a comment and is the family the bar's
+             Comments button wears. Greg, spya-vj7wv0: "change the comment icon
+             to a chat icon (because that's really what it is)". The words
+             already said chat. docs/project/icons.md § A chat is two bubbles. */
           data-tip={
             chatCount
               ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
@@ -701,7 +680,7 @@ export function BlockGutter({
               : "Chat with the AI about this paragraph"
           }
         >
-          <MessageSquare size={GLYPH} aria-hidden="true" />
+          <MessagesSquare size={GLYPH} aria-hidden="true" />
           {/* Every conversation anchored to this block, selections included —
               counting only the whole-block ones would make the number disagree
               with the marks sitting beside it. */}
@@ -759,8 +738,8 @@ export function BlockGutter({
           onClick={(e) => {
             e.stopPropagation();
             setOpen(false);
-            /* Its own token, not the permalink's `op`: sharing one would let a
-               bookmark press silently drop a copy result still in flight, and
+            /* Its own token, not the permalink's, which `useCopy` keeps:
+               sharing one would let a bookmark press silently drop a copy result still in flight, and
                the reverse. Only the newest press speaks, and nothing speaks
                after unmount. */
             const mine = ++marking.current;
@@ -799,7 +778,7 @@ export function BlockGutter({
 
           A one-line paragraph has room for one 24px target, a two-line one for
           two, a three-line one for three — measured, and the whole arithmetic is
-          in styles.css § the gutter. Until today the row was *stretched* to hold
+          in gutter.css § the gutter. Until today the row was *stretched* to hold
           the column, which cost every short paragraph 24px of the article's
           rhythm; Greg looked at that twice and then named the fix: *"for short
           paragraphs we simply show a `...` button that reveals them all? That

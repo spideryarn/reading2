@@ -12,12 +12,13 @@
  *     notice and *outdated* draws nothing; a changed profile offers a rewrite;
  *     a visitor gets the stored paragraphs and no verb, or a line saying none
  *     has been made.
- *  2. **The press.** The real `SummaryControls` slider over the real
- *     `useSimple`, under `<StrictMode>`, counting job requests the way
- *     tests/modes-that-start-themselves.test.tsx does: choosing a level with
- *     nothing stored buys exactly one run; arriving on a level (a pasted link,
- *     a Back step, a restore — all the same setter) buys nothing; and a second
- *     press recovers from a failed read.
+ *  2. **The press.** The real `SummaryControls` — Brief | Fuller | Thread since
+ *     2026-10-03 (plan 261003l), a slider before — over the real `useSimple`,
+ *     under `<StrictMode>`, counting job requests the way
+ *     tests/modes-that-start-themselves.test.tsx does: choosing a length with
+ *     nothing stored buys exactly one run; arriving on one (a pasted link, a
+ *     Back step, a restore — all the same setter) buys nothing; a second press
+ *     recovers from a failed read; and Thread buys nothing here at all.
  *  3. **The band**: the real `SummaryBand` and `VisitorSummaryBand` on an old
  *     outline link, which must land on the default level with no Parts |
  *     Sections anywhere (plan 261001p).
@@ -25,7 +26,8 @@
 import { act, createElement, type ReactElement, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BlockId, Job, SimpleLevel, SimpleSummary } from "../src/types.js";
+import type { Article, BlockId, Job, SimpleLevel, SimpleSummary } from "../src/types.js";
+import type { SummaryView } from "../src/web/params.js";
 import type { UseSimple } from "../src/web/useSimple.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -47,8 +49,8 @@ const LATER = "spya-r8z3nh" as BlockId;
 const WHAT = "This essay asks whether a machine could ever be conscious, and says probably not.";
 const WHY = "It matters because people are starting to treat chatbots as if they had feelings.";
 
-const BRIEF_TEXT = "A short one: could a machine feel? Probably not.";
 const FULLER_TEXT = "The fuller one keeps the essay's own term, the hard problem, and says what it means.";
+const OLD_MIDDLE_TEXT = "The removed middle level is still in this historical row.";
 
 function artefact(): SimpleSummary {
   return {
@@ -61,10 +63,6 @@ function artefact(): SimpleSummary {
     profileHash: null,
     levels: {
       brief: [
-        { text: BRIEF_TEXT, ids: [EARLY] },
-        { text: "It matters for chatbots.", ids: [LATER] },
-      ],
-      simple: [
         { text: WHAT, ids: [EARLY, MIDDLE] },
         { text: WHY, ids: [LATER] },
       ],
@@ -73,13 +71,26 @@ function artefact(): SimpleSummary {
         { text: WHY, ids: [LATER] },
         { text: "And it says where the argument stops.", ids: [MIDDLE] },
       ],
+      /* The owner's GET may still carry this old key. Nothing draws it. */
+      ...{ simple: [
+        { text: OLD_MIDDLE_TEXT, ids: [EARLY] },
+        { text: "Why the old middle version mattered.", ids: [LATER] },
+      ] },
     },
   };
 }
 
+/**
+ * When set, the GET waits for it before it answers: a read that is under way
+ * and has not landed. What it answers is decided when it lands, as a server's
+ * would be.
+ */
+let artefactGate: Promise<void> | null = null;
+
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string) => {
     gets.push(url);
+    if (artefactGate) await artefactGate;
     if (artefactFails) throw new Error("network");
     return artefactStatus === 404
       ? new Response(null, { status: 404 })
@@ -93,32 +104,48 @@ vi.mock("../src/web/lib/api.js", () => ({
 }));
 
 let nextJobId = 0;
-const jobs: Job[] = [];
+/**
+ * The polled job list. **Replaced, never edited**, as the engine's is: the
+ * hook under it memoises on the array, so a test that changes what is queued
+ * assigns a new one and draws again (`showJobs`).
+ */
+let jobs: Job[] = [];
+/** The completion listener the mounted hook registered — `useStepJob`'s `announce`. */
+let finished: ((job: Job) => void) | undefined;
+/** What a press on Retry does: the ids asked for, and the job the queue answers with. */
+const retried: string[] = [];
+let retryAnswer: Job | null = null;
 vi.mock("../src/web/useJobs.js", async () => {
   const actual = await vi.importActual<typeof import("../src/web/useJobs.js")>("../src/web/useJobs.js");
   return {
     ...actual,
-    useJobs: () => ({
-      jobs,
-      loaded: true,
-      error: null,
-      driverFailures: {},
-      lastFailure: () => "The queue said no.",
-      run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
-        posts.push(request);
-        nextJobId += 1;
-        return { id: `job${nextJobId}` };
-      },
-      cancel: async () => {},
-      add: async () => null,
-      addUpload: async () => null,
-      retry: async () => {},
-      forget: async () => {},
-    }),
+    useJobs: (_cadence: unknown, onFinished?: (job: Job) => void) => {
+      finished = onFinished;
+      return {
+        jobs,
+        loaded: true,
+        error: null,
+        driverFailures: {},
+        lastFailure: () => "The queue said no.",
+        run: async (request: { slug: string; steps: string[]; force?: string[] }) => {
+          posts.push(request);
+          nextJobId += 1;
+          return { id: `job${nextJobId}` };
+        },
+        cancel: async () => {},
+        add: async () => null,
+        addUpload: async () => null,
+        retry: async (id: string) => {
+          retried.push(id);
+          return retryAnswer;
+        },
+        forget: async () => {},
+      };
+    },
   };
 });
 
-const { SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
+const { SIMPLE_FULLER_NOT_WRITTEN, SIMPLE_FULLER_PENDING, SIMPLE_NONE_OWNER, SIMPLE_NONE_VISITOR, SimplePanel } = await import(
   "../src/web/SimplePanel.js"
 );
 const { BlockLinkProvider } = await import("../src/web/BlockLinkCard.js");
@@ -135,10 +162,14 @@ let root: Root;
 beforeEach(() => {
   gets.length = 0;
   posts.length = 0;
-  jobs.length = 0;
+  jobs = [];
+  finished = undefined;
+  retried.length = 0;
+  retryAnswer = null;
   nextJobId = 0;
   artefactStatus = 404;
   artefactFails = false;
+  artefactGate = null;
   resetActivations();
   jobEngine.reset();
   host = document.createElement("div");
@@ -176,6 +207,8 @@ function owner(over: Partial<UseSimple> = {}): UseSimple {
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
+    preview: null,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
@@ -189,7 +222,7 @@ const jumps: BlockId[] = [];
 
 async function draw(
   access: Parameters<typeof SimplePanel>[0]["access"],
-  level: SimpleLevel = "simple",
+  level: SimpleLevel = "brief",
 ): Promise<void> {
   jumps.length = 0;
   await act(async () =>
@@ -244,7 +277,7 @@ describe("the Simple view", () => {
         <BlockLinkProvider index={index}>
           <SimplePanel
             access={{ kind: "owner", owner: owner() }}
-            level="simple"
+            level="brief"
             onJump={(id: BlockId) => void jumps.push(id)}
           />
         </BlockLinkProvider>,
@@ -263,7 +296,7 @@ describe("the Simple view", () => {
 
   it("renders a paragraph's markup as the characters, never as HTML", async () => {
     const simple = artefact();
-    simple.levels.simple[0] = { text: "<b>bold</b> **stars**", ids: [EARLY] };
+    simple.levels.brief[0] = { text: "<b>bold</b> **stars**", ids: [EARLY] };
     await draw({ kind: "owner", owner: owner({ simple }) });
     expect(host.querySelector(".simple-text b")).toBeNull();
     expect(host.querySelector(".simple-text")?.textContent).toBe("<b>bold</b> **stars**");
@@ -280,13 +313,15 @@ describe("the Simple view", () => {
 
   it("draws the level the slider has chosen, and only that one", async () => {
     await draw({ kind: "owner", owner: owner() }, "brief");
-    expect(text()).toContain(BRIEF_TEXT);
-    expect(text()).not.toContain(WHAT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
     await draw({ kind: "owner", owner: owner() }, "fuller");
     expect(text()).toContain(FULLER_TEXT);
+    expect(text()).not.toContain(WHAT);
     expect(host.querySelectorAll(".simple-para")).toHaveLength(3);
     await draw({ kind: "visitor", simple: { levels: artefact().levels } }, "brief");
-    expect(text()).toContain(BRIEF_TEXT);
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
   });
 
   it("offers to write it again once the reader has changed their profile, without a notice line", async () => {
@@ -313,7 +348,12 @@ describe("the Simple view", () => {
        "Writing it in plain words" read as a contradiction in the browser check. */
     await draw({ kind: "owner", owner: owner({ status: "none", simple: null, starting: true }) });
     expect(text()).not.toContain(SIMPLE_NONE_OWNER);
-    expect(text()).toContain("All three levels are written together");
+    /* Brief is shown first since 2026-10-04 (plan 261004f stage 2), so the hint
+       no longer says the two arrive together, or in half a minute. */
+    expect(text()).toContain("Brief appears first. Fuller follows, and can take up to about a minute.");
+    expect(text()).toContain("Written once and kept");
+    expect(text()).not.toContain("written together");
+    expect(text()).not.toContain("half a minute");
   });
 
   it("offers to write it when there is none, and shows why a run failed", async () => {
@@ -351,15 +391,90 @@ describe("the Simple view", () => {
     expect(host.querySelectorAll("button")).toHaveLength(0);
   });
 
+  /* ---- ask about a paragraph in chat (plan 261004a) ---- */
+
+  const ASK = "Ask about this paragraph in chat";
+  const askButtons = () =>
+    [...host.querySelectorAll<HTMLButtonElement>(`.simple-para .simple-refs button[aria-label="${ASK}"]`)];
+  /** The panel with a handler, which `draw` does not pass. */
+  async function drawAsking(
+    access: Parameters<typeof SimplePanel>[0]["access"],
+    level: SimpleLevel = "brief",
+  ): Promise<string[]> {
+    const asked: string[] = [];
+    await act(async () =>
+      root.render(
+        createElement(SimplePanel, {
+          access,
+          level,
+          onJump: () => {},
+          onAskChat: (paragraph: string) => void asked.push(paragraph),
+        }),
+      ),
+    );
+    return asked;
+  }
+
+  it("gives the owner one ask button per paragraph, and a press hands over that paragraph's words", async () => {
+    const asked = await drawAsking({ kind: "owner", owner: owner() });
+    expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+    const buttons = askButtons();
+    expect(buttons, "one per paragraph, at the end of its doors row").toHaveLength(2);
+    expect(buttons.map((b) => b.type)).toEqual(["button", "button"]);
+    /* The second, so a handler wired to the first paragraph or to the whole
+       level would be caught. */
+    await act(async () => buttons[1]?.click());
+    expect(asked).toEqual([WHY]);
+    await act(async () => buttons[0]?.click());
+    expect(asked).toEqual([WHY, WHAT]);
+  });
+
+  it("hands over the paragraph's whole text when it is drawn as sentences", async () => {
+    const simple = artefact();
+    simple.levels.brief[0] = {
+      text: WHAT,
+      ids: [EARLY, MIDDLE],
+      sentences: [
+        { text: "This essay asks whether a machine could ever be conscious,", id: MIDDLE },
+        { text: "and says probably not.", id: null },
+      ],
+    };
+    const asked = await drawAsking({ kind: "owner", owner: owner({ simple }) });
+    expect(host.querySelector(".simple-text a.simple-sentence"), "drawn as sentences").not.toBeNull();
+    await act(async () => askButtons()[0]?.click());
+    expect(asked).toEqual([WHAT]);
+  });
+
+  it("draws the ask button on Brief and Fuller alike", async () => {
+    await drawAsking({ kind: "owner", owner: owner() }, "brief");
+    expect(askButtons()).toHaveLength(2);
+    await drawAsking({ kind: "owner", owner: owner() }, "fuller");
+    expect(askButtons()).toHaveLength(3);
+  });
+
+  it("draws no ask button for the owner when nobody is listening for it", async () => {
+    await draw({ kind: "owner", owner: owner() });
+    expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+    expect(askButtons()).toHaveLength(0);
+    expect(host.querySelectorAll(".simple-para button")).toHaveLength(0);
+  });
+
+  it("draws a visitor no ask button, even if a handler is passed: a visitor has no chat", async () => {
+    const asked = await drawAsking({ kind: "visitor", simple: { levels: artefact().levels } });
+    expect(host.querySelectorAll(".simple-para")).toHaveLength(2);
+    expect(host.querySelectorAll("button")).toHaveLength(0);
+    expect(asked).toEqual([]);
+  });
+
   /* ---- sentences that point at their passage (plan 261002e) ---- */
 
   const ASKS = "This essay asks whether a machine could ever be conscious,";
   const SAYS = "and says probably not.";
   const ASKS_SAYS = `${ASKS} ${SAYS}`;
-  /** The first Simple paragraph, cut into a linked and an unlinked sentence. */
+  /** The first Brief paragraph, cut into a linked and an unlinked sentence. */
   function withSentences(sentences: unknown, text = ASKS_SAYS): SimpleSummary {
     const simple = artefact();
-    simple.levels.simple[0] = { text, ids: [EARLY, MIDDLE], sentences };
+    simple.levels.brief[0] = { text, ids: [EARLY, MIDDLE], sentences };
     return simple;
   }
   const LINKED = [
@@ -418,7 +533,7 @@ describe("the Simple view", () => {
         <BlockLinkProvider index={index}>
           <SimplePanel
             access={{ kind: "owner", owner: owner({ simple: withSentences(LINKED) }) }}
-            level="simple"
+            level="brief"
             onJump={(id: BlockId) => void jumps.push(id)}
           />
         </BlockLinkProvider>,
@@ -439,6 +554,99 @@ describe("the Simple view", () => {
     expect(sentenceLinks().map((a) => a.getAttribute("data-block-link"))).toEqual([MIDDLE]);
   });
 
+  /* ---- bold and bullets (plan 261004b) ---- */
+
+  const LEAD = "The essay gives three reasons:";
+  const ONE = "Brains are alive and machines are not.";
+  const TWO = "A simulation of a storm is not wet.";
+  const BULLETS = [
+    { text: LEAD, id: null },
+    { text: ONE, id: MIDDLE, key: "alive" },
+    { text: TWO, id: null },
+  ];
+  /** The first Brief paragraph as a list: a lead-in and two bullets. */
+  function withList(sentences: unknown = BULLETS, list: unknown = true): SimpleSummary {
+    const simple = withSentences(sentences, (sentences as { text: string }[]).map((s) => s.text).join(" "));
+    simple.levels.brief[0] = { ...simple.levels.brief[0]!, list };
+    return simple;
+  }
+
+  it("draws a list paragraph as its lead-in and a bullet for each later sentence, still linked", async () => {
+    await draw({ kind: "owner", owner: owner({ simple: withList() }) });
+    const para = host.querySelector(".simple-para");
+    expect(para?.querySelector("p.simple-text")?.textContent).toBe(LEAD);
+    const items = [...(para?.querySelectorAll("ul.simple-list > li") ?? [])];
+    expect(items.map((li) => li.textContent)).toEqual([ONE, TWO]);
+    /* A bullet is one sentence: the linked one is the same block link, so it
+       hovers, jumps and lights up with no code of its own. */
+    const link = items[0]?.querySelector<HTMLAnchorElement>("a.simple-sentence.block-ref");
+    expect(link?.getAttribute("data-block-link")).toBe(MIDDLE);
+    expect(link?.textContent).toBe(ONE);
+    expect(sentenceLinks()).toContain(link);
+    expect(items[1]?.querySelector("a")).toBeNull();
+    await act(async () => {
+      link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+    });
+    expect(jumps).toEqual([MIDDLE]);
+    /* The doors still follow the paragraph. */
+    expect(doors(para ?? undefined)).toEqual([EARLY, MIDDLE]);
+    /* The other paragraph is untouched. */
+    expect(host.querySelectorAll("ul.simple-list")).toHaveLength(1);
+  });
+
+  it("draws a list of only two sentences, and one that is not `true`, as prose", async () => {
+    await draw({ kind: "owner", owner: owner({ simple: withList(BULLETS.slice(0, 2)) }) });
+    expect(host.querySelector("ul.simple-list")).toBeNull();
+    expect(host.querySelector(".simple-text")?.textContent).toBe(`${LEAD} ${ONE}`);
+    await draw({ kind: "owner", owner: owner({ simple: withList(BULLETS, "true") }) });
+    expect(host.querySelector("ul.simple-list")).toBeNull();
+  });
+
+  it("draws a sentence's key as one strong, with exactly the key's words, inside the link", async () => {
+    const sentences = [
+      { text: ASKS, id: MIDDLE, key: "a machine" },
+      /* Twice in the sentence: only the first is bold. */
+      { text: "Not now and not later.", id: null, key: "not" },
+    ];
+    const simple = withSentences(sentences, `${ASKS} Not now and not later.`);
+    await draw({ kind: "owner", owner: owner({ simple }) });
+    const strongs = [...host.querySelectorAll(".simple-text strong")];
+    expect(strongs.map((s) => s.textContent)).toEqual(["a machine", "not"]);
+    expect(strongs[0]?.closest("a.simple-sentence")?.getAttribute("data-block-link")).toBe(MIDDLE);
+    expect(strongs[1]?.closest("a")).toBeNull();
+    /* The words are unchanged: bold wraps them, it adds none. */
+    expect(host.querySelector(".simple-text")?.textContent).toBe(`${ASKS} Not now and not later.`);
+    expect(strongs[1]?.previousSibling?.textContent).toBe("Not now and ");
+  });
+
+  it("draws no strong for a key that is not its sentence's words", async () => {
+    const sentences = [
+      { text: ASKS, id: MIDDLE, key: "a toaster" },
+      { text: SAYS, id: null, key: SAYS },
+    ];
+    await draw({ kind: "owner", owner: owner({ simple: withSentences(sentences) }) });
+    expect(host.querySelector(".simple-text strong")).toBeNull();
+    expect(host.querySelector(".simple-text")?.textContent).toBe(ASKS_SAYS);
+  });
+
+  it("renders markup in a sentence, a bullet or a key as the characters, never as HTML", async () => {
+    const sentences = [
+      { text: "Three <b>bold</b> things:", id: null },
+      { text: "**stars** and <i>tags</i> stay.", id: MIDDLE, key: "<i>tags</i>" },
+      { text: "- a dash is a dash.", id: null, key: "**stars**" },
+    ];
+    await draw({ kind: "owner", owner: owner({ simple: withList(sentences) }) });
+    const para = host.querySelector(".simple-para");
+    expect(para?.querySelector("b, i, em")).toBeNull();
+    expect(para?.querySelector("p.simple-text")?.textContent).toBe("Three <b>bold</b> things:");
+    expect([...(para?.querySelectorAll("li") ?? [])].map((li) => li.textContent)).toEqual([
+      "**stars** and <i>tags</i> stay.",
+      "- a dash is a dash.",
+    ]);
+    /* The one strong is the valid key, as characters; the other key is not in its sentence. */
+    expect([...(para?.querySelectorAll("strong") ?? [])].map((s) => s.textContent)).toEqual(["<i>tags</i>"]);
+  });
+
   it("dismisses a sentence's old passage card when a rewrite changes only its target", async () => {
     class FakeResizeObserver {
       observe() {}
@@ -457,7 +665,7 @@ describe("the Simple view", () => {
         <BlockLinkProvider index={index}>
           <SimplePanel
             access={{ kind: "owner", owner: owner({ simple: withSentences([{ text: ASKS, id }, { text: SAYS, id: null }]) }) }}
-            level="simple"
+            level="brief"
             onJump={(target: BlockId) => void jumps.push(target)}
           />
         </BlockLinkProvider>,
@@ -515,127 +723,113 @@ describe("the Simple view", () => {
 
 /* --------------------------------------------------------------- the press -- */
 
-/** The owner's band, reduced: the real slider and, under a level, the real hook. */
+/** The owner's band, reduced: the real control and, under it, the real hook. */
 function SimpleProbe({ slug }: { slug: string }): ReactElement {
   const view = useSimple(slug);
   return createElement("div", { "data-band": "simple" }, view.starting ? "starting" : view.status);
 }
 
 /** The address-bar setter, which is what a pasted link, Back and a restore all reach. */
-let arrive: (next: SimpleLevel) => void = () => {};
+let arrive: (next: SummaryView) => void = () => {};
 
-function Band({ slug, start }: { slug: string; start: SimpleLevel }): ReactElement {
-  const [view, setView] = useState<SimpleLevel>(start);
+function Band({ slug, start }: { slug: string; start: SummaryView }): ReactElement {
+  const [view, setView] = useState<SummaryView>(start);
   arrive = setView;
   return createElement(
     "div",
     null,
     createElement(SummaryControls, { slug, value: view, onChange: setView }),
-    /* One element for every level, so moving between levels keeps the hook
-       mounted — as `OwnerSimple` does in the real band. */
+    /* One element for both lengths, so moving between them keeps the hook
+       mounted — as `OwnerSimple` does in the real band. Left mounted on Thread
+       too, which the real band does not do, **on purpose**: it is what would
+       claim and spend a `simple` token if the Thread segment ever armed one. */
     createElement(SimpleProbe, { slug }),
   );
 }
 
-async function open(start: SimpleLevel): Promise<void> {
+async function open(start: SummaryView): Promise<void> {
   await act(async () => {
     root.render(createElement(StrictMode, null, createElement(Band, { slug: "a-piece", start })));
   });
   await settle();
 }
 
-function slider(): HTMLInputElement {
-  const found = host.querySelector<HTMLInputElement>(".summ-slider input[type=range]");
-  if (!found) throw new Error("no plain-words slider");
-  return found;
+const segments = (): HTMLButtonElement[] => [
+  ...host.querySelectorAll<HTMLButtonElement>('.summ-views [role="radio"]'),
+];
+
+/** The view the control says is chosen. */
+function chosen(): string | null {
+  return segments().find((b) => b.getAttribute("aria-checked") === "true")?.textContent ?? null;
 }
 
-/** A click on the slider where it rests, on Simple — a press on the level showing. */
-async function pressSimple(): Promise<void> {
-  const input = slider();
-  await act(async () => input.click());
-  await settle();
-}
-
-/** A drag or an arrow key to a stop. */
-async function slideTo(stop: number): Promise<void> {
-  const input = slider();
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, String(stop));
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+/** A press on one segment — the one showing, or another. */
+async function pressSegment(label: "Brief" | "Fuller" | "Thread"): Promise<void> {
+  const found = segments().find((b) => b.textContent === label);
+  if (!found) throw new Error(`no ${label} segment`);
+  await act(async () => found.click());
   await settle();
 }
 
 const simpleGets = (): string[] => gets.filter((u) => u.startsWith("/api/simple/"));
 
-describe("choosing a plain-words level", () => {
+describe("choosing a plain-words length", () => {
   it("writes them when nothing is stored, once", async () => {
-    await open("simple");
+    await open("fuller");
     expect(posts, "arriving buys nothing").toEqual([]);
-    await pressSimple();
+    await pressSegment("Fuller");
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
   });
 
   it("writes them once when the reader goes straight to Fuller", async () => {
-    await open("simple");
-    await slideTo(2);
+    await open("brief");
+    await pressSegment("Fuller");
+    expect(chosen()).toBe("Fuller");
     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
   });
 
-  it("goes to an end, and arms, from the icon at that end", async () => {
-    await open("simple");
-    const ends = [...host.querySelectorAll<HTMLButtonElement>(".summ-slider .summ-slider-end")];
-    expect(ends, "an icon at each end").toHaveLength(2);
-    /* They are real shortcuts, not decoration: a keyboard and a screen reader
-       get the same Brief/Fuller jumps as a pointer. */
-    expect(ends.map((end) => end.getAttribute("aria-label"))).toEqual([
-      "Show Brief summary",
-      "Show Fuller summary",
-    ]);
-    expect(ends.map((end) => end.tabIndex)).toEqual([0, 0]);
-    expect(ends.some((end) => end.hasAttribute("aria-hidden"))).toBe(false);
-    await act(async () => ends[1]?.click());
-    await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Fuller");
-    expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
-    await act(async () => ends[0]?.click());
-    await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+  it("does not write them a second time when pressed again, or moved to the other length", async () => {
+    await open("fuller");
+    await pressSegment("Fuller");
+    await pressSegment("Fuller");
+    await pressSegment("Brief");
+    expect(chosen()).toBe("Brief");
     expect(posts, "one run writes every level").toEqual([{ slug: "a-piece", steps: ["simple"] }]);
-  });
-
-  it("does not write them a second time when pressed again, or moved to another level", async () => {
-    await open("simple");
-    await pressSimple();
-    await pressSimple();
-    await slideTo(0);
-    expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
   });
 
   it("writes nothing when they are already stored", async () => {
     artefactStatus = 200;
-    await open("simple");
-    await pressSimple();
-    await slideTo(2);
+    await open("brief");
+    await pressSegment("Brief");
+    await pressSegment("Fuller");
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 
   it("recovers from a failed read on a second press", async () => {
     artefactFails = true;
-    await open("simple");
-    await pressSimple();
+    await open("brief");
+    await pressSegment("Brief");
     expect(posts, "a failed read is not an answer").toEqual([]);
 
     artefactFails = false;
-    await pressSimple();
+    await pressSegment("Brief");
     expect(posts).toEqual([{ slug: "a-piece", steps: ["simple"] }]);
+  });
+
+  it("writes nothing for Thread, even with the plain-words hook there to claim a press", async () => {
+    /* The thread writes on arrival, from its own band (useTweets.ts); pressing
+       its segment must arm nothing for the lengths. */
+    await open("brief");
+    await pressSegment("Thread");
+    expect(chosen()).toBe("Thread");
+    expect(simpleGets().length).toBeGreaterThan(0);
+    expect(posts).toEqual([]);
   });
 });
 
-describe("arriving at a level without choosing it", () => {
+describe("arriving at a length without choosing it", () => {
   it("spends nothing on a pasted link or a restore", async () => {
     await open("fuller");
     /* The read settled — so "no POST" is about a panel that knows it is empty. */
@@ -646,7 +840,7 @@ describe("arriving at a level without choosing it", () => {
 
   it("spends nothing on a Back step into it", async () => {
     await open("brief");
-    await act(async () => arrive("simple"));
+    await act(async () => arrive("fuller"));
     await settle();
     expect(simpleGets().length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
@@ -655,26 +849,46 @@ describe("arriving at a level without choosing it", () => {
 
 /* ------------------------------------------------------------ the band -- */
 
+const ARTICLE: Article = {
+  highPowerSince: null,
+  titleOverridden: false,
+  meta: { slug: "a-piece", title: "A piece", url: "https://example.com/piece" },
+  blocks: [],
+  assets: undefined,
+  navLabelStatus: "ready",
+  sourceGuess: undefined,
+  tree: { rootId: "spya-root", nodes: {} } as unknown as Article["tree"],
+};
+
 /**
- * **Summary is the slider and the paragraphs, and nothing else** — Greg,
- * 2026-10-01 (spya-b3ggv4): *"let's just get rid of parts and sections"*.
- * docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
+ * **Summary is the control and the paragraphs (or the thread), and nothing
+ * else** — Greg, 2026-10-01 (spya-b3ggv4): *"let's just get rid of parts and
+ * sections"*. docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md.
  *
  * The real bands, under the real address bar, on the address an old link
  * carries: `?summary=gists&deep=2` was the outline at Sections. It must land
- * on the default plain-words level, with no Parts | Sections pair and no
+ * on the default plain-words length, with no Parts | Sections pair and no
  * outline anywhere in the band, for the owner and for a visitor.
  */
-describe("Summary's band, arriving on an old outline link", () => {
+describe("Summary's band, arriving on an old link", () => {
   const OLD_LINK = "/read/a-piece?mode=summary&summary=gists&deep=2";
+
+  const visitorBand = (): ReactElement =>
+    createElement(VisitorSummaryBand, {
+      slug: "a-piece",
+      simple: { levels: artefact().levels },
+      thread: undefined,
+      article: ARTICLE,
+      onJump: () => {},
+    });
 
   async function band(which: "owner" | "visitor"): Promise<void> {
     history.replaceState(null, "", OLD_LINK);
     const { NuqsAdapter } = await import("nuqs/adapters/react");
     const inner =
       which === "owner"
-        ? createElement(SummaryBand, { slug: "a-piece", onJump: () => {} })
-        : createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
+        ? createElement(SummaryBand, { slug: "a-piece", article: ARTICLE, onJump: () => {} })
+        : visitorBand();
     await act(async () => {
       root.render(createElement(NuqsAdapter, null, inner));
     });
@@ -692,62 +906,380 @@ describe("Summary's band, arriving on an old outline link", () => {
     expect(host.querySelectorAll(".summ-controls"), "one row of controls").toHaveLength(1);
   }
 
-  it("draws the owner the default plain-words level, not the outline", async () => {
+  it("draws the owner the default plain-words length, not the outline", async () => {
     await band("owner");
     noOutline();
     /* Brief, the default since 8N (plan 261002c). */
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    expect(chosen()).toBe("Brief");
     /* The plain-words body, at its empty state — the GET answered 404. */
     expect(text()).toContain(SIMPLE_NONE_OWNER);
     expect(posts, "arriving on a link spends nothing").toEqual([]);
   });
 
-  it("draws a visitor the stored paragraphs at the default level", async () => {
+  it("draws a visitor the stored paragraphs at the default length", async () => {
     await band("visitor");
     noOutline();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
-    expect(text()).toContain(BRIEF_TEXT);
-    expect(text()).not.toContain(WHAT);
+    expect(chosen()).toBe("Brief");
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
     expect(gets, "a visitor's band reads nothing").toEqual([]);
   });
 
   /* Greg, 2026-10-01 (8N, spya-zw479b): "In summary mode, default to the
      brief summary when it opens for the first time." No `?summary=` selects
-     that default; explicit Simple and Fuller are remembered in the address. */
-  it("opens on Brief when the address names no level, and Simple only when it says so", async () => {
+     that default; an explicit Fuller is remembered in the address. */
+  it("opens on Brief when the address names no view, and on Fuller only when it says so", async () => {
     const { NuqsAdapter } = await import("nuqs/adapters/react");
-    const inner = createElement(VisitorSummaryBand, { simple: { levels: artefact().levels }, onJump: () => {} });
     history.replaceState(null, "", "/read/a-piece?mode=summary");
     await act(async () => {
-      root.render(createElement(NuqsAdapter, null, inner));
+      root.render(createElement(NuqsAdapter, null, visitorBand()));
     });
     await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
-    expect(text()).toContain(BRIEF_TEXT);
+    expect(chosen()).toBe("Brief");
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
     await act(async () => {
       root.unmount();
     });
     root = createRoot(host);
-    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
+    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=fuller");
     await act(async () => {
-      root.render(createElement(NuqsAdapter, null, inner));
+      root.render(createElement(NuqsAdapter, null, visitorBand()));
     });
     await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Simple");
-    expect(text()).toContain(WHAT);
+    expect(chosen()).toBe("Fuller");
+    expect(text()).toContain(FULLER_TEXT);
     /* Back to Brief, the default: nuqs drops it from the address (plan, Sol P2). */
-    const briefEnd = host.querySelector<HTMLButtonElement>('button[aria-label="Show Brief summary"]');
-    await act(async () => {
-      briefEnd?.click();
-    });
-    await settle();
-    expect(slider().getAttribute("aria-valuetext")).toBe("Brief");
+    await pressSegment("Brief");
+    for (let i = 0; i < 50 && new URLSearchParams(location.search).has("summary"); i += 1) {
+      await act(async () => {
+        await new Promise((go) => setTimeout(go, 10));
+      });
+    }
+    expect(chosen()).toBe("Brief");
     expect(new URLSearchParams(location.search).has("summary")).toBe(false);
   });
 
-  it("says the slider's three levels without a visible level name beside it", async () => {
+  /* The Simple level was a view until 2026-10-03 and stopped being written on
+     2026-10-04 (plan 261004f). A link that names it degrades to the default
+     like any unknown value. */
+  it.each(["owner", "visitor"] as const)("reads an old ?summary=simple as Brief and never draws its stored middle level (%s)", async (which) => {
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    artefactStatus = 200;
+    history.replaceState(null, "", "/read/a-piece?mode=summary&summary=simple");
+    await act(async () => {
+      const inner = which === "owner"
+        ? createElement(SummaryBand, { slug: "a-piece", article: ARTICLE, onJump: () => {} })
+        : visitorBand();
+      root.render(createElement(NuqsAdapter, null, inner));
+    });
+    await settle();
+    expect(chosen()).toBe("Brief");
+    expect(text()).toContain(WHAT);
+    expect(text()).not.toContain(FULLER_TEXT);
+    expect(text()).not.toContain(OLD_MIDDLE_TEXT);
+    expect(posts, "a stored historical row is never rewritten on arrival").toEqual([]);
+  });
+
+  it("names its three choices in words, in one row", async () => {
     await band("owner");
-    expect(host.querySelector(".summ-slider-name")).toBeNull();
-    expect(host.querySelector(".summ-controls")?.textContent ?? "").not.toMatch(/Brief|Simple|Fuller/);
+    expect(host.querySelector("input[type=range]"), "the slider is gone").toBeNull();
+    expect(host.querySelector(".summ-controls")?.textContent).toBe("BriefFullerThread");
+  });
+});
+
+/* -------------------------------------------------------- Brief first -- */
+
+/**
+ * **Brief is shown as soon as it is written, while Fuller is still on its way**
+ * (docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2, and
+ * GPT Sol's S3 on that stage's plan).
+ *
+ * The real `SummaryBand`, so the real `useSimple` and `useStepJob`, over the
+ * stubbed queue and the stubbed GET. What moves between the cases is what a
+ * poll and a read would move: the job list, the completion the engine
+ * announces, and when the stored summary's GET lands.
+ *
+ * **Mutation, watched red on 2026-10-04.** `keptPreview` in
+ * src/web/useSimple.ts made to forget the preview when no job is current: the
+ * deferred-read, failed-read and failed-job cases go red, and the Fuller case
+ * at its failed half; the rest stay green.
+ */
+describe("Brief, before Fuller is written", () => {
+  const NEW_BRIEF = "A newer Brief that has not been stored.";
+  const RUNNING_LABEL = "Writing it in plain words";
+
+  /** The job as the poll shows it while `simple` runs, with Brief on its step or not. */
+  function writing(id: string, paragraphs: SimpleSummary["levels"]["brief"] | null): Job {
+    return {
+      id,
+      ownerId: "owner" as Job["ownerId"],
+      slug: "a-piece",
+      status: "running",
+      createdAt: "2026-10-04T09:00:00.000Z",
+      startedAt: "2026-10-04T09:00:01.000Z",
+      steps: [
+        {
+          name: "simple",
+          label: RUNNING_LABEL,
+          status: "running",
+          startedAt: "2026-10-04T09:00:01.000Z",
+          ...(paragraphs ? { preview: { kind: "simple-brief" as const, paragraphs } } : {}),
+        },
+      ],
+    };
+  }
+
+  /** The same job once it is over: off the running set, and with no preview on its row. */
+  function ended(job: Job, status: "done" | "error", error?: string): Job {
+    return {
+      ...job,
+      status,
+      finishedAt: "2026-10-04T09:01:00.000Z",
+      ...(error ? { error } : {}),
+      steps: job.steps.map(({ preview: _gone, ...step }) => ({
+        ...step,
+        status,
+        ...(error ? { error } : {}),
+      })),
+    };
+  }
+
+  /** A fresh element each time, of the same types: React draws the same band again rather than bailing out. */
+  let bandElement: () => ReactElement = () => createElement("div");
+
+  async function ownerBand(view: "brief" | "fuller"): Promise<void> {
+    history.replaceState(null, "", `/read/a-piece?mode=summary${view === "fuller" ? "&summary=fuller" : ""}`);
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    bandElement = () =>
+      createElement(
+        NuqsAdapter,
+        null,
+        createElement(SummaryBand, { slug: "a-piece", article: ARTICLE, onJump: () => {} }),
+      );
+    await act(async () => root.render(bandElement()));
+    await settle();
+  }
+
+  /** What the next poll shows: a new list, and the band drawn again over it. */
+  async function showJobs(next: Job[]): Promise<void> {
+    jobs = next;
+    await act(async () => root.render(bandElement()));
+    await settle();
+  }
+
+  /** The engine announcing a finished job, which is what makes the hook read again. */
+  async function announce(job: Job): Promise<void> {
+    await act(async () => finished?.(job));
+    await settle();
+  }
+
+  const paras = (): string[] => [...host.querySelectorAll(".simple-para .simple-text")].map((p) => p.textContent ?? "");
+  const buttons = (): string[] => [...host.querySelectorAll("button")].map((b) => b.textContent?.trim() ?? "");
+
+  it("draws Brief's paragraphs, doors and all, with the progress under them", async () => {
+    await ownerBand("brief");
+    expect(text()).toContain(SIMPLE_NONE_OWNER);
+    await showJobs([writing("job-a", null)]);
+    expect(paras(), "nothing to show before Brief is written").toEqual([]);
+
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(
+      [...host.querySelectorAll(".simple-para a.block-ref")].map((a) => a.getAttribute("data-block-link")),
+    ).toEqual([EARLY, MIDDLE, LATER]);
+    expect(text()).toContain(RUNNING_LABEL);
+    expect(buttons()).toContain("Stop");
+    expect(text()).not.toContain(SIMPLE_NONE_OWNER);
+    expect(text(), "the empty state's hint is not drawn over the paragraphs").not.toContain("Brief appears first");
+    expect(posts, "showing it spends nothing").toEqual([]);
+  });
+
+  it("on Fuller, says Brief is ready and draws none of Brief's text", async () => {
+    await ownerBand("fuller");
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    expect(text()).toContain(SIMPLE_FULLER_PENDING);
+    expect(text()).toContain(RUNNING_LABEL);
+    expect(text()).not.toContain(WHAT);
+    expect(paras()).toEqual([]);
+
+    /* And when the write fails, it stops saying Fuller is on its way. */
+    const failed = ended(writing("job-a", null), "error", "The AI service is busy right now.");
+    await showJobs([failed]);
+    expect(text()).toContain(SIMPLE_FULLER_NOT_WRITTEN);
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(text()).toContain("The AI service is busy right now.");
+    expect(text()).not.toContain(WHAT);
+  });
+
+  it("keeps Brief on screen from the job finishing until the stored summary has loaded", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    expect(paras()).toEqual([WHAT, WHY]);
+
+    /* The job is over and its read has gone out and not come back. */
+    let land: () => void = () => {};
+    artefactGate = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    artefactStatus = 200;
+    const before = simpleGets().length;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(simpleGets().length, "the completion has to have started a read").toBe(before + 1);
+    expect(paras(), "an empty band between the job and the read").toEqual([WHAT, WHY]);
+    expect(text()).not.toContain(SIMPLE_NONE_OWNER);
+
+    /* It lands: the stored summary, whose Brief is the same words. */
+    await act(async () => land());
+    await settle();
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(text()).not.toContain(RUNNING_LABEL);
+    /* And it is the stored one now: Fuller is there to move to. */
+    await pressSegment("Fuller");
+    expect(text()).toContain(FULLER_TEXT);
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(posts).toEqual([]);
+  });
+
+  it("keeps Brief on screen beside the read error when the completion read fails", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+
+    artefactFails = true;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(host.querySelector(".read-error"), "the failed read is said").not.toBeNull();
+    expect(paras()).toEqual([WHAT, WHY]);
+  });
+
+  it("keeps Fuller legible while the completion read is pending, with a read-only retry", async () => {
+    await ownerBand("fuller");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    let land = () => {};
+    artefactGate = new Promise<void>((resolve) => { land = resolve; });
+    artefactStatus = 200;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    expect(text()).toContain("The summary hasn't loaded yet.");
+    expect(text()).not.toContain(SIMPLE_FULLER_PENDING);
+    expect(buttons()).toContain("Try again");
+    expect(buttons()).not.toContain("Write it");
+    const before = simpleGets().length;
+    await act(async () => host.querySelector<HTMLButtonElement>(".read-error button")?.click());
+    expect(posts).toEqual([]);
+    await act(async () => land());
+    await settle();
+    expect(simpleGets().length).toBeGreaterThan(before);
+    expect(text()).toContain(FULLER_TEXT);
+  });
+
+  it("keeps Brief visible during a retry of a failed completion read", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    artefactFails = true;
+    await showJobs([ended(job, "done")]);
+    await announce(ended(job, "done"));
+    artefactFails = false;
+    let land = () => {};
+    artefactGate = new Promise<void>((resolve) => { land = resolve; });
+    artefactStatus = 200;
+    await act(async () => host.querySelector<HTMLButtonElement>(".read-error button")?.click());
+    expect(paras()).toEqual([WHAT, WHY]);
+    await act(async () => land());
+    await settle();
+    expect(paras()).toEqual([WHAT, WHY]);
+    expect(posts).toEqual([]);
+  });
+
+  it("drops the remembered Brief when the same job is requeued for a new attempt", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+    expect(paras()).toEqual([WHAT, WHY]);
+    const queued = { ...writing("job-a", null), status: "queued" as const, requeues: 1 };
+    await showJobs([queued]);
+    expect(paras()).toEqual([]);
+    await showJobs([{ ...writing("job-a", null), requeues: 1 }]);
+    expect(paras()).toEqual([]);
+  });
+
+  it("keeps Brief when a later step is paused and simple itself is already done", async () => {
+    await ownerBand("brief");
+    await showJobs([writing("job-a", artefact().levels.brief)]);
+    const paused = writing("job-a", null);
+    paused.steps[0]!.status = "done";
+    paused.status = "queued";
+    paused.requeues = 1;
+    await showJobs([paused]);
+    expect(paras(), "the new attempt will keep the finished simple step").toEqual([WHAT, WHY]);
+    await showJobs([{ ...paused, status: "running" }]);
+    expect(paras()).toEqual([WHAT, WHY]);
+  });
+
+  it("keeps Brief beside the failure when the job fails, and drops it when a retry starts", async () => {
+    await ownerBand("brief");
+    const job = writing("job-a", artefact().levels.brief);
+    await showJobs([job]);
+
+    await showJobs([ended(job, "error", "The AI service is busy right now.")]);
+    expect(paras(), "Brief was shown, so it stays").toEqual([WHAT, WHY]);
+    expect(text()).toContain("The AI service is busy right now.");
+    expect(buttons()).toContain("Retry");
+
+    /* The retry is a new job, and it writes both levels again. */
+    const successor = { ...writing("job-b", null), status: "queued" as const };
+    retryAnswer = successor;
+    const retry = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Retry");
+    await act(async () => retry?.click());
+    await settle();
+    expect(retried).toEqual(["job-a"]);
+    await showJobs([successor, ended(job, "error", "The AI service is busy right now.")]);
+    expect(paras(), "the failed attempt's Brief under the new attempt").toEqual([]);
+    expect(text()).not.toContain(WHAT);
+
+    /* And it does not come back when the successor leaves the list. */
+    await showJobs([ended(job, "error", "The AI service is busy right now.")]);
+    expect(text()).not.toContain(WHAT);
+  });
+
+  it("goes on drawing the stored summary while a forced rewrite carries a newer Brief", async () => {
+    artefactStatus = 200;
+    await ownerBand("brief");
+    expect(paras()).toEqual([WHAT, WHY]);
+
+    await showJobs([writing("job-a", [{ text: NEW_BRIEF, ids: [EARLY] }])]);
+    expect(paras(), "the old summary stays until both new levels are stored").toEqual([WHAT, WHY]);
+    expect(text()).not.toContain(NEW_BRIEF);
+  });
+
+  it("never shows a visitor a preview", async () => {
+    jobs = [writing("job-a", [{ text: NEW_BRIEF, ids: [EARLY] }])];
+    history.replaceState(null, "", "/read/a-piece?mode=summary");
+    const { NuqsAdapter } = await import("nuqs/adapters/react");
+    await act(async () => {
+      root.render(
+        createElement(
+          NuqsAdapter,
+          null,
+          createElement(VisitorSummaryBand, {
+            slug: "a-piece",
+            simple: undefined,
+            thread: undefined,
+            article: ARTICLE,
+            onJump: () => {},
+          }),
+        ),
+      );
+    });
+    await settle();
+    expect(text()).toContain(SIMPLE_NONE_VISITOR);
+    expect(text()).not.toContain(NEW_BRIEF);
+    expect(paras()).toEqual([]);
+    expect(gets, "a visitor's band reads nothing").toEqual([]);
   });
 });

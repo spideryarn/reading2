@@ -68,14 +68,13 @@
  * The four designs this was chosen from, and the two things it is a bet on, are
  * in docs/plans/260826b-glossary-prioritised-order.md.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import {
   ExternalLink,
   Eye,
   Globe,
   Info,
   LoaderCircle,
-  RotateCcw,
   Search,
   TextSearch,
   Trash2,
@@ -85,10 +84,19 @@ import type { AddedTerm, BlockId, GlossaryEntry, GlossaryLookup, Job } from "../
 import { parseAskedTerm } from "../asked-term.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
+import { isImeComposing } from "./key-chord.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { Tooltip } from "./Tooltip.js";
+import {
+  ASK_ENTRY_IN_CHAT,
+  AskInChatButton,
+  type GlossaryEntryChats,
+  OPEN_ENTRY_CHAT,
+  OriginChatMark,
+} from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
 /* One `hostOf`, not four. src/urls.ts has said since 2026-08-26 that the copies
    in this file, CommentDialog and ChatPanel should converge on it "when somebody
    is next in those files" — the hover card (ProseHoverCard.tsx) made this the
@@ -108,17 +116,24 @@ import {
   survivesThreshold,
   type ThresholdResult,
 } from "./threshold.js";
+import { ThresholdSlider } from "./ThresholdSlider.js";
 import type { LookKept, UseGlossary } from "./useGlossary.js";
 import type { StepFailure } from "./useStepJob.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { builtButEmpty, codeOfMessage } from "../messages.js";
 import { MAX_ASKED_TERM } from "../asked-term.js";
+import { pendingGlossaryAsk, subscribeGlossaryAsk, takeGlossaryAsk } from "./glossary-ask-handoff.js";
+import { freshRunOffered, glossaryFindMoreOffered } from "./find-more.js";
+import { useFindMoreHandOff } from "./useFindMoreHandOff.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
 import { WrittenForYou } from "./WrittenForYou.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job writing it,
@@ -207,8 +222,17 @@ export type GlossaryAccess =
       glossary: { entries: GlossaryEntry[] } | null;
       /** The ones the owner hid, for the *Hidden (n)* section and nothing else; absent is none. Plan 261002c § 2. */
       hidden?: readonly GlossaryEntry[];
+      /**
+       * **A chat about one entry**: what an entry's *Ask in chat* and its
+       * mark need (OriginChat.tsx § `ItemChats`; plan 261006d). On the owner's
+       * arm because a visitor has no chat: with `chats?: never` below, a
+       * visitor's panel cannot be handed one. Optional, so a panel drawn
+       * without it (most tests) has no button; that `Reader` passes it is
+       * held by tests/glossary-and-citations-ask-in-chat.test.tsx.
+       */
+      chats?: GlossaryEntryChats;
     }
-  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never; hidden?: never };
+  | { kind: "visitor"; glossary: { entries: GlossaryEntry[] }; owner?: never; hidden?: never; chats?: never };
 
 interface Props {
   access: GlossaryAccess;
@@ -236,8 +260,8 @@ interface Props {
    *
    * **Given the term, and it goes with the reader.** Called with the term the
    * box actually sent (`UseGlossary.askTerm`); `Reader` turns it into a question
-   * in a fresh conversation's composer, sent only when the reader presses Send
-   * — Greg, 2026-09-11, *"fresh"*. Until then it was a bare mode switch and the
+   * and sends it as a fresh conversation's first (the press is the Send since
+   * 2026-10-06, plan 261006j) — Greg, 2026-09-11, *"fresh"*. Until then it was a bare mode switch and the
    * reader typed the word twice. `askAboutTerm` in src/web/chat-handoff.ts, and
    * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
    */
@@ -276,6 +300,29 @@ export function GlossaryPanel({
      `error` is about the list, and this is about one press, so it is the
      panel's own — drawn in the same place, the band's error line. */
   const [hideFailed, setHideFailed] = useState<string | null>(null);
+  /* **Find more, once, for its two callers**: the run row's button below, and
+     the command bar's *Glossary › Find more* (plan 261004k), which opens this
+     band and leaves a press for it to take. **In the list's own recorded
+     setting**, not the current profile: `existingFor` refuses to append
+     across a profile difference, so asking a plain list's Find more for the
+     profile would *rewrite* it — dropping every term the model did not return
+     again — under a button that says "more". The *Use your profile* checkbox
+     used to carry this, seeded from the list; since it went on 2026-09-13 the
+     list's `profiled` is passed directly. useGlossary.ts § `more`;
+     tests/glossary-find-more-keeps-the-lists-profile.test.tsx.
+
+     The bar's press is made only if a fresh Find more is what this band is
+     offering now, and is used up either way (useFindMoreHandOff.ts). */
+  const findMore = () => owner?.more(owner.profiled) ?? Promise.resolve();
+  useFindMoreHandOff({
+    slug: owner?.slug ?? null,
+    mode: "glossary",
+    /* The list and the job list must both have answered. Until the first job
+       poll, `job === null` means “not known”, not “none” (code review F10). */
+    settled: owner !== null && owner.status !== "loading" && owner.loaded,
+    offered: owner !== null && glossaryFindMoreOffered(owner),
+    press: () => void findMore(),
+  });
   const setHidden = owner
     ? (id: string, hide: boolean) => {
         setHideFailed(null);
@@ -295,15 +342,14 @@ export function GlossaryPanel({
      the server says it does not, so this rewrites. `find` would be unforced
      and could skip. Plan 261002b. */
   const badge =
-    glossary && owner?.profiled ? (
+    glossary && owner ? (
       <WrittenForYou
-        written
+        written={owner.profiled}
         changed={owner.profileChanged}
         slug={owner.slug}
-        compact
         regenerate={{
           run: () => void owner.more(true),
-          busy: owner.job !== null || owner.starting,
+          busy: owner.job !== null || owner.starting || owner.rewriting,
           refresh: () => owner.refresh(),
         }}
       />
@@ -364,6 +410,7 @@ export function GlossaryPanel({
           is still a fragment rather than `null`, for the reason above: the row
           holds its place while the list is coming, and the corner sits in it
           (mode-band.css floors a head at the corner's height). */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={sorts.length > 0 ? null : <></>}
     >
       {/* **The run row, first thing in the column**, since 2026-10-03 — Greg,
@@ -371,29 +418,32 @@ export function GlossaryPanel({
           Add it back, at the top of the column"*. It was pinned in the foot,
           and hidden there on an outdated list (plan 260929c) — most lists, and
           Greg's. Now it shows on every owner's finished list, and says what
-          its run will do: *Find more* when it appends, *Find terms again* when
+          its run will do: *Find more* when it appends, *Write a new list* when
           it rewrites (`MoreRow`). The guard is the one the foot had: an owner
           whose glossary has arrived.
-          docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1. */}
+          docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 1.
+          Since 2026-10-04 an appendable older prompt's list is appended to, so
+          the second label is the rare one (plan 261004f). */}
       {glossary && owner?.status === "ready" && owner.glossary ? (
         <MoreRow
           job={owner.job}
+          loaded={owner.loaded}
           starting={owner.starting}
           failed={owner.failed}
           stalled={owner.stalled}
           /* The server's verdict when it gave one (`panelRunKind`, which
-             also sees a changed or cleared profile); otherwise the two facts
-             the panel has. Plan 261003c, GPT Sol's plan review P1. */
+             also sees a changed or cleared profile). An older cached response
+             has no verdict and `outdated` cannot distinguish an appendable
+             glossary/4 list from an incompatible glossary/1 one, so that path
+             stays conservative and says rewrite. Current responses always
+             carry the precise answer. Plan 261003c, GPT Sol's plan review P1;
+             plan 261004f code review F7. */
           rewrites={owner.panelRun ? owner.panelRun === "rewrite" : owner.stale || owner.outdated}
-          /* **In the list's own recorded setting**, not the current profile.
-             `existingFor` refuses to append across a profile difference, so
-             asking a plain list's Find more for the profile would *rewrite*
-             it — dropping every term the model did not return again — under
-             a button that says "more". The *Use your profile* checkbox used
-             to carry this, seeded from the list; since it went on 2026-09-13
-             the list's `profiled` is passed directly. useGlossary.ts § `more`;
-             tests/glossary-find-more-keeps-the-lists-profile.test.tsx. */
-          onMore={() => owner.more(owner.profiled)}
+          foundNothing={owner.glossary.passes > 1 && owner.glossary.lastAdded === 0}
+          /* In the list's own recorded setting — `findMore` above. */
+          onMore={findMore}
+          waiting={owner.rewriting ? (owner.error ? "held" : "read") : null}
+          onRead={owner.refresh}
           onCancel={owner.cancel}
         />
       ) : null}
@@ -439,7 +489,7 @@ export function GlossaryPanel({
         <GateSlider entries={all} gate={gate} moved={chosenGate !== null} onGate={onGate} />
       )}
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
       {hideFailed && <p className="gloss-error">{hideFailed}</p>}
 
       {orphanedLookup && (
@@ -449,7 +499,7 @@ export function GlossaryPanel({
         </p>
       )}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for a glossary…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for a glossary…</BandWaiting>}
 
       {/* **A visitor's list is already here or it is not**, so there is no
           loading state and no offer to build one — a piece with no glossary
@@ -509,8 +559,8 @@ export function GlossaryPanel({
                 <TriangleAlert size={13} />
                 These terms describe an older version of the article.
               </p>
-              {/* **No run button of its own since 2026-10-03**: *Find terms
-                  again* at the top of the column is the same rewrite, and two
+              {/* **No run button of its own since 2026-10-03**: *Write a new
+                  list* at the top of the column is the same rewrite, and two
                   buttons each drawing the one job's progress was a second
                   place to look. GPT Sol's plan review of 261003c, P2. */}
             </div>
@@ -518,7 +568,8 @@ export function GlossaryPanel({
           {/* **No banner for an outdated glossary** (older prompt, same
               article) — Greg, 2026-09-29 (SPIDERYARN-READING2-55): *"it's not
               worth bugging the user about it."* Plan 260929c. The run row at
-              the top says *Find terms again* on such a list (plan 261003c). */}
+              the top says *Find more* on such a list, and adds to it (plan
+              261004f). */}
 
           {/* One list again, in every order. It was a `div` wrapping two headed
               `ol`s from 2026-08-26 until 2026-09-03, when the threshold started
@@ -564,6 +615,9 @@ export function GlossaryPanel({
                   lookFailed={
                     owner?.lookFailed?.id === entry.id ? owner.lookFailed.message : null
                   }
+                  /* The owner's alone: a visitor's entry draws neither the
+                     button nor the mark. */
+                  chats={access.kind === "owner" ? (access.chats ?? null) : null}
                   onSelect={() => {
                     // Pressing the selected term again clears it, which is
                     // what takes the underlines back out of the prose.
@@ -1147,6 +1201,15 @@ function SortBar({
  * A native `<input type="range">` rather than anything built: it is draggable,
  * arrow-key steppable, announced by screen readers and touch-friendly for free,
  * and `accent-color` is the whole of the styling it needs.
+ *
+ * **The row itself is `ThresholdSlider`** (src/web/ThresholdSlider.tsx) since
+ * 2026-10-04 — it was drawn here until then, and the decisions above are
+ * the ones that component carries for every panel. What stays here is the one
+ * pass and this panel's numbers and words. The reset appears only once there is
+ * something to undo (a reset that is always there is a permanent invitation to
+ * a state you are already in), and the foot line is there always, never
+ * conditionally: an empty list under a slider is otherwise ambiguous between
+ * "there is nothing here" and "you have hidden it all".
  */
 function GateSlider({
   entries,
@@ -1163,55 +1226,22 @@ function GateSlider({
      `N of M` and the foot line have to agree, and the way they cannot disagree
      is for there to be one result rather than a filter beside a counter. */
   const { visible, hiddenCount } = visibleEntries(entries, gate);
-  const note = gateNote(hiddenCount, entries.length);
-  const count = `${visible.length} of ${entries.length}`;
-
   return (
-    <div className="gloss-gate">
-      <div className="gloss-gate-row">
-        <label className="gloss-gate-label" htmlFor="gloss-gate">
-          threshold
-        </label>
-        <span className="gloss-gate-value">
-          {gate.toFixed(2)} · {count}
-        </span>
-        {/* Only once there is something to undo. A reset that is always there
-            is a permanent invitation to a state you are already in. */}
-        {moved && (
-          <button
-            type="button"
-            className="gloss-gate-reset"
-            title={`Back to ${PRIORITY_GATE.toFixed(2)}`}
-            aria-label={`Reset the threshold to ${PRIORITY_GATE.toFixed(2)}`}
-            onClick={() => onGate(null)}
-          >
-            <RotateCcw size={11} />
-          </button>
-        )}
-      </div>
-      <input
-        id="gloss-gate"
-        className="gloss-gate-range"
-        type="range"
-        min={0}
-        max={gateMax(entries, gate)}
-        step={GATE_STEP}
-        value={gate}
-        title="How high a term has to score to stay on screen: the model's difficulty × its centrality. Left shows more terms, right fewer."
-        /* The thumb's position is a number nobody can hear. This is what makes
-           it audible, and it is the count rather than the product because the
-           count is what the reader is aiming at. **"showing", not
-           "promoting"** — an unscored term is shown without being promoted. */
-        aria-valuetext={`${gate.toFixed(2)}, showing ${count} terms`}
-        onChange={(e) => onGate(Number.parseFloat(e.target.value))}
-      />
-      {/* Always, never conditionally: present wherever the slider is, absent
-          wherever it is not. A line that is sometimes missing for a *different*
-          reason teaches the reader nothing, and an empty list under a slider is
-          otherwise ambiguous between "there is nothing here" and "you have
-          hidden it all". */}
-      <p className="gloss-gate-note">{note}</p>
-    </div>
+    <ThresholdSlider
+      id="gloss-gate"
+      value={gate}
+      max={gateMax(entries, gate)}
+      defaultValue={PRIORITY_GATE}
+      moved={moved}
+      visible={visible.length}
+      total={entries.length}
+      /* **"showing … terms", not "promoting"** in the spoken value — an
+         unscored term is shown without being promoted. */
+      noun="terms"
+      title="How high a term has to score to stay on screen: the model's difficulty × its centrality. Left shows more terms, right fewer."
+      note={gateNote(hiddenCount, entries.length)}
+      onChange={onGate}
+    />
   );
 }
 
@@ -1233,6 +1263,7 @@ function Term({
   lookBusy,
   lookDraft,
   lookFailed,
+  chats,
   onSelect,
   onJump,
   onHide,
@@ -1282,6 +1313,8 @@ function Term({
   /** This term's lookup as it arrives, or what arrived before it broke. */
   lookDraft: string | null;
   lookFailed: string | null;
+  /** `null` for a visitor: no *Ask in chat*, and no mark. `Looked` draws both. */
+  chats: GlossaryEntryChats | null;
   onSelect(): void;
   onJump(id: BlockId): void;
   /**
@@ -1475,6 +1508,7 @@ function Term({
             unquoted={unquoted}
             draft={lookDraft}
             failed={lookFailed}
+            chats={chats}
           />
 
           {entry.aliases.length > 0 && (
@@ -1512,7 +1546,17 @@ function Term({
                 {entry.blocks.length === 1 ? "used in" : `used in ${entry.blocks.length} places`}
               </span>
               {entry.blocks.map((id) => (
-                <BlockRef key={id} id={id} onJump={onJump} />
+                <BlockRef
+                  key={id}
+                  id={id}
+                  /* Recorded, as the stepper's own arrows record it below, so
+                     Next goes on from the chip the reader pressed. Until
+                     2026-10-07 the chip jumped and the counter stayed put. */
+                  onJump={(to) => {
+                    setAtBlock(id);
+                    onJump(to);
+                  }}
+                />
               ))}
               {/* Greg, 2026-08-26: *"a way in both Ideas and Glossary modes to
                   jump to prev/next exemplifying block"*. The chips have always
@@ -1643,6 +1687,37 @@ function AskATerm({
     setTerm("");
   }, [addedId, addedHasArrived, onTerm, clearAsked]);
 
+  /* **A term the command bar asked for** — its *Look up “X” in this article*
+     row (plan 261003f, Stage 1.2) moved the reader here and left the term in
+     a one-shot hand-off (glossary-ask-handoff.ts). Taken once, put in the box
+     so the reader sees what was asked, and asked exactly as the Look up button
+     asks: one `POST …/ask`, and no glossary run (GPT Sol's F1).
+
+     **Taken on a timer, not in the effect.** `<StrictMode>` runs this effect,
+     its cleanup, and the effect again on mount; useGlossary.ts's slug cleanup
+     runs `clearAsked` in that same gap, which would abort an ask started by
+     the first run. The timer the first run sets is cleared by its cleanup, so
+     only the second asks — and the take is atomic besides.
+     tests/glossary-ask-from-the-command-bar.test.tsx. */
+  const readHandOff = useCallback(() => pendingGlossaryAsk(owner.slug), [owner.slug]);
+  const handOff = useSyncExternalStore(subscribeGlossaryAsk, readHandOff, readHandOff);
+  useEffect(() => {
+    if (handOff === null) return;
+    const timer = setTimeout(() => {
+      const asked = takeGlossaryAsk(owner.slug, handOff);
+      if (asked === null) return;
+      /* The command is a new lookup, just as editing this box and pressing Look
+         up again is. Disown an older stream before asking: `ask` deliberately
+         admits only one request, so without this a command pressed over a live
+         lookup was consumed and then dropped while the old answer carried on
+         under the new term. */
+      clearAsked();
+      setTerm(asked);
+      void ask(asked);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [handOff, owner.slug, ask, clearAsked]);
+
   return (
     <div className="gloss-ask">
       <form
@@ -1677,6 +1752,14 @@ function AskATerm({
           maxLength={MAX_ASKED_TERM}
           placeholder="Look up a term…"
           aria-label="Look up a term in this article"
+          /* A key an input method is using is not ours
+             (docs/project/keyboard.md): its Enter accepts a candidate, so the
+             form must not submit a half-chosen word, and its Escape dismisses
+             the list, where the browser itself would empty a `type="search"`
+             box. Every other key is left alone. */
+          onKeyDown={(e) => {
+            if (isImeComposing(e) && (e.key === "Enter" || e.key === "Escape")) e.preventDefault();
+          }}
           onChange={(e) => {
             setTerm(e.target.value);
             /* The previous answer goes the moment the box changes. It belongs to
@@ -1931,6 +2014,7 @@ export function Looked({
   unquoted,
   draft,
   failed,
+  chats = null,
 }: {
   entry: GlossaryEntry;
   look: ((id: string) => Promise<unknown>) | null;
@@ -1955,8 +2039,20 @@ export function Looked({
       `worthRetrying` in src/messages.ts § The two places that deliberately do
       not ask. */
   failed: string | null;
+  /**
+   * **A chat about this entry**: its *Ask in chat*, beside Dig deeper, and the
+   * mark that reopens a chat already started from it (plan 261006d, D5).
+   * `null` or absent for a visitor, who gets neither.
+   */
+  chats?: GlossaryEntryChats | null;
 }) {
   const lookup = entry.lookup;
+  /* The chat started from this entry, if there is one: matched by the entry's
+     id alone, so it survives a regeneration that rewords the name. The name
+     in the origin built here is not compared (`sameOrigin`). */
+  const chat = chats
+    ? threadForOrigin(chats.summaries, { mode: "glossary", itemId: entry.id, quote: entry.name })
+    : undefined;
 
   /* **Nothing at all for a visitor**, rather than a disabled button. The
      marked-not-hidden rule is about controls a reader would otherwise go
@@ -2009,6 +2105,21 @@ export function Looked({
           {looking ? <LoaderCircle size={12} className="cmt-spinner" /> : <Globe size={12} />}
           {looking ? "Digging deeper…" : lookup ? "Dig deeper again" : "Dig deeper"}
         </button>
+        {/* **Not disabled for a term the article never quotes**, unlike its
+            neighbour: Dig deeper needs a passage to anchor to, a chat does
+            not. It is its own conversation, so it does not wait for a
+            running lookup either. The press sends the question (plan 261006j). It stays once a chat exists: a second one
+            can be started. */}
+        {chats && (
+          <AskInChatButton
+            label={ASK_ENTRY_IN_CHAT}
+            className="gloss-btn gloss-ask-chat"
+            onAsk={() => chats.onAsk(entry)}
+          />
+        )}
+        {/* The way back to the chat started from this entry, on a line of its
+            own under the buttons. */}
+        {chats && chat && <OriginChatMark chat={chat} label={OPEN_ENTRY_CHAT} onOpen={chats.onOpen} />}
         {/* The wait needs saying, not just spinning through. This call sends the
             whole article and may run a web search on top, so it can sit for the
             better part of a minute — long enough that a bare spinner reads as
@@ -2203,14 +2314,20 @@ export function LookupAnswer({ lookup }: { lookup: GlossaryLookup }) {
  */
 function MoreRow({
   job,
+  loaded,
   starting,
   failed,
   stalled,
   rewrites,
+  foundNothing,
+  waiting,
+  onRead,
   onMore,
   onCancel,
 }: {
   job: Job | null;
+  /** False until the first job poll; while false, whether a run exists is unknown. */
+  loaded: boolean;
   /**
    * **The POST has gone and the poll has not seen the job yet** — `useStepJob.ts`
    * § `starting`, which exists for exactly the gap this foot used to fall into.
@@ -2229,28 +2346,54 @@ function MoreRow({
   stalled: boolean;
   /**
    * **This press writes a fresh list rather than adding to this one** —
-   * `existingFor` (src/glossary.ts) refuses to merge when the article, the
-   * prompt version or the profile differs, so a button saying "more" would
-   * replace the list (the reason plan 260929c hid it on an outdated list). It
-   * says *Find terms again* instead, and its tooltip says so plainly: some
-   * terms may go. Terms the reader added survive (they are outside the
+   * `existingFor` (src/glossary.ts) refuses to merge when the article or the
+   * profile differs, or the list is one today's prompt may not add to
+   * (`appendableVersion`), so a button saying "more" would replace the list.
+   * It says *Write a new list* instead, with the reason under it, and its
+   * tooltip says the rest plainly: some terms may go. Terms the reader added survive (they are outside the
    * document, `glossary_lookups.added_name`), and so does anything keyed to an
    * entry the new run finds again under the same name, when the article has
    * not changed (`idsByTerm`); a `?term=` link, a *Dig deeper* answer or a hide
    * on a term that does not come back has nothing to attach to.
    */
   rewrites: boolean;
+  /**
+   * The last pass was a *Find more* and it added nothing — `Glossary.lastAdded`
+   * of 0 on a list of more than one pass. False on a list from before the
+   * field existed.
+   */
+  foundNothing: boolean;
+  /**
+   * **The run this row offers was pressed, has finished, and its list has not
+   * loaded** (`UseGlossary.rewriting`). `"read"` draws the read in the button's
+   * place; `"held"` only disables the button, because a failed re-read already
+   * has *Try again* beside its sentence.
+   */
+  waiting: "read" | "held" | null;
+  /** Read the list again. Never spends. */
+  onRead(): Promise<void>;
   onMore(): Promise<void>;
   onCancel(id: string): void;
 }) {
-  const label = rewrites ? "Find terms again" : "Find more";
+  /* *Find terms again* until 2026-10-04, when Greg could not tell what it did
+     (spya-try2v7). It is rare now — an appendable list an older prompt wrote
+     is added to (src/glossary.ts § `appendableVersion`) — and what is left
+     says what it does in the label, and why in a sentence beside it rather
+     than only in a tooltip, which a touch screen never shows. Plan 261004f. */
+  const label = rewrites ? "Write a new list" : "Find more";
   const title = rewrites
     ? "Writes a fresh list rather than adding to this one, so some terms here may not come back. Terms you added are kept"
     : "Another model call, told what it has already found, looking for the quieter terms";
   /* The stale banner used to own the transport warning and the failed job's
      Retry. Consolidating the controls must carry both, not just the spinner
-     and Stop — code review of plan 261003c. */
-  if (job || starting || failed) {
+     and Stop — code review of plan 261003c.
+
+     `freshRunOffered` is the question the command bar's Find more asks before
+     it presses `onMore` (find-more.ts): while this branch is drawn, it does
+     not. */
+  if (!loaded) return null;
+
+  if (!freshRunOffered({ job, loaded, starting, failed })) {
     return (
       <div className="gloss-more">
         <Progress
@@ -2266,14 +2409,42 @@ function MoreRow({
     );
   }
 
+  /* A forced run has finished and its list is not here yet: this gives way to
+     a read, never to a second paid run. rewrite-hold.ts. */
+  if (waiting === "read") {
+    return (
+      <div className="gloss-more">
+        <RewriteWaiting line="The new terms haven't loaded yet." onRead={onRead} className="tw:m-0" />
+      </div>
+    );
+  }
+
   return (
     <div className="gloss-more">
       <div className="gloss-actions">
-        <button type="button" className="gloss-btn" title={title} onClick={() => void onMore()}>
+        <button
+          type="button"
+          className="gloss-btn"
+          title={title}
+          /* Held with the retry elsewhere: `ReadError`, under a failed re-read. */
+          disabled={waiting === "held"}
+          onClick={() => void onMore()}
+        >
           <Search size={12} />
           {label}
         </button>
       </div>
+      {rewrites ? (
+        <p className="gloss-more-note">
+          The article, your profile or how we write glossaries has changed since these terms were
+          found, so this replaces the list. Terms you added are kept.
+        </p>
+      ) : foundNothing ? (
+        /* Said, because a *Find more* that found nothing otherwise looks like
+           a button that did nothing — QuotesPanel.tsx § `Foot` has the same
+           line for the same reason. */
+        <p className="gloss-more-note">No more terms worth adding turned up.</p>
+      ) : null}
     </div>
   );
 }

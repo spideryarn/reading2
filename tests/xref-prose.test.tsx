@@ -12,7 +12,7 @@
  *    ends a selection does not (Sol F6);
  *  - a `<mark class="xref" data-xref="x-0">` written by the article itself does
  *    nothing on click, Enter or hover (Sol F2, the nonce);
- *  - over a term, a citation, a comment and a search's wash the xref wins, on a
+ *  - over a term, a citation, a comment and a search's outline the xref wins, on a
  *    mouse and on a finger (Sol F5), with a control for each so a pass cannot be
  *    the other handler simply never running;
  *  - a stale artefact draws nothing, and a GET that lands after the first render
@@ -420,7 +420,7 @@ describe("the xref wins the words it is on", () => {
     expect(openedComments).toEqual(["c1"]);
   });
 
-  it("over a search's wash, on a mouse and on a finger", () => {
+  it("over a search's outline, on a mouse and on a finger", () => {
     const text = "Sleep loss reduced recall by 38% in older adults.";
     const start = text.indexOf("38% in older");
     const hitMarks = new Map<BlockId, unknown[]>([
@@ -470,7 +470,10 @@ describe("where the links come from", () => {
     await act(async () => {
       answer(new Response(JSON.stringify(response(false)), { status: 200 }));
     });
-    expect(vi.mocked(apiFetch)).toHaveBeenCalledWith("/api/crossrefs/the-slug");
+    /* With the header that asks for "none yet" as `200 null` (plan 261006g). */
+    expect(vi.mocked(apiFetch)).toHaveBeenCalledWith("/api/crossrefs/the-slug", {
+      headers: { "x-spideryarn-none-yet-as-null": "1" },
+    });
     expect(row(A).querySelectorAll("mark.xref").length).toBeGreaterThan(0);
     expect(row(B).querySelectorAll("mark.xref").length).toBeGreaterThan(0);
   });

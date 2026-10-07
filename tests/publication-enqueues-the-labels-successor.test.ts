@@ -79,9 +79,34 @@
  * | the warning branch in `logPublication` deleted | case 9 → `nothing in the log says this revision will never get its labels` |
  * | `lockArticlesInSlugOrder` made to return everything it was handed | case 15d → `a row whose article could not be locked was reported as locked`. **Not** 15c, which cannot tell the two apart and says so in its own comment |
  *
+ * ## And the four for the shared predicate, watched red on 2026-10-07
+ *
+ * `anotherJobCarriesLabelsIn` (src/store/pg-jobs.ts), which the live ending and
+ * the sweep both ask since that day. Before the live path asked at all, case 15f
+ * → `a live failure told the reader the labels failed while the job that makes
+ * them was still queued: expected 'failed' to be 'pending'`.
+ *
+ * | mutation | red |
+ * |---|---|
+ * | the settling job no longer excluded | cases 8 and 15g → `expected 'pending' to be 'failed'`: a running job counted as its own successor, so no live failure marks at all |
+ * | the owner clause dropped | case 15g alone → `a job that will not make this article's labels was counted as the one that will` |
+ * | the `labels` membership test dropped, so any active job counts | case 15g alone, same line |
+ * | the sweep's call removed | case 15e alone, as on 2026-09-07 |
+ *
+ * The review added a direct predicate test for `not(cancelling)`, with the
+ * same running row as a positive control once its flag is cleared, and two
+ * cases pinning the live trigger. Run against Postgres on 2026-10-07 and each
+ * watched red:
+ *
+ * | mutation | red |
+ * |---|---|
+ * | `not(jobs.cancelling)` dropped from `anotherJobCarriesLabelsIn` | *a cancelling labels job is not a promise of more labels* alone → `a cancelling job promised work it may abandon: expected true to be false` |
+ * | the live trigger's `unfinished === "labels"` widened to any unfinished step | *a live structure error leaves pending labels alone* alone → `expected 'failed' to be 'pending'` |
+ * | the live trigger's `ending.status === "error"` dropped | *a live labels cancelled leaves pending labels alone* alone, same line |
+ *
  * **The sixth is the one worth reading twice, because the symptom is not what
  * the design expected.** The plan predicted that copying the parent's
- * `ingestEventId` would surface as *"Too many articles already called X"* —
+ * `ingestEventId` would surface as *"Too many articles already have that name"* —
  * `jobs_ingest_event_unique` sending `enqueue`'s allocation loop round twenty
  * times. That is true of `enqueue`. `enqueueSuccessorIn` has no loop and an
  * `onConflictDoNothing`, so the insert is **swallowed**: no successor exists at
@@ -118,7 +143,7 @@ import { runAsOwner } from "../src/owner.js";
 import { STEPS } from "../src/pipeline.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { mintAttempt, workKeyFor } from "../src/store/jobs.js";
-import { pgJobStore, ingestProvenanceOf } from "../src/store/pg-jobs.js";
+import { anotherJobCarriesLabelsIn, pgJobStore, ingestProvenanceOf } from "../src/store/pg-jobs.js";
 import { openPgStoreSession } from "../src/store/pg-session.js";
 import { settleReservation } from "../src/store/pg-billing.js";
 import {
@@ -795,7 +820,7 @@ describe("publication enqueues the free labels successor", () => {
   /**
    * **Accidental charge, route 2: copying the parent's `ingestEventId` onto the
    * successor.** `jobs_ingest_event_unique` refuses it — but it surfaces to the
-   * reader as *"Too many articles already called X"* after twenty allocation
+   * reader as *"Too many articles already have that name"* after twenty allocation
    * passes, which is safe and completely unintelligible. So this case names the
    * route in its title and proves both halves: the successor carries none, and
    * the copy is what the database refuses.
@@ -1492,6 +1517,159 @@ describe("publication enqueues the free labels successor", () => {
       .soft((await jobRow(successor?.id ?? ""))?.status, "the successor is no longer there to keep it")
       .toBe("queued");
   });
+
+  /* ---------------------------------------------------------------- 15f -- */
+
+  /**
+   * **The same question, asked by the claimant that is still alive** — and until
+   * 2026-10-07 it got the other answer.
+   *
+   * The case above is the sweep. This is the same ordering with job A failing
+   * *live* inside `labels` rather than lapsing: `settleIn`
+   * (src/store/pg-session.ts) marked the base `failed` without asking whether
+   * anybody else was still going to make the labels, while B sat queued to make
+   * exactly those. One article, one position, two durable answers depending on
+   * how the job died
+   * (docs/investigations/261006d-seventh-sweep-depth-pipeline-and-import-queue-sol.md
+   * § PQ3). Both callers now ask `anotherJobCarriesLabelsIn`
+   * (src/store/pg-jobs.ts).
+   */
+  mine("a live labels failure does not mark failed while another job still carries the labels", async () => {
+    const slug = `${SLUG_PREFIX}promise-elsewhere-live`;
+    const fixture = await publishPending(slug);
+    const successor = (await successorsOf(slug))[0];
+    expect(successor, "no successor to be the surviving promise").toBeTruthy();
+
+    const older = await queueBehind(slug, ["structure", "labels"], new Date(Date.now() - 60_000));
+    const attempt = mintAttempt();
+    const job = await claimWhenSlotFree(older, attempt);
+    const session = await openPgStoreSession({ slug, job: { id: older, attemptId: attempt } });
+    await session.beginStep(slug, "labels");
+    await session.settleJob({
+      kind: "end",
+      jobId: older,
+      attempt,
+      ending: { status: "error", steps: job.steps, error: "the label pass gave up" },
+    });
+
+    expect((await jobRow(older))?.status, "job A did not end as an error").toBe("error");
+    expect
+      .soft(
+        await navLabelStatusOf(fixture.revisionId),
+        "a live failure told the reader the labels failed while the job that makes them was still queued",
+      )
+      .toBe("pending");
+    expect
+      .soft((await jobRow(successor?.id ?? ""))?.status, "the successor is no longer there to keep it")
+      .toBe("queued");
+  });
+
+  /* ---------------------------------------------------------------- 15g -- */
+
+  /**
+   * **And what does not count as somebody else carrying them**, one control per
+   * clause of `anotherJobCarriesLabelsIn`, each through the live path:
+   *
+   * - **another reader's job on a slug of the same name** — slugs are per owner,
+   *   so that job is about a different article;
+   * - **a job with no `labels` step** — it is in the article's line and will make
+   *   nothing the sentence promises.
+   *
+   * The third clause, *the settling job is not its own successor*, is case 8
+   * itself: there the failing job is `running` with a `labels` step when the mark
+   * is decided, and nothing else is queued.
+   */
+  mine("a live labels failure still marks failed when nobody else of this owner carries them", async () => {
+    const slug = `${SLUG_PREFIX}promise-nowhere-live`;
+    const fixture = await publishPending(slug);
+    const claimed = await claimTheSuccessor(slug);
+
+    /* Theirs: same slug, `labels`, queued — and not this article. */
+    const theirs = mintId();
+    await db()
+      .insert(jobsTable)
+      .values({
+        id: theirs,
+        ownerId: STRANGER,
+        slug,
+        steps: stepsOf(["labels"]),
+        status: "queued",
+        workKey: `labels-successor-fixture-${theirs}`,
+      });
+    /* Ours, queued behind, and buying something else. */
+    const unrelated = await queueBehind(slug, ["arc"]);
+
+    await claimed.session.beginStep(slug, "labels");
+    await claimed.session.settleJob({
+      kind: "end",
+      jobId: claimed.jobId,
+      attempt: claimed.attempt,
+      ending: { status: "error", steps: claimed.steps, error: "the label pass gave up" },
+    });
+
+    expect((await jobRow(theirs))?.status, "the stranger's job is not there to be miscounted").toBe(
+      "queued",
+    );
+    expect((await jobRow(unrelated))?.status).toBe("queued");
+    expect(
+      await navLabelStatusOf(fixture.revisionId),
+      "a job that will not make this article's labels was counted as the one that will",
+    ).toBe("failed");
+  });
+
+  // The coordinator normally serializes claims on an article. Ask the helper
+  // directly so this clause needs no impossible pair of live claimants.
+  mine("a cancelling labels job is not a promise of more labels", async () => {
+    const slug = `${SLUG_PREFIX}cancelling-carrier`;
+    await publishPending(slug);
+    const successor = (await successorsOf(slug))[0];
+    expect(successor).toBeTruthy();
+    const id = successor!.id;
+    await db().update(jobsTable).set({
+      status: "running",
+      attemptId: mintAttempt(),
+      leaseExpiresAt: new Date(Date.now() + LEASE_MS),
+      cancelling: true,
+    }).where(eq(jobsTable.id, id));
+    try {
+      const carries = () => db().transaction((tx) =>
+        anotherJobCarriesLabelsIn(tx, { slug, ownerId: OWNER }, []),
+      );
+      expect(await carries(), "a cancelling job promised work it may abandon").toBe(false);
+      await db().update(jobsTable).set({ cancelling: false }).where(eq(jobsTable.id, id));
+      expect(await carries(), "the same running labels job must be a positive control").toBe(true);
+    } finally {
+      await db().update(jobsTable).set({
+        status: "cancelled", cancelling: false, attemptId: null, leaseExpiresAt: null,
+      }).where(eq(jobsTable.id, id));
+    }
+  });
+
+  // Pin the live trigger separately from successor suppression. Otherwise a
+  // broadened membership check can pass 15f because its successor still exists.
+  for (const { step, status } of [
+    { step: "structure", status: "error" },
+    { step: "labels", status: "cancelled" },
+  ] as const) {
+    mine(`a live ${step} ${status} leaves pending labels alone`, async () => {
+      const slug = `${SLUG_PREFIX}live-trigger-${step}-${status}`;
+      const fixture = await publishPending(slug);
+      const successor = (await successorsOf(slug))[0];
+      expect(successor).toBeTruthy();
+      await db().delete(jobsTable).where(eq(jobsTable.id, successor!.id));
+      const id = await queueBehind(slug, ["structure", "labels"]);
+      const attempt = mintAttempt();
+      const job = await claimWhenSlotFree(id, attempt);
+      const session = await openPgStoreSession({ slug, job: { id, attemptId: attempt } });
+      await session.beginStep(slug, step);
+      await session.settleJob({
+        kind: "end", jobId: id, attempt,
+        ending: { status, steps: job.steps, ...(status === "error" ? { error: "gave up" } : {}) },
+      });
+      expect((await jobRow(id))?.status).toBe(status);
+      expect(await navLabelStatusOf(fixture.revisionId)).toBe("pending");
+    });
+  }
 
   /* ---------------------------------------------------------------- 15d -- */
 

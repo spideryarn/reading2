@@ -46,14 +46,38 @@ vi.mock("../src/monitoring.js", async (importOriginal) => {
   return { ...actual, captureFailure: vi.fn(actual.captureFailure) };
 });
 
-import { eq, sql } from "drizzle-orm";
+/* The blocks each quick search was handed, watched at the model boundary and
+   passed straight through (plan 261005i § D). */
+const quickSearchSaw = vi.hoisted(() => ({ blocks: [] as unknown[] }));
+vi.mock("../src/quick-search.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/quick-search.js")>();
+  return {
+    ...actual,
+    quickPassagesStream: (request: Parameters<typeof actual.quickPassagesStream>[0]) => {
+      quickSearchSaw.blocks.push(request.blocks);
+      return actual.quickPassagesStream(request);
+    },
+  };
+});
+
+import { and, eq, sql } from "drizzle-orm";
 
 import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, articleTags, comments as commentsTable, readerProfiles } from "../src/db/schema.js";
+import {
+  articles,
+  articleTags,
+  comments as commentsTable,
+  readerProfiles,
+  revisionBlocks,
+  searchRuns,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
+import { UNEXPECTED_FAILURE } from "../src/messages.js";
 import { captureFailure } from "../src/monitoring.js";
+import { hashBlocks } from "../src/source-hash.js";
+import type { Block } from "../src/types.js";
 import { originalUrl } from "../src/vercel.js";
 import { ADMIN_FEEDBACK_DEFAULT_LIMIT } from "../src/types.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -742,6 +766,7 @@ describe("the reader routes", () => {
          boundary drops — leaving a client to read "not sent" as "off" by luck
          rather than by contract. docs/project/experimental-features.md. */
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -752,13 +777,14 @@ describe("the reader routes", () => {
     /* **Both fields, whichever one the body changed.** A reply whose shape
        follows the request is one a client reads as "the other thing is unset".
        `routes.ts` § patchReader. */
-    expect(w.body).toEqual({ profile: "A physicist.", experimentalSince: null });
+    expect(w.body).toEqual({ profile: "A physicist.", experimentalSince: null, autoModes: true });
     expect((await call("GET", "/api/reader")).body).toEqual({
       profile: "A physicist.",
       purpose: null,
       purposeFailed: false,
       hasProfile: true,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -784,6 +810,7 @@ describe("the reader routes", () => {
     expect((await call("PATCH", "/api/reader", { profile: null })).body).toEqual({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
     expect((await call("GET", "/api/reader")).body).toMatchObject({
       profile: null,
@@ -795,6 +822,7 @@ describe("the reader routes", () => {
     expect((await call("PATCH", "/api/reader", { profile: "   " })).body).toEqual({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
     /* Whitespace is *clearing*, not storing three spaces — and the row says so
        rather than the reply. */
@@ -826,6 +854,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: false,
       experimentalSince: null,
+      autoModes: true,
     });
     /* …and the article still has one. `purpose` comes back as the reader's
        own words rather than as a flag, because the panel prints each box
@@ -839,6 +868,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: true,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -876,6 +906,7 @@ describe("the reader routes", () => {
     expect((await call("PATCH", "/api/reader", { experimental: false })).body).toEqual({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
     expect(
       (await call("GET", "/api/reader")).body as unknown as { experimentalSince: null },
@@ -903,6 +934,70 @@ describe("the reader routes", () => {
     ).toBe("A physicist.");
   });
 
+  /* ------------------------------------- generate the main modes: the box -- */
+
+  /**
+   * Plan 261004h: the add page's tick box is the reader's setting, read by the
+   * publication that queues the modes. A boolean on the wire and a time in the
+   * row — `auto_modes_off_at`, null for on — so the row is read directly here:
+   * the reply alone cannot say the time was kept.
+   */
+  const offAt = async (): Promise<Date | null | undefined> => {
+    const [row] = await getDb()
+      .select({ at: readerProfiles.autoModesOffAt })
+      .from(readerProfiles)
+      .where(eq(readerProfiles.ownerId, TEST_OWNER));
+    return row?.at;
+  };
+
+  it("has the main modes on until they are switched off, and stamps when", async () => {
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ autoModes: true });
+    expect(await offAt(), "a reader who never chose has a row").toBeUndefined();
+
+    const off = await call("PATCH", "/api/reader", { autoModes: false });
+    expect(off.status).toBe(200);
+    expect(off.body).toEqual({ profile: null, experimentalSince: null, autoModes: false });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ autoModes: false });
+    const stamped = await offAt();
+    expect(stamped, "switching off stored no time").toBeInstanceOf(Date);
+
+    /* Off twice keeps the first time: the column answers *since when*. */
+    await call("PATCH", "/api/reader", { autoModes: false });
+    expect((await offAt())?.getTime()).toBe(stamped?.getTime());
+
+    const on = await call("PATCH", "/api/reader", { autoModes: true });
+    expect(on.body).toEqual({ profile: null, experimentalSince: null, autoModes: true });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({ autoModes: true });
+    expect(await offAt(), "switching back on left the time").toBeNull();
+  });
+
+  it("refuses an autoModes that is not a boolean, and one sent with another field", async () => {
+    const wrong = await call("PATCH", "/api/reader", { autoModes: "false" });
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error).toMatch(/autoModes must be true or false/);
+    const both = await call("PATCH", "/api/reader", { autoModes: false, experimental: true });
+    expect(both.status).toBe(400);
+    expect(both.body.error).toMatch(/one at a time/);
+    expect(await offAt(), "a refused request wrote the row").toBeUndefined();
+  });
+
+  it("keeps the main-modes choice and the other two fields out of each other's way", async () => {
+    await call("PATCH", "/api/reader", { autoModes: false });
+    await call("PATCH", "/api/reader", { profile: "A physicist." });
+    await call("PATCH", "/api/reader", { experimental: true });
+    expect((await call("GET", "/api/reader")).body).toMatchObject({
+      profile: "A physicist.",
+      autoModes: false,
+    });
+    await call("PATCH", "/api/reader", { autoModes: true });
+    const body = (await call("GET", "/api/reader")).body as unknown as {
+      profile: string | null;
+      experimentalSince: string | null;
+    };
+    expect(body.profile).toBe("A physicist.");
+    expect(body.experimentalSince).toBeTypeOf("string");
+  });
+
   it("refuses to change both halves in one request", async () => {
     /* Two store operations and no transaction across them: a body carrying both
        could save the profile, fail on the switch, and answer with an error
@@ -915,6 +1010,7 @@ describe("the reader routes", () => {
     expect((await call("GET", "/api/reader")).body).toMatchObject({
       profile: null,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -945,6 +1041,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: false,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -977,6 +1074,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: false,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 
@@ -995,6 +1093,7 @@ describe("the reader routes", () => {
       purposeFailed: false,
       hasProfile: true,
       experimentalSince: null,
+      autoModes: true,
     });
   });
 });
@@ -1092,7 +1191,10 @@ describe("a slug that is not a slug", () => {
     for (const [method, url] of cases) {
       const r = await call(method, url);
       expect(r.status, url).toBe(400);
-      expect(r.body.error, url).toMatch(/Not a slug/);
+      /* The words and nothing else: this message is written to the request log,
+         so it does not echo the value (src/routes.ts § `logRequest`, plan
+         261004e § R11). */
+      expect(r.body.error, url).toBe("Not a slug");
     }
   });
 
@@ -1106,7 +1208,7 @@ describe("a slug that is not a slug", () => {
       start: 0,
     });
     expect(r.status).toBe(400);
-    expect(r.body.error).toMatch(/Not a slug/);
+    expect(r.body.error).toBe("Not a slug");
   });
 
   it("refuses the shapes that are not traversals but are not slugs either", async () => {
@@ -1988,8 +2090,8 @@ describe("POST /api/search/:slug is a stream too", () => {
        Driven through `DELETE /api/search/:slug/:id` rather than through the
        store, so the route that carries the id is in the path too — this is the
        only case in the file that reaches that method. */
-    const keep = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to keep", "meaning"));
-    const doomed = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "the one to delete", "meaning"));
+    const keep = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "feedfacefeedface", "the one to keep", "meaning"));
+    const doomed = await asTestOwner(() => searchStore.begin(SEARCH_SLUG, "feedfacefeedface", "the one to delete", "meaning"));
     expect(keep.run.id).not.toBe(doomed.run.id);
 
     const r = await call("DELETE", `/api/search/${SEARCH_SLUG}/${doomed.run.id}`);
@@ -2147,6 +2249,125 @@ describe("POST /api/search/:slug is a stream too", () => {
         [id, "the prize the essay won", "done"],
       ]);
     });
+
+    it("stamps the run with the hash of the blocks the model was sent, across a re-extraction", async () => {
+      /* Plan 261005i § D. The article changes between the pending row and the
+         model call: the wrapped `begin` commits, the block is rewritten, and
+         only then does `begin` answer. Rewritten straight in the table, which
+         is not how a re-extraction lands, but it moves the fingerprint and what
+         `loadArticle` returns, and that is all this needs. */
+      fetchMock.mockImplementation(async (_url: string, init: RequestInit) => decisionsReply(init));
+      const original = searchArticle!.blocks.find((b) => b.id === BLOCK)!;
+      const thisBlock = and(
+        eq(revisionBlocks.articleId, searchArticle!.articleId),
+        eq(revisionBlocks.blockId, BLOCK),
+      );
+      const real = searchStore.begin.bind(searchStore);
+      const spy = vi
+        .spyOn(searchStore, "begin")
+        .mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+          const begun = await real(...args);
+          await getDb()
+            .update(revisionBlocks)
+            .set({ text: `${original.text} Re-extracted.` })
+            .where(thisBlock);
+          return begun;
+        });
+      quickSearchSaw.blocks.length = 0;
+      try {
+        const r = await callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+          criterion: "the prize the essay won",
+          kind: "quick",
+        });
+        expect(parseFrames(r.frames).map((f) => f.event)).toContain("done");
+        expect(spy, "the wrapped begin never ran, so nothing was tested").toHaveBeenCalledTimes(1);
+        expect(quickSearchSaw.blocks).toHaveLength(1);
+        const sent = quickSearchSaw.blocks[0] as Block[];
+        const [stored] = await asTestOwner(() => searchStore.load(SEARCH_SLUG));
+        expect(stored?.sourceHash, "the row's hash is not of the blocks the model was sent").toBe(
+          hashBlocks(sent),
+        );
+        /* And the article really did change under the request, or the equality
+           above is the trivial one. */
+        expect(await asTestOwner(() => searchStore.sourceHash(SEARCH_SLUG))).not.toBe(
+          stored?.sourceHash,
+        );
+      } finally {
+        spy.mockRestore();
+        await getDb().update(revisionBlocks).set({ text: original.text }).where(thisBlock);
+      }
+    });
+
+    it("an older attempt whose begin answers late does not take the revision's hold with it", async () => {
+      /* Plan 261005i § C. The older request's `begin` commits and its return
+         is then delayed, so it registers its hold *after* the revision that
+         superseded it. With one holder per key the older took the key over and
+         deleted it on the way out. */
+      const held: { release: () => void }[] = [];
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        const h = heldCall(init);
+        held.push({ release: h.release });
+        return h.reply;
+      });
+      const real = searchStore.begin.bind(searchStore);
+      let olderCommitted!: () => void;
+      const committed = new Promise<void>((r) => (olderCommitted = r));
+      let letOlderReturn!: () => void;
+      const delayed = new Promise<void>((r) => (letOlderReturn = r));
+      const spy = vi
+        .spyOn(searchStore, "begin")
+        .mockImplementationOnce(async (...args: Parameters<typeof real>) => {
+          const begun = await real(...args);
+          olderCommitted();
+          await delayed;
+          return begun;
+        });
+      const id = mintId();
+      let older: ReturnType<typeof callStreaming> | undefined;
+      let newer: ReturnType<typeof callStreaming> | undefined;
+      try {
+        older = callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+          id,
+          criterion: "the prize",
+          kind: "quick",
+        });
+        await committed;
+        newer = callStreaming("POST", `/api/search/${SEARCH_SLUG}`, {
+          id,
+          criterion: "the prize the essay won",
+          kind: "quick",
+          revises: true,
+        });
+        await until(() => held.length === 1);
+
+        letOlderReturn();
+        await until(() => held.length === 2);
+        held[1]!.release();
+        const olderReply = parseFrames((await older).frames);
+        // Fenced: the older attempt's answer was written nowhere.
+        expect(olderReply.some((f) => f.event === "done")).toBe(false);
+
+        /* Aged past the grace, so only the hold can spare the revision. */
+        await getDb()
+          .update(searchRuns)
+          .set({ attemptStartedAt: new Date(Date.now() - 10 * 60_000) })
+          .where(and(eq(searchRuns.articleId, searchArticle!.articleId), eq(searchRuns.id, id)));
+        const mid = await call("GET", `/api/search/${SEARCH_SLUG}`);
+        expect(
+          (mid.body.runs as { criterion: string; status: string }[]).map((r) => [r.criterion, r.status]),
+          "the older attempt took the revision's hold with it",
+        ).toEqual([["the prize the essay won", "pending"]]);
+
+        held[0]!.release();
+        expect(parseFrames((await newer).frames).map((f) => f.event)).toEqual(["begin", "hit", "done"]);
+        expect(liveRuns(SEARCH_SLUG).has(id)).toBe(false);
+      } finally {
+        spy.mockRestore();
+        letOlderReturn();
+        for (const h of held) h.release();
+        await Promise.allSettled([older, newer]);
+      }
+    });
   });
 });
 
@@ -2194,7 +2415,7 @@ describe("PATCH /api/search/:slug/:id", () => {
 
   /** A saved search on the colour article, through the store the route uses. */
   async function saved(criterion = "arguments against"): Promise<string> {
-    const { run } = await asTestOwner(() => searchStore.begin(COLOUR_SLUG, criterion, "meaning"));
+    const { run } = await asTestOwner(() => searchStore.begin(COLOUR_SLUG, "feedfacefeedface", criterion, "meaning"));
     return run.id;
   }
 
@@ -2652,6 +2873,30 @@ describe("the admin gate", () => {
       expect(refused.status).toBe(403);
       expect(refused.body).not.toHaveProperty("reports");
       expect(list).toHaveBeenCalledTimes(2);
+    } finally {
+      list.mockRestore();
+    }
+  });
+
+  /* **A missing file inside a request is a fault, not "no such article".**
+     `serveApi`'s catch mapped any `ENOENT` to 404 for the filesystem store,
+     which went on 2026-09-05. Left in place it did three wrong things to an
+     unexpected one: answered 404, so nothing was reported; and, because a
+     status under 500 passes the error's own message through, put the path on
+     the wire. docs/plans/261004e-fifth-sweep-cluster-8-routes-deletions.md § R9. */
+  it("answers an ENOENT thrown inside a handler as a reported 500, without its message", async () => {
+    const enoent = Object.assign(
+      new Error("ENOENT: no such file or directory, open '/var/task/api-dist/missing.json'"),
+      { code: "ENOENT" },
+    );
+    const list = vi.spyOn(adminStore, "listFeedbackAcrossOwners").mockRejectedValueOnce(enoent);
+    vi.mocked(captureFailure).mockClear();
+    try {
+      const r = await call("GET", "/api/admin/feedback");
+      expect(r.status).toBe(500);
+      expect(r.body.error).toBe(UNEXPECTED_FAILURE.message);
+      expect(JSON.stringify(r.body)).not.toContain("/var/task");
+      expect(vi.mocked(captureFailure).mock.calls.map((c) => c[0])).toContain(enoent);
     } finally {
       list.mockRestore();
     }

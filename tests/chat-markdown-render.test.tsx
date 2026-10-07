@@ -163,7 +163,7 @@ describe("the marks inside a block", () => {
 
   it("keeps a citation chip working inside a list item", () => {
     paint("- because of this [spya-k3m9qt]");
-    const chip = host.querySelector("li .cite .block-ref");
+    const chip = host.querySelector("li .cite-chips .block-ref");
     expect(chip).not.toBeNull();
     expect(chip?.textContent).toContain("k3m9qt");
   });
@@ -172,7 +172,7 @@ describe("the marks inside a block", () => {
     paint("The id `spya-k3m9qt` and the markers `**` are literal.");
     expect(all("code.fmt-code").map((c) => c.textContent)).toEqual(["spya-k3m9qt", "**"]);
     // No chip: inside backticks an id is a string being discussed, not a place.
-    expect(all(".cite")).toHaveLength(0);
+    expect(all(".cite-chips")).toHaveLength(0);
     expect(all("strong")).toHaveLength(0);
   });
 
@@ -194,7 +194,7 @@ describe("the marks inside a block", () => {
     // would put a second, differently-behaved thing inside something the
     // reader is about to press.
     paint("[spya-k3m9qt](https://a.example/x)");
-    expect(all(".cite")).toHaveLength(0);
+    expect(all(".cite-chips")).toHaveLength(0);
     expect(host.querySelector("a.cited-link")?.textContent).toContain("spya-k3m9qt");
   });
 });
@@ -202,7 +202,7 @@ describe("the marks inside a block", () => {
 describe("the links a model wrote", () => {
   it("prints the real host beside the model's label", () => {
     // The label is the model's to choose and the host is the one part of a
-    // link an untrusted page cannot dress up. docs/plans/chat-web-links.md.
+    // link an untrusted page cannot dress up. docs/plans/260827ao-chat-web-links.md.
     paint("[the paper](https://not-anthropic.example/x)");
     expect(host.querySelector(".cited-link-host")?.textContent).toBe("not-anthropic.example");
   });
@@ -372,7 +372,7 @@ describe("the client and the server agree about what a citation is", () => {
     (citableText(answer).match(/spya-[a-z0-9]{6}/g) ?? []).length;
   const chipsOnScreen = (answer: string) => {
     paint(answer);
-    return all(".cite .block-ref").length;
+    return all(".cite-chips .block-ref").length;
   };
 
   it.each([
@@ -395,9 +395,63 @@ describe("the client and the server agree about what a citation is", () => {
     expect(chipsOnScreen(answer)).toBe(expected);
     expect(serverCount(answer)).toBe(expected);
   });
+
+  /**
+   * **The same agreement at the depth cap**, which is where it was broken.
+   *
+   * Both sides stop at `MAX_BLOCK_DEPTH` (src/citable.ts), and for five weeks
+   * both had a `MAX_DEPTH = 12` of their own with a comment saying the other
+   * was kept in step. The constants were equal and the two still disagreed,
+   * because the renderer counted **block nesting** (a quote, or a list item
+   * holding more than one paragraph) and `citableText` counted **every level of
+   * the tree** — the paragraph, the list *and* its item, each `strong`. So the
+   * server gave up eleven quotes deep where the renderer gives up at twelve, and
+   * six lists deep where the renderer still draws a chip. Found by a GPT Sol
+   * review of docs/plans/261006j-sixth-codebase-sweep-umbrella.md, 2026-10-06.
+   *
+   * The renderer's answer is the right one by definition: `citableText` is "the
+   * text a reader will actually be offered a citation in". Each row is a shape
+   * at one side of the limit, with the count the screen shows.
+   */
+  const ID = "[spya-k3m9qt]";
+  const quotes = (n: number) => "> ".repeat(n);
+  const lists = (n: number) => "- ".repeat(n);
+  /** A list item holding two paragraphs, the id in the second, `n` quotes deep. */
+  const looseItem = (n: number) =>
+    [`${quotes(n)}- first`, quotes(n).trimEnd(), `${quotes(n)}  see ${ID}`].join("\n");
+
+  it.each([
+    ["10 quotes", quotes(10) + ID, 1],
+    ["11 quotes, the last depth drawn", quotes(11) + ID, 1],
+    ["12 quotes, the first drawn as source", quotes(12) + ID, 0],
+    ["13 quotes", quotes(13) + ID, 0],
+    ["5 lists", lists(5) + ID, 1],
+    ["6 lists", lists(6) + ID, 1],
+    ["12 lists, the last depth drawn", lists(12) + ID, 1],
+    ["13 lists, the first drawn as source", lists(13) + ID, 0],
+    ["a one-paragraph item 11 quotes deep", `${quotes(11)}- ${ID}`, 1],
+    ["a one-paragraph item 12 quotes deep", `${quotes(12)}- ${ID}`, 0],
+    ["a two-paragraph item 10 quotes deep", looseItem(10), 1],
+    ["a two-paragraph item 11 quotes deep", looseItem(11), 0],
+    ["a list in a quote in a list", `- > - ${ID}`, 1],
+    ["bold italics 11 quotes deep", `${quotes(11)}**_${ID}_**`, 1],
+    ["bold italics 12 quotes deep", `${quotes(12)}**_${ID}_**`, 0],
+    ["bold italics 5 lists deep", `${lists(5)}**_${ID}_**`, 1],
+    ["a heading 11 quotes deep", `${quotes(11)}# on ${ID}`, 1],
+    ["a heading 12 quotes deep", `${quotes(12)}# on ${ID}`, 0],
+  ])("agrees at the depth cap: %s", (_what, answer, expected) => {
+    expect(chipsOnScreen(answer)).toBe(expected);
+    expect(serverCount(answer)).toBe(expected);
+  });
 });
 
 describe("what the second review caught", () => {
+  it("survives deeply nested quotes while the answer is streaming", () => {
+    expect(() => painting(`${"> ".repeat(10000)}spya-k3m9qt`)).not.toThrow();
+    expect(text()).toContain("spya-k3m9qt");
+    expect(all(".cite-chips .block-ref")).toHaveLength(0);
+  });
+
   it("survives Markdown nested past anything a model writes", () => {
     /* The parser handles 4,000 nested quote markers in 140ms; the RENDER WALK
        does not — `RangeError: Maximum call stack size exceeded` at around 2,400
@@ -453,7 +507,7 @@ describe("the summary panel, which reads marks but not structure", () => {
   it("reads bold and block ids", () => {
     summarise("He calls it **computational functionalism** [spya-k3m9qt].");
     expect(host.querySelector("strong")?.textContent).toBe("computational functionalism");
-    expect(host.querySelector(".cite .block-ref")).not.toBeNull();
+    expect(host.querySelector(".cite-chips .block-ref")).not.toBeNull();
   });
 
   it("emits no block elements, because it sits inside a <p>", () => {

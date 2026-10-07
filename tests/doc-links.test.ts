@@ -37,6 +37,21 @@ import { globSync } from "node:fs";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { describe, expect, it } from "vitest";
 
+import { DATED_FOLDERS, IMAGE_EXTENSIONS } from "../scripts/prune-old-screenshots.js";
+
+/**
+ * A link from a doc in one of the dated folders to an image that also lives in
+ * one. Those images are deleted a week after their last commit, so the link is
+ * allowed to be dead; see the test that uses this.
+ */
+function isPrunedScreenshotLink(from: string, target: string): boolean {
+  const inDated = (p: string) => DATED_FOLDERS.some((folder) => p.startsWith(`${folder}/`));
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(from), target.replace(/#.*$/, "")));
+  return (
+    inDated(from) && inDated(resolved) && (IMAGE_EXTENSIONS as readonly string[]).includes(path.extname(resolved).toLowerCase())
+  );
+}
+
 // infra/hetzner/README.md is named explicitly rather than picked up by a glob,
 // because it is the only markdown outside docs/ that is a runbook someone
 // follows literally — and it was outside this gate until 2026-08-31, which is
@@ -140,9 +155,16 @@ function unportableTarget(resolved: string): string | null {
 const stripFences = (md: string) => md.replace(/^```[\s\S]*?^```/gm, "");
 
 /**
- * GitHub's heading → anchor rule: lower-case, drop everything that isn't a
- * letter, number, space, hyphen or underscore (so backticks, colons, commas and
- * apostrophes all vanish), then spaces to hyphens.
+ * Heading → anchor: lower-case, drop everything that isn't a letter, number,
+ * space, hyphen or underscore (so backticks, colons, commas and apostrophes all
+ * vanish), then each **run** of spaces to one hyphen.
+ *
+ * That last step is where this is NOT GitHub's rule, which turns each space
+ * into a hyphen. The two differ on consecutive spaces, including those left
+ * when punctuation is dropped. A common case is an em dash: `Stage 3 — the dashboard` is
+ * `stage-3-the-dashboard` here and `stage-3--the-dashboard` on GitHub. An anchor
+ * written from GitHub habit therefore fails, and `suggestAnchor` below is what
+ * puts the right one in the failure message.
  */
 function slug(heading: string): string {
   return heading
@@ -185,6 +207,32 @@ interface Link {
   target: string;
   file: string;
   anchor: string;
+}
+
+/**
+ * The anchor somebody most likely meant by one that does not exist, or `null`.
+ *
+ * It answers only when exactly one real anchor is the same as the wanted one
+ * once every run of hyphens is a single hyphen — the GitHub-habit mistake `slug`
+ * describes. Two candidates is no answer: it cannot know which was meant.
+ *
+ * Deliberately not fuzzy. A nearest-by-edit-distance guess was planned and cut
+ * at review: `#overview-2` would be pointed at `#overview-1`, and a wrong
+ * suggestion taken on trust is a link that passes this test and goes to the
+ * wrong place — the silent failure this file exists to stop.
+ */
+function suggestAnchor(wanted: string, anchors: Set<string>): string | null {
+  const collapse = (s: string) => s.replace(/-+/g, "-");
+  const candidates = [...anchors].filter((a) => collapse(a) === collapse(wanted));
+  return candidates.length === 1 ? candidates[0]! : null;
+}
+
+/** One line of the "anchors that exist" failure: the broken link, and the fix when there is one. */
+function describeBrokenAnchor(l: Link, anchors: Set<string>): string {
+  const line = `${l.from} → ${l.target}`;
+  const meant = suggestAnchor(l.anchor, anchors);
+  if (!meant) return line;
+  return `${line} (did you mean #${meant}? Differs only in consecutive hyphens; this checker turns a run of spaces into ONE hyphen)`;
 }
 
 function linksIn(file: string): Link[] {
@@ -258,8 +306,25 @@ describe("documentation links", () => {
       // ends in one — so this exempts the citation without exempting the file.
       // Narrow on purpose: `foo.md#anchor` and plain `foo.ts` are still checked.
       .filter((l) => !/:\d+$/.test(l.target))
+      // A dated doc's link to a screenshot that has since been pruned. Greg,
+      // 2026-10-06: "old screenshots (>1w) can be deleted", and a plan left
+      // with a dead image link is the accepted cost (docs/project/overseer.md
+      // § Keeping `/home` from filling). Narrow on purpose: only an image, only
+      // linked from one of the folders scripts/prune-old-screenshots.ts prunes.
+      // A missing image linked from docs/project or a tutorial still fails.
+      .filter((l) => !isPrunedScreenshotLink(l.from, l.target))
       .map((l) => `${l.from} → ${l.target}`);
     expect(broken).toEqual([]);
+  });
+
+  it("exempts a pruned screenshot only where screenshots are pruned", () => {
+    expect(isPrunedScreenshotLink("docs/plans/260929e-plan.md", "260929e-shot-example.png")).toBe(true);
+    expect(isPrunedScreenshotLink("docs/postmortems/260929a-pm.md", "shots/A.JPG")).toBe(true);
+    expect(isPrunedScreenshotLink("docs/plans/260929e-plan.md", "260929e-review-sol.md")).toBe(false);
+    expect(isPrunedScreenshotLink("docs/project/marketing-pages.md", "hero.png")).toBe(false);
+    expect(isPrunedScreenshotLink("docs/tutorials/260901a-how.html", "figure.png")).toBe(false);
+    // Out of the dated folders by way of `..` is not a pruned screenshot.
+    expect(isPrunedScreenshotLink("docs/plans/260929e-plan.md", "../project/diagram.png")).toBe(false);
   });
 
   /**
@@ -322,8 +387,85 @@ describe("documentation links", () => {
     const broken = allLinks
       .filter((l) => l.anchor && existsSync(l.file) && l.file.endsWith(".md"))
       .filter((l) => !anchorsFor(l.file).has(l.anchor))
-      .map((l) => `${l.from} → ${l.target}`);
+      .map((l) => describeBrokenAnchor(l, anchorsFor(l.file)));
     expect(broken).toEqual([]);
+  });
+
+  /**
+   * The positive control for the message above, which is only ever printed when
+   * the list is not empty — so on a green tree nothing shows whether it helps.
+   *
+   * The first case is the one this exists for: on 2026-09-10 four plans in one
+   * day linked a heading containing an em dash with GitHub's two-hyphen anchor,
+   * and each went red with a line that said the link was wrong and not what the
+   * right one was.
+   */
+  it("says which anchor a broken link probably meant", () => {
+    const anchors = new Set([
+      slug("Stage 3 — the dashboard"),
+      slug("Stage 4 — the queue"),
+      slug("Principles"),
+    ]);
+    // The slug rule itself, pinned: one hyphen where GitHub gives two.
+    expect(anchors.has("stage-3-the-dashboard")).toBe(true);
+
+    // GitHub's anchor for an em-dash heading → the one this repo computes.
+    expect(suggestAnchor("stage-3--the-dashboard", anchors)).toBe("stage-3-the-dashboard");
+    // The other way round: the real anchor has the run, the link does not.
+    expect(suggestAnchor("the-editor-is-emacs-nw", new Set(["the-editor-is-emacs--nw"]))).toBe(
+      "the-editor-is-emacs--nw",
+    );
+    // Every run is collapsed, including runs longer than two hyphens.
+    expect(suggestAnchor("a---b--c", new Set(["a-b-c"]))).toBe("a-b-c");
+    expect(suggestAnchor("a-b-c", new Set(["a---b--c"]))).toBe("a---b--c");
+    // A repeated heading's suffix survives.
+    expect(suggestAnchor("a--b-1", new Set(["a-b", "a-b-1"]))).toBe("a-b-1");
+    // Two anchors that differ only in their hyphen runs → nothing; it cannot
+    // know which was meant.
+    expect(suggestAnchor("a---b", new Set(["a-b", "a--b"]))).toBeNull();
+    // A typo, a neighbouring stage or a stale anchor → nothing, rather than a
+    // confident wrong guess.
+    expect(suggestAnchor("principels", anchors)).toBeNull();
+    expect(suggestAnchor("stage-5-the-queue", anchors)).toBeNull();
+    expect(suggestAnchor("how-billing-works", anchors)).toBeNull();
+    expect(suggestAnchor("overview-2", new Set(["overview", "overview-1"]))).toBeNull();
+    expect(suggestAnchor("a--b", new Set())).toBeNull();
+    // Explicit ids are case-sensitive; only hyphen runs may differ.
+    expect(suggestAnchor("Editor--Mode", new Set(["editor-mode"]))).toBeNull();
+    expect(suggestAnchor("a--b", new Set(["a_b"]))).toBeNull();
+
+    const link: Link = {
+      from: "docs/plans/a.md",
+      target: "roadmap.md#stage-3--the-dashboard",
+      file: "docs/plans/roadmap.md",
+      anchor: "stage-3--the-dashboard",
+    };
+    const line = describeBrokenAnchor(link, anchors);
+    expect(line).toBe(
+      "docs/plans/a.md → roadmap.md#stage-3--the-dashboard (did you mean #stage-3-the-dashboard? Differs only in consecutive hyphens; this checker turns a run of spaces into ONE hyphen)",
+    );
+    // A literal id with repeated hyphens gets the same neutral explanation.
+    expect(
+      describeBrokenAnchor(
+        { ...link, target: "roadmap.md#Editor-Mode", anchor: "Editor-Mode" },
+        new Set(["Editor--Mode"]),
+      ),
+    ).toBe(
+      "docs/plans/a.md → roadmap.md#Editor-Mode (did you mean #Editor--Mode? Differs only in consecutive hyphens; this checker turns a run of spaces into ONE hyphen)",
+    );
+    // And with nothing to suggest, the line is what it always was.
+    expect(
+      describeBrokenAnchor(
+        { ...link, target: "roadmap.md#how-billing-works", anchor: "how-billing-works" },
+        anchors,
+      ),
+    ).toBe("docs/plans/a.md → roadmap.md#how-billing-works");
+    expect(
+      describeBrokenAnchor(
+        { ...link, target: "roadmap.md#a---b", anchor: "a---b" },
+        new Set(["a-b", "a--b"]),
+      ),
+    ).toBe("docs/plans/a.md → roadmap.md#a---b");
   });
 });
 

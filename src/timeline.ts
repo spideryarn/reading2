@@ -108,10 +108,8 @@ import path from "node:path";
 import { partsOf } from "./arc.js";
 import type { Article } from "./article-input.js";
 import { mintUniqueId } from "./ids.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import {
   type BlockFingerprint,
@@ -120,7 +118,7 @@ import {
   type MetaFingerprintDated,
 } from "./source-hash.js";
 import { findQuote } from "./quote-match.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -131,7 +129,9 @@ import { articleWithIds } from "./article-prompt.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import {
   countOrderConflicts,
+  dayFrame,
   orderEvents,
+  pieceYear,
   readWhen,
   type TimelineModality,
   type When,
@@ -519,7 +519,9 @@ function locatePhrase(phrase: string, occurrences: readonly PlacedOccurrence[]):
  *
  * It is checked with `readWhen` rather than with a second date scanner, so the
  * label is held to exactly the rule the date column is held to and there is one
- * definition of "is this date in this passage" rather than two.
+ * definition of "is this date in this passage" rather than two. Unlike a
+ * selector phrase, the label is displayed verbatim: any year it states must
+ * also be stated in the passage, even if the date column can fill a year.
  *
  * Three of the four refusals are innocent and only one is an offence:
  *
@@ -546,6 +548,7 @@ export function labelStatesAnUncitedDate(
       blockId: o.blockId,
       frame,
       within: { start: o.start, end: o.end },
+      requireStatedYear: true,
     });
     /* Any occurrence that vindicates the label settles it. `noDateInPhrase` is
        decided from the label alone, before the block is looked at, so the first
@@ -582,6 +585,8 @@ export function dateEvent(
   frame: string | null,
   modality: TimelineModality,
   dropped: Dropped,
+  /** The piece's own single stated year, for when there is no `frame` — `pieceYear`. */
+  assumedYear: number | null = null,
 ): Dating {
   /* No phrase is not a refusal. The article gives this event no time at all,
      which the prompt calls a correct answer and often the right one. */
@@ -597,15 +602,14 @@ export function dateEvent(
       frame,
       within: { start: o.start, end: o.end },
       direction,
+      assumedYear,
     });
     if (result.ok) return { kind: "dated", when: result.when };
     if (REFUSAL_RANK[result.reason] < REFUSAL_RANK[worst]) worst = result.reason;
   }
 
   dropped[worst]++;
-  /* The article's words go in the row either way, because on an article with no
-     publication date EVERY dated event lands here — the field arrives only by
-     re-extraction, so that is the common path on this shelf — and a row reading
+  /* The article's words go in the row either way, because a row reading
      "we could not read the date" with no words beside it tells the reader
      nothing they can check. */
   const located = locatePhrase(phrase, occurrences);
@@ -638,6 +642,7 @@ export function toEvents(
   frame: string | null,
   taken: Set<string>,
   dropped: Dropped,
+  assumedYear: number | null = null,
 ): TimelineEvent[] {
   const out: TimelineEvent[] = [];
   const raws = Array.isArray(raw) ? raw : [];
@@ -676,7 +681,7 @@ export function toEvents(
     out.push({
       id: mintUniqueId(taken),
       label,
-      dating: dateEvent(text(r.phrase), occurrences, frame, modality, dropped),
+      dating: dateEvent(text(r.phrase), occurrences, frame, modality, dropped, assumedYear),
       order,
       modality,
       /* The parser's working — `text` and `end` — stays out of the artefact.
@@ -721,6 +726,20 @@ export function evidenceKey(event: Pick<TimelineEvent, "dating" | "occurrences">
   return `${blocks}|${when ? `${when.earliest ?? ""}..${when.latest ?? ""}` : ""}`;
 }
 
+/** Only for the noYearFrame → piece-year migration; keep the same words and passages. */
+function yearlessEvidenceKey(event: TimelineEvent): string | null {
+  const phrase = event.dating.kind === "rejected" && event.dating.reason === "noYearFrame"
+    ? event.dating.phrase
+    : event.dating.kind === "dated" && event.dating.when.yearFrom === "piece"
+      ? event.dating.when.phrase : null;
+  if (!phrase) return null;
+  const fold = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const passages = [...new Set(event.occurrences.map((o) =>
+    JSON.stringify([o.blockId, fold(o.quote)]),
+  ))].sort();
+  return `yearless:${JSON.stringify([fold(phrase), passages])}`;
+}
+
 /**
  * Ids from the list this run is replacing, keyed by `evidenceKey`.
  *
@@ -743,12 +762,14 @@ export function idsByEvidence(onDisk: Timeline | null): Map<string, TimelineEven
        reader's `?event=` link and is the correct outcome; throwing here would
        fail the whole stage on an artefact it is about to replace. */
     if (!event || typeof event.id !== "string" || !Array.isArray(event.occurrences)) continue;
-    const key = evidenceKey(event);
-    if (seen.has(key)) {
-      ambiguous.add(key);
-      continue;
+    const migration = event.dating?.kind === "rejected" ? yearlessEvidenceKey(event) : null;
+    for (const key of [evidenceKey(event), ...(migration ? [migration] : [])]) {
+      if (seen.has(key)) {
+        ambiguous.add(key);
+        continue;
+      }
+      seen.set(key, event.id);
     }
-    seen.set(key, event.id);
   }
   for (const key of ambiguous) seen.delete(key);
   return seen;
@@ -768,11 +789,18 @@ export function inheritIds(
     const key = evidenceKey(event);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  return fresh.map((event) => {
+  const candidates = fresh.map((event) => {
     const key = evidenceKey(event);
-    const old = inherit.get(key);
-    if (!old || counts.get(key) !== 1) return event;
-    return { ...event, id: old };
+    if (counts.get(key) !== 1) return undefined;
+    const migration = event.dating.kind === "dated" ? yearlessEvidenceKey(event) : null;
+    return inherit.get(key) ?? (migration ? inherit.get(migration) : undefined);
+  });
+  // Aliases and ordinary keys must not let two rows claim one old id.
+  const claims = new Map<TimelineEventId, number>();
+  for (const id of candidates) if (id) claims.set(id, (claims.get(id) ?? 0) + 1);
+  return fresh.map((event, i) => {
+    const old = candidates[i];
+    return old && claims.get(old) === 1 ? { ...event, id: old } : event;
   });
 }
 
@@ -787,6 +815,12 @@ export function buildTimeline(
     power: ModelPower;
     /** The publication day, or null — and null is the common case on this shelf. */
     frame: string | null;
+    /**
+     * `Meta.fetchedAt`, or null. **Never a frame** (src/types.ts § `Meta`
+     * says why); it only decides whether the piece's own stated year is
+     * recent enough to assume when there is no `frame`.
+     */
+    fetchedAt: string | null;
     elapsedMs: number;
     inherit?: Map<string, TimelineEventId> | null;
     dropped: Dropped;
@@ -807,8 +841,27 @@ export function buildTimeline(
     );
   }
   const taken = new Set<string>(opts.inherit?.values() ?? []);
+  /* **No publication day, so the piece's own single stated year stands in** —
+     `pieceYear` in src/timeline-time.ts, Greg 2026-10-04 (spya-fyjac4). Read
+     from the same body blocks the model was shown, and never when there is a
+     usable publication date, which is the better frame.
+
+     **And only when it is the year we fetched the piece, or the one before.**
+     One full date in an old year is far more often a piece of history than
+     the year the piece is about: measured on production on 2026-10-05, 13 of
+     the 16 articles that state exactly one year state one older than that
+     (plan 261005d § Measured). With the guard, the assumption is "this is a
+     current piece about its own year", and it has two signs rather than one.
+     No fetch time, no assumption. */
+  const stated =
+    dayFrame(opts.frame) === null
+      ? pieceYear(opts.blocks.filter(isBodyEvidence).map((b) => b.text))
+      : null;
+  const fetchedYear = Number(dayFrame(opts.fetchedAt)?.slice(0, 4) ?? Number.NaN);
+  const assumedYear =
+    stated !== null && (stated === fetchedYear || stated === fetchedYear - 1) ? stated : null;
   const fresh = inheritIds(
-    toEvents(parsed.events, opts.blocks, opts.frame, taken, opts.dropped),
+    toEvents(parsed.events, opts.blocks, opts.frame, taken, opts.dropped, assumedYear),
     opts.inherit ?? null,
   );
   const raws = parsed.events.length;
@@ -1351,26 +1404,8 @@ export async function generateTimeline(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    /* `stop_details` is neither thrown nor logged — it is the provider's own
-       words about a request that carried the whole article. src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("timeline", maxTokens, ANSWER_TOKENS, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "timeline", maxTokens, ANSWER_TOKENS);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyDropped();
   const timeline = buildTimeline(parseJson(raw), {
@@ -1379,6 +1414,7 @@ export async function generateTimeline(opts: {
     blocks,
     sourceHash,
     frame,
+    fetchedAt: articleMeta?.fetchedAt ?? null,
     elapsedMs: Date.now() - started,
     inherit,
     dropped,

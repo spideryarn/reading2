@@ -1,8 +1,9 @@
 # Public-readable sharing, and what we tell the person who wrote it
 
 `/features/public-readable-sharing` — the single place the claims we make about republishing
-somebody else's article are written down. Part of
-[reading-view-overview.md](reading-view-overview.md).
+somebody else's article are written down.
+
+Up: [reading-view-overview.md](reading-view-overview.md)
 
 > Perhaps we should even have a separate page at `/features/public-readable-sharing` or similar that
 > describes this in more detail as the single source of truth, and then we can signpost to that from
@@ -15,6 +16,18 @@ Its two neighbours, and the split between them is the thing to hold on to:
 [privacy.md](privacy.md) is **what we will do when somebody asks**; and this is **what we do with an
 article in the meantime**. One home per fact, so the takedown promise is not restated here and the
 robots headers are not restated there.
+
+## In this doc
+
+- [§ The page has two readers](#the-page-has-two-readers-and-that-is-the-design-constraint) — the rules for writing or rewording the page
+- [§ Two of the five briefed claims were false](#two-of-the-five-briefed-claims-were-false-which-is-the-fact-worth-carrying-forward) — what is actually true about training, canonical, origin link and consent (and the review that found eight more overclaims)
+- [§ The three awkward facts](#the-three-awkward-facts-named-on-purpose) — what the page admits on purpose
+- [§ The banner on every shared article](#the-banner-on-every-shared-article) — what a visitor sees without looking for the page
+- [§ A private link](#a-private-link-the-same-republishing-to-fewer-people) — republishing to fewer people, and the Sharing section
+- [§ While the article is still importing](#while-the-article-is-still-importing) — a visitor who arrives early
+- [§ Where the code is](#where-the-code-is) — the page, strings, address and tests
+- [§ The claims that can go stale silently](#the-claims-that-can-go-stale-silently-and-the-test-that-holds-them) — which sentences are pinned to which file
+- [§ The simpler option that was passed over](#the-simpler-option-that-was-passed-over) — what we did not build
 
 ## The page has two readers, and that is the design constraint
 
@@ -42,7 +55,7 @@ code* names. **A rights-holder cannot check any of it and is relying on us to ha
 | Briefed | What is actually true |
 |---|---|
 | "zero-data-retention AI models that won't train on your work" | **False, and it has got worse.** When this was checked, `zdr: true` was set on dictation and nothing else, which made it false as a *blanket* claim. Since 2026-09-07 it is set on **nothing** (`AI_JOB_ROUTE`, [`src/ai-call.ts`](../../src/ai-call.ts)): dictation moved to `openai/gpt-transcribe` on the transcription endpoint, where OpenRouter does not apply routing preferences or `zdr` — [260907c](../plans/260907c-dictation-onto-an-openai-transcriber.md). Live conversation still does not go through the gateway at all ([ai-gateway.md](ai-gateway.md)). The page makes the *no-training* commitment carrying the same hedge `/privacy` gives it — that it rests partly on an account setting, so it is a commitment we hold ourselves to rather than something the page can prove |
-| "the SEO canonical link points to your original page" | **True and inert.** The `<link rel="canonical">` is real ([`src/public/page-head.ts`](../../src/public/page-head.ts) § `tags`) and no search engine ever reads it, because every response is `noindex, nofollow` and `robots.txt` is `Disallow: /`. It is also omitted entirely when the source URL carries a query string (`safePublicCanonical`, [`src/urls.ts`](../../src/urls.ts)). So the page leads with the strong claim — **we are not in search engines at all** — and mentions the canonical after it as belt-and-braces |
+| "the SEO canonical link points to your original page" | **True, and not the protection.** The `<link rel="canonical">` is real ([`src/public/page-head.ts`](../../src/public/page-head.ts) § `tags`), and what keeps a shared article out of search is that every `/read/` response is `noindex, nofollow`. It is also omitted entirely when the source URL carries a query string (`safePublicCanonical`, [`src/urls.ts`](../../src/urls.ts)). So the page leads with the strong claim — **a shared article is not listed** — and mentions the canonical after it as belt-and-braces. *Until 2026-10-05 the strong claim was "we are not in search engines at all"; since then our own pages may be listed and nobody's article may, and `robots.txt` lets a crawler fetch `/read/` so that it can read the `noindex` — [deployment.md](deployment.md), under "Our own pages may be listed". The page's section was rewritten that day and `tests/public-readable-sharing-page.test.tsx` holds each sentence to the file it describes* |
 | "we prominently link to the original" | **True, and stronger than briefed** — the article's `<h1>` *is* a link to the original, and `OriginLine` prints host and path beneath it, both shown to a signed-out visitor ([`src/web/Masthead.tsx`](../../src/web/Masthead.tsx)) |
 | "we check with users before making things public" | **True as a mechanism, and it is not a check.** A dialog, a tick-box, a server that returns 400 without it ([`src/routes.ts`](../../src/routes.ts)), and an audit row in `article_visibility_changes`. The page says all of that **and** says plainly that nobody reviews an article before it appears |
 | "we hope this will increase human readership and appreciation of your work" | True, and the one most likely to read as self-serving. Last on the page, one section, making a claim about *our tool* rather than about the author's benefit, and conceding the point in its final sentence |
@@ -135,6 +148,150 @@ the no-training claim with the same hedge, and links `/privacy` for it.
 `tests/shared-notice-banner.test.tsx` holds the training wording to both pages. The banner does not
 ask for evidence, because `/privacy` promises we won't.
 
+## A private link: the same republishing, to fewer people
+
+Since 2026-10-05 an owner can make a **private link**, `/read/<slug>?key=<key>`, instead of or as
+well as making an article public. Anyone who has it reads what a visitor to a public article reads.
+It is listed nowhere and the owner can turn it off. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md); what keeps it
+closed is in
+[security-map.md § The unauthenticated namespace](security-map.md#the-unauthenticated-namespace-and-the-tripwire-under-it).
+
+**The name is "private link"**, not "shareable link". Greg, 2026-10-07: *"'private link' is much
+clearer, and clearly distinguishes it from a publicly-shared article."* Older feedback reports say
+"shareable link" and mean this.
+
+> When they open a page with a private link, it should say that it's a private link, i.e. not visible to anyone without the link
+>
+> — Greg, 2026-10-05
+
+**The notice.** When the server says `sharedBy: "link"`, `SharedNotice` leads with
+`SHARED_BY_PRIVATE_LINK` in place of `SHARED_WITH_YOU`: *"This is a private link. This article isn't
+listed anywhere, and nobody can see it without the link."* The source, takedown and training lines
+are the banner's own, unchanged. The chip in the bar takes the same sentence for its hover. A public
+article opened with a key is `sharedBy: "public"` and gets the public notice, because public wins.
+The owner never sees either. `tests/shared-notice-banner.test.tsx` and
+`tests/public-network-trace.test.tsx` § a visitor holding a private link hold all three.
+
+**The card.** Access & sharing on the Metadata page is two controls:
+[`PrivateLink.tsx`](../../src/web/PrivateLink.tsx) above, the public switch
+(`AccessSharing.tsx`) below. The private link's control reads its state from
+`GET /api/article/:slug/share-link` each time the card opens, never from a copy. *Create a link*
+opens the same confirmation going public does: the derived inventory, the note about the reader
+profile and the rights tick-box, with the sentences about listing swapped for ones about a link. On,
+it draws the whole link, *Copy*, *Turn off* and *On since*. Two sentences depend on the other
+control:
+
+- when both are on, the link's control says the public address works without the link and turning
+  the link off will not make the article private (`PRIVATE_LINK_ALSO_PUBLIC`);
+- while a link is on, the public switch does not say *"Only you can read this"* of a private
+  article. It says who else can (`SHARING_OFF_WITH_LINK`), and when the link's state could not be
+  read it says only that the article is not public.
+
+A refusal from the server, such as a paper not read through yet, is shown in the server's words
+and leaves the card as it was. A write that did not come back draws no link and no state.
+
+**Still asking, and having failed to find out, are two sentences.** While the Metadata page's read
+is out the public switch says *Checking who can read this…* (`SHARING_CHECKING`); *We could not
+check…* (`SHARING_UNKNOWN`) is drawn only once a read has failed. A failed first read is asked
+again four times over about fifty seconds (`READ_AGAIN_AFTER_MS` in `Metadata.tsx`), so the card
+mends itself without a reload —
+[261006e](../plans/261006e-access-and-sharing-says-checking-while-it-asks-and-asks-again-after-a-failed-read.md).
+`tests/private-link-card.test.tsx` and `tests/access-sharing.test.tsx`.
+
+**The owner's marks carry only a boolean.** `Article.privateLinkOn` and
+`LibraryEntry.privateLinkOn` let the masthead and shelf name a private link without carrying its
+key. The card reports changes back to the owner article view, including an unknown result after
+a lost reply. Public wins when both are on. `tests/masthead-sharing-mark.test.tsx`,
+`tests/shelf-shared-badge.test.tsx` and `tests/metadata-sharing-card.test.tsx` hold these paths.
+
+**The pages.** `/features/public-readable-sharing` has a section, *A private link*; `/privacy`
+names it in *Who can see your shelf*, *If you send us a bug report*, *Deleting things* and
+*If something here is yours*; `/help` § Sharing describes both ways. The first two are held to the
+code by `tests/public-readable-sharing-page.test.tsx` and `tests/privacy-page.test.ts`.
+
+## While the article is still importing
+
+Since 2026-10-05 the add page has a **Make it public** box
+([`AddShare.tsx`](../../src/web/AddShare.tsx) drawing a `ShareAtAdd`,
+[`src/web/add-share.ts`](../../src/web/add-share.ts)), which Greg asked for (`spya-e9t58e`). The plan
+is [261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md). **The server
+did not change.** `PUT /api/article/:slug/visibility` has always needed only the owner's row, and
+every public read needs a published revision, so a switch pressed early exposes nothing early: the
+article becomes readable by others when the import publishes.
+
+- **The confirmation is this card's own**: the same title, body, inventory, profile note and rights
+  tick-box, and nothing is sent without the tick and the press. The inventory is the one for an
+  article nothing has been built on, so everything a model makes is under *would be shared if
+  built*.
+- **Which is why it first asks whether there is already an article.** An import can adopt one
+  already on the shelf, with a glossary and notes that would go out at once. The box is offered
+  only when the owner's metadata read is a fresh 404. On a 200 it points at this card, and on
+  anything else it offers nothing.
+- **One `ShareAtAdd` per slug, per tab** (`shareAtAddFor`), so two spellings of one add address
+  never give one article two writers. A Retry that comes back under another slug shows that slug's
+  own unticked box.
+- **It sends `private` only when the reader unticks.** The first build also took a share back by
+  itself when the slug changed. GPT Sol's review showed that a take-back nobody is watching can be
+  refused unseen, or land after a newer confirmation and undo it, so it went. What that leaves: a
+  failed import that was shared stays public under its old slug, with nothing published for
+  anyone to read.
+- **A reload cannot read the switch back before publication.** No owner read returns visibility
+  until there is a published revision. So the tab writes a mark in `sessionStorage` before a
+  share request is sent, and a reloaded page that finds the mark shows *we cannot read that back* and offers
+  the untick. The mark never sends a public request. A second tab has no mark and shows an
+  unticked box over an article that is public: accepted for now, and the fix is a server read
+  ([postmortem 261005r](../postmortems/261005r-a-publication-404-does-not-establish-sharing-state.md)).
+- **Coming back to the add page asks again, and a published article belongs to this card.** The
+  controller outlives the page, so on every return it repeats the metadata read before sending
+  anything. If the article has published since, whatever it remembered gives way to the line
+  pointing here: this card may have changed the switch, and an intent from an earlier visit must
+  not publish over a later unshare. A page that stays open through publication is not asked again.
+- **A 404 while the job is alive means the row is not there yet** and is retried. After five
+  minutes it stops, and tries once more when the import completes.
+- **The add page does not leave by itself while sharing is unsettled**: the confirmation open, or
+  the request waiting, refused or unanswered. It shows *Open the article*.
+
+### Stage 2, 2026-10-06: one Sharing section, a private link, and a visitor who arrives early
+
+Greg's answers to the three questions stage 1 ended on, in his words, are in the plan
+([261005l § Greg's answers](../plans/261005l-permalink-and-share-while-an-article-is-importing.md)).
+
+- **Both controls sit in one *Sharing* section, shut by default**
+  ([`AddSharing.tsx`](../../src/web/AddSharing.tsx)): *"because most people won't want to use
+  it"*. It opens itself when a control is on, waiting, refused or unknown, cannot be shut over an
+  open question, and shut it names what is on (*Sharing: public*). Shut, neither control is
+  mounted, so a link's key is not in the page.
+- **Create a private link** ([`AddShareLink.tsx`](../../src/web/AddShareLink.tsx) drawing a
+  `LinkAtAdd`, [`add-share-link.ts`](../../src/web/add-share-link.ts)) sends the Metadata card's
+  own requests behind its own confirmation. Unlike the public switch **it can read its state
+  before publication**: `GET /api/article/:slug/share-link` needs only the owner's row. So it
+  reads on every attachment and keeps no mark. **A create that did not come back is never sent
+  again by itself**, because a second create replaces the first link: it shows *unknown* and a
+  *Check again* button. An older read that answers after a newer write is dropped
+  ([postmortem 261006b](../postmortems/261006b-a-read-completion-does-not-prove-it-followed-a-write.md)).
+- **Controllers belong to one reader.** The registry is keyed by reader and slug and is emptied
+  when the session changes, where the upload engine is fenced
+  ([`add-sharing-session.ts`](../../src/web/add-sharing-session.ts)); a reply for a retired
+  controller is drawn nowhere. A key in memory must not outlive the account it belongs to.
+- **A visitor before publication is told the article is still being added.** The public article
+  read answers **409 `still-being-added`** when the request may read the article (public, or the
+  right key), nothing is published, and its owner has a queued job or a running one with a live
+  lease (`publicPendingImportQuery`, [`src/store/public-reader.ts`](../../src/store/public-reader.ts)).
+  The body is a fixed sentence and the code. The head, assets, the shelf and every other read are
+  as they were, so no title goes out. A wrong key, a private article, a failed or abandoned
+  import are the same 404 as before. Greg accepted what it gives away, *"i'm not too worried
+  about the security tradeoff"*: somebody holding the address learns an unpublished article is
+  there. The page ([`StillBeingAddedVisitor.tsx`](../../src/web/article/StillBeingAddedVisitor.tsx))
+  asks again every ten seconds while the tab is visible. The owner of a shared import gets their
+  own import's card, as in stage 1.
+- **Console logs no longer print a response's query string** (`logFailure`,
+  [`src/web/lib/api.ts`](../../src/web/lib/api.ts)): the expected 409 on a private link was
+  logging `?key=…` ([postmortem 261006a](../postmortems/261006a-a-secret-bearing-response-url-escaped-through-a-diagnostic-sibling.md)).
+
+Not built, by Greg's decision: a read of the public switch before publication, so the second-tab
+limit above stands.
+
 ## Where the code is
 
 | File | What's in it |
@@ -143,7 +300,11 @@ ask for evidence, because `/privacy` promises we won't.
 | [`src/web/router.ts`](../../src/web/router.ts) § `PUBLIC_SHARING_HREF` | the address, built from `FEATURES_HREF` so the pair cannot come apart |
 | [`src/messages.ts`](../../src/messages.ts) § If something here is yours | `PUBLIC_SHELF_PROVENANCE`, `PUBLIC_SHELF_TAKEDOWN` and the three `TAKEDOWN_TIP_*` strings |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under the shelf's lede, and the `ControlTip` on it |
-| `tests/public-readable-sharing-page.test.tsx` | the four claims that can go stale silently |
+| [`src/web/PrivateLink.tsx`](../../src/web/PrivateLink.tsx), [`AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the two controls of Access & sharing on the Metadata page — [§ A private link](#a-private-link-the-same-republishing-to-fewer-people) |
+| [`src/web/AddShare.tsx`](../../src/web/AddShare.tsx), [`AddSharing.tsx`](../../src/web/AddSharing.tsx), [`add-share.ts`](../../src/web/add-share.ts) | sharing from the add page, while the import runs — [§ While the article is still importing](#while-the-article-is-still-importing) |
+| [`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx) § `SharedNotice` | the banner a visitor sees — [§ The banner](#the-banner-on-every-shared-article) |
+| [`tests/public-readable-sharing-page.test.tsx`](../../tests/public-readable-sharing-page.test.tsx) | each claim that can go stale silently, held to the file it describes ([§ below](#the-claims-that-can-go-stale-silently-and-the-test-that-holds-them)) |
+| [`public/robots.txt`](../../public/robots.txt), [`vercel.json`](../../vercel.json) | what the page says about crawlers and `noindex` — [deployment.md § Our own pages may be listed](deployment.md#our-own-pages-may-be-listed-nothing-a-reader-put-here-may) |
 
 **It is the app's only nested address.** `parseRoute` matches it above `/features`, the way
 `/read/public` sits above `/read/:slug` — not because the `/features` regex could swallow it today
@@ -181,7 +342,7 @@ deleted, because the claim can go stale in the other direction too.
 
 **A claim about a header is exactly the kind that stays on a page for a year after the header goes** —
 [silent-success.md](../reusable/silent-success.md) — so the test reads the page as text and fails
-when one of the four stops being true, the way `tests/privacy-page.test.ts` pins model names.
+when one of them stops being true, the way `tests/privacy-page.test.ts` pins model names.
 
 What the test deliberately does **not** pin is the prose. Those are words that will be rewritten,
 and a test quoting them is a test somebody edits to make green — the rule

@@ -78,7 +78,12 @@ import {
   type ArticleView,
 } from "../read-address.js";
 import { isSpideryarnId } from "../ids.js";
-import { ADMIN_FEEDBACK_PATH, ADMIN_USERS_PATH, ADMIN_VOUCHERS_PATH } from "../urls.js";
+import {
+  ADMIN_COSTS_PATH,
+  ADMIN_FEEDBACK_PATH,
+  ADMIN_USERS_PATH,
+  ADMIN_VOUCHERS_PATH,
+} from "../urls.js";
 import type { BlockId } from "../types.js";
 import {
   canStamp,
@@ -95,7 +100,7 @@ import {
 export type { ArticleView };
 
 /** Which admin page. `home` is `/admin` itself — the index of the others. */
-export type AdminPage = "home" | "users" | "feedback" | "vouchers";
+export type AdminPage = "home" | "users" | "feedback" | "vouchers" | "costs";
 
 export type Route =
   | { kind: "library" }
@@ -267,15 +272,24 @@ export type Route =
    */
   | { kind: "changelog" }
   /**
-   * How to use it — `/help`: contents, a search box, and an anchor on every
-   * section. See help/HelpPage.tsx and docs/plans/261002b-help-page.md.
+   * How to use it — `/help`, the contents, and `/help/<page>`, one page of it.
+   * See help/HelpPage.tsx, docs/plans/261002b-help-page.md, and for the pages
+   * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
+   * § Routing and old links.
+   *
+   * **`page` is the segment as it was typed, and the router does not judge
+   * it.** Whether it names a page, a page that has moved, or nothing at all is
+   * Help's to say (help/help-anchors.ts § `resolveHelpPage`), so this file
+   * imports none of Help and `/help/nonsense` gets Help's own answer, with
+   * the contents under it, rather than the app's *not found*. Absent for
+   * `/help` itself.
    *
    * Signed out for the reason `changelog` is: it is a page somebody is *sent*
-   * — `/help#spine` in a reply to a question — and nothing on it is about the
+   * — `/help/spine` in a reply to a question — and nothing on it is about the
    * reader's account. A link into Help that bounced a stranger to the sign-in
    * page would be a link that does not work.
    */
-  | { kind: "help" }
+  | { kind: "help"; page?: string }
   /**
    * Where the code lives, and what it is licensed under — `/opensource`. See
    * OpenSourcePage.tsx.
@@ -496,12 +510,14 @@ export function parseRoute(pathname: string): Route {
   for (const [href, kind] of STATIC_ROUTES) {
     if (new RegExp(`^${href}/?$`).test(pathname)) return { kind };
   }
+  const help = helpRoute(pathname);
+  if (help) return help;
   /* Beside `design` and `profile`, and above `/read/` for the same reason: it
      is not about an article. The alternation is the validation — `/admin/foo`
      matches nothing here and falls through to `not-found`, which is what every
      unrecognised address does. Greg wrote both of these with a trailing slash,
      so both spellings work at both lengths. */
-  const adminPath = /^\/admin(?:\/(users|feedback|vouchers))?\/?$/.exec(pathname);
+  const adminPath = /^\/admin(?:\/(users|feedback|vouchers|costs))?\/?$/.exec(pathname);
   if (adminPath) {
     /* The captured segment *is* the page name for every page but the index,
        which has no segment. Written as a lookup rather than a chain of
@@ -511,7 +527,10 @@ export function parseRoute(pathname: string): Route {
     const page = adminPath[1];
     return {
       kind: "admin",
-      page: page === "users" || page === "feedback" || page === "vouchers" ? page : "home",
+      page:
+        page === "users" || page === "feedback" || page === "vouchers" || page === "costs"
+          ? page
+          : "home",
     };
   }
   // Before the /read/ regex, and it cannot use one: what follows /add/ is a
@@ -647,6 +666,8 @@ export const ADMIN_USERS_HREF = ADMIN_USERS_PATH;
 export const ADMIN_FEEDBACK_HREF = ADMIN_FEEDBACK_PATH;
 /* Gift vouchers — docs/project/admin.md § `/admin/vouchers`. */
 export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
+/* The cost explorer — plan 261005a. */
+export const ADMIN_COSTS_HREF = ADMIN_COSTS_PATH;
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
 /**
@@ -766,10 +787,10 @@ export const CHANGELOG_HREF = "/changelog";
  */
 export const CHANGELOG_LABEL = "What’s new";
 /**
- * How to use it, section by section — linked from the footer. **Build a link
- * to one section with `helpHref` (help/help-anchors.ts), never by appending a
- * fragment to this**: `helpHref` takes a typed anchor, so a link to a section
- * that does not exist does not compile.
+ * How to use it: the contents of Help — linked from the footer. **Build a link
+ * to one page of it with `helpHref` (help/help-anchors.ts), never by appending
+ * to this**: `helpHref` takes a typed anchor, so a link to a page that does not
+ * exist does not compile.
  */
 export const HELP_HREF = "/help";
 /**
@@ -861,10 +882,25 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
   /* Same shape as `/changelog` above, and indifferent to order for the same
      reason: top level, sharing a prefix with nothing. */
   [OPENSOURCE_HREF, "opensource"],
-  // The same again. Its sections are fragments, not paths: `/help/spine` is
-  // nobody's address, so it falls through to `not-found` like any other.
-  [HELP_HREF, "help"],
+  /* `/help` was the last row here until 2026-10-07. It has pages under it
+     now (`/help/spine`), so its variant carries one and it is no longer an
+     address that is exactly itself: § `helpRoute`, below. */
 ] as const;
+
+/**
+ * **`/help`, or `/help/<one segment>`**, or null for anything else.
+ *
+ * One segment and no more: `/help/a/b` is nobody's address and falls through
+ * to `not-found`. The segment is decoded and handed over as it is, whether or
+ * not it names a page — see the `help` variant for why that is Help's call.
+ * A trailing slash is the same address at both lengths, as it is for every
+ * other route here (§ `parseRoute`).
+ */
+function helpRoute(pathname: string): Route | null {
+  const m = new RegExp(`^${HELP_HREF}(?:/([^/]+))?/?$`).exec(pathname);
+  if (!m) return null;
+  return m[1] === undefined ? { kind: "help" } : { kind: "help", page: safeDecode(m[1]) };
+}
 
 /**
  * The canonical address for "add this URL": `/add/<the URL, percent-encoded>`.
@@ -1059,6 +1095,7 @@ export function settleAddress(pathname: string, search: string, hash: string): s
   at = liftLegacyAnchor(at);
   at = liftLegacySlug(at);
   at = liftLegacyTweets(at);
+  at = liftLegacyDebateBy(at);
   at = liftLegacyAbout(at);
   /* `liftStrandedText` stood here from 2026-09-05 to 2026-09-29, rewriting
      `?mode=hierarchy&text=0` to Structure and dropping every `text=0`. Both
@@ -1237,9 +1274,10 @@ function liftLegacyAbout(at: Address): Address {
 /**
  * **The rewrite below, for an address that arrives after boot** — a `navigate()`
  * to an old link, or Back/Forward onto a history entry written while the page
- * still existed. `settleAddress` runs once, at boot; without these two a tab
- * open across the deploy would land on *not found*. GPT Sol, plan review,
- * 2026-09-29. `null` when the address is not the old one.
+ * (or, until 2026-10-03, the mode) still existed. `settleAddress` runs once, at
+ * boot; without these two a tab open across the deploy would land on *not
+ * found*, or on Summary at Brief. GPT Sol, plan review, 2026-09-29, and F4 of
+ * the 261003l review. `null` when the address is neither old spelling.
  */
 export function liftedTweetsHref(href: string): string | null {
   const at = splitHref(href);
@@ -1248,25 +1286,116 @@ export function liftedTweetsHref(href: string): string | null {
 }
 
 /**
- * `/read/<slug>/tweets` → `/read/<slug>?mode=tweets`. The thread was a page of
- * its own from 2026-08-25 until 2026-09-29, when it became a mode (Greg,
- * SPIDERYARN-READING2-5A); links to the page — pasted, bookmarked, in a sent
- * thread's own history — land on the mode rather than on *not found*.
+ * **Both of the thread's old addresses, to where the thread is now**:
+ * `/read/<slug>/tweets` and `?mode=tweets` → `?mode=summary&summary=thread`.
  *
- * Every other parameter is carried, so an old link keeps its `?at=`; a `mode`
- * already on it is replaced, because the path said which view it meant.
- * `parseRoute` no longer knows the segment, so this has to run before anything
- * asks it — `settleAddress`'s chain on boot (main.tsx), and `liftedTweetsHref`
- * above after it.
- * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md.
+ * The thread was a page of its own from 2026-08-25 until 2026-09-29, then a
+ * mode until 2026-10-03, when it became Summary's Thread view (Greg,
+ * SPIDERYARN-READING2-5A and spya-thpsnd). Links to either — pasted,
+ * bookmarked, in a sent thread's own history — land on the thread rather than
+ * on *not found* or on Summary at Brief, which is all `RETIRED_MODES`
+ * (src/modes.ts) can say by itself. A visitor to a public article with a thread
+ * and no summary would otherwise be told nobody has made one (GPT Sol, F4).
+ *
+ * Every other parameter is carried, so an old link keeps its `?at=`. **Every
+ * `mode` and every `summary` pair is replaced**, because the old spelling said
+ * which view it meant: a carried `summary=fuller` would otherwise win, and two
+ * `summary` pairs would leave the answer to their order.
+ *
+ * `parseRoute` no longer knows the path segment, so this has to run before
+ * anything asks it — `settleAddress`'s chain on boot (main.tsx), and
+ * `liftedTweetsHref` above after it.
+ * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md,
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
  */
 function liftLegacyTweets(at: Address): Address {
+  const selects = (pair: string) => hasKey(pair, "mode") || hasKey(pair, "summary");
+  const toThread = (search: string) => {
+    const rest = withoutPairs(search, selects);
+    return rest ? `${rest}&${SUMMARY_THREAD}` : SUMMARY_THREAD;
+  };
   const m = /^\/read\/([^/]+)\/tweets\/?$/.exec(at.pathname);
-  if (!m) return at;
-  const route = parseRoute(`/read/${m[1]}`);
-  if (route.kind !== "read") return at;
-  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "mode"));
-  return { ...splitHref(readHref(route.slug, rest ? `${rest}&mode=tweets` : "mode=tweets")), hash: at.hash };
+  if (m) {
+    const route = parseRoute(`/read/${m[1]}`);
+    if (route.kind !== "read") return at;
+    return { ...splitHref(readHref(route.slug, toThread(at.search))), hash: at.hash };
+  }
+  /* The retired mode word, on any page that carries it — the metadata page's
+     links hand the query back to the article. The first `mode` pair is the one
+     every reader of the address acts on (`get("mode")`). */
+  const first = queryPairs(at.search).find((pair) => hasKey(pair, "mode"));
+  if (first === undefined || !first.includes("=")) return at;
+  /* Decoded as the parser decodes it, for `hasKey`'s reason; a malformed
+     escape is not the word and must not throw. */
+  let value = first.slice(first.indexOf("=") + 1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return at;
+  }
+  if (value !== "tweets") return at;
+  return { pathname: at.pathname, search: `?${toThread(at.search)}`, hash: at.hash };
+}
+
+/** Where both old Tweets addresses land: Summary, on its Thread view. */
+const SUMMARY_THREAD = "mode=summary&summary=thread";
+
+/**
+ * **Debate's old *by claim* order, to the sub-mode it became**:
+ * `?debateby=claim` → `?debate=claims`, with `debateby` removed.
+ *
+ * *By claim* was one of four orders over Debate's one mixed list from
+ * 2026-09-29 until 2026-10-03, when the two searches became two sub-modes and
+ * grouping by claim became the whole of Claims
+ * (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
+ *
+ * **Lifted here, once, rather than interpreted in the panel** (GPT Sol's F7).
+ * Reception is the *absent* parameter, so a panel that read a lingering
+ * `debateby=claim` as "Claims" would bounce a reader who pressed Reception
+ * straight back. After this nothing downstream knows the word:
+ * `debateOrderParam` (params.ts) has three values.
+ *
+ * **An explicit `debate=` wins**: the old order is removed either way, and the
+ * sub-mode the link already names is left as it is. Every other pair is kept
+ * exactly as written. An old by-claim link no longer shows the rows about the
+ * piece above the claims; that is the intended change.
+ *
+ * Only the first `debateby` pair is read, as every reader of the address reads
+ * it (`get("debateby")`); a `debateby=date` or `=stance` is Reception's own and
+ * is left alone.
+ */
+function liftLegacyDebateBy(at: Address): Address {
+  const first = queryPairs(at.search).find((pair) => hasKey(pair, "debateby"));
+  if (first === undefined || !first.includes("=")) return at;
+  /* Decoded as the parser decodes it, for `hasKey`'s reason; a malformed
+     escape is not the word and must not throw. */
+  let value = first.slice(first.indexOf("=") + 1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return at;
+  }
+  if (value !== "claim") return at;
+  const rest = withoutPairs(at.search, (pair) => hasKey(pair, "debateby"));
+  const named = queryPairs(rest).some((pair) => hasKey(pair, "debate"));
+  const search = named ? rest : rest ? `${rest}&${DEBATE_CLAIMS}` : DEBATE_CLAIMS;
+  return { pathname: at.pathname, search: search ? `?${search}` : "", hash: at.hash };
+}
+
+/** Where an old `debateby=claim` lands: Debate's Claims sub-mode. */
+const DEBATE_CLAIMS = "debate=claims";
+
+/**
+ * **Every old spelling `settleAddress` lifts that can also arrive after
+ * boot** — `liftedTweetsHref`'s job, for the thread's old addresses and
+ * Debate's old order together. `navigate()` and Back/Forward (`useRoute`) ask
+ * this, so a tab open across a deploy lands where a fresh load would. `null`
+ * when the address carries neither.
+ */
+export function liftedLegacyHref(href: string): string | null {
+  const at = splitHref(href);
+  const lifted = liftLegacyDebateBy(liftLegacyTweets(at));
+  return lifted === at ? null : `${lifted.pathname}${lifted.search}${lifted.hash}`;
 }
 
 /**
@@ -1293,9 +1422,11 @@ export function navigate(
     scroll?: boolean;
   } = {},
 ): void {
-  /* The thread's old page is a mode now; an old link goes to the mode rather
-     than to *not found*. § `liftedTweetsHref`. */
-  const lifted = liftedTweetsHref(to);
+  /* The thread's old page, and its old mode word, are Summary's Thread view
+     now; an old link goes there rather than to *not found* or to Summary at
+     Brief. § `liftedTweetsHref`. Debate's old by-claim order goes to its Claims
+     sub-mode the same way (§ `liftedLegacyHref`). */
+  const lifted = liftedLegacyHref(to);
   const href = lifted ?? to;
   /* The hash counts only for a lifted link — GPT Sol's code review found an old
      hashless link could otherwise leave a stale hash behind. Every other
@@ -1359,7 +1490,7 @@ export function onAddressChange(listener: () => void): () => void {
  *
  * That was invisible until `TableView` was memoised. Ten reading parameters are
  * owned by child components — `rank`, `bar`, `run`, `conf`, `summary`, `diagram`,
- * `dx`, `dhue`, `referee`, `remember` — and a change to any of them re-renders
+ * `dx`, `dhue`, `referee`, `learn` — and a change to any of them re-renders
  * only that child. `blockHref` reads the query to build 551 permalinks, and it
  * used to get away with it because `?at=` re-rendered the whole reading view
  * once a second while anybody scrolled. Take that away and the staleness stops
@@ -1805,14 +1936,30 @@ export function useRoute(): Route {
     () => location.pathname,
     () => "/",
   );
-  /* **Back or Forward onto the thread's old page** — the one way an old address
-     reaches here without passing `settleAddress` or `navigate()`. Rewritten in
-     place, and parsed as where it is going meanwhile, so the frame before the
-     rewrite shows the article rather than *not found*. § `liftedTweetsHref`. */
+  /* **Back or Forward onto one of the thread's old addresses** — the one way an
+     old address reaches here without passing `settleAddress` or `navigate()`.
+     Rewritten in place, and parsed as where it is going meanwhile, so the frame
+     before the rewrite shows the article rather than *not found*.
+     § `liftedTweetsHref`.
+
+     **On `popstate` as well as on a new pathname**, since 2026-10-03: the old
+     *mode* word is query state, so Back between two entries on one article
+     changes no pathname and would never re-run this effect — leaving
+     `?mode=tweets` to parse as Summary at Brief (GPT Sol, F4 of the 261003l
+     review). Only history can put an old spelling on the address after boot
+     without `navigate()`, so `popstate` is the whole of the gap.
+
+     Debate's old `debateby=claim` is query state too and takes the same road
+     (`liftedLegacyHref` lifts both). */
   // biome-ignore lint/correctness/useExhaustiveDependencies: pathname is the subscribed signal; the effect must rewrite the complete address as it stands when the effect runs.
   useEffect(() => {
-    const lifted = liftedTweetsHref(`${location.pathname}${location.search}${location.hash}`);
-    if (lifted !== null) history.replaceState(history.state, "", lifted);
+    const lift = () => {
+      const lifted = liftedLegacyHref(`${location.pathname}${location.search}${location.hash}`);
+      if (lifted !== null) history.replaceState(history.state, "", lifted);
+    };
+    lift();
+    window.addEventListener("popstate", lift);
+    return () => window.removeEventListener("popstate", lift);
   }, [pathname]);
   return useMemo(() => {
     const lifted = liftedTweetsHref(pathname);

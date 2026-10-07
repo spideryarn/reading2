@@ -1,0 +1,549 @@
+commit c05cde80222cef02ed05baa345fac26c2b323a5d
+Author: Greg Detre <greg@gregdetre.com>
+Date:   Tue Oct 6 20:29:17 2026 +0100
+
+    261006k: a sideways iPhone no longer enlarges a band's text (spya-ar65p3, qi-d4c5w4fe)
+    
+    Greg's screenshot showed Skim's quote and section line at about 1.53 times
+    their stylesheet size beside an article at its own 17px. That fits Safari's
+    landscape text autosizing, which the app never turned off because it does not
+    import Tailwind's preflight. One rule on html, in the @layer base substitute.
+    
+    The preflight checklist test looked only at button; it now holds a decision
+    for each property preflight sets on html, and checks the value is 100%.
+    Both were seen red. Not reproducible on the box: Chrome has no autosizing.
+    
+    The plan holds the quick review of fonts and sizes, GPT Sol's plan review
+    (six findings, all taken), and one question for Greg (qi-f8h393sb).
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+diff --git a/docs/plans/261006k-plan-review-prompt.md b/docs/plans/261006k-plan-review-prompt.md
+new file mode 100644
+index 000000000..7a4ff12f0
+--- /dev/null
++++ b/docs/plans/261006k-plan-review-prompt.md
+@@ -0,0 +1,32 @@
++# Plan review: 261006k
++
++Read-only review. Please review the plan at
++`docs/plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md`
++before it is built. Do not edit any file.
++
++Evidence to check it against, rather than taking the prose on trust:
++
++- `src/web/tailwind.css` (the hand-written preflight substitute, the `@layer base` blocks near the end)
++- `node_modules/tailwindcss/preflight.css` (the `html, :host` rule)
++- `tests/preflight-substitute.test.ts` (the test the plan extends)
++- `src/web/styles/skim.css` (`.skim-words`, `.skim-place`), `styles/tokens.css` (`--reading-size`)
++- `docs/project/controls.md`, `docs/project/fonts.md`, `docs/project/typography.md`
++- `index.html` (the viewport meta)
++- The screenshot is not in the repo; the plan's table is my measurement of it. It shows Skim's band
++  left of the article on what looks like an iPhone in landscape.
++
++Questions:
++
++1. Is the diagnosis (iOS Safari text autosizing in landscape, absent `-webkit-text-size-adjust: 100%`)
++   sound, given a `width=device-width, initial-scale=1` viewport? Is there another explanation for a
++   uniform 1.53x on wrapped text in the band while the article and the buttons are at their own size
++   that I should rule out in the stylesheets?
++2. Is `html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }` in `@layer base` the right
++   rule and place? Any way it could regress something (layer order, `.prose`, the reader's zoom)?
++3. Is the proposed test a real check (could it pass vacuously)?
++4. Are the review's numbers right (count them yourself), and are the two questions for Greg plain
++   and answerable?
++5. Anything clear-cut the review should have built rather than asked about, or anything it built
++   that is really a design choice?
++
++End with a line `VERDICT: approve` or `VERDICT: changes needed`, and number your findings F1, F2, …
+diff --git a/docs/plans/261006k-plan-review-sol.md b/docs/plans/261006k-plan-review-sol.md
+new file mode 100644
+index 000000000..278cbc1c5
+--- /dev/null
++++ b/docs/plans/261006k-plan-review-sol.md
+@@ -0,0 +1,41 @@
++The core diagnosis and CSS fix are sound, but the test and the two follow-up questions need correction before approval.
++
++F1 — The proposed test does not prove the fix. It compares property names, so `-webkit-text-size-adjust: auto`, `50%`, or another ineffective value would pass. Keep the generic Tailwind checklist, but add a direct assertion that the bare `html` rule in `@layer base` contains:
++
++```css
++-webkit-text-size-adjust: 100%;
++text-size-adjust: 100%;
++```
++
++The extraction also needs an explicit non-empty sentinel. The currently visible draft has that sentinel, so it cannot pass completely vacuously, but it still accepts the wrong value. See [the test proposal](/var/tmp/spideryarn-worktrees/qi-d4c5w4fe-fonts-skim-review/docs/plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md:88).
++
++F2 — The screenshot does not support the proposed global 94% reduction for AI text. The section line is requested at `0.88rem` and the quote at `0.84rem`; their requested ratio is 1.0476. The measured sizes, 21.5px and 20.5px, have a ratio of 1.0488. In other words, the whole visible difference is already explained by the deliberately different CSS sizes, with no residual evidence of an optical font-size mismatch. Question 2 should wait for an equal-CSS-size comparison on `/design`. It should also distinguish `font-size-adjust` from multiplying `font-size` by 94%; they are different mechanisms, and the 94% figure is currently unexplained.
++
++F3 — Several audit numbers need correcting:
++
++- The screenshot arithmetic is correct: approximately 16.8px, 20.5px, 21.5px and matching 1.53 multipliers.
++- There are 566 `font-size` declarations.
++- There are 64 literal value strings, or 63 after treating `0.84rem !important` as the same size; “about 65” is fair.
++- There are 26 distinct normalized rem values from `0.72rem` through `0.98rem`, not 23.
++- The current utility counts are 242 `text-sm` and 219 `text-xs`, not 218.
++- There are 27 arbitrary size-utility occurrences across 11 size values, so “about 25” is fair.
++- `debate.css` has 18 distinct sizes, and the five pixel declarations are correct.
++- Only 40 files in the stated CSS scan contain a `font-size` declaration, so “45 stylesheets” needs explanation or correction.
++
++F4 — Question 1 understates and misdescribes the large option. Moving “every rule” onto `12, 13, 14, 15, 17px` cannot move each by at most half a pixel: the corpus includes values below 12px, headings, `4.2rem`, clamps, variables, `inherit`, and even `0.98rem` moves 0.68px to its nearest listed step. More importantly, rounding to a numeric scale does not ensure that “the same job is the same size”; only named semantic roles do that. Ask plainly between:
++
++1. aligning the recurring cross-mode roles;
++2. designing a fuller scale that also covers headings and exceptional text;
++3. leaving the current values alone.
++
++The recommended first option is a real design choice and is answerable. The present full option is not yet sufficiently defined.
++
++F5 — The autosizing diagnosis is a strong, credible inference, but the plan should not call it proved. The responsive viewport does not rule it out: Apple documents text adjustment as separate from viewport control, and the CSS specification describes per-block adjustment that is suppressed for short text—matching the wrapped-row-versus-short-label pattern. The specification does not say buttons are categorically exempt, and both `.skim-place` and `.skim-words` are descendants of the `.skim-go` button, so replace “leaves short labels and buttons alone” with the narrower observed claim. No competing stylesheet explanation is apparent: there is no relevant scale/zoom transform, both Skim elements request smaller sizes than the article, and both receive the same measured multiplier. [Apple’s Safari guidance](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/AdjustingtheTextSize/AdjustingtheTextSize.html), [CSS text-size-adjust specification](https://drafts.csswg.org/css-size-adjust/).
++
++F6 — The rule and placement are right. `html` in `@layer base` makes the inherited setting global while leaving `app` and utility rules above it; it does not override `.prose`’s font size or interfere with ordinary pinch/page zoom. `100%` is Tailwind’s choice and historically avoided an old desktop-WebKit text-only-zoom bug associated with `none`, although the current CSS specification defines `100%` and `none` as equivalent for automatic text adjustment. The real behavioral trade-off is that Safari’s automatic inflation is disabled everywhere, including any surface where it might have been helpful; for this responsive app with 17px article text, that is reasonable but should still be confirmed on a real phone. [Historical WebKit bug and 100% workaround](https://bugs.webkit.org/show_bug.cgi?id=56543).
++
++The clear-cut work is the global rule, an exact-value regression test, and correcting the audit figures. A shared size scale and any global optical adjustment remain design choices.
++
++I made no file changes. The worktree already contained an uncommitted draft implementation when inspected; its focused test currently passes 5/5.
++
++VERDICT: changes needed
+\ No newline at end of file
+diff --git a/docs/plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md b/docs/plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md
+new file mode 100644
+index 000000000..9fc09d8a2
+--- /dev/null
++++ b/docs/plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md
+@@ -0,0 +1,184 @@
++# A landscape phone inflates some of our text, and a quick review of fonts and sizes
++
++One of Greg's reports (admin; `feedback-reporter.ts` exit 0, row proved, event not matched),
++Overseer queue item `qi-d4c5w4fe`, report `spya-ar65p3`, Sentry `SPIDERYARN-READING2-DW`. Filed as a
++suggestion; its first half is a bug.
++
++> Why are the fonts in this different? Probably the ones in the Skim mode are too big?
++>
++> Do a quick review of fonts and font sizes more generally.
++>
++> — Greg, spya-ar65p3, 2026-10-06
++
++**Prior work:** none. No plan, note or commit names this report; the only live session on it is this
++one (`fbdw-fonts-differ-skim-too-big-review`). The faces themselves were decided in
++[261002b](261002b-a-nicer-ai-typeface-and-the-voices-trawl.md) and
++[261002f](261002f-the-three-faces-for-everyone-and-every-surface-voiced.md), and are not reopened
++here.
++
++## What "this" is
++
++The screenshot in the production row (1600 × 738, read read-only) shows Skim's band on the left and
++the article on the right, with Marginalia's "needs a wider window" line over the prose. The picture
++is 2.17 times as wide as it is tall, which is an iPhone held sideways (844 × 390 is 2.16). The
++report's own page was `/admin/costs`, where the dialog was opened; the row has no diagnostics, so
++the device is read from the picture and is an inference.
++
++In it, three things sit side by side:
++
++- the article, in the author's serif;
++- Skim's quote, the same serif but grey, **and visibly bigger than the article**;
++- Skim's section line ("Introduction › Why the conflation matters"), in the model's monospace,
++  a little bigger again (it is asked to be: 0.88rem against the quote's 0.84rem).
++
++## Why Skim's text is bigger: measured from the picture
++
++Skim's stylesheet asks for *smaller* text than the article, not bigger: the quote is `0.84rem`
++(13.4px), the section line `0.88rem` (14.1px), the article `--reading-size` (17px).
++
++Taking the picture as 1600 / 844 = 1.90 picture pixels per CSS pixel:
++
++| Text | Line pitch in the picture | CSS line pitch | Line-height | Size drawn | Size asked for | Ratio |
++|---|---|---|---|---|---|---|
++| article | 51px | 26.9px | 1.6 | 16.8px | 17px | 1.0 |
++| Skim's quote | 54.5px | 28.7px | 1.4 | 20.5px | 13.4px | 1.53 |
++| Skim's section line | 55px | 29.0px | 1.35 | 21.5px | 14.1px | 1.53 |
++
++The article comes out at its own size, which checks the scale. Both Skim lines come out at the same
++1.53 times what the stylesheet says. The short one-line labels in the same band ("Gist 6",
++"Reading for:") are not enlarged.
++
++**That pattern fits iOS Safari's text autosizing, and I found nothing else that does.** It is a
++strong inference, not a proof (see below). On an iPhone in landscape, Safari enlarges text block by
++block and holds back on short text, unless the page says `-webkit-text-size-adjust: 100%`; a
++`width=device-width` viewport does not turn it off
++([Apple](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/SafariWebContent/AdjustingtheTextSize/AdjustingtheTextSize.html),
++[the CSS draft](https://drafts.csswg.org/css-size-adjust/)). No transform, zoom or larger size in
++the stylesheets explains a uniform 1.53 on two elements that ask for different sizes. Nothing in the app says it (`grep -r text-size-adjust src/web
++styles` is empty). Tailwind's preflight sets it on `html`, and
++[we deliberately do not import preflight](../project/controls.md). So this is the fourth gap in the
++hand-written substitute, after the button border, `img { height: auto }` and the button font
++(`tests/preflight-substitute.test.ts` lists the three). The fleet dashboard imports preflight whole,
++so it already has the rule.
++
++It is not a Skim bug. Any band with wrapped text is open to it; Skim is where Greg saw it. It also
++explains "why are the fonts different": the faces are different on purpose
++([fonts.md](../project/fonts.md): the quote is the author's, the section line is a model's title),
++but the *sizes* were never meant to be.
++
++**What I could not do:** reproduce it. The box has Chrome through Playwright, which has no such
++autosizing, and nothing here can drive a real iPhone. The evidence is the arithmetic above and the
++documented behaviour of the property. So the fix is confirmed only when Greg next holds a phone
++sideways on a build that has it; the note says so.
++
++## The change
++
++One rule, in the `@layer base` substitute in [`tailwind.css`](../../src/web/tailwind.css):
++
++```css
++html {
++  -webkit-text-size-adjust: 100%;
++  text-size-adjust: 100%;
++}
++```
++
++`100%`, not `none`: the two mean the same in today's CSS draft, but `none` once broke text zoom in
++desktop WebKit ([bug 56543](https://bugs.webkit.org/show_bug.cgi?id=56543)), and `100%` is what
++preflight uses. It does not touch pinch or page zoom. **What it gives up:** Safari's enlargement is
++off everywhere, including anywhere it might have helped. With the article at 17px that is
++reasonable, and it is the thing to look at on a real phone.
++
++**The simpler option passed over:** a rule on Skim's classes alone. It would fix the picture and
++leave every other band enlarged on the same phone.
++
++**The test**, red first: `tests/preflight-substitute.test.ts` gains two checks. One requires the
++exact values, `-webkit-text-size-adjust: 100%` and `text-size-adjust: 100%`, on the bare `html`
++rule in `@layer base` (GPT Sol's F1: a check of names alone passes `auto`; seen red with `auto`).
++The other reads preflight's
++own `html` rule out of `node_modules`, and requires every property it sets there to be either in our
++base block's `html` rule or declined with a reason, the same shape the file already uses for
++`button`. That makes the next Tailwind upgrade's new `html` property a decision too. Of the seven
++properties preflight sets there today, we mirror one and decline six (line-height, tab-size, the
++font family and its two settings, the tap highlight), each of which the app already sets itself or
++has shown no bug for.
++
++**Docs:** a paragraph in [controls.md](../project/controls.md) beside the other three findings, and
++a line in [phone-and-touch.md](../project/phone-and-touch.md).
++
++## The quick review
++
++What I looked at: every `font-size` in `src/web/styles/` and `styles/`, the Tailwind text utilities
++in the components, the four voice tokens, and the main line of text in each mode's band.
++
++**The faces are in order.** Four tokens, one file of voice lists, a test that makes a new mode or
++page a type error until its AI classes are listed ([fonts.md](../project/fonts.md)). I found nothing
++drawn in the wrong face in this pass, beyond what fonts.md § Not yet in a voice already lists.
++
++**The sizes are not on a scale.** This is the real finding.
++
++- 566 `font-size` declarations across the 40 stylesheets that set one, using about **65 different
++  values**. Between 0.72rem and 0.98rem alone there are 26 steps, most a tenth of a pixel or two
++  apart: 0.81rem (50 uses), 0.83 (45), 0.88 (39), 0.85 (34), 0.79 (30), 0.77 (30), 0.84 (27),
++  0.8 (25), 0.86 (22) and so on.
++- The pages built with Tailwind are tidier: 242 `text-sm`, 219 `text-xs`, and 27 uses of 11 one-off
++  sizes.
++- **The same job gets a different size in each mode.** The main line of a row is 0.88rem in Skim
++  and Timeline, 0.93rem in FAQ, 0.95rem in Glossary, 1.03rem in Quiz. A verbatim quote is 0.83rem
++  in Timeline and 0.84rem in Skim. No two of these were chosen against each other; each was chosen
++  on the day its mode was written.
++- One stylesheet (`debate.css`) uses 18 sizes by itself.
++- A handful are in `px` (five rules), which do not follow the reader's browser font setting.
++
++Nobody would see 0.83 against 0.84. What it costs is that there is no answer to "what size should
++this be", so each new mode picks its own, and across modes the drift is visible: Quiz's question is
++2.4px bigger than Skim's row.
++
++**Whether the three faces look the same size at the same size is not known.** IBM Plex Mono is
++wide, so a line of it may read as larger than Geist or the serif at the same size. The picture is
++no evidence either way: the section line measures 1.049 times the quote, and it is asked to be
++1.048 times (GPT Sol's F2). It needs the three faces side by side at one size on `/design`.
++
++**Clear-cut and built here:** the `text-size-adjust` rule only. Everything else above is a choice
++about how the product looks, so it goes to Greg.
++
++## Questions for Greg
++
++One question, in [awaiting-approval.md](../user-feedback/awaiting-approval.md) in plain words. It
++does not block the fix. Queue item `qi-f8h393sb`.
++
++**Should the same kind of line be the same size in every mode?** Today each mode chose its own. The
++choices:
++
++1. **Line up the roles that recur across modes** (recommended). Name five or six jobs: a row's main
++   line, a verbatim quote, a model's sentence, a small label, a count. Give each one size as a
++   token, and move the modes' rules for those jobs onto it. *In use:* Quiz's question, Glossary's
++   term and Skim's row become one size, somewhere between today's 14px and 16.5px, which is itself
++   a choice to look at. *Cost:* perhaps 100 to 150 rules, some rows rewrapping, a browser pass over
++   every mode at three widths; about a session. Everything else keeps its odd value.
++2. **A full scale for everything**, headings, tiny labels and the one-off sizes included. *Gives:*
++   one answer for any new text. *Cost:* it has to be designed first (which steps, which roles), then
++   all 566 rules moved; several sessions, and many small visible shifts. Not yet defined well enough
++   to build.
++3. **Leave it.** Nothing is broken; a reader sees the drift only by comparing modes.
++
++*What would make you pick:* 1 if the modes looking like one product matters now; 3 if it does not
++yet; 2 only after 1 has shown which roles are real.
++
++**Not a question yet:** whether the model's monospace should be drawn slightly smaller. There is no
++evidence it looks bigger (above). The same queue item covers putting the three faces side by side
++at one size on `/design`; if they look uneven, that becomes a question with a picture.
++
++## Assumptions
++
++- The screenshot is an iPhone in landscape. If it was a narrow desktop window instead, the 1.53
++  ratio has no explanation I can find in the stylesheets, and the rule is still harmless.
++- "Skim's are probably too big" is answered by the inflation. Skim's own sizes (0.84 to 0.88rem)
++  are in line with the other bands, so I have not changed them.
++
++## Progress
++
++- [x] GPT Sol plan review: changes needed, six findings, all taken ([answer](261006k-plan-review-sol.md)). F1 the exact-value test; F2 the monospace question withdrawn for want of evidence; F3 the counts; F4 the question redrawn as three choices; F5 "inference, not proof"; F6 the trade-off named
++- [x] Test red, rule added, test green (names: red before the rule; value: red with `auto`). The rule is in the built `dist` stylesheet
++- [x] Docs
++- [ ] GPT Sol code review
++- [ ] Note, endings, queue
+diff --git a/docs/project/controls.md b/docs/project/controls.md
+index d09a31806..bd9fd79b7 100644
+--- a/docs/project/controls.md
++++ b/docs/project/controls.md
+@@ -103,6 +103,23 @@ anything else. And **an HTML attribute that also sets CSS is a rule you did not
+ `width`/`height` on an image are the common one, and the moment a utility sets only one of the pair,
+ they stop being about aspect ratio and start being about size.
+ 
++## And a fourth: a phone held sideways
++
++Found 2026-10-06, from Greg's report `spya-ar65p3`: *"Why are the fonts in this different? Probably
++the ones in the Skim mode are too big?"* On an iPhone in landscape, Skim's quote (`0.84rem`, 13.4px)
++measured 20.5px in his screenshot, beside an article at its own 17px.
++
++Preflight sets `-webkit-text-size-adjust: 100%` on `html`, and we set nothing. Without it Safari on
++an iPhone in landscape enlarges text block by block and holds back on short text, so the sizes in one band stop agreeing with each other and with the stylesheet. The
++rule is now in the same `@layer base` substitute. That reading of the screenshot is a strong
++inference rather than something reproduced. **Nothing on the box can show it**: Chrome has no
++such autosizing, so this one is checked on a real phone
++([phone-and-touch.md § Checking it](phone-and-touch.md#checking-it)).
++
++The checklist had looked only at `button`, so a property preflight sets on `html` was outside it. It
++now holds a decision for each of those too. The measurement is in
++[261006k](../plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md).
++
+ ## Two hover languages, and the orange one won
+ 
+ `--accent` is a raised dark grey **surface**, not the orange; both `styles/tokens.css` and
+diff --git a/docs/project/phone-and-touch.md b/docs/project/phone-and-touch.md
+index 3e2959f2b..c0fe0900e 100644
+--- a/docs/project/phone-and-touch.md
++++ b/docs/project/phone-and-touch.md
+@@ -230,3 +230,7 @@ A phone-width desktop window is not a phone, and emulation has no real notch or
+ [browser-testing-playwright.md](browser-testing-playwright.md) say what to use instead, and
+ [touch.md § What only a real iPad can tell us](touch.md#what-only-a-real-ipad-can-tell-us) says
+ what no emulation can show.
++
++**Text that is bigger than its stylesheet says, on an iPhone in landscape only**, is Safari's text
++autosizing, which no desktop browser has. `html { -webkit-text-size-adjust: 100% }` turns it off,
++since 2026-10-06 ([controls.md § And a fourth](controls.md#and-a-fourth-a-phone-held-sideways)).
+diff --git a/docs/user-feedback/261006_1416-fonts-differ-skim-too-big-and-a-quick-font-review.md b/docs/user-feedback/261006_1416-fonts-differ-skim-too-big-and-a-quick-font-review.md
+new file mode 100644
+index 000000000..5c98a7e59
+--- /dev/null
++++ b/docs/user-feedback/261006_1416-fonts-differ-skim-too-big-and-a-quick-font-review.md
+@@ -0,0 +1,38 @@
++---
++reports: spya-ar65p3
++ending: shipped
++---
++# Skim's text is bigger than the article's, and a quick review of fonts and sizes
++
++`spya-ar65p3`, filed as a suggestion by Greg (admin; `feedback-reporter.ts` exit 0 on the
++production row), 2026-10-06 14:16 UTC, from `/admin/costs` (where the dialog was opened; the
++subject is the reading view). Sentry `SPIDERYARN-READING2-DW`. Overseer queue item `qi-d4c5w4fe`.
++This session has no Sentry sign-in and did not write the Sentry status; the next feedback sweep
++does.
++
++> Why are the fonts in this different? Probably the ones in the Skim mode are too big?
++>
++> Do a quick review of fonts and font sizes more generally.
++
++**Ending: Shipped.** It is on `dev` and not deployed. The design question the review raised is a
++deferred half with its own queue entry (`qi-f8h393sb`), and is on
++[awaiting-approval.md](awaiting-approval.md).
++
++What we did, in
++[261006k](../plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md):
++
++- **Read the screenshot** from the production row. It is an iPhone held sideways, with Skim's band
++  beside the article. Skim's quote and section line are drawn about 1.5 times the size the
++  stylesheet asks for; the article and the buttons are at their own size.
++- **The cause is, as far as can be told from here, Safari's text autosizing on a landscape iPhone**, which the app never turned off.
++  It is not Skim's own sizes, which are smaller than the article's. One rule on `html` turns it
++  off for every band, and a test now keeps a decision for each thing Tailwind's reset sets there.
++- **The faces differ on purpose**: the quote is the author's serif, the section line is a model's
++  title in the monospace ([fonts.md](../project/fonts.md)).
++- **The quick review** is in the plan. The faces are in order. The sizes are not on a scale: about
++  65 different values, and the same kind of line is a different size in each mode.
++
++**Not seen on a phone.** Nothing on the box has this autosizing, so the fix rests on the
++measurement and the documented behaviour. Greg: when a build with it is live, Skim on a phone held
++sideways should show the quote smaller than the article text. If it does not, say so and this
++reopens.
+diff --git a/docs/user-feedback/awaiting-approval.md b/docs/user-feedback/awaiting-approval.md
+index 67ae558c9..edbcd91af 100644
+--- a/docs/user-feedback/awaiting-approval.md
++++ b/docs/user-feedback/awaiting-approval.md
+@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
+ 
+ ## Waiting on Greg now
+ 
++- 2026-10-06 · SPIDERYARN-READING2-DW (spya-ar65p3; the report itself shipped as one rule that
++  stops a sideways iPhone enlarging a band's text, this is the review's question) · should the same
++  kind of line be the same size in every mode? Today there are about 65 text sizes, and a row's
++  main line is 14px in Skim, 15px in Glossary and 16.5px in Quiz. Three choices: line up the five
++  or six kinds of line that recur across modes (about a session; recommended), design a full scale
++  for everything (several sessions, not yet defined), or leave it · qi-f8h393sb ·
++  [261006k § Questions for Greg](../plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md#questions-for-greg) ·
++  [note](261006_1416-fonts-differ-skim-too-big-and-a-quick-font-review.md)
++
+ - 2026-10-06 · SPIDERYARN-READING2-DQ (spya-jghnva; the report itself shipped as `skim/10`, this is
+   its deferred half) · should Skim's cue set a scene more often? What shipped sets one only when the
+   quote leans on words it does not explain. A wording that sets one on every cue was preferred 64 to
+diff --git a/src/web/tailwind.css b/src/web/tailwind.css
+index 48db5fb86..81212b454 100644
+--- a/src/web/tailwind.css
++++ b/src/web/tailwind.css
+@@ -408,3 +408,23 @@
+     height: auto;
+   }
+ }
++
++/* ------------------------------------- and a fourth: a phone held sideways --
++   Preflight's `html { -webkit-text-size-adjust: 100% }`. Without it, Safari on
++   an iPhone in landscape enlarges text block by block and holds back on short
++   text. So a mode's band drew its rows half as
++   big again as the stylesheet says, beside an article at its own size: Skim's
++   0.84rem quote measured 20.5px against the prose's 17px in Greg's screenshot
++   (report spya-ar65p3, 2026-10-06; docs/plans/261006k-…).
++
++   `100%` and not `none`: it switches the autosizing off without touching the
++   reader's own zoom. Nothing on the box can show this (Chrome has no such
++   autosizing), so it is checked on a real phone or not at all.
++   tests/preflight-substitute.test.ts holds the decision for each of the other
++   properties preflight sets on `html`. */
++@layer base {
++  html {
++    -webkit-text-size-adjust: 100%;
++    text-size-adjust: 100%;
++  }
++}
+diff --git a/tests/preflight-substitute.test.ts b/tests/preflight-substitute.test.ts
+index 462b50682..69ed23cf9 100644
+--- a/tests/preflight-substitute.test.ts
++++ b/tests/preflight-substitute.test.ts
+@@ -1,6 +1,6 @@
+ /**
+  * **We hand-wrote a replacement for Tailwind's preflight, and it has been
+- * incomplete three times. This is the checklist that makes a fourth loud.**
++ * incomplete four times. This is the checklist that makes a fifth loud.**
+  *
+  * [`tailwind.css`](../src/web/tailwind.css) deliberately imports no preflight —
+  * it would reset the article author's own HTML inside `.prose`, the one place
+@@ -13,6 +13,10 @@
+  * | 2026-08-27 | scoped to `[data-slot]`, so most buttons got nothing | 36 of 59 buttons wore the UA's `2px outset white` border; all 59 had `cursor: default` |
+  * | 2026-08-27 | `img { height: auto }` | the landing page's screenshots were stretched 1.95× |
+  * | 2026-09-04 | `font-family` / `font-size` | every button that set no font of its own rendered in the UA's Arial on a Geist page |
++ * | 2026-10-06 | `html { -webkit-text-size-adjust }` | an iPhone in landscape drew a band's wrapped text half as big again as the article beside it |
++ *
++ * The fourth was on `html`, which the checklist did not cover: it looked only
++ * at `button`. It covers both now (`DECLINED_HTML`).
+  *
+  * Each was found by eye, late, by somebody looking at something else. The
+  * pattern is always the same and it is the [silent-success](../docs/reusable/silent-success.md)
+@@ -85,6 +89,22 @@ const DECLINED: Record<string, Declined | string> = {
+     "the UA appearance is already defeated by the background and border we set; no bug seen.",
+ };
+ 
++/**
++ * The same decision list for preflight's `html` rule, added 2026-10-06 with the
++ * fourth finding: `-webkit-text-size-adjust`. Without it an iPhone in landscape
++ * enlarged the wrapped text in a mode's band by half while the article beside
++ * it stayed at its own size (report spya-ar65p3, plan 261006k).
++ */
++const DECLINED_HTML: Record<string, string> = {
++  "line-height": "`body` sets the app's own (styles/shell.css), and `.prose` the article's.",
++  "tab-size": "no bug seen; the only tabs we draw are in an article's own `<pre>`.",
++  "font-family": "`body` names the app's face from the tokens, and the voices set theirs.",
++  "font-feature-settings": "no bug seen; nothing here reads a theme default for it.",
++  "font-variation-settings": "no bug seen; Geist Variable is driven by `font-weight` alone here.",
++  "-webkit-tap-highlight-color":
++    "no bug seen, and nobody has looked at a phone with the tap flash gone; undecided, so left.",
++};
++
+ /** Strip comments so a property named in prose is not read as a declaration. */
+ function decomment(css: string): string {
+   return css.replace(/\/\*[\s\S]*?\*\//g, " ");
+@@ -129,6 +149,39 @@ async function oursButtonProps(): Promise<string[]> {
+   return [...props];
+ }
+ 
++/** Every property a stylesheet declares in a rule whose selector list names bare `html`. */
++function htmlProps(css: string): string[] {
++  const props = new Set<string>();
++  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
++    const targetsHtml = (selector ?? "")
++      .split(",")
++      .map((s) => s.trim().split(/\s+/).pop())
++      .some((s) => s === "html");
++    if (!targetsHtml) continue;
++    for (const decl of (body ?? "").split(";")) {
++      const name = decl.split(":")[0]?.trim();
++      if (name) props.add(name);
++    }
++  }
++  return [...props];
++}
++
++async function preflightHtmlProps(): Promise<string[]> {
++  const props = htmlProps(decomment(await readFile(PREFLIGHT, "utf8")));
++  /* As above: an empty read must not pass, and this is the property the check is for. */
++  expect(props, `no html rule found in ${PREFLIGHT}; has preflight moved?`).toContain(
++    "-webkit-text-size-adjust",
++  );
++  return props;
++}
++
++async function oursHtmlProps(): Promise<string[]> {
++  const css = decomment(await readFile(TAILWIND_CSS, "utf8"));
++  const base = css.match(/@layer base \{([\s\S]*?)\n\}/g)?.join("\n") ?? "";
++  expect(base, "no @layer base block found in tailwind.css").not.toBe("");
++  return htmlProps(base);
++}
++
+ describe("the hand-written preflight substitute", () => {
+   it("has a decision recorded for every property preflight sets on a button", async () => {
+     const preflight = await preflightButtonProps();
+@@ -176,4 +229,34 @@ describe("the hand-written preflight substitute", () => {
+       "DECLINED explains why we skip properties preflight does not set any more — delete these",
+     ).toEqual([]);
+   });
++
++  it("has a decision recorded for every property preflight sets on html", async () => {
++    const preflight = await preflightHtmlProps();
++    const ours = new Set(await oursHtmlProps());
++    const undecided = preflight.filter((p) => !ours.has(p) && !(p in DECLINED_HTML));
++    expect(
++      undecided,
++      "Tailwind's preflight sets these on `html` and this app neither mirrors them in the " +
++        "@layer base block in tailwind.css nor records why not in DECLINED_HTML.",
++    ).toEqual([]);
++  });
++
++  it("switches Safari's landscape text autosizing off, at 100%", async () => {
++    /* The check above compares names, so `auto` would pass it. This is the value. */
++    const css = decomment(await readFile(TAILWIND_CSS, "utf8"));
++    const base = css.match(/@layer base \{([\s\S]*?)\n\}/g)?.join("\n") ?? "";
++    const html = [...base.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
++      .filter(([, selector]) => (selector ?? "").trim() === "html")
++      .map(([, , body]) => (body ?? "").replace(/\s+/g, ""))
++      .join("");
++    expect(html).toContain("-webkit-text-size-adjust:100%;");
++    expect(html).toMatch(/(^|;)text-size-adjust:100%;/);
++  });
++
++  it("keeps DECLINED_HTML honest: nothing preflight stopped setting, nothing we now set", async () => {
++    const preflight = new Set(await preflightHtmlProps());
++    const ours = new Set(await oursHtmlProps());
++    const stale = Object.keys(DECLINED_HTML).filter((p) => !preflight.has(p) || ours.has(p));
++    expect(stale, "delete these from DECLINED_HTML").toEqual([]);
++  });
+ });

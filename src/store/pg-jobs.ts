@@ -2,14 +2,14 @@
  * Ingest jobs in Postgres — the record both invocations can see, and the fence
  * that stops the wrong one writing.
  *
- * ## Every transition is one conditional statement, bar one
+ * ## Conditional writes enforce transitions
  *
  * The precondition lives in the `WHERE`, so the database decides rather than
  * the order two requests happened to arrive in, and a loser learns it lost
- * instead of overwriting a winner — where the filesystem adapter has to read
- * first, this file does not.
+ * instead of overwriting a winner. Some operations also lock and read rows to
+ * decide their outcome; the write still checks its precondition.
  *
- * **`pauseForDeadline` is the exception and it is deliberate.** Its caller does
+ * **`pauseForDeadline` locks before classifying, deliberately.** Its caller does
  * not want to know *whether* it moved the row, it wants to know **why not** —
  * Stop, a spent budget, or a lost claim, which want three different things and
  * which one row count cannot tell apart. So it locks the row, decides, and
@@ -244,10 +244,9 @@ export interface IngestProvenance {
  *
  * **Not on `Job` and not on the `JobStore` interface**, deliberately. `Job` is
  * serialised to the browser by `publicJob` (src/jobs.ts) and a ledger id is not
- * the reader's business; the interface is shared with the filesystem adapter,
- * where quota does not exist (docs/project/billing.md). So this is a Postgres
- * read with one Postgres-only caller — src/billing/admission.ts, which is
- * already behind that flag.
+ * the reader's business; the interface was shared with the filesystem adapter
+ * until 2026-09-05, where quota did not exist (docs/project/billing.md). So this is a Postgres
+ * read with one Postgres-only caller — src/billing/admission.ts.
  *
  * Owner-scoped, like `get`: somebody else's job is one that is not there.
  * Dismissed-scoped like `get`, too: otherwise a direct Retry can reserve a
@@ -307,7 +306,9 @@ export async function ingestProvenanceOf(
  */
 async function lockArticleFor(tx: Tx, job: Job) {
   return await tx
-    .select({ id: articles.id })
+    /* `currentRevisionId` is for `requireWhatTheAllocationLeanedOn` alone: only
+       a *published* article excuses a queue adoption from its holder. */
+    .select({ id: articles.id, currentRevisionId: articles.currentRevisionId })
     .from(articles)
     .where(ownedSlug(job.slug, job.ownerId))
     .for("update")
@@ -366,16 +367,29 @@ async function lockRetriedAttempt(tx: Tx, job: Job, retryOf: string) {
  * long enough for the holder to publish, finish, and have its article destroyed —
  * and then this insert lands on a slug with nothing under it.
  *
- * **Only asked when the article is absent**, which is the difference between a
- * guard and a refusal of ordinary work: a holder that finished properly leaves
- * the article behind, and adopting a name whose article exists is a shelf
- * adoption in all but provenance.
+ * **Only asked when the article has no published revision**, which is the
+ * difference between a guard and a refusal of ordinary work: a holder that
+ * finished properly leaves a published article behind, and adopting a name
+ * whose article is published is a shelf adoption in all but provenance.
+ *
+ * **Published, not merely present, since 2026-10-06.** It used to be *"when the
+ * article is absent"*, and a bare row — made at the holder's first claim, with
+ * nothing published into it — was taken for the article. But the shelf lookup
+ * (`slugForUrlKey`, src/store/find-article.ts) matches a published revision's
+ * address and cannot see a bare row, so that row keeps no other request away
+ * from the address: the holder ends, a second request sees neither a shelf
+ * article nor an active job and mints and reserves a new slug, and this one
+ * lands on the old slug reserving nothing — two jobs for one address on two
+ * slugs, both charged. A published article *is* found by every later lookup,
+ * which is what makes it safe to lean on. GPT Sol's F14, reviewing the built
+ * stage 1 of plan 261005l; tests/one-article-for-one-address.test.ts § *an
+ * article nobody has published into*.
  *
  * **The lock has to cover the insert**, and does, because it is taken in the
  * insert's own transaction. An unlocked existence check is the same race one
  * statement later — the finding says so in as many words.
  *
- * **A miss is not a refusal on its own**, because `articleExists` was read
+ * **A miss is not a refusal on its own**, because an *absent* article was read
  * without holding anything: `restartRatherThanRefuse` is what a miss goes
  * through, and it asks for one more pass before it will say no.
  *
@@ -469,8 +483,8 @@ const isRestart = (result: EnqueueOutcome | Restart): result is Restart =>
  * lock order** — GPT Sol's F50, docs/plans/260906h-delete-an-article-permanently.md.
  *
  * `lockArticleFor` on an absent article locks *nothing*
- * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md), so
- * `articleExists === false` is a fact from a moment that has already passed —
+ * (docs/postmortems/260901f-a-for-update-that-locks-nothing.md), so *"there is
+ * no article"* is a fact from a moment that has already passed —
  * exactly the kind of fact this whole family of guards exists to distrust. The
  * losing sequence is an ordinary second paste:
  *
@@ -488,8 +502,14 @@ const isRestart = (result: EnqueueOutcome | Restart): result is Restart =>
  * transaction holding a job row and then reaching for the article row is the
  * other half of that cycle. Restarting releases the job lock and goes back
  * through the canonical article-first order, where the second pass finds the
- * article, skips this guard entirely, and inserts as the ordinary adoption it
- * always was.
+ * published article, skips this guard entirely, and inserts as the ordinary
+ * adoption it always was.
+ *
+ * **A row that exists and is unpublished is not stale in that way** — it was
+ * found and locked — so since 2026-10-06, when such a row stopped excusing the
+ * holder check (`lockAdoptedHolder`), a miss over one is expected to be told
+ * the same thing on the second pass. It still goes round once: one rule is
+ * simpler than two, and the pass is cheap.
  *
  * **Exactly one restart**, and the `Look` is how it is counted. A second miss
  * means the holder really has gone and left nothing behind, which is what the
@@ -516,30 +536,33 @@ function restartRatherThanRefuse(look: Look): Restart {
  *
  * **After the article lock, never before it.** `pgShelfStore.destroy` takes
  * `articles` and then `jobs`; a transaction taking them the other way round
- * would be the cycle. Called with whether that lock found anything rather than
- * with the row, because that is all either guard wants to know.
+ * would be the cycle. Called with whether that lock found a *published* article
+ * rather than with the row, because that is all the holder guard wants to know
+ * and the attempt guard wants nothing.
  *
  * **Throws for the two answers that are final, and returns for the one that is
  * not.** A missing attempt is a 404 and a second look could only agree with it;
- * a missing *holder* is only final on the second look, because
- * `articleExists` was read before nothing was locked — `restartRatherThanRefuse`
- * is the whole of that argument.
+ * a missing *holder* is only final on the second look, because an absent
+ * article was read with nothing locked — `restartRatherThanRefuse` is the whole
+ * of that argument.
  */
 async function requireWhatTheAllocationLeanedOn(
   db: Tx,
   job: Job,
   ticket: EnqueueTicket,
-  articleExists: boolean,
+  articlePublished: boolean,
   look: Look,
 ): Promise<Restart | undefined> {
   if (ticket.retryOf !== undefined) {
     const [attempt] = await lockRetriedAttempt(db, job, ticket.retryOf);
     if (!attempt) throw noSuchAttempt();
   }
-  /* Only when the article is absent: a holder that finished properly left one
-     behind, and adopting a name whose article exists is a shelf adoption in all
-     but provenance. See `lockAdoptedHolder`. */
-  if (!articleExists && ticket.adoptedFromJob !== undefined) {
+  /* Only when nothing is published there: a holder that finished properly left
+     a published article behind, and adopting a name whose article is published
+     is a shelf adoption in all but provenance. A row with no published revision
+     does not count — no lookup can find it by its address, so it holds the
+     address for nobody. See `lockAdoptedHolder`. */
+  if (!articlePublished && ticket.adoptedFromJob !== undefined) {
     const [holder] = await lockAdoptedHolder(db, job, ticket.adoptedFromJob);
     if (!holder) return restartRatherThanRefuse(look);
   }
@@ -576,7 +599,7 @@ async function enqueueIn(
     db,
     job,
     ticket,
-    article !== undefined,
+    article !== undefined && article.currentRevisionId !== null,
     look,
   );
   if (restart) return restart;
@@ -972,9 +995,9 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
  *
  * **Cancelled — the reader asked.** Back to `pending`, `startedAt` dropped,
  * and no sentence: nothing failed, and the step is simply one the reader chose
- * not to run. That is exactly what `sweepStopped` (src/store/jobs-fs.ts)
- * writes for a step whose process went away, so this is mechanisms agreeing
- * rather than a new rule.
+ * not to run. That is exactly what the filesystem adapter's `sweepStopped`
+ * wrote for a step whose process went away (src/store/jobs-fs.ts, deleted
+ * 2026-09-05), so this was mechanisms agreeing rather than a new rule.
  *
  * **Interrupted — nobody asked.** `error`, carrying `INTERRUPTED.message` and
  * a `finishedAt`, exactly as `runStep` records a step that threw. The first
@@ -994,12 +1017,17 @@ async function getIn(tx: Tx, id: string, owner: OwnerId): Promise<Job | undefine
  * One correlated subquery rather than a read-then-write, so this file keeps its
  * rule that every transition is a single conditional statement. `jobs.steps` on
  * the right-hand side of a `SET` is the row as it was before the update.
+ *
+ * A preview belongs only to a running step. Remove it on every arm, including
+ * non-running steps: Stop on a queued job can see a pending preview left by a
+ * pause from before this removal was added. Asking a live claimant to stop does
+ * not use this transformation, so its preview stays until the claimant settles.
  */
 function settledSteps(cancelled: SQL) {
   return sql`(
     select coalesce(
       jsonb_agg(
-        case
+        (case
           when step.value->>'status' <> 'running' then step.value
           when ${cancelled}
             then (step.value - 'startedAt') || '{"status":"pending"}'::jsonb
@@ -1014,7 +1042,7 @@ function settledSteps(cancelled: SQL) {
                  'finishedAt', to_char(
                    clock_timestamp() at time zone 'utc',
                    'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
-        end
+        end) - 'preview'
         order by step.ordinality
       ),
       '[]'::jsonb
@@ -1062,7 +1090,8 @@ async function settlingIfTerminal(transition: (tx: Tx) => Promise<Job>): Promise
       /* Off the row this transaction has just written and still holds, the same
          read `settleIn` does and for the same reason: `Job` deliberately does
          not carry the ledger id, and widening it to would push a Postgres-only
-         column through an interface the filesystem store shares. */
+         column through an interface the filesystem store shared when this was
+         written. */
       const [row] = await tx
         .select({ ingestEventId: jobs.ingestEventId })
         .from(jobs)
@@ -1283,7 +1312,7 @@ const rawPgJobStore: JobStore = {
 
       if (running >= maxRunning) {
         /* **Classify the job before blaming the cap** — `refusalFor` above says
-           why, and the filesystem adapter classifies first for the same reason.
+           why, and the filesystem adapter classified first for the same reason.
            **Not "N of N".** The cap can be lowered under jobs that are already
            running, so this really can read `already running 5 of 3` — which is a
            true account of a machine that is over its new limit and draining, and
@@ -1399,8 +1428,9 @@ const rawPgJobStore: JobStore = {
         .set({
           status: "queued",
           /* The *cancelled* shape of `settledSteps`, which is the same shape
-             `settleExpired`'s requeue writes and the same shape `sweepStopped`
-             has always written: the running step back to `pending` with its
+             `settleExpired`'s requeue writes, and the one the filesystem
+             adapter's `sweepStopped` wrote until that adapter went on
+             2026-09-05: the running step back to `pending` with its
              `startedAt` dropped and no sentence on it.
 
              **Derived from the row rather than taken from the caller**, and
@@ -1408,8 +1438,8 @@ const rawPgJobStore: JobStore = {
              *failure* narrative `runStep` records on the way out — `error`, and
              `INTERRUPTED`'s sentence — and writing those onto a job that is
              going back into the line would put a red step on a card that is
-             waiting its turn. The row already holds every finished step, because
-             `noteProgress` wrote them. */
+             waiting its turn. The row already holds every finished step,
+             written in the transaction that committed its product. */
           steps: settledSteps(sql`true`),
           attemptId: null,
           leaseExpiresAt: null,
@@ -1646,10 +1676,11 @@ const rawPgJobStore: JobStore = {
        * **First, the jobs that get another go — back to `queued` on their own
        * row.**
        *
-       * This is the Postgres answer to `sweepStopped` (src/store/jobs-fs.ts),
-       * which has always turned a restart into a *pause* rather than an
-       * abandoned ingest: running steps back to `pending`, the job back to
-       * `queued`, the row otherwise untouched. Postgres had no equivalent, so on
+       * This is the Postgres answer to the filesystem adapter's `sweepStopped`
+       * (src/store/jobs-fs.ts, deleted 2026-09-05), which turned a restart
+       * into a *pause* rather than an abandoned ingest: running steps back to
+       * `pending`, the job back to `queued`, the row otherwise untouched.
+       * Postgres had no equivalent, so on
        * the store we actually ship a deploy landing mid-ingest ended the job —
        * and the reader's only door out of that was a Retry that, until
        * 2026-09-03, minted a new article and threw away every chunk they had
@@ -1683,9 +1714,9 @@ const rawPgJobStore: JobStore = {
                 /* The *cancelled* shape of `settledSteps`: the running step back
                    to `pending` with its `startedAt` dropped and no sentence on
                    it. Nothing failed — the job is going back into the line — and
-                   this is exactly what `sweepStopped` writes for a step whose
-                   process went away, so the two mechanisms agree rather than
-                   inventing a third answer. */
+                   this is what `pauseForDeadline` writes too, so the two
+                   requeues agree. (The filesystem adapter's `sweepStopped`,
+                   gone 2026-09-05, wrote the same.) */
                 steps: settledSteps(sql`true`),
                 attemptId: null,
                 leaseExpiresAt: null,
@@ -1875,7 +1906,8 @@ const rawPgJobStore: JobStore = {
        * missing fact is this one: **no other active job on this article still
        * carries `labels`**. If one does, skip — it will be marked at its own
        * ending if it dies too, so nothing is lost and the sentence stays true
-       * meanwhile.
+       * meanwhile. The predicate itself is `anotherJobCarriesLabelsIn`, below,
+       * which the live ending in src/store/pg-session.ts asks as well.
        *
        * **Asked after the settlement, deliberately.** By now every row this sweep
        * ended is terminal and so is outside `ACTIVE`, which is what stops two
@@ -1885,37 +1917,9 @@ const rawPgJobStore: JobStore = {
        * `queued` and does count, which is right: it has another window and its
        * draft.
        */
-      const stillCarryingLabels =
-        buyingLabels.length === 0
-          ? []
-          : (
-              await tx
-                .select({ id: jobs.id, ownerId: jobs.ownerId, slug: jobs.slug, steps: jobs.steps })
-                .from(jobs)
-                .where(
-                  and(
-                    inArray(
-                      jobs.slug,
-                      buyingLabels.map((row) => row.slug),
-                    ),
-                    inArray(jobs.status, ACTIVE),
-                    not(jobs.cancelling),
-                  ),
-                )
-            ).filter(
-              (row) =>
-                !ended.has(row.id) && row.steps.some((step) => step.name === "labels"),
-            );
-
       for (const row of buyingLabels) {
         if (ended.get(row.id) !== "error") continue;
-        if (
-          stillCarryingLabels.some(
-            (other) => other.slug === row.slug && other.ownerId === row.ownerId,
-          )
-        ) {
-          continue;
-        }
+        if (await anotherJobCarriesLabelsIn(tx, row, [...ended.keys()])) continue;
         const marked = await markNavLabelsFailedIn(
           tx,
           row.slug,
@@ -1950,12 +1954,17 @@ const rawPgJobStore: JobStore = {
     return outcomes;
   },
 
-  async noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job> {
+  async noteProgress(id: string, attempt: string, steps: JobStep[], title?: string): Promise<Job> {
     const db = getDb();
-    /* `steps` and nothing else — not the status, and **not the lease**. See the
-       contract: renewing here would turn the lease into a heartbeat, and the
-       claimant's own deadline has to be the thing that fires first. */
-    const moved = await db.update(jobs).set({ steps }).where(fence(id, attempt)).returning();
+    /* `steps`, and the title when the claimant has one — not the status, and
+       **not the lease**. See the contract: renewing here would turn the lease
+       into a heartbeat, and the claimant's own deadline has to be the thing
+       that fires first. An absent or blank title leaves the row's alone. */
+    const moved = await db
+      .update(jobs)
+      .set({ steps, ...(title?.trim() && { title }) })
+      .where(fence(id, attempt))
+      .returning();
     if (!moved[0]) throw new StaleAttemptError(id);
     return toJob(moved[0]);
   },
@@ -2056,6 +2065,15 @@ const rawPgJobStore: JobStore = {
           error: sql`case when ${over} then null else ${jobs.error} end`,
           failureKind: sql`case when ${over} then null else ${jobs.failureKind} end`,
           finishedAt: sql`case when ${over} then now() else ${jobs.finishedAt} end`,
+          /* **When the reader pressed Stop**, on both branches — unconditional
+             inside the statement because the WHERE is what makes a request
+             accepted: a job that is already over, or somebody else's, matches
+             no row and stamps nothing. On the asking branch this is the only
+             record of the moment, since `finished_at` waits for the claimant
+             and may not end as `cancelled` at all. A second press on a job
+             already stopping matches again and moves it: it is the *latest*
+             accepted request. Nothing clears it. */
+          cancelRequestedAt: sql`now()`,
         })
         .where(and(eq(jobs.id, id), eq(jobs.ownerId, owner), inArray(jobs.status, ACTIVE)))
         .returning();
@@ -2099,10 +2117,10 @@ const rawPgJobStore: JobStore = {
   },
 
   /**
-   * **The retention rule, written out here and cited from the filesystem
-   * adapter** (src/store/jobs-fs.ts § `trimFinished`), which implements the
-   * same thing in JavaScript. It used to be spelled out at length on both
-   * sides, and that is how they drifted.
+   * **The retention rule, written out here and nowhere else.** Until
+   * 2026-09-05 a filesystem adapter (src/store/jobs-fs.ts § `trimFinished`)
+   * implemented the same thing in JavaScript and cited this; before that the
+   * rule was spelled out at length on both sides, which is how they drifted.
    *
    * Rank each terminal job **within its own kind** — `done` on one side,
    * everything that is not a success on the other — most recently finished
@@ -2126,8 +2144,8 @@ const rawPgJobStore: JobStore = {
    * ending** — `noteEnded` trims immediately after every finish (src/jobs.ts).
    * Ranked by finish time it is rank 1 of its kind, because nothing has ended
    * since. `nulls last` puts a legacy or malformed terminal row at the back of
-   * its kind, which is the conservative answer; every terminal transition on
-   * both adapters stamps the column.
+   * its kind, which is the conservative answer; every terminal transition
+   * stamps the column.
    *
    * **What depends on this.** The client learns a job finished by polling for a
    * terminal row (`recordCompletions`, src/web/jobEngine.ts) — so the
@@ -2142,7 +2160,7 @@ const rawPgJobStore: JobStore = {
    * docs/plans/260903h-keep-a-fresh-success-out-of-the-retention-sweep.md.
    *
    * `id` is the last key because neither timestamp is a total order, and
-   * without it the two adapters answer from different accidents.
+   * without it two jobs with equal timestamps are ranked by accident.
    *
    * **No lock.** Two endings each trimming this one owner see a consistent
    * snapshot, and overlapping deletes only make one of the returned counts
@@ -2192,8 +2210,9 @@ const rawPgJobStore: JobStore = {
  * These are exported anyway, because the transactional store session
  * (docs/plans/260827aa-delete-the-importer.md § D1b) has to settle the job inside the
  * *artefact* transaction, and a method that calls `getDb()` for itself binds to
- * nothing. Injecting the public `JobSettles` capability was the design the
- * review rejected for exactly that reason.
+ * nothing. Injecting the public pair (`JobSettles`, a type deleted with the
+ * filesystem session on 2026-10-07) was the design the review rejected for
+ * exactly that reason.
  *
  * **So the scrubbing has to be re-provided by the caller, and here is where:**
  * the session constructs its returned object through `guardDbStore`, the same
@@ -2203,6 +2222,100 @@ const rawPgJobStore: JobStore = {
  * `.finish` still go through the wrapper, because the wrapper is applied to the
  * store object and not to the statement.
  */
+
+/**
+ * **Is some other job still going to make this article's paragraph labels?**
+ *
+ * The one answer to that, for the two endings that ask it before writing
+ * `failed` onto a published revision (`markNavLabelsFailedIn`,
+ * src/store/pg-revisions.ts): the sweep above, ending a job nobody is inside,
+ * and `settleIn` (src/store/pg-session.ts), a live claimant ending its own.
+ * Until 2026-10-07 only the sweep asked, so the same article in the same
+ * position ended `pending` after a lapse and `failed` after a live failure
+ * (docs/investigations/261006d-seventh-sweep-depth-pipeline-and-import-queue-sol.md
+ * § PQ3). Kept here, with the statuses it reads, so there is no second copy to
+ * drift a second time.
+ *
+ * Another job counts when all four hold:
+ *
+ * - **it is not one of `excluding`.** The caller names every job it is ending.
+ *   For the sweep that is belt and braces, because its rows are already
+ *   terminal. For the live path it is the whole of the answer: the settling job
+ *   is still `running` with a `labels` step when this is asked, and would
+ *   otherwise be read as its own successor, so no live failure would ever mark;
+ * - **it belongs to `article.ownerId`.** `articles.slug` is unique across every
+ *   owner, but `jobs.slug` is plain text with no key to the article, so the
+ *   schema does not stop another owner's job carrying the same text, and the
+ *   sweep runs over everybody's rows;
+ * - **it is `queued` or `running` and not `cancelling`.** A job on its way out
+ *   promises nothing;
+ * - **its step list has `labels`.** Membership is right *here*, about the other
+ *   job: this is whether it may still carry the work, not
+ *   whether it failed inside it.
+ *
+ * **When to ask is the caller's, and the two differ on purpose.** The sweep
+ * asks about any ended job whose list has `labels`; the live path only when
+ * `unfinished === "labels"`. Do not merge them: each states its reason where it
+ * asks.
+ *
+ * Reads `jobs` and takes no lock. Both callers already hold the article's row,
+ * which is what a publication takes before it queues a successor, so a
+ * successor cannot appear between this answer and the mark. Session completion
+ * takes that lock too. Stop does not: it can cancel a queued successor while
+ * this transaction holds the article. As with Stop after this commit, that can
+ * leave labels pending; both callers deliberately mark only an error ending.
+ */
+export async function anotherJobCarriesLabelsIn(
+  exec: Executor,
+  article: { readonly slug: string; readonly ownerId: OwnerId },
+  excluding: readonly string[],
+): Promise<boolean> {
+  const active = await exec
+    .select({ id: jobs.id, steps: jobs.steps })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.slug, article.slug),
+        eq(jobs.ownerId, article.ownerId),
+        inArray(jobs.status, ACTIVE),
+        not(jobs.cancelling),
+      ),
+    );
+  return active.some(
+    (row) => !excluding.includes(row.id) && row.steps.some((step) => step.name === "labels"),
+  );
+}
+
+/**
+ * The step is done and the claim stays: write the job's steps, and only them.
+ *
+ * **This is the receipt for a forced step, which is why it is in the commit.**
+ * `force` is spent by the step's stored status being `done` (`stillForced`,
+ * src/jobs.ts), and nothing about the artefacts can say it instead. Until
+ * 2026-10-07 that status reached the row only through `noteProgress`, after
+ * the commit and on its own connection. A claim that lapsed in between, or a
+ * progress write that failed before a pause, left the step stored as `running`
+ * with `force: true`; the requeue made it `pending`, and the next claim ran
+ * and paid for it again.
+ *
+ * Not the status, not the lease, not `cancelling`, and no row handed back: the
+ * walk's `noteProgress` straight after is still the look at Stop. The row is
+ * already locked by this transaction (`requireLiveJobOwnsDraft`, taken by
+ * `finishStepRun`), so this adds a statement and no lock.
+ */
+export async function keepStepIn(
+  exec: Executor,
+  id: string,
+  attempt: string,
+  steps: JobStep[],
+): Promise<void> {
+  const moved = await exec
+    .update(jobs)
+    .set({ steps })
+    .where(fence(id, attempt))
+    .returning({ id: jobs.id });
+  if (!moved[0]) throw new StaleAttemptError(id);
+}
 
 /**
  * Hand the job back to the queue with this step's outcome recorded — or, if a
@@ -2270,6 +2383,13 @@ export async function releaseStepIn(
  * So the flag is cleared and the ending stands. Written down here because the
  * two functions reading the same column and answering differently is exactly
  * what a later reader would take for a bug.
+ *
+ * **And since 2026-10-07 the claimant's own instance agrees.** A Stop that
+ * aborted the running step locally used to make `transitionAfter` (src/jobs.ts)
+ * ask for a `cancelled` ending here instead, so the same press kept the article
+ * or lost it by which server answered. It asks for `done` now; Greg's decision
+ * is quoted there. `cancel_requested_at` is not cleared, so the press stays on
+ * the row.
  */
 export async function finishIn(
   exec: Executor,

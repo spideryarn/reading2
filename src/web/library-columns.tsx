@@ -10,7 +10,7 @@
  * > Make the set of docs on the homepage nicely sortable (e.g. by when added,
  * > when last opened, how many words, how many actions/interactions performed)
  *
- * Two of those six keys are the "actions/interactions", and they are the only
+ * Two of the keys are the "actions/interactions", and they are the only
  * two we can honestly count: opens and questions are the only reader
  * interactions stored as numbers. Chat threads and saved searches are
  * deliberately absent, for the reason the details tooltip already gives — they
@@ -31,15 +31,16 @@
  */
 
 import type { Table } from "@tanstack/react-table";
-import { SHARING_ON } from "../messages.js";
+import { PRIVATE_LINK_HEADING, SHARING_OFF_WITH_LINK, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import type { SortableColumn } from "./lib/DataTable.js";
 import { at, localeText, numberOrMissing } from "./lib/table-sort.js";
 import { Link } from "./Link.js";
-import { exactly, timeAgo } from "./relative-time.js";
+import { exactly, publishedOf, timeAgo } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { Actions, ArchivedMark, NotProcessedBadge, SharedBadge } from "./ShelfEntry.js";
 import type { Shelf } from "./ShelfEntry.js";
+import type { ComponentType } from "react";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { Tooltip } from "./Tooltip.js";
@@ -81,6 +82,10 @@ export const CARD_NOTES: Record<string, CardNote> = {
   opened: (e, now) => {
     const when = timeAgo(e.lastOpenedAt, now);
     return when ? `opened ${when}` : "never opened";
+  },
+  published: (e) => {
+    const published = publishedOf(e);
+    return published ? `published ${published.label}` : "no publication date";
   },
   opens: (e) =>
     e.opens === 0 ? "never opened" : e.opens === 1 ? "opened once" : `opened ${e.opens} times`,
@@ -132,7 +137,7 @@ export const DEFAULT_BY = ["opened"];
  * forgotten here. A cross-family review noticed Added had quietly stopped being
  * first when the chips started following column order, 2026-08-26.
  */
-export const CHIP_ORDER = ["opened", "added", "title", "length", "opens", "questions"];
+export const CHIP_ORDER = ["opened", "added", "published", "title", "length", "opens", "questions"];
 
 /**
  * `now` is passed in rather than read here so that every relative date on one
@@ -141,10 +146,21 @@ export const CHIP_ORDER = ["opened", "added", "title", "length", "opens", "quest
  * `archivedShown` is `?archived=1`: archived articles are rows too, and
  * Archive's card must not promise the row leaves (plan 260929a).
  */
+/**
+ * **What draws an article’s topic pills under its title**, handed in by the
+ * shelf page (ShelfRowTopics.tsx) rather than imported: this file is shared
+ * with the lazy /admin and /design routes, and the pills bring the topic
+ * colours behind them (tests/eager-client-graph.test.ts). A component rather
+ * than the topics themselves, so it can be one stable reference and the
+ * columns are not rebuilt when the topics answer lands. Plan 261005a.
+ */
+export type RowTopicsSlot = ComponentType<{ slug: string; className?: string; plain?: boolean }>;
+
 export function libraryColumns(
   shelf: Shelf,
   now: number,
   archivedShown = false,
+  Topics?: RowTopicsSlot,
 ): SortableColumn<LibraryEntry>[] {
   return [
     {
@@ -165,7 +181,7 @@ export function libraryColumns(
       /* `table` from the cell's context, so the row card can carry back the
          value of every column the reader has hidden. */
       cell: ({ row, table }) => (
-        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} />
+        <TitleCell entry={row.original} shelf={shelf} hidden={hiddenColumns(table)} Topics={Topics} />
       ),
     },
     {
@@ -188,6 +204,45 @@ export function libraryColumns(
          § Structure's card describes. `Details` stays on the cards view, which
          has no columns to repeat. Plan 260928a, Decision 2. */
       cell: ({ row }) => timeAgo(row.original.addedAt, now) ?? "unknown",
+    },
+    {
+      /* Greg, 2026-10-03 (report spya-t3es7k): "enable sorting the Shelf by
+         publication date where available". The publisher's own day, compared
+         and printed as a day — relative-time.ts § `calendarDay` says why not
+         as an instant. **An article with no date sorts last in both
+         directions**, by the rule every key follows (`sinkLast` in
+         Library.tsx): a PDF never has one, so that group is large, and
+         borrowing its Added date would put a 1990 paper fetched yesterday at
+         the top of "newest first". Plan 261003m.
+
+         **A paper dated only to a year sorts among the dated ones**, at the
+         start of its year, and prints as the year alone — `publishedOf`, plan
+         261004h. Left with the undated, most older print papers would be
+         outside the sort that was built for them. */
+      id: "published",
+      header: "Published",
+      accessorFn: (e) => publishedOf(e)?.t,
+      sortDescFirst: true,
+      sortingFn: numberOrMissing<LibraryEntry>(),
+      meta: {
+        label: "Published",
+        hint: "When the publisher says it was published",
+        ends: ["oldest first", "newest first"],
+        /* **A chip always, a column only if asked for.** The table was already
+           as wide as the page at 1440px; this column made it 78px wider and
+           pushed Actions out of sight (browser check, plan 261003m). The row
+           card carries the date while it is hidden — `rowCardFacts`. */
+        startsHidden: true,
+      },
+      /* The date itself, not "3 days ago": it is a fact about the piece, not
+         about the reader's week. The dash and its words as on Last opened. */
+      cell: ({ row }) =>
+        publishedOf(row.original)?.label ?? (
+          <span className="tw:opacity-40">
+            <span aria-hidden="true">—</span>
+            <span className="tw:sr-only">no publication date</span>
+          </span>
+        ),
     },
     {
       id: "opened",
@@ -285,13 +340,16 @@ function TitleCell({
   entry,
   shelf,
   hidden,
+  Topics,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
+  Topics: RowTopicsSlot | undefined;
   /** The ids of the columns the reader has hidden — `rowCardFacts`. */
   hidden: readonly string[];
 }) {
   const sub = [entry.byline, entry.siteName, `~${entry.minutes} min`].filter(Boolean).join(" · ");
+  const topics = Topics ? <Topics slug={entry.slug} className="tw:mt-1" plain /> : null;
 
   /* The same in-place rename the card offers, and deliberately the same
      component: the three-outcome contract (`undefined` cancelled, `null` reset
@@ -301,19 +359,22 @@ function TitleCell({
      opened it are two different cells. */
   if (shelf.renaming === entry.slug) {
     return (
-      <TitleEditor
-        title={entry.title}
-        overridden={Boolean(entry.titleOverridden)}
-        /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
-           16px and does not zoom back out. The reading view's fields get that floor
-           from narrow-window.css § a field iOS zooms into; the utilities layer
-           outranks it, so a `tw:`-styled field says so itself. */
-        className="tw:text-sm tw:any-pointer-coarse:text-base"
-        onDone={(title) => {
-          if (title === undefined) shelf.cancelRename();
-          else void shelf.rename(entry.slug, title);
-        }}
-      />
+      <>
+        <TitleEditor
+          title={entry.title}
+          overridden={Boolean(entry.titleOverridden)}
+          /* `any-pointer-coarse:text-base` — iOS zooms the page in on a field under
+             16px and does not zoom back out. The reading view's fields get that floor
+             from narrow-window.css § a field iOS zooms into; the utilities layer
+             outranks it, so a `tw:`-styled field says so itself. */
+          className="tw:text-sm tw:any-pointer-coarse:text-base"
+          onDone={(title) => {
+            if (title === undefined) shelf.cancelRename();
+            else void shelf.rename(entry.slug, title);
+          }}
+        />
+        {topics}
+      </>
     );
   }
 
@@ -371,7 +432,7 @@ function TitleCell({
       ) : (
         link
       )}
-      {(sub || archived || entry.visibility === "public" || entry.fixture) && (
+      {(sub || archived || entry.visibility === "public" || entry.privateLinkOn === true || entry.fixture) && (
         <span className="tw:block tw:wrap-anywhere tw:text-xs tw:text-muted-foreground">
           {/* **First on the line, unlike on the card.** It went first because
               this line used to truncate, and the byline and the site name could
@@ -398,9 +459,9 @@ function TitleCell({
               <NotProcessedBadge />{" "}
             </>
           )}
-          {entry.visibility === "public" && (
+          {(entry.visibility === "public" || entry.privateLinkOn === true) && (
             <>
-              <SharedBadge titled={false} />{" "}
+              <SharedBadge titled={false} privateLink={entry.visibility !== "public"} />{" "}
             </>
           )}
           {sub}
@@ -415,6 +476,7 @@ function TitleCell({
           <ShelfTags entry={entry} shelf={shelf} />
         </span>
       )}
+      {topics}
     </>
   );
 }
@@ -513,6 +575,11 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
   if (opened) facts.push({ label: "Last opened", value: opened });
   else if (isHidden("opened")) facts.push({ label: "Last opened", value: "never" });
 
+  /* The cell prints the whole date, so the card repeats it only when the
+     column is hidden — and says nothing where there is none to carry back. */
+  const published = publishedOf(entry);
+  if (published && isHidden("published")) facts.push({ label: "Published", value: published.label });
+
   if (isHidden("opens")) {
     facts.push({
       label: "Opened",
@@ -540,6 +607,7 @@ export function rowCardFacts(entry: LibraryEntry, hidden: readonly string[]): Ro
 
   if (entry.titleOverridden) facts.push({ label: "Title", value: "renamed by you" });
   if (entry.visibility === "public") facts.push({ label: "Shared", value: SHARING_ON });
+  else if (entry.privateLinkOn === true) facts.push({ label: PRIVATE_LINK_HEADING, value: SHARING_OFF_WITH_LINK });
 
   return { gist: entry.gist, gistVoice: gistVoice(entry), facts };
 }

@@ -174,6 +174,31 @@ afterEach(async () => {
 });
 
 describe("the third arm of the toggle", () => {
+  it("acknowledges the first Find immediately, before any wait timer runs", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending: SavedSearch = { ...MEANING, status: "pending" };
+      const base = owner();
+      if (base.kind !== "owner") throw new Error("the Find test needs an owner");
+      const access: Extract<SearchAccess, { kind: "owner" }> = {
+        ...base,
+        onAsk: (criterion, kind) => {
+          asked.push([criterion, kind]);
+          root.render(<Harness access={access} runs={[pending]} start="meaning" active={[pending.id]} />);
+        },
+      };
+      await mount({ access, runs: [], start: "meaning", active: [] });
+      type(pending.criterion);
+      act(() => findButton().click());
+      expect(asked).toEqual([[pending.criterion, "meaning"]]);
+      const line = container.querySelector('.srch-working[role="status"]');
+      expect(line?.textContent).toBe("Reading the article for you…");
+      expect(line?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("is drawn between words and meaning, and checked when the matcher is quick", async () => {
     await mount({ access: owner(), runs: [], start: "quick", active: [] });
     const names = [...container.querySelectorAll('[role="radio"]')].map((b) => b.textContent?.trim());
@@ -413,5 +438,118 @@ describe("a quick hit's score", () => {
     expect(card).toContain("Quick score 93 out of 100");
     expect(card).toContain("fast model");
     expect(card).not.toContain("how strongly the model thinks");
+  });
+});
+
+/**
+ * **The cross that empties the panel's own box** — plan 261005i, Part B. Greg,
+ * 2026-10-04: *"Q-panel-box-cross yes"*. Escape's clear on every device, a
+ * phone having no Escape, with the cursor left in the box for the next words.
+ */
+describe("the box's clear cross", () => {
+  const cross = () => container.querySelector<HTMLButtonElement>("button.srch-clear");
+  const press = (el: HTMLElement): MouseEvent => {
+    const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    act(() => {
+      el.dispatchEvent(down);
+      el.click();
+    });
+    return down;
+  };
+  /** An owner whose quick box types into a session, as the band's does. */
+  function typingOwner(): { access: SearchAccess; edits: string[] } {
+    const edits: string[] = [];
+    const typing = {
+      edit: (text: string) => {
+        edits.push(text);
+      },
+      flush: () => {},
+      end: () => {},
+      blur: () => {},
+      focus: () => {},
+    };
+    return { access: { ...owner(), typing } as SearchAccess, edits };
+  }
+
+  it.each(["words", "quick", "meaning"] as const)("is there only while the %s box has words in it", async (start) => {
+    await mount({ access: owner(), runs: [], start, active: [] });
+    expect(cross()).toBeNull();
+    type("free will");
+    expect(cross()?.getAttribute("aria-label")).toBe("Clear the search");
+    type("");
+    expect(cross()).toBeNull();
+  });
+
+  it("empties the quick draft, tells the session, and leaves the cursor in the box", async () => {
+    const { access, edits } = typingOwner();
+    await mount({ access, runs: [], start: "quick", active: [] });
+    type("free will");
+    act(() => input().blur());
+    const down = press(cross() as HTMLButtonElement);
+    expect(down.defaultPrevented, "the press took the focus off the input first").toBe(true);
+    expect(input().value).toBe("");
+    expect(edits.at(-1)).toBe("");
+    expect(document.activeElement).toBe(input());
+    expect(cross()).toBeNull();
+    expect(asked, "clearing asked something").toEqual([]);
+  });
+
+  it("clears the words search", async () => {
+    await mount({ access: owner(), runs: [], start: "words", active: [] });
+    type("free will");
+    act(() => input().blur());
+    press(cross() as HTMLButtonElement);
+    expect(input().value).toBe("");
+    expect(document.activeElement).toBe(input());
+    // Nothing was carried across: the other matchers' draft is empty too.
+    act(() => radio("meaning").click());
+    expect(input().value).toBe("");
+  });
+
+  it("is what Escape does", async () => {
+    const { access, edits } = typingOwner();
+    await mount({ access, runs: [], start: "quick", active: [] });
+    type("free will");
+    act(() => {
+      input().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(input().value).toBe("");
+    expect(edits.at(-1)).toBe("");
+    expect(cross()).toBeNull();
+  });
+
+  /* An input method's Escape dismisses its candidate list; the reader's words
+     stay. Plan 261007a-ui-sweep-k2. */
+  it.each([
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+  ])("is not what a composing Escape does (%s)", async (_how, init) => {
+    const { access, edits } = typingOwner();
+    await mount({ access, runs: [], start: "quick", active: [] });
+    type("日本語の");
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    act(() => {
+      input().dispatchEvent(escape);
+    });
+    expect(input().value).toBe("日本語の");
+    expect(edits.at(-1)).toBe("日本語の");
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(escape.defaultPrevented).toBe(true);
+  });
+
+  /* GPT Sol's F5 on the plan: the matcher buttons sit 0.4rem under the field,
+     and this field clips nothing, so the finger target is the field's height
+     and no taller — wider, not deeper. */
+  it("has a finger target no taller than the field, and keeps words and spinner clear of it", () => {
+    const css = readerCssNoComments();
+    const target = /@media \(any-pointer: coarse\)\s*{\s*\.srch-clear::after\s*{([^}]*)}/.exec(css)?.[1] ?? "";
+    expect(target).toMatch(/inset:\s*0 /);
+    expect(css).toMatch(/\.srch-field--filled \.srch-input\s*{[^}]*padding-right/);
+    expect(css).toMatch(/\.srch-field--filled \.srch-spin\s*{[^}]*right/);
+    // The same specificity as the spinner's own place, so it has to come after it to win.
+    expect(css.indexOf(".srch-field--filled .srch-spin")).toBeGreaterThan(css.indexOf(".srch-field .srch-spin"));
+    // Not the browser's cross beside ours.
+    expect(css).toMatch(/\.srch-input::-webkit-search-cancel-button\s*{\s*display: none/);
   });
 });

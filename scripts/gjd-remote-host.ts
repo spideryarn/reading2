@@ -25,7 +25,7 @@
  * docs/plans/260905d-gjd-remote-resolves-the-box-address-without-an-env-var.md.
  */
 
-import { lstatSync, readFileSync } from "node:fs";
+import { type Stats, lstatSync, readFileSync } from "node:fs";
 
 /** Where a machine says which address `gjd-remote` should use *on it*. */
 export const BOX_HOST_FILE = "/etc/gjd-remote-host";
@@ -103,7 +103,7 @@ export function parseBoxHost(text: string, pathname: string): BoxHostRead {
  * thing to reach through a redirection that `cat` cannot show you.
  */
 export function readBoxHostFile(pathname: string = BOX_HOST_FILE): BoxHostRead {
-  let stat;
+  let stat: Stats;
   try {
     stat = lstatSync(pathname);
   } catch (err) {

@@ -28,7 +28,12 @@
 import { MODE_CATALOG } from "../mode-catalog.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { Mode } from "../modes.js";
+import { type ArgumentKind, PICK_SLUG, type PickKey, type PickOption } from "../command-pick.js";
+import { HELP_HREF } from "./router.js";
 import { subModeWords, type SubMode } from "./sub-modes.js";
+
+/** `/help`, or one page of it: router.ts § `helpRoute`. See `pickKey`. */
+const HELP_PAGE_PATH = new RegExp(`^${HELP_HREF}(?:/[^/]+)?/?$`);
 
 /**
  * **What a row that is not a mode has to carry** — its own words, because
@@ -92,6 +97,19 @@ interface CommandWords {
    * the default can be the ordinary case without the hole `generates` closed.
    */
   readonly typedOnly?: true;
+  /**
+   * **A muted word after the sentence that is about the reader's state, not
+   * the row's meaning** — `current` on the appearance in force
+   * (appearance-commands.ts), since 2026-10-05.
+   *
+   * It is a field of its own, and not a clause on `description`, because the
+   * description is what a model is shown and what the checked-in catalogue
+   * holds once per (id, label) (`pickOption`; tests/command-pick-catalogue.test.ts):
+   * a sentence that changed with the reader's setting would either collide
+   * there or be frozen into the server's copy for everybody (GPT Sol's F2 on
+   * plan 261005d). Drawn, never matched on and never sent.
+   */
+  readonly marker?: string;
 }
 
 /**
@@ -144,8 +162,8 @@ export type ActionOutcome =
  *
  * It also **retires product call 4** as stated (*the bar lists exactly what the
  * Dock lists*), and the replacement is narrower rather than looser: the bar's
- * **mode** rows are exactly what the Dock lists, and everything else comes
- * after them. tests/command-bar.test.tsx holds both halves.
+ * **mode** rows are exactly what the Dock offers — as a button, or since
+ * 2026-10-07 under its More button — and everything else comes after them. tests/command-bar.test.tsx holds both halves.
  */
 export type Command =
   | { readonly kind: "mode"; readonly mode: Mode }
@@ -179,6 +197,22 @@ export type Command =
        * only on `close` (CommandBar.tsx § `activate`).
        */
       readonly run: () => ActionOutcome | Promise<ActionOutcome>;
+      /**
+       * **Whether pressing this only shows the reader something** — opens a
+       * drawer, a dialog, a section — and changes and sends nothing.
+       *
+       * Read by one decision: a row the command bar's model picked from a
+       * sentence runs without a second Enter only if it just moves the reader
+       * (CommandBar.tsx § `onlyMovesTheReader`, plan 261003k). A mode or a
+       * page answers that with `generates`; an action is a closure, so it has
+       * to say.
+       *
+       * **Required, for `generates`'s reason**: an optional flag would let a
+       * new action that writes compile without deciding, and the wrong default
+       * here is a sentence archiving an article. `false` is the safe answer
+       * when unsure — the row is then drawn and waits for Enter.
+       */
+      readonly opensOnly: boolean;
     });
 
 /**
@@ -241,6 +275,25 @@ export interface CommandText {
  * `kind` check in this file has: **a check that names the minority arm keeps
  * working as arms are added; one that names the majority does not.**
  */
+/**
+ * **What a mode used to be called**, for the compound names of its sub-mode
+ * rows only. A sub-mode row takes its parent's *label* as a nickname, not the
+ * parent's catalogue aliases, so when a label changes the old compound
+ * (*remember quiz*) would find nothing, though the old word alone still finds
+ * the mode through its alias (`MODE_CATALOG.learn.aliases`). GPT Sol, plan
+ * review of 261005l, PR-2.
+ *
+ * Store compounds and not a bare alias. Prefix matching still lists the four
+ * sub-modes for the bare old name, as it does for the current parent name, but
+ * the mode's own exact alias stays first rather than tying four more exact
+ * aliases.
+ */
+const FORMER_PARENT_NAMES: Partial<Record<Mode, readonly string[]>> = {
+  /* Learn was Remember until 2026-10-05 (Greg, spya-mvmpks). The key is the
+     mode id, which followed on 2026-10-06; the value is the old word. */
+  learn: ["Remember"],
+};
+
 export function commandText(command: Command): CommandText {
   if (command.kind === "submode") {
     const words = subModeWords(command.sub);
@@ -258,6 +311,14 @@ export function commandText(command: Command): CommandText {
         `${words.label} ${parent}`,
         `${parent} ${words.label}`,
         `${words.label} mode`,
+        ...(FORMER_PARENT_NAMES[command.sub.mode] ?? []).flatMap((former) => [
+          `${words.label} ${former}`,
+          `${former} ${words.label}`,
+        ]),
+        /* The sub-mode's own nicknames — Summary's Thread answers to `tweets`
+           (sub-modes.ts § `SubModeWords`). Here and not on the parent's catalog
+           row, so the word selects this row and not the mode's. */
+        ...(words.aliases ?? []),
       ],
       description: words.description,
     };
@@ -314,6 +375,57 @@ export function commandId(command: Command): string {
       return never;
     }
   }
+}
+
+/**
+ * **A row's key, as the browser sends it and the server holds it** — its id
+ * and its label, since Archive and *Put back* share an id (plan 261003k, F5).
+ *
+ * **The id is `commandId` with everything about *this* visit taken out of a
+ * page's address**, so one list on the server serves every article and every
+ * place in it: the slug becomes `PICK_SLUG`, and the query string and the
+ * fragment go, and so does which page of Help. `page:/read/my-paper/metadata?at=spya-k3m9qt`
+ * and the Help row's `page:/help/mode-glossary` are sent as
+ * `page:/read/:slug/metadata` and `page:/help`. Nothing else in an id varies
+ * by article.
+ *
+ * **Help is one row whatever page of it the row opens.** The bar has a single
+ * Help row, whose address is the page for the mode the reader is in
+ * (`/help/mode-glossary`, and `/help#mode-glossary` until 2026-10-07, when the
+ * fragment rule above covered it). The server's list holds `page:/help` once;
+ * a key it does not hold is dropped (src/command-pick-call.ts § knownOptions),
+ * so without this the row would silently stop being something a model can
+ * pick. One segment only, as the router reads it. GPT Sol, plan review, R1:
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
+ *
+ * A key is for matching, never for acting: what runs is the row the bar holds
+ * today, found again by this function (CommandBar.tsx), with its own `href`.
+ */
+export function pickKey(command: Command, slug?: string): PickKey {
+  const { label } = commandText(command);
+  if (command.kind !== "page") return { id: commandId(command), label };
+  const path = command.href.split(/[?#]/, 1)[0] ?? "";
+  if (HELP_PAGE_PATH.test(path)) return { id: `page:${HELP_HREF}`, label };
+  const own = slug === undefined ? null : `/read/${encodeURIComponent(slug)}`;
+  const shared =
+    own !== null && (path === own || path.startsWith(`${own}/`)) ? `/read/${PICK_SLUG}${path.slice(own.length)}` : path;
+  return { id: `page:${shared}`, label };
+}
+
+/**
+ * **One row as a model is shown it**: its key, and the three kinds of words
+ * the bar itself matches on. Nothing a row *does* — no closure, no href beyond
+ * what the id already holds — so it serialises.
+ *
+ * These are what src/command-pick-catalogue.generated.json holds, and the
+ * model's answer is only ever one of the ids (plan 261003k, decision 2). The
+ * eval that chose the model reads the same list: evals/command-pick/README.md.
+ */
+export type { PickOption };
+
+export function pickOption(command: Command, slug?: string): PickOption {
+  const { description, aliases } = commandText(command);
+  return { ...pickKey(command, slug), description, aliases: [...aliases] };
 }
 
 /**
@@ -390,8 +502,8 @@ function tierFor(query: string, command: Command): number {
  * `commands` is the list to search and its **order is part of the answer**: two
  * commands on the same tier come back in the order they were handed in, so the
  * result is total and a test can state it. The caller hands in the modes the
- * Dock is drawing followed by everything else, which is what makes "the bar's
- * mode rows are exactly what the Dock lists" true by construction rather than
+ * Dock is offering followed by everything else, which is what makes "the bar's
+ * mode rows are exactly what the Dock offers" true by construction rather than
  * by a second copy of the experimental-switch rule (`visibleModes` in Dock.tsx
  * is the only copy).
  *
@@ -440,50 +552,183 @@ function isTypedOnly(command: Command): boolean {
 }
 
 /**
- * **The verbs that make a query a search of the article**, longest first so
- * `search for X` is a search for X and not for `for X`. Greg's own example was
- * *"do they talk about X?"* (SPIDERYARN-READING2-8D); the others are what the
- * same request is usually typed as. Lower-case, compared against the query
- * lower-cased.
+ * **What a typed query can ask for with an argument** — the bar's rows whose
+ * text comes from the query rather than from a list. Since 2026-10-03 (plan
+ * 261003f, Stage 1); `find` was the only one from 2026-10-02.
+ *
+ * A parse, not a resolution: `glossary` says *look these words up*, and which
+ * term they name — or whether an ask is offered at all — is
+ * command-proposal.ts § `resolveArgument`'s, against the glossary the reader
+ * can see.
  */
-const FIND_VERBS = ["do they talk about", "does it mention", "search for", "search", "find"] as const;
+export type ArgumentQuery =
+  | { readonly kind: "find"; readonly words: string }
+  | { readonly kind: "jump-first"; readonly words: string }
+  | { readonly kind: "glossary"; readonly words: string }
+  | { readonly kind: "tag-add"; readonly words: string }
+  | { readonly kind: "tag-remove"; readonly words: string };
+
+/* The kinds here and the kinds a sentence can be answered with
+   (src/command-pick.ts § `ARGUMENT_KINDS`) are one list written twice, because
+   that module cannot import this one (the eval imports it, and this reaches a
+   `.tsx`). Either of these two lines fails to compile if they part. */
+const _everyKindIsPicked: ArgumentKind = "find" as ArgumentQuery["kind"];
+const _everyPickIsAKind: ArgumentQuery["kind"] = "find" as ArgumentKind;
+void _everyKindIsPicked;
+void _everyPickIsAKind;
 
 /**
- * **The words a `find …` query asks for, or `null` when it is not one.**
+ * **One verb phrase, and the command it starts.** `endings` are phrases that
+ * may close the query and are not part of the argument — *to this paper* —
+ * and `needsEnding` makes the ending the other half of the verb, as `mean` is
+ * of *what does … mean*.
+ */
+interface Verb {
+  readonly kind: ArgumentQuery["kind"];
+  readonly verb: string;
+  readonly endings?: readonly string[];
+  readonly needsEnding?: true;
+  /** Arguments, lower-case, that make this a phrase the bar already names. */
+  readonly except?: readonly string[];
+}
+
+const TO_THIS = ["to this paper", "to this article", "to this piece", "to this"] as const;
+const FROM_THIS = ["from this paper", "from this article", "from this piece", "from this"] as const;
+
+/**
+ * **The verb table — every argument the bar takes, by the words that ask for
+ * it.** Lower-case, matched whatever the reader's case and as a whole word;
+ * where one verb starts another the longer wins, so `search for X` is a search
+ * for X and not for `for X`, and `tag this as X` tags X.
  *
- * The bar's one row whose text comes from the query, so it is parsed here, out
- * of React, where every edge can be stated (tests/command-match-rerun-and-find.test.ts).
- * It is a parse and not a ranking: a query is a find **only** when it starts
- * with one of the verbs and has words after it, so *No command matches.*
- * stays the answer to a query that names nothing. That is Greg's call 3 on
- * the bar (CommandBar.tsx § the four product calls) — an honest empty state
- * over a guessed fallback search — and it still holds, because here the
- * reader typed the verb.
+ * Greg's examples (spya-wh2xys, qi-qkjnkwce): *"do a search for X"*, *"look up
+ * some word in the glossary"*, *"jump to the first place where X"*, *"add a
+ * tag of X to this paper"*. The five `find` verbs are the 2026-10-02 set,
+ * unchanged — *"do they talk about X?"* was SPIDERYARN-READING2-8D.
  *
- * The verb is matched whatever its case and must be a whole word, so
- * `findings` is not `find ings`. The words keep the reader's spelling, minus a
- * trailing `?` and one pair of quotes round them (straight or curly), and with
- * runs of space collapsed: what is left is matched in the article as one
- * literal phrase (search-hits.ts § `findLiteral`), so a stray quote would be
+ * **What is deliberately not a verb**, each held by the collision matrix in
+ * tests/command-match-arguments.test.ts:
+ *
+ *  - `take me to`, `go to` and a bare `jump to` — how a reader names a mode or
+ *    a page, so *take me to glossary* stays the Glossary row rather than
+ *    becoming a search for the word (GPT Sol's F7 on plan 261003f). The jump
+ *    verbs say *first*, explicitly.
+ *  - `jump to the first` — *jump to the first section* names a place.
+ *  - **a bare `glossary X`**, which the plan listed and the matrix refused:
+ *    *glossary again* is a *Run again* phrasing (rerun-commands.ts) and
+ *    *Glossary › Run again* a row's own label, so either would have grown a
+ *    paid *Look up “again”* row under the one the reader meant. `look up`,
+ *    `define` and *what does … mean* ask the same without the clash.
+ *  - **`define again`**, for the same reason one step on: `define` is one of
+ *    Glossary's nicknames (mode-catalog.ts), so *define again* is a *Run
+ *    again* phrasing too. The verb stays and that one argument is excepted.
+ *    **`define find more`** likewise, since 2026-10-04: a *Glossary › Find
+ *    more* phrasing (find-more.ts).
+ *
+ * **And one collision is declared rather than avoided**: `find more` and
+ * `find more terms` are *Find more* rows' own words and also a `find` with
+ * words after it. The verb is not narrowed — a reader may be searching for the
+ * word *more* — so the bar draws the row and then the *Find “more …”* row
+ * under it. The matrix names those two rows as its exception.
+ */
+const VERBS: readonly Verb[] = [
+  { kind: "find", verb: "do they talk about" },
+  { kind: "find", verb: "does it mention" },
+  { kind: "find", verb: "search for" },
+  { kind: "find", verb: "search" },
+  { kind: "find", verb: "find" },
+  /* *find mentions of dopamine* is a search for dopamine: without these the
+     shorter `find` took it and looked for `mentions of dopamine`, which no
+     article says (found by the command-pick eval, 261003e). */
+  { kind: "find", verb: "find mentions of" },
+  { kind: "find", verb: "find all mentions of" },
+  { kind: "find", verb: "find every mention of" },
+  { kind: "find", verb: "find references to" },
+  { kind: "jump-first", verb: "jump to first" },
+  { kind: "jump-first", verb: "first occurrence of" },
+  { kind: "jump-first", verb: "first mention of" },
+  { kind: "jump-first", verb: "where does it first say" },
+  { kind: "jump-first", verb: "where does it first mention" },
+  { kind: "glossary", verb: "look up", endings: ["in the glossary"] },
+  { kind: "glossary", verb: "define", except: ["again", "find more"] },
+  { kind: "glossary", verb: "what does", endings: ["mean"], needsEnding: true },
+  { kind: "glossary", verb: "what is meant by" },
+  { kind: "tag-add", verb: "add a tag of", endings: TO_THIS },
+  { kind: "tag-add", verb: "add the tag", endings: TO_THIS },
+  { kind: "tag-add", verb: "add tag", endings: TO_THIS },
+  { kind: "tag-add", verb: "tag this as" },
+  { kind: "tag-add", verb: "tag this" },
+  { kind: "tag-add", verb: "tag as" },
+  { kind: "tag-add", verb: "tag" },
+  { kind: "tag-remove", verb: "remove the tag", endings: FROM_THIS },
+  { kind: "tag-remove", verb: "remove tag", endings: FROM_THIS },
+  { kind: "tag-remove", verb: "untag", endings: FROM_THIS },
+];
+
+/** Longest first, so a verb that starts another never takes its query. */
+const LONGEST_FIRST: readonly Verb[] = [...VERBS].sort((a, b) => b.verb.length - a.verb.length);
+
+/** Where a kind's first verb sits in the table — the order rows come back in. */
+const kindOrder = (kind: ArgumentQuery["kind"]): number => VERBS.findIndex((v) => v.kind === kind);
+
+/**
+ * **The argument commands a query could be** — at most one per kind, in the
+ * table's order, and for almost every query none.
+ *
+ * It is a parse and not a ranking: a query is one **only** when it starts with
+ * a verb and has words after it, so *No command matches.* stays the answer to
+ * a query that names nothing. That is Greg's call 3 on the bar (CommandBar.tsx
+ * § the four product calls) — an honest empty state over a guessed fallback —
+ * and it still holds, because here the reader typed the verb.
+ *
+ * The verb must be a whole word, so `findings` is not `find ings` and `tags`
+ * is not `tag s`. The words keep the reader's spelling, minus a trailing `?`,
+ * the verb's ending if it has one, and one pair of quotes round them (straight
+ * or curly), with runs of space collapsed — a stray quote would otherwise be
  * looked for too.
  */
-export function parseFindQuery(query: string): string | null {
-  const text = query.trim().replace(/\s+/g, " ");
+export function parseArgumentQuery(query: string): readonly ArgumentQuery[] {
+  const text = query.trim().replace(/\s+/g, " ").replace(/\?+$/, "").trim();
   const lower = text.toLowerCase();
-  /* Half-way through typing the longer verb, `search for` is not a search for
+  /* Half-way through typing a longer verb, `search for` is not a search for
      *for*: a row flickering past with that in it is a row about nothing. */
-  if ((FIND_VERBS as readonly string[]).includes(lower)) return null;
-  const verb = FIND_VERBS.find((v) => lower.startsWith(`${v} `));
-  if (verb === undefined) return null;
-  const words = text
-    .slice(verb.length)
-    .trim()
-    .replace(/\?+$/, "")
-    .trim()
+  if (VERBS.some((v) => v.verb === lower)) return [];
+  const found: ArgumentQuery[] = [];
+  for (const entry of LONGEST_FIRST) {
+    if (found.some((q) => q.kind === entry.kind)) continue;
+    if (!lower.startsWith(`${entry.verb} `)) continue;
+    const words = argumentOf(text.slice(entry.verb.length).trim(), entry);
+    if (words !== null) found.push({ kind: entry.kind, words });
+  }
+  return found.sort((a, b) => kindOrder(a.kind) - kindOrder(b.kind));
+}
+
+/** What follows a verb, as the argument — or `null` when there is none. */
+function argumentOf(rest: string, entry: Verb): string | null {
+  let words = rest;
+  const lower = rest.toLowerCase();
+  const ending = entry.endings?.find((e) => lower === e || lower.endsWith(` ${e}`));
+  if (ending !== undefined) words = words.slice(0, words.length - ending.length).trim();
+  else if (entry.needsEnding) return null;
+  if (entry.except?.includes(words.toLowerCase())) return null;
+  words = words
     /* A function rather than the `"$1"` pattern, which
        tests/no-ai-cost-for-readers.test.ts reads — rightly, from where it
        stands — as a price in reader copy. */
     .replace(/^["'“‘](.*)["'”’]$/, (_, inner: string) => inner)
     .trim();
   return words === "" ? null : words;
+}
+
+/**
+ * **The words a `find …` query asks for, or `null` when it is not one** — the
+ * `find` entry of `parseArgumentQuery`, kept by name because it was the bar's
+ * first argument (2026-10-02) and its tests state every edge of the cleaning
+ * all the verbs now share (tests/command-match-rerun-and-find.test.ts). What
+ * it returns is matched in the article as one literal phrase (search-hits.ts §
+ * `findLiteral`).
+ */
+export function parseFindQuery(query: string): string | null {
+  const find = parseArgumentQuery(query).find((q) => q.kind === "find");
+  return find === undefined ? null : find.words;
 }

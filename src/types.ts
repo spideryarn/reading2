@@ -9,7 +9,10 @@
  * cost the one guarantee that matters: that the file writing blocks.json and
  * the thirty-five files reading it agree about its shape.
  *
- * `TreeNode` must stay in sync with docs/project/granularity-zoom.md#node-shape.
+ * `TreeNode` below is the authority for a node's fields.
+ * docs/project/granularity-zoom.md § Node shape explains them — what a `gist`
+ * is and why a leaf has a `navLabel` instead — and is not a second copy to keep
+ * in step: one kept there drifted by a field within a month.
  *
  * Three imports. Two are types: `FailureKind` belongs to src/messages.ts,
  * where the four kinds are defined and where `canRetry` decides what each one
@@ -23,10 +26,14 @@
  * src/ids.ts — `decodeFeedbackCursor` below needs them, and src/ids.ts imports
  * nothing at all, so it costs the browser bundle nothing and keeps this file
  * from becoming the sixth copy of the uuid regex.
+ *
+ * A fourth, of types again: the difficulty rating's shapes belong to
+ * src/reading-time.ts, which turns them into minutes and imports nothing.
  */
-import type { FailureKind, PaperUnreadableReason } from "./messages.js";
+import { CHAT_BEING_UPDATED, type FailureKind, type PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
+import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
 
 export type NodeId = string; // "n0042"
 export type BlockId = string; // "spya-k3m9qt" — see docs/project/block-ids.md
@@ -187,6 +194,14 @@ export interface TreeNode {
   summary?: string;
   sourceHeading?: string;
   /**
+   * Set when no model wrote `title` and no heading did either: it quotes the
+   * opening words of its first qualifying non-heading block (src/heading-tree.ts
+   * § `buildBoundedHeadingTree`). The author's words, so the client draws them
+   * in the author's face; `sourceHeading` cannot say so, because it must name
+   * a heading.
+   */
+  titleFrom?: "opening-words";
+  /**
    * **Apparatus rather than argument** — the footnotes, the bibliography.
    * Absent means the body, which is every node of every tree written before
    * 2026-08-28.
@@ -240,8 +255,26 @@ export interface Tree {
    * (src/public/dto.ts), because a client that cannot tell a provisional tree
    * from a finished one draws empty cells where it should say the structure is
    * still arriving.
+   *
+   * **Two values, because "headings" is not always temporary.** `"headings"` is
+   * what `structure` falls back to when the model's answer cannot be used, and
+   * it is final: nothing is coming to replace it. `"awaiting-structure"` is the
+   * same kind of tree published on purpose by a first import from the browser,
+   * so the article opens before the model call, with a `["structure"]` job
+   * queued by that publication to replace it (`awaitingStructure` below).
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
    */
-  provisional?: "headings";
+  provisional?: "headings" | "awaiting-structure";
+}
+
+/**
+ * Is this the stand-in a first import publishes, with the real tree still to
+ * come? The one question every reader of that state asks: the publication's
+ * successors, `structure`'s freshness, the gate on the steps that read the
+ * tree, and the open page.
+ */
+export function awaitingStructure(tree: Pick<Tree, "provisional"> | null | undefined): boolean {
+  return tree?.provisional === "awaiting-structure";
 }
 
 /**
@@ -378,15 +411,9 @@ export interface TweetThread {
   sourceHash: string;
   /**
    * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
+   * for "written without one". Absent predates profile provenance.
+   * `profileIsStale` in src/profile.ts owns the three-state comparison:
+   * a first profile counts as a change; clearing it does not.
    *
    * A hash rather than a `usedProfile: true`, because a boolean cannot tell
    * "written for the profile you have now" from "written for the profile you
@@ -423,9 +450,10 @@ export interface ThreadResponse {
    * write this differently now*; this means *you are not who you were when we
    * wrote it*.
    *
-   * False when the artefact was written deliberately without a profile, and
-   * false when the reader has since cleared theirs. `profileIsStale` in
-   * src/profile.ts is the one place those two rules live.
+   * True as well when the artefact was written while the reader had no
+   * profile and they have one now (since 2026-10-05); false when the reader
+   * has since cleared theirs. `profileIsStale` in src/profile.ts is the one
+   * place those rules live.
    */
   profileChanged: boolean;
 }
@@ -561,6 +589,26 @@ export interface GlossaryEntry {
    */
   fromOutside?: boolean;
   /**
+   * When the pass that added this entry finished, ISO — **its own time, not
+   * the list's.** `Glossary.generatedAt` is re-stamped by every *Find more
+   * terms*, so without this an entry from the first pass could not be told
+   * from one the third pass added. Greg, 2026-10-03: *"Store when it
+   * happened."* The twin of `Quote.addedAt`.
+   *
+   * **Absent on every entry stored before 2026-10-03, and never backfilled.**
+   * For those the list's `generatedAt` is an upper bound, not their time, and
+   * writing the bound into the field would turn it into a claim. Kept — and
+   * its absence kept — across an append, across a merge whichever name or
+   * prose wins, and across a rewrite that inherits the id (src/glossary.ts
+   * § `merge`, § `InheritedEntry`).
+   *
+   * Stored and shown nowhere yet. It enters no hash, no freshness comparison,
+   * no dedupe and no prompt; the public projection (src/public/dto.ts) does
+   * not copy it. A term the reader added themselves is not in the document
+   * and has no `addedAt`: its time is its `glossary_lookups` row's.
+   */
+  addedAt?: string;
+  /**
    * What came back when the reader asked us to check this term on the web.
    *
    * **Absent until somebody presses the button**, and that is the design rather
@@ -690,22 +738,28 @@ export interface AskedTermAnswer extends AskedTermFound {
  * `STEP_ORDER` but not in `DEFAULT_INGEST_STEPS` (src/pipeline.ts).
  */
 export interface Glossary {
+  /** The prompt that wrote the **latest pass** — `PROMPT_VERSION` in src/glossary.ts. */
   version: string;
+  /**
+   * **The oldest prompt any entry here came from**, when that is not `version`.
+   *
+   * A *Find more* on an appendable list an older prompt wrote adds to it
+   * (src/glossary.ts § `appendableVersion`, plan 261004f), and the list is then
+   * stamped with the current version. This is what keeps that stamp from
+   * vouching for the older entries. Absent on a list one prompt wrote, which is
+   * every list from before 2026-10-04; a rewrite drops it. Nothing shows it: it
+   * is provenance, in the export.
+   */
+  oldestVersion?: string;
   generator: string;
   slug: string;
   /** Fingerprint of the blocks it was written from — `hashBlocks`, src/source-hash.ts. */
   sourceHash: string;
   /**
    * Fingerprint of the **reader's profile** this was written from, or `null`
-   * for "written deliberately without one".
-   *
-   * Three states, and only one of them means stale:
-   *
-   * | value | means | stale? |
-   * |---|---|---|
-   * | absent | written before the profile existed | no |
-   * | `null` | written deliberately without one | **no** |
-   * | a hash | written from that profile | only if it differs from now |
+   * for "written without one". Absent predates profile provenance.
+   * `profileIsStale` in src/profile.ts owns the three-state comparison:
+   * a first profile counts as a change; clearing it does not.
    *
    * A hash rather than a `usedProfile: true`, because a boolean cannot tell
    * "written for the profile you have now" from "written for the profile you
@@ -735,6 +789,13 @@ export interface Glossary {
    * See docs/project/original-version/glossary.md § Bug one.
    */
   passes: number;
+  /**
+   * How many entries the most recent pass added. As `Quotes.lastAdded`: the one
+   * number that tells a *Find more* that found nothing from a button that did
+   * nothing (docs/reusable/silent-success.md). Absent on a list written before
+   * 2026-10-04.
+   */
+  lastAdded?: number;
   generatedAt: string;
   /** Total across every pass. Timed from outside the SDK, whose own timings came back empty. */
   elapsedMs: number;
@@ -772,20 +833,22 @@ export interface GlossaryResponse {
    * write this differently now*; this means *you are not who you were when we
    * wrote it*.
    *
-   * False when the artefact was written deliberately without a profile, and
-   * false when the reader has since cleared theirs. `profileIsStale` in
-   * src/profile.ts is the one place those two rules live.
+   * True as well when the artefact was written while the reader had no
+   * profile and they have one now (since 2026-10-05); false when the reader
+   * has since cleared theirs. `profileIsStale` in src/profile.ts is the one
+   * place those rules live.
    */
   profileChanged: boolean;
   /**
    * **What the panel's own run button will do with this list** — `panelRunKind`
-   * in src/glossary.ts, for the label: *Find more* when it appends, *Find terms
-   * again* when it rewrites. The route adds it, beside `profileChanged`,
+   * in src/glossary.ts, for the label: *Find more* when it appends, *Write a
+   * new list* when it rewrites. The route adds it, beside `profileChanged`,
    * because the profile half needs the reader's current profile. Plan 261003c.
    *
-   * Optional only so a hand-built response in a test need not carry it; the
-   * route always sends it. The panel reads absent as `rewrite` when the list is
-   * stale or outdated and `append` otherwise (useGlossary.ts).
+   * Optional for responses cached before the field existed, and so a hand-built
+   * response in a test need not carry it; the current route always sends it.
+   * The panel reads absent conservatively as `rewrite` when the list is stale
+   * or outdated and `append` otherwise (GlossaryPanel.tsx).
    */
   panelRun?: "append" | "rewrite";
 }
@@ -1090,11 +1153,13 @@ export interface Quote {
 }
 
 /**
- * How heavily a quote is outlined in the prose — **two levels, and the number of
- * levels is the finding, not an accident.**
+ * How heavily a quote is drawn in the prose — **two levels, and the number of
+ * levels is the finding, not an accident.** (Drawn as a fill since 2026-10-03,
+ * plan 261003l; the widths and the blind test below are from when it was an
+ * outline, and the test has not been re-run on fills.)
  *
- * `1` is the light stroke, `2` the heavy one. The stylesheet owns the widths
- * (1px and 3px, styles/annotations.css § quote strokes); this is an ordinal so
+ * `1` is the light fill, `2` the heavy one. The stylesheet owns their strengths
+ * (`--quote-fill-light` and `--quote-fill-heavy`, per theme, styles/tokens.css); this is an ordinal so
  * that the design values stay in the design layer, exactly as `data-hues` keeps
  * a count here and the colours next door.
  *
@@ -1111,8 +1176,12 @@ export interface Quote {
 export type QuoteTier = 1 | 2;
 
 /**
- * **How a quote's outline is drawn: its weight and its brightness, as one
- * value.** `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
+ * **How strongly a quote is drawn: its tier and its brightness, as one
+ * value.** Since 2026-10-03 a quote is a fill, like a highlighter pen, and both
+ * numbers set how strong the fill is (plan 261003l, Greg, `spya-xrgste`);
+ * until then it was an outline, they were its weight and its alpha, and that
+ * is where the name `QuoteStroke` comes from. The numbers and what they mean
+ * did not change. `tier` is the coarse priority step above; `alpha` (0.70–1.00) is
  * the fine one on top of it, since 2026-09-11 — Greg, SPIDERYARN-READING2-2W:
  * *"perhaps slightly fade the border based on the priority-score (but even
  * low-priority quotes should still be clearly visible)"*.
@@ -1284,8 +1353,10 @@ export interface QuotesResponse {
 /**
  * The pass a stop belongs to. **The model plans the passes as nesting** (depth
  * *d* covering every stop with `depth ≤ d`, which is what `Skim.visible`
- * counts); **the reader walks each pass as only its own stops** — plan 260929e,
- * src/web/skim-route.ts.
+ * counts). **The reader walks a pass as the stops first placed there plus any
+ * earlier stops whose `again` names it** — plan 261003l, `walkedIn` in
+ * src/web/skim-route.ts. Before `skim/9`, there were no carried stops, so each
+ * pass was only its own (plan 260929e).
  */
 export type SkimDepth = 1 | 2 | 3;
 
@@ -1301,7 +1372,8 @@ export interface SkimStop {
    */
   role: string | null;
   /**
-   * What to **look for** in this passage — an instruction or a question, never
+   * What to **look for** in this passage — since `skim/10`, the scene the quote
+   * assumes first, then an instruction or a question — never
    * what it found — at most `MAX_CUE_CHARS` (src/skim.ts). Context-free
    * on purpose: a reader can reach a stop from anywhere, so it never says how
    * this stop follows another (Sol F18). `null` when the model's was missing,
@@ -1309,6 +1381,18 @@ export interface SkimStop {
    * written before `trajectory/5`.
    */
   cue?: string | null;
+  /**
+   * **The deeper passes this stop is walked in again** — each deeper than
+   * `depth`, ascending, unique, and only a depth some stop is first placed at.
+   * `depth` stays the shallowest pass the stop belongs to; a stop is walked in
+   * pass *d* when `depth === d` or this includes *d* (`walkedIn`,
+   * src/web/skim-route.ts). Greg, 2026-10-03 (spya-ms9d69): *"it's not a
+   * guarantee, but nor is it excluded that something in a coarser level shows
+   * up in a more detailed level."* **Absent** on routes written before
+   * `skim/9`, which walk each pass as only its own stops (plan 260929e).
+   * docs/plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md.
+   */
+  again?: SkimDepth[];
 }
 
 /**
@@ -1342,6 +1426,17 @@ export interface SkimDrops {
    * had no cue; read it as 0.
    */
   badCue?: number;
+  /**
+   * `again` entries dropped: not 2 or 3, not deeper than the stop's own depth,
+   * repeated, or naming a depth no stop is first placed at. The stop is kept.
+   * Optional, as `badCue` is: routes before `skim/9` have none.
+   */
+  badAgain?: number;
+  /**
+   * `again` entries dropped because the pass already carried as many earlier
+   * stops as it may — `maxCarried` in src/skim.ts. The stop is kept.
+   */
+  overCarried?: number;
   /** Stops past a cumulative cap, dropped in route order — never demoted. */
   overCap: number;
 }
@@ -1368,11 +1463,12 @@ export interface Skim {
    * here. src/skim.ts § `routeProfileIsStale`.
    */
   profileHash: string | null;
-  /** **The array order is the route.** Each pass walks its own stops in this order (see `SkimDepth`). */
+  /** **The array order is the route.** Each pass walks its own and carried stops in this order (see `SkimDepth`). */
   stops: SkimStop[];
   /**
    * How many stops there are at depth ≤ 1, ≤ 2 and ≤ 3 — **cumulative**, as the route was planned
-   * and validated. Growing, by construction. Not what the band counts: it counts each pass's own.
+   * and validated. Growing, by construction. Not what the band counts: it counts the own and
+   * carried stops the selected pass actually walks.
    */
   visible: [number, number, number];
   /**
@@ -1399,7 +1495,8 @@ export interface SkimResponse {
   outdated: boolean;
   /**
    * The profile is not the one the route was written for — **including none →
-   * some**, which the shared `profileIsStale` does not count.
+   * some** (the shared `profileIsStale` counts that too since 2026-10-05) and
+   * some → none, which it does not.
    */
   profileChanged: boolean;
   /**
@@ -1512,9 +1609,59 @@ export interface Author {
   affiliations: string[];
 }
 
+/**
+ * **The `readingDifficulty` artefact, as it is stored**: the rating a screen
+ * shows (`RatedDifficulty`, src/reading-time.ts) plus which model made it and
+ * when, or the plain statement that the piece is not rated.
+ *
+ * Two members rather than a bag of optionals, because a rating with a level
+ * and no sentence is not a thing: the table refuses one too
+ * (`article_revisions_reading_difficulty_all_or_none`, src/db/schema.ts).
+ * `{ rated: false }` is a real value the `blocks` step writes, and it clears
+ * all five columns, so a piece whose text changed never keeps a rating of the
+ * old text.
+ * docs/plans/261005j-reading-time-knows-difficulty-a-model-rates-language-and-ideas-at-import.md.
+ */
+export type StoredReadingDifficulty =
+  | {
+      rated: true;
+      language: DifficultyLevel;
+      ideas: DifficultyLevel;
+      /** The model's one sentence. Never blank. */
+      reason: string;
+      /** The model's id as the gateway named it. Never sent to a screen. */
+      model: string;
+      /** When the rating was made, ISO 8601. */
+      ratedAt: string;
+    }
+  | { rated: false };
+
 export interface Meta {
   slug: string;
   title: string;
+  /**
+   * **How hard the piece is to read, when a model has rated it**: language and
+   * ideas, 1 to 5 each, and one sentence saying why. The reading-time estimate
+   * is multiplied by it (src/reading-time.ts) and the card under the minutes
+   * shows it. Absent on every piece not rated, which then reads at the flat
+   * rate.
+   *
+   * **Put here by the reads a screen is drawn from** (`metaFrom`,
+   * src/store/pg.ts), from columns the `blocks` step writes as an artefact of
+   * its own. It is not part of the `meta` artefact: the pipeline's own `Meta`
+   * never carries it and a `meta` write ignores it, so re-running `metadata`
+   * or `extract` cannot clear a rating of text that has not changed.
+   */
+  readingDifficulty?: RatedDifficulty;
+  /**
+   * **The title as it arrived, when import tidied it** — all capitals made
+   * title case, a trailing footnote marker taken off (`tidyTitle`,
+   * src/title-tidy.ts). Absent when tidying changed nothing. For the owner
+   * only: the Metadata page shows it and offers it back. No prompt reads it and
+   * a visitor is not sent it.
+   * docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md.
+   */
+  titleOriginal?: string;
   /**
    * Free text, and what every prompt's `BY:` line and Referee mode read. When
    * `authors` is present the byline is derived from it (names joined `"; "`),
@@ -1547,6 +1694,11 @@ export interface Meta {
    *
    * It is the publisher's claim, verbatim, not a verified fact: a page can say
    * anything, and re-dating an old post is a thing publishers do.
+   *
+   * **Since 2026-10-04 it may be a registry's day instead** (`YYYY-MM-DD`, no
+   * time): when the page states none and Crossref's record for the article's
+   * own DOI states a whole day — src/article-registry.ts. That is how a PDF
+   * gets one.
    */
   publishedAt?: string;
   /** Readability's own one-or-two-sentence excerpt. A last-resort card blurb. */
@@ -1561,6 +1713,26 @@ export interface Meta {
    */
   abstract?: string;
   doi?: string;
+  /**
+   * **The journal or venue the registry names for this piece** — Crossref's or
+   * DataCite's, for the article's own DOI, kept only when the registry's title
+   * is the article's (src/article-registry.ts). The same lookup may fill `doi`
+   * and, when the page stated no date, `publishedAt` or `publishedYear`. A
+   * visitor is sent it too (`PublicMeta.journal`), which `doi` is not. Absent
+   * on everything imported before 2026-10-04.
+   * docs/plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md.
+   */
+  journal?: string;
+  /**
+   * **The year of publication, when that is all the registry states** — an
+   * older print paper, or a DataCite record. Set only while `publishedAt` is
+   * absent: an article has a day or a year, never both, and the database
+   * refuses a row with both. Read the two together with `publishedOf`
+   * (src/web/relative-time.ts). Timeline does not read it: a year is too
+   * coarse a frame for "last March".
+   * docs/plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md.
+   */
+  publishedYear?: number;
 
   /**
    * **The reader's own name for a file they uploaded** — `raw_filename`, which
@@ -1656,6 +1828,17 @@ export interface Meta {
    * it, nobody is checking. `recall` is the number; this is the complaint.
    */
   quality?: string[];
+}
+
+/**
+ * `value` when it is a year `Meta.publishedYear` may hold, else undefined: a
+ * whole number from 1000 to 2999, the bounds of the column's own check
+ * (`article_revisions_published_year`). One function for every place a year
+ * comes in from outside the type system: a registry record, a database row on
+ * its way to a visitor, a shelf saved in the browser.
+ */
+export function publishedYearOf(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1000 && value <= 2999 ? value : undefined;
 }
 
 /** What GET /api/article/:slug returns — everything needed for every zoom level. */
@@ -1763,6 +1946,41 @@ export interface SkipCounts {
  */
 export type EmbeddingReason = "config" | "provider" | "busy";
 
+/**
+ * Why a fetch failed, as something to switch on.
+ *
+ * These exist because **every network and TLS failure in Node arrives as the
+ * identical `TypeError: fetch failed`** — DNS, refused connection, expired
+ * certificate, self-signed certificate and a missing intermediate are one
+ * string at the top level, and the difference lives only in `err.cause.code`.
+ * Code that matches on the message learns nothing, which is exactly the trap
+ * the previous version fell into (docs/project/original-version/extraction.md).
+ *
+ * **Declared here, not in [fetch.ts](fetch.ts) where every one of them is
+ * raised**, for `EmbeddingReason`'s reason above: [messages.ts](messages.ts)
+ * holds a total map from these to the sentence a reader gets (`fetchFailed`),
+ * and it may not import `fetch.ts`, type-only or not. `fetch.ts` re-exports the
+ * name, so every other importer is unchanged. Moved 2026-10-04.
+ */
+export type FetchFailureCode =
+  | "invalid-url"
+  | "unsupported-scheme"
+  | "blocked-address"
+  | "dns"
+  | "connection"
+  | "certificate"
+  | "timeout"
+  | "too-many-redirects"
+  | "unauthorized"
+  | "forbidden"
+  | "not-found"
+  | "rate-limited"
+  | "server-error"
+  | "http-error"
+  | "too-large"
+  | "unsupported-type"
+  | "empty";
+
 export interface ProjectionResponse {
   model: string;
   /** How many blocks were embedded. Short ones and non-prose are skipped. */
@@ -1849,7 +2067,7 @@ export interface Article {
    * **May a stranger read this** — the owner's copy of `articles.visibility`,
    * so the masthead can say so without a request of its own.
    *
-   * The one field here that is not an artefact. It is on this payload rather
+   * A field about access, rather than an artefact. It is on this payload rather
    * than behind a route because it is a property of *the work* (src/routes.ts
    * § the sharing switch), because the Postgres store selects the `articles`
    * row anyway so it costs nothing, and because the alternative — a `GET`
@@ -1857,22 +2075,26 @@ export interface Article {
    * carry one enum that is already on the wire.
    * docs/plans/260904b-sharing-mark-on-the-article-masthead.md.
    *
-   * **Absent means *this store cannot say*, and never `private`.** The
-   * filesystem store has no visibility column — `visibilityStore.set` refuses
-   * with a 501 there (src/store/index.ts) — so absence is the only honest
-   * answer it has, and a `private` default would have the mark tell an owner
-   * that only they can read an article nobody ever asked about. That is the one
+   * **Absent means no owner-side visibility field, and never `private`.** The
+   * owner's read always sets it (src/store/pg.ts); a visitor's payload omits it
+   * and carries `sharedBy` instead, a `PublicArticle` drawn as an `Article`
+   * (src/web/article/access.ts, src/public-types.ts). Until 2026-09-05 absence
+   * also meant the filesystem store had no visibility column. A `private`
+   * default would have the mark tell an owner that only they can read an
+   * article nobody ever asked about. That is the one
    * sentence this control must not get wrong, and it is the same rule
    * `ArticleMetadata.sharing` follows for the same reason.
    * docs/reusable/silent-success.md.
    *
    * Optional rather than `Visibility | undefined`, unlike `assets` above:
    * `assets` is required-but-undefinable precisely so a store that forgets it
-   * is a type error, and here the *forgetting* is a legitimate answer one of
-   * the two stores gives on every article. There is nothing for a compiler to
-   * insist on.
+   * is a type error, and here leaving it out is a legitimate answer — the one
+   * a visitor's payload gives on every article. There is nothing for a
+   * compiler to insist on.
    */
   visibility?: Visibility;
+  /** Owner-only sharing state. Absent means unknown; never contains the key. */
+  privateLinkOn?: boolean;
 
   /**
    * **When the owner archived this article — `null` while it is on the shelf.**
@@ -1974,6 +2196,24 @@ export interface LibraryEntry {
   /** ISO. `meta.fetchedAt` where stage 2 recorded one, else the mtime of blocks.json. */
   addedAt: string;
   /**
+   * **When the publisher says it was published** — `Meta.publishedAt`,
+   * verbatim: `YYYY-MM-DD`, or that day with a time and an offset. The shelf
+   * sorts on it and prints it (plan 261003m). Only the calendar day means
+   * anything, so read it with `calendarDay` (src/web/relative-time.ts), never
+   * `Date.parse`.
+   *
+   * Absent for most of a shelf: a PDF never has one, and nor does a web page
+   * that states none or was last extracted before 2026-08-31.
+   */
+  publishedAt?: string;
+  /**
+   * `Meta.publishedYear`: the year alone, for a paper whose registry record
+   * states no whole day. Never beside `publishedAt`. The shelf reads the pair
+   * with `publishedOf` (src/web/relative-time.ts), which sorts a year at the
+   * start of that year and prints it as `2011`.
+   */
+  publishedYear?: number;
+  /**
    * **The body's words, not every block's** — `LibraryScalars.wordCount`, which
    * is `articleWordCounts(blocks).body` (src/block-policy.ts). Footnotes and
    * bibliographies are on the page and are not what the card is promising.
@@ -2011,13 +2251,13 @@ export interface LibraryEntry {
    * the visitor's side of the same fact is `ViewOnlyChip`
    * (src/web/PublicChrome.tsx) and says something different.
    *
-   * **Absent rather than `"private"`, and that is not a spelling choice.** The
-   * filesystem store has no visibility column at all — `visibilityStore.set`
-   * refuses with a 501 there (src/store/index.ts) — so absence is the only
-   * answer both stores can give about a document nobody has shared, and
-   * tests/store-parity.test.ts compares whole entries. A `"private"` from one
-   * store and an absence from the other would be two spellings of one fact and
-   * a parity failure about nothing.
+   * **Absent rather than `"private"`, and that is not a spelling choice.**
+   * `describeArticle` keeps the key only when the row says `public`
+   * (src/library-scalars.ts), so an unshared document has one spelling and not
+   * two. The rule dates from the filesystem store (gone 2026-09-05), which had
+   * no visibility column at all: absence was the only answer both stores could
+   * give about a document nobody had shared, and a `"private"` from one and an
+   * absence from the other would have been a parity failure about nothing.
    *
    * A badge, not a filter: there is deliberately no way to sort or narrow the
    * shelf by this until there is enough shared material for it to be worth
@@ -2033,6 +2273,8 @@ export interface LibraryEntry {
    * stage, on the house rule in AGENTS.md § *let the types catch it*.
    */
   visibility?: "public";
+  /** Owner-only fact that a private link is on, independently of public visibility. */
+  privateLinkOn?: boolean;
   /**
    * Whether the pipeline can safely reuse the stored source document. A
    * rebuild with no web address leaves `fetch` unforced, so this is exactly
@@ -2166,8 +2408,20 @@ export interface LibraryTermsResponse {
     /** Lowercased, plural-folded — what `?topics=` names. */
     key: string;
     label: string;
-    /** Every member article, by how often it uses the phrase, then slug. */
-    articles: { slug: string; count: number }[];
+    /**
+     * Every member article. A phrase topic's are ordered by how often each uses
+     * the phrase, then slug, and carry that `count`. **A model-named topic's
+     * are newest first and carry no `count`**: there is no phrase to count
+     * (plan 261003f), and a made-up 1 would print "used 1 time".
+     */
+    articles: { slug: string; count?: number }[];
+    /**
+     * How coarse or fine the topic is, 0 (a broad subject) towards 1. Only on
+     * a model-named topic; the list arrives broad first. Greg, 2026-10-03.
+     */
+    granularity?: number;
+    /** The `key` of the broader topic this one is inside, when it has one. */
+    within?: string;
   }[];
   scope: {
     /** The whole visible shelf, including skipped and pending articles. */
@@ -2177,7 +2431,11 @@ export interface LibraryTermsResponse {
     /** Read articles the extractor skipped — not English, or no prose. */
     skipped: number;
   };
-  /** In-scope articles not yet read; ask again until this is 0. */
+  /**
+   * Articles not yet read; ask again until this is 0. Normally the visible
+   * scope. While preparing one model tree over active + archived together it
+   * can temporarily include archived articles outside the current view.
+   */
   pending: number;
   /**
    * Whose ranking `terms` is: `"model"` when a stored model score for this
@@ -2191,6 +2449,13 @@ export interface LibraryTermsResponse {
    * bounded number of times — and the model's pick will be in the answer.
    */
   refreshing: boolean;
+  /**
+   * How many articles in this view are not in the model's topics yet because
+   * they arrived after it was last worked out. They are sorted in by
+   * themselves; until then they are missing under a chosen topic, so the row
+   * says so. Absent when there are none, and on the phrase row.
+   */
+  sorting?: number;
 }
 
 /**
@@ -2438,6 +2703,29 @@ export interface VisibilityState {
    */
   publicAt: string | null;
 }
+
+/**
+ * **An article's private link, as its owner is told about it** — what
+ * `GET`, `POST` and `DELETE /api/article/:slug/share-link` all answer.
+ * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * A union, so "on with no key" and "off with a key" cannot be written. The
+ * link itself is `/read/<slug>?key=<key>`; the client builds it, from
+ * `SHARE_KEY_PARAM` in src/share-key.ts.
+ *
+ * **`key` is a credential, and this is the only response that carries it.**
+ * It is not on the article, the shelf, the export or anything a visitor is
+ * sent. Do not log this value or put it in an error.
+ */
+export type ShareLinkState =
+  | { on: false }
+  | {
+      on: true;
+      /** The 22-character key. Anybody who has it and the slug can read the article. */
+      key: string;
+      /** ISO time this key was made. Making a link again makes a new key and moves this. */
+      since: string;
+    };
 
 /**
  * Everything the owner's Access & Sharing card needs, in one block.
@@ -2719,30 +3007,29 @@ export interface ArticleMetadata {
    *
    * Inside a block it cannot happen: **the block being present is the store
    * saying it can answer**, so `personalised: []` is unambiguous. And "cannot
-   * say" has exactly one cause — the filesystem store has no column and no
-   * artefacts to read a hash off — so it is one fact about the store rather than
+   * say" is one fact — the block is missing — rather than
    * three independent unknowns. Two optionals would also admit a state where
    * visibility is known and personalisation is not, which cannot occur and which
    * the client would still have to branch for.
    *
    * ## Why absent rather than a default
    *
-   * The filesystem store has no `visibility` column and nowhere to put one, so
-   * it cannot answer. The first version of this was required and that store
-   * reported `private`, on the reasoning that nothing *can* be shared there so
-   * `private` is the truth.
+   * **The Postgres store always sends the block** (src/store/pg.ts §
+   * `sharing`), so today the field is optional for historical reasons. The
+   * filesystem store, which went on 2026-09-05, had no `visibility` column and
+   * nowhere to put one, so it could not answer. The first version of this was
+   * required and that store reported `private`, on the reasoning that nothing
+   * *could* be shared there so `private` was the truth.
    *
-   * That was wrong, and the argument against it is the one `requirePostgres`
-   * already makes on the public route: a store with no honest answer must
+   * That was wrong: a store with no honest answer must
    * **refuse to answer** rather than supply a plausible one. A required
-   * `private` is a claim the store is in no position to make, and the card
+   * `private` was a claim the store was in no position to make, and the card
    * would have drawn *"Only you can read this"* — confidently, and with no way
    * to be right — over every article in development.
    *
-   * Absent means *this store cannot say*. The card keeps its existing "we could
-   * not check" state, which is true, and nothing throws — a read must not refuse
-   * the way `visibilityStore.set` does, or the whole Metadata page goes down in
-   * dev to be principled about a field nobody can set there.
+   * Absent still means *nobody could say*. The card keeps its "we could not
+   * check" state for it (src/web/AccessSharing.tsx), which is true, and
+   * nothing throws.
    * docs/reusable/silent-success.md.
    */
   sharing?: ArticleSharing;
@@ -3136,47 +3423,40 @@ export type StepName =
   | "labels"
   | "assets" | "arc" | "tweets" | "glossary"
   /* The lines worth keeping, in the article's own words — docs/project/quotes.md.
-     Beside `glossary` because the two send byte-identical article bytes at the
-     same effort and share one cached prefix. */
+
+     **Which steps share a cached article is not written in this union.** These
+     comments used to say, step by step, and every one of them went stale when
+     the output schema joined the cache key. `sharesArticleCache` in
+     src/pipeline.ts is the policy and tests/article-cache-group.test.ts pins
+     it; today no two steps share. */
   | "quotes"
   /* A route through the Quotes, at three depths —
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md.
      Its input is another step's artefact, like `illustrated`: it reads the
-     stored Quotes and never the article's prose, so it is in no cached prefix
-     and is not an `ArticleStage`. */
+     stored Quotes and never the article's prose, so it is not an
+     `ArticleStage`. */
   | "skim"
   | "ideas"
   /* When the things the piece narrates happened, and how sure it is —
-     docs/project/timeline.md. Beside `ideas` because the two send byte-identical
-     article bytes at the same effort and share one cached prefix, the same
-     reason `quotes` sits beside `glossary`. */
+     docs/project/timeline.md. */
   | "timeline"
-  /* The questions the piece can ask you back, the second sub-mode of Remember —
-     docs/plans/260831al-review-quiz-sub-mode.md. Beside `ideas` and `timeline`
-     for the third time and the same reason: `articleWithIds` at `high` effort,
-     so the group shares one cached article prefix. `STEP_ORDER` keeps its calls
-     close inside the provider's five-minute lifetime; cache lookup itself is
-     position-blind. */
+  /* The questions the piece can ask you back, the second sub-mode of Learn —
+     docs/plans/260831al-review-quiz-sub-mode.md. */
   | "quiz"
   /* The questions a careful reader would put to this piece while reading it,
-     and the passages where the piece responds — docs/plans/260916d-faq-mode.md.
-     Beside `quiz` for the same reason `quiz` is beside `timeline`:
-     `articleWithIds` over the body at `high` effort, so it joins the
-     `ideas`/`timeline`/`quiz` cached article prefix. */
+     and the passages where the piece responds — docs/plans/260916d-faq-mode.md. */
   | "faq"
   /* How each paragraph bears on the one before it, one word of ten —
      docs/plans/261003f-marginalia-relation-words-and-timeline-events.md.
-     Read only by Marginalia, and by the owner only. The same bytes as `faq`
-     at `low` effort, so in no cached prefix group. */
+     Read only by Marginalia, and by the owner only. */
   | "relations"
   /* The picture a model draws of the argument — docs/project/diagram.md § Sketch.
-     Nothing reads what it writes except the one below. The same bytes as
-     `ideas` but at `low` effort since 2026-10-01, so in no cached prefix group
-     (src/models.ts § STAGE_EFFORT). */
+     Nothing reads what it writes except the one below. `low` effort since
+     2026-10-01 (src/models.ts § STAGE_EFFORT). */
   | "sketch"
-  /* The same argument painted, docs/project/diagram.md § Illustrated. **The only
-     step here whose input is another step's artefact rather than the article**,
-     so it is last in `STEP_ORDER` and it *refuses* rather than pulls: a request
+  /* The same argument painted, docs/project/diagram.md § Illustrated. **It reads
+     the Sketch as well as the article**,
+     so it follows `sketch` in `STEP_ORDER` and it *refuses* rather than pulls: a request
      for it alone arrives as `steps: ["illustrated"]` and nothing puts `sketch`
      in front of it. src/pipeline.ts § illustrated. */
   | "illustrated"
@@ -3186,8 +3466,8 @@ export type StepName =
      it makes.
 
      **It is deliberately NOT an `ArticleStage`** (src/models.ts). That type is
-     the subset of these names that share a byte-exact cached article prefix on
-     the Messages wire; this step is on chat/completions, shares no such prefix,
+     the subset of these names that send the article bare on the Messages wire,
+     and so could share a cached copy of it; this step is on chat/completions,
      and therefore takes no row in `STAGE_EFFORT` or `ARTICLE_RENDERER` and none
      in `cacheArticleForStep`. Stated here because mode.md lists both tables
      among the ones the compiler asks for, and a reader will otherwise go
@@ -3201,14 +3481,12 @@ export type StepName =
      `debate`'s: it is on the Messages wire, but it sends `articleWithIds` over
      *every* block — the notes and the bibliography are the whole point — where
      `ideas`, `timeline`, `quiz`, `faq` and `sketch` send the body only. Different
-     bytes, so no shared cached prefix, so no row in `STAGE_EFFORT` or
+     bytes from every `ArticleStage`, so no row in `STAGE_EFFORT` or
      `ARTICLE_RENDERER`; its effort is a constant in src/citations.ts. */
   | "citations"
   /* **Links between the article's own blocks** — a phrase in one block that
      refers to what another shows in detail. Ideas' article block, byte for byte
-     up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`, and it
-     shares a cached prefix with nothing, because no other `ids` stage thinks at
-     `medium`. Not a mode: the links sit in the prose in every mode.
+     up to the breakpoint, at `medium` effort: so it IS an `ArticleStage`. Not a mode: the links sit in the prose in every mode.
      docs/plans/260930f-cross-reference-links-between-blocks-with-a-rich-hover-preview.md. */
   | "crossrefs"
   /* **Simple** — a few short paragraphs in everyday words saying what the piece
@@ -3216,7 +3494,7 @@ export type StepName =
      came from: a sub-mode of Summary, made on a press.
      docs/plans/260930i-simple-summaries-eli15-sub-mode.md. Ideas' article block
      at `high` effort (measured against `medium` in stage 1), so an
-     `ArticleStage` in the `ideas` cached prefix group. */
+     `ArticleStage`. */
   | "simple";
 
 export type JobStatus = "queued" | "running" | "done" | "error" | "cancelled";
@@ -3234,7 +3512,32 @@ export interface JobStep {
   finishedAt?: string;
   /** Run even if the artefact is already there — this is what a refresh is. */
   force?: boolean;
+  /**
+   * On a `structure` step only: write the headings tree and return, so the
+   * import publishes before the model call. Set by `enqueue` for a first import
+   * the browser asked to open early, and honoured only while the article has
+   * never been published (src/pipeline.ts § `STEPS.structure`). In the job's
+   * own `steps` JSON, so it needs no column.
+   */
+  headingsFirst?: true;
+  /**
+   * **Part of what the step is making, shown before the step is over.** On the
+   * job row only while the step is `running`: the runner deletes it when the
+   * step starts, succeeds or fails (src/jobs.ts § `runStep`), so nothing of an
+   * artefact is kept on a job. The owner's alone, as every job is, and never
+   * logged. docs/plans/261004f-stop-writing-the-simple-summary-level.md § Stage 2.
+   */
+  preview?: StepPreview;
 }
+
+/**
+ * What a running step may show early. A union on `kind`, so a later step adds
+ * its own arm and a reader of the row has to say which one it wants.
+ *
+ * `simple-brief`: Summary's Brief paragraphs, final and checked, while Fuller
+ * is still being written. They are stored, with Fuller, only when the step ends.
+ */
+export type StepPreview = { kind: "simple-brief"; paragraphs: SimpleParagraph[] };
 
 /**
  * One run of some steps against one article.
@@ -3372,11 +3675,9 @@ export interface Job {
    * about it is a copy decision with two renderers behind it (src/job-state.ts,
    * and `JobCard` against `JobProgress`) and is Greg's to make.
    *
-   * Postgres reads it off `jobs.requeues`. The filesystem adapter keeps the
-   * *budget's* count in memory — a restart empties it, deliberately, because a
-   * restart there is `sweepStopped`, which requeues everything with no budget at
-   * all — and writes this field alongside so the two stores hand the client the
-   * same shape. src/store/jobs-fs.ts says the rest.
+   * Postgres reads it off `jobs.requeues`. The filesystem adapter, which went
+   * on 2026-09-05, kept the *budget's* count in memory and wrote this field
+   * alongside so the two stores handed the client the same shape.
    */
   requeues?: number;
   /**
@@ -3574,14 +3875,14 @@ export interface ChatMessage {
   editedAt?: string;
   /**
    * Which stance produced this answer — **legacy, read-only**. Assistant turns
-   * of Remember threads written before 2026-10-02 carry one; nothing writes it
+   * of Learn threads written before 2026-10-02 carry one; nothing writes it
    * since Recall became one voice, and nothing on screen shows it. It is kept
    * because the stored rows have values (the column and its CHECK stay, and an
    * export carries them) — dropping it would be destructive and buy nothing.
    * docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md;
    * the original rule is docs/plans/260827ah-review-mode.md.
    */
-  stance?: RememberStance;
+  stance?: LearnStance;
   /**
    * **The reader pressed the "?" beside a paragraph rather than typing this.**
    * User turns only.
@@ -3606,22 +3907,36 @@ export interface ChatMessage {
    * follow above, and what tests/store-roundtrip.test.ts compares.
    */
   help?: true;
+  /**
+   * **When the reader first pressed Hint under this answer.** Assistant turns
+   * of Recall (`learn`) threads only.
+   *
+   * The hint is the answer's own last paragraph (`splitHint` in
+   * src/recall-hint.ts); this is the record that the reader opened it. Set once
+   * by the first press, cleared when a retry replaces the answer. It keeps an
+   * opened hint open after a reload, and `answerAsSeen` reads it so that Live
+   * and `reader_notes` are not told about a hint nobody looked at.
+   *
+   * Absent, never null — the rule every optional field here follows.
+   * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+   */
+  hintOpenedAt?: string;
 }
 
 /**
- * How much the model should say in a Remember answer — the reader's choice, per
+ * How much the model should say in a Learn answer — the reader's choice, per
  * turn, **until 2026-10-02**. Greg named all four on 2026-08-27
  * (docs/plans/260827ah-review-mode.md § The stance) and asked for one adaptive
  * voice instead on 2026-10-01 (`spya-c8x66d`). Legacy now: the type of stored
  * rows, and of the one request field the route still validates and drops.
  */
-export type RememberStance = "balanced" | "respond" | "socratic" | "signposts";
+export type LearnStance = "balanced" | "respond" | "socratic" | "signposts";
 
 /**
  * The four, as a value — what the route accepts (and drops) from a tab still
  * running a client from before the picker went. `streamChat` in src/routes.ts.
  */
-export const REMEMBER_STANCES: readonly RememberStance[] = [
+export const LEARN_STANCES: readonly LearnStance[] = [
   "balanced",
   "respond",
   "socratic",
@@ -3634,7 +3949,7 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  *
  * **Required, not optional**, and normalised to `"chat"` when a stored thread
  * predates this field. An optional kind means a `?? "chat"` at every read site
- * and one of them will eventually be missed — which is a Remember thread answered
+ * and one of them will eventually be missed — which is a Learn thread answered
  * with chat's prompt, and nothing on screen disagreeing. GPT Sol's review of
  * docs/plans/260827ah-review-mode.md, 2026-08-27.
  *
@@ -3645,12 +3960,17 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * **This value is persisted, so renaming it was a migration and not an edit.**
  * The mode was called Review until 2026-09-01, and `chat_threads.kind` carried a
  * CHECK constraint `kind in ('chat','review')`. Narrowing a CHECK before the rows
- * move fails every Remember insert with `23514`, so the discriminant, the schema
+ * move fails every Learn insert with `23514`, so the discriminant, the schema
  * and the data moved in one step: drizzle/0048_rename_review_thread_kind.sql
  * drops the constraint, updates the rows, then re-adds it with `'remember'`.
  * Anything else that speaks this wire value — `src/routes.ts`'s validation, the
  * export/import shapes, the committed fixture corpus — moved with it.
  * docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages.
+ *
+ * **And `remember` until 2026-10-06**, when the identifiers followed the
+ * reader's word, Learn. The same one step:
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql,
+ * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md.
  *
  * **`candidates` is the third**, added 2026-09-01 — Referee mode's fourth
  * sub-mode, which Greg asked to be *"a special reuse of Chat mode, to get
@@ -3663,35 +3983,56 @@ export const REMEMBER_STANCES: readonly RememberStance[] = [
  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
  */
-export type ThreadKind = "chat" | "remember" | "candidates" | "tutorial";
+export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore";
 
 /**
  * The thread kinds, as a value, and the predicate both ends validate with.
  *
- * **One list**, for the reason `REMEMBER_STANCES` below gives about itself and
- * for one more that is specific to this field: the default lives in *two*
- * normalisers, one per store (`normaliseKind` in src/chat.ts and its twin in
- * src/store/pg-chat.ts), and both coerce anything unrecognised to `"chat"`. A
- * fourth kind added to the union and missed in either of them is a thread that
- * silently becomes a chat on its next read — answered with chat's prompt, with
- * nothing on screen disagreeing, which is the failure the `kind` field was
- * introduced to prevent. Since both call `isThreadKind`, adding a member is one
- * edit rather than four.
+ * **One list**, for the reason `LEARN_STANCES` below gives about itself and
+ * for one more that is specific to this field: every reader of a stored kind
+ * has to agree on the list. A kind added to the union and missed by one of
+ * them used to be a thread that silently became a chat on its next read —
+ * answered with chat's prompt, with nothing on screen disagreeing, which is the
+ * failure the `kind` field was introduced to prevent. Since they all go
+ * through `isThreadKind`, adding a member is one edit rather than four.
+ *
+ * Since 2026-10-06 the two Postgres readers (src/store/pg-chat.ts and
+ * src/store/export.ts) no longer coerce at all: `storedThreadKind` below
+ * refuses a kind that is not on this list. Since 2026-10-07 neither does the
+ * fixture-file reader, `kindFromFile` in src/chat.ts: it supplies `"chat"` only
+ * for an absent kind, and reads `RETIRED_THREAD_KINDS` below.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "remember", "candidates", "tutorial"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "tutorial", "explore"];
 
 /**
- * **The kinds an article has at most one of** — Remember's Recall and Tutorial,
- * each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
- * and Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md).
+ * **Words a thread kind used to be, and what each became.** The database
+ * renamed them by migration — `review` → `remember` in
+ * drizzle/0048_rename_review_thread_kind.sql, `remember` → `learn` in
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql — but
+ * database migrations do not update `chat.json` on disk, so a file reader
+ * needs the same map.
+ * A rename of a kind adds its old word here, pointing at the final one.
+ * docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md.
+ */
+export const RETIRED_THREAD_KINDS = {
+  review: "learn",
+  remember: "learn",
+} as const satisfies Record<string, ThreadKind>;
+
+/**
+ * **The kinds an article has at most one of** — Learn's Recall, Tutorial and
+ * Explore, each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
+ * Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md,
+ * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md).
  * A partial unique index per kind holds it in the database
- * (`chat_threads_one_remember`, `chat_threads_one_tutorial`); this is the list
- * `targetOf` in src/chat.ts and `ConversationBand` read, so the two ends agree.
+ * (`chat_threads_one_learn`, `chat_threads_one_tutorial`,
+ * `chat_threads_one_explore`); this is the list `targetOf` in src/chat.ts and
+ * `ConversationBand` read, so the two ends agree.
  *
  * Single-thread is ONE property. It does not say what a kind is called, what
  * its empty box says, or whether it offers Live — those are decided per kind.
  */
-export const SINGLE_THREAD_KINDS = ["remember", "tutorial"] as const satisfies readonly ThreadKind[];
+export const SINGLE_THREAD_KINDS = ["learn", "tutorial", "explore"] as const satisfies readonly ThreadKind[];
 export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
 
 export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {
@@ -3706,9 +4047,49 @@ export function isSingleThreadKind(kind: ThreadKind | undefined): kind is Single
  */
 export const MAX_VISIBLE_BLOCKS = 100;
 
-/** Is this one of the three? Used by both stores' normalisers and by the route. */
+/** Is this a current thread kind? Used by the file and database readers and the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
   return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);
+}
+
+/**
+ * The database holds a thread kind this code has no name for.
+ *
+ * **A 409, carried on the class**, which is the door src/store/db-errors.ts
+ * asks a refusal to use: the store's guard passes anything with a numeric
+ * `status`, and `serveApi` answers with it. 409 and not 500 because the browser
+ * has usually already drawn the Retry or Edit this refuses, and a 409 is the one
+ * answer it puts the screen back for (src/web/chat/effects.ts § `runTurn`); a
+ * 500 it commits, blanking an answer Postgres still holds.
+ *
+ * **So the message is the reader's**, since below 500 the message is what the
+ * response says. What was stored is on `stored`: a column a CHECK constrains to
+ * a handful of words chosen in a migration, never anybody's prose.
+ */
+export class UnknownStoredThreadKind extends Error {
+  override readonly name = "UnknownStoredThreadKind";
+  readonly status = 409;
+  constructor(readonly stored: unknown) {
+    super(CHAT_BEING_UPDATED.message);
+  }
+}
+
+/**
+ * **A kind read from `chat_threads`, or a refusal. Never a default.**
+ *
+ * The column is `not null` with a CHECK listing the kinds, so a value outside
+ * `THREAD_KINDS` can only mean the database is newer or older than this code.
+ * Until 2026-10-06 both Postgres readers answered that with `"chat"`: a Retry
+ * or Edit of a Recall answer was then answered under Chat's prompt and stored
+ * over the original, and an export labelled the conversation a chat, with
+ * nothing failing. Refusing costs a failed request for the minutes a deploy
+ * takes; coercing cost a wrong answer that stayed.
+ * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md,
+ * stage 0, and docs/reusable/silent-success.md.
+ */
+export function storedThreadKind(value: unknown): ThreadKind {
+  if (isThreadKind(value)) return value;
+  throw new UnknownStoredThreadKind(value);
 }
 
 /**
@@ -3750,6 +4131,148 @@ export type ChatAnchor =
   | { blockId: BlockId }
   | { blockId: BlockId; quote: string; start: number };
 
+/**
+ * **Where a conversation was started from, when it was started from an item
+ * in another mode** — Debate's *Check this claim in chat* is the first caller.
+ * Plan docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1.
+ *
+ * Not a `ThreadKind` and not the anchor. Kind chooses the prompt and tools,
+ * and a claim check is an ordinary chat. An anchor says "this is the chat
+ * about this passage" to the prose marks and the gutter chip, which a claim
+ * check is not. One meaning per field.
+ *
+ * **A union on `mode`**, so a claim cannot exist without its block and its
+ * words. A claim has no id: its identity is `(blockId, quote)`, the article's
+ * own words as they were when the chat started. `summary` is reserved and
+ * not built: `chat_threads_origin_mode` in src/db/schema.ts lists it, and the
+ * route accepts only the modes that are built (`ORIGIN_MODES`).
+ *
+ * **A glossary entry and a cited work since 2026-10-06**
+ * (plan docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md, D1):
+ * each has a durable id, so the id is its identity and the name beside it is
+ * a snapshot. See `GlossaryOrigin`.
+ *
+ * **Debate has two shapes since 2026-10-05, and `mode` does not tell them
+ * apart** (plan docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A):
+ * a claim, and a *lens*, an angle the reader typed to look at the debate from.
+ * Both say `mode: "debate"`, so narrowing on `mode` reaches neither's fields.
+ * Ask `isLensOrigin` or `isClaimOrigin`; a claim never equals a lens
+ * (`sameOrigin`).
+ *
+ * Set on the turn that creates the thread and never again, like `anchor`.
+ * Written by conditional spread, never `origin: undefined`.
+ */
+export type ThreadOrigin = ClaimOrigin | LensOrigin | GlossaryOrigin | CitationsOrigin;
+
+/** One of Debate's claims: the block it sits in and its words when the chat started. */
+export type ClaimOrigin = { mode: "debate"; blockId: BlockId; quote: string };
+
+/**
+ * An angle the reader asked to see the debate from: their own words, trimmed
+ * and non-empty, at most `MAX_LENS_CHARS`. No block and no quote. Two chats
+ * may share one lens; they are then two lines in Debate's *Your angles*.
+ */
+export type LensOrigin = { mode: "debate"; lens: string };
+
+/**
+ * **One entry of the Glossary**: its id, and its name when the chat started.
+ *
+ * The id is durable (inherited across regenerations, src/glossary.ts), so
+ * **the origin is matched by `mode` and `itemId` alone** (`sameOrigin`) and
+ * the entry's mark survives a regeneration that rewords it. `quote` is a
+ * snapshot of the name, kept so the chat's title and the tooltip in Chat's
+ * list need no look-up and still read once the entry has gone. At most
+ * `MAX_ORIGIN_NAME_CHARS`; the sender cuts it with `originName`.
+ */
+export type GlossaryOrigin = { mode: "glossary"; itemId: string; quote: string };
+
+/** One work the article cites: its id, and its title when the chat started. `GlossaryOrigin`'s rules. */
+export type CitationsOrigin = { mode: "citations"; itemId: string; quote: string };
+
+/**
+ * The most the name snapshot of a glossary or citations origin may be. The
+ * route refuses a longer one, so **every sender cuts with `originName`**: a
+ * glossary name has no length limit of its own (plan 261006d's review, F1).
+ */
+export const MAX_ORIGIN_NAME_CHARS = 300;
+
+/**
+ * An entry's name as its origin stores it: trimmed, and cut to
+ * `MAX_ORIGIN_NAME_CHARS` without leaving half a surrogate pair. A cut is
+ * fine here, unlike a lens: the name is a label and the id is the identity.
+ */
+export function originName(name: string): string {
+  const clean = name.trim();
+  if (clean.length <= MAX_ORIGIN_NAME_CHARS) return clean;
+  return clean
+    .slice(0, MAX_ORIGIN_NAME_CHARS)
+    .replace(/[\uD800-\uDBFF]$/, "")
+    .trimEnd();
+}
+
+/**
+ * The most a lens may be. The cap of *why you're reading this*, because the
+ * command bar will build a lens from that text (the plan's part B). A longer
+ * one is refused, not cut: a cut lens is a different question.
+ */
+export const MAX_LENS_CHARS = MAX_PURPOSE_CHARS;
+
+/** Is this origin a lens, and not a claim? The one place the two shapes are told apart. */
+export function isLensOrigin(origin: ThreadOrigin): origin is LensOrigin {
+  return "lens" in origin;
+}
+
+/** Is this origin one of Debate's claims: the one shape that names a block? */
+export function isClaimOrigin(origin: ThreadOrigin): origin is ClaimOrigin {
+  return origin.mode === "debate" && !isLensOrigin(origin);
+}
+
+/** The origin modes that are built. The route refuses any other. */
+export const ORIGIN_MODES = ["debate", "glossary", "citations"] as const satisfies readonly ThreadOrigin["mode"][];
+
+/**
+ * Are these the same anchor? What the route's 409 and `withTurn`'s refusal
+ * inside the store's transaction both ask, so there is one answer. It lived in
+ * src/routes.ts, private, until 2026-10-07.
+ *
+ * A thread with no anchor is **not** the same as one with any anchor: a send
+ * offering a passage for an unanchored conversation is still trying to change
+ * what that conversation is about, and it is refused. `undefined` on both sides
+ * cannot reach here: a caller only asks when it has one to offer.
+ */
+export function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean {
+  if (!stored) return false;
+  if (stored.blockId !== wanted.blockId) return false;
+  const a = "quote" in stored ? stored : null;
+  const b = "quote" in wanted ? wanted : null;
+  if (!a || !b) return a === b; // both block-only, or one of each
+  return a.quote === b.quote && a.start === b.start;
+}
+
+/**
+ * Are these the same origin? What the route's 409 and the caller's way back
+ * both ask, so there is one answer. Exact: a claim reworded by a new search is
+ * a different claim. **A claim and a lens are never the same**, whatever their
+ * words, so the shapes are compared before any field is.
+ *
+ * **A glossary entry or a cited work is its id**: the name is a snapshot and
+ * is not compared, so a reworded entry is still the same origin (plan
+ * 261006d, D1).
+ */
+export function sameOrigin(a: ThreadOrigin, b: ThreadOrigin): boolean {
+  switch (a.mode) {
+    case "glossary":
+    case "citations":
+      return b.mode === a.mode && a.itemId === b.itemId;
+    case "debate":
+      if (b.mode !== "debate") return false;
+      if (isLensOrigin(a)) return isLensOrigin(b) && a.lens === b.lens;
+      return !isLensOrigin(b) && a.blockId === b.blockId && a.quote === b.quote;
+    default:
+      return a satisfies never;
+  }
+}
+
 export interface ChatThread {
   id: string;
   title: string;
@@ -3764,10 +4287,16 @@ export interface ChatThread {
    * up, and for a sharper reason here: the anchor is what draws a mark in the
    * prose, so a thread that re-anchored itself would move its mark to a
    * paragraph the reader is not looking at. `withTurn` sets it only on the
-   * branch that builds a new thread, and the route refuses an anchor sent for a
-   * thread that already has one.
+   * branch that builds a new thread, and refuses a different one offered for a
+   * thread that exists (`sameAnchor`); the route refuses it first, for
+   * the sentence. A thread with **no** anchor is refused one too.
    */
   anchor?: ChatAnchor;
+  /**
+   * The item in another mode this conversation was started from, if it was.
+   * Set on the turn that creates the thread and never again. See `ThreadOrigin`.
+   */
+  origin?: ThreadOrigin;
   /**
    * A question about the article, or the reader saying what they took from
    * it. See `ThreadKind`.
@@ -3807,13 +4336,19 @@ export interface ThreadSummary {
   updatedAt: string;
   anchor?: ChatAnchor;
   /**
-   * Chat or Remember — which the reading view needs even though it draws no
-   * Remember marks.
+   * Where the conversation was started from. A caller mode finds its own
+   * conversation by matching this (`threadForOrigin` in
+   * src/web/useChatAnchors.ts); nothing is stored on the item's side.
+   */
+  origin?: ThreadOrigin;
+  /**
+   * Chat or Learn — which the reading view needs even though it draws no
+   * Learn marks.
    *
    * `?thread=` opens the floating `ChatDialog` in every mode but the two
    * conversation modes, and that dialog is chat's UI and asks with chat's
-   * prompt. A pasted `?mode=toc&thread=<a Remember thread>` would therefore
-   * continue a Remember conversation as a chat. The overlay is gated on this
+   * prompt. A pasted `?mode=toc&thread=<a Learn thread>` would therefore
+   * continue a Learn conversation as a chat. The overlay is gated on this
    * instead. See
    * src/web/reader/Reader.tsx § overlay, and GPT Sol's review of
    * docs/plans/260827ah-review-mode.md, finding 7.
@@ -4031,8 +4566,19 @@ export interface When {
   phrase: string;
   /** Where in the block `phrase` sits, so the reader can go and check. */
   at: { blockId: BlockId; start: number; end: number };
-  /** True when the parser supplied the year from the publication date. */
+  /** True when the parser supplied the year rather than the article writing it here. */
   yearFilled: boolean;
+  /**
+   * **Where a supplied year came from, when it was not the publication date**:
+   * `"piece"` is the one year the piece itself states (`pieceYear`,
+   * src/timeline-time.ts), used when we have no publication date. It is an
+   * assumption and the panel says so. Absent on a year taken from the
+   * publication date, and on everything written before 2026-10-05.
+   *
+   * On the row rather than the artefact so that it travels wherever the event
+   * does, a shared link's payload included, and cannot disagree with the row.
+   */
+  yearFrom?: "piece";
 }
 
 /**
@@ -4185,7 +4731,13 @@ export interface CitedWork {
   why: string;
   /** 0–1: how much THIS piece's argument leans on the work. The model's reading. */
   relevance?: number;
-  /** 0–1: how influential the work is in its field. **The model's memory**, weaker. */
+  /**
+   * 0–1: how influential the work is in its field. **The model's memory**, weaker.
+   * **Absent means no usable score**: `citations/6` asks for a number only when
+   * confident, else null, stored as no field (plan 261003m). Missing/rejected
+   * values share that shape. New low numbers mean "known, and minor"; older
+   * lists retain low numbers that may have meant "I do not know this work".
+   */
   influence?: number;
   /** The bibliography / reference-list / note entry, if the article has one. */
   reference?: CitationPlace;
@@ -4277,8 +4829,26 @@ export interface RegistryWork {
   venue?: string;
 }
 
-/** Citations' registry field: a record whose title agrees, or the fact that it does not. */
-export type CitationRegistry = ({ kind: "found" } & RegistryWork) | { kind: "conflict"; source: RegistrySource };
+/**
+ * **Crossref's count of the works that cite this one, and when it was read**
+ * (plan 261005i): `is-referenced-by-count`, a dated snapshot and never a live
+ * number. Only ever beside a Crossref record. `readAt` is ISO, by the
+ * database's clock.
+ */
+export interface RegistryCitedBy {
+  count: number;
+  readAt: string;
+}
+
+/**
+ * Citations' registry field: a record whose title agrees, or the fact that it
+ * does not. `citedBy` is on the `found` arm alone, and not on `RegistryWork`:
+ * a conflict's record is another work, whose count is not this row's, and
+ * Debate's rows do not ask.
+ */
+export type CitationRegistry =
+  | ({ kind: "found"; citedBy?: RegistryCitedBy } & RegistryWork)
+  | { kind: "conflict"; source: RegistrySource };
 
 /**
  * How a cited work was matched to an article here, strongest first. `title` is
@@ -4344,6 +4914,35 @@ export interface CitationInvestigation {
    * stage**, which the row draws exactly as it did then.
    */
   paper?: InvestigatedPaper;
+  /**
+   * **How influential the work is, read from one page of this press's own web
+   * search** (plan 261003m stage 2, src/citation-influence.ts) — an AI
+   * estimate, kept only where code found the quoted words on a search result
+   * whose title names the work. **Absent** when the press found nothing code
+   * could keep, and on an answer from before that stage. Read it through
+   * `effectiveInfluence` (src/citation-effective-influence.ts), never directly:
+   * that is where a stale `version` is dropped.
+   */
+  influence?: CitationWebInfluence;
+}
+
+/**
+ * **A cited work's influence, as one web page states it** — plan 261003m stage
+ * 2. The number is the model's; the quote is the page's own characters as code
+ * found them; the address and title are copied from the search result by code.
+ * When it happened is the investigation's own `at`.
+ */
+export interface CitationWebInfluence {
+  /** 0–1, on the list's rubric. */
+  value: number;
+  /** The page's own words the number rests on. */
+  quote: string;
+  /** The search result's address, through `safeUrl`. */
+  sourceUrl: string;
+  /** The search result's own title. A kept source always had one; optional for a stored row that lost it. */
+  sourceTitle?: string;
+  /** `INFLUENCE_VERSION` when it was written: the prompt and the checking rules. */
+  version: string;
 }
 
 /** How code confirmed a fetched PDF is the cited work — src/paper-evidence.ts § confirmIdentity. */
@@ -4426,10 +5025,11 @@ export interface InvestigateCitationDone {
  * stage 2); then (plan 260930d) `finding`
  * — the lookup that looks for the work's own page, only when the row has no
  * current `assessed` one — then `reading-paper` (plan 261001a stage 3: the
- * paper itself fetched and checked, and when read, its passages asked for),
+ * paper itself fetched and checked, and when read, its passages asked for;
+ * and beside it, since plan 261003m stage 2, the influence call),
  * then `reading`, the streamed answer. Sent as a `stage` frame (`{ stage }`);
- * a `lookup` frame after `finding` carries the lookup's answer, the same
- * `FindCitationResponse` `POST …/find` answers.
+ * a `lookup` frame after `finding` carries the lookup's answer, a
+ * `FindCitationResponse`.
  */
 export type InvestigateStage = "searching" | "finding" | "reading-paper" | "reading";
 
@@ -4521,10 +5121,13 @@ export type CitationLookup =
     });
 
 /**
- * `POST /api/citations/:slug/:id/find`. **Two outcomes, and neither is an
- * error**: a page that matched and was kept, or nothing that matched — stored
- * nowhere, and the row stays as it was. A failed call is an HTTP error, not a
- * third outcome.
+ * What *Look it up* answers — `runCitationLookup` (src/citation-find.ts), sent
+ * to the browser as the `lookup` frame of
+ * `POST /api/citations/:slug/:id/investigate`. It was the body of
+ * `POST /api/citations/:slug/:id/find` until that route was deleted on
+ * 2026-10-04. **Two outcomes, and neither is an error**: a page that matched
+ * and was kept, or nothing that matched — stored nowhere, and the row stays as
+ * it was. A failed call fails the press, not a third outcome.
  *
  * On `found`, **the link and the lookup are separate** (plan 260929g R-3):
  * `work` is the row's link half — upgraded to `linkFrom: "web"` only when it
@@ -4585,21 +5188,31 @@ export interface CitationDrops {
   entryMismatch: number;
   /** An entry whose text does not contain the model's title — the entry is dropped (plan 260930i, Sol F3). */
   entryDisagrees: number;
-  /** Authors not all found as words of the work's entry — dropped, the entry kept. */
+  /**
+   * Authors not all found as words of the work's entry — dropped, the entry
+   * kept. With no entry, authors the article names nowhere (plan 261003j).
+   */
   authorsUnfound: number;
-  /** A year the work's entry does not carry — dropped, the entry kept. */
+  /** A year the work's entry does not carry, or with no entry, the article — dropped. */
   yearUnfound: number;
 }
 
 /**
  * The 0–1 scores the prompt required and did not get — the twin of
  * `GlossaryScoreDrops` (src/glossary.ts), same absent/rejected split.
+ *
+ * `influenceUnknown` is not a drop: it is the model's own `null`, the answer
+ * the prompt asks for when it is not confident it knows the work (plan
+ * 261003m). Kept apart from `influenceAbsent` (the field left out, which the
+ * schema forbids) and `influenceRejected` (not a number in 0–1), so the log
+ * line can tell an honest "unknown" from a broken answer.
  */
 export interface CitationScoreDrops {
   relevanceAbsent: number;
   relevanceRejected: number;
   influenceAbsent: number;
   influenceRejected: number;
+  influenceUnknown: number;
 }
 
 /**
@@ -4649,7 +5262,7 @@ export type CitationsFound = CitationsResponse;
 
 /* ------------------------------------------------------------------- quiz --
    The questions the piece can ask you back — `data/<slug>/quiz.json`, and the
-   second sub-mode of Remember. See docs/plans/260831al-review-quiz-sub-mode.md.
+   second sub-mode of Learn. See docs/plans/260831al-review-quiz-sub-mode.md.
 
    ## Why these are here and not in src/quiz.ts, where the stage lives
 
@@ -4834,10 +5447,40 @@ export interface QuizResponse {
   outdated: boolean;
   /** Written for a profile the reader has since changed. `ThreadResponse`. */
   profileChanged: boolean;
+  /**
+   * **The reader's kept answers to this batch**, the latest per question —
+   * since 2026-10-05 (plan 261005b, report spya-e8ujxn).
+   *
+   * **`null` is "could not be read", and it is not `[]`**, which says the
+   * reader has answered nothing. The route answers `null` when the attempts
+   * read threw, so that the questions still arrive; the client then keeps what
+   * it already had for this batch (GPT Sol's plan review, F5).
+   */
+  attempts: QuizKeptAnswer[] | null;
 }
 
-/** What the store returns; the route adds `profileChanged`. As `IdeasFound`. */
-export type QuizFound = Omit<QuizResponse, "profileChanged">;
+/**
+ * One finished mark, as the owner's read returns it: the answer, the mark it
+ * was given, and when. A row of `quiz_attempts` (src/db/schema.ts) less the
+ * batch — the read is scoped to one — and the question's words, which the
+ * client already has. **No verdict**: whether the reader got it right is not
+ * stored.
+ */
+export interface QuizKeptAnswer {
+  questionId: QuizQuestionId;
+  /** The reader's words, as they went to the marker. */
+  answer: string;
+  /** The mark, as the reader saw it. */
+  reply: string;
+  /** ISO time the mark finished — the row's `created_at`. */
+  answeredAt: string;
+}
+
+/**
+ * What the store returns; the route adds `profileChanged` (as `IdeasFound`)
+ * and `attempts`, which is a second read from a different table.
+ */
+export type QuizFound = Omit<QuizResponse, "profileChanged" | "attempts">;
 
 /**
  * What one mark is, on the wire — `POST /api/quiz/:slug/mark`.
@@ -5054,12 +5697,46 @@ export interface SimpleParagraph {
    * that skips it.
    */
   sentences?: unknown;
+  /**
+   * **`true` when the paragraph is a list**: its first sentence a lead-in, each
+   * later one a bullet (docs/plans/261004b-summary-fuller-longer-and-bold-and-bullets.md).
+   * Stored only when true; absent on every paragraph written before
+   * `simple-prompt/7`. Typed `unknown` for `sentences`' reason: whether a list
+   * is drawn is `paragraphShape`'s answer, never this field read directly.
+   */
+  list?: unknown;
 }
 
 /** One sentence of a paragraph, and the one passage it rests on, or `null` for none in particular. */
 export interface SimpleSentence {
   text: string;
   id: BlockId | null;
+  /**
+   * A few of this sentence's own words, drawn bold: the finding, number or
+   * term a skimming reader should catch (plan 261004b). Present only when
+   * `simpleKey` accepts it, so absent on most sentences.
+   */
+  key?: string;
+}
+
+/** The most words a sentence's `key` may have — a phrase to catch, never a clause to read. */
+export const SIMPLE_KEY_MAX_WORDS = 8;
+
+/**
+ * **Is this a key phrase for this sentence? One answer, for the writer's
+ * validation and for every read** (plan 261004b): the trimmed key when it is a
+ * string with something in it, found in the sentence's text exactly, at most
+ * `SIMPLE_KEY_MAX_WORDS` words, and shorter than the sentence; otherwise
+ * `null`. Formatting is never a reason to refuse a sentence, so a caller that
+ * gets `null` draws the sentence without bold.
+ *
+ * @param text the sentence's text, already trimmed.
+ */
+export function simpleKey(key: unknown, text: string): string | null {
+  if (typeof key !== "string") return null;
+  const trimmed = key.trim();
+  if (trimmed === "" || trimmed.length >= text.length || !text.includes(trimmed)) return null;
+  return trimmed.split(/\s+/).length <= SIMPLE_KEY_MAX_WORDS ? trimmed : null;
 }
 
 /**
@@ -5075,7 +5752,9 @@ export interface SimpleSentence {
  * rest of the summary is untouched. Never a reason to refuse the artefact.
  *
  * Returns fresh objects with trimmed text, so a caller can hand them on
- * without carrying anything else the stored entries had.
+ * without carrying anything else the stored entries had. A `key` rides along
+ * only when `simpleKey` accepts it; one that fails is left off and the sentence
+ * is still usable.
  */
 export function usableSentences(paragraph: SimpleParagraph): SimpleSentence[] | null {
   const raw = paragraph.sentences;
@@ -5084,29 +5763,61 @@ export function usableSentences(paragraph: SimpleParagraph): SimpleSentence[] | 
   const out: SimpleSentence[] = [];
   for (const entry of raw as unknown[]) {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
-    const { text, id } = entry as { text?: unknown; id?: unknown };
+    const { text, id, key: rawKey } = entry as { text?: unknown; id?: unknown; key?: unknown };
     if (typeof text !== "string") return null;
     const trimmed = text.trim();
     if (trimmed === "") return null;
     if (id !== null && (typeof id !== "string" || !ids.has(id))) return null;
-    out.push({ text: trimmed, id: id as BlockId | null });
+    const key = simpleKey(rawKey, trimmed);
+    out.push({ text: trimmed, id: id as BlockId | null, ...(key === null ? {} : { key }) });
   }
   return out.map((s) => s.text).join(" ") === paragraph.text ? out : null;
 }
 
 /**
- * **The three plain-words levels**, in the order the slider runs: `brief`,
- * short and very simple; `simple`, fairly simple and just under the first
- * version's length; `fuller`, moderately complex and just over it. Greg,
- * 2026-09-30 (SPIDERYARN-READING2-7J): *"a UI-slider with 3 level (short &
- * very-simple, just-under-current-length and fairly-simple,
- * just-over-current-length and moderately-complex)"*.
- * docs/plans/261001b-summary-controls-in-one-row-and-two-plain-words-levels-shaped-by-profile-and-goal.md.
- *
- * Also the `?summary=` values for these views (src/web/params.ts), so
- * `simple` keeps the value readers' links already carry.
+ * What to draw for one paragraph. `list` carries its lead-in and at least two
+ * bullets by construction, so no caller can draw a list of one.
  */
-export const SIMPLE_LEVELS = ["brief", "simple", "fuller"] as const;
+export type SimpleParagraphShape =
+  /** No usable sentences: draw `text`, as before `simple-prompt/4`. */
+  | { kind: "text" }
+  | { kind: "prose"; sentences: SimpleSentence[] }
+  | { kind: "list"; lead: SimpleSentence; items: SimpleSentence[] };
+
+/**
+ * **How a paragraph is drawn — one answer for the owner's panel and the
+ * visitor's payload** (plan 261004b). A list needs `list: true` and three or
+ * more usable sentences, a lead-in and two bullets; anything less is prose,
+ * which is always a correct way to draw the same sentences.
+ */
+export function paragraphShape(paragraph: SimpleParagraph): SimpleParagraphShape {
+  const sentences = usableSentences(paragraph);
+  if (!sentences) return { kind: "text" };
+  const [lead, ...items] = sentences;
+  if (paragraph.list === true && lead && items.length >= 2) return { kind: "list", lead, items };
+  return { kind: "prose", sentences };
+}
+
+/**
+ * **The two plain-words levels** the `simple` step writes, shortest first:
+ * `brief`, short and very simple; `fuller`, moderately complex and the longer.
+ *
+ * **There were three until 2026-10-04.** A middle level, itself called
+ * `simple`, sat between them (Greg, 2026-09-30, SPIDERYARN-READING2-7J). It
+ * stopped being shown on 2026-10-03 and stopped being written the day after.
+ * Greg, 2026-10-04: *"we've removed that middle level of Summary, and we're
+ * not going to add it back"*.
+ * docs/plans/261004f-stop-writing-the-simple-summary-level.md.
+ *
+ * **A row stored before then still has `levels.simple`, and `check.levels.simple`.**
+ * The reader ignores both: every guard below asks about the levels in this
+ * list and no others, so such a row is usable exactly when its Brief and
+ * Fuller are. The historical check report still reads the middle check and
+ * validates it separately. The stored JSON is not rewritten.
+ *
+ * The step and the artefact are still named `simple`; only the level went.
+ */
+export const SIMPLE_LEVELS = ["brief", "fuller"] as const;
 export type SimpleLevel = (typeof SIMPLE_LEVELS)[number];
 
 /** The stored shape's version, beside the guard that decides whether it is usable. */
@@ -5122,15 +5833,29 @@ export interface SimpleLevelLimits {
 
 /*
  * The word ceilings sit above the longest the measurement saw at each level
- * (210, 338 and 431, plan 261001b § Ledger) — a ceiling is the line between an
- * orientation and a digest, not a length target, and with three calls a tight
- * one loses all three for one level's ten words. The prompt's asks are what
- * set the length.
+ * (210 for Brief and 431 for Fuller, plan 261001b § Ledger) — a ceiling is the
+ * line between an orientation and a digest, not a length target, and with a
+ * call per level a tight one loses every level for one level's ten words. The
+ * prompt's asks are what set the length.
+ *
+ * Fuller's were 5 paragraphs and 480 words until 2026-10-04. The limits rose
+ * for the first, twice-as-long arm and deliberately stayed there when the
+ * smaller fallback shipped, so a longer Fuller later remains a prompt-only
+ * change (Greg, spya-azft06; plan 261004b). Its minimum stays 3 so every Fuller
+ * stored before then still reads.
+ *
+ * Fuller's were raised again on 2026-10-05 (Greg, spya-gttwhn; plan 261005b),
+ * from 8 paragraphs and 850 words: the length Fuller is asked for now follows
+ * the length of the piece, and a book's is asked for about 900 words in eight
+ * to eleven paragraphs. Brief is asked for one length whatever the piece, so
+ * its limits did not move. **One cap for every length of
+ * piece**, because a reader of a stored row has no article to measure; the
+ * prompt's own "never more than" is what holds a shorter piece's summary short.
+ * The minimums did not move, so every stored summary still reads.
  */
 export const SIMPLE_LIMITS: Record<SimpleLevel, SimpleLevelLimits> = {
   brief: { minParagraphs: 2, maxParagraphs: 3, maxWords: 240 },
-  simple: { minParagraphs: 2, maxParagraphs: 4, maxWords: 360 },
-  fuller: { minParagraphs: 3, maxParagraphs: 5, maxWords: 480 },
+  fuller: { minParagraphs: 3, maxParagraphs: 13, maxWords: 1400 },
 };
 
 /** Passages per paragraph, at every level. */
@@ -5180,9 +5905,11 @@ export function isSimpleParagraphs(value: unknown, level: SimpleLevel): value is
 }
 
 /**
- * **Are all three stored levels present and within their limits?** The content
+ * **Are both stored levels present and within their limits?** The content
  * half of `isUsableSimpleSummary` below, which is the whole-artefact guard every
- * read boundary uses (Sol's plan review, P1-2).
+ * read boundary uses (Sol's plan review, P1-2). A key that is not in
+ * `SIMPLE_LEVELS` is not looked at: that is how a row from before 2026-10-04,
+ * which also has the removed middle level, still reads.
  */
 export function isSimpleLevels(value: unknown): value is Record<SimpleLevel, SimpleParagraph[]> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -5196,8 +5923,8 @@ export interface SimpleSummary {
   generator: string;
   slug: string;
   /**
-   * A hash of the body-only article rendering and the **profile-free** user
-   * message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
+   * A hash of the body-only article rendering, the length band since `/9`, and
+   * the **profile-free** user message (src/simple-summary.ts § `inputFingerprint`). The profile is not in
    * it, so a changed profile never makes the paragraphs stale.
    */
   sourceHash: string;
@@ -5255,7 +5982,8 @@ export function isSimpleCheck(value: unknown, levels: Record<SimpleLevel, Simple
   );
 }
 
-function isLevelCheck(value: unknown, paragraphs: number): boolean {
+/** Shared with the historical report, which also reads the removed middle level. */
+export function isLevelCheck(value: unknown, paragraphs: number): value is SimpleLevelCheck {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
   const storedLatest =
@@ -5457,6 +6185,32 @@ export interface CrossrefsResponse {
 }
 
 export type CrossrefsFound = CrossrefsResponse;
+
+/**
+ * **"If it has not been made yet, say so with `200 null`, not a 404."** A
+ * request header, sent with any value, on ten artefact reads: `GET
+ * /api/<name>/:slug` for quiz, crossrefs and citations — the three every
+ * owner's article view makes whichever mode is open — and, since plan 261006h,
+ * simple, ideas, faq, timeline, debate, glossary and quotes.
+ *
+ * "Not made yet" is the ordinary answer to all ten, and a browser prints
+ * every 4xx in red, so an ordinary page load showed failures that were not
+ * failures. A header rather than `200 null` for everybody because a tab left
+ * open across the deploy reads `loaded.quiz` or `loaded.ideas.…` off the body
+ * and would show an error where its button was; rather than a query parameter
+ * because the offline cache and several tests match these URLs by a pattern
+ * that ends at the slug. "No such article" is a 404 either way.
+ *
+ * **Not every artefact read.** Six still answer a 404 whatever is sent; they
+ * are named, with what is left to do for each, in
+ * src/store/artefact-not-made-yet.ts, which is the one list.
+ *
+ * The server's half is `orNullWhenNotMadeYet` in src/routes.ts. It goes, and
+ * `200 null` becomes unconditional, the day there is a client-version
+ * boundary. docs/plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md,
+ * docs/plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md.
+ */
+export const NONE_YET_AS_NULL_HEADER = "x-spideryarn-none-yet-as-null";
 
 /* ----------------------------------------------------------------- debate --
    What the rest of the web says about this piece — the `debate` column on
@@ -5695,8 +6449,7 @@ interface DebateRowBase {
  * - `partly` — it bears on part of it, or on something close;
  * - `loosely` — same topic, little direct bearing.
  *
- * Three words rather than a number for the reason the identification bar gave
- * (src/web/debate-levels.ts): a reader shown *0.73* reads a measurement, and
+ * Three words rather than a number: a reader shown *0.73* reads a measurement, and
  * this is one model's judgment of a stranger's page.
  */
 export type DebateBears = "directly" | "partly" | "loosely";
@@ -6310,6 +7063,68 @@ export interface DebateResponse {
 }
 
 /**
+ * **One paper that cites the article**, as OpenAlex lists it — Reception's
+ * *Cited by* (src/citation-index.ts). Every string is plain text and bounded,
+ * and none is a link: the panel builds its link from `doi` or `openalexId`
+ * (src/citer-link.ts). We have not read what the paper says about the piece.
+ */
+export interface Citer {
+  /** OpenAlex's id for the work, `W…`, shape-checked. */
+  openalexId: string;
+  /** Lower-cased and shape-checked. Absent when OpenAlex has none. */
+  doi?: string;
+  /** The citing paper's own title: its authors' words, not ours. */
+  title: string;
+  /** The first authors' display names, at most 20. */
+  authors: string[];
+  /** How many authors the work has, which can be more than `authors` holds. */
+  authorCount: number;
+  year?: number;
+  /** Where it appeared: OpenAlex's `primary_location.source.display_name`. */
+  venue?: string;
+  /** OpenAlex's `type`: `article`, `preprint`, `review`, … */
+  kind?: string;
+  /** How often the citing paper is itself cited. The list's order. */
+  citedByCount: number;
+}
+
+/**
+ * `GET /api/citers/:slug` — **who cites this article, or why there is no
+ * list.** No model made any of it, and it is not part of the stored Debate.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+ *
+ * - `no-doi` — the article has no DOI on record, so nothing was asked.
+ * - `not-indexed` — OpenAlex has no record of the DOI.
+ * - `unconfirmed` — OpenAlex's record for the DOI could not be shown to be this
+ *   article: its title and one author must both agree. Not a claim that the
+ *   DOI is another work's; with no byline there is simply nothing to agree.
+ * - `unavailable` — it could not be asked just now. Worth trying again.
+ * - `too-large` — its target record exceeds our byte limit, or its list does
+ *   even after asking for a shorter page. Not worth the same retry today.
+ * - `found` — the list. `count` is OpenAlex's own count of citers, `returned`
+ *   how many records its answer carried, `dropped` how many of those could not
+ *   be shown (no title, a malformed id, a duplicate), and `capped` whether the
+ *   page limit left some out. `citers.length` is `returned - dropped`, so the
+ *   panel can say which of the two reasons a short list has.
+ */
+export type CitersResult =
+  | { kind: "no-doi" }
+  | { kind: "not-indexed" }
+  | { kind: "unconfirmed" }
+  | { kind: "unavailable" }
+  | { kind: "too-large" }
+  | {
+      kind: "found";
+      count: number;
+      returned: number;
+      dropped: number;
+      capped: boolean;
+      citers: Citer[];
+      /** When OpenAlex answered, ISO. A cached list keeps the day it was fetched. */
+      fetchedAt: string;
+    };
+
+/**
  * As `TimelineFound` and `QuizFound`, and here too it is the *same* type, for
  * the same reason: there is no `profileChanged` for a store adapter to leave
  * out. Named rather than skipped so both adapters agree with their neighbours
@@ -6388,13 +7203,13 @@ export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
  * tab shows it** — `GET /api/feedback`.
  * docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * **Six fields, written out.** Not a `Pick` of
+ * **Seven fields, written out.** Not a `Pick` of
  * `FeedbackReport` or of the admin row: a field added to either of those must
  * not widen what this response carries by itself. The email, the address, the
  * diagnostics and the screenshot stay behind — a list whose job is "what did I
  * say" has no use for them, and the address can carry the reader's own search
  * terms or a credential in an `/add/` URL (docs/project/feedback.md § The one
- * rule). Five come from the store; the route derives `shipped` from this build's
+ * rule). Six come from the store; the route derives `shipped` from this build's
  * note map. Here rather than in src/store/contracts.ts because the dialog reads
  * it, and nothing under src/web/ may import the store.
  */
@@ -6412,6 +7227,14 @@ export interface EarlierFeedback {
    * docs/plans/261003g-earlier-tab-shows-the-page-each-report-was-filed-from.md.
    */
   page: string | null;
+  /**
+   * **The paragraph it was filed at**, as a block id, so the page's link opens
+   * there. The one value taken from the stored address's query, and only when
+   * it has a block id's fixed shape; `null` otherwise, and always when `page`
+   * is not an article's reading page. src/feedback-page.ts § `feedbackPageAt`.
+   * docs/plans/261006b-earlier-link-carries-the-paragraph.md.
+   */
+  at: string | null;
   /**
    * **A change for this report has shipped, and is in the build answering.**
    * Derived from the report's note in docs/user-feedback/, compiled into the
@@ -6449,6 +7272,102 @@ export const EARLIER_FEEDBACK_SHOWS = ["all", "shipped", "unshipped"] as const;
 export type EarlierFeedbackShow = (typeof EARLIER_FEEDBACK_SHOWS)[number];
 
 /**
+ * **What became of a report, as an admin's Earlier tab says it** — four, and
+ * every report has exactly one. Derived, never stored:
+ *
+ * - `shipped`: its notes combine to shipped (a change went out);
+ * - otherwise `aside` (shown *Set aside*): an admin pressed Ignore on
+ *   `/admin/feedback`, or its notes say declined;
+ * - otherwise `waiting` (shown *Needs a decision*): its notes say awaiting;
+ * - otherwise `open`: no note yet, so it is new or in hand.
+ *
+ * The order is the rule: an ignored report no longer asks for a decision, and
+ * a shipped one stays shipped whatever else is true of it. The one place the
+ * rule is executed is src/store/pg-feedback.ts § `statusOf`.
+ * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+ */
+export const EARLIER_FEEDBACK_STATUSES = ["open", "waiting", "aside", "shipped"] as const;
+export type EarlierFeedbackStatus = (typeof EARLIER_FEEDBACK_STATUSES)[number];
+
+/** `GET /api/admin/feedback/earlier?show=`, absent meaning `all`. Filtered on the server, before the cap. */
+export const ADMIN_EARLIER_FEEDBACK_SHOWS = ["all", ...EARLIER_FEEDBACK_STATUSES] as const;
+export type AdminEarlierFeedbackShow = (typeof ADMIN_EARLIER_FEEDBACK_SHOWS)[number];
+
+/**
+ * **One of an admin's own earlier reports** — `GET /api/admin/feedback/earlier`.
+ * The six fields every reader's list has, and four only this route sends.
+ * `shipped` is not among them: `status` says it.
+ */
+export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
+  /** `feedback.number`: unique across every owner, shown as `#212`. */
+  number: number;
+  status: EarlierFeedbackStatus;
+  /**
+   * **One line about what became of it**, from its note's `comment:` header
+   * (src/feedback-ending.ts § `feedbackComment`), or null. An agent wrote it:
+   * plain text, to be drawn as text, at most `MAX_FEEDBACK_COMMENT_CHARS`.
+   */
+  comment: string | null;
+  /** ISO: when an admin pressed Ignore on it, or null. What the row says when there is no comment. */
+  ignoredAt: string | null;
+}
+
+/**
+ * **An admin's reply to a question, as the Earlier tab shows it under the
+ * question**: the newest one this admin has sent. Their own words back to them.
+ */
+export interface AdminFeedbackQuestionAnswer {
+  id: string;
+  body: string;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * **One open question an agent has put to the admin** — part of
+ * `GET /api/admin/feedback/earlier`. An agent wrote `title` and `body` (a
+ * file under docs/user-feedback/questions/, compiled into the server): plain
+ * text, to be drawn as text with its line breaks kept. The file's `refs` and
+ * `acted` lines are for agents and are never here.
+ */
+export interface AdminFeedbackQuestion {
+  /** `q-k3m9qt`. */
+  id: string;
+  title: string;
+  body: string;
+  /** `yyyy-mm-dd`: the day it was asked. */
+  asked: string;
+  /**
+   * The report it is about, when it names one **and that report is this
+   * admin's own**; otherwise null, and the body has to stand without it.
+   */
+  report: { id: string; number: number; firstLine: string } | null;
+  /** This admin's newest reply, or null. */
+  answer: AdminFeedbackQuestionAnswer | null;
+}
+
+/**
+ * The whole answer. **Counts are report counts** under each filter, uncapped,
+ * on every answer, and the four statuses sum to `all`.
+ *
+ * `questions` is every open question, oldest first, **the same under every
+ * `show`**: a question's report may be shipped, set aside or absent, so the
+ * list is not narrowed by the filter (plan 261007d, decision 7). The dialog
+ * draws them in *Needs a decision* and counts them beside that pill.
+ */
+export interface AdminEarlierFeedbackPage {
+  reports: AdminEarlierFeedback[];
+  more: boolean;
+  counts: Record<AdminEarlierFeedbackShow, number>;
+  questions: AdminFeedbackQuestion[];
+}
+
+/** What `POST /api/admin/feedback/answers` answers with: the stored reply, on a 201 and on a 200 alike. */
+export interface AdminFeedbackAnswerReceipt {
+  answer: AdminFeedbackQuestionAnswer;
+}
+
+/**
  * **How many earlier reports the dialog lists.** No paging: a reader with fifty
  * reports is almost certainly the administrator, who has `/admin/feedback`.
  * The server's number, never a query parameter.
@@ -6468,21 +7387,34 @@ export const EARLIER_FEEDBACK_LIMIT = 50;
  * pasted article cannot become an attachment, which is the case the cap is
  * really for.
  *
- * It used to be *per answer*, and there were three of them, so the reader's
- * ceiling has quietly dropped from 12,000 characters to 4,000. Left where it is
- * on purpose: 4,000 characters is a very long report, the number is written into
- * a CHECK constraint by hand, and the failure is a sentence asking the reader to
- * trim rather than a report that goes missing.
+ * **12,000 since 2026-10-07; it was 4,000**, and the reason is dictation. A
+ * dictation may now run fifteen minutes (`MAX_MS`, src/web/mic-recording.ts),
+ * which at an even 150 words a minute is about 13,000 characters, and Greg was
+ * cut off dictating a long report into this box (spya-n8cuqq). At 4,000 the box
+ * would have refused what the microphone had just been allowed to take.
+ * 12,000 is what the column's CHECK already admits (`MAX_FEEDBACK_BODY_CHARS`
+ * below), so no migration went with it. Past it the failure is a sentence
+ * asking the reader to trim, with every word still in the box. Plan
+ * docs/plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md.
  */
-export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
+export const MAX_FEEDBACK_ANSWER_CHARS = 12_000;
+
+/**
+ * The cap on **each of the three answers a stale client sends** — the dialog's
+ * shape before 2026-09-02, still folded into one `body` by src/routes.ts §
+ * `feedbackBody`. It was `MAX_FEEDBACK_ANSWER_CHARS` until that one went up;
+ * these stay at the 4,000 they were written under, because three at 12,000
+ * would pass the route and then fail the column's CHECK as a database error.
+ */
+export const MAX_LEGACY_FEEDBACK_ANSWER_CHARS = 4_000;
 
 /**
  * The longest a `feedback.body` may be **in the database**, which is three times
- * the number above plus the headings — and that is not sloppiness, it is what
+ * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` plus the headings — and that is not sloppiness, it is what
  * the backfill needs.
  *
  * Reports filed before 2026-09-02 are three answers, each capped at
- * `MAX_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
+ * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
  * used to write. Three full ones come to exactly 12,072 characters. The column's
  * CHECK has to admit that, or the migration that wrote them into `body` would
  * fail on a row that was legal when it was filed — and the alternative, cutting
@@ -6491,19 +7423,31 @@ export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
  * **The reader's limit is still `MAX_FEEDBACK_ANSWER_CHARS`**: the route refuses
  * more and the dialog says so. This one is the ceiling under which no historical
  * row is illegal, and it is also what a report from a *stale client* folds into
- * — src/routes.ts § `legacyBody`.
+ * — src/routes.ts § `feedbackBody`.
  */
 export const MAX_FEEDBACK_BODY_CHARS = 12_072;
 
 /**
  * The largest screenshot the database will take, in **decoded** bytes.
  *
- * The dialog downscales to around 300 KB; this is the ceiling that holds
- * whatever the dialog does, because client-side downscaling is not validation.
- * A CHECK on `octet_length` rather than a rule in TypeScript, so it holds for
- * every writer including a script — docs/project/sql.md.
+ * The dialog shrinks a picture until it is under 90% of this
+ * (src/web/feedback-screenshot.ts); this is the ceiling that holds whatever the
+ * dialog does, because client-side downscaling is not validation. A CHECK on
+ * `octet_length` rather than a rule in TypeScript, so it holds for every writer
+ * including a script — docs/project/sql.md.
+ *
+ * **Two megabytes since 2026-10-03; it was 400,000.** At the old number a
+ * screenshot with a photograph in it had to go at about 640 pixels to fit, which
+ * cannot be read. It is not higher because the picture travels as base64 inside
+ * a JSON body and Vercel refuses a request over 4.5 MB before our code runs:
+ * two megabytes is 2.67 MB on the wire, and five would be 6.7 MB.
+ *
+ * **Three places hold this number and must move together**: this constant, the
+ * `feedback_screenshot_size` CHECK in src/db/schema.ts, and a migration that
+ * drops and re-adds that CHECK. tests/feedback-store.test.ts files one at
+ * exactly this size and one a byte over, against the real table.
  */
-export const MAX_FEEDBACK_SCREENSHOT_BYTES = 400_000;
+export const MAX_FEEDBACK_SCREENSHOT_BYTES = 2_000_000;
 
 /**
  * The opt-in diagnostics blob — **opaque to everything that stores it**.
@@ -6610,10 +7554,11 @@ export interface AdminFeedbackReport {
    *
    * **Not length-capped on the way out.** Reports filed before 2026-09-02 carry
    * the three old answers glued together with their headings, so a legacy body
-   * can legitimately be three times the dialog's current limit. A renderer that
-   * truncates to `MAX_FEEDBACK_ANSWER_CHARS` would silently cut the oldest
-   * reports — the ones most likely to be the reason somebody opened this page.
-   * GPT Sol, 2026-09-02.
+   * can legitimately be longer than the dialog's limit (`MAX_FEEDBACK_BODY_CHARS`
+   * against `MAX_FEEDBACK_ANSWER_CHARS`: three times it until 2026-10-07, 72
+   * characters over it since). A renderer that truncates to the dialog's limit
+   * would silently cut the oldest reports — the ones most likely to be the
+   * reason somebody opened this page. GPT Sol, 2026-09-02.
    */
   body: string;
   /**

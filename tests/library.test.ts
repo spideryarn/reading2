@@ -79,6 +79,14 @@ describe("describeArticle", () => {
     return root as unknown as Record<string, unknown>;
   };
 
+  it("carries the private-link fact independently of public visibility", () => {
+    expect(describeArticle({ ...base, privateLinkOn: true })).toMatchObject({ privateLinkOn: true });
+    expect(describeArticle({ ...base, privateLinkOn: false })).toMatchObject({ privateLinkOn: false });
+    expect(describeArticle({ ...base, visibility: "public", privateLinkOn: true })).toMatchObject({
+      visibility: "public", privateLinkOn: true,
+    });
+  });
+
   it("prints the word count it was given, and turns it into minutes", () => {
     const entry = describeArticle(base);
     expect(entry.revisionId).toBe(base.revisionId);
@@ -86,10 +94,36 @@ describe("describeArticle", () => {
     expect(entry.minutes).toBe(readingMinutes(1000));
   });
 
+  it("multiplies the minutes by a rated article's difficulty, and leaves the words alone", () => {
+    /* Literals worked out by hand (plan 261005j): 1,000 words is 4.2 minutes
+       flat, shown as 4; language 5 and ideas 5 multiply to 1.404, so 5.9,
+       shown as 6. A card that ignored the rating would say 4. */
+    const rated = describeArticle({
+      ...base,
+      meta: { ...base.meta, readingDifficulty: { language: 5, ideas: 5, reason: "Dense." } },
+    });
+    expect(describeArticle(base).minutes).toBe(4);
+    expect(rated.minutes).toBe(6);
+    expect(rated.words).toBe(1000);
+    // The model's sentence is for the article's own card, not the shelf's.
+    expect(JSON.stringify(rated)).not.toContain("Dense.");
+  });
+
   it("prints parts and sections, which are counted by depth and not by position", () => {
     const entry = describeArticle(base);
     expect(entry.parts).toBe(1);
     expect(entry.sections).toBe(0);
+  });
+
+  it("carries the publisher's date verbatim, and leaves the key off when there is none", () => {
+    /* The shelf sorts on it (plan 261003m). Verbatim, because the calendar day
+       in the publisher's own frame is the whole content of the field. */
+    const dated = describeArticle({
+      ...base,
+      meta: { ...base.meta, publishedAt: "2024-03-11T23:30:00-05:00" },
+    });
+    expect(dated.publishedAt).toBe("2024-03-11T23:30:00-05:00");
+    expect("publishedAt" in describeArticle(base)).toBe(false);
   });
 
   it("blurbs with the root gist — the whole piece in one sentence", () => {

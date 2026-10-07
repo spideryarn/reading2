@@ -49,7 +49,7 @@
  * stays with you as you read is the spine and the arc column, not this.
  */
 import { useMemo, type ReactNode } from "react";
-import { Archive, ExternalLink, FileQuestion, Globe, Lock, Undo2, Upload } from "lucide-react";
+import { Archive, ExternalLink, FileQuestion, Globe, Link2, Lock, Undo2, Upload } from "lucide-react";
 import {
   SHARING_BADGE,
   SHARING_MARK_HOW_PRIVATE,
@@ -61,6 +61,12 @@ import {
   SHARING_MARK_PRESS_PRIVATE,
   SHARING_MARK_PRESS_PUBLIC,
   SHARING_OFF,
+  SHARING_OFF_WITH_LINK,
+  SHARING_OFF_LINK_UNKNOWN,
+  PRIVATE_LINK_HEADING,
+  PRIVATE_LINK_CANNOT_UNRING,
+  SHARING_MARK_NAME_LINK,
+  SHARING_MARK_PRESS_LINK,
   SHARING_ON,
 } from "../messages.js";
 import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
@@ -70,14 +76,14 @@ import type { Article, Meta, SourceGuess, Visibility } from "../types.js";
    guards the other sink, the guessed address (`GuessedSourceLink`), which does
    not come off `meta` and so never passes through `webSource`. */
 import { hostOf, isWebUrl } from "../urls.js";
-import { BackLink } from "./BackLink.js";
 import { Link } from "./Link.js";
 import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
-import { carriedSearch, LIBRARY_HREF, readHref } from "./router.js";
+import { carriedSearch, readHref } from "./router.js";
+import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
-import { FoldAllButton } from "./FoldToggle.js";
+import { FoldAllButton, FrontMatterButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
@@ -194,6 +200,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
       <SharingMark
         slug={slug}
         visibility={onRenamed === undefined ? undefined : article.visibility}
+        privateLinkOn={article.privateLinkOn}
         archived={archive?.at === undefined ? undefined : archive.at !== null}
       />
       {/* Owner-only: the controller is mounted by OwnedArticle and is absent
@@ -222,7 +229,28 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
     byline,
     meta.siteName,
     `${stats.words.toLocaleString()} words`,
-    `~${stats.minutes} min`,
+    /* **The one fact here with a card**, because it is the one that is an
+       estimate — ReadTimeCard.tsx. Focusable so a keyboard and a finger reach
+       what a pointer does; it is not a button because pressing it does
+       nothing. */
+    <Tooltip
+      key="read-time"
+      placement="bottom"
+      keepSide
+      className="tip-soon"
+      content={
+        <ReadTimeCard
+          words={stats.words}
+          supplementWords={stats.supplementWords}
+          difficulty={stats.difficulty}
+        />
+      }
+    >
+      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the card is the only way to the explanation, and focus is how a keyboard opens it */}
+      <span className="read-time-trigger" tabIndex={0}>
+        {`~${stats.minutes} min`}
+      </span>
+    </Tooltip>,
     `${stats.parts} parts`,
     `${stats.sections} sections`,
   ].filter(Boolean) as ReactNode[];
@@ -230,29 +258,15 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
   return (
     <div className="masthead">
       <div className="masthead-inner">
-        {/* The way back to the shelf. Here rather than in the sticky controls
-            bar because it belongs with the article's identity, not with the
-            granularity controls — and because the bar is measured by
-            `stickyOffset()`, so anything added to it changes where every deep
-            link and arrow jump lands (scroll.ts). Browser Back does the same
-            job; this is for the reader who arrived by pasted link and has no
-            Back to press. The way home is also `DockHome` in the bottom bar
-            (Dock.tsx), and this is still not a duplicate of it: this one
-            scrolls away with the title, and that one is a brand mark that is
-            always there.
-
-            **An arrow and a tooltip since 2026-09-29**, not the word
-            "Library". Greg, SPIDERYARN-READING2-50: *"change the back button
-            text labels at the top of some pages … to icons with tooltips
-            (because there's already so much text on the page)"*. BackLink.tsx.
-            The label is the owner's library for the owner; a visitor may be
-            signed out, where `/` is the front page, so theirs does not say
-            *your*. */}
-        <BackLink
-          href={LIBRARY_HREF}
-          label={onRenamed === undefined ? "Back to Spideryarn" : "Back to your library"}
-          className="tw:mb-1.5"
-        />
+        {/* **No way back to the shelf here, since 2026-10-07.** An arrow stood
+            above the title (the word "Library" before 2026-09-29) for the
+            reader who arrived by pasted link and has no Back to press. Greg,
+            spya-us7e4v: *"Don't bother showing back arrow to the Shelf at the
+            top. We have the Spideryarn logo for that."* The logo is `DockHome`
+            at the left end of the bottom bar (Dock.tsx), which goes to the
+            same place for an owner and for a visitor;
+            tests/dock-corner-controls.test.tsx holds both halves.
+            docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md. */}
         {/* The title, and the pencil beside it — TitleEditor.tsx owns where the
             pencil hides, what replaces the heading, and what a failed write
             says, because the metadata page needs all three the same way. */}
@@ -304,6 +318,11 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
               nothing on an article with no heading to fold. FoldToggle.tsx;
               plan 261002e. */}
           <FoldAllButton />
+          {/* The byline blocks under the title, folded away on arrival, and
+              the one control that shows them: here because this line is where
+              the authors are already named. Nothing on an article with no
+              such blocks. FoldToggle.tsx § `FrontMatterButton`; plan 261007d. */}
+          <FrontMatterButton />
         </p>
 
         {/* **Where this article came from, when the answer is not "a web page".**
@@ -394,7 +413,7 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
  * The address is drawn host-first with the path faded after it, because the
  * host is the part that answers the question and the path is the part that
  * runs off the end of a narrow window. Truncation is the path's, in CSS, so
- * the host is never the thing that gets cut (styles.css § `.origin`).
+ * the host is never the thing that gets cut (shell.css § `.origin`).
  *
  * ## The link is for everybody; the *word* "uploaded" is not
  *
@@ -765,24 +784,25 @@ export function addressParts(url: string): { host: string; rest: string } | null
  *
  * "The profile" is this article's **Metadata** page: `AccessSharing` is the
  * only control in the app that changes an article's visibility, and it lives in
- * that page's *Access & sharing* section — the third of eight, because Greg
- * asked for it to be moved up (Metadata.tsx).
+ * that page's *Access & sharing* section, which Greg asked to be moved up
+ * (Metadata.tsx).
  *
  * **The link stops at the page and does not aim at the section**, which was the
  * first design and is the one thing here that was cut rather than forgotten.
- * Aiming needs a place in the address for "which section", and this app took
+ * At the time, aiming needed a place in the address for "which section", and this app took
  * the fragment out on purpose: docs/project/url-state.md § Why the query string
  * and not the hash — one query string, one listener. Adding either a `#` or a
  * `?focus=` back is a new piece of URL state, a row in that doc's table and a
  * scroll that has to wait for a page that renders after its own fetch, to save
- * a reader half a screen of scrolling on arrival. Worth doing if the landing
- * turns out to feel wrong; not worth doing first.
+ * a reader scrolling on arrival. Metadata now supports `?section=` for other
+ * links, but this link still goes to the page without choosing a section.
  *
  * ## Absence is the third state, and it draws nothing
  *
- * `undefined` means *nobody could tell us*, never *private*. It is a visitor's
- * payload, which carries no `visibility` at all, and it was also the filesystem
- * store, which had no visibility column — that store went on 2026-09-05
+ * `undefined` means no owner-side visibility field, never *private*. A visitor's
+ * payload omits `visibility` and carries `sharedBy` instead (src/public-types.ts).
+ * The filesystem store could not answer at all — it had no visibility column
+ * and went on 2026-09-05
  * (docs/project/database.md) and the field is still optional, so the state is
  * still reachable and still has to draw nothing. Silent is the only honest
  * thing it can be: a lock is a claim, and a lock drawn over a source that was
@@ -821,11 +841,13 @@ export function addressParts(url: string): { host: string; rest: string } | null
 function SharingMark({
   slug,
   visibility,
+  privateLinkOn,
   archived,
 }: {
   slug: string;
   /** `undefined` means the store could not say — see the header. */
   visibility: Visibility | undefined;
+  privateLinkOn: boolean | undefined;
   /**
    * Whether the article is archived, `undefined` when we do not know. **Archived
    * means off the public list too** (public-library.ts § the `archivedAt`
@@ -841,27 +863,41 @@ function SharingMark({
   if (visibility === undefined) return null;
 
   const shared = visibility === "public";
+  const linked = !shared && privateLinkOn === true;
   /* Two strings, and they are deliberately not one — see `SHARING_MARK_NAME_PUBLIC`
      in src/messages.ts. The tooltip becomes `aria-describedby`, so a name
      holding the same sentence is announced twice. */
-  const tip = shared
-    ? archived === true
-      ? SHARING_MARK_ON_ARCHIVED
-      : archived === false
-        ? SHARING_ON
-        : SHARING_MARK_ON_ARCHIVE_UNKNOWN
-    : SHARING_OFF;
-  const name = shared ? SHARING_MARK_NAME_PUBLIC : SHARING_MARK_NAME_PRIVATE;
-  /* The state as a word, which is what a reader hovering this actually came for
-     — `SHARING_BADGE` because the shelf already calls it that, and an owner who
-     has met *Shared* on a card should not meet a synonym here. */
-  const head = shared ? SHARING_BADGE : "Private";
-  /* The half a reader cannot work out by pressing — `ControlTip`'s rule. Both
-     are about what *stopping* or *starting* does not do. */
-  const how = shared ? SHARING_MARK_HOW_PUBLIC : SHARING_MARK_HOW_PRIVATE;
-  /* Where the press goes, as its own line rather than a sentence tacked onto
-     the state — spya-d886ah, src/messages.ts § `SHARING_MARK_PRESS_PUBLIC`. */
-  const press = shared ? SHARING_MARK_PRESS_PUBLIC : SHARING_MARK_PRESS_PRIVATE;
+  const privateMark = linked
+    ? {
+        tip: SHARING_OFF_WITH_LINK,
+        name: SHARING_MARK_NAME_LINK,
+        head: PRIVATE_LINK_HEADING,
+        how: PRIVATE_LINK_CANNOT_UNRING,
+        press: SHARING_MARK_PRESS_LINK,
+        icon: <Link2 size={14} strokeWidth={1.75} />,
+      }
+    : {
+        tip: privateLinkOn === false ? SHARING_OFF : SHARING_OFF_LINK_UNKNOWN,
+        name: SHARING_MARK_NAME_PRIVATE,
+        head: "Private",
+        how: SHARING_MARK_HOW_PRIVATE,
+        press: SHARING_MARK_PRESS_PRIVATE,
+        icon: <Lock size={14} strokeWidth={1.75} />,
+      };
+  /* Public access wins when both controls are on. Keep each mark's words and
+     icon together so they describe the same access state. */
+  const { tip, name, head, how, press, icon } = shared
+    ? {
+        tip: archived === true
+          ? SHARING_MARK_ON_ARCHIVED
+          : archived === false ? SHARING_ON : SHARING_MARK_ON_ARCHIVE_UNKNOWN,
+        name: SHARING_MARK_NAME_PUBLIC,
+        head: SHARING_BADGE,
+        how: SHARING_MARK_HOW_PUBLIC,
+        press: SHARING_MARK_PRESS_PUBLIC,
+        icon: <Globe size={14} strokeWidth={1.75} />,
+      }
+    : privateMark;
 
   /* The view state carried across, so stepping out to the switch and coming
      back returns the reader to the paragraph they left — the same
@@ -900,7 +936,7 @@ function SharingMark({
           shared ? "tw:text-highlight-text" : "tw:text-ink-faint"
         }`}
       >
-        {shared ? <Globe size={14} strokeWidth={1.75} /> : <Lock size={14} strokeWidth={1.75} />}
+        {icon}
       </Link>
     </Tooltip>
   );

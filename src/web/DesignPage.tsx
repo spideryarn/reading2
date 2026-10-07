@@ -165,6 +165,7 @@ const DESIGN_HIGH_POWER_SINCE = new Date(Date.now() - 3 * 86_400_000).toISOStrin
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
 import { useTheme } from "./appearance.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * The real run button, with only the state under test varying.
@@ -286,9 +287,11 @@ const SWATCHES: { group: string; names: string[] }[] = [
     group: "shadcn surfaces (CAREFUL: --accent is a surface, not the orange)",
     names: ["--background", "--card", "--popover", "--secondary", "--accent", "--border", "--input"],
   },
-  { group: "States", names: ["--ring", "--destructive", "--primary", "--primary-foreground"] },
+  /* `--danger` beside `--destructive`: the first is error text, the second a
+     fill (styles/tokens.css § --danger). */
+  { group: "States", names: ["--ring", "--destructive", "--danger", "--primary", "--primary-foreground"] },
   {
-    group: "The search mark (the wash is a slate; the colour is in the rules)",
+    group: "The search mark (the outline carries confidence; its colour carries identity)",
     /* `--hit-wash`, not `--hit-wash-rgb`. The `-rgb` form is three numbers, and
        this page paints its swatches with `background: var(...)` — which for a
        bare triplet is an invalid declaration that silently keeps the previous
@@ -481,6 +484,7 @@ function useMeasured(names: string[]): Record<string, { css: string; rgb: Rgb | 
      say: the swatches repaint by themselves, the numbers beside them do not.
      The *resolved* theme, so System following the OS remeasures too. */
   const theme = useTheme();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `theme` is the trigger, not an input — `measure` reads the computed colours from the DOM, and those change when the theme does.
   useEffect(() => {
     setMap(measure(names));
   }, [names, theme]);
@@ -547,7 +551,7 @@ export function DesignPage() {
         <div className="design-panel">
           {/* `design-sample` restates the row padding the reading view gets from
               its table, off the same --block-pad. Without it these blocks touch —
-              see styles.css § THE SAMPLE ARTICLE HAS NO TABLE UNDER IT. */}
+              see design-page.css § THE SAMPLE ARTICLE HAS NO TABLE UNDER IT. */}
           <div className="prose design-sample">
             <h2>How markets learn, and how slowly</h2>
             <p>
@@ -922,10 +926,13 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
           <BandCase
             state="loading"
             real='status: "loading"'
-            note="One quiet line, under a head row that is already drawn and still empty. There is
-                  no count yet because there is nothing to count."
+            note="BandWaiting: nothing for 600ms, then a spinner and the sentence naming what it
+                  waits for, in a status line mounted from the start. Every band's wait is this
+                  one. Drawn here without the 600ms; responses to a press also show immediately."
           >
-            <p className="gloss-quiet">Looking for a glossary…</p>
+            <BandWaiting className="gloss-quiet" delayMs={0}>
+              Looking for a glossary…
+            </BandWaiting>
           </BandCase>
 
           <BandCase
@@ -1191,14 +1198,14 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
         <p className="design-note">
           Everything that can be drawn over the author's words — the reader's comments and
           conversations, glossary terms, search hits and quotes, citations and cross-references —
-          and what happens where they overlap. A test fails if a kind of mark is missing here. <strong>Search fills; quotes outline.</strong> A quote's stroke weight is its
-          priority — heavy above the bar's default, light below it — so running your eye down an
+          and what happens where they overlap. A test fails if a kind of mark is missing here. <strong>Quotes fill, like a highlighter pen; search outlines.</strong> How
+          strong a quote's fill is says its priority, so running your eye down an
           article finds the passages worth stopping at. Every specimen below is built by the real{" "}
           <code>annotateHtml</code>, not written out by hand, which is the only way this page can
           show the case that actually matters: one quote containing an <code>&lt;em&gt;</code>{" "}
-          becomes <em>three</em> sibling marks, and three closed boxes would read as three quotes.
-          If the outlines below have visible seams at the italic words, the end-cap rules have
-          broken.
+          becomes <em>three</em> sibling marks, and so does one search hit, where three closed boxes
+          would read as three hits. If the search outline below has a cap at the italic word, or
+          the quote's fill a notch there, the start and end rules have broken.
         </p>
         <div className="design-panel">
           <div className="prose design-sample">
@@ -1281,6 +1288,7 @@ function LogoAnimations() {
      One frame of delay gives them the starting value they need, and costs the
      keyframe ones nothing. */
   const [armed, setArmed] = useState(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `take` is the trigger, not an input — Play again rebuilds the cells without the class, so they need arming again (the comment inside says the rest).
   useEffect(() => {
     setArmed(false);
     const id = requestAnimationFrame(() => setArmed(true));
@@ -1387,7 +1395,7 @@ function LogoGlyph({ wrapper }: { wrapper: "logo-text" | "dock-btn-label" }) {
  * sibling marks, and that only the outer two carry the end-caps — are the
  * annotator's, not ours.
  *
- * docs/project/quotes.md § The stroke; docs/project/design-css-overview.md.
+ * docs/project/quotes.md § A highlighter pen; docs/project/design-css-overview.md.
  */
 export const SPECIMEN_HTML =
   "<p>He rejects the idea that mind is <em>software</em> running on wet hardware, " +
@@ -1399,7 +1407,7 @@ export const SPECIMEN_HTML =
  */
 export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
   {
-    label: "A search hit — a fill, whose depth is the model's confidence",
+    label: "A search hit — an outline in the search's colour; the fainter its top and ends, the less sure the model",
     marks: [{ id: "h", start: 25, end: 49, kind: "hit", strength: 0.45, slot: 0 }],
   },
   {
@@ -1408,15 +1416,15 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
        its priority as well as its weight; this is the bottom of both, and
        "even low-priority quotes should still be clearly visible" (Greg,
        SPIDERYARN-READING2-2W) is a claim about this specimen. */
-    label: "A low-priority quote — the light stroke, at the faintest the fade goes",
+    label: "A low-priority quote — the light fill, at the faintest the fade goes",
     marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } }],
   },
   {
-    label: "A top-priority quote — the heavy stroke at full strength, and the same three fragments",
+    label: "A top-priority quote — the heavy fill at full strength, and the same three fragments",
     marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } }],
   },
   {
-    label: "Two abutting quotes — the caps are inset so they stay two",
+    label: "Two abutting quotes — a hairline of the page between them, so they stay two",
     marks: [
       { id: "q1", start: 0, end: 19, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
       { id: "q2", start: 19, end: 65, kind: "hit", quoteStroke: { tier: 1, alpha: 0.7 } },
@@ -1426,8 +1434,8 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
     /* **This label used to say "both channels, neither lost", and the page was
        visibly disproving it.** The fragments that also carry `data-wash` get
        `padding-bottom: 2px` to make room for the hue band, so they are 2px
-       taller and the quote's bottom rule steps down where the search hit begins
-       and back up where it ends. Named here rather than quietly claimed
+       taller and the quote's fill (its bottom rule, until 2026-10-03) steps
+       down where the search hit begins and back up where it ends. Named here rather than quietly claimed
        otherwise — /design exists to show what the reader gets, so a specimen
        advertising a property it does not have is the worst thing on it.
        **Reachable in the reading view since 2026-09-08**, when the quotes
@@ -1436,14 +1444,14 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
        gone stale is the second worst thing on this page.
        260907c § The step where a quote crosses a search hit, and
        docs/plans/260908i-quotes-marked-in-the-prose-in-every-mode.md. */
-    label: "A quote over a search hit — both channels drawn, but see the 2px step in the lower rule",
+    label: "A quote over a search hit — the fill and the outline both drawn; the fill is 2px taller under the hit",
     marks: [
       { id: "h", start: 33, end: 78, kind: "hit", strength: 0.45, slot: 0 },
       { id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
     ],
   },
   {
-    label: "The quote the reader pressed — a white stroke and a momentary wash",
+    label: "The quote the reader pressed — its fill, and a ring in the page's strongest ink",
     marks: [{ id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 }, open: true }],
   },
   {
@@ -1477,10 +1485,10 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
   },
   {
     /* The other overlap that is reachable today: the quotes are marked in every
-       mode, so any citation inside a quoted sentence draws both. A stroke and a
-       background do not compete with a text decoration, which is the claim this
+       mode, so any citation inside a quoted sentence draws both. A fill does not
+       compete with a text decoration, which is the claim this
        row exists to let somebody check. */
-    label: "A citation inside a quote — the stroke and the dashed rule, neither redrawn",
+    label: "A citation inside a quote — the fill and the dashed rule, neither redrawn",
     marks: [
       { id: "q", start: 25, end: 65, kind: "hit", quoteStroke: { tier: 2, alpha: 1 } },
       { id: "c", start: 33, end: 41, kind: "cite" },
@@ -1513,11 +1521,11 @@ export const SPECIMEN_MARKS: { label: string; marks: Mark[] }[] = [
 
 /** `annotateHtml(SPECIMEN_HTML, marks)` for each of the above, in the same order. */
 export const SPECIMEN_OUT: string[] = [
-  '<p>He rejects the idea that <mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">mind is </mark><em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)"> running</mark> on wet hardware, and says so in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)" data-wash-start="">mind is </mark><em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)" data-wash-end=""> running</mark> on wet hardware, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="1" style="--quote-a:0.70" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="1" style="--quote-a:0.70">software</mark></em><mark class="hit" data-hit="q" data-quote="1" style="--quote-a:0.70" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p><mark class="hit" data-hit="q1" data-quote="2" style="--quote-a:1.00" data-quote-start="" data-quote-end="">He rejects the idea</mark><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70" data-quote-start=""> that mind is </mark><em><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70">software</mark></em><mark class="hit" data-hit="q2" data-quote="1" style="--quote-a:0.70" data-quote-end=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
-  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)">, and says so</mark> in the first paragraph.</p>',
+  '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="">mind is </mark><em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)" data-wash-start="">software</mark></em><mark class="hit" data-hit="h q" data-wash="" data-quote="2" data-hues="1" style="--hit-a:0.450;--quote-a:1.00;--h0:var(--cat-0-rgb)" data-quote-end=""> running on wet hardware</mark><mark class="hit" data-hit="h" data-wash="" data-hues="1" style="--hit-a:0.450;--h0:var(--cat-0-rgb)" data-wash-end="">, and says so</mark> in the first paragraph.</p>',
   '<p>He rejects the idea that <mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-start="" data-hit-open="">mind is </mark><em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-hit-open="">software</mark></em><mark class="hit" data-hit="q" data-quote="2" style="--quote-a:1.00" data-quote-end="" data-hit-open=""> running on wet hardware</mark>, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that mind is <em><mark class="cite" data-cite="c">software</mark></em> running on wet hardware, and says so in the first paragraph.</p>',
   '<p>He rejects the idea that mind is <em><mark class="term cite" data-term="t" data-cite="c">software</mark></em> running on wet hardware, and says so in the first paragraph.</p>',

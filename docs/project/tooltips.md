@@ -2,6 +2,24 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+Code: [`Tooltip.tsx`](../../src/web/Tooltip.tsx) (`Tooltip`, `ControlTip`, `TooltipGroup`, `DELAY`), [`styles/tooltip.css`](../../src/web/styles/tooltip.css); the card copy for modes is [`mode-catalog.ts`](../../src/mode-catalog.ts).
+
+- [§ When something needs one](#when-something-needs-one) — deciding whether a control gets a tooltip at all
+- [§ Prefer the rich card to a native `title`](#prefer-the-rich-card-to-a-native-title) — Greg's rule
+- [§ Short paragraphs or bullets](#short-paragraphs-or-bullets-not-one-block) — how to write a card's text
+- [§ What we chose](#what-we-chose) — Floating UI, and what was rejected
+- [§ Where the code is](#where-the-code-is) — the table of every file that draws a card; open it to find the one to copy
+- [§ `ControlTip`](#controltip-which-is-what-most-of-them-are-now) — the common shape: a control described
+  - [A shortcut is named on its card](#a-shortcut-is-named-on-its-card) — the rule that a key is on its control's card
+  - [The bar, and the two shapes of the same modes](#the-bar-and-the-two-shapes-of-the-same-modes) — the Dock's mode buttons
+- [§ What the card says, and why that](#what-the-card-says-and-why-that) — the content of the spine's card and Structure's
+- [§ Five things that are load-bearing](#five-things-that-are-load-bearing) — the ways the obvious version fails silently
+- [§ Grouping, and why the delays are what they are](#grouping-and-why-the-delays-are-what-they-are) — 240ms/90ms and `TooltipGroup`
+- [§ A card the pointer can enter](#a-card-the-pointer-can-enter) — making a card interactive (links, buttons inside it)
+- [§ Checking it in a browser](#checking-it-in-a-browser) — why a screenshot lies about a fading card
+
 > In the left-most column, add a nice hover-tooltip to show more detail somehow.
 >
 > — Greg, 2026-08-25
@@ -47,6 +65,19 @@ costs nothing per trigger; the reading-time line moved onto `BlockLinkCard` on 2
 that, and the gutter's controls — the mark, permalink, chat, bookmark, help and overflow — followed
 on 2026-10-02, when Greg asked that they *"all have tooltips"* (spya-jc0vm6;
 [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md)).
+
+## Short paragraphs or bullets, not one block
+
+> for the rich tooltip for the remember mode information, it's like one big paragraph. Prefer smaller
+> paragraphs or bullet points because it's much clearer.
+>
+> — Greg, 2026-10-04 (`spya-usyhwy`)
+
+A card that has several things to say says them as several short paragraphs or a list. And when a
+card is describing a row of controls, each control gets its own card instead (the same report: *"each
+submode button should have its own tooltip"*). Remember's (i) was the case: 110 words walking through
+three sub-modes, now two sentences and a four-line list, with the detail on each chip
+([261004f](../plans/261004f-remember-header-profile-icon-only-and-a-card-on-each-sub-mode-chip.md)).
 
 ## What we chose
 
@@ -112,7 +143,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx) | the card every block link shares — section, then the paragraph cut short — one panel for the whole reading view, mounted by Reader. See below |
 | [`src/web/StructurePanel.tsx`](../../src/web/StructurePanel.tsx) | `RowCard` — what a row of Structure's two columns says on hover, and the only card here whose *contents* are decided by a projection rather than written beside the JSX. See [§ Structure's card](#structures-card-which-is-defined-by-subtraction) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-modes) |
-| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
+| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those cards (seventeen entries, one per `Mode`), both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
@@ -120,7 +151,9 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/PaperCard.tsx`](../../src/web/PaperCard.tsx) | **the paper card** — what a link to an article on your shelf says: title, authors and site, the gist (or a paper's abstract, cut short, before it is AI-processed), added, last opened, length or not-yet-processed status, any archive and sharing state, and up to six shelf topics it is in, followed by *+N more*. `titleIsTriggerName` keeps the title on screen but out of the description, for a link already named by it. Reusable by design (Greg, `spya-f28vqj`: *"a reusable component for paper-tooltips that we use anywhere there's a link to a paper"*): it takes a `LibraryEntry` and the topics to name, and the caller wraps its own link in a `Tooltip`. Unlike the row card it repeats the title, because it hangs off a bare link rather than a row that prints everything else. First used on the shelf topics' More-detail links ([shelf-terms.md](shelf-terms.md), plan [261002f](../plans/261002f-paper-card-on-topic-article-links.md)) |
 | [`src/web/ShelfEntry.tsx`](../../src/web/ShelfEntry.tsx) | the shelf card's five action buttons — the one row where a card also has to say *why this one does nothing* ([library.md § When a button cannot do its job](library.md#when-a-button-cannot-do-its-job)) |
 | [`src/web/AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the sharing card's three controls, and its two dozen inventory chips — where a tooltip is the *only* place a row's sentence is written, which is why each chip is a `<button>` rather than a `title` attribute ([security-map.md § the inventory](security-map.md#the-owner-is-shown-the-inventory-before-they-publish)) |
-| [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
+| [`src/web/BandAbout.tsx`](../../src/web/BandAbout.tsx) | **every band's (i)**, in its top-right corner, put there by `ModeSurface`'s `mode` and `about` since 2026-10-01 (Greg: *"Move this into a tooltip for a (i) icon in the top-right"*, spya-ucu35y). Controlled, so a tap opens it on a phone; the state is [`usePressToggle`](../../src/web/usePressToggle.ts), shared with `HowToRead` below, which is what stops a quick double press being undone by a hover timer that was already pending. Its card opens with the mode's two `MODE_CATALOG` paragraphs — the same words as the Dock's card on that mode — then the mode's counts, caveats and `AboutMade` (who made it, when, how long). What belongs there is [mode.md](mode.md) § Every band has an (i) |
+| [`src/web/ProfilePanel.tsx`](../../src/web/ProfilePanel.tsx) | **the profile icon's card**, since 2026-10-04 — the one card on a button that also opens a panel about the same subject. It is `enabled` only while the panel is closed, controlled so a finger's tap opens only the panel, and ignores the one focus event the panel returns on close; a later hover or keyboard visit opens it normally |
+| [`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `HowToRead` | **the same controlled shape on a panel rather than a band**: Referee's *How to read this* button, which holds the sentences that say a list of passages is not a verdict. A tap toggles it, because those sentences must reach a phone ([referee-mode.md](referee-mode.md) § How to read a panel) |
 | [`src/web/BackLink.tsx`](../../src/web/BackLink.tsx) | the icon-only way back (an arrow) or home (a house) at the top of a page, since 2026-09-29 — the card says the destination and opens to the *right*, because a card below covered the heading. Name in `aria-label`, words in a `TipNote` |
 | [`src/web/styles/tooltip.css`](../../src/web/styles/tooltip.css) § tooltip | every pixel of the appearance; the library ships none — [design-css-overview.md](design-css-overview.md) says where that file sits in the load order |
 
@@ -153,7 +186,8 @@ tap commits, which is `bandPress`'s rule reached by a different route
 tooltips get there through `Tooltip.tsx`'s `mouseOnly`; this one owns its own listeners, so the whole
 gesture lives in `useHoverCard.ts`.
 
-**A quote's outline joined it on 2026-10-02** (`mark.hit[data-quote]`), as a fourth half of the
+**A quote's mark joined it on 2026-10-02** (`mark.hit[data-quote]`; an outline then, a fill since
+2026-10-03), as a fourth half of the
 same card — scores, reason, ‹ › and *open Quotes* ([quotes.md](quotes.md) § In the spine, on a
 card, and one at a time). Pointer only, and not in `tapSelector`, because a tap on a bare quote
 selects its paragraph. It brought the hook one option, **`openDelay`**: a per-hit rest before a cold
@@ -237,7 +271,7 @@ cross-family review caught them —
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for
 [Referee mode](referee-mode.md) on 2026-09-02, which is now the largest customer: about thirty
-controls across four sub-modes, where the unguessable half is a model call being spent, a
+controls across five sub-modes, where the unguessable half is a model call being spent, a
 placement being discarded, or a number that reads like a score and is not
 ([referee-mode.md § Every control says what it does](referee-mode.md#every-control-says-what-it-does)).
 [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) is the idiom to copy: a row of chips wrapped in
@@ -344,12 +378,12 @@ Three things about it are not true of any other set here.
 
 - **The copy is not in the component.** Both paragraphs come from `MODE_CATALOG`
   ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), which is a pure module the server can read
-  too, so a fifteenth mode is a compile error until somebody has written both halves. Everywhere
+  too, so a new mode is a compile error until somebody has written both halves. Everywhere
   else in this file the words sit beside the JSX. [mode.md § The card on the
   button](mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
   the rule that **no card in this bar names a price** — the command bar says `generates` and no
   figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
-- **The same fourteen modes are drawn by two different components**, and only one of them had a
+- **The same modes are drawn by two different components**, and only one of them had a
   card. On the reading view they are a `role="radiogroup"` segment; on the metadata page (and, until
   2026-09-29, the tweets page — now a mode, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md))
   they are loose `DockLink`s, and those carried a `title` attribute while the segment had a panel.
@@ -366,7 +400,7 @@ Three things about it are not true of any other set here.
   why the button is dimmed rather than `aria-disabled`. That widened `state`, which until then had
   meant *this switch is mid-flight or broken*; what the two share is that somebody who opened the
   card because the control looked wrong wants that answered before they are told what it is for.
-- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata (Tweets became a mode on 2026-09-29, leaving two; [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) — took the
+- **And the three buttons in the bar that are not modes** — Comments, Tweets and Metadata (Tweets became a mode on 2026-09-29, leaving two, and Summary's Thread view on 2026-10-03; [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)) — took the
   same two-paragraph card later the same day. Their copy is `NOT_A_MODE` in
   [`Dock.tsx`](../../src/web/Dock.tsx) rather than `MODE_CATALOG`, because a record keyed by `Mode`
   is the wrong home for three things that are not modes and never will be. They are in a
@@ -455,6 +489,13 @@ All three were measured rather than reasoned about. The first two make a test th
 nothing; the third makes one fail loudly for a reason that is not in the code it is testing, which
 costs an hour in a different way.
 
+Advance a fake clock for these delays; the converted cases restore real timers after unmounting.
+Use `DELAY.open` from [`Tooltip.tsx`](../../src/web/Tooltip.tsx) for an ungrouped card. A
+`TooltipGroup` supplies its own delay, so a grouped card must advance past the delay on its surface.
+Keep real timers for unrelated layout or fetch settling; the scoped switch in
+[`tests/sketch-caption-is-not-a-native-tooltip.test.tsx`](../../tests/sketch-caption-is-not-a-native-tooltip.test.tsx)
+is the example when those waits follow a card check.
+
 - **Opening and closing do not take the same event.** A native `mouseenter` dispatched on the trigger
   opens it — `useHover` binds that listener to the reference node rather than going through React, so
   a bubbling `mouseover` never reaches it. Closing is React's synthetic `onMouseLeave`, which React
@@ -463,14 +504,15 @@ costs an hour in a different way.
 - **The close needs two `act` blocks, not one long one.** Closing is two timers in series with a
   render between them: the close delay sets `open` false, and only the render that follows schedules
   the transition's unmount. Inside a single `act` the queued update is not applied until the block
-  exits, so the card is still in the DOM however long that block waits.
+  exits, so the card is still in the DOM however far that block advances the clock.
 - **Re-hovering the same control inside a `TooltipGroup` needs a *third* `act` block.** Two blocks
   close the card and unmount it; the third is not part of closing at all, and waits out the group
   instead. `FloatingDelayGroup` waits its `timeoutMs` after a close before clearing the current group
-  member — 400ms in the bottom bar — and that timer starts at the close *render*, so two 300ms waits
+  member — 400ms in the bottom bar — and that timer starts at the close *render*, so two 300ms advances
   do not outlast it. Hover the same control again while it is pending and the card opens instantly
   (the group is in its instant phase) and the stale timer's close lands in the same `act`: it opens
-  and shuts inside one block, and the assertion reads zero. One more wait fixes it, and
+  and shuts inside one block, and the assertion reads zero. One more advance in a separate `act`
+  fixes it, and
   [`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx)'s `cardFor` is the
   copy to take.
 
@@ -593,6 +635,22 @@ Each of these is a way the obvious version fails silently.
    [`tests/tooltip-on-link.test.tsx`](../../tests/tooltip-on-link.test.tsx) hovers a real one, and
    its third case is the same test with the ref taken away.
 
+And a sixth, found on 2026-10-03, under the old heading because other docs link to it:
+
+6. **A controlled card a finger opened is not closed by hover.** `mouseOnly` stops a tap's
+   compatibility `mouseenter` *opening* a controlled card, and nothing stopped its `mouseleave`
+   *closing* one. In Chrome with touch on, a tap on a search result's score opened its card and a
+   `mouseleave` synthesised about 100ms after the click shut it 20ms later; a card with
+   `interactive` escaped only by accident, through `safePolygon`. So `Tooltip` remembers whether the
+   last press on its trigger was a finger or a pen (`byTouch`) and, for a controlled card, drops a
+   close whose reason is `hover` when it was. Escape, a press elsewhere and the parent still close
+   it. That exemption ends when the card closes or a real mouse reaches or leaves the trigger (or
+   reaches an interactive card directly), so a hybrid device does not need a mouse press before
+   leaving closes it normally again. Reproduced in Chrome only; whether Safari on an iPad sends
+   that `mouseleave` is not known.
+   [`tests/search-hit-card-on-the-score.test.tsx`](../../tests/search-hit-card-on-the-score.test.tsx),
+   [261003p](../plans/261003p-search-results-get-the-room-on-a-landscape-ipad.md).
+
 ## Grouping, and why the delays are what they are
 
 Open 240ms, close 90ms, wrapped in a `<TooltipGroup>`. The group is the interesting half: once one
@@ -653,6 +711,13 @@ The first customer is **every band's (i)**: its card ends in *More in Help →*,
 of [Help](help-page.md) (`BandAbout.tsx`, given `help` by `ModeSurface`). The prose card
 (`ProseHoverCard`) was interactive long before this, through its own machinery — § The second
 implementation says why it is separate — and is not a customer.
+
+The second, since 2026-10-06, is **Skim's term chips**: each opens the glossary's own entry card
+(`TermCard`, the one the prose card draws) with its *Dig deeper · Hide · Open glossary* row
+(`TermChip` in `SkimPanel.tsx`; [skim.md](skim.md)). It is the first to combine `interactive` with
+a controlled `open`, so that a finger's tap keeps it up. Its content scrolls inside a height tied to
+the window. That cap is on a wrapper inside the panel, not on `.tooltip`, where `overflow` would
+clip the arrow.
 
 ## Checking it in a browser
 

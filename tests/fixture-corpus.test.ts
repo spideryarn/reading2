@@ -42,7 +42,7 @@ import { isSpideryarnId } from "../src/ids.js";
 import { inputFingerprint as quizFingerprint } from "../src/quiz.js";
 import { hashBlocks } from "../src/source-hash.js";
 import { checkTree } from "../src/tree-invariants.js";
-import { REMEMBER_STANCES } from "../src/types.js";
+import { LEARN_STANCES } from "../src/types.js";
 import type {
   Block,
   ChatThread,
@@ -333,17 +333,17 @@ describe("the committed fixture corpus", () => {
       expect(blocksOf("writes").length).toBeGreaterThanOrEqual(19);
     });
 
-    it("has a Remember thread carrying a stance", () => {
-      /* Without one, tests/store-roundtrip.test.ts's Remember test warns and
+    it("has a Learn thread carrying a stance", () => {
+      /* Without one, tests/store-roundtrip.test.ts's Learn test warns and
          covers nothing: `kind` and `stance` could vanish from
          src/store/export.ts and the round trip would stay green. */
       const chat = read<{ threads: { kind?: string; messages: { stance?: string }[] }[] }>(
         "writes",
         "chat.json",
       );
-      const remembered = chat.threads.filter((t) => t.kind === "remember");
-      expect(remembered.length).toBeGreaterThan(0);
-      expect(remembered.flatMap((t) => t.messages).filter((m) => m.stance).length).toBeGreaterThan(0);
+      const learnThreads = chat.threads.filter((t) => t.kind === "learn");
+      expect(learnThreads.length).toBeGreaterThan(0);
+      expect(learnThreads.flatMap((t) => t.messages).filter((m) => m.stance).length).toBeGreaterThan(0);
     });
 
     it("has a comment anchored to something block_identities cannot hold", () => {
@@ -361,7 +361,7 @@ describe("the committed fixture corpus", () => {
       /* **The synthesised files are the one part of this corpus nothing wrote**,
          so they are the one part that could be shaped subtly wrong — a `kind`
          the union does not have, a `stance` spelled differently from the four.
-         Checked against `REMEMBER_STANCES`, the exported list the route and the
+         Checked against `LEARN_STANCES`, the exported list the route and the
          client both use, rather than against a literal here that could drift.
 
          **Not read through `loadThreads`/`loadComments`/`loadRuns`, which would
@@ -385,13 +385,13 @@ describe("the committed fixture corpus", () => {
       }
 
       const { threads } = read<{ threads: ChatThread[] }>("writes", "chat.json");
-      expect(threads.map((t) => t.kind).sort()).toEqual(["chat", "remember"]);
+      expect(threads.map((t) => t.kind).sort()).toEqual(["chat", "learn"]);
       for (const t of threads) {
         expect(t.messages.length).toBeGreaterThan(0);
         for (const m of t.messages) {
           expect(["user", "assistant"]).toContain(m.role);
           expect(["pending", "done", "error"]).toContain(m.status);
-          if (m.stance) expect(REMEMBER_STANCES).toContain(m.stance);
+          if (m.stance) expect(LEARN_STANCES).toContain(m.stance);
         }
       }
 

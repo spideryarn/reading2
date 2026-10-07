@@ -13,15 +13,82 @@ running text — each with a link. Asked for through the Feedback button on 2026
 The design, the review that reshaped it and the real runs are
 [260911g-citations-mode.md](../plans/260911g-citations-mode.md). This page says what is built.
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ A row](#a-row) — what one row draws, and where its two scores come from
+- [§ Crossref's citation count](#crossrefs-citation-count) — why a row says "cited 357 times", and which rows never do
+- [§ The one safety property](#the-one-safety-property) — why no link on a row can be invented by the model
+- [§ What we have read of the work](#what-we-have-read-of-the-work-said-on-every-row) — the "read from" line on every row
+- [§ Nothing about the work beyond the article's bibliography](#nothing-about-the-work-beyond-the-articles-bibliography) — what the list never claims
+- [§ Which citation, and whose entry](#which-citation-and-whose-entry) — matching a mention to a bibliography entry; numbered PDF lists
+- [§ The orders, and the bar](#the-orders-and-the-bar) — the five orders, the threshold, `?citeby=` / `?citebar=`
+- [§ Marked in the prose](#marked-in-the-prose-in-every-mode) — the marks on the article's own text, and the hover card on one
+- [§ Look it up on the web](#look-it-up-on-the-web) — finding a work that has no link (now a step of Dig deeper)
+- [§ Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand) — the one press that reads a work and judges its influence
+- [§ Ask in chat](#ask-in-chat-a-conversation-about-one-work) — opening Chat anchored on one work
+- [§ Already an article here](#already-an-article-here) — a cited work that is already on the shelf
+- [§ Chat can read it](#chat-can-read-it) — the `article_citations` tool
+- [§ Making it again](#making-it-again) — the Metadata redo
+- [§ Who sees it](#who-sees-it) — owner, visitor, experimental switch
+- [§ Deferred](#deferred) — what was left out, and where each reason is written
+- [§ The code](#the-code) — the files, in one list
+
 ## A row
 
 The title — a link out, opening a new tab ([links.md](links.md)) — then authors · year as the article
-gives them, more than two authors shortened to *First et al.*, one plain sentence on *what the piece uses it for*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
+gives them, more than two authors shortened to *First et al.*, and a quiet line: relevance and influence as two small bars (the numbers in their tooltip, as in the glossary),
+for some works a real citation count (§ [Crossref's citation count](#crossrefs-citation-count)),
 where the link came from, and **first cited**, a jump to the passage
 ([`BlockRef`](../../src/web/BlockRef.tsx)). A work the article names only in its bibliography says
 *only in the references* and jumps there. § [Which citation, and whose
 entry](#which-citation-and-whose-entry) is what the by-line and *first cited* show since
 2026-09-30.
+
+**New lists ask for influence as a number only when the model is confident it knows the work;
+otherwise the row says *influence unknown*.** Influence is the model's memory of the work, not anything in the article, and
+until `citations/6` the prompt told it to give a low number for a work it did not know, so "I do not
+know this" and "this is obscure" were the same number. Asked whether to keep the score at all
+([261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md)), Greg,
+2026-10-03:
+
+> Q-influence Hmmm, I'm torn. Maybe if the model is confident (e.g. because it's well-known), but if
+> in doubt default to Unknown. And if we do a deeper dive on a Citation, try and populate it then.
+>
+> — Greg, 2026-10-03
+
+So since `citations/6` the prompt asks for a number or `null`, the schema makes the field required
+and nullable ([prompting-guide.md](prompting-guide.md) § What the model writes back), and a low
+number means *known, and minor*. A `null` is stored as no `influence` at all, the shape an unscored
+row already had, and counted on the step's log line as `influenceUnknown`, apart from
+`influenceAbsent` (the field left out) and `influenceRejected` (not a number in 0–1). Two drafts of
+one work fold to the known number. On the row, a work with a relevance and no influence draws the
+relevance bar and then the words *influence unknown*, with a card saying no usable score was saved;
+never a bar at zero. Storage does not distinguish an explicit unknown from a missing or rejected
+score, so the card explains the new prompt's rule without claiming why this particular score is
+absent. It opens on hover, focus or tap. A row with neither score says nothing, as before, and the
+hover card in the prose draws no scores at all.
+
+**A list made by `citations/5` or earlier keeps its numbers**, low ones for unknown works included,
+until it is made again from the Metadata page (§ [Making it again](#making-it-again)). Nothing re-runs
+by itself.
+
+**A bar marked *from the web* is the second half of Greg's answer**: *Dig deeper* looked for the
+work's standing on the pages its web search returned, and kept a number (§ [Dig
+deeper](#dig-deeper-a-closer-look-at-one-work-on-demand), *It looks for the work's influence*). The words open a
+card, on hover, focus or tap, saying it is *an AI estimate from web evidence*, the site, the day,
+and the page's own words. The owner's card on *influence unknown* says Dig deeper looks for it; a
+visitor's does not, because a visitor has no Dig deeper and never sees what it found.
+
+**Every reader of a row's influence goes through one function**, `effectiveInfluence` in
+[`citation-effective-influence.ts`](../../src/citation-effective-influence.ts): the web number when
+the row has a kept, current *Dig deeper* answer whose influence carries the current
+`INFLUENCE_VERSION`, else the list's own, else unknown. The bar, the threshold, the influence order,
+whether that order is offered, and chat's `article_citations` tool all read it. The web number
+replaces the model's memory on that row, higher or lower, because it has a source and the memory
+has none. **The list's own `influence` is never overwritten**, so a visitor's row, which is built
+from the list alone, keeps the list's value.
 
 **No by-line that only repeats the title.** When the article gives a work only as an author–year
 label, the label is the title, and `Bartlett (1932)` over `Bartlett · 1932` said it twice
@@ -46,6 +113,50 @@ the article gives no authors or no year, the registry's are drawn, marked *from 
 DataCite*. A visitor's row carries a found record, never a conflict. Outside the stamp and the
 prompt, and the step never fails for it ([`citation-registry.ts`](../../src/citation-registry.ts)).
 
+### Crossref's citation count
+
+A row whose DOI Crossref holds also says how many times the work has been cited, as the number
+itself: *cited 357 times · Crossref*. It was [Q-crossref-count] in
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md),
+and the answer was:
+
+> Q-crossref-count yes
+>
+> — Greg, 2026-10-04
+
+The plan is
+[261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md).
+
+- **Where it comes from.** Crossref's `is-referenced-by-count`, in the answer the registry lookup
+  above already fetches. No extra request, no model, no press.
+- **Which rows.** Only a `found` record from Crossref: the titles agreed, so the count is this
+  work's. A *conflict* carries none (that DOI is another work), and so does a DataCite record,
+  which is what every arXiv id resolves to. Most rows of most lists therefore have no count.
+- **What the row says.** The count in words beside the bars, with thousands separators; *cited
+  once* for one; and for zero ***no citations recorded · Crossref***, because Crossref counts only
+  citations from works whose publishers deposit their reference lists, so zero is a statement about
+  its records. The card on those words (hover, focus or tap, as *influence unknown* has) gives the
+  day it was read and that caveat. The day is in the card and not on the line: with it the piece
+  would be wider than the band at its narrowest. Owner and visitor alike: it is public data about
+  a public DOI.
+- **It is a dated snapshot.** The day is the day Crossref was asked, kept beside the count
+  (`citedBy: { count, readAt }` on the row's `registry`). Nothing refreshes it on read; a list made
+  again from Metadata gets the registry cache's answer, which is up to 180 days old.
+- **It is alongside influence, not instead of it.** It is never drawn as a bar, because nothing
+  maps a count onto 0–1, and it changes neither the threshold nor any order. Whether the bar should
+  change now that counts exist is still [Q-bar-on-relevance] in 261003m.
+- **An existing list gets counts when it is made again**, as every other registry fact does. The
+  first such run asks Crossref once more about each DOI it had cached before 2026-10-05, because
+  those answers were stored without a count. A failed ask leaves the record due again, so a
+  Crossref outage can make a cached record unavailable to import, Debate and *Dig deeper* too until
+  one ask succeeds (`freshSql` in [`pg-bibliographic.ts`](../../src/store/pg-bibliographic.ts) has
+  the rule, and the `cited_by_count_read_at` column's comment in
+  [`schema.ts`](../../src/db/schema.ts) says why it needs a second timestamp).
+
+`readCitationRegistry` in [`registry-work.ts`](../../src/registry-work.ts) is the one reader, for
+the panel, the public projection and chat: it keeps a count only beside a Crossref record, a whole
+number, with a moment that parses, and otherwise drops the count and keeps the record.
+
 ## The one safety property
 
 **Every address a row presents as the work's own was in the article, and code found it.** The model
@@ -65,8 +176,7 @@ Asked for through the Feedback button on 2026-09-29 (SPIDERYARN-READING2-5G):
 > be really careful to be clear about whether you could get the actual paper, so that we can be sure
 > you're not hallucinating
 
-`why` is written **from the article**, and nothing that makes the list reads the cited work. So the
-row labels `why` *what the article uses it for*, and every row and hover card carries one quiet line
+Nothing that makes the list reads the cited work, so every row and hover card carries one quiet line
 saying what we have read. Usually that is nothing: *We have not read this work, only the article that
 cites it.* After *Look it up* it names what was read, which is only ever a search engine's extract
 of a matching page, and never the work itself. Once *Dig deeper* has read the paper itself
@@ -75,6 +185,47 @@ with the host, the length and the day. `readNoteOf` in
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) is the one source of that line for both
 surfaces, total over `linkFrom` and the lookup's state. The design and its two plan reviews are
 [260929g](../plans/260929g-check-a-cited-paper-supports-the-claim.md).
+
+## Nothing about the work beyond the article's bibliography
+
+Asked for through the Feedback button on 2026-10-03 (`spya-zmdb7y`):
+
+> we don't want to mislead the reader into thinking that that's what the paper actually says when
+> actually there's no new information beyond what's in the text. So instead, I think citations mode
+> should perhaps err on the side of saying, you know, nothing about a paper beyond what's available
+> in the bibliography … better to say less and allow the user to ask for more
+>
+> — Greg, 2026-10-03
+
+The model writes one sentence a work, `why`: *what the article uses it for*. It is written from the
+citing paragraph and can only restate it. Until 2026-10-03 every row, hover card and Marginalia note
+drew it; measured on 194 stored rows that was 2,143 words of paraphrase, about 11 a row
+([the investigation](../investigations/261003d-what-a-citations-row-says-and-where-it-came-from.md)).
+
+**Now `why` is drawn only beside something that was checked against it** (`showsWhy` in
+[`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)): in the band, once the row has a
+quick-check verdict or a *Dig deeper* answer; on the hover card, once it has the verdict, since the
+card draws no *Dig deeper* answer. There it is the claim under test, still labelled *what the article
+uses it for* — the verdict reads *supports what the article uses it for*, which says nothing without
+it. Marginalia's opened note never draws it, and shows the article's own reference entry instead. A
+visitor has neither a verdict nor an answer, so never sees it.
+
+**Authors and a year the article never gives are dropped**, by code, when the list is made
+(`locateInArticle` in [`src/citations.ts`](../../src/citations.ts)). The prompt asks for both *as the
+article gives them*; one stored row in 194 had an author from the model's memory instead (*The
+Bitter Lesson · Sutton*, in an essay that never names Sutton). Every word of the authors must be a
+word of the article's text or its PDF reference list, and a bare four-digit year must be in it
+somewhere; a suffix or date phrase must occur together. Otherwise that field goes and the row stays;
+`authorsUnfound` and `yearUnfound` on the step's
+log line count them. It asks only whether the article says the name at all, not whether it says it
+of this work, which code cannot know. A name the model corrected (the article's *Dojolonga*) goes
+too. A row with a DOI can still get its authors from the registry, marked *from Crossref*. A list
+made before 2026-10-03 keeps what it has until it is made again.
+
+`why` is still written and stored: the quick check, the paper's passages and the *Dig deeper* answer
+are all aimed by it, and chat's `article_citations` tool returns it as *used for*. The plan, with
+what was passed over, is
+[261003j](../plans/261003j-citations-say-only-what-the-bibliography-supports.md).
 
 ## Which citation, and whose entry
 
@@ -116,7 +267,24 @@ under the bibliography heading **at the list's own numbers**. The model sees the
 article, one `[n] entry` a line, and names each work's entry **by number**. Code keeps it only if:
 
 - the list has that number, and the work's verified mentions cite it (`[8]`, `[7,8]`, `[6–9]`) —
-  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors;
+  entry 9 for a work cited as `[8]` is the pairing slip, and it would carry the neighbour's authors.
+  **When the article's blocks carry no recognised footnotes or endnotes**, a number stuck to the
+  text counts too —
+  `studies15`, `mortality.¹`, `pattern5,51`, `disease.³⁻⁵` — the superscript cite of a biomedical
+  paper, which otherwise lost every entry. It is read inside the quote and **straight after it in
+  the block** (`markersInBlock`), since the model's quote usually stops before the superscript. With
+  recognised notes, such a number may be a note's marker, so brackets only. The full block supplies
+  the context even for a marker inside the quote: `dose5` quoted from `dose5mg` is no citation.
+  `gluedNumbers` excludes quantities and delimited maths. A note the extraction left out or did
+  not recognise leaves no block, so `hasNotes` cannot prove there are none; the licence therefore
+  also needs **glued numbers in the body to match at least half of the list's numbers**
+  (`citesMostOfListGlued`: 69 of 69 and 26 of 27 on the two papers measured, against one or two for
+  a stray footnote). That counts matching numbers, not citations, and it narrows the gap without
+  closing it: a paper that cites by superscript and also has an unrecognised numbered footnote, or
+  labels such as `sample1–20`, can still pair a work with the entry of a footnote's number, if the
+  model names that entry with its own title —
+  [review postmortem](../postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md);
+  [261004j](../plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md);
 - the model's title is in the entry — else the entry is dropped as disagreeing.
 
 Then every author name must be a word of the entry, or the authors go, and the year must be one of
@@ -147,7 +315,7 @@ clear upgrade keeps its *Look it up*, find and investigation, while an ambiguous
 them to another work.
 
 **Shown**: the by-line's tooltip holds the authors as given and the entry, labelled as the entry in
-the article's own reference list, which we have not looked up; the prose hover card shows the entry
+the article's own reference list, copied from the article and not from the work; the prose hover card shows the entry
 in full, since a card is what a finger gets. **A visitor gets the entry only when it is its own
 bibliography block's text**, every character of which is already on their page. An entry read from
 a PDF's text layer stays owner-only: it can carry a publisher's one-page "Downloaded by …" stamp
@@ -158,7 +326,16 @@ that the furniture filter missed ([261001b](../plans/261001b-public-article-visi
 Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 - **prioritised**, the default — `(2 × relevance + influence) / 3` against the threshold bar, in
-  first-cited order. A work missing a score survives every position of the bar
+  first-cited order: a score never moves a row, it only hides one. **A work whose influence is
+  unknown is judged on its relevance alone** (`priorityOf`), since 2026-10-03; before that it
+  survived every position of the bar, which was written for a rare unscored row and would stop the
+  bar hiding anything now that unknown is common. That is the same arithmetic as assuming the work
+  is exactly as influential as it is relevant, so it is not neutral: at relevance 0.30 an unknown
+  work clears the default bar, and one known to be minor (influence 0.10) scores 0.23 and does not.
+  Not knowing a work is not evidence against it. Whether the bar should use relevance alone for
+  every row is an open question in
+  [261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md).
+  A work with no relevance still survives every position of the bar
   ([`threshold.ts`](../../src/web/threshold.ts)), and the line under it says how many are hidden. The
   bar starts at **0.25**, lowered from 0.40 on 2026-09-15 so most works come in by default — 92% on
   average on the local runs
@@ -166,7 +343,18 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
   Falls back to first cited
   when no position of the bar would hide anything.
 - **first cited** — the artefact's own order.
-- **relevance**, **influence** — descending, a work missing that score last.
+- **relevance** — descending, a work with no relevance last. Offered only when some work has a
+  relevance; a saved `?citeby=relevance` falls back to first cited otherwise (GPT Sol's F14: until
+  2026-10-03 it reordered the rows while no button was pressed).
+- **influence** — known influence first, descending; then the works whose influence is unknown, by
+  relevance, descending, with no relevance last. First-cited order breaks ties. Offered only when
+  some work has an influence; a saved `?citeby=influence` falls back to first cited otherwise.
+
+**The influence in every one of these is the effective one** (§ [A row](#a-row)): a number *Dig
+deeper* read from the web counts in the threshold's `(2 × relevance + influence) / 3` and in the
+influence order exactly as the list's own would, and one press can make the influence order
+available on a list that had none.
+
 - **date** — publication year, oldest first, as Debate's date order is; same year in first-cited
   order, undated last. The year is the one the row draws (`workByLine`: the article's, the
   registry's only where the article gives none), read as its first four-digit year, so `2017a` is
@@ -180,7 +368,7 @@ Five, under the glossary's order buttons ([glossary.md](glossary.md)):
 
 Only the two raw scores are drawn on a row, never the combination — the glossary's rule. An **(i)**
 in the band's top-right corner (`BandAbout`, shared by every mode) says `influence` is the model's
-memory, not a citation count, and, **only when the model reported it**, that the list was capped at
+memory, not a citation count, and what *influence unknown* means, whose count *cited 357 times · Crossref* is, and, **only when the model reported it**, that the list was capped at
 80; it also carries the work count and provenance. The two notes were a foot pinned under the list
 until Greg, 2026-09-30 (`spya-nca765`), then briefly lived in the order row; the count was in that
 row too, shown only outside *prioritised*, whose threshold row already says "n of m"
@@ -237,13 +425,28 @@ like one of the article's own hyperlinks. `/design` has three specimens, includi
 
 **Pointing at one opens the work**, in the card the glossary and the links already share
 ([`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx)) — a fourth section, not a second card.
-It draws the title with its link, authors · year, `why`, and *cited in N paragraphs* — or *only in
+It draws the title with its link, authors · year, the entry, and *cited in N paragraphs* — or *only in
 the references* for a bibliography-only work. The provenance
 is the panel's own `sourceOf`, so a `search` row is drawn here as a search exactly as it is there:
 two surfaces disagreeing about whether an address is the work's own would teach a reader something
 false. Not in the card, each deliberately: the score bars (the card says meaning, the band says
-numbers), *Look it up* (billed, and a surface that opens on a hover is the wrong place for it), and a
-foot button into the mode (it needs `?cite=`).
+numbers), a kept *Dig deeper* answer (the row has the room), and a selected row in the mode (it
+needs `?cite=`).
+
+**The owner's card has *Dig deeper* in its foot**, since 2026-10-04. Greg, 2026-10-03 (report
+`spya-c2qmbg`):
+
+> I clicked search Scholar and it took me to another page. It's just a Google Scholar search. That
+> wasn't that interesting. What I was hoping is that it would have a button for dig deeper in the
+> tooltip.
+
+One press starts the row's own *Dig deeper*
+(§ [Dig deeper](#dig-deeper-a-closer-look-at-one-work-on-demand)), closes the card, and opens
+Citations with that row scrolled into view, where the answer streams. If the prioritised order's bar
+was hiding the row, the bar is lowered to it, visibly, as *Open glossary* does for a term. The button
+is disabled while any dig runs. *search Scholar* stays beside it on a row with no link. The glossary
+card's *Dig deeper* is the same shape
+([261004b](../plans/261004b-citation-hover-card-offers-dig-deeper.md)).
 
 **A finger gets the card on the first tap.** `mark.cite` is in `tapSelector` and in
 `NOT_A_BLOCK_SELECTION` — both, and the pair is the point: the second alone would take the tap away
@@ -267,8 +470,10 @@ Feedback button (SPIDERYARN-READING2-75):
 > both worlds?
 
 Everything below still describes that step — the call, its identity rule, its checked quotes, its
-store — and `POST …/find` still answers it on its own for a tab opened before the change. Where this
-section says *Look it up*, read *the quick check*.
+store. Its own route, `POST /api/citations/:slug/:id/find`, stayed for a tab opened before the
+change and was deleted on 2026-10-04; the step is `runCitationLookup` in
+[`src/citation-find.ts`](../../src/citation-find.ts), called by the press. Where this section says
+*Look it up*, read *the quick check*.
 
 Every owner row offered **Look it up** — owner-only, one row at a time, a few seconds. It was *Find
 it*, offered only on a row with no link, until 2026-09-29, when it also began reading what it
@@ -280,10 +485,11 @@ own page*, since `namesTitle` / `pageNamesTitle` accept a result whose title **o
 the work's title. What it adds over the `title` it replaced is the effect: it costs money, a press
 that finds nothing stores nothing and leaves the Scholar search where it was.
 [tooltips.md](tooltips.md) is why a `title` was not a small version of this — it does not exist at
-all on a touch device, which is the device the report came from. `POST /api/citations/:slug/:id/find` makes one chat-wire call with
+all on a touch device, which is the device the report came from. The step makes one chat-wire call with
 `openrouter:web_search` (Exa, `max_total_results: 5`) and a short prompt asking for one search for
 this one work and a JSON answer naming which result, if any, is its own page
-([`src/citation-find.ts`](../../src/citation-find.ts)). JSON, not streamed: the answer is a link.
+([`src/citation-find.ts`](../../src/citation-find.ts)). The model returns JSON; Investigate sends
+the checked link and reading to the browser in its `lookup` SSE frame.
 
 **What is kept is decided by code, and the model is only a pointer into the result set** — the
 plan's [§ Stage 3](../plans/260911g-citations-mode.md#stage-3-find-it-on-the-web) and review
@@ -308,10 +514,15 @@ result cap and a 60-second deadline; the count is the alarm — `webSearches` on
 `searches` / `searchesFrom` on the `citation find` log line.
 
 **And the presses are bounded**, since each one is billed and a no-match stores nothing to stop the
-same row being pressed again: the `citation-find` bucket of the shared per-owner allowance
-(`FIND_RATE_POLICY` — two at once, twenty an hour, sixty a day, and a global daily fuse), taken
-after the checks that refuse for free. The numbers are guesses, written as such. Added by the owed
-code review, GPT Sol F11.
+same row being pressed again. Since 2026-09-30 the bound is the press's own: the
+`citation-investigate` bucket of the shared per-owner allowance (`INVESTIGATE_RATE_POLICY` in
+[`src/citation-investigate.ts`](../../src/citation-investigate.ts)), one fill for the whole press,
+taken after the checks that refuse for free. `runCitationLookup` takes none itself, so any new
+caller must bring one. The step's first allowance policy (`FIND_RATE_POLICY`, added by the owed
+code review, GPT Sol F11) went with the `/find` route on 2026-10-04. Its `citation-find` bucket
+remains in the database's allowed values for historical rows; it is out of the `RateBucket` type,
+so no caller can spend it. The condition for removing it is in
+[`schema.ts`](../../src/db/schema.ts) beside `rate_limit_events_bucket`.
 
 ### It reads the search extract, never the work
 
@@ -375,7 +586,24 @@ footer reads *Researched <date> · Dig deeper again*. It was **Investigate** unt
 it became the same action as the glossary's and a comment's: always a web search, and always the
 bigger model ([glossary.md § Digging deeper into a term](glossary.md#digging-deeper-into-a-term) has
 Greg's words and the shared half). The code and the route keep the old name
-(`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`). One press, in order:
+(`makeInvestigateCitation`, `POST /api/citations/:slug/:id/investigate`).
+
+**A dig outlives the band** (2026-10-04, plan 261004b). The press's state
+lives on the article's citations read, not in the band, so the prose card can start one from any
+mode; leaving Citations mid-answer no longer stops the reading. Its draft or result remains
+available when the reader comes back; a replacement list clears the old press's failure and
+no-match note once the press has finished. Leaving the article still stops the reading; the
+server finishes and stores the answer either way.
+
+A dig can change its own row's priority (it detaches the last answer's web influence while it
+looks again). While the panel is mounted, a change in the last dug work's priority lowers the bar
+if the prioritised order would hide it. Other orders leave their dormant bar alone, and moving
+the slider alone does not trigger this reveal. This does not guarantee visibility when a dig
+finishes with the band closed: the panel's last-work ref is gone, and the saved bar still applies
+on return. See `CitationsPanel`'s two reveal effects in
+[`src/web/CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx).
+
+One press, in order:
 
 1. **The forced web search** — `searchFirst` from [`src/dig-deeper.ts`](../../src/dig-deeper.ts),
    aimed with the work's title, authors, year and its own link when the article gave one, and the
@@ -444,8 +672,9 @@ snapshot: nothing re-fetches the paper on read, so the row never claims the remo
 unchanged. An answer from before this has no paper columns and is drawn exactly as before.
 
 **The paper's words reach the reader only as passages code found.** When the paper was read, one
-small JSON call (`citation-paper-passages`, the quick check's model, no tools, the chunks fenced as
-evidence with a reminder after) offers up to three `{ chunk, quote, bears }`. Code keeps one only if
+small JSON call (`citation-paper-passages`, *Dig deeper*'s model, no tools, the chunks and the
+article's own fields — the title, `why`, the citing passages — each fenced as data with a reminder
+after) offers up to three `{ chunk, quote, bears }`. Code keeps one only if
 `verifyPassage` finds it in the one chunk it names, and stores that chunk's characters and page,
 never the model's spelling ([`citation-paper-passages.ts`](../../src/citation-paper-passages.ts)).
 They are shown under *the paper's own words, found by code in the text we read*, each with its page
@@ -455,6 +684,56 @@ press and says the pick failed. The streamed answer is sent the chunks and these
 paraphrase, told which state the paper is in, and still may not quote: the guard's allowed texts are
 unchanged, because a quote presented as the paper's could otherwise be the article's words (GPT
 Sol's plan review, P-1).
+
+**It looks for the work's influence, on the pages its own search returned.** Since 2026-10-03 (plan
+[261003m](../plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md),
+stage 2). After the press's last re-read of the row, and beside the paper read, one small JSON call
+(`citation-influence`, on `DIG_DEEPER_MODEL`, no tools, a strict schema whose three fields are each
+a value or null) is shown the work's title, authors and year and the forced search's pages,
+numbered and fenced as data. It answers a number on the list's own 0–1 rubric, the number of the
+one page it rests on, and the words on that page; or three nulls when no page says, or when the
+only evidence is a bare citation count with nothing to read it by. It is told never to answer from
+memory. Code keeps the number only when all of this holds
+([`citation-influence.ts`](../../src/citation-influence.ts) § `keepInfluence`):
+
+- the page is one of those shown, and its address and title are copied from the search result,
+  never from the model;
+- **the page's title names this work**, by
+  the quick check's title rule (`resultIsTheWork` with no identifier anchor: the title begins with
+  the work's; "Comment on …", "… - Review" and an untitled result are refused);
+- the words are found in that page's own extract by the strict pass (`verifyQuote`: at least six
+  words, at most 400 characters), and what is kept is the extract's slice;
+- the number is finite and within 0–1.
+
+No call is made when no page shown has a title naming the work, since nothing it answered could be
+kept. The wait has its own 20-second deadline and ends before the streamed answer starts. The
+deadline aborts the request, but cannot force a transport ignoring abort to stop; a late result
+is ignored. It is best-effort: a refusal, the deadline, an unreadable answer or
+a failed check stores no influence and never fails the press. The press's log line says
+`influenceKept`, and `influenceWhy` when not.
+
+**What that does not prove.** A page about the work can still carry a figure that belongs to
+something else on it. Code checks the page and the words, not what the words are about. So the row
+calls it *an AI estimate from web evidence* and shows the quoted words, for the reader to judge.
+
+It is stored on the press's own row, in five nullable columns: `influence`, `influence_quote`,
+`influence_source_url`, `influence_source_title` and `influence_version`. Two CHECKs: the number,
+quote, address and version are all null or all present (the title may be null beside them), and the
+number is within 0–1. When it happened is the row's own `at`. `influence_version` is
+`INFLUENCE_VERSION`, the stamp of this call's prompt and checks: bumping it stops every older
+number being read without hiding the answers beside them. **`CITATION_INVESTIGATE_VERSION` is not
+bumped**, because the streamed answer's prompt did not change; an answer kept before this has no
+influence, and *Dig deeper again* looks for one. The streamed answer is not told the number.
+
+**It rarely finds one, measured.** The probe (`evals/citations-influence-dig.ts`, 2026-10-03) ran
+the press's own search and this call on 13 works, most of them well known: **none was filled in**.
+For 10 no page's title named the work, so no call was made; for 3 the work's own page came back
+and said nothing about its standing, because a search for a work returns the work, and an abstract
+does not say how famous it is. So today *Dig deeper* leaves influence as it was nearly every time.
+A source that does say is a registry's citation count, and since 2026-10-05 a row with a DOI shows
+Crossref's beside the bars (§ [Crossref's citation count](#crossrefs-citation-count)); it does not
+fill in influence, which stays the model's. The probe's numbers are in
+[261003f](../investigations/261003f-citations-influence-unknown-unless-confident-before-and-after.md).
 
 **The prompt forbids quotation marks outright** since 2026-09-30. Allowing them round the article's
 words and the work's title led the model to quote its own phrases, the paper's terms and result
@@ -470,7 +749,13 @@ paper-selection versions, and the model's generation. The search's findings and 
 content are not in it — they are a dated snapshot of what was read (`investigateContextHash` in
 [`src/citation-investigate-context.ts`](../../src/citation-investigate-context.ts)). The model is `DIG_DEEPER_MODEL` on both the write and the read, so an environment override cannot
 make the two disagree and hide a kept answer. Dig deeper bumped `CITATION_INVESTIGATE_VERSION`, so an
-answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. It never
+answer kept by *Investigate* no longer attaches and its row offers *Dig deeper* afresh. So did
+fencing the passages call's article fields on 2026-10-04 (`/8`): that call has no version of its
+own, and its passages go on into the answer's prompt. The answer's own prompt fences the same
+fields, the matched search result and the paper's source host under the same `/8`, which had not been deployed
+([261004i](../plans/261004i-fence-the-dig-deeper-and-quick-check-prompts-article-fields.md)); the
+quick check's prompt was fenced with it and went to `citation-lookup/7`, so a kept *Look it up*
+detaches too. It never
 reaches a visitor, and it is in all three exports. A failed *Dig deeper again* leaves the earlier
 answer in place, and the row says so.
 
@@ -483,12 +768,31 @@ press's worst case, now on Opus with the search) stays under a $50-a-day ceiling
 raised it on 2026-10-02, when it bought only about 25 presses a day for everyone. The comment on
 that constant carries the arithmetic and says which figures are estimated and which measured. The
 lease covers every deadline in a press — the forced search, the quick check, the registry and the
-paper's 25 seconds, the passages call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by
+paper's 25 seconds, the passages call, the influence call, the answer — plus a margin. The answer's own optional Exa tool is pinned and bounded by
 `INVESTIGATE_MAX_TOTAL_RESULTS` and `INVESTIGATE_MAX_CHARACTERS`
 ([`citation-investigate.ts`](../../src/citation-investigate.ts)) — separate from the forced
-search's `DIG_MAX_RESULTS`. On the gateway a press can record up to four jobs: `dig-deeper-search`,
+search's `DIG_MAX_RESULTS`. On the gateway a press can record up to five jobs: `dig-deeper-search`,
 `citations-find` when the quick check runs, `citation-paper-passages` when the paper's passages are
-picked, and `citation-investigate` for the streamed answer.
+picked, `citation-influence` when a page of the search is about the work, and
+`citation-investigate` for the streamed answer.
+
+## Ask in chat: a conversation about one work
+
+Since 2026-10-06 every owner row has **Ask in chat** beside Dig deeper, which is unchanged. It
+opens a fresh conversation in Chat with the work quoted (its title, then the authors and year where
+the article gives them) and a question after it, and sends that as the first question: the press
+is the Send since 2026-10-06 ([261006j](../plans/261006j-ask-in-chat-sends-the-question.md)). Once a chat exists,
+a line under the row's controls shows how many questions were asked and how the latest answer
+begins, and pressing it opens that conversation beside Citations. Chat's list marks the
+conversation with Citations' icon. A visitor has neither the button nor the line.
+
+It is the Glossary's button with a different origin, `{ mode: "citations", itemId, quote }`: the
+work's id, which a re-run inherits by its key, and a snapshot of its title. Matched by the mode and
+the id alone, so a reworded title keeps the line. Everything else, and Greg's words, are in
+[glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat); the
+machinery under both is
+[debate.md § Check a claim in chat](debate.md#check-a-claim-in-chat). The hover card in the prose
+has no *Ask in chat*.
 
 ## Already an article here
 
@@ -545,13 +849,27 @@ Chat — typed, a passage question, and Live — can read the stored list throug
 at the right paper. It reads the list and never makes one: no list is an ordinary answer, a stale one
 shows no rows, and a capped one is counted as *the stored list*, never the article's total. The
 experimental switch governs this mode's screen, not the reader's own derived data, so the tool is not
-behind it. [chat-tools.md](chat-tools.md) has the tool.
+behind it. [chat-tools.md](chat-tools.md) has the tool. Each row's influence is the effective one
+(§ [A row](#a-row)): where *Dig deeper* found one on the web, the row gives that number and says it
+is *an AI estimate from the web, from a page on* that host, and our words outside the fence say
+what that means. The page's words and its address are not in the row. `loadCitations` attaches the
+owner's kept answers, so the tool needed no wider read. Crossref counts appear outside the article's
+fence as *Row 2: cited 357 times (Crossref’s count, read 2026-10-04)*, built by code from the number
+and the day `readCitationRegistry` let through. The displayed row number ties each count to its
+work inside the fence, after filtering and caps; our words also say what the count leaves out.
 
 ## Making it again
 
 From the Metadata page: *AI processing* has a Citations row, since 2026-09-29, and it is the
-only redo — the panel says nothing when its list was made by an older prompt
-([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
+usual place to redo a list the article still matches — the panel says nothing when its list was made by an
+older prompt
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). When the
+article has changed under the list, the banner that says so has *Find them again*, which is held
+from the press until the new list has been read
+([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+After a refused start, the panel's foot also offers *Find them again* on a current list, held in
+the same way.
+A press is one
 model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
 succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The row is
 drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer
@@ -568,11 +886,11 @@ behind, and the owner's *Look it up* results kept private (SPIDERYARN-READING2-5
 
 ## Deferred
 
-Selecting a work to mark every passage that cites it (`?cite=`), and with it the *In Citations* foot
-button on the hover card and the threshold reveal it would need; marking every occurrence of a
+Selecting a work to mark every passage that cites it (`?cite=`), and with it an *In Citations* foot
+button on the hover card that starts nothing; marking every occurrence of a
 mention in its block rather than only an unambiguous one; joining the citation section to the *link*
 and *note* cards, so a work cited by a hyperlink or a footnote marker gets it too; *Find more* past
-the cap; real influence from a citation database; searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* from the hover card, or on every row at once; an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
+the cap; a citation count for a row Crossref does not hold (DataCite's `citationCount`, which would cover arXiv preprints and is thinly populated, and OpenAlex's `cited_by_count`, which is up to 80 more requests a list), a *most cited* order, feeding the count to *Dig deeper*'s influence call, and refreshing a count on read ([261005i](../plans/261005i-citations-show-crossref-citation-count-with-source-and-date-read.md) § Passed over); searching every unlinked row at once; marks in the prose for a visitor; *Dig deeper* on every row at once; folding Citations into Debate as a sub-mode, and placing a cited work in the debate's threads (a proposal awaiting Greg, [261004b § Part 2](../plans/261004b-citation-hover-card-offers-dig-deeper.md)); an HTML page as the paper's full text; quoting the paper inside the streamed answer; *In your library* for a visitor, or used as the text *Look it up* reads; a stranger's public upload matched by our guess at its DOI; an author–year PDF bibliography's entries; a PDF list's entry for a visitor; OpenAlex (needs an account). Each is in one of the plans' lists of what is deliberately not built, with the reason.
 
 ## The code
 
@@ -582,12 +900,21 @@ the cap; real influence from a citation database; searching every unlinked row a
 mounts) ·
 [`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx) ·
 [`CitationInvestigation.tsx`](../../src/web/CitationInvestigation.tsx) (Dig deeper's row) ·
+[`citation-influence.ts`](../../src/citation-influence.ts) (Dig deeper's influence call and what
+code keeps of it) ·
+[`citation-effective-influence.ts`](../../src/citation-effective-influence.ts) (the one read path) ·
 [`cited-in-spideryarn.ts`](../../src/cited-in-spideryarn.ts) and
 [`pg-cited-in-spideryarn.ts`](../../src/store/pg-cited-in-spideryarn.ts) (already an article here) ·
 [`CitationsMode.tsx`](../../src/web/modes/citations/CitationsMode.tsx) ·
 [`citations.css`](../../src/web/styles/citations.css) ·
 [`annotate.ts`](../../src/web/annotate.ts) § `citeMarks` (the prose marks) ·
 [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx) § `CiteCard` (the card).
+
+The tests are the `tests/citation*.test.ts(x)` and `tests/citations*.test.ts(x)` files, one per
+piece above (for instance [`citations.test.ts`](../../tests/citations.test.ts),
+[`citation-marks.test.ts`](../../tests/citation-marks.test.ts),
+[`citations-panel.test.tsx`](../../tests/citations-panel.test.tsx)). The probe behind the
+influence numbers is [`evals/citations-influence-dig.ts`](../../evals/citations-influence-dig.ts).
 
 ---
 

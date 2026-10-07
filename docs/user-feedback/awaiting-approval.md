@@ -1,49 +1,26 @@
 # Awaiting Greg
 
-Reports that were researched and written up but **not built**, because the call is Greg's — the
-third ending in
+Until 2026-10-07 this file held the list of reports that were researched and written up but **not
+built**, because the call is Greg's — the third ending in
 [feedback-reports.md § Three ways a report ends](../project/feedback-reports.md#three-ways-a-report-ends).
+**That list has moved.** Each thing waiting on Greg is now one file under
+`docs/user-feedback/questions/`, which the Feedback dialog shows him at the top of *Earlier → Needs
+a decision*, with a box to reply in:
+[feedback-reports.md § Asking Greg a question, and acting on his answer](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer).
 
-Their Sentry issues are `ignored`, so they are out of the unresolved queue and **this file is the
-only place they are visible**. The loop reads it first, every run, and says what is on it.
-
-One line each: the date the report arrived, its Sentry short id, one sentence of what is being
-proposed, and a link to the plan doc. When Greg answers, the work either happens or doesn't, the note
-in this directory records which, and the line comes off.
+What this file still holds: reports that tried something nefarious and that Greg has not seen yet,
+which the feedback sweep reads and counts every run; and the history of what he has answered, and
+what followed.
 
 ## Waiting on Greg now
 
-- 2026-10-01 · SPIDERYARN-READING2-9D (the report itself shipped as stage 1; this is its stage 2)
-  · may Debate send an article's DOI to a citation index, to list every work that cites it? OpenAlex
-  is licence-compatible today (CC0; a free key and a daily budget) and gives the list but not what
-  each citer said. Semantic Scholar gives the citing sentence, which makes for/against checkable,
-  but its standard licence excludes commercial use: ask AI2 for the expanded one first? ·
-  [261002i § The question for Greg](../plans/261002i-debate-leads-with-who-has-cited-this-article.md) ·
-  [note](261001_1914-debate-leads-with-who-has-cited-this.md)
+**Not listed here any more.** One file per question, in `docs/user-feedback/questions/`:
 
-- 2026-10-01 · SPIDERYARN-READING2-8A (the report itself shipped; this is its follow-up) · may a
-  failed import's pre-filled Problem report also carry the source URL, filename and error sentence?
-  Today it carries ids, step names and times only, because those three would bend
-  feedback.md § The one rule; the cost is that a dismissed job's id leads nowhere. And: build a
-  link back to an uploaded original (a new owner-only read path onto Storage)? ·
-  [261001s § review item 6](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md) ·
-  [note](261001_1035-past-imports-say-more-and-why-you-are-reading-says-if-saved.md)
-
-- 2026-10-02 · SPIDERYARN-READING2-A8 (report spya-nnr8ha) · a text
-  size setting on /profile: body text alone follows one variable, but headings stay fixed, so it is
-  either about ten CSS rules re-expressed as one scale (B, ~a day), body-only with an inverted
-  hierarchy (A, not recommended), or not now, using browser zoom (C) ·
-  [261003a § The question for Greg](../plans/261003a-reading-text-size-setting.md) ·
-  [note](261002_2036-a-reading-text-size-setting.md)
-
-- 2026-09-30 · report spya-ntyes8 (Sentry has no copy of this report, so there is no short id and
-  no status to set: searched by report_id, sweep of 2026-10-03) · better shelf topic pills: let GPT-6 Luna name the topics and file the articles, instead
-  of only scoring phrases the articles use. It won all six synthetic shelves against today's list;
-  about a thirtieth of a penny per article if the topics are re-thought each time the shelf grows
-  by a tenth. Three questions: try it on your own shelf first? replace the pills or sit in front of
-  them? and when a newly added article gets its topics ·
-  [261003f § The questions for Greg](../plans/261003f-shelf-topics-named-by-a-model-as-concepts-not-phrases.md) ·
-  [note](260930_0715-shelf-topics-as-concepts-topic-model-or-clustering.md)
+- `npx tsx scripts/feedback-questions.ts` lists the open ones;
+- `npx tsx scripts/feedback-questions.ts --answers` prints the replies of his that nobody has acted
+  on yet (exit 2 means it could not tell, never "none");
+- `npx tsx scripts/feedback-questions.ts --new "<title>"` starts a new one. A new waiting item is a
+  question file, never a line in this file.
 
 ## Attempted abuse, not yet seen by Greg
 

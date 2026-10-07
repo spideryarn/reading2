@@ -64,7 +64,6 @@
    to sit at it again. */
 
 import { log } from "../log.js";
-import { makeFindCitation } from "../citation-find.js";
 import { type InvestigateCitationDeps, makeInvestigateCitation, readCitedPaper } from "../citation-investigate.js";
 import { makeGuessSource } from "../source-guess-run.js";
 import { makeAskAboutTerm, makeLookUpTerm } from "../term-lookup.js";
@@ -77,6 +76,7 @@ import type {
   CommentStore,
   ReadingTimeStore,
   GlossaryHiddenStore,
+  QuizAttemptStore,
   FeedbackStore,
   FetchAllowanceStore,
   GlossaryLookupStore,
@@ -95,6 +95,7 @@ import type {
   SourceGuessStore,
   SourceStore,
   VisibilityStore,
+  ShareLinkStore,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { pgRealtimeSessionStore } from "./realtime-sessions-pg.js";
@@ -114,6 +115,7 @@ import { pgCitedInSpideryarnStore } from "./pg-cited-in-spideryarn.js";
 import { pgSourceGuessStore } from "./pg-source-guesses.js";
 import { pgReadingTimeStore } from "./pg-reading-time.js";
 import { pgGlossaryHiddenStore } from "./pg-glossary-hidden.js";
+import { pgQuizAttemptStore } from "./pg-quiz-attempts.js";
 import { pgReaderStore } from "./pg-reader.js";
 import { pgRefereeClaimsStore } from "./pg-referee-claims.js";
 import { pgRefereeCriteriaStore } from "./pg-referee-criteria.js";
@@ -123,6 +125,7 @@ import { pgTagStore } from "./pg-tags.js";
 import { pgShelfTermsStore } from "./pg-shelf-terms.js";
 import { pgSourceStore } from "./pg-source.js";
 import { pgVisibilityStore } from "./pg-visibility.js";
+import { pgShareLinkStore } from "./pg-share-link.js";
 import { pgHighPowerStore } from "./pg-high-power.js";
 
 import { postgresBlobStore } from "./blobs.js";
@@ -249,6 +252,7 @@ export const loadSkim = reader.loadSkim.bind(reader);
 export const loadSketch = reader.loadSketch.bind(reader);
 export const loadIllustrated = reader.loadIllustrated.bind(reader);
 export const loadDebate = reader.loadDebate.bind(reader);
+export const loadArticleIdentity = reader.loadArticleIdentity.bind(reader);
 export const loadCitations = reader.loadCitations.bind(reader);
 /* The articles a cited work may be matched to: the reader's own and public ones
    only. Owner's GET /api/citations only — docs/plans/260930b-citations-say-when-a-cited-work-is-already-in-spideryarn.md. */
@@ -344,6 +348,8 @@ export const citationFindStore: CitationFindStore = guarded("citation-finds", pg
 export const readingTimeStore: ReadingTimeStore = guarded("reading-time", pgReadingTimeStore);
 /** The glossary entries an owner hid on one article — plan 261002c § 2. */
 export const glossaryHiddenStore: GlossaryHiddenStore = guarded("glossary-hidden", pgGlossaryHiddenStore);
+/** The reader's finished quiz marks, kept since 2026-10-05 — plan 261005b. */
+export const quizAttemptStore: QuizAttemptStore = guarded("quiz-attempts", pgQuizAttemptStore);
 
 /**
  * Explaining a term the reader typed into the glossary's box.
@@ -472,6 +478,13 @@ export const adminStore: AdminStore = guarded("admin", pgAdminStore);
  */
 export const visibilityStore: VisibilityStore = guarded("visibility", pgVisibilityStore);
 
+/**
+ * The owner's private link for one article — src/store/pg-share-link.ts. What
+ * it lets a visitor read goes through src/store/public-reader.ts, like the
+ * public reads above, and not through this file.
+ */
+export const shareLinkStore: ShareLinkStore = guarded("share-link", pgShareLinkStore);
+
 /** High-powered AI's column — plan 260930f, src/store/pg-high-power.ts. */
 export const highPowerStore: HighPowerStore = guarded("high-power", pgHighPowerStore);
 
@@ -551,20 +564,6 @@ export const lookUpTerm = makeLookUpTerm({
   library: (query, limit, opts) => librarySearch.searchLibrary(query, limit, opts),
 });
 
-/**
- * Citations mode's *Find it*: one web-search call for one cited work, kept only when
- * a search result is plainly that work's own page. Built here out of the
- * parts, as `lookUpTerm` is — the reader seam decides ownership (a stranger's
- * slug is a 404), the allowance bounds the presses, and src/citation-find.ts
- * decides what is kept. **Below `fetchAllowanceStore`**, because it is read when
- * this line runs.
- */
-export const findCitation = makeFindCitation({
-  reader,
-  finds: citationFindStore,
-  allowance: fetchAllowanceStore,
-});
-
 /** Where *Investigate* keeps an answer — one row per `(article, entry)`. */
 export const citationInvestigationStore: CitationInvestigationStore = guarded(
   "citation-investigations",
@@ -573,9 +572,13 @@ export const citationInvestigationStore: CitationInvestigationStore = guarded(
 
 /**
  * Citations' *Investigate*: one streamed, web-searching answer about one cited
- * work, kept. `findCitation`'s parts plus the finds as a read (the URL of the
- * page a current *Look it up* read) and its own store —
- * src/citation-investigate.ts. Below `fetchAllowanceStore` for the same reason.
+ * work, kept. Built here out of the parts, as `lookUpTerm` is: the reader seam
+ * decides ownership (a stranger's slug is a 404), the allowance bounds the
+ * presses, the finds are both written (its first step, *Look it up* —
+ * src/citation-find.ts § `runCitationLookup`) and read (the URL of the page a
+ * current lookup read), and it has its own store —
+ * src/citation-investigate.ts. **Below `fetchAllowanceStore`**, because it is
+ * read when this line runs.
  */
 export const investigateCitationDeps = {
   reader,
@@ -598,7 +601,7 @@ export const sourceGuessStore: SourceGuessStore = guarded("source-guesses", pgSo
 
 /**
  * **Look for an uploaded paper on the web, once** — `POST /api/source-guess/:slug`,
- * src/source-guess-run.ts. `findCitation`'s parts: the reader decides ownership,
+ * src/source-guess-run.ts. `investigateCitation`'s parts: the reader decides ownership,
  * the allowance bounds spend, and src/source-guess.ts decides what is kept.
  * Below `fetchAllowanceStore` for the same reason.
  */

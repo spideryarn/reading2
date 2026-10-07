@@ -7,7 +7,7 @@ npm run lint         # Biome over everything biome.jsonc's `includes` allows
 npm run lint:fix     # the same, applying the fixes Biome considers safe
 ```
 
-Fast enough not to think about — around 20ms for the whole tree — so run it alongside
+Fast enough not to think about — about 20 seconds for the whole tree (measured 2026-10-07, 3,900 files) — so run it alongside
 `npm test` and `npm run typecheck` before you commit. Or run
 [`npm run check`](static-analysis.md), which is those three plus the build and the
 project-wide analysis, with an honest split between what gates and what only advises.
@@ -19,7 +19,7 @@ The config is [`biome.jsonc`](../../biome.jsonc), and every rule turned off in i
 > `api/`, `evals/`, `styles/` and `drizzle.config.ts` were all in that hole until 2026-08-26:
 > typechecked by `scripts/typecheck.ts`, linted by no one.
 >
-> The npm script is now just `biome lint .`, which is the fix for the second half of the trap: it
+> The npm script is now just `biome lint --max-diagnostics=none .`, which is the fix for the second half of the trap: it
 > used to repeat the path list, so the script and the config could disagree — and did. Worse, a path
 > named in the script that does not exist makes Biome print an internal error and **still exit 0**.
 > One list, in the config, and `.` for the scope. One more
@@ -58,7 +58,7 @@ for the `Checked N files` summary line, before believing it.
 
 **Scope does not narrow it.** `biome lint src` crashed too, and so did a one-line file
 in `/tmp`. The scanner walks the whole `includes` allowlist whatever path you hand it,
-so the only lever is the allowlist itself. `!evals/extraction/fixtures/**` is in
+so the only lever is the allowlist itself. `!evals/extraction/fixtures` is in
 `biome.jsonc` for that reason.
 
 Neither commit was wrong on its own. `evals/**` joined the allowlist on 2026-08-26,
@@ -157,7 +157,8 @@ npx biome lint src 2>&1 | grep -i 'unknown key\|deserialize'
 
 `noFloatingPromises` is switched **on**, at error. It lives in Biome's `nursery` group because it
 needs type inference, which is also why `@biomejs/biome` is pinned to an exact version in
-`package.json`: nursery rules move between releases.
+`package.json`: nursery rules move between releases. Since 2026-10-04 it is also a gate with a
+command of its own — § Two rules that are gates on their own, below.
 
 ## Tabs or spaces
 
@@ -217,7 +218,9 @@ without touching the config, so nothing in the tree records that it happened. Me
 `biome check --write --formatter-enabled=true` reflowed **205 lines, of which 8 were the author's**
 — in a tree several agents have edits in flight in, which is the whole reason the formatter is off.
 There is no undo: the recovery is `git show HEAD:<file> >` the file and re-apply your own change by
-hand, which is only possible because the other 197 lines were committed. Wrap by hand instead.
+hand, which is only possible because the other 197 lines were committed. Look at
+`git diff HEAD --word-diff -- <file>` first and confirm the only content changes in the file are yours: a peer's
+uncommitted edit in it would be overwritten too. Wrap by hand instead.
 
 ## What the first run found
 
@@ -229,7 +232,7 @@ all — but `type` defaults to `submit`, so it is a trap laid for whoever adds o
 concatenations that wanted template literals; three `return fail(…), null` comma operators in
 [`validate-tree.ts`](../../src/validate-tree.ts) that read as a typo and are now two statements; and
 the vendored `src/web/components/ui/**` excluded rather than hand-edited, since `npx shadcn add`
-overwrites those.
+overwrites those (that exclusion did not last: `biome.jsonc` has none now — see § What's turned off).
 
 **False positives, suppressed one line at a time with the reason (5).** Never by switching a rule
 off globally. The interesting one is
@@ -259,8 +262,10 @@ general, and wrong here, and the comment says why.
 [`TableView.tsx`](../../src/web/TableView.tsx): real, but making cells focusable and Enter-activated
 is a design decision about [keyboard.md](keyboard.md), not a lint fix. And the one that matters —
 `noDangerouslySetInnerHtml` — turned out to be a genuine way for a hostile article to run JavaScript
-in the reading view. It has its own entry, [Q9](open-questions.md#q9), with the pipeline traced and
-the payloads that survive Readability. **It is deliberately not suppressed.**
+in the reading view. It had its own entry, [Q9](open-questions.md#q9), with the pipeline traced and
+the payloads that survive Readability; it was closed on 2026-08-25 when DOMPurify went in at stage 3
+([security.md](security.md)). **It was deliberately not suppressed while it was open**; the remaining
+uses carry a `biome-ignore` saying the html is sanitised at ingress.
 
 ### Suppression syntax, since it cost us three attempts
 
@@ -302,10 +307,52 @@ wanted.
 
 ## The baseline is not green yet
 
-`npm run lint` still reports a handful, and the count moves as other agents land work. What remains
-is the two `useKeyWithClickEvents` and the `dangerouslySetInnerHTML` above, plus whatever arrived
-this morning.
+`npm run lint` still reports a lot, and the count moves as other agents land work. On 2026-10-07 it
+was 89 errors and 138 warnings, plus about five thousand infos (nearly all `useLiteralKeys` and the
+complexity advisory). The cases above are no longer among them.
 
 **So `npm run lint` is not yet a gate that passes.** Don't wire it into anything that must be green
 until the baseline is cleared — and don't clear the baseline by turning rules off. Suppress a single
 line with a reason, or fix it, or write it down as an open question. Not the third option quietly.
+
+## Two rules that are gates on their own
+
+Since 2026-10-04 two single rules are at zero over the whole tree, and each has its own command that
+must stay at zero:
+
+```
+npm run lint:hook-deps   # correctness/useExhaustiveDependencies — about 2 s
+npm run lint:promises    # nursery/noFloatingPromises — about 5 s
+```
+
+Both are gates in [`scripts/check.ts`](../../scripts/check.ts), beside `cycles`. And because
+`npm run check` takes minutes,
+[`tests/biome-config-is-live.test.ts`](../../tests/biome-config-is-live.test.ts) runs the same two
+commands inside `npm test`, checks that Biome looked at thousands of files, and proves each rule
+still fires on a file that breaks it.
+
+**When `lint:hook-deps` names your hook**, read it before you do what it says. If the list is
+missing something the hook reads, that is a stale closure: fix it. If a dependency is there to make
+the hook run again — the `layoutKey` case above — or the missing one cannot change, keep the code and
+put the reason on the line above the hook:
+
+```ts
+// biome-ignore lint/correctness/useExhaustiveDependencies: `open` is the trigger, not an input — …
+useEffect(() => {
+```
+
+The reason has to be about that hook. Eleven hooks were read on the day this became a gate: eight
+got a suppression, three listed a value that cannot change and lost it, and none was a live bug
+([261004d](../plans/261004d-sweep-clusters-13-and-18-lint-gates-census-test-and-client-tidy.md) § A1).
+
+**When `lint:promises` names your call**, `await` it or handle its rejection. `void` is for a
+promise that cannot reject and that nothing may wait on, such as `leavingFetch` on the way out of a
+page.
+
+**The red controls use scratch copies of the repo's settings.** A file outside the repo, linted with
+`--config-path` pointing at `biome.jsonc`, is ignored: *"Checked 0 files"*, exit 1. And
+`noFloatingPromises` does not fire on stdin at all. So the test copies `biome.jsonc`, `.gitignore`
+and `package.json` into a scratch directory, then writes its violating file under `tests/`.
+Both ordinary lint and the gate command must flag it by name and exit 1. That holds the configured
+severity as well as rule discovery: with `noFloatingPromises` switched off, `--only=` still reports
+it at info and exits 0.

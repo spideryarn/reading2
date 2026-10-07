@@ -13,7 +13,9 @@
  *   the artefact forward, so a record is keyed on its article and its
  *   `generatedAt`. They say what each check *answered*: flagged, passed,
  *   unreadable. They cannot see a press that failed for another reason (it
- *   stored nothing), or a record a re-run replaced.
+ *   stored nothing), or a record a re-run replaced. A summary written before
+ *   2026-10-04 has three levels in its record and one written since has two;
+ *   both are counted as stored, so "levels" is not twice the summaries.
  * - **The ledger**: product `simple` step rows of purpose `simple-check`. They
  *   see every checker call, failed presses and replaced records included, with
  *   its outcome, latency and cost. Eval and CLI calls are excluded: they are
@@ -38,7 +40,13 @@ import { Pool } from "pg";
 import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
 import { resolveTargetUrl } from "../src/env.js";
 import { tallyChecks } from "../src/simple-check.js";
-import { isUsableSimpleSummary, SIMPLE_LEVELS, type SimpleLevelCheck } from "../src/types.js";
+import { isLevelCheck, isUsableSimpleSummary, type SimpleLevelCheck } from "../src/types.js";
+
+/**
+ * The levels a stored check record can hold. `simple`, the middle level, is in
+ * records written before 2026-10-04 only; `SIMPLE_LEVELS` no longer names it.
+ */
+const RECORDED_LEVELS = ["brief", "simple", "fuller"] as const;
 
 const daysArg = process.argv.indexOf("--days");
 const days = daysArg >= 0 ? Number(process.argv[daysArg + 1]) : 30;
@@ -86,7 +94,25 @@ try {
           unusable += 1;
           continue;
         }
-        for (const level of SIMPLE_LEVELS) checks.push(s.check.levels[level]);
+        /* The reader no longer validates the middle level, but this report
+           still consumes its check. Validate it here before trusting its tally. */
+        const historical = (s.check.levels as Record<string, unknown>).simple;
+        const middle = (s.levels as Record<string, unknown>).simple;
+        if (historical !== undefined || middle !== undefined) {
+          if (!Array.isArray(middle) || !isLevelCheck(historical, middle.length)) {
+            unusable += 1;
+            continue;
+          }
+        }
+        /* Every level the record holds, the removed middle one included: a
+           summary written before 2026-10-04 was checked at three levels, and
+           the ledger below still counts all three of its calls (plan 261004f,
+           Sol's plan review F1). */
+        const recorded = s.check.levels as Partial<Record<(typeof RECORDED_LEVELS)[number], SimpleLevelCheck>>;
+        for (const level of RECORDED_LEVELS) {
+          const check = recorded[level];
+          if (check) checks.push(check);
+        }
       }
       const t = tallyChecks(checks);
       const presses = stored.length - unusable;

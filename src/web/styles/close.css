@@ -26,7 +26,13 @@
    the rationing argument there is about chrome you can see, and an iPad with a
    keyboard attached reports `pointer: fine` while its reader taps the glass
    (narrow-windows.md § What a control owes a finger).
-   docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md. */
+   docs/plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md.
+
+   **Since 2026-10-04 it is also the cross that empties the shelf's search box**
+   (Library.tsx § SearchBox), which is a clear rather than a close but is the
+   same thing to a hand: a cross you have to find and hit. A Tailwind-classed
+   button that takes this class must carry no `tw:size-*`, because the
+   utilities layer comes after this file and wins. */
 .close-x {
   position: relative;
   flex: none;
@@ -52,3 +58,12 @@
     inset: -4px;
   }
 }
+
+/* **A search box that draws its own clear cross hides the browser's.** Chrome
+   and Safari draw one inside any `type="search"` while it has the focus, so
+   the shelf's box showed two, the browser's bold and ours faint (spya-wzmvva).
+   A rule here rather than a `tw:[&::-webkit-…]` variant, for the reason
+   changelog.css gives. `.srch-input` and `.dock-qs-input` hide theirs in their
+   own files, each beside a smaller cross of its own (search.css §
+   `.srch-clear`, dock-quick-search.css § `.dock-qs-clear`). */
+.own-clear::-webkit-search-cancel-button { display: none; }

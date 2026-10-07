@@ -1,8 +1,12 @@
 /**
  * Who is signed in, as React state.
  *
- * One subscription to `onAuthStateChange`, and `loading` until the SDK has told
- * us something. There is no third state: between page load and the first
+ * One subscription, and `loading` until the SDK has told us something. **The
+ * subscription is to lib/session.ts, not to the SDK**, since 2026-10-06: the
+ * SDK gives each of its subscribers a first answer of their own, read from
+ * storage as they arrive, so a screen that asked it directly could be drawn
+ * for a different reader from the one requests are bound to. session.ts
+ * has the whole argument. There is no third state: between page load and the first
  * `INITIAL_SESSION` the answer is genuinely unknown, and rendering the sign-in
  * screen during that moment makes a signed-in reader see a login flash on every
  * single reload.
@@ -35,13 +39,22 @@
 import { useEffect, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
+import { onSession } from "./lib/session.js";
 import { supabase } from "./lib/supabase.js";
 
 export interface SessionState {
   session: Session | null;
   user: User | null;
-  /** True until the SDK has said anything at all. Not "no user". */
+  /** True until the SDK has said anything at all, or `SETTLE_MS` has passed. Not "no user". */
   loading: boolean;
+  /**
+   * The SDK has said who is signed in, or that nobody is. Not `!loading`:
+   * the deadline below ends `loading` without an answer, and `user` is then
+   * `null` because nobody knows, not because nobody is signed in. Anything
+   * that would treat the answer arriving afterwards as a change of reader
+   * asks this instead (App.tsx § `useLastView`).
+   */
+  known: boolean;
 }
 
 /**
@@ -68,12 +81,14 @@ export function useSession(): SessionState {
     session: null,
     user: null,
     loading: true,
+    known: false,
   });
 
   useEffect(() => {
-    /* `onAuthStateChange` fires INITIAL_SESSION by itself once the client has
-       finished initialising, so there is no separate `getSession()` call here
-       to race with it. One source of truth. */
+    /* The SDK fires INITIAL_SESSION by itself once the client has finished
+       initialising, and lib/session.ts hears it, so there is no separate
+       `getSession()` call here to race with it. One source of truth. If it
+       has already been heard, `onSession` says what is held before it returns. */
     /* Armed before subscribing, cleared by the first event. If initialisation
        never settles, this is the only thing that ends `loading` — and ending it
        as "signed out" is right: the reader gets a sign-in screen they can act
@@ -82,9 +97,9 @@ export function useSession(): SessionState {
       setState((current) => (current.loading ? { ...current, loading: false } : current));
     }, SETTLE_MS);
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const unsubscribe = onSession((session) => {
       clearTimeout(settle);
-      setState({ session, user: session?.user ?? null, loading: false });
+      setState({ session, user: session?.user ?? null, loading: false, known: true });
     });
 
     /* A page restored from the bfcache comes back with whatever it had when it
@@ -98,7 +113,7 @@ export function useSession(): SessionState {
 
     return () => {
       clearTimeout(settle);
-      data.subscription.unsubscribe();
+      unsubscribe();
       window.removeEventListener("pageshow", resync);
     };
   }, []);

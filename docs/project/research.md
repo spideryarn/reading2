@@ -34,6 +34,17 @@ The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`,
 
 ## See also
 
+- [261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
+  — 45 places a reader's paper link points, what each imports as today through our own fetcher,
+  which refuse us, and the ranking of which are worth an import rule
+
+- [261005b-link-previews-and-seo-for-republished-articles.md](../research/261005b-link-previews-and-seo-for-republished-articles.md)
+  — which tags each platform reads for a link preview, why `og:url` is ours while the canonical is
+  the original's, and why Google asks a republisher for `noindex`
+- [261005a-reading-time-estimates-and-text-difficulty.md](../research/261005a-reading-time-estimates-and-text-difficulty.md)
+  — reading rates, the word-length equation, what readability formulas and model ratings can and
+  cannot see, for the "~N min" estimate
+
 - [261002c-recall-and-tutorial-pedagogy-for-remember-mode.md](../research/261002c-recall-and-tutorial-pedagogy-for-remember-mode.md)
   — retrieval practice, hint ladders, Socratic questions and one-to-one tutoring, for Remember's
   Recall and Tutorial prompts

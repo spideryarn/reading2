@@ -206,6 +206,62 @@ describe("the public API's import graph", () => {
   });
 
   /**
+   * **And so is its sibling, the private link's predicate.** Plan 261005e.
+   *
+   * The same closure `publicSlug` has, for the same reason: no owner anywhere
+   * in what it can reach. The key's type is an `import type`, which this walk
+   * does not follow, so `src/share-key.ts` is not in the list; it is checked on
+   * its own below, because the public routes import it for real.
+   */
+  it("and linkSharedSlug imports nothing but the schema", () => {
+    expect(graphFrom("src/store/link-shared-slug.ts")).toEqual([
+      "src/db/schema.ts",
+      "src/ids.ts",
+      "src/store/link-shared-slug.ts",
+    ]);
+  });
+
+  /** The module that joins the two leaves reaches them and the key's shape, and no further. */
+  it("and the access value reaches the two leaves and nothing else", () => {
+    expect(graphFrom("src/store/public-access.ts")).toEqual([
+      "src/db/schema.ts",
+      "src/ids.ts",
+      "src/store/link-shared-slug.ts",
+      "src/store/public-access.ts",
+      "src/store/public-slug.ts",
+    ]);
+  });
+
+  /** What a key looks like is a fact about a string. It imports nothing. */
+  it("and the key's shape is a leaf with no imports at all", () => {
+    expect(graphFrom("src/share-key.ts")).toEqual(["src/share-key.ts"]);
+  });
+
+  /**
+   * **The owner's side of the link is not in the public graph**, and the
+   * listing cannot be handed a key.
+   *
+   * `pg-share-link.ts` is the one module that reads the token out of the
+   * database and the one that writes the audit table; a public request that
+   * could reach it could be made to return a key. And `public-library.ts`
+   * reaching `public-access.ts` would be the first step to a link-shared
+   * article on the public shelf.
+   */
+  it("and no public door reaches the owner's share-link store, nor the listing a key", () => {
+    for (const entry of PUBLIC_ENTRIES) {
+      expect(graphFrom(entry), entry).not.toContain("src/store/pg-share-link.ts");
+    }
+    const listing = graphFrom("src/store/public-library.ts");
+    expect(listing).not.toContain("src/store/public-access.ts");
+    expect(listing).not.toContain("src/store/link-shared-slug.ts");
+    expect(listing).not.toContain("src/share-key.ts");
+    /* The control: the article reader does reach all three. */
+    const reader = graphFrom("src/store/public-reader.ts");
+    expect(reader).toContain("src/store/public-access.ts");
+    expect(reader).toContain("src/store/link-shared-slug.ts");
+  });
+
+  /**
    * **The positive control**, and the reason the three cases above are worth
    * believing.
    *
@@ -304,7 +360,8 @@ describe("the public API's tables", () => {
    * § Stage 3 — so the sentence this comment used to carry, that everything a
    * *reader* does is a different table by design, is no longer true of all of
    * them. It is still true of chats, searches, lookups, profiles, uploads and
-   * jobs, and those are still refused here.
+   * jobs, and those are still refused here (`jobs` in all but two named files
+   * since 2026-10-06: see `ALLOWED_IN` below).
    *
    * **What makes this a widening rather than the hole this test was written
    * for**, stated so the next person to add a line has to clear the same bar:
@@ -362,6 +419,11 @@ describe("the public API's tables", () => {
    * `article_visibility_changes` is deliberately **not** here. It is written by
    * the owner's switch and read by nobody yet, and when something does read it
    * that will be an owner-facing page, not this one.
+   *
+   * `article_share_link_events` is not here either, and the list did not grow
+   * for the private link (plan 261005e): the key is a column of `articles`,
+   * which is compared in a `where` and never selected, and the audit table is
+   * written from the owner's side only (src/store/pg-share-link.ts).
    */
   const ALLOWED = [
     "articles",
@@ -372,6 +434,39 @@ describe("the public API's tables", () => {
     "searchRuns",
     "uploadSourceGuesses",
   ];
+
+  /**
+   * **One table, in two named files, and not a line of `ALLOWED`.**
+   *
+   * `jobs` joined the public surface on 2026-10-06, on Greg's instruction: a
+   * visitor who opens a shared address before its article is published is told
+   * *still being added*
+   * (docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md
+   * § 2c). Its three sentences, as the list above asks:
+   *
+   *  - the read is `publicPendingImportQuery` in src/store/public-reader.ts,
+   *    which starts from `articles`, carries `publicAccessWhere` in its own
+   *    `where`, and reaches `jobs` only inside a correlated `exists`;
+   *  - it selects a constant, so no column of a job crosses: not its title,
+   *    its address, its error, its steps or its owner;
+   *  - and the authenticated job store (src/store/pg-jobs.ts, src/jobs.ts) is
+   *    not what serves it, and stays forbidden above.
+   *
+   * **Why it is a permission per file and not an eighth line**: `ALLOWED`
+   * covers every module in the public graph, and `jobs` is a queue of
+   * everybody's work. The route file, the DTOs and the listing have no reason
+   * to name it, and with this they still may not. `job-fence.ts` is the second
+   * file because the lease predicate is imported from where it is defined
+   * rather than written a second time; it holds predicates and runs no query.
+   *
+   * The raw-SQL and relational arm below does not read this record, so `jobs`
+   * spelled in a template string, or `db.query.jobs`, is still refused in every
+   * public file including these two.
+   */
+  const ALLOWED_IN: Record<string, string[]> = {
+    "src/store/public-reader.ts": ["jobs"],
+    "src/store/job-fence.ts": ["jobs"],
+  };
 
   /**
    * **Detected through the import, not by grepping for the word.**
@@ -439,7 +534,9 @@ describe("the public API's tables", () => {
         const braces = /\{([\s\S]*)\}/.exec(clause);
         for (const raw of (braces?.[1] ?? "").split(",")) {
           const name = raw.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]?.trim() ?? "";
-          if (name && forbidden.includes(name)) offenders.push(`${file} → ${name}`);
+          if (!name || !forbidden.includes(name)) continue;
+          if (ALLOWED_IN[file]?.includes(name)) continue;
+          offenders.push(`${file} → ${name}`);
         }
       }
     }
@@ -520,6 +617,27 @@ describe("the public API's tables", () => {
     const reader = readFileSync(path.join(ROOT, "src/store/public-reader.ts"), "utf8");
     for (const table of ["articles", "articleRevisions", "revisionBlocks"]) {
       expect(reader, table).toMatch(new RegExp(`\\b${table}\\b`));
+    }
+  });
+
+  /**
+   * **And each per-file permission is still being used, by a file still in the
+   * graph.** A permission left behind after its query has gone is a door
+   * nobody is watching. It also holds the two lists apart: a table in both
+   * would be allowed everywhere, whatever `ALLOWED_IN` said.
+   */
+  it("and every per-file permission names a public file that really imports that table", () => {
+    const graph = publicFiles();
+    for (const [file, tables] of Object.entries(ALLOWED_IN)) {
+      expect(graph, file).toContain(file);
+      const source = readFileSync(path.join(ROOT, file), "utf8");
+      for (const table of tables) {
+        expect(ALLOWED, table).not.toContain(table);
+        expect(everyTable(), table).toContain(table);
+        expect(source, `${file} → ${table}`).toMatch(
+          new RegExp(`import\\s*\\{[^}]*\\b${table}\\b[^}]*\\}\\s*from\\s*["'][^"']*db/schema\\.js["']`),
+        );
+      }
     }
   });
 });

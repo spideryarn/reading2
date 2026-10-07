@@ -1,5 +1,6 @@
 /**
- * A contents list for a long page of sections, in the margin beside it.
+ * A contents list for a long page of sections: in the margin beside it where
+ * the window has a margin, and above it where the window does not.
  *
  * Greg, 2026-09-03, on the Metadata page:
  *
@@ -44,16 +45,44 @@
  * > machinery).
  *
  * Both go through one verb, `reveal`: tell the section to open
- * (`SECTION_REVEAL`, which Metadata.tsx § Section listens for), scroll to it,
+ * (`SECTION_REVEAL`, which PageSection.tsx § Section listens for), scroll to it,
  * and flash it once the scroll has stopped (flash.ts § scrollToAndFlash, the
  * reading view's flash). The search itself is page-search.ts, which reads the
  * same `[data-section]` elements this list does, plus their `data-keywords`.
  * docs/plans/261001s-metadata-contents-opens-and-flashes-its-section-and-a-search-box-above-it.md.
+ *
+ * ## On a narrow window it is above the page, folded under *Contents*
+ *
+ * Greg, 2026-10-06 (feedback report `spya-vwf00u`):
+ *
+ * > In the metadata page, and maybe other places as well, perhaps the profile,
+ * > we have a table of contents that's visible in the left-hand side if the
+ * > page is wide enough. Actually, that table of contents is really nice. I
+ * > think it even has a search bar as well. On something like a portrait
+ * > iPhone, obviously it's not wide enough. So perhaps we should then put the
+ * > search bar and table of contents above the actual contents of the page,
+ * > like the metadata or the profile page, because I think that's a useful
+ * > piece of functionality for helping people navigate.
+ *
+ * Until then the `<nav>` was not drawn at all below `lg`, search box included.
+ * Now it is one element with two placements: fixed in the margin from `lg`, and
+ * an ordinary block in the page's column below it, which is why each page
+ * mounts it inside `<main>` at the spot the narrow one belongs. One input and
+ * one list, so there is no second copy of the query or of the entries to keep
+ * in step (`/help` draws its list twice, because a `<details>` cannot be held
+ * open by a stylesheet; a button and a boolean can).
+ *
+ * **The list is shut until *Contents* is pressed**, the search box always
+ * there. Metadata has up to about fifteen sections, and at a size a finger can
+ * press that is a phone's whole first screen. `/help` made the same call.
+ * docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { scrollToAndFlash } from "./flash.js";
-import { searchSections, type SearchableSection } from "./page-search.js";
+import { isImeComposing } from "./key-chord.js";
+import { searchSections, type SearchableSection, type SynonymTable } from "./page-search.js";
 
 /**
  * The event a section listens for to open itself — sent to the `[data-section]`
@@ -87,7 +116,7 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
   const el = sectionIn(root, id);
   if (!el) return null;
   /* The section commits its open state synchronously on this event
-     (Metadata.tsx § Section, `flushSync`), so its body is in the DOM before the
+     (PageSection.tsx § Section, `flushSync`), so its body is in the DOM before the
      scroll is asked for — near the foot of the page a shut section may not
      leave the scroll range to bring its heading up. Sol, plan review. */
   el.dispatchEvent(new CustomEvent(SECTION_REVEAL));
@@ -119,7 +148,7 @@ function reveal(root: HTMLElement | null, id: string): (() => void) | null {
  * on success, id change or unmount.
  *
  * **Tried from a timer and from the observer, never inside the effect.** The
- * section opens itself with `flushSync` (Metadata.tsx § Section), and React
+ * section opens itself with `flushSync` (PageSection.tsx § Section), and React
  * will not flush from inside its own effect pass.
  *
  * A reveal already under way is left to finish when the id goes to `null` —
@@ -223,18 +252,56 @@ function reachedPx(section: HTMLElement): number {
   return Number.isFinite(margin) && margin > 0 ? margin + REACHED_SLACK_PX : FALLBACK_REACHED_PX;
 }
 
+/**
+ * **The class a page's `<main>` wears to make room for this list.** From `lg`
+ * the list is fixed in the left margin (the `<nav>` below says why), so the
+ * page has to step right where its centred margin is too narrow to hold it. A
+ * page that mounts `PageContents` without this puts the list over its own text
+ * between 1024px and 1152px wide. Below `lg` the list is a block in the column
+ * and needs no room, and this class, being `lg:`, does nothing there. One copy, here beside the widths it answers to, so
+ * Metadata and `/profile` cannot drift apart.
+ *
+ * It is `mx-auto`'s own left margin for a 48rem column (`max-w-3xl`, which the
+ * page supplies), but never less than 12rem plus the left safe inset: the list
+ * ends at 12.5rem plus that inset (from `lg` it is fixed chrome, so it adds it —
+ * tokens.css § safe areas), and the column's text starts 1.5rem inside it, so
+ * a 1rem gap. The `max` picks the centred margin from 1152px plus twice the
+ * left inset of containing-block width (a little more window width with a
+ * classic scrollbar, since `100%` is the width beside it). Below that the page
+ * sits right of centre — by up to 4rem when the inset is zero — so an iPad in
+ * landscape gets the list. Greg, SPIDERYARN-READING2-9M, 2026-10-01: *"not
+ * visible on my iPad, even in landscape mode, even though there's quite a lot
+ * of space on either side."*
+ * docs/plans/261002a-metadata-contents-on-an-ipad-in-landscape.md.
+ */
+export const CONTENTS_MARGIN =
+  "tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))]";
+
 export function PageContents({
   containerRef,
   label,
+  synonyms,
 }: {
   /** The element whose `[data-section]` descendants are the contents. */
   containerRef: RefObject<HTMLElement | null>;
-  /** Names the nav for a screen reader — this page has another one in the bar. */
+  /** Names the nav for a screen reader. */
   label: string;
+  /** This page's vocabulary; omitted, the search keeps Metadata's table. */
+  synonyms?: SynonymTable;
 }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [here, setHere] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  /* **Whether the reader has opened the list on a narrow window.** It means
+     nothing from `lg` up, where the list is always drawn and the button that
+     sets this is not. Not in the URL and not remembered: it is where the
+     reader's finger was, not a place they were (url-state.md). */
+  const [open, setOpen] = useState(false);
+  /* The list's id, for the button's `aria-controls`. `useId` and not a
+     constant: two of these pages can be mounted at once (tests do), and a
+     shared id would point both buttons at the first list. GPT Sol, plan
+     review of 261007c, F5. */
+  const listId = useId();
   /* One navigation owns one settle wait. A quick second click cancels the
      first one's timers and listener, so the old section cannot flash after the
      reader has already chosen another one. The unmount cleanup matters too:
@@ -399,22 +466,40 @@ export function PageContents({
      query is typed joins the results. */
   const matches = useMemo(() => {
     if (query.trim() === "") return null;
-    const ids = searchSections(query, entries);
+    const ids = searchSections(query, entries, synonyms);
     return ids.flatMap((id) => entries.filter((e) => e.id === id));
-  }, [query, entries]);
+  }, [query, entries, synonyms]);
 
   /* Nothing worth navigating. One entry is furniture rather than help, and an
      empty list is the state before the metadata request has landed. */
   if (entries.length < 2) return null;
 
   const shown = matches ?? entries;
+  /* **A query shows its matches whatever `open` says, and takes the button
+     away while it does.** A search whose results are folded shut looks like a
+     search that found nothing; and a button reading `aria-expanded="false"`
+     above a list of matches would be untrue. So whenever the button is drawn,
+     `aria-expanded` is true exactly when the list is. `open` is not touched by
+     a query, so clearing the box puts the list back as the reader left it.
+     GPT Sol, plan review of 261007c, F1. */
+  const searching = matches !== null;
+  const folded = !searching && !open;
 
   return (
-    /* **Fixed, in the margin — not a column beside the content.** As a flex
-       sibling it would push the prose column off centre on wide windows and
-       change nothing on narrow ones, where it is hidden anyway. Fixed keeps
-       the nav out of the page's layout: the page stays centred wherever its
-       margin holds the list, and Metadata moves it only where that is needed.
+    /* **From `lg`: fixed, in the margin — not a column beside the content.**
+       As a flex sibling it would push the prose column off centre on wide
+       windows. Fixed keeps the nav out of the page's layout: the page stays
+       centred wherever its margin holds the list, and Metadata moves it only
+       where that is needed. And because it is fixed, it does not matter there
+       that it is mounted inside `<main>`, part-way down the page.
+
+       **Below `lg`: an ordinary block in the page's column**, where the page
+       mounted it. Every class that positions it is `lg:` for that reason: a
+       bare `tw:fixed` or `tw:w-44` here would pin an 11rem box over a phone's
+       page. It was `tw:hidden` below `lg` until 2026-10-07 (the file header
+       has Greg's report). The top margin is the gap from whatever the page
+       put above it, and the section below brings its own; it is `lg:mt-0`
+       because a margin on a fixed box moves the box.
 
        `lg` (1024px), the width of the smallest full-screen landscape iPad.
        The list is 11rem at 1.5rem in, plus the left safe inset (tokens.css §
@@ -422,8 +507,8 @@ export function PageContents({
        content is `max-w-3xl` (48rem) and centred. With no left safe inset its
        margin holds the list from 1152px up; an inset raises that threshold by
        twice its width. Below it the page steps its column right just far enough
-       to clear the list (Metadata.tsx § `tw:lg:ml-…`) —
-       so this nav assumes its page does that, and a page that mounts it
+       to clear the list (`CONTENTS_MARGIN`, above) —
+       so this nav assumes its page wears that, and a page that mounts it
        without it would put the list over the prose. It was `xl` until Greg,
        SPIDERYARN-READING2-9M, 2026-10-01: *"not visible on my iPad, even in
        landscape mode"*. Plan 261002a.
@@ -432,23 +517,46 @@ export function PageContents({
        search box arrived (plan 261001s), and then every keystroke that
        filtered the list shrank the box and moved the input under the
        reader's cursor. 6rem down, level with the page's first sections; the
-       corner wordmark it once had to clear moved into the dock on 2026-09-06.
+       Metadata's corner wordmark moved into the dock on 2026-09-06;
+       Profile keeps its wordmark above the list.
        The list scrolls inside a column that stops short of the dock, so a
        long page's contents never run under it. Sol, plan review. */
     <nav
       aria-label={label}
-      className="tw:hidden tw:lg:flex tw:lg:flex-col tw:fixed tw:left-[calc(1.5rem_+_var(--safe-left))] tw:top-[calc(6rem_+_var(--safe-top))] tw:max-h-[calc(100vh_-_6rem_-_var(--safe-top)_-_var(--dock-space)_-_1rem)] tw:z-10 tw:w-44 tw:font-sans"
+      className="tw:mt-6 tw:font-sans tw:lg:mt-0 tw:lg:flex tw:lg:flex-col tw:lg:fixed tw:lg:left-[calc(1.5rem_+_var(--safe-left))] tw:lg:top-[calc(6rem_+_var(--safe-top))] tw:lg:max-h-[calc(100vh_-_6rem_-_var(--safe-top)_-_var(--dock-space)_-_1rem)] tw:lg:z-10 tw:lg:w-44"
     >
       {/* **Above the list, in the same column** — where Greg asked for it.
           Typing filters the list below to what matches, best first; Enter
           takes you to the first; Escape empties the box and puts the whole
           list back. `type="search"` for the platform's clear button and the
-          right on-screen keyboard. */}
+          right on-screen keyboard.
+
+          **`any-pointer-coarse:text-[max(1rem,16px)]`, at every width**: iOS zooms the
+          page in on a field under 16px and does not zoom back out. The
+          app-wide rule that lifts fields to 16px on a touch screen is in the
+          `app` layer and cannot reach a `tw:text-*` utility, so this box, at
+          `text-xs`, zoomed an iPad in landscape before it was ever drawn on a
+          phone (narrow-windows.md § the utilities layer is out of reach).
+          `max(1rem, 16px)`, rather than `text-base`'s bare `1rem`, also keeps
+          the floor when the reader's root type is smaller than 16px;
+          `leading-6` retains `text-base`'s touch line height. The two coarse
+          utilities beat the `lg` ones by order: Tailwind emits the
+          `any-pointer` block after the breakpoint block, read off the compiled
+          CSS on 2026-10-07. */}
       <input
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
+          if (e.key === "Escape" && query !== "") e.stopPropagation();
+          /* A key an input method is using is not ours: its Enter accepts a
+             candidate and its Escape dismisses the list. A `type="search"`
+             box is also emptied by the browser itself on Escape (measured in
+             Chrome, 2026-10-07), so that default is cancelled. */
+          if (isImeComposing(e)) {
+            if (e.key === "Escape") e.preventDefault();
+            return;
+          }
           if (e.key === "Enter") {
             e.preventDefault();
             const first = matches?.[0];
@@ -457,14 +565,13 @@ export function PageContents({
             /* Only when there is something to clear, so an Escape in an empty
                box still reaches whatever else on the page listens for it. */
             e.preventDefault();
-            e.stopPropagation();
             setQuery("");
           }
         }}
         placeholder="Search this page"
         enterKeyHint="search"
         aria-label="Search this page's sections"
-        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-2 tw:py-1 tw:font-sans tw:text-xs tw:text-foreground tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
+        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-2 tw:font-sans tw:text-sm tw:text-foreground tw:lg:px-2 tw:lg:py-1 tw:lg:text-xs tw:any-pointer-coarse:text-[max(1rem,16px)] tw:any-pointer-coarse:leading-6 tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
       />
       {/* Kept mounted before the first keystroke: a live region inserted with
           its first message is not announced consistently. Sighted readers only
@@ -485,7 +592,35 @@ export function PageContents({
             ? "Nothing on this page matches."
             : `${matches.length} section${matches.length === 1 ? "" : "s"} match.`}
       </p>
-      <ul className="tw:m-0 tw:min-h-0 tw:list-none tw:overflow-y-auto tw:p-0">
+      {/* **Drawn only below `lg`, and only while the box is empty** (`searching`
+          and `folded`, above, say why). PageSection.tsx § Section's own
+          disclosure, so a page has one way of showing that something opens:
+          the words, then a chevron that points right when shut and down when
+          open. The whole line is the target, not the chevron. */}
+      {!searching && (
+        <button
+          type="button"
+          onClick={() => setOpen((was) => !was)}
+          aria-expanded={open}
+          aria-controls={listId}
+          className="tw:flex tw:w-full tw:cursor-pointer tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:px-0 tw:py-2 tw:text-left tw:font-sans tw:text-sm tw:text-muted-foreground tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text tw:lg:hidden"
+        >
+          Contents
+          {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </button>
+      )}
+      {/* `tw:hidden` with `tw:lg:block` beside it is "hidden below `lg`
+          only": from `lg` the list is the block it always was, scrolling
+          inside the nav's column (`min-h-0` and `overflow-y-auto` are for
+          that, and do nothing in a block with no height limit). Folded rather
+          than unmounted, so the wide window's list and the button's
+          `aria-controls` target are always there. */}
+      <ul
+        id={listId}
+        className={`tw:m-0 tw:min-h-0 tw:list-none tw:overflow-y-auto tw:p-0${
+          folded ? " tw:hidden tw:lg:block" : ""
+        }`}
+      >
         {shown.map((entry) => (
           <li key={entry.id}>
             {/* A button, not `<a href="#id">`. This app routes its own anchors
@@ -507,8 +642,8 @@ export function PageContents({
               aria-current={here === entry.id ? "true" : undefined}
               /* **`tw:font-sans` on the button, not just on the `<nav>`.** The
                  page-scoped reset this was written beside hung off
-                 `.metadata-page`, on `<main>` — and this nav is main's
-                 *sibling*, so it never reached here. That reset is app-wide
+                 `.metadata-page`, on `<main>` — and this nav was then
+                 main's *sibling*, so it never reached here. That reset is app-wide
                  now (tailwind.css § the bit of preflight we need), so this is
                  belt and braces rather than the only fix. Before that reset, a
                  font-family on the parent could not win: the UA stylesheet
@@ -516,7 +651,16 @@ export function PageContents({
                  would have drawn in Arial beside a page of Geist, which is the
                  exact bug this component was shipped alongside a fix for. GPT
                  Sol, 2026-09-03. */
-              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-1 tw:pl-3 tw:text-left tw:font-sans tw:text-xs tw:leading-snug tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text ${
+              /* **The focus mark is an outline drawn inside the button.** The
+                 entry fills the list's width and the list scrolls, so a mark
+                 outside the box would be cut off at the list's edges. Until
+                 2026-10-07 the outline was off and focus changed only the
+                 text colour, which on the entry already marked as "here" was
+                 no visible change at all. */
+              /* **Larger and taller below `lg`**, where what presses it is a
+                 finger: `text-sm` and `py-2` there, the margin's `text-xs`
+                 and `py-1` from `lg`. */
+              className={`tw:block tw:w-full tw:cursor-pointer tw:border-0 tw:border-l-2 tw:bg-transparent tw:py-2 tw:pl-3 tw:text-left tw:font-sans tw:text-sm tw:leading-snug tw:lg:py-1 tw:lg:text-xs tw:transition-colors tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:-outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text ${
                 here === entry.id
                   ? "tw:border-highlight tw:text-foreground"
                   : "tw:border-border tw:text-ink-faint"

@@ -36,7 +36,7 @@
  *
  * `PUBLIC_LIBRARY_LIMIT` bounds the **rows**. `PUBLIC_CARD_CHARS` bounds the
  * **bytes**, because nothing in this repo bounds a title or an `<h1>` and a
- * fetched document may be 32 MB. And `articles_public_listing` — a partial index
+ * fetched document may be 50 MB. And `articles_public_listing` — a partial index
  * on `(public_at desc nulls last, slug) where visibility = 'public'`,
  * drizzle/20260904175802 — bounds the **work**, because without it Postgres can
  * sort the whole public corpus before applying the limit. All three arrived
@@ -105,7 +105,7 @@ const PUBLIC_LIBRARY_LIMIT = 200;
  * `PUBLIC_LIBRARY_LIMIT` bounds how many cards come back and says nothing at all
  * about how large one is. Every text column below is unbounded in the database:
  * extraction does not constrain a document's title (src/extract.ts), a fetched
- * document may be 32 MB (src/fetch.ts), and the `<h1>` fallback returns a
+ * document may be 50 MB (src/fetch.ts), and the `<h1>` fallback returns a
  * block's whole text — so **one deliberately enormous public heading, or a few
  * hundred merely large ones, turns an anonymous request into a very large
  * allocation and a very large response**. GPT Sol's finding 1 on stage 3a,

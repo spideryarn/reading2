@@ -1,11 +1,12 @@
-/* quiz.css — the Quiz sub-mode of Remember (QuizPanel.tsx), and the
-   Recall | Tutorial | Quiz switch that sits in the band's head beside the title.
+/* quiz.css — the Quiz sub-mode of Learn (QuizPanel.tsx), and the
+   Recall | Tutorial | Explore | Quiz switch that sits at the left of the
+   band's head.
 
    Its structural classes are the glossary band's rather than a second
    vocabulary for the same things, so **it must stay after glossary.css**. */
 
 /* ------------------------------------------------------------------ quiz --
-   The Quiz sub-mode of Remember — docs/plans/260831al-review-quiz-sub-mode.md.
+   The Quiz sub-mode of Learn — docs/plans/260831al-review-quiz-sub-mode.md.
 
    **The structural classes are the glossary band's** (`band-head`, `gloss-run`,
    `gloss-stale`, `gloss-count`) rather than a second vocabulary saying the same
@@ -17,31 +18,26 @@
    follows the theme without a second palette to keep in step — /design and
    docs/project/design-css-overview.md. */
 
-/* Recall | Tutorial | Quiz, in the band's head beside the title. Two toggle buttons, and
-   the pressed one is filled — a pair where one is always on, so an outline-only
-   treatment would leave a reader guessing which half they are looking at. */
-.remember-submode {
-  display: flex;
-  gap: 1px;
-  margin-left: auto;
-  flex: none;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  overflow: hidden;
-}
-.remember-submode-btn {
-  border: 0;
-  background: transparent;
-  color: var(--ink-faint);
-  font: inherit;
-  font-size: 0.81rem;
-  padding: 0.15rem 0.5rem;
-  cursor: pointer;
-}
-.remember-submode-btn:hover { color: var(--ink); }
-.remember-submode-btn.on {
-  background: var(--rule);
-  color: var(--ink);
+/* Recall | Tutorial | Explore | Quiz, at the left of the band's head: the
+   part-switcher every mode shares, `.summ-views` / `.summ-view-btn`
+   (mode-band.css § the part-switcher; plan 261007h § F2), so its look is not
+   here. Toggle buttons with `aria-pressed`, and the pressed one is filled. It
+   sat right-aligned with its own 4px corners and a `--rule` fill until
+   2026-10-07; it moved left because every other mode's switcher is at the left.
+
+   **It may shrink, and then it scrolls sideways inside its outline** rather
+   than wrap, as every part-switcher does: the bin and the Written-for-you
+   badge after it are pushed to the row's right end, and give up nothing. */
+.band-head > .learn-submode { margin-right: auto; }
+/* **Four chips (the Experimental switch on) tighten their side padding**; three keep
+   the bar's 0.6rem. On an iPad the band is 288px, so the head row has 234px of
+   content (the (i) keeps the right 41.6px; 226px on a touch screen). Four
+   chips in the bar are 196px at 0.25rem and about 241px at 0.6rem, and the bin
+   Recall, Tutorial and Explore add beside them is 22px plus a 7px gap: 225px
+   fits, 270px would scroll. Measured 2026-10-07 (plan 261007h § F2); plan
+   261005h item B measured the first version. */
+.learn-submode:has(> .learn-submode-btn:nth-child(4)) > .learn-submode-btn {
+  padding-inline: 0.25rem;
 }
 
 /* The scrolling child every `.mode-band` needs. Without one the panel's own
@@ -302,11 +298,11 @@
    the chips are punctuation in it. `white-space: normal` undoes `.quiz-reply`'s
    `pre-wrap` for the chip alone — inside a `pre-wrap` box the space between two
    ids in one bracket is preserved twice and the flex gap adds a third. */
-.quiz-reply .cite {
+.quiz-reply .cite-chips {
   white-space: normal;
   vertical-align: baseline;
 }
-.quiz-reply .cite .block-ref { font-size: 0.74rem; }
+.quiz-reply .cite-chips .block-ref { font-size: 0.74rem; }
 
 /* Status-only since plan 260929b: progress, Stop and failures stay pinned even
    though the idle redo button moved to Metadata. */

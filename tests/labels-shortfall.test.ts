@@ -52,7 +52,9 @@ const wire = vi.hoisted(() => ({
   /** Every request body that reached the wire, in order. */
   calls: [] as { maxTokens: number; parts: string[] }[],
   /** What to answer, indexed by call number. Set by each test. */
-  answers: [] as Array<string | { fail: () => never }>,
+  answers: [] as Array<string | { fail: () => never } | ((parts: string[]) => string)>,
+  /** Network attempts reported by each logical call, indexed by call number. */
+  attempts: [] as number[],
 }));
 
 vi.mock("../src/messages-stream.js", async (importOriginal) => {
@@ -70,12 +72,14 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         maxTokens: body.max_tokens as number,
         parts: content.map((p) => p.text),
       });
-      const answer = wire.answers[at];
-      if (answer === undefined) throw new Error(`No scripted answer for call ${at + 1}`);
+      const scripted = wire.answers[at];
+      if (scripted === undefined) throw new Error(`No scripted answer for call ${at + 1}`);
+      const answer = typeof scripted === "function" ? scripted(content.map((p) => p.text)) : scripted;
       const stop = answer === "TRUNCATED" ? "max_tokens" : "end_turn";
       return {
         onText: () => {},
         aborted: () => false,
+        attempts: () => wire.attempts[at] ?? 1,
         finalMessage: async () => {
           if (typeof answer !== "string") return answer.fail();
           return {
@@ -178,6 +182,7 @@ function allBut(n: number, gaps: number[], how?: string): string {
 beforeEach(() => {
   wire.calls.length = 0;
   wire.answers.length = 0;
+  wire.attempts.length = 0;
 });
 
 describe("a batch that comes back short", () => {
@@ -239,6 +244,18 @@ describe("a batch that comes back short", () => {
     expect(run.dropped).toEqual([]);
   });
 
+  it("counts every network attempt inside one logical batch call", async () => {
+    const { tree, blocks } = oneSection(12);
+    wire.answers.push(allBut(12, []));
+    wire.attempts.push(2);
+
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+    expect(wire.calls).toHaveLength(1);
+    expect(run.calls).toBe(2);
+    expect(run.file.batches?.[0]?.requests).toBe(2);
+  });
+
   it("still re-draws the whole batch when the answer was truncated", async () => {
     /* A truncation is a different failure with a different answer: nothing came
        back to keep, and the fix is room to think, so the whole batch goes again
@@ -263,6 +280,35 @@ describe("a batch that comes back short", () => {
     expect(run.file.batches?.[0]?.requests).toBe(2);
     expect(run.inputTokens).toBe(2000);
     expect(run.outputTokens).toBe(1000);
+  });
+});
+
+/**
+ * **A batch the planner hands over can always be asked for twice.** A
+ * truncated batch is re-drawn at double the reasoning allowance, and until
+ * 2026-10-06 the planner only asked whether the *first* call fitted: a section
+ * of 1,742 to 2,032 paragraphs was one batch whose re-draw threw
+ * `TooLongForOnePass` before it was sent, so one truncation lost the article's
+ * labels with one request made. GPT Sol, A1 of
+ * docs/plans/261005j-stage-1a-rest-A-code-review-sol.md.
+ */
+describe("a section whose re-draw would not fit one answer", () => {
+  it("is asked about in windows, so a truncated call is re-drawn and the labels arrive", async () => {
+    const N = 1742;
+    const { tree, blocks } = oneSection(N);
+    /* Whatever a call asks for, answer all of it; the first call is cut short. */
+    const all = (parts: string[]): string =>
+      allBut(new Set(parts.join("\n").match(/^\[\d+\]/gm) ?? []).size, []);
+    wire.answers.push("TRUNCATED");
+    for (let i = 0; i < 200; i++) wire.answers.push(all);
+
+    const run = await generateLabels({ power: "standard", tree, blocks, slug: "test", checkpoints: nullCheckpointStore() });
+
+    expect(Object.keys(run.labels).length).toBe(N);
+    /* More than the two requests one batch would take, and the cut-short one is among them. */
+    expect(run.batches).toBeGreaterThan(1);
+    expect(wire.calls.length).toBe(run.batches + 1);
+    expect(run.calls).toBe(run.batches + 1);
   });
 });
 

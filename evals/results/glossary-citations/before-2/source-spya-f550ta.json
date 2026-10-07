@@ -1,0 +1,146 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "before-2",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "c0f77fe893b2d17d662dd423edb92f6a2b640a26fea7dd3558fe76164d467e61",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A still-unexplained group of short-lived glowing phenomena linked to thunderstorms, first named this way by François Arago. It appears unpredictably, lasts only seconds, and vanishes with or without leaving marks, unlike ordinary lightning bolts."
+    },
+    {
+      "name": "François Arago",
+      "kind": "person",
+      "aliases": [
+        "Arago"
+      ],
+      "background": "French astronomer and physicist who wrote 'Sur le tonnerre' in 1837, the work credited with establishing the term 'ball lightning' for this class of phenomena."
+    },
+    {
+      "name": "Walther Brand",
+      "kind": "person",
+      "aliases": [
+        "Brand"
+      ],
+      "background": "A German senior school official who wrote 'Der Kugelblitz' in 1923 (reprinted 2010), the only German-language monograph on ball lightning, compiling and rediscovering earlier case reports."
+    },
+    {
+      "name": "Rakov and Uman",
+      "kind": "work",
+      "aliases": [
+        "Rakov and Uman (2003)"
+      ],
+      "background": "Authors of a major lightning physics handbook covering over 6000 references on lightning generally, who devoted a chapter to summarizing the state of ball lightning research and its lack of hard scientific documentation."
+    },
+    {
+      "name": "Stenhoff",
+      "kind": "person",
+      "aliases": [
+        "Stenhoff (1999)"
+      ],
+      "background": "Author of a 1999 book on ball lightning containing roughly 2400 references, which paid particular attention to reports from scientists and trained professionals."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "background": "A European research collaboration proposal on the physics of lightning, involving about 30 researchers, which concluded that the existence of ball lightning is not in doubt even though it remains unexplained."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "The Austrian network that detects and records lightning strikes, including their location, timing, and electrical current, used here to cross-check eyewitness ball lightning reports against real strike data."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [],
+      "senseHere": "The German lightning detection and information service that records strike data, used in the article to confirm a strong strike coinciding with a 1994 ball lightning sighting."
+    },
+    {
+      "name": "cloud-ground stroke polarity",
+      "kind": "term",
+      "aliases": [
+        "positive stroke",
+        "negative stroke",
+        "cloud-cloud stroke"
+      ],
+      "senseHere": "Lightning strikes are classed by whether they travel between cloud and ground or stay within clouds, and by whether they carry positive or negative charge, with positive ground strikes typically carrying far higher peak currents."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "An Austrian geologist and mineralogist and member of the Imperial Academy of Sciences at Vienna, who produced one of the earliest detailed scientific ball lightning reports, in 1868, complete with a sketch and angular size measurement."
+    },
+    {
+      "name": "Axel Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann"
+      ],
+      "background": "A German astrophysicist at the Göttingen university observatory who, as a child in 1951, witnessed ball lightning splitting into smaller spheres and later calculated the plasma's energy density from melted asphalt left on the ground."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A physics professor famous for the 1922 Stern-Gerlach experiment demonstrating spin quantization in a magnetic field. His 1927 report of ball lightning included precise timing calculations suggesting the object moved faster than the speed of sound without producing a sonic boom."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A radio astronomer who worked at the Jodrell Bank Observatory before becoming a professor of physical electronics at the University of Kent. His 1963 in-flight ball lightning sighting, published in Nature, became one of the most widely cited cases in the field."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "A Baltic German physicist and member of the St Petersburg Academy of Sciences who was killed in 1753 by a conventional lightning strike while experimenting on atmospheric electricity. A popular engraving later misrepresented his death as caused by ball lightning, cementing a deadly, mythic image of the phenomenon."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis and shock caused by a nearby lightning or ball lightning event, distinct from longer-lasting nervous disorders it can trigger.",
+      "background": "Charcot used this concept to separate immediate lightning-induced paralysis from lasting traumatic neurosis such as skin numbness, phobia, or motor loss, a distinction still used in medicine today."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "French physician and founder of modern neurology, professor at the University of Paris, and a teacher of Sigmund Freud. He examined a patient's detailed account of a ball lightning encounter and its lasting nervous effects."
+    },
+    {
+      "name": "Abrahamson and Dinniss soil strike theory",
+      "kind": "concept",
+      "aliases": [
+        "soil strike theory"
+      ],
+      "senseHere": "A proposed explanation that ball lightning forms when a strike hits soil, vaporizing silicon-rich minerals that then burn slowly as fine glowing particles, matching chemical signatures seen in a recorded ball lightning spectrum."
+    }
+  ]
+}

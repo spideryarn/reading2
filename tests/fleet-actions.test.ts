@@ -394,6 +394,21 @@ const TREE = "/home/greg/code/spideryarn2/.claude/worktrees/fleet-dashboard-v01"
 describe("planRemoveWorktree", () => {
   const action = enactedNamed("remove-worktree");
 
+  it("selects removal by the checked directory, without a branch selector", () => {
+    const out = planRemoveWorktree(action, { dir: TREE, branch: "worktree-shared", primaryDir: PRIMARY });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const remove = out.plan.steps.at(-1);
+    expect(remove?.argv).toEqual([`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`]);
+    expect(remove?.cwd).toBe(TREE);
+  });
+
+  it("refuses a primary directory containing dot or empty segments", () => {
+    for (const primaryDir of [`${PRIMARY}/..`, `${PRIMARY}/.`, `${PRIMARY}//elsewhere`]) {
+      expect(planRemoveWorktree(action, { dir: TREE, branch: "b", primaryDir }).ok, primaryDir).toBe(false);
+    }
+  });
+
   it("pairs the directory with the branch before it does anything else", () => {
     // `dir` and `branch` arrive from the page as TWO INDEPENDENT CLAIMS, and
     // nothing downstream puts them back together: step 2 sweeps by branch and
@@ -405,7 +420,7 @@ describe("planRemoveWorktree", () => {
     const out = planRemoveWorktree(action, { dir: TREE, branch: "worktree-fleet-dashboard-v01", primaryDir: PRIMARY });
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    const [pair] = out.plan.steps;
+    const [, pair] = out.plan.steps;
     expect(pair?.argv).toEqual(["git", "-C", TREE, "rev-parse", "--abbrev-ref", "HEAD"]);
     // Run FROM the primary, ASKING ABOUT the tree — so a directory that has
     // already gone is a failed step rather than a spawn error in a cwd that
@@ -418,18 +433,84 @@ describe("planRemoveWorktree", () => {
     const out = planRemoveWorktree(action, { dir: TREE, branch: "worktree-fleet-dashboard-v01", primaryDir: PRIMARY });
     expect(out.ok).toBe(true);
     if (!out.ok) return;
-    expect(out.plan.steps).toHaveLength(3);
-    const [, check, remove] = out.plan.steps;
-    expect(check?.argv).toEqual(["npm", "run", "worktree:check"]);
-    expect(check?.cwd).toBe(TREE);
+    expect(out.plan.steps).toHaveLength(4);
+    const [, , check, remove] = out.plan.steps;
+    /* The PRIMARY's copy, told which tree — not `npm run worktree:check` standing
+       in the tree, which needs the tree's own `tsx` and so stopped the plan with
+       `tsx: not found` at every tree under the external root that was never set
+       up (qi-k2jjejb2). The same shape as the remover below, for its reasons. */
+    expect(check?.argv).toEqual([`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", TREE]);
+    expect(check?.cwd).toBe(PRIMARY);
     // The step that makes this safe: a non-zero exit stops the plan, and
     // worktree:check exits non-zero for "blocked" AND for "could not look".
     // Since 2026-09-08 that includes a server still listening from inside the
     // tree, which is the case no other guard here can see.
     expect(check?.pass).toEqual({ kind: "exit-zero" });
-    expect(remove?.argv).toEqual(["npm", "run", "worktree:sweep", "--", "remove", "--branch", "worktree-fleet-dashboard-v01"]);
-    expect(remove?.cwd).toBe(PRIMARY);
+    expect(remove?.argv).toEqual([`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`]);
+    expect(remove?.cwd).toBe(TREE);
     expect(remove?.pass).toEqual({ kind: "exit-zero" });
+  });
+
+  /**
+   * The step the external root made necessary. A path under
+   * `/var/tmp/spideryarn-worktrees/` says which tree, never whose: a worktree
+   * of another repository has the same shape, and the sweep removes THIS
+   * repository's tree on the branch named. So before anything else git is
+   * asked, from the primary, whether that exact directory is registered here.
+   */
+  it("asks git whether the tree is this repository's before anything else", () => {
+    const out = planRemoveWorktree(action, { dir: TREE, branch: "worktree-fleet-dashboard-v01", primaryDir: PRIMARY });
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    const [registered] = out.plan.steps;
+    expect(registered?.argv).toEqual(["git", "worktree", "list", "--porcelain", "-z"]);
+    expect(registered?.cwd).toBe(PRIMARY);
+    expect(registered?.pass).toEqual({ kind: "stdout-has-record", record: `worktree ${TREE}` });
+  });
+
+  /**
+   * The bug: since 2026-10-05 a new tree on the box is under
+   * `/var/tmp/spideryarn-worktrees/`, and this answered `not-a-worktree`.
+   */
+  it("plans the removal of a tree under the external root", () => {
+    const tree = "/var/tmp/spideryarn-worktrees/bar-reads-profile";
+    const out = planRemoveWorktree(action, { dir: tree, branch: "worktree-bar-reads-profile", primaryDir: PRIMARY }, {});
+    expect(out.ok).toBe(true);
+    if (!out.ok) return;
+    expect(out.plan.steps.map((s) => s.argv)).toEqual([
+      ["git", "worktree", "list", "--porcelain", "-z"],
+      ["git", "-C", tree, "rev-parse", "--abbrev-ref", "HEAD"],
+      [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-check.ts`, "--root", tree],
+      [`${PRIMARY}/node_modules/.bin/tsx`, `${PRIMARY}/scripts/worktree-remove.ts`],
+    ]);
+    expect(out.plan.steps.map((s) => s.cwd)).toEqual([PRIMARY, PRIMARY, PRIMARY, tree]);
+    expect(out.plan.steps[0]?.pass).toEqual({ kind: "stdout-has-record", record: `worktree ${tree}` });
+  });
+
+  it("acts on the tree's root, whichever directory inside it the row was in", () => {
+    for (const tree of [TREE, "/var/tmp/spideryarn-worktrees/x"]) {
+      const out = planRemoveWorktree(action, { dir: `${tree}/tools/fleet/`, branch: "b", primaryDir: PRIMARY }, {});
+      expect(out.ok).toBe(true);
+      if (!out.ok) return;
+      expect(out.plan.steps[0]?.pass).toEqual({ kind: "stdout-has-record", record: `worktree ${tree}` });
+      expect(out.plan.steps[1]?.argv[2]).toBe(tree);
+      expect(out.plan.steps[2]?.argv.slice(2)).toEqual(["--root", tree]);
+      expect(out.plan.steps[3]?.cwd).toBe(tree);
+    }
+  });
+
+  it("refuses a path that only reads as a worktree until it is resolved", () => {
+    for (const dir of [
+      `${TREE}/../../..`,
+      `${PRIMARY}/.claude/worktrees/../..`,
+      "/var/tmp/spideryarn-worktrees/x/../../../../etc",
+      "/var/tmp/spideryarn-worktrees",
+      "/var/tmp/spideryarn-worktrees-old/x",
+    ]) {
+      const out = planRemoveWorktree(action, { dir, branch: "b", primaryDir: PRIMARY }, {});
+      expect(out.ok, dir).toBe(false);
+      if (!out.ok) expect(out.rule).toBe("not-a-worktree");
+    }
   });
 
   it("refuses the primary checkout", () => {
@@ -469,6 +550,8 @@ describe("planRemoveWorktree", () => {
     expect(isUnderWorktreesDir(`${TREE}/src/deep`)).toBe(true);
     expect(isUnderWorktreesDir("/home/greg/code/spideryarn2/.claude/worktrees")).toBe(false);
     expect(isUnderWorktreesDir("/home/greg/.claude/projects/x")).toBe(false);
+    expect(isUnderWorktreesDir("/var/tmp/spideryarn-worktrees/x", {})).toBe(true);
+    expect(isUnderWorktreesDir("/var/tmp/spideryarn-worktrees", {})).toBe(false);
   });
 });
 

@@ -1,9 +1,9 @@
 # Structure (the step)
 
+Up: [architecture.md](architecture.md)
+
 Pipeline stage 4 — `structure`, `npm run structure -- <slug> [--force]`. Builds the nested tree that Structure,
-Marginalia, the Spine and the rest render. (The step was called `hierarchy` until 2026-10-02, and this file was
-`hierarchy.md` — [261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md). The Hierarchy
-*mode* that gave it that name — gist columns beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
+Marginalia, the Spine and the rest render. (Its old names, `hierarchy` and `toc`, are in [261007l § The opening](../plans/261007g-structure-step-history.md#the-opening).) Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
@@ -22,15 +22,27 @@ its coarse levels and fails validation, and both would write the same artefact. 
 [`src/structure.ts`](../../src/structure.ts) is the authority; this line used to say stage 5 filled them, and
 had not been true for some time.
 
-**The step was called `toc` until 2026-08-31**, and this file was `table-of-contents.md`. The
-reading-view mode gave that name up on 2026-08-29 and the step deliberately kept it, which left one
-concept wearing two names across the UI, the code and the database; Greg reversed that half so all
-three say the same word —
-[260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md).
-The rows moved in [`drizzle/0041_rename_toc_step_to_hierarchy.sql`](../../drizzle/0041_rename_toc_step_to_hierarchy.sql)
-and the filesystem store's copies in [`scripts/migrate-fs-toc-to-hierarchy.ts`](../../scripts/migrate-fs-toc-to-hierarchy.ts).
 "Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
 rather than the step.
+
+## In this doc
+
+- [§ Intent](#intent) — what the tree is for
+- [§ We store a tree and derive the flat rows](#we-store-a-tree-and-derive-the-flat-rows) — why `tree.json`, not rows
+- [§ Schema](#schema) — the tree's shape and fields
+- [§ The tree the author's headings give us for free](#heading-tree) — using existing headings
+- [§ Entry length grows with depth](#granularity) — how long each level's text is
+- [§ Every block gets a leaf; not every leaf gets a row](#every-block-gets-a-leaf-not-every-leaf-gets-a-row) — coverage of blocks
+- [§ Headings: verbatim unless genuinely uninformative](#headings-verbatim-unless-genuinely-uninformative) — when a title is rewritten
+- [§ Building the tree over a flat article](#building-the-tree-over-a-flat-article) — articles with no headings
+- [§ Two passes: the structure, then the labels](#two-passes) — the `structure` and `labels` steps; why two
+- [§ The budget](#the-budget) — token and time limits
+- [§ When one answer will not fit](#when-one-answer-will-not-fit) — chunking long articles
+- [§ The generation prompt](#the-generation-prompt) — the prompt itself
+- [§ The question under the claim](#the-question-under-the-claim) — what each node is asked
+- [§ A new prompt reaches new articles only](#prompt-versions) — prompt versions and old trees
+- [§ Worked example: the derived sidebar](#worked-example-the-derived-sidebar) — one article end to end
+- [§ See also](#see-also) — neighbouring docs
 
 ## Intent
 
@@ -171,39 +183,15 @@ paragraph joins the section **before** it rather than the one after. The cursor 
 did the opposite, and on the fixture in `tests/structure-step-repairs.test.ts` that filed "Body of the first
 part" under "Second".
 
-#### What this cost, and how we got here
-
-Three shapes in three days, each one bought by an article somebody lost:
-
-| | what it did | what it cost |
-|---|---|---|
-| until 2026-08-30 | refused any tiling fault | 4 structure calls in 13 |
-| 2026-08-30 | snapped boundaries; bounded by size, then by count | an article with two slips |
-| 2026-08-31 | derives the tiling; nothing about it refuses | a dropped section, rarely |
-
-A paid calibration on 2026-08-30 threw on **4 of 13** structure calls, bimodal by kind: two partition
-gaps and two `sourceHeading` claims outside their node's range. The structure call takes about 163
-seconds and most of the stage's bill, so every refusal cost a reader a whole article after the money
-was spent.
-
-The first fix snapped a boundary shut, bounded at one block. That bound was fitted to four
-observations that were **all off by one and all from HTML articles with headings** — the half of the
-corpus where the model has the author's own structure to agree with. PDF ingest reached production
-the same day, PDFs are headingless, and a 9-page arXiv paper lost its ToC to a gap of three. Greg,
-2026-08-30:
+Greg, 2026-08-30:
 
 > I think for now, we should allow gaps. It's not ideal, but it's not the end of the world, and
 > better than things failing fatally. Perhaps in future, it should trigger a re-run of the LLM, where
 > we feed in the previous output, with information about the gaps and ask it to adjust. But that's
 > for later.
 
-So the size bound went, leaving a count: **one distinct boundary per answer**. That was fitted to the
-same four observations, and the code comment said in as many words that a headingless PDF with two
-independent slips would still lose its whole ToC. On 2026-08-31 one did — a Princeton memory paper,
-one gap of a block at depth two and one overlap of two at depth one. Fixing that by raising the
-number would have been the third guess at a threshold nobody had evidence for, so instead the
-question it answered was removed. See
-[260831ai-hierarchy-tiling-normalisation.md](../plans/260831ai-hierarchy-tiling-normalisation.md).
+How the tiling came to be derived — three shapes in three days, each bought by a lost article — is in
+[261007l § What this cost, and how we got here](../plans/261007g-structure-step-history.md#what-this-cost-and-how-we-got-here).
 
 #### The one thing it loses, and what still throws
 
@@ -229,25 +217,21 @@ for legacy and direct ranged-builder inputs and is no longer production telemetr
 **And an answer that still cannot become a tree is asked for once more, inside the step** — any
 failure of `treeFrom` (parse, build, supplement, invariants) on a freshly bought answer, if the
 step's deadline leaves room for a second call as long as the first, and never after a truncation, a
-refusal or an abort. Two calls is the worst case; `wholeDocumentCalls` says which happened. Long answers
+refusal or an abort. Two answers is the worst case; `wholeDocumentCalls` says which happened. (Each
+may be more than one network request since 2026-10-03, when a dropped connection began to be
+retried in the gateway: [ai-gateway.md § transport retry](ai-gateway.md#transport-retry).) Long answers
 have more places for one local fault, and the reader pressing Retry was the retry loop:
 [261001s](../plans/261001s-fb93-long-pdf-hierarchy-asks-again.md).
 
 #### A child's backwards range is a disagreement, not a lie <a id="backwards-child"></a>
 
-**That list had a second entry — a range that runs backwards — until 2026-09-04.** The refusal was
-explicit and tested, so it was a decision rather than an oversight; what was too broad was its
-premise. This whole function believes a start and computes every end, so **a child's own end is a
+This whole function believes a start and computes every end, so **a child's own end is a
 redundant second statement of a boundary the derivation already discards**. A backwards pair whose
 ids both resolve is those two statements disagreeing, which is the thing the repairs exist to absorb.
 
 It is not evidence that the node's title and gist describe the wrong prose: the model wrote those
 from the whole article, not from its own range, and the repairs already keep a title and gist while
 moving that node's boundary by many blocks. ⟨GPT Sol, 2026-09-04⟩
-
-Measured, and it is why this changed: `smart-low` lost `gwern-scaling-long` to exactly this — one
-block backwards at `root > child 7 > child 1` — in the run that moved production to `low`
-([hierarchy-waves-real-corpus](../../evals/results/hierarchy-waves-real-corpus-2026-09-04.md)).
 
 **What it costs, which is the interesting half.** A backwards end is **ineligible for the fallback**.
 When two children claim the same start, `planChildRanges` falls back to the previous child's end as
@@ -262,19 +246,13 @@ on a pair that does not run forwards, or it would turn an invented id into a sil
 
 #### The root was the last node whose range was believed <a id="root-clamp"></a>
 
-**A root that misses the article's ends was on that list until 2026-09-04, and it should never have
-been.** Every other node's range is *computed* — `planChildRanges` believes a start and derives every
+Every other node's range is *computed* — `planChildRanges` believes a start and derives every
 end, so the first child begins where its parent begins and the last ends where its parent ends. The
 root has no parent, so its range came out of the answer and then met a hard equality assertion. It
 was the one node in the tree where the ordinary fault was fatal, and the section above reads as
 though the derivation covered everything.
-
-It is not a corner. `openai-huggingface` ends on an empty paragraph, a stranded footnote the prompt
-renders as `NOT-GISTABLE: (withheld)`, and a blog footer whose entire text is `No posts`; ending the
-article before those three is what a careful reader would do, and **three independent arms — Sonnet
-at `medium`, Sonnet at `low`, and glm-5.3-flash — each did, and each lost the article to the same
-sentence** ([hierarchy-cheap-models](../../evals/results/hierarchy-cheap-models-2026-09-03.md),
-recommendation 3).
+The evidence that it is not a corner is in [261007l § The root was the last node whose range was
+believed](../plans/261007g-structure-step-history.md#the-root-was-the-last-node-whose-range-was-believed).
 
 So the root is clamped to `[blocks[0].id, blocks.at(-1).id]` before anything descends, and the guard
 stays behind it as a post-condition rather than being deleted for having nothing left to catch.
@@ -292,13 +270,7 @@ Three things about the shape are load-bearing:
 
 #### A section that starts one block below its own heading is snapped onto it <a id="heading-snap"></a>
 
-**The model was not ignoring the author. It was cutting one block late.** Measured on a 142-page
-Kuhn paper, 2026-09-04, replaying the saved structure answer: of 82 non-root nodes, **24 started on
-a heading block and 53 on the block immediately after one**, and 75 of the 82 named a
-`sourceHeading`. Every unbacked claim reproduced was at that offset — the heading fell into the
-previous section's tail, `planChildRanges` believed the start, and `buildTree` dropped the claim as
-out of range. `droppedHeadings: 59` was counting that, and it read as the author's structure being
-overruled. It was not.
+**The model was not ignoring the author. It was cutting one block late.**
 
 So the repair is code, in `snapStartsToHeadings`
 ([`src/heading-snap.ts`](../../src/heading-snap.ts)): a kept child whose start is the block after a
@@ -328,21 +300,8 @@ they disagreed about.
   phantom `overlap` against its own correct start — and the snap would vanish from the telemetry that
   exists to watch it.
 
-**Measured, before and after, on the real answer** (no paid calls — the saved answer replayed through
-`buildTree`; the plan has the table):
-
-| | Kuhn, 142pp | noema × 43 saved trees |
-|---|---|---|
-| backed `sourceHeading` | 24 → **74** of 75 claimed | unchanged |
-| `droppedHeadings` | 59 → **9** | 0 → 0 |
-| headings starting a node | 21 → **67** of 254 | unchanged |
-| `repairedBlocks` | 40 → 86 | 0 → 0 |
-| `checkTree` problems | 0 → 0 | 0 → 0 |
-
-`repairedBlocks` **rises**, and that is the repair being honest rather than a regression: 46 headings
-really did change hands. The no-op half is the half that matters — 43 saved trees over noema and
-`openai-huggingface` come out byte-identical, because the model already put those starts on the
-headings.
+The Kuhn measurement, before and after, is in [261007l § A section that starts one block below its
+own heading](../plans/261007g-structure-step-history.md#a-section-that-starts-one-block-below-its-own-heading-is-snapped-onto-it).
 
 **`repairedBlocks` also over-counts now, by a known and bounded amount.** A boundary the model got
 *both* misplaced and one block late is recorded twice — by `recordBoundaryFaults` at the coordinate
@@ -363,12 +322,9 @@ who numbered three deep, and it is stage 8b of
 [`src/structure-cascade.ts`](../../src/structure-cascade.ts) fixes each answer's ranges before the
 next call is made, precisely so no subtree is generated against a range that later moves — and it
 tells its caller to hand the final `buildTree` a fresh report because "there is nothing left for it
-to mend". For a while the snap *was* something left for it to mend, and that mattered from wave 2
-on: a scoped call would be shown a slice `planChildRanges` had derived while its own answer was
-derived by a rule with no snap in it. Both now call
+to mend". Both now call
 [`src/heading-snap.ts`](../../src/heading-snap.ts), and a differential test hands a normalised answer
-to the real `buildTree` and requires it to change no range and record no repair. Nothing wires that
-module into the pipeline or the evals yet.
+to the real `buildTree` and requires it to change no range and record no repair.
 
 **Where the two derivations still differ, on purpose**: a child whose start falls outside its
 parent. `planChildRanges` clamps it back inside and keeps the article — right for a whole-document
@@ -472,11 +428,14 @@ has nothing to render at its own zoom level. That is a rule
 denominator every paid arm is read against. If the eval measured one carving and the product shipped
 another, every number under `evals/results/` would describe something nobody reads.
 
-**What is not built yet.** Nothing in the pipeline produces one of these trees for a reader: the
-builder, the marker, the exemption and the public boundary are in place, and the publication
-boundary, the tree-replacement seam and the gate on paid work generated *against* a provisional tree
-are not. Those are steps 2–4 in
-[the research](../investigations/260830a-opening-an-article-before-the-toc.md).
+**What the pipeline uses of it.** `buildHeadingTree` itself is still only the eval's arm zero. The
+pipeline's trees from headings are the bounded variant, `buildBoundedHeadingTree`, which is the
+long-document fallback and the `provisional: "awaiting-structure"` publication of a first import
+([§ The fallback](#the-fallback-a-tree-from-the-documents-own-headings)); the browser swaps in the
+finished tree through `useLateStructure` ([`src/web/article/useLateStructure.ts`](../../src/web/article/useLateStructure.ts)).
+Steps 2–4 of
+[the research](../investigations/260830a-opening-an-article-before-the-toc.md) are the plan those
+grew from.
 
 ## Entry length grows with depth <a id="granularity"></a>
 
@@ -582,8 +541,7 @@ what happens to exist — [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts)
 says why: a column of blank cells reports our unfinished work as the article's own shape, and a
 partly-drawn outline rung is worse.
 
-Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day
-and `pending` is now the ordinary state of a newly added article** — `structure` writes the empty
+Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day and `pending` is now the ordinary state of a newly added article** — `structure` writes the empty
 manifest and the labels arrive later, from a free successor job
 ([Why they are two steps](#two-steps)). So the withheld state is what a reader sees for the minutes
 between adding a piece and the labels landing, rather than a state nothing produces.
@@ -622,10 +580,7 @@ reproduces the heading, not the bytes.** Publishers emit `Claude’s Constitutio
 because their CMS does; ask a model to repeat it and a fair share of the time you get
 `Claude's Constitution`. Same heading, typewriter apostrophe.
 
-The first article to reach this check with apostrophes in its headings — the Anthropic constitution,
-36 of them — failed on **eleven**, and every one of the eleven was an apostrophe. None was a heading
-the model had actually got wrong, which is the only thing the check exists to catch. A validator
-whose errors are all false teaches whoever reads it to stop reading it, which is a slower and worse
+A validator whose errors are all false teaches whoever reads it to stop reading it, which is a slower and worse
 version of having no validator at all.
 
 So the comparison folds the characters that have both a typographic and a typewriter spelling —
@@ -736,6 +691,9 @@ What that means in practice:
   settlement, and `settleExpired` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) for the job whose lease
   ran out with nobody inside it. The label pass is the slowest step in the app, so running out of
   lease is its *ordinary* ending rather than an exotic one.
+  **Neither marks while another job is still going to make the labels**: both ask
+  `anotherJobCarriesLabelsIn` (`pg-jobs.ts`), which counts another active, non-cancelling job of the
+  same owner on the article with a `labels` step, and never the job that is ending.
 - **`structure` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
   `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
   model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.
@@ -766,18 +724,33 @@ The rule the split turns on:
 A label's job is to tell its paragraph apart from *its neighbours*
 ([entry length](#granularity)), so every pair a reader compares has to have been written in the same
 call. `planBatches` packs whole sibling sets until adding the next one would pass 60 blocks, and
-never splits one. Batching on a token window instead would break exactly that and nothing else,
-which is why it would be hard to notice.
+keeps them whole while the packed batches can be asked. Batching on a token window instead would
+break exactly that and nothing else, which is why it would be hard to notice.
+
+**The one exception is a section in a batch whose re-draw would not fit one answer** (over
+1,741 blocks in the packed batch: `labelCallBudget` throws `TooLongForOnePass` for the re-draw a truncated
+batch gets, which has twice the reasoning room, `LABEL_RETRY_HEADROOM`. The first call alone
+would fit up to 2,032, and a batch whose only retry could not be sent lost the labels to one
+truncation). `planBatches` asks about it
+in consecutive near-equal windows of at most 60 blocks, a window not ending on a heading where it
+can help it (`cutIntoWindows`, the cut the [bounded headings tree](#when-one-answer-will-not-fit)
+uses for its sections). Each window is a sibling set of its own with the section's node, crumb
+and gist; the tree is not touched. The rule is on the finished plan, not on the section, because
+the floor and the tail merge below join sets: pack as always, and if any batch could not be
+asked, cut every section over 60 in that batch and pack again. So no plan holds a batch too long
+to ask, and a tree whose batches already fit both calls plans exactly as it did, which its checkpoint
+keys depend on. What it gives up: that section's labels are written without the far windows in view. A
+section between 61 and 1,741 blocks stays whole unless the floor or tail merge puts it in an
+unaskable batch (`oversizedSets` counts those left whole, and nothing more); cutting the rest too
+would move the batches of trees that label fine today.
 
 **There is a floor as well as a cap, and it is derived rather than chosen.** A batch under
 `MIN_BATCH` — 13 today — cannot both spend its drop budget and leave `detectShift` the
 `MIN_SHIFT_EVIDENCE` labels it needs to vote, so it is a batch nothing could stand behind. Rather
 than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
-backwards into the batch before it. That breaches the 60 by at most twelve — 71 on the widest real
-case here — which is the same give the cap already has for an oversized sibling set. Measured before
-it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
-three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
-merge into. The residue is `acceptGap`'s to refuse.
+backwards into the batch before it. The floor and tail merge can each add up to twelve beyond the
+60, even with no oversized set: sets of `[12, 60, 12]` pack into 84. The widest real case measured
+here was 71. The residue is `acceptGap`'s to refuse.
 
 **A heading's label is taken from the block, not asked for.** The prompt says to copy the heading
 exactly; the model does not. On the two committed articles, 9 of 36 heading labels and 3 of 9
@@ -800,8 +773,7 @@ stage 1 of [260830am](../plans/260830am-faster-ingest-and-concurrency.md) took i
 renamed its job — the article-level backstop, not the per-batch bound — and
 [`src/labels.ts`](../../src/labels.ts) § `COVERAGE_FLOOR` carries that argument.
 
-*(Both lines said the opposite of the code from 2026-08-30 until 2026-08-31, which is the drift
-CLAUDE.md warns about: a doc that restates a constant is a second copy that nothing keeps in step.)*
+The two lines’ documented drift is in [261007l § Why they are two steps](../plans/261007g-structure-step-history.md#why-they-are-two-steps).
 
 ### And, behind a switch that is off, a third pass <a id="deepening"></a>
 
@@ -956,7 +928,7 @@ So the stage now does three things instead of dying, in rising order of risk:
   each spending their floor of one would stay inside budget and still cost the article a fifth of its
   rows. It now lives in [`src/labels.ts`](../../src/labels.ts) and is applied at the end of
   `generateLabels`, so every caller gets it — it used to be enforced only by `generateStructure`,
-  while `npm run labels` (retired 2026-09-05) went round it,
+  while the old standalone `npm run labels` implementation (replaced by the queue CLI) went round it,
   which made the backstop depend on which command you typed.
 
 **The risk in the third one is silent success.** An unlabelled leaf renders as *nothing* — the
@@ -982,13 +954,8 @@ enforces the pairing from the other side as well: `writeArtefacts` **refuses** a
 no manifest beside it, so a future writer of the tree (the deepening wave is the one we know is
 coming) has to say what it did to the labels rather than remember a convention.
 
-It used to write the three files itself, in a fixed order with the tree last. That ordering was
-about three *separate* writes: `writeFile` truncates before it has anything to put there, and
-*existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
-kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
-both halves of that. **The ordering survived in `npm run structure`'s own `main()` until 2026-09-05,
-and now survives nowhere**: that command goes through the queue, so there are no three files and no
-order to get right. Nothing in this repo writes stage 4's artefacts separately any more.
+Why it is one write and not three is in [261007l § Three artefacts](../plans/261007g-structure-step-history.md#three-artefacts-and-what-survives-a-failed-run).
+Nothing in this repo writes stage 4's artefacts separately any more.
 
 `labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
 whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels
@@ -1080,13 +1047,8 @@ Two failures, deliberately kept distinct, because they are not the same problem:
   so. Clamping to the ceiling instead would be friendlier-looking and wrong: the call would run for
   minutes, cost money, and come back truncated anyway.
 
-  **What that boundary is, and what it is not.** It used to be pinned in the tests at exactly 1,976
-  blocks, on the argument that the boundary *is* the feature. The number itself turned out to be
-  wrong by a factor: `estimateStructureTokens` charged one node per four blocks, which is a rate
-  fitted to three trees of 19, 141 and 360 blocks, and re-measured over 32 trees from 10 to 2,025
-  blocks it over-predicts monotonically with length — 1.35× → 2.2× → 3.8× → 4.0× → **8.21×**. The
-  8.21× is the paper it refused, which a real call then answered in 10,996 tokens of a 128,000
-  budget. So the estimate is now built from what the prompt asks for rather than from a rate per
+  **What that boundary is, and what it is not.** (How the old rate was found wrong: [261007l § The budget](../plans/261007g-structure-step-history.md#the-budget).)
+  So the estimate is now built from what the prompt asks for rather than from a rate per
   paragraph — the tree it describes for any article at all (three levels, nine children a node, so 81
   sections) as a **floor**, plus the sections the article's own headings and long runs force on top.
   Measured margin over the whole corpus: 2.46× at the tightest. The boundary that leaves is around
@@ -1096,6 +1058,10 @@ Two failures, deliberately kept distinct, because they are not the same problem:
   that call actually cost. It is deliberately not an asymptotic claim; `buildTree` enforces neither
   the depth nor the fan-out the prompt asks for, so no bound here would be a bound the runtime keeps.
   [260904b](../plans/260904b-a-long-pdf-finishes-without-a-retry-click.md).
+
+  **Since 2026-10-05 this is no longer the step failing.** `generateStructure` catches that one
+  throw and builds the tree with no model:
+  [§ When one answer will not fit](#when-one-answer-will-not-fit).
 - **The estimate was wrong.** `stop_reason: "max_tokens"` still throws, and the message now carries
   the budget and the estimate so the constants can be re-tuned from the failure. It does **not**
   suggest retrying, because the Retry button makes the identical call.
@@ -1104,17 +1070,136 @@ What must never happen is the third option: keeping whatever JSON arrived and bu
 it. A table of contents that silently describes two thirds of an article is exactly the failure
 [silent-success.md](../reusable/silent-success.md) is about, and it is worse than the bug.
 
-**A third failure used to hide behind the second, and it looked identical.** On 2026-09-03 this step
-died on `dhammatalks.org/suttas/MN/MN10.html` saying *"it breaks at position 5409 of 13547
-characters"* — which reads like a truncated answer and was not one, since `ranOut` had already ruled
-truncation out. The likeliest reading is a whole tree with another 8,138 characters written after it,
-though nothing kept the response, so that stays a candidate rather than a fact. The stage assumed a
-model's answer *is* its
+The stage assumed a model's answer *is* its
 JSON, and it is not — it now reads the answer with `parseJsonAnswer`
 ([`src/parse-json.ts`](../../src/parse-json.ts)), which finds the document inside a preamble, a
 sign-off or a stray close fence, and `diagnose` names trailing material outright instead of quoting
 an offset that could mean either thing.
 [260903k](../plans/260903k-model-json-answer-extraction-in-the-shared-parse-seam.md).
+
+## When one answer will not fit
+
+A document past the boundary above (a 250-page novel is about 3,100 blocks) used to be refused
+here, after its transcription had been paid for. Since 2026-10-05 it is not. Greg's decision and
+the options he chose between are in
+[261004f § Decisions](../plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md#decisions);
+the design, its reviews and the results are in
+[261005a](../plans/261005a-a-document-too-long-for-one-structure-answer-still-becomes-an-article.md),
+and the measurements in
+[the investigation](../investigations/261005a-long-documents-structured-in-slices.md).
+
+Two things happen, in this order.
+
+### First: the tree is asked for in slices
+
+`runSlices` in [`src/structure-slices.ts`](../../src/structure-slices.ts). The body is cut into
+slices of about 1,000 blocks, on the document's own headings where it has them. Each slice goes
+through the ordinary structure call, eight at a time, with a short note ahead of its blocks saying
+it is one stretch of a longer document (`SLICE_NOTE`). The system prompt is untouched, and an
+ordinary article's request is byte for byte what it was. Every slice's top-level sections are then
+put under one root, whose gist and question come from one small call over those sections' titles
+and gists. The result goes through the same final `buildTree`, tree checks and labels check as any
+tree, and is an ordinary finished tree.
+
+- **A slice's answer is accepted only if its sections are there and exactly tile the blocks it was
+  given.** An answer with a root and no sections is valid on its own and would vanish in the join,
+  leaving a neighbour's gist stretched over text that model never read.
+- **A top-level section that comes back with no sections of its own and more than `MAX_BATCH`
+  blocks is asked for once more**, alone, and replaced by what comes back if that is two or more
+  sections. This "refill" is optional: if it fails, is refused, or runs past its time cap, the
+  section stays as it was and the run carries on (since 2026-10-05,
+  [261005j § Stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)).
+- **A slice whose answer is refused or cut short is asked for in two halves**, each once, cut at
+  the heading nearest its middle or else at the middle block (`halvingCut`). Each half must tile
+  its own blocks, the cut is one of the seams the final build is checked against, and a half is
+  not halved again. A slice under `HALVE_MIN_BLOCKS`, or with no safe cut near its middle, is not halved.
+- **A slice that fails is asked for once more, after the others.** A failed slice does not stop
+  the rest of the first pass. The second pass asks only for what is missing, once each, under the
+  same deadline rules, and a slice that fails there is the end of the run. How many slices were
+  actually asked in it is `secondPass` on `StructureSource`, in the step's log line and in its `detail`.
+- **The root call is asked for once more too.** If it does not come back, or its answer and the
+  one re-ask of it do not pass, it is asked a second time, one call, under the same deadline
+  rules; the slices and refills are in hand and are not asked again. A refused or cut-short root
+  answer is not asked for again, and neither is one that ran past its cap, which is out of time
+  (and so, with a lease window left, is asked for again in the next one: see below).
+  That a second ask was actually started is `rootAskedTwice` on `StructureSource`, in the step's
+  log line and in its `detail` ("the top line asked for twice").
+- **Slices, halves, refills and the root are each checkpointed** under their own request, so a
+  second run on unchanged blocks asks for nothing. A refused or cut-short slice leaves a marker
+  under its own key (an entry with `halve` and no `answer`), so a later run goes straight to the
+  halves and does not buy the refused answer again.
+- **The slices keep a deadline of their own, ahead of the queue's**, and every call has a time
+  cap. That is so the step stops itself with every call settled and its spend counted, and is
+  never still returning a tree when the queue's deadline fires, which would end the job as
+  interrupted whatever the step returned. Running out of time stops both passes at once.
+- **Out of time with a lease window left, it hands the job back and returns no tree** (since
+  2026-10-06). The step throws `NeedsAnotherWindow`
+  ([`src/another-window.ts`](../../src/another-window.ts)) once every call in flight has settled,
+  and the queue puts the job down exactly as it does at its own deadline: same row, same draft,
+  up to `REQUEUE_BUDGET` more windows, re-driven by the browser
+  ([ingest-queue.md § a step can ask for the same pause itself](ingest-queue.md)). Saved answers
+  are read before any deadline is consulted, so the next window asks only for what is missing.
+  The step is told which window it is in (`StepContext.window`), and its log line carries it.
+  "Out of time" is also a required call running past its own cap, so a hand-back can come early
+  in a window and still spends one of the three; and nothing requires progress, so a window in
+  which no answer was bought spends one too. A call that always exceeds its cap can be bought
+  in all three windows before falling back, with no improvement in the result.
+- **On a failure it cannot get past, or out of time with no window left (or a direct call without
+  a queue), it stops starting calls, waits for the ones in flight, and falls back** to the tree
+  below. A slice that failed in both passes, a slice refused or cut short that could not be read
+  in halves, a root call refused, cut short or failed twice, or a joined tree that will not
+  build: none of these hands back, because a second window would fail the same way. What was
+  spent is still counted. A reader's Stop is a cancellation, not a fallback and not a hand-back.
+
+The stage command line uses the same queue and receives the same windows
+([`scripts/stage.ts`](../../scripts/stage.ts)); the no-queue behavior is for direct calls.
+
+What it gives up: each slice is cut without sight of the others, so a chapter that runs across a
+seam becomes two; slices are sized in blocks, not characters; and past roughly 45 slices there is
+not time in one window, so it takes up to three, and falls back after them.
+
+### The fallback: a tree from the document's own headings
+
+`buildBoundedHeadingTree` in [`src/heading-tree.ts`](../../src/heading-tree.ts), with no model
+call. It is what the reader gets when the slices fail, so that a long document never fails at
+this step.
+
+- **It has the shape the model prompt asks for**: root, parts, sections, and every body block at depth 3.
+  The reading view takes "the section level" to be one above the deepest paragraph, for the whole
+  article (`sectionDepth`, [`src/web/position.ts`](../../src/web/position.ts)), so a tree whose
+  branches end at different depths breaks section navigation. That is why this is not
+  `buildHeadingTree`, which stays as it was for the structure eval.
+- **No body section holds more than the labels step's batch size** (`MAX_BATCH`). The labels step never
+  cuts a section, so a run of 3,000 paragraphs under one heading was one call it refused. Longer
+  runs are cut into consecutive "windows". Without a usable heading, a window takes its title
+  from the opening words of its first non-heading block with at least three words containing a
+  letter, dropping dot leaders. With no qualifying block or usable heading, it wears the stock
+  title (`UNTITLED_WINDOW_TITLE`).
+- **A heading repeated five or more times is page furniture, not a section** (`REPEATED_HEADING_MIN`),
+  and so is the article's own title met twice, or a heading with no letter in it. Equality uses
+  `sameHeading`, which folds typographic punctuation and whitespace but preserves case,
+  trailing punctuation and numbering. These blocks remain leaves but neither cut nor supply
+  a fallback title. A PDF's running header is often transcribed as a
+  heading on every page: on the first real book through this path, 58 of 76 parts were called
+  *With a Little Help*. With the rule it is 13 parts, named for the stories.
+- **It has no gists**, and is marked `provisional: "headings"`, which is what excuses it from the
+  gist rule in `checkTree`. That value means **final**: nothing is coming to replace it. Since
+  2026-10-05 Structure mode reads it to say so on screen, and offers the owner another run:
+  [structure.md § When it is only the headings](structure.md#when-it-is-only-the-headings).
+- **The same tree is also published on purpose, marked `provisional: "awaiting-structure"`**, by a
+  first import from the browser, so the article opens before the model call
+  ([ingest-queue.md § A first import opens before its structure](ingest-queue.md#a-first-import-opens-before-its-structure)).
+  That value means the opposite: a `["structure"]` job is queued to replace it. Ask
+  `awaitingStructure(tree)` ([`src/types.ts`](../../src/types.ts)), never the bare flag, since the
+  two values want different things from every reader.
+- **A model's tree no longer takes this path for a section too long for one labels call.** The
+  labels planner now asks about such a section in windows
+  ([§ Why they are two steps](#two-steps)), so the tree stands.
+  `unaskableBatches` ([`src/labels.ts`](../../src/labels.ts)) is kept as the measure: it is empty
+  for every tree, and the tests and the long-document evals ask it.
+- **`StructureRun.source` says which path ran** (one answer, slices, or headings and why), and the
+  step logs it at every value and puts it in its `detail`, so a fallback that became the common
+  case would show.
 
 ## The generation prompt
 
@@ -1154,17 +1239,11 @@ tokens** of a 128,000 budget. The old estimate had refused it at 90,275. So the 
 refuse a book was the arithmetic, not the model, and the fix was to re-rate it: see
 [the budget](#the-budget).
 
-Past that, the **structure** call is what no longer fits, and generating it section by section is
-**still not built**. The budget refuses those out loud rather than half-doing them. The shape it
-should take, from GPT-5.6-sol's review and written up in
-[260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
-make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
-assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
-the whole global outline in front of it. Never blind subtree calls with independently invented
-sibling roots — that is where four sections all end up meaning "Background".
+Past that, the **structure** call is what no longer fits, and since 2026-10-05 the tree is asked for
+in slices instead ([§ When one answer will not fit](#when-one-answer-will-not-fit)).
 
-Note what is *no longer* on that list: the labels. They are already batched, and they are the half
-that scaled worst.
+Never blind subtree calls with independently invented
+sibling roots — that is where four sections all end up meaning "Background".
 
 **The model emits nested JSON; stage 4 converts it to the flat map** and assigns `NodeId`s, `parent`
 pointers and `depth`. Asking a model to emit a self-consistent map of cross-referencing ids is
@@ -1180,10 +1259,7 @@ The prompt's rules inherit from
 [granularity-zoom.md § Generation](granularity-zoom.md#generation) and
 [vision.md § Principles](vision.md#principles).
 
-**The live prompt is [`SYSTEM`](../../src/structure.ts) and it is not copied here.** A copy was, for
-a fortnight, and it went stale without a word: it still said *"Do not write a `gist` field — that is
-a later stage"* long after the gists moved back into this call, and it had never gained *"Go 3
-levels deep"*. `tests/structure-whole-document-request-parity.test.ts` pins the real bytes, so that is
+**The live prompt is [`SYSTEM`](../../src/structure.ts) and it is not copied here.** `tests/structure-whole-document-request-parity.test.ts` pins the real bytes, so that is
 the one to read and the one that fires when they move.
 
 What it asks for, in one line each, so this page can be read without opening the source: internal
@@ -1216,8 +1292,7 @@ Frozen is the load-bearing word — a key that carried the tree *as it stands* w
 neighbouring parent's answer landed, so a resumed attempt would miss every row the previous one
 wrote, under exactly the load the checkpoint exists for. A stored answer is re-read through the same
 `readExpansion` a fresh one goes through, against the parent as it is now, and one that no longer
-derives is a miss the next answer overwrites. Still called by nothing: the wiring and the wave's
-concurrency are stage 5.
+derives is a miss the next answer overwrites.
 
 **The nav labels are not in this response.** They were, and it is what took the stage over the
 128,000-token ceiling — one per gistable block is the only output in the pipeline that grows with the
@@ -1287,8 +1362,7 @@ the hint says so instead: *"(two options weighed)"*, *"(no settled answer)"*.
 
 **This replaced the first wording on 2026-09-07**, and the first wording is why. It asked for the
 question *"this node's text answers and its gist does NOT"* — an instruction to strip out everything
-the gist carried, whose only honest output is a bare why-question. Four candidate rewordings were
-built into an eval and measured over seven real articles;
+the gist carried, whose only honest output is a bare why-question. Four candidate rewordings were built into an eval and measured over seven real articles;
 [`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
 separate them, and the code change this one needed. Production shipped that V4 block byte-for-byte
 at `toc/7`; `toc/8` replaced only its final plain-words bullet, and a test asserts that exact
@@ -1379,8 +1453,8 @@ and the asymmetry is deliberate — the comment on `question` in [`types.ts`](..
 
 ## A new prompt reaches new articles only, and that is the decision <a id="prompt-versions"></a>
 
-**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports only
-`generateStructure` from [`src/structure.ts`](../../src/structure.ts) and no version constant; the
+**Nothing backfills the tree.** [`src/pipeline.ts`](../../src/pipeline.ts) imports
+`generateStructure` and `checkCoverage` from [`src/structure.ts`](../../src/structure.ts) and no version constant; the
 tree has no `outdated` mechanism of the kind glossary, quotes and ideas each have; and the
 tree-version chip came off the reading view on 2026-09-05. So when the prompt changes, an article
 already on somebody's shelf keeps the gists it was built with, silently and indefinitely.
@@ -1406,8 +1480,10 @@ they did not ask to be regenerated, and no reader is shown a warning about a lin
 perfectly well. The cost is the one that prompted the question: a change you make today is not
 visible on the articles you know best, so it is hard to judge whether it was an improvement.
 
-The escape is per-article rather than library-wide, and it is being built —
-**re-run the stage from the article's metadata page**. Greg, in the same breath:
+The escape is per-article rather than library-wide: **re-run the stage from the article's metadata
+page**. That is built for the other generated modes, but `structure` is deliberately not on it
+([`src/rerun-steps.ts`](../../src/rerun-steps.ts)) — a press would strip every paragraph label — so
+a tree is re-run with `npm run structure -- <slug> --force`. Greg, in the same breath:
 
 > there should be a way to re-run any of the generated modes (either within the UI for the mode, or
 > perhaps in the Metadata section)

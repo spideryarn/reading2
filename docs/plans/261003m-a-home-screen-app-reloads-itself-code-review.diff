@@ -1,0 +1,635 @@
+diff --git a/docs/project/copy.md b/docs/project/copy.md
+index e76527f39..8c1863eb9 100644
+--- a/docs/project/copy.md
++++ b/docs/project/copy.md
+@@ -227,7 +227,10 @@ rather than in `src/messages.ts`, because that file is about
+ **failures a model call can return** and a component that threw while being drawn is not one; and
+ none of them has anything to say to `worthRetrying`, which is why `[render]` says outright that
+ reloading will probably hit it again, `[chunk]` says reloading usually fixes it — the commonest
+-cause is a deploy replacing the assets under an open tab — and `[mode-render]` offers a retry the
++cause is a deploy replacing the assets under a copy of the app that was already open, which since
++2026-10-03 reloads by itself where it can and otherwise offers a Reload button, because the app
++opened from a home-screen icon has no other
++([`stale-shell.ts`](../../src/web/stale-shell.ts)) — and `[mode-render]` offers a retry the
+ boundary itself performs. What
+ they take from this section is the part about the reader: a code, last, in brackets. And, like every
+ message here, **no `error.message`** — its text can be a provider's body, a model's output or the
+diff --git a/docs/project/web-client.md b/docs/project/web-client.md
+index 9b0f51e4c..3ff2c6ff5 100644
+--- a/docs/project/web-client.md
++++ b/docs/project/web-client.md
+@@ -112,6 +112,10 @@ of. The server's list is [architecture.md § Shared code (server)](architecture.
+ - **`src/web/relative-time.ts` § `timeAgo` / `relativeAgo`, with `src/web/useNow.ts` § `useNow`** —
+   "3 days ago" that stays true while the page is open. `src/web/Metadata.tsx` § `ago` is an older
+   private copy with neither the switch to a date nor the clock.
++- **`src/web/stale-shell.ts` § `reloadIfStale`** — code fetched on demand that did not arrive: asks
++  `/build.json` whether a newer build is live and reloads once if so, because a copy opened from a
++  home-screen icon outlives every deploy. `src/web/LazyPage.tsx` is its one caller; `src/web/maths.ts`
++  fetches on demand without it.
+ - **`src/web/Tooltip.tsx` § `Tooltip`, `ControlTip`, `TipNote`** — any tip or card on a control
+   ([tooltips.md](tooltips.md)); `src/web/useHoverCard.ts` for a card on the prose.
+ - **`src/web/voice.ts` § `voiceClass`, `withVoice`** — text whose voice depends on the data (the
+diff --git a/src/web/LazyPage.tsx b/src/web/LazyPage.tsx
+index 55ed0dfa2..8a396536c 100644
+--- a/src/web/LazyPage.tsx
++++ b/src/web/LazyPage.tsx
+@@ -64,6 +64,8 @@ import { Link } from "./Link.js";
+ import { nameOfThrown, recordLog } from "./log-buffer.js";
+ import { captureClientFailure } from "./monitoring.js";
+ import { LIBRARY_HREF } from "./router.js";
++import { reloadIfStale, reloadPage } from "./stale-shell.js";
++import { Button } from "@/components/ui/button";
+ 
+ /**
+  * What `React.lazy` is handed.
+@@ -133,9 +135,17 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
+       >
+         <p>
+           Part of Spideryarn didn’t arrive, so this page can’t be drawn. That’s a fault
+-          here, not anything you did — most often this app was updated while your tab sat
+-          open, and the piece this page needed had moved. Reloading the page usually fixes
+-          it. [chunk]
++          here, not anything you did — most often Spideryarn was updated while you had it
++          open, and the piece this page needed had moved. Reloading usually fixes it.
++          [chunk]
++        </p>
++        {/* A button, because the advice above cannot otherwise be followed in
++            the app opened from a home-screen icon: no reload button, no address
++            bar. Before 2026-10-03 the sentence was the whole of it. */}
++        <p className="tw:mt-4">
++          <Button type="button" variant="outline" size="sm" onClick={() => reloadPage()}>
++            Reload
++          </Button>
+         </p>
+         <p className="tw:mt-4 tw:opacity-70">
+           <button
+@@ -156,6 +166,39 @@ class ChunkBoundary extends Component<BoundaryProps, { broken: boolean }> {
+   }
+ }
+ 
++/**
++ * What a failed load does before React hears of it: if this copy of the app
++ * has outlived a deploy, reload rather than show the escape.
++ *
++ * Greg's iPad, 2026-10-03 (spya-u6uba0). The app opened from a home-screen icon
++ * is never reloaded, so it is routinely several deploys old, and the escape
++ * above told him to reload in the one place with no way to. stale-shell.ts has
++ * the mechanism and its one-reload limit; the plan is
++ * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
++ *
++ * **In the loader rather than in the boundary**, so the reader never sees the
++ * escape flash before the page goes, and a copy that was merely old sends
++ * Sentry nothing — it is not a fault.
++ *
++ * **A promise that never settles** is what "the page is on its way out" means
++ * to Suspense: the spinner stays until the reload replaces the document.
++ * Resolving would need a component to resolve to; rejecting would draw the
++ * escape for the moment before the reload.
++ *
++ * **The original error is what is rethrown**, always — the check failing is
++ * not the failure the boundary should report.
++ */
++async function orReloadIfStale(err: unknown): Promise<never> {
++  let leaving = false;
++  try {
++    leaving = await reloadIfStale();
++  } catch {
++    leaving = false;
++  }
++  if (leaving) return new Promise<never>(() => {});
++  throw err;
++}
++
+ /**
+  * One route's worth of code, fetched when the reader arrives at it.
+  *
+@@ -180,7 +223,7 @@ export function LazyPage({ load, routeKey }: { load: PageLoader; routeKey: strin
+        review of this file, 2026-09-05, F9. */
+     void attempt;
+     void routeKey;
+-    return lazy(load);
++    return lazy(() => load().catch(orReloadIfStale));
+   }, [load, routeKey, attempt]);
+   return (
+     <ChunkBoundary key={`${routeKey}:${attempt}`} onRetry={() => setAttempt((n) => n + 1)}>
+diff --git a/src/web/stale-shell.ts b/src/web/stale-shell.ts
+new file mode 100644
+index 000000000..64aedd547
+--- /dev/null
++++ b/src/web/stale-shell.ts
+@@ -0,0 +1,183 @@
++/**
++ * Whether the copy of the app this browser is running has outlived a deploy —
++ * and the reload that answers it.
++ *
++ * **A copy can be days old.** A laptop tab is reloaded all the time. The app
++ * opened from an iPad's home-screen icon is not: iOS puts it to sleep and wakes
++ * the same copy, we deploy several times a day, and each deploy removes the
++ * hashed files the copy before it would ask for. So the first thing a
++ * days-old copy fetches on demand — a lazy route's code — is not there, and
++ * production answers a missing file with the shell's HTML and a 200
++ * (`vercel.json`'s last rewrite), which a browser refuses as a module. Greg's
++ * report, 2026-10-03 (spya-u6uba0), reproduced in WebKit and Chromium:
++ * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
++ *
++ * The message that used to be the whole answer said *"reloading the page
++ * usually fixes it"*, in the one place with no reload button and no address
++ * bar. So when the server says a different build is live, this reloads rather
++ * than asking the reader to.
++ *
++ * **The question is `/build.json`**, which every deploy publishes beside the
++ * shell (`vite.config.ts` § `generateBundle`) from the very stamp that is
++ * compiled into this bundle. No API call, nothing signed in, nothing a
++ * function has to wake for.
++ *
++ * **A build is its commit *and* the moment it was built**, not the commit
++ * alone. One commit can be deployed twice — the changelog's line 6 is one —
++ * and the build time is compiled into the bundle, so the second build's hashed
++ * files are different files: the same failure, from a server the commit calls
++ * the same. And the test is *different*, not *newer*: a rollback strands a
++ * copy exactly as a deploy does. GPT Sol's plan review, 2026-10-03.
++ *
++ * **At most one reload per live build**, remembered in `sessionStorage`. The
++ * reload is only worth doing if it lands on the build the server named; if it
++ * does not — the shell and `build.json` out of step, a stamp that lies — the
++ * second failure finds its own note and the reader gets the message, not a
++ * page that never stops blinking. The note is written *before* the reload, and
++ * with nowhere to write it there is no reload at all.
++ *
++ * **Only for the page that failed.** The check takes a moment, and a reader
++ * can leave the spinner in that moment; reloading whatever they went to
++ * instead would be this app throwing away a page nobody had a problem with.
++ * So the address is noted before asking and compared after. And the asking has
++ * a deadline, because the loader is waiting on it: a request that never
++ * settles would trade a message the reader can act on for a spinner they
++ * cannot.
++ *
++ * Everything is passed in, so tests/stale-shell.test.ts drives the decision
++ * with no browser.
++ *
++ * Shared: the next thing that fetches code on demand asks this rather than
++ * growing its own — docs/project/web-client.md § Shared code (client).
++ */
++import { buildCommit, buildTime } from "./build-stamp.js";
++
++/** The `sessionStorage` key holding the live build this session last reloaded for. */
++export const RELOADED_FOR_KEY = "spy.reloaded-for-build";
++
++/** How long `/build.json` gets. It is a static file of a few hundred bytes. */
++const CHECK_TIMEOUT_MS = 4000;
++
++const SHA = /^[0-9a-f]{40}$/;
++
++/**
++ * One build, said as a string two copies can compare: `<commit> <builtAt>`.
++ * `null` for a stamp that is not one — no commit, a commit that is not a sha,
++ * a time that is not a time.
++ */
++export function buildIdentity(commit: unknown, builtAt: unknown): string | null {
++  if (typeof commit !== "string" || !SHA.test(commit)) return null;
++  if (typeof builtAt !== "string" || Number.isNaN(Date.parse(builtAt))) return null;
++  return `${commit} ${builtAt}`;
++}
++
++export interface StaleShellDeps {
++  /** The build this copy is; `null` off a build (dev, tests). */
++  mine: string | null;
++  fetch: typeof fetch;
++  /** `null` where the browser refuses even the accessor. */
++  storage: Pick<Storage, "getItem" | "setItem"> | null;
++  reload: () => void;
++  /** The address the reader is at, read before the check and again after. */
++  address: () => string;
++  timeoutMs: number;
++}
++
++/**
++ * The build the server is serving now, or `null` for anything short of a clear
++ * answer in time — including the shell's own HTML, which is what a deploy
++ * without the file would send back.
++ *
++ * Never throws and never hangs: a check that could itself fail loudly, or
++ * wait for ever, would replace the reader's one error with a worse one.
++ */
++export async function serverBuild(
++  fetchFn: typeof fetch,
++  timeoutMs: number = CHECK_TIMEOUT_MS,
++): Promise<string | null> {
++  const abort = new AbortController();
++  let timer: ReturnType<typeof setTimeout> | undefined;
++  /* Raced as well as aborted: the abort is a courtesy to the network, the race
++     is the deadline. A `fetch` that ignores its signal still loses. */
++  const deadline = new Promise<null>((resolve) => {
++    timer = setTimeout(() => {
++      abort.abort();
++      resolve(null);
++    }, timeoutMs);
++  });
++  const asked = (async () => {
++    try {
++      /* `no-store`: the answer is only worth having if it is the server's, and
++         the file is tiny. A cached copy is this very bug one level down. */
++      const res = await fetchFn("/build.json", {
++        cache: "no-store",
++        credentials: "omit",
++        signal: abort.signal,
++      });
++      if (!res.ok) return null;
++      const body: unknown = await res.json();
++      if (typeof body !== "object" || body === null) return null;
++      const stamp = body as { commit?: unknown; builtAt?: unknown };
++      return buildIdentity(stamp.commit, stamp.builtAt);
++    } catch {
++      return null;
++    }
++  })();
++  try {
++    return await Promise.race([asked, deadline]);
++  } finally {
++    clearTimeout(timer);
++  }
++}
++
++function browserDeps(): StaleShellDeps {
++  let storage: StaleShellDeps["storage"] = null;
++  try {
++    /* The accessor itself throws where storage is blocked. */
++    storage = window.sessionStorage;
++  } catch {
++    storage = null;
++  }
++  return {
++    mine: buildIdentity(buildCommit(), buildTime()),
++    fetch: (input, init) => fetch(input, init),
++    storage,
++    reload: reloadPage,
++    address: () => window.location.href,
++    timeoutMs: CHECK_TIMEOUT_MS,
++  };
++}
++
++/**
++ * Reload if a different build is live, this session has not already reloaded
++ * for it, and the reader is still where the failure happened. `true` means the
++ * page is on its way out.
++ */
++export async function reloadIfStale(deps: StaleShellDeps = browserDeps()): Promise<boolean> {
++  const { mine, storage } = deps;
++  if (mine === null || storage === null) return false;
++
++  const failedAt = deps.address();
++  const theirs = await serverBuild(deps.fetch, deps.timeoutMs);
++  if (theirs === null || theirs === mine) return false;
++  /* Before the note is written, not only before the reload: a note left for a
++     page the reader walked away from would spend the one reload on nothing. */
++  if (deps.address() !== failedAt) return false;
++
++  try {
++    if (storage.getItem(RELOADED_FOR_KEY) === theirs) return false;
++    storage.setItem(RELOADED_FOR_KEY, theirs);
++    /* Read back: a store that accepts a write and keeps nothing is no guard. */
++    if (storage.getItem(RELOADED_FOR_KEY) !== theirs) return false;
++  } catch {
++    return false;
++  }
++
++  deps.reload();
++  return true;
++}
++
++/** The reload itself, named so the escape's button and the check share one. */
++export function reloadPage(): void {
++  window.location.reload();
++}
+diff --git a/tests/lazy-page.test.tsx b/tests/lazy-page.test.tsx
+index 6a6bc8794..a2e78b978 100644
+--- a/tests/lazy-page.test.tsx
++++ b/tests/lazy-page.test.tsx
+@@ -38,6 +38,15 @@ vi.mock("../src/web/log-buffer.js", async (importOriginal) => ({
+   recordLog,
+ }));
+ 
++/* The other door: whether this copy has outlived a deploy, and the reload that
++   answers it. Stubbed because the subject here is what `LazyPage` does with the
++   answer; the decision itself is tests/stale-shell.test.ts. `false` by default,
++   which is also what the real one says in every test — there is no build stamp
++   off a build — so the cases above the new `describe` are exactly as they were. */
++const reloadIfStale = vi.fn(async () => false);
++const reloadPage = vi.fn();
++vi.mock("../src/web/stale-shell.js", () => ({ reloadIfStale, reloadPage }));
++
+ import type { PageLoader } from "../src/web/LazyPage.js";
+ 
+ /* Imported after the mocks are declared, so that the module under test picks
+@@ -69,6 +78,8 @@ let quietConsole: ReturnType<typeof vi.spyOn>;
+ beforeEach(() => {
+   captureClientFailure.mockClear();
+   recordLog.mockClear();
++  reloadIfStale.mockReset().mockResolvedValue(false);
++  reloadPage.mockClear();
+   quietConsole = vi.spyOn(console, "error").mockImplementation(() => {});
+   host = document.createElement("div");
+   document.body.append(host);
+@@ -232,6 +243,81 @@ describe("a route whose code does not arrive", () => {
+     expect(host.querySelector('[role="status"]')).toBeNull();
+   });
+ 
++  /**
++   * Greg's iPad, 2026-10-03 (spya-u6uba0): the app opened from a home-screen
++   * icon is never reloaded, so it outlives every deploy, and `/changelog`'s code
++   * had moved by the time he asked for it. The message told him to reload, in
++   * the one place with no reload button.
++   * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
++   */
++  describe("when this copy of the app has outlived a deploy", () => {
++    it("reloads instead of showing the escape, and reports nothing", async () => {
++      reloadIfStale.mockResolvedValue(true);
++      const load = vi.fn(async () => {
++        throw new Error(SECRET);
++      });
++      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
++
++      expect(reloadIfStale).toHaveBeenCalledTimes(1);
++      expect(text()).not.toContain("[chunk]");
++      expect(host.querySelector('[role="alert"]')).toBeNull();
++      /* Still waiting: the page is about to be replaced, and a blank or an
++         error in the meantime would be a flash of the thing this avoids. */
++      expect(host.querySelector('[role="status"]')).not.toBeNull();
++      /* Not a fault, so not a report. */
++      expect(captureClientFailure).not.toHaveBeenCalled();
++      expect(recordLog).not.toHaveBeenCalled();
++    });
++
++    it("shows the escape when the copy is current, having asked", async () => {
++      const load = vi.fn(async () => {
++        throw new Error(SECRET);
++      });
++      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
++
++      expect(reloadIfStale).toHaveBeenCalledTimes(1);
++      expect(text()).toContain("[chunk]");
++      expect(captureClientFailure).toHaveBeenCalledTimes(1);
++      /* The original failure is what is reported, not anything the check did. */
++      expect((captureClientFailure.mock.calls[0] as [Error])[0].message).toBe(SECRET);
++    });
++
++    it("shows the escape, with the page's own failure, when the check itself throws", async () => {
++      reloadIfStale.mockRejectedValue(new Error("the check broke"));
++      const load = vi.fn(async () => {
++        throw new Error(SECRET);
++      });
++      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
++
++      expect(text()).toContain("[chunk]");
++      expect((captureClientFailure.mock.calls[0] as [Error])[0].message).toBe(SECRET);
++    });
++
++    it("does not ask when the page arrived", async () => {
++      const load = vi.fn(async () => ({ default: RealPage }));
++      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
++      expect(text()).toContain("The real page");
++      expect(reloadIfStale).not.toHaveBeenCalled();
++    });
++
++    it("gives the escape a Reload button, for an app with no reload of its own", async () => {
++      const load = vi.fn(async () => {
++        throw new Error(SECRET);
++      });
++      await show(<LazyPage load={load as unknown as PageLoader} routeKey="changelog" />);
++
++      const reload = [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Reload");
++      expect(reload, "a home-screen app has no reload button and no address bar").toBeDefined();
++      expect(reloadPage).not.toHaveBeenCalled();
++      await act(async () => {
++        reload?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
++      });
++      expect(reloadPage).toHaveBeenCalledTimes(1);
++      /* And it no longer says "tab": there is none in a home-screen app. */
++      expect(text()).not.toMatch(/\btab\b/);
++    });
++  });
++
+   it("issues no request at any point", () => {
+     /* Across every case above: a page that never loaded cannot have asked the
+        server for anything, and a loading state that quietly started generation
+diff --git a/tests/stale-shell.test.ts b/tests/stale-shell.test.ts
+new file mode 100644
+index 000000000..452d067ab
+--- /dev/null
++++ b/tests/stale-shell.test.ts
+@@ -0,0 +1,215 @@
++/**
++ * **Whether a copy of the app that has outlived a deploy reloads itself.**
++ *
++ * The subject is one decision — reload, or leave the reader with the message —
++ * and what it is a function of: the build this copy is, the build the server
++ * says is live, the build this session has already reloaded for, and whether
++ * the reader is still on the page that failed.
++ * docs/plans/261003m-a-home-screen-app-reloads-itself-when-a-page-s-code-has-moved.md.
++ *
++ * Every case that must *not* reload is here beside the one that must, because
++ * the failure that matters is a reload that fires when it should not: at best a
++ * page that blinks, at worst one that never stops, or one that takes away a
++ * page nobody had a problem with.
++ */
++import { describe, expect, it, vi } from "vitest";
++
++import {
++  RELOADED_FOR_KEY,
++  buildIdentity,
++  reloadIfStale,
++  serverBuild,
++  type StaleShellDeps,
++} from "../src/web/stale-shell.js";
++
++const MINE_SHA = "5b76945908127d48826be1d0283596e753a15f80";
++const THEIR_SHA = "d3f34a0f89c7d865166da7d4e1e034f43de4c3d3";
++const MINE_STAMP = { commit: MINE_SHA, builtAt: "2026-10-03T07:40:33.000Z" };
++const THEIR_STAMP = { commit: THEIR_SHA, builtAt: "2026-10-03T17:33:40.390Z" };
++const MINE = `${MINE_STAMP.commit} ${MINE_STAMP.builtAt}`;
++const THEIRS = `${THEIR_STAMP.commit} ${THEIR_STAMP.builtAt}`;
++
++/** `/build.json` as a deploy publishes it. */
++const answering = (body: unknown, status = 200) =>
++  vi.fn(
++    async () => new Response(typeof body === "string" ? body : JSON.stringify(body), { status }),
++  ) as unknown as typeof fetch;
++
++/** A `sessionStorage` that is only a map. */
++function memory(initial: Record<string, string> = {}) {
++  const held = new Map(Object.entries(initial));
++  return {
++    held,
++    getItem: (k: string) => held.get(k) ?? null,
++    setItem: (k: string, v: string) => void held.set(k, v),
++  };
++}
++
++type Deps = StaleShellDeps & { reload: ReturnType<typeof vi.fn> };
++
++function deps(over: Partial<StaleShellDeps> = {}): Deps {
++  return {
++    mine: MINE,
++    fetch: answering(THEIR_STAMP),
++    storage: memory(),
++    reload: vi.fn(),
++    address: () => "https://www.spideryarn.com/changelog",
++    timeoutMs: 1000,
++    ...over,
++  } as Deps;
++}
++
++describe("buildIdentity", () => {
++  it("is the commit and the build time together", () => {
++    expect(buildIdentity(MINE_STAMP.commit, MINE_STAMP.builtAt)).toBe(MINE);
++  });
++
++  it.each([
++    ["a commit that is not a sha", "unknown", MINE_STAMP.builtAt],
++    ["no commit", null, MINE_STAMP.builtAt],
++    ["no build time", MINE_SHA, null],
++    ["a build time that is not a time", MINE_SHA, "soon"],
++  ])("is null for %s", (_what, commit, builtAt) => {
++    expect(buildIdentity(commit, builtAt)).toBeNull();
++  });
++});
++
++describe("serverBuild", () => {
++  it("reads the build out of /build.json, and asks for it uncached", async () => {
++    const fetchFn = answering({ ...THEIR_STAMP, deploymentId: "dpl_x", artefact: "client" });
++    expect(await serverBuild(fetchFn)).toBe(THEIRS);
++    const [url, init] = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [
++      string,
++      RequestInit,
++    ];
++    expect(url).toBe("/build.json");
++    expect(init.cache).toBe("no-store");
++  });
++
++  it.each([
++    ["the shell's HTML, which is what a missing file answers with", "<!doctype html><html></html>", 200],
++    ["a commit that is not a sha", { ...THEIR_STAMP, commit: "unknown" }, 200],
++    ["no commit at all", { builtAt: THEIR_STAMP.builtAt }, 200],
++    ["no build time", { commit: THEIR_SHA }, 200],
++    ["a failing status", THEIR_STAMP, 500],
++    ["something that is not an object", "null", 200],
++  ])("is null for %s", async (_what, body, status) => {
++    expect(await serverBuild(answering(body, status))).toBeNull();
++  });
++
++  it("is null, not a throw, when the request itself fails", async () => {
++    const offline = vi.fn(async () => {
++      throw new TypeError("Load failed");
++    }) as unknown as typeof fetch;
++    expect(await serverBuild(offline)).toBeNull();
++  });
++
++  it("is null after its deadline when the request never settles, even one that ignores the abort", async () => {
++    /* The loader is waiting on this. A fetch that hangs must cost the reader a
++       few seconds of spinner and then the message, never the spinner for ever.
++       GPT Sol's plan review, finding 4. */
++    let signal: AbortSignal | undefined;
++    const hanging = vi.fn((_url: string, init?: RequestInit) => {
++      signal = init?.signal ?? undefined;
++      return new Promise<Response>(() => {});
++    }) as unknown as typeof fetch;
++    const started = Date.now();
++    expect(await serverBuild(hanging, 30)).toBeNull();
++    expect(Date.now() - started).toBeLessThan(1000);
++    expect(signal?.aborted, "the request is told to stop as well").toBe(true);
++  });
++});
++
++describe("reloadIfStale", () => {
++  it("reloads when a different build is live, and remembers which", async () => {
++    const d = deps();
++    expect(await reloadIfStale(d)).toBe(true);
++    expect(d.reload).toHaveBeenCalledTimes(1);
++    expect(d.storage?.getItem(RELOADED_FOR_KEY)).toBe(THEIRS);
++  });
++
++  it("reloads when the same commit has been built again — its files are different files", async () => {
++    /* A redeploy: the changelog's line 6 is one. The build time is compiled in,
++       so the hashes move though the commit does not. Sol, finding 2. */
++    const d = deps({ fetch: answering({ commit: MINE_SHA, builtAt: "2026-10-03T09:00:00.000Z" }) });
++    expect(await reloadIfStale(d)).toBe(true);
++    expect(d.reload).toHaveBeenCalledTimes(1);
++  });
++
++  it("does not reload twice for the same build — the message, not a loop", async () => {
++    const d = deps({ storage: memory({ [RELOADED_FOR_KEY]: THEIRS }) });
++    expect(await reloadIfStale(d)).toBe(false);
++    expect(d.reload).not.toHaveBeenCalled();
++  });
++
++  it("does reload again for a build other than the one it last reloaded for", async () => {
++    const d = deps({ storage: memory({ [RELOADED_FOR_KEY]: `${"a".repeat(40)} 2026-10-02T00:00:00.000Z` }) });
++    expect(await reloadIfStale(d)).toBe(true);
++    expect(d.reload).toHaveBeenCalledTimes(1);
++  });
++
++  it("does not reload when the server is on this very build", async () => {
++    const d = deps({ fetch: answering(MINE_STAMP) });
++    expect(await reloadIfStale(d)).toBe(false);
++    expect(d.reload).not.toHaveBeenCalled();
++  });
++
++  it("does not reload when the check could not be made", async () => {
++    const d = deps({ fetch: answering("<!doctype html>") });
++    expect(await reloadIfStale(d)).toBe(false);
++    expect(d.reload).not.toHaveBeenCalled();
++  });
++
++  it("does not reload, or ask, when this copy has no build stamp", async () => {
++    const d = deps({ mine: null });
++    expect(await reloadIfStale(d)).toBe(false);
++    expect(d.fetch).not.toHaveBeenCalled();
++    expect(d.reload).not.toHaveBeenCalled();
++  });
++
++  it("does not reload, or leave a note, when the reader left while it was asking", async () => {
++    /* Back, or the corner logo, pressed during the spinner. The answer arrives
++       with the reader somewhere else, and that page did nothing wrong. Sol,
++       finding 3. */
++    let at = "https://www.spideryarn.com/changelog";
++    let answer: (r: Response) => void = () => {};
++    const slow = vi.fn(
++      () =>
++        new Promise<Response>((resolve) => {
++          answer = resolve;
++        }),
++    ) as unknown as typeof fetch;
++    const d = deps({ fetch: slow, address: () => at });
++
++    const deciding = reloadIfStale(d);
++    at = "https://www.spideryarn.com/read/an-article";
++    answer(new Response(JSON.stringify(THEIR_STAMP)));
++
++    expect(await deciding).toBe(false);
++    expect(d.reload).not.toHaveBeenCalled();
++    expect(d.storage?.getItem(RELOADED_FOR_KEY), "the one reload is not spent on nothing").toBeNull();
++  });
++
++  it("does not reload when there is nowhere to remember that it did", async () => {
++    expect(await reloadIfStale(deps({ storage: null }))).toBe(false);
++
++    /* Present but refusing, which is what a blocked or full store does. The
++       write is what has to land *before* the reload, so a store that reads and
++       cannot write is the same as no store. */
++    const refusing = {
++      getItem: () => null,
++      setItem: () => {
++        throw new DOMException("QuotaExceededError");
++      },
++    };
++    const d = deps({ storage: refusing });
++    expect(await reloadIfStale(d)).toBe(false);
++    expect(d.reload).not.toHaveBeenCalled();
++
++    /* And one that takes the write and keeps nothing. */
++    const forgetful = { getItem: () => null, setItem: () => {} };
++    const f = deps({ storage: forgetful });
++    expect(await reloadIfStale(f)).toBe(false);
++    expect(f.reload).not.toHaveBeenCalled();
++  });
++});

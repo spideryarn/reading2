@@ -2,6 +2,32 @@
 
 Up: [code-quality-overview.md](code-quality-overview.md)
 
+## In this doc
+
+- [§ The runner: Vitest](#the-runner-vitest) — why vitest, and where its config lives
+- [§ A run is not the only thing on the machine](#a-run-is-not-the-only-thing-on-the-machine) — the worker cap, `NO TESTS RAN` / `REFUSING TO START`, `VITEST_MAX_WORKERS`
+- [§ Three lanes, and which one your test is in](#three-lanes-and-which-one-your-test-is-in) — adding a test that touches Postgres or Storage; `TEST_LANES`
+- [§ `TEST DATABASE CONTENDED`](#test-database-contended) and [§ `POLLUTED`](#polluted) — what those red banners mean
+- [§ What we test, and what we don't](#what-we-test-and-what-we-dont) — what each older suite pins, and what is deliberately untested
+- [§ Why the docs have a test](#why-the-docs-have-a-test) — `doc-links.test.ts`: a link or anchor goes red, how anchors are slugged
+- [§ Sweep a continuous input](#sweep-a-continuous-input-dont-sample-it) — testing widths and offsets by shape, not samples
+- [§ The three things to know before adding a test](#the-three-things-to-know-before-adding-a-test) — fixtures, the CLI subprocess, which artefact store to hand it
+- [§ What a brand-new test file owes the two registries](#what-a-brand-new-test-file-owes-the-two-registries) — a new route test trips a gate that reads as something else
+- [§ Rendering a component, without a testing library](#rendering-a-component-without-a-testing-library) — `renderToStaticMarkup`
+- [§ What an upload's tests are for](#what-an-uploads-tests-are-for) — the four upload suites
+- [§ Evals are not tests](#evals-are-not-tests-and-live-in-their-own-folder) — and why an eval in a worktree measures the fixture cut
+- [§ A test that spawns a process needs its own timeout](#a-test-that-spawns-a-process-needs-its-own-timeout) — a red that is the box, not the change
+- [§ A green run here proves less than it looks like](#a-green-run-here-proves-less-than-it-looks-like) — tmux, killed runs, scoped runs, raw NULs, `.env.local`, jsdom `localStorage`, nuqs
+- [§ Run the suite in tmux](#run-the-suite-in-tmux-because-a-killed-run-and-a-passing-run-look-the-same) — `scripts/tmux-job.ts`, and a log with no `Test Files` line
+- [§ `.env.local` is loaded into tests](#envlocal-is-loaded-into-tests) — secrets scrubbed, `SPIDERYARN_OWNER_ID`, `runAsOwner`
+- [§ A nuqs write outlives the test that started it](#a-nuqs-write-outlives-the-test-that-started-it) — green tests, red run
+- [§ Nothing under `tests/` may call a paid provider](#nothing-under-tests-may-call-a-paid-provider) — the fetch guard and its opt-out
+- [§ Mocks and fixtures that manufacture green](#mocks-and-fixtures-that-manufacture-green) — a test of a race that tests its own mock
+- [§ A suite that cannot run, and how to make it say so](#a-suite-that-cannot-run-and-how-to-make-it-say-so) — why a skip printed nothing (history), and `process.stderr.write`
+- [§ When a skip is not acceptable](#when-a-skip-is-not-acceptable-never-since-2026-09-05) — the database is mandatory; how to check the refusal
+- [§ One database, many suites](#one-database-many-suites-the-three-shared-resources) — run locks, the job claim and why a case went `busy` (mostly history)
+- [§ Mint a fixture id randomly, not by counting](#mint-a-fixture-id-randomly-not-by-counting) — a row deleted by another file
+
 > Start with deterministic TypeScript tests.
 >
 > — Greg, 2026-08-24
@@ -10,6 +36,11 @@ Up: [code-quality-overview.md](code-quality-overview.md)
 npm test           # once
 npm run test:watch # while working
 ```
+
+**`npm test` needs a build first, and does not make one**: several files read `dist/` or
+`api-dist/` and fail, naming the command, when it is missing — `npm run build`, then
+`npm run build:fleet` for the fleet tests. `npm run worktree:setup` and `npm run check` both build;
+a bare `npm test` in a fresh clone does not.
 
 Run [`npm run typecheck`](typechecking.md) alongside it before committing. The two catch different
 things and neither is a substitute for the other — vitest never looks at the types, and `tsc` never
@@ -38,8 +69,7 @@ looking at them — see [typechecking.md](typechecking.md).
 
 **One suite gets half the cores, not all of them.** Vitest's default is `availableParallelism() - 1`,
 decided by each run in ignorance of every other — fine on a machine running one suite, and not what
-either of ours is. On 2026-09-06 eight concurrent runs put 76 fork workers on the 16-core box and
-made it unusable for everybody, including the agents whose tests they were. The numbers, the cost of
+either of ours is. The numbers, the cost of
 the cap and the options passed over are in
 [260906h](../plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md).
 
@@ -112,6 +142,10 @@ writes `4` on the box. A laptop has no file and is never refused: `MemAvailable`
 and macOS has no honest equivalent, so it is stated rather than approximated. If a run is refused
 and you are certain, delete the file or set a smaller reserve.
 
+The message begins `REFUSING TO START`. Inside `npm run check` it arrives as `✗ test FAILED` and
+`EXIT=1` after about three minutes rather than twenty-five (measured 2026-09-08), so a check that
+went red that fast is usually this and not the change. The string is in the log.
+
 A *file* for the middle one, because the obvious environment variable never arrives: nothing in the
 `env` block of `~/.claude/settings.json` reaches a Claude Bash tool call — measured, including the
 `CLAUDE_CODE_SCROLL_SPEED` that has been in it since the box was built. `vitest --maxWorkers=N` still
@@ -125,8 +159,7 @@ Vitest reads `VITEST_MAX_WORKERS` itself — in `resolveConfig`, **after** the l
 singleton and which is serial on purpose. A flag meaning "use less of this machine" silently changed
 what the suite tests, and bought back the nondeterministic red that
 [260903e](../plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md) exists
-to remove. It had already been typed in good faith: 260906f records
-`VITEST_MAX_WORKERS=4 npm run check` as a "reduced-contention full gate".
+to remove.
 
 So `resolveParallelWorkers()` reads the variable and `delete`s it, which is the only lever a config
 file has — everything vitest does with it happens later.
@@ -170,16 +203,11 @@ That scan is **syntactic**: it looks for `pgReady(`, `new Pool(`/`new Client(` a
 helpers, so it cannot see a test that reaches a database through application code — an aliased
 constructor, a dynamic import, a transitive `getDb()` — and it does not look for Storage at all.
 Those turn up the other way round, and then get a lane plus a declared entry in
-`LANES_BEYOND_THE_SCAN` saying how each was found. There are six, all of them Storage: they talk to
-the bucket over HTTP and never touch Postgres, so no `DATABASE_URL` poison could have caught them.
-GPT Sol found four by reading the map against `src/store/blobs.ts`; poisoning `SUPABASE_URL` found
-the other two on its first full run — including one that names no store at all and reaches the
-bucket through the pipeline's own acquire step, which nothing but running it could have caught. Six
-is a working door; a page of them would mean the scan needs a better predicate.
-
-`tests/health.test.ts` was the fifth and is not one any more: it reached Postgres through the health
-handler's own `getDb()` until it was given a real `pgReady(` gate, which the scan sees — so the
-exemption went stale the moment the fix landed, and the guard said so before anybody had to.
+`LANES_BEYOND_THE_SCAN` saying how each was found. There are five today, all of them Storage: they
+talk to the bucket over HTTP and never touch Postgres, so no `DATABASE_URL` poison could have caught
+them. Five is a working door; a page of them would mean the scan needs a better predicate.
+How those were found, and the one that left the list, are in
+[261007g-testing-history.md § Three lanes](../plans/261007g-testing-history.md#three-lanes-and-which-one-your-test-is-in).
 
 ### A private database is not a bare clone
 
@@ -219,13 +247,8 @@ Six files reach Storage: `raw-source-store`, `upload-acquire`, `uploads-api`,
 `acquire-extract-blocks-end-to-end`. They are all in `private-postgres` — the only lane that both
 leaves `SUPABASE_URL` alone and runs serially — so they cannot collide **inside one run**. Two
 separate `npm test` invocations still share the bucket. `LANES_BEYOND_THE_SCAN` in
-`tests/store-migration-registry.ts` carries the per-file reason.
-
-They were in the `unit` lane until 2026-09-04, reaching the real shared bucket while that lane's
-documentation said it had no database; the poison covered `DATABASE_URL` and Storage is chosen from
-`SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY`. GPT Sol found four of them reviewing T-D and the
-new poison found two more the first time it ran, which is the argument for a semantic backstop in
-one sentence.
+`tests/store-migration-registry.ts` carries the per-file reason. Where they were before 2026-09-04
+is in [261007g-testing-history.md § Storage is not isolated](../plans/261007g-testing-history.md#storage-is-not-isolated).
 
 ### The lease, and the database left behind by a killed run
 
@@ -277,21 +300,6 @@ restrain.
 It is also the only way to point a run at another database from the command line:
 `SPIDERYARN_ENV_PINNED=DATABASE_URL DATABASE_URL=… npx vitest …` works where `DATABASE_URL=… npx
 vitest` does not.
-
-### With Docker off, `npm test` is red — and was before the lanes existed
-
-Worth writing down because two documents claimed otherwise. Files that go through `pgReady` skip
-loudly; a dozen private-lane files do not, because their fixtures reach the database outside any
-gate. Measured 2026-09-04 with `DATABASE_URL` pointed at a dead port: **12 files failing** under the
-three-lane config, and **9 of the same 10 sampled** under the single-project config from before the
-lanes, for identical reasons. The lanes did not cause it. `tests/health.test.ts` was the one file
-the lanes could have been blamed for, and it now has a gate.
-
-Only "the stack is not running" turns into a skip, and it has to say so itself: the factory raises
-`StackUnreachable` from the three places that can mean nothing else, and
-[`private-db-global.ts`](../../tests/setup/private-db-global.ts) skips on that class alone. Until
-2026-09-04 it skipped on *any* error, so a failed dump, a failed restore, a cluster mismatch or a
-failed migration all printed "no private database" and skipped ninety suites.
 
 ### `TEST DATABASE CONTENDED`
 
@@ -379,7 +387,7 @@ outright — [`tests/setup/no-provider-calls.ts`](../../tests/setup/no-provider-
 `fetch` and fails the request before it is sent.
 
 "No network" used to be part of that sentence and it was never true: the `shared-services` files
-talk to GoTrue over HTTP, the four Storage files talk to the bucket, and the whole
+talk to GoTrue over HTTP, the Storage files talk to the bucket, and the whole
 `private-postgres` lane talks to Postgres. What is true is that nothing here reaches the public
 internet, and the `unit` lane reaches nothing at all.
 
@@ -398,7 +406,7 @@ internet, and the `unit` lane reaches nothing at all.
 | [`tests/validate-tree-rows.test.ts`](../../tests/validate-tree-rows.test.ts) | which leaves may carry a row, and label length — the **editorial** half |
 | [`tests/structure-step-build.test.ts`](../../tests/structure-step-build.test.ts) | `buildTree` — the model's proposal → the stored tree, and leaf growth |
 | [`tests/token-budget.test.ts`](../../tests/token-budget.test.ts) | that a model call's `max_tokens` **grows with the article**, and that the estimate clears what a real tree cost — written after a typed-in number failed a 360-block article ([postmortem](../postmortems/260826a-toc-max-tokens.md)) |
-| [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) | that cutting the article into label calls loses no block, duplicates none, and **never splits a sibling set** — plus the wire format that makes a dropped label a hard error instead of a shifted list ([260826h-toc-scaling.md](../plans/260826h-toc-scaling.md)) |
+| [`tests/labels-batching.test.ts`](../../tests/labels-batching.test.ts) | that cutting the article into label calls loses no block, duplicates none, and **keeps sibling sets whole while their packed batches can be asked** (sections in an unaskable batch are cut into windows, and no plan holds a batch too long to ask) — plus the wire format that makes a dropped label a hard error instead of a shifted list ([260826h-toc-scaling.md](../plans/260826h-toc-scaling.md)) |
 | [`tests/labels-receipt-invalidation.test.ts`](../../tests/labels-receipt-invalidation.test.ts) | that writing an **empty** labels manifest deletes this revision's `labels` receipt, so a second ingest cannot skip the labels step or throw `StampDisagrees` out of a claim — the P0 of [260906a](../plans/260906a-labels-leave-the-blocking-hierarchy-step.md). Its header records why one block set proved nothing and two do |
 | [`tests/labels-step-registration.test.ts`](../../tests/labels-step-registration.test.ts) | the three registrations nothing else checks: `labels` out of `DEFAULT_INGEST_STEPS`, out of `FORCE_ONLY_WHEN_NAMED`, and **every step that produces `tree` also produces `labels`** |
 | [`tests/labels-file-union.test.ts`](../../tests/labels-file-union.test.ts) | that a pending labels manifest cannot claim a prompt version and a completed one cannot omit it. **`npm run typecheck` reddens this, not `npm test`** — vitest strips `@ts-expect-error` without looking |
@@ -445,23 +453,16 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
   `buildTree` in [`src/structure.ts`](../../src/structure.ts) is the *deterministic* half of stage 4 — it takes
   the model's parsed proposal and grows the leaf layer — and it is exported and tested precisely so
   that only the genuinely nondeterministic part is untested.
-- **The React reading view.** No DOM tests yet. When they arrive: `environment: "jsdom"` and
-  `@testing-library/react`, and start with [`src/web/tree.ts`](../../src/web/tree.ts) `buildGeometry`,
-  which is pure and is where a rowSpan bug silently draws a wrong article.
+- **The React reading view, as a browser draws it.** Component tests exist now — hundreds of files
+  under `// @vitest-environment jsdom`, and `renderToStaticMarkup` (§ *Rendering a component, without
+  a testing library*) — but `@testing-library/react` was never added, and nothing in the suite
+  covers the whole rendered view; a few Chrome tests do compute styles and layout, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts).
 
-  **The gap is bigger than "no DOM tests" sounds, and 2026-08-25 measured it.** Adopting Tailwind
-  produced three bugs the whole suite was blind to: a generated `.outline` utility drawing a border
-  round the table, unlayered CSS outranking every utility we meant to write, and `dark:` rules that
-  applied or not depending on the *viewer's* OS setting
-  ([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)). Every one produced
-  valid CSS that rendered. None of them could have gone red here, because nothing renders React and
-  nothing computes a style — and the third could not have gone red in a DOM test either, since jsdom
-  has no OS to ask.
-
-  So this is the moment to reconsider `@testing-library/react`, and also the moment to be honest
-  about its ceiling: it would have caught the class names, not the cascade. Anything that depends on
+  Anything that depends on
   the *resolved* value has to be checked in a real browser
   ([browser-testing.md](browser-testing.md#do-not-judge-colour-from-a-screenshot)).
+  The 2026-08-25 measurement of that gap is in
+  [261007g-testing-history.md § What we test](../plans/261007g-testing-history.md#what-we-test-and-what-we-dont).
 - **Readability itself** ([content-extraction.md](content-extraction.md)). Needs a large fixture
   corpus. Worth doing when extraction bugs start costing time.
 
@@ -511,7 +512,8 @@ of which **3** are in the GitHub-correct form. So the repo has consistently writ
 this gate, and correcting `slug()` would redden hundreds of links across files many agents have open
 at once. Left alone on cost, not on merit. **Write anchors the way the gate wants** — one hyphen —
 and know they are wrong on github.com; the rendered docs are read locally and in editors far more
-often. Fixing it properly is a whole-tree sweep and wants to be its own job.
+often. Or link to the file with no fragment and name the section in prose, which is right in both
+places. Fixing it properly is a whole-tree sweep and wants to be its own job.
 
 Comments need their own rule, because they don't use markdown link syntax. A bare
 `granularity-zoom.md#the-tree` is resolved against the **docs** directories, not against the source
@@ -602,9 +604,9 @@ this; nothing yet catches the email half, which is why it is written down here.
 
 ## What a brand-new test file owes the two registries
 
-Three gates in `tests/store-migration-registry.test.ts` fire on files that are not conversions at
-all, and each one reads as something else when it does. Written down on 2026-09-08 after a new
-route test tripped two of them inside twenty minutes of being committed.
+Two gates in `tests/store-migration-registry.test.ts` fire on files that are not conversions at
+all, and each one reads as something else when it does. There were three until
+2026-10-06; the third is kept below, struck, because the entries it asked for are still in the file.
 
 1. **A lane, or the database looks broken.** A file absent from `TEST_LANES` defaults to `unit`,
    whose `DATABASE_URL` is poisoned on purpose. A Postgres suite then fails on
@@ -617,15 +619,14 @@ route test tripped two of them inside twenty minutes of being committed.
    conversion — anything written after the filesystem store went on 2026-09-05 is not — **do not add
    the entry to silence the gate**; that records a history that did not happen. Say the same thing
    in different words: *Outside this oracle* was the phrasing used the first time this came up.
-3. **A verdict in `STORE_MIGRATION`, if the import graph can reach a condemned module through your
-   file** — which it can as soon as you use `scratchArticleInPg`. Without one, § *leaves no file that
-   the import graph can reach and nothing accounts for* names your file as a hole. And set
-   **`evidence: "static-only"`**: the field defaults to `"dynamic"`, which claims the instrumented
-   witness watched your file execute, and that witness is a dated measurement from 2026-09-03. A
-   file written since cannot have been watched, and § *keeps `evidence` honest about which witness
-   backs each verdict* is what says so.
+3. **Gone since 2026-10-06: a verdict in `STORE_MIGRATION`.** It was asked of any file the import
+   graph could reach a condemned module through, which meant any file using `scratchArticleInPg`,
+   with `evidence: "static-only"` because the instrumented witness was a measurement from
+   2026-09-03. The import walk and the witness were deleted with the last of the filesystem store's
+   leftovers ([261006j S1](../plans/261006j-sixth-sweep-s1-filesystem-store-leftovers.md)), so
+   **a new test file adds nothing to `STORE_MIGRATION`**. That map is a closed record.
 
-The shape all three share: **the registry is a record of a migration, and a new file is not part of
+The shape they share: **the registry is a record of a migration, and a new file is not part of
 it** — so every one of these is a gate asking you to say what your file *is*, and each has a wrong
 answer that is easier than the right one.
 
@@ -693,9 +694,6 @@ labels written in separate parallel calls are as good as ones written in a singl
 coverage, length, template repetition, vocabulary retention, and the seam test, over artefacts that
 already exist, so the eval itself calls nothing and is cheap to re-run.
 
-It earned its keep on the first run: vocabulary retention caught the batch prompt turning the
-author's "technorati" into "technologists", which every other check was happy with.
-
 Two habits it made explicit and worth carrying to the next eval:
 
 - **A verdict line is read as a conclusion, so do not print one at all unless the numbers support
@@ -734,8 +732,13 @@ Every result row already carries `blocksSha256.matchesManifest`, and in a worktr
 Before quoting any eval number, check that field and the block count of what actually ran.
 
 Do not fix it by copying the primary's corpus in. `cp -rn` skips existing files, so it appears to
-work and changes nothing; copying the whole corpus brings articles the manifest does not describe.
-Run evals in the primary, or make the cut deliberate and say so in the write-up.
+work and changes nothing; copying the whole corpus brings articles the manifest does not describe,
+some with incomplete artefact sets, and that reddens `store-roundtrip`, `store-parity`,
+`store-shelf-reads` and `admin-store` — which is why `worktree:check` compares `data/` with the
+fixtures. Run evals in the primary, or make the cut deliberate and say so in the write-up.
+(`entryForDir` in `evals/structure-whole-document/corpus.ts` matches on the slug as well as the
+path, so a run pointed at the primary's directories by absolute path still gets the manifest hash
+check.)
 
 ## A known limit, pinned by a test
 
@@ -751,14 +754,8 @@ Vitest's default is 5 seconds. That is generous for a function call and meaningl
 starts `tsx`, which has to compile the script and its imports before it does the thing you are
 testing.
 
-On 2026-08-28 all four cases in `tests/store-export-fails-closed.test.ts` went red at
-`Test timed out in 5000ms`, each taking 11-19 seconds. Nothing was wrong with the code or the tests:
-the machine had a load average of **108** and 56 vitest workers alive, because six sessions were
-sharing one laptop. The same file passes with a realistic ceiling, and a mutation still reddens
-exactly the cases it should — so the ceiling did not weaken anything.
-
-The cost of that red was not the failure, it was the **wording**. "Timed out" reads like a hang, so
-it gets investigated as one. Half an hour went on a number.
+The incidents behind this section are in
+[261007g-testing-history.md § A test that spawns a process](../plans/261007g-testing-history.md#a-test-that-spawns-a-process-needs-its-own-timeout).
 
 So: **if a test shells out, give it an explicit timeout and say in a comment why that number.** Sixty
 seconds is the convention here (`tests/pdf-read.test.ts`, `tests/store-export-fails-closed.test.ts`).
@@ -778,12 +775,16 @@ had `SPAWN_TIMEOUT = 60_000` since `96c7661e` — added at 12:03 on 2026-08-28, 
 The lesson is not about this file: a paragraph that names offenders is a list that goes stale
 silently, because fixing one is never the same edit as un-naming it.
 
-**And the paragraph's own prediction came true on 2026-09-03.** A `npm run check` run on a box
-carrying eleven worktrees came back with seven failures. Six were 5-second timeouts in suites that
-pass in isolation; the seventh was a real regression that a guard had caught. Telling them apart cost
-a second full pass, and the expensive half was not the re-run — it was that the noise and the signal
-were indistinguishable until it finished.
-[260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
+**So re-run each red file alone before calling any of them a regression.** A file that passes alone
+was the box; one that fails alone is a real failure, and yours if it passes on the commit before
+your change. The exception is `TEST DATABASE CONTENDED`, which is never retried
+([above](#test-database-contended)).
+
+**And one timeout can fail the rest of its file.** A vitest timeout inside React's `act()` leaves
+the root mid-render, and every later test in that file renders an empty host. On 2026-09-02 three
+sweeps measuring 3.6–3.8s against the 5-second default met a load spike: one timed out, and twenty
+further tests failed with nothing wrong. So in a file like that the first failure is the real one —
+[260902j](../plans/260902j-public-read-only-access-audit-and-improvements.md), progress log.
 
 **A process timeout is not a bound on how long you wait.** Node's `timeout` on `execFileSync` and
 `spawnSync` sends a signal and then waits for the child to exit, however long: a child that ignores
@@ -834,6 +835,9 @@ npx tsx scripts/tmux-job.ts npm test -- --reporter=dot
 It prints the log; `tail -f` it, and the last line is `EXIT=<n>`. Same for anything else that takes
 minutes — `npm run typecheck`, an eval, a codex review.
 
+The logs are in `logs/tmux-jobs/`, which is gitignored. Deleting that directory while a job is still
+writing to it orphans the run, and nothing says so (2026-09-05).
+
 **`--name` is its only flag, and there is no `--` separator.** A bare `--` or an invented `--log`
 in front of the command becomes the command: `sh: 1: --: not found`, `EXIT=127` in under a second,
 behind the same `✓` and log path a healthy launch prints — hit twice on 2026-09-09. A log with
@@ -845,15 +849,30 @@ The kill lands as `EXIT=143` under a screen of green ticks, which reads like a s
 when it stopped. Several agents retrying together is what caused it, so a re-run straight away
 tends to meet the same fate.
 
+**Whatever is watching the job gets killed too, and that says nothing about the job.** The harness
+stops background Bash tasks with *"stopped because the system is running low on memory"*. That is
+its own guard, not the kernel's (`dmesg` showed no kills on 2026-09-05), and it picks by system
+pressure rather than by size: six `until grep -q EXIT= …; do sleep 60; done` loops of a few KB each
+were stopped in a row that day while the tmux job they watched carried on. The job's log, and
+whether its tmux session still exists, are the only evidence about the job.
+
+**A `timeout` in front of the command is one more way to be told it passed.** On 2026-09-06 a
+`timeout 400 npm run check … | tail` was killed at its deadline — the output held `Terminated` and
+`EXIT=124` — and the harness announced *"completed (exit code 0)"*, which is the pipeline's status.
+A deadline that feels generous is still far shorter than `check`. So never put a shell
+`timeout` in front of a long command: launch it in tmux with no outer deadline. A wrapper's own
+limit, such as `run-codex.ts --timeout-minutes`, is a different thing and stays.
+
 "It never ran" and "it passed" are indistinguishable from outside, which is the family this whole
 section belongs to — [silent-success.md](../reusable/silent-success.md).
 
-**Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.** This
-section used to give the raw incantation with `-s gate` hard-coded in it, and both halves drifted:
-the second agent to run it in a minute got `duplicate session` and improvised a name, and agents who
-had lost a one-shot session to a quoting mistake made a bare `bash -l` session and typed into it
-instead. A bare session never exits. On 2026-09-05 eight of those husks were sitting on the box
-under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of them fifteen hours old.
+**A long gate reports on a commit, not on the tree you are standing in.** Record the sha the run
+started from, and before acting on a failure, and above all before telling its owner, check that
+sha is still your `HEAD`; `git merge-base --is-ancestor <fix> HEAD` says whether a fix is already
+in.
+
+**Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.**
+A bare session never exits.
 `gjd-remote ls` now tells `shell busy` from `shell idle` so a husk is visible as one, and
 `gjd-remote kill <name>` will end any of them; the script above is so there is nothing to kill.
 
@@ -863,11 +882,53 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
   or deleted runs the other two and exits 0 — found 2026-09-07 when a brief named
   `streaming-route-request-lifetime.test.ts` after it had become `referee-stream-lifetime.test.ts`.
   The `Test Files N passed` count is the only place the missing file shows.
-- **A list built from your diff misses the route's other callers.** On 2026-09-10 a change to a
-  box-action request body passed eight scoped suites and typecheck, while
-  `tests/fleet-quarantine.test.ts`, which posts to the same route and was in nobody's diff, lost
-  three guarantees; only the full suite saw it. `grep -rl '<the url>' tests/` finds the files that
+- **A list built from your diff misses the route's other callers.** `grep -rl '<the url>' tests/` finds the files that
   drive a route.
+- **After merging `dev`, choose the re-run from what the merge brought in, not from what your change
+  is about.** Note `HEAD` before the merge and run `git diff --name-only <that sha> HEAD` after it
+  (once merged, `HEAD...origin/dev` is empty); then typecheck and the suites those files touch. A full gate after every merge reports on a tree that has already gone: on 2026-09-08
+  `dev` gained 74 commits in 55 minutes, two full re-gates went red, and neither red belonged to the
+  change being gated. Keep the full gate for the tree you push.
+
+### A raw NUL in a file makes every grep of it come back empty
+
+An escape sequence typed as *content* — a backslash-u NUL, a backslash-x zero — through the Write
+tool, the Edit tool or a heredoc can land in the file as the control byte itself. The code still
+compiles and its tests still pass. What broke, eight times between 2026-09-05 and 2026-09-08 in
+two sessions, was every later `grep` of that file: the `grep` those sessions had treated it as
+binary and printed nothing, exit 1, the same as no match. Which `grep` answers decides this. GNU
+grep 3.11, read on the box on 2026-10-05, prints a binary-match notice and exits 0 instead, and the
+header of the test below tells the two apart.
+
+The signature then was greps against one file all returning nothing while `sed` showed the text,
+and `file <path>` reporting `data` for a source file.
+
+[`tests/no-raw-nul-bytes.test.ts`](../../tests/no-raw-nul-bytes.test.ts) catches it at the gate. It
+checks every file git tracks, and every untracked file that is not ignored, against a denylist of
+binary extensions, so a new directory is covered the day it arrives; its header says why an
+allowlist would be the same bug. A commit message is outside it: git refuses one outright with *"a
+NUL byte in commit log message not allowed"* and writes nothing.
+
+Retyping the escape to repair it puts the byte back. An `Edit` could not find its `old_string`,
+because the file held bytes; a Python repair script written with Write arrived with a NUL in its
+own docstring.
+
+So: never insert an invisible character to get round syntax — rewrite the sentence so it does not
+need the delimiter. Repair a file with a script that contains no escape sequence at all, building
+each backslash with `chr(92)`, finding the line by a plain-text anchor that must match exactly
+once, and counting the bad bytes before and after. And when a Bash call is refused for *"control
+characters that would be hidden in the approval dialog"*, do not retry it: that is this byte, so
+move the content into a file.
+
+### A script outside the repo cannot import the repo's packages
+
+Reproducing a test's behaviour outside vitest is how a real failure is told from a loaded box, and
+the script for it usually sits in a session scratchpad under `/tmp`. Run with `npx tsx` from the
+repo root, it still fails with `ERR_MODULE_NOT_FOUND: Cannot find package …`, because Node resolves
+a bare import by walking up from the **script's own directory**, not from the working directory.
+Two things do resolve from there: an absolute path into the repo's `node_modules`, and a
+`createRequire` rooted at the repo's `package.json`. A script moved into the tree resolves too, and
+is then in every agent's `git status`.
 
 ### `.env.local` is loaded into tests
 
@@ -976,7 +1037,7 @@ await vi.waitFor(() => {
 ```
 
 A fixed delay works today and bakes the current throttle into the file, so it goes quietly
-green-then-flaky if that number ever moves. `tests/remember-url-rules.test.tsx`'s `until()` helper
+green-then-flaky if that number ever moves. `tests/learn-url-rules.test.tsx`'s `until()` helper
 and `sendNew` in `tests/conversation-band-send-new.test.tsx` are the two worked examples.
 
 ## Nothing under `tests/` may call a paid provider
@@ -1178,16 +1239,15 @@ anything that is not failing, wherever it happens.** The interception is the mec
 timing. That is why moving a warning into a test body does not help, and why putting the reason in a
 test name does not either — the default reporter prints no passing test names at all.
 
-**Failing instead of skipping is the wrong fix.** It reddens the suite for everyone without a local
-Postgres, and a missing database is a fact about a laptop rather than a defect in the code. It is
-the right fix for one run in particular, which is the next section.
+How the Postgres suites used to skip, before 2026-09-05, is in
+[261007g-testing-history.md § A suite that cannot run](../plans/261007g-testing-history.md#a-suite-that-cannot-run-and-how-to-make-it-say-so).
 
-**Most of the Postgres suites here still skip in silence**, because they warn with `console.warn` —
-`tests/store-artefacts-pg.test.ts` is the pattern the others copied. So a `skipped` count today
-usually comes with no reason at all. Until they move over: **if you see a skipped Postgres case,
-re-run that file with `--reporter=verbose` before believing anything about it.** A silent skip is
-[silent-success.md](../reusable/silent-success.md) in its quietest form — the count does change, so
+No suite skips over a missing database any more, but **if you ever see a skipped
+case, re-run that file with `--reporter=verbose` before believing anything about it** — a skip is
+[silent-success.md](../reusable/silent-success.md) in its quietest form: the count changes, so
 something is visibly not happening, and only the *why* is missing.
+
+<a id="with-docker-off-npm-test-is-red-and-was-before-the-lanes-existed"></a>
 
 ### When a skip is not acceptable: never, since 2026-09-05
 
@@ -1195,11 +1255,9 @@ something is visibly not happening, and only the *why* is missing.
 ([database.md](database.md)), so a machine with no database cannot run this application at all, and a
 suite that skipped over that would be describing a configuration that does not exist.
 
-That is a change of policy, and the thing it replaced is worth knowing. A hundred-odd suites used to
-take themselves out when the database was missing, in the one part of the summary nobody reads: a run
-could pass, or fail for something else entirely, with every one of them absent. `REQUIRE_POSTGRES=1`
+`REQUIRE_POSTGRES=1`
 was the escape hatch for the runs that cared. **The flag is gone from every decision** — nothing
-reads it, `scripts/check.ts` still sets it and will stop when the store tombstone goes.
+reads it, and `scripts/check.ts` no longer sets it either.
 
 Two mechanisms, and between them there is no way for a suite to opt out:
 
@@ -1373,15 +1431,10 @@ deletes rows before releasing loses the release to the first failed delete. Both
 [`tests/lock-lifecycle.test.ts`](../../tests/lock-lifecycle.test.ts) checks against `pg_locks` on
 keys minted per run. A suite whose whole teardown *is* the release needs neither.
 
-**Measured 2026-08-30.** Two concurrent `npx vitest run` processes over the seven job-slot files,
-with the key neutralised so the lock excludes nobody: **23 to 50 failures per run** across four runs,
-four to six of the seven files red, where every one of those files is green alone. With the lock
-taken by all of them: **0 failures**, across four concurrent pairs and a wider nine-file set, and 162
-passed / 162 passed on an independent second reading.
+The 2026-08-30 measurement of the lock, taken while one `running` row was still the limit for the
+whole table, is in [261007g-testing-history.md § One database](../plans/261007g-testing-history.md#one-database-many-suites-the-three-shared-resources).
 
-The spread is the point. The first version of this paragraph said "39 failures in each" — a
-suspiciously equal pair, taken before a change to the teardown — and it was replaced after
-re-measuring. Contention does not produce tidy numbers, so a tidy one is the reading to distrust.
+Contention does not produce tidy numbers, so a tidy one is the reading to distrust.
 
 **The failures do not say "contention".** They arrive as `expected 'busy' to be 'claimed'`, as
 `duplicate key … articles_slug_unique`, and as `23503` foreign-key violations against a revision that
@@ -1390,9 +1443,7 @@ clock: `insertWhenSlotFree`'s budget is 40 × 500ms, so a **~20,500ms** case is 
 out. Do not raise a timeout to make it go away.
 
 Read the clock and the message as answering **different questions**: the clock says why the case was
-slow, the assertion says what failed. On 2026-08-30 six cases failed at 20,468 / 20,438 / 20,589ms and
-the duration was read as though it were the failure. It was not — the assertions were ordinary diffs
-like `expected 'running' to be 'error'`, and the 20 seconds was the wait in front of them.
+slow, the assertion says what failed.
 
 **A wedged row's second symptom points at the database.** The suite it blocks hangs — 316 seconds
 on 2026-08-31, against 6 once the row was gone — and the *next* run then skips itself with
@@ -1401,19 +1452,12 @@ connection timeout`. That reads as a sick database and is a knock-on from the hu
 fine throughout, answering in 15ms on 32 of 100 connections. **Clear the row before believing
 anything about the database.**
 
-**The claimant is usually not another suite — it is a wedged row.** That day's holder was a job left
-`running` by an *aborted teardown*: `store-jobs-parity`'s `afterAll` deleted articles before jobs, the
-foreign key refused, the first delete threw, and the rest of the teardown never ran. Waiting cannot
-clear that, which is exactly what `insertWhenSlotFree`'s message says and why it says it. The fix was
-to delete jobs first and key the teardown by slug rather than by minted ids. **A teardown that can
+**The claimant is usually not another suite — it is a wedged row.** Waiting cannot
+clear that, which is exactly what `insertWhenSlotFree`'s message says and why it says it. **A teardown that can
 throw half-way through is a global-resource leak**, so order it so the last thing deleted is the thing
 everything else references.
 
-**Do not filter test output you may need later.** The only record of those six failures came through
-`… | grep -E "FAIL|× |Tests |not to contain|to contain" | head -8`, which does not match
-`AssertionError`, `expected` or `Received`. The timings survived and the assertion text did not, so
-weeks later the transcript could still prove *how slow* the failures were and could no longer say
-*what they claimed* — and two plausible explanations for them could not be told apart. Capture the run
+**Do not filter test output you may need later.** Capture the run
 to a file and grep the file.
 
 **If you add a suite that starts a job**, take the lock: `pgReady` first, then `takeRunLock` only when
@@ -1488,10 +1532,7 @@ node -e 'for (let i = 0; i < 3; i++) console.log(crypto.randomUUID())'
 
 Half the suite mints from the `00000000-0000-4000-8000-…` block, and that is exactly what makes
 counting inside it dangerous: the next number that *looks* free usually is not, and there is no way to
-tell a harmless clash from a destructive one by looking at the id. `tests/find-article.test.ts` took
-`…c4`, `…f1` and `…f2` on 2026-08-31 and collected three collisions at once — with `source-store`,
-`chat-anchor` and `publish-session-cleanup-log`. Only the `…f1` pair could actually destroy a row;
-that is not a distinction worth relying on, and the file now uses random ids.
+tell a harmless clash from a destructive one by looking at the id.
 
 Leave the existing block-style ids alone. Rewriting them buys nothing and a shared *foreign key*
 written longhand is a different problem with a different fix — import the constant, the way the suite now

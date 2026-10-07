@@ -60,7 +60,6 @@
 .skim-spark-dot.on { fill: var(--highlight); stroke: var(--highlight); }
 
 .skim-arrow,
-.skim-depth,
 .skim-door-btn {
   display: inline-flex;
   align-items: center;
@@ -78,30 +77,28 @@
 .skim-arrow { width: var(--control-h-lg); height: var(--control-h-lg); padding: 0; }
 .skim-arrow:disabled { opacity: 0.4; cursor: default; }
 .skim-arrow:not(:disabled):hover,
-.skim-depth:hover,
 .skim-door-btn:hover { border-color: var(--highlight); }
 
-/* **Three segmented buttons**, one box: the middle one's borders are shared. */
+/* **The depths**: the part-switcher every mode shares, `.summ-views` /
+   `.summ-view-btn` (mode-band.css § the part-switcher; plan 261007h § F2), so
+   its outline, its dividers and its chosen fill are not here. Its chosen depth
+   was the accent until 2026-10-07; it is marked neutrally now, because **orange
+   marks the mode and a part within it is marked neutrally**. What stays is the
+   size: the house's 36px (`--control-h`), not the bar's 26, because this is the
+   mode's main control beside the 44px stepper (Greg, 2026-09-28); a finger
+   gets the bar's 44px. The fieldset's own margin and padding go. */
 .skim-depths {
-  display: inline-flex;
   margin: 0;
   padding: 0;
-  border: 0;
 }
 .skim-depth {
-  padding: 0 0.45rem;
-  border-radius: 0;
+  min-height: var(--control-h);
+  padding-block: 0;
+  padding-inline: 0.45rem;
   font-size: 0.85rem;
 }
-.skim-depth + .skim-depth { margin-left: -1px; }
-.skim-depth:first-child { border-radius: var(--radius) 0 0 var(--radius); }
-.skim-depth:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-.skim-depth.on {
-  position: relative; /* its border over its neighbours' */
-  border-color: var(--highlight);
-  background: var(--highlight-wash);
-  color: var(--highlight-ink);
-  font-weight: 600;
+@media (any-pointer: coarse) {
+  .skim-depth { min-height: var(--control-h-lg); }
 }
 .skim-depth-n {
   color: var(--ink-faint);
@@ -147,7 +144,6 @@
 }
 .skim-what { display: flex; flex-direction: column; min-width: 0; gap: 0.15rem; }
 .skim-place { font-size: 0.88rem; line-height: 1.35; }
-.skim-place-repeat { color: var(--ink-faint); }
 .skim-cue { color: var(--ink-soft); font-size: 0.85rem; line-height: 1.35; }
 /* The quote's own words (plan 260928e) — cut short on every row but the
    current one, whose row shows them whole. A touch smaller than the path,
@@ -209,14 +205,37 @@
   background: var(--highlight);
 }
 
-.skim-read-error { margin: 0.4rem 0.7rem 0; }
-.skim-read-error .gloss-error { margin: 0 0 0.5rem; }
+/* **Which passes the stop is in** (plan 261003l, spya-ms9d69): one pip per
+   pass the route offers, shallowest first, filled when the stop is walked
+   there. Between the number and the position line, in the number's column, so
+   it costs no width — three pips are 16px of a column at least 1.4em wide, at
+   a 280px band and on a phone alike. Muted, in the sparkline's own colours
+   (`.skim-spark-dot`): hollow is the page with a faint ring, filled is the
+   ring's colour. Not a control — SkimPanel.tsx § StopPasses.
+   Its height and gap are variables on `.skim-line`, because `.skim-where`
+   below has to move down by exactly as much. */
+.skim-pips {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  height: var(--skim-pips-height);
+  margin-top: var(--skim-pips-gap);
+}
+.skim-pip {
+  box-sizing: border-box;
+  width: var(--skim-pips-height);
+  height: var(--skim-pips-height);
+  border: 1px solid var(--ink-faint);
+  border-radius: 50%;
+  background: var(--page);
+}
+.skim-pip.on { background: var(--ink-faint); }
 
 /* Before a route has a pinned head, its status or error is the top row. */
 .mode-band.skim.has-about:not(:has(> .band-head)) > .gloss-quiet,
 .mode-band.skim.has-about:not(:has(> .band-head)) > .gloss-empty,
 .mode-band.skim.has-about:not(:has(> .band-head)) > .gloss-stale,
-.mode-band.skim.has-about:not(:has(> .band-head)) > .skim-read-error {
+.mode-band.skim.has-about:not(:has(> .band-head)) > .read-error {
   padding-right: calc(0.7rem + var(--band-about-room));
 }
 
@@ -359,7 +378,25 @@
 }
 .skim-chip:hover,
 .skim-chip.on { border-color: var(--highlight); }
-.skim-also { color: var(--ink-faint); font-size: 0.75rem; }
+/* **A term chip's card** — the glossary's own (`TermCard`, styled by
+   prose-hover-card.css), inside the shared tooltip (SkimPanel.tsx § TermChip).
+   Only its height is ours. An entry with a web answer is long, and the row of
+   buttons is the last thing in it, so the card scrolls rather than running off
+   a short window (GPT Sol, plan review of 261006e, F3).
+
+   Half the window, because the card sits above or below its chip and `flip`
+   picks the roomier side, which is never less than half of what the chip
+   leaves. The 4rem is the rest of that side: half the chip, the tooltip's
+   offset and edge padding (10px each) and the panel's own padding. The floor
+   keeps a line of text and the buttons in a window too short for any of this.
+
+   On this wrapper and not on `.tooltip`: the panel's arrow hangs outside its
+   box, and `overflow` there would clip it. */
+.skim-term-card {
+  max-height: max(6rem, calc(50dvh - 4rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
 .skim-sense {
   margin-top: 0.35rem;
   padding-left: 0.5rem;
@@ -391,18 +428,26 @@
    own button rather than in it (Sol, plan 260929f F5). Invisible — the mark
    under it is the drawing; this is only the thing to point at. The hit target's
    top is derived from the same padding, number line and gap that place the
-   mark, rather than assuming a font-dependent offset from `.skim-line`. */
+   mark — the pips' room included, on a row that has them — rather than
+   assuming a font-dependent offset from `.skim-line`. */
 .skim-line {
   --skim-row-pad-x: 0.4rem;
   --skim-row-pad-y: 0.35rem;
   --skim-number-line: 1rem;
   --skim-pos-gap: 0.2rem;
   --skim-pos-height: 1.6rem;
+  --skim-pips-gap: 0.1rem;
+  --skim-pips-height: 4px;
+  /* What the pips add above the position line: nothing on a row without them. */
+  --skim-pips-room: 0px;
   position: relative;
 }
+.skim-line.piped { --skim-pips-room: calc(var(--skim-pips-gap) + var(--skim-pips-height)); }
 .skim-where {
   position: absolute;
-  top: calc(var(--skim-row-pad-y) + var(--skim-number-line) + var(--skim-pos-gap));
+  top: calc(
+    var(--skim-row-pad-y) + var(--skim-number-line) + var(--skim-pips-room) + var(--skim-pos-gap)
+  );
   left: var(--skim-row-pad-x);
   width: 1.2rem;
   height: 2rem;

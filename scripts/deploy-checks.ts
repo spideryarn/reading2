@@ -20,6 +20,7 @@ import {
   type ExpectedMigration,
 } from "../src/migration-digest.js";
 import { sameCommit } from "./build-stamp.js";
+import { judgeRobotsTxt } from "./check-public-shell.js";
 
 /* ------------------------------------------------------------------ */
 /* Migrations                                                          */
@@ -721,12 +722,12 @@ export function readLogQuery(exitCode: number, stdout: string, deploymentId: str
 }
 
 /**
- * The tracked corpus the gate worktree copies `data/` and `output/` out of.
+ * The tracked fixture corpus, present in every gate worktree through Git.
  *
- * The interim coupling to the old store layout is deliberately visible in the
- * path: underneath this directory sit a `data/` and an `output/` shaped exactly
- * like the ones the filesystem store still expects, so the gate can materialise
- * both by copying. docs/plans/260901b-committed-fixture-corpus.md.
+ * Its `data/` and `output/` retain the old filesystem store's layout for tests
+ * that still read file fixtures. The gate copies both to the worktree root
+ * (`materialiseCorpus`, scripts/corpus-materialise.ts), as `worktree:setup`
+ * does. docs/plans/260901b-committed-fixture-corpus.md.
  */
 export const GATE_FIXTURE_ROOT = "tests/fixtures/data-root";
 
@@ -820,6 +821,19 @@ export const GATE_FIXTURES = [
 export const GATE_TOOLING_BUILDS: readonly { gate: string; script: string }[] = [
   { gate: "fleet client build", script: "build:fleet" },
 ];
+
+/**
+ * **Every npm script that has to have run before the suite can be green**, in
+ * the order to run them: the product build, then the tooling builds above.
+ *
+ * Setup (scripts/worktree-builds.ts) reads this list. The deploy gate and
+ * `npm run check` run the product build separately and read
+ * GATE_TOOLING_BUILDS above for the rest. Until 2026-10-06 only the deploy
+ * gate built both, so `check` was red on a clean checkout for three fleet
+ * files and every fresh worktree started with five red files.
+ * docs/plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md.
+ */
+export const SUITE_BUILDS: readonly string[] = ["build", ...GATE_TOOLING_BUILDS.map((b) => b.script)];
 
 export function missingGateFixtures(exists: (relPath: string) => boolean): string[] {
   return GATE_FIXTURES.filter((rel) => !exists(rel));
@@ -1010,6 +1024,29 @@ export function findSecretsInBundle(js: string): string[] {
     }
   }
   return found;
+}
+
+/**
+ * **What the deploy says about the `/robots.txt` a host served.** Empty means
+ * it is the file we mean to serve.
+ *
+ * The judging is `judgeRobotsTxt`, which reads the file the way a crawler
+ * does: by group, since a bot obeys the one group naming it and inherits
+ * nothing from `*`. Its own comment has the rule it holds the file to.
+ *
+ * This is the third check here. `/disallow/i` over the whole body passed on
+ * the file's comments alone; a `Disallow: /` line anywhere (`hasDisallowAll`,
+ * 2026-10-05) passed a file restricting only Twitterbot beside an unrestricted
+ * `User-agent: *`, which GPT Sol reproduced on 2026-10-06.
+ * docs/postmortems/261005j-keyword-checks-accept-comments-as-restrictions.md.
+ *
+ * Only the pure judge is borrowed. The deploy still does not run that script's
+ * requests, so the `X-Robots-Tag` header is not checked by a deploy.
+ */
+export function judgeServedRobots(status: number, contentType: string, body: string): string[] {
+  const problems: string[] = [];
+  if (status !== 200) problems.push(`answered ${status}`);
+  return [...problems, ...judgeRobotsTxt(contentType, body)];
 }
 
 /** The `/assets/*.js` files an `index.html` asks the browser to load. */

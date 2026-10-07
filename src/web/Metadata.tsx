@@ -59,7 +59,8 @@
  *    scan down. The 4-column table also needed `overflow-x` on a narrow window;
  *    rows that wrap do not.
  *  - **Tooltips that say what a number means.** Read time is the clearest case:
- *    ours is words ÷ 230, and the reader has no way to know that. Dotted
+ *    ReadTimeCard.tsx explains the rate, any difficulty adjustment and what
+ *    the estimate cannot see. Dotted
  *    underline, `cursor-help`, same convention theirs used.
  *
  * What did **not** come across, deliberately: their gradient icon chips and
@@ -192,7 +193,6 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -208,10 +208,9 @@ import {
   Blocks,
   Bot,
   BookA,
+  CircleDashed,
   Lightbulb,
   BookOpen,
-  ChevronDown,
-  ChevronRight,
   Clock,
   Database,
   Download,
@@ -263,29 +262,34 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
    `src/pipeline.ts` — which is a server module the client may not import
    (tests/client-imports.test.ts). See src/rerun-steps.ts. */
 import { METADATA_RERUN_STEPS, type MetadataRerunStep } from "../rerun-steps.js";
-import { WPM } from "../reading-time.js";
+import { ReadTimeCard } from "./ReadTimeCard.js";
 import { isWebUrl } from "../urls.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { leavePurpose, savePurpose } from "./purpose.js";
-import { Dock } from "./Dock.js";
+import { Dock, withPanel } from "./Dock.js";
 import { Link } from "./Link.js";
 import { atParam, type MetadataSection, sectionParam } from "./params.js";
 import { LIBRARY_HREF, PROFILE_HREF, carriedSearch, navigate, readHref } from "./router.js";
-import { cameOffADisk, SourceLink, webSource } from "./SourceLink.js";
+import { cameOffADisk, journalBesideSite, SourceLink, webSource } from "./SourceLink.js";
 import { articleStats } from "./stats.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { TagEditor } from "./TagEditor.js";
-import { editArticleTags } from "./article-tags.js";
+import { editArticleTags, type TagChange } from "./article-tags.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { AuthorNames, AuthorSearchLinks } from "./AuthorNames.js";
-import { howLong, timeAgo } from "./relative-time.js";
+import { howLong, publishedOf, relativeAgo, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
 import { SLOW_AFTER_MS } from "./useSlow.js";
 import { useExperimental } from "./useExperimental.js";
 import { type ArchiveControl, useArchive } from "./useArchive.js";
 import { downloadExport } from "./export-download.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { isUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
 import { cachedReaderNow, forgetCachedReader } from "./lib/cached-shelf.js";
+import { ownLabel } from "./lib/own-label.js";
 import { AccessSharing, asArticleSharing } from "./AccessSharing.js";
+import { PrivateLink } from "./PrivateLink.js";
 import { isAdmin } from "../admin.js";
 import { ArticleCostBody, articleCostSummary, useArticleCost } from "./ArticleCost.js";
 import { CARD } from "./card.js";
@@ -293,8 +297,10 @@ import { useSession } from "./useSession.js";
 import { ProfileBox } from "./ProfileBox.js";
 import { useAutosavedText } from "./useAutosavedText.js";
 import { GuessedSourceLink } from "./Masthead.js";
-import { flushSync } from "react-dom";
-import { PageContents, SECTION_REVEAL, useRevealOnArrival } from "./PageContents.js";
+import { CONTENTS_MARGIN, PageContents, useRevealOnArrival } from "./PageContents.js";
+/* The section every card on this page sits in. It lived in this file until
+   2026-10-03, when `/profile` needed the same folding (plan 261003k). */
+import { Section, sectionId } from "./PageSection.js";
 import { Button } from "@/components/ui/button";
 import { HighPowerSwitch } from "./HighPowerSwitch.js";
 import { JobProgress } from "./JobProgress.js";
@@ -311,7 +317,7 @@ import { articleTitleVoice, voiceClass, withVoice } from "./voice.js";
  *
  * **`--dock-space`, not `--dock-h`.** The bar's own height is no longer the room
  * it takes: since 2026-08-28 it also carries the home indicator's inset as
- * padding (styles.css § tokens), and on an iPhone that inset is 34px against
+ * padding (src/web/styles/tokens.css § tokens), and on an iPhone that inset is 34px against
  * the 2rem of slack this line adds — so the last paragraph of this page would
  * have finished two pixels under the bar rather than clear of it. GPT Sol,
  * 2026-08-28.
@@ -402,6 +408,22 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
   simple: Layers,
 };
 
+/**
+ * The glyph for a stage **the server named**, which may be one this copy of
+ * the app was built before.
+ *
+ * `STAGE_ICONS` is complete for the names in this bundle and the type says so,
+ * but a stage row's `step` comes off the wire, and a copy opened from a
+ * home-screen icon outlives several deploys. When `relations` was added, every
+ * older copy looked it up, got `undefined`, and React took the whole app to
+ * the `[render]` screen for a missing 13-pixel icon (`SPIDERYARN-READING2-BJ`,
+ * `-CB`). The server sends the row's label, so with a neutral glyph the row is
+ * complete. tests/metadata-unknown-stage.test.tsx.
+ */
+function stageIcon(step: string): ComponentType<{ size?: number }> {
+  return ownLabel(STAGE_ICONS, step) ?? CircleDashed;
+}
+
 /*
  * **`SOON` and its one row stood here until 2026-09-07, and the row was this
  * feature.**
@@ -431,9 +453,9 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
  *
  * Their loading rules, quoted in original-version/design-system.md#loading-states,
  * which are short and right: *"Under 1 second: No
- * loading indicator needed (distracting)"*. This request is a directory walk on
- * localhost, so it almost always beats the timer and the section simply appears
- * filled in. A spinner that flashes for 200ms is worse than nothing — the
+ * loading indicator needed (distracting)"*. When the database-backed request
+ * beats the timer the section simply appears filled in. A spinner that flashes
+ * for 200ms is worse than nothing — the
  * flicker reads as breakage.
  */
 // The same 600ms as everywhere else, and now literally the same number:
@@ -442,11 +464,24 @@ const STAGE_ICONS: Record<StepName, ComponentType<{ size?: number }>> = {
 // so the docstring above and the effect below still read as they did.
 const LOADING_AFTER_MS = SLOW_AFTER_MS;
 
+/**
+ * **How long after each failed first read this page asks again**, and then it
+ * stops: four more tries over about fifty seconds.
+ *
+ * One failed read used to be final — `reload` ran when the slug changed and at
+ * no other time — so a single 404 in the seconds an import was still writing,
+ * or one dropped connection, left *"We could not check who can read this"* up
+ * until the reader reloaded (qi-kynm6gzc, 2026-10-06). Bounded, because a slug
+ * that is really gone would otherwise be polled for the life of the tab.
+ */
+const READ_AGAIN_AFTER_MS: readonly number[] = [2_000, 5_000, 15_000, 30_000];
+
 export function Metadata({
   slug,
   article,
   onRenamed,
   onVisibility,
+  onPrivateLink,
   archive: sharedArchive,
 }: {
   slug: string;
@@ -468,6 +503,7 @@ export function Metadata({
    * is one of the values.
    */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
   /** The owner's controller. Optional only for focused tests that mount this page alone. */
   archive?: ArchiveControl | undefined;
 }) {
@@ -493,11 +529,24 @@ export function Metadata({
   /**
    * Which stages have run, and how many questions have been asked. Not in the
    * article payload and deliberately never will be: that payload is fetched on
-   * every page, and walking the filesystem for it would charge every reader for
-   * a page almost nobody opens.
+   * every page, and the extra database reads behind this would charge every
+   * reader for a page almost nobody opens.
    */
   const [provenance, setProvenance] = useState<ArticleMetadata | null>(null);
+  /**
+   * The failed read's sentence, already in a reader's words
+   * (`describeFetchFailure`), or null when the last read answered.
+   *
+   * **`provenanceFailed` below is the one test of "did it fail"**, and it is
+   * `!== null`, not truthiness. Until 2026-10-06 four consumers asked
+   * `Boolean(provenanceError)` and a fifth `=== null`, which disagree about an
+   * empty message: a failure four of them called "not failed" and the fifth
+   * called "not still asking" (postmortem 261005i's class, failure presence
+   * inferred from message contents).
+   * tests/metadata-failed-read-says-a-readers-sentence.test.tsx.
+   */
   const [provenanceError, setProvenanceError] = useState<string | null>(null);
+  const provenanceFailed = provenanceError !== null;
   /**
    * **Did that answer come off the network, or out of our own cupboard?**
    *
@@ -512,6 +561,13 @@ export function Metadata({
    */
   const [provenanceOffline, setProvenanceOffline] = useState(false);
   const [slow, setSlow] = useState(false);
+  /** Reads that have failed since this article was opened — `READ_AGAIN_AFTER_MS`. */
+  const [failedReads, setFailedReads] = useState(0);
+  /* Reuse the description of consecutive identical failures for this article.
+     The first description reports an unauthored exception; its timed retries
+     should not report it four more times. Keep transport branding in the
+     comparison: a browser TypeError and a code TypeError can share words. */
+  const lastReadFailure = useRef<{ slug: string; error: Error; message: string } | null>(null);
   /**
    * **On `useOrderedRead`, because a dozen rows below can now ask for this again.**
    *
@@ -538,12 +594,26 @@ export function Metadata({
         const copy = res.headers.get("x-spideryarn-offline") === "copy";
         const answer = await readJson<ArticleMetadata>(res);
         if (!current()) return;
+        lastReadFailure.current = null;
         setProvenance(answer);
         setProvenanceOffline(copy);
         setProvenanceError(null);
       } catch (e) {
         if (!current()) return;
-        setProvenanceError((e as Error).message);
+        /* Let the shared classifier choose: transport wording belongs to the
+           browser, unauthored exceptions get the page-fault sentence, and
+           ReaderFacingError keeps its authored words. docs/project/copy.md. */
+        const error = e instanceof Error ? e : new Error(String(e));
+        const last = lastReadFailure.current;
+        const message = last?.slug === slug
+          && last.error.constructor === error.constructor
+          && last.error.message === error.message
+          && isUnreachable(last.error) === isUnreachable(error)
+          ? last.message
+          : describeFetchFailure(error);
+        lastReadFailure.current = { slug, error, message };
+        setProvenanceError(message);
+        setFailedReads((n) => n + 1);
       }
     },
     [slug],
@@ -553,21 +623,34 @@ export function Metadata({
      else — so "a different article" is said once, in the place `useOrderedRead`
      already has to be right about it, rather than a second time here. */
   useEffect(() => {
+    lastReadFailure.current = null;
     setProvenance(null);
     setProvenanceError(null);
     setProvenanceOffline(false);
     setSlow(false);
+    setFailedReads(0);
     const timer = setTimeout(() => setSlow(true), LOADING_AFTER_MS);
     void reload();
     return () => clearTimeout(timer);
   }, [reload]);
+  /* **A failed first read asks again** — `READ_AGAIN_AFTER_MS`. Only while there
+     is nothing on the page: a failed *refresh* keeps the rows it had and the
+     sentence beside them, and the next press asks again anyway. Keyed on the
+     count, so each wait starts when the read before it failed. */
+  useEffect(() => {
+    if (provenance !== null || failedReads === 0) return;
+    const wait = READ_AGAIN_AFTER_MS[failedReads - 1];
+    if (wait === undefined) return;
+    const timer = setTimeout(() => void reload(), wait);
+    return () => clearTimeout(timer);
+  }, [provenance, failedReads, reload]);
 
   /**
    * The per-article half of the reader profile, as a draft.
    *
    * Seeded from `provenance` rather than fetched separately — that endpoint is
-   * already walking this article's directory, so one more read answers it for
-   * free, which is the same argument its `comments` count already makes.
+   * already reading this article's rows, so one more answers it for almost
+   * nothing, which is the same argument its `comments` count already makes.
    *
    * `saved === null` means "not seeded yet", so an empty box the reader has
    * cleared is tellable from one that has not loaded.
@@ -582,21 +665,26 @@ export function Metadata({
    * add page's box cannot, and never sends an empty one (src/web/purpose.ts).
    * `savePurpose` also forgets the link cards' summaries, which were written
    * from the sentence being replaced.
+   *
+   * Both writes name the reader the page was mounted for (lib/made-for.ts):
+   * the unmount save is made after a change of reader has already happened.
+   * Plan 261006f § Stage 2.
    */
+  const madeFor = useMadeFor();
   const purpose = useAutosavedText({
     save: async (text) => {
       /* The server's answer, not what was typed: it trims and settles line
          endings, and the box must show the string that was actually stored.
          Read from `purpose` rather than from `entry`: the shelf card
          deliberately does not carry it (src/routes.ts § patchShelf). */
-      const stored = (await savePurpose(slug, text === "" ? null : text)) ?? "";
+      const stored = (await savePurpose(slug, text === "" ? null : text, madeFor)) ?? "";
       /* The glossary row's verdict (`glossaryRun`) is judged against this
          sentence, so one read before the save may be wrong after it — plan
          261001i § 3, GPT Sol's plan review. */
       void refresh();
       return stored;
     },
-    leave: (text) => leavePurpose(slug, text),
+    leave: (text) => leavePurpose(slug, text, madeFor),
   });
   const seedPurpose = purpose.seed;
   /**
@@ -627,8 +715,8 @@ export function Metadata({
    * Note what this page does NOT fetch: the comments. See Dock.tsx — the
    * Questions button is a link back to the reading view here, so nothing on
    * this page needs them, and a visit should not cost a request for them. The
-   * *count* below comes from the metadata endpoint, which is already looking in
-   * this article's directory.
+   * *count* below comes from the metadata endpoint, which is already reading
+   * this article's rows.
    */
   const [at] = useQueryState("at", atParam);
 
@@ -684,12 +772,47 @@ export function Metadata({
    * One derivation rather than the same two terms written out at each site.
    */
   const hasShelfRow = provenance !== null && !showingFixture;
+  /* The TagEditor and command bar share `saveTags`, so their admission record
+     has to live here too. React state would update a render later and admit
+     two presses in one tick; a ref closes the gate before the request leaves. */
+  const tagSaveInFlight = useRef(false);
+  /**
+   * **The one save of this article's tags on this page** — the `TagEditor`'s,
+   * and since 2026-10-03 the command bar's *Add the tag* / *Remove the tag*
+   * rows too (`shelfRow.tags` below), so a press in the bar and the editor on
+   * the page are one state. Plan 261003f, GPT Sol's F4: the bar calling
+   * `editArticleTags` itself would have left the editor showing the old list.
+   */
+  const saveTags = useCallback(
+    async (change: TagChange): Promise<string[]> => {
+      /* A `ReaderFacingError`, because it is a sentence for the reader and
+         `TagEditor` draws its failures through `describeFetchFailure`, which
+         gives a plain `Error` the page-fault sentence instead of its own
+         (tests/describe-fetch-failure.test.ts § every file that describes…). */
+      if (tagSaveInFlight.current) {
+        throw new ReaderFacingError("Still saving the last tag change — a moment.");
+      }
+      tagSaveInFlight.current = true;
+      try {
+        const tags = await editArticleTags(slug, change);
+        /* A metadata GET already in flight may have read the old tags. Let it
+           finish, then repair it from the server; with no GET in flight the
+           PATCH answer already is the freshest answer. */
+        armRefresh();
+        setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
+        return tags;
+      } finally {
+        tagSaveInFlight.current = false;
+      }
+    },
+    [slug, armRefresh],
+  );
   /* A local controller for focused mounts; the app hands in OwnedArticle's. */
   const metadataArchive = useArchive(
     slug,
     provenance?.archivedAt,
     provenance !== null,
-    Boolean(provenanceError),
+    provenanceFailed,
   );
   /* In the app, one controller survives the switch between Reader and
      Metadata. The local controller keeps this page independently mountable in
@@ -697,7 +820,22 @@ export function Metadata({
   const archive = sharedArchive ?? metadataArchive;
   /* The byline leaves this line when the Authors section below says it one name
      at a time — the same names twice on one screen is noise (plan 260929d). */
-  const facts = [meta.authors ? undefined : meta.byline, meta.siteName, meta.lang].filter(Boolean) as string[];
+  /* **Where and when it was published** (Greg, 2026-10-03, spya-pcz6a3). The
+     journal is the registry's name for where the piece appeared, left out when
+     the site already says it; the day is the publisher's own calendar day,
+     printed by the same `publishedOf` the shelf sorts on, so the two cannot
+     disagree about what counts as a date. A paper the registry dates only to
+     a year prints the year alone, `Published 2011` (plan 261004h). */
+  const journal = journalBesideSite(meta.journal, meta.siteName);
+  const published = publishedOf(meta)?.label;
+  const facts = [
+    ["byline", meta.authors ? undefined : meta.byline],
+    ["journal", journal],
+    ["site", meta.siteName],
+    ["published", published ? `Published ${published}` : undefined],
+    ["language", meta.lang],
+  ].filter(([, fact]) => Boolean(fact)) as [string, string][];
+  const fetchedShown = fetchedIsShown(meta.fetchedAt);
 
   /**
    * The one line that has to survive the section being shut.
@@ -749,6 +887,10 @@ export function Metadata({
     section?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   }
 
+  /* The page's one clock for the three times it says in words — "fetched …",
+     "ran …", "last wrote …" — read here and passed down, so the heading's
+     "last wrote" and the row's cannot straddle a minute (useNow.ts). */
+  const now = useNow();
   const pipelineLine = useMemo(() => {
     if (!provenance) return null;
     const ran = provenance.stages.filter((s) => s.done).length;
@@ -756,8 +898,8 @@ export function Metadata({
       .map((s) => (s.ranAt ? Date.parse(s.ranAt) : Number.NaN))
       .filter((t) => !Number.isNaN(t));
     const newest = stamps.length ? Math.max(...stamps) : null;
-    return `${ran} of ${provenance.stages.length} stages${newest === null ? "" : ` · last wrote ${ago(new Date(newest))}`}`;
-  }, [provenance]);
+    return `${ran} of ${provenance.stages.length} stages${newest === null ? "" : ` · last wrote ${whenSaid(new Date(newest).toISOString(), now)}`}`;
+  }, [provenance, now]);
 
   return (
     <>
@@ -781,15 +923,6 @@ export function Metadata({
           gone and the clock has not: this page has no sticky bar of its own, so
           y=0 here is under the status bar and the term is what keeps the back
           link out from under it. */}
-      {/* The contents list in the left margin. It reads its entries off the
-          `[data-section]` elements inside `main`, so there is no second list of
-          section names to keep in step — PageContents.tsx says why that matters
-          more here than usual. Hidden below `lg`, where there is no margin to
-          put it in; from `lg` until the centred margin is wide enough there is
-          only room once `main` steps right to clear it, which is the
-          `tw:lg:ml-…` below. */}
-      <PageContents containerRef={body} label="Sections of this page" />
-
       {/* `metadata-page` carries no rule now. It once held a typography fix —
           every `<button>` on this page inheriting its font, because we import
           no preflight and a button otherwise keeps the UA's 13.3px Arial
@@ -798,23 +931,12 @@ export function Metadata({
           the bit of preflight we need; feedback.css § metadata keeps the
           diagnosis).
 
-          **`tw:lg:ml-…` is room for the contents list, and nothing else.** It is
-          `mx-auto`'s own left margin for a 48rem column, but never less than
-          12rem plus the left safe inset: the list ends at 12.5rem plus that
-          inset (it is fixed chrome, so it adds it — tokens.css § safe areas),
-          and this column's text starts 1.5rem inside it, so a 1rem gap. The
-          `max` picks the centred margin from 1152px plus twice the left inset
-          of containing-block width (a little more window width with a classic
-          scrollbar, since `100%` is the width beside it). Below that the page
-          sits right of centre — by up to 4rem when the inset is zero — so an
-          iPad in landscape gets the list. Greg, SPIDERYARN-READING2-9M,
-          2026-10-01: *"not visible
-          on my iPad, even in landscape mode, even though there's quite a lot of
-          space on either side."*
-          docs/plans/261002a-metadata-contents-on-an-ipad-in-landscape.md. */}
+          **`CONTENTS_MARGIN` is room for the contents list, and nothing
+          else** — PageContents.tsx has the arithmetic, shared with `/profile`
+          since 2026-10-03. */}
       <main
         ref={body}
-        className={`metadata-page tw:mx-auto tw:lg:ml-[max(calc(12rem_+_var(--safe-left)),calc((100%_-_48rem)/2))] tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
+        className={`metadata-page tw:mx-auto ${CONTENTS_MARGIN} tw:max-w-3xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans ${DOCK_CLEARANCE}`}
       >
         <Link
           href={backHref}
@@ -858,21 +980,31 @@ export function Metadata({
             {meta.title}
           </h1>
         </EditableTitle>
+        {hasShelfRow && !rename.editing && (
+          <ImportedTitle original={meta.titleOriginal} showing={meta.title} onUse={rename.done} />
+        )}
         {/* Only the facts this article actually has, filtered once and counted
             from the filtered list — same reasoning as the library card. A chain
             of `&&`s, or a separate test of the same fields, is how a line ends
             up starting with a stranded `·`. */}
-        <p className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground">
-          {facts.map((fact, i) => (
-            <span key={fact}>
-              {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
+        <p
+          data-metadata-facts
+          className="tw:mt-2 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground"
+        >
+          {/* **The separator ends an item; it never starts one.** The line wraps
+              on a phone, and a row beginning "· fetched 3 weeks ago" reads as a
+              stray mark (261004a's browser check). At the end of the row above
+              it reads as "and there is more". */}
+          {facts.map(([key, fact], i) => (
+            <span key={key}>
               {fact}
+              {(i < facts.length - 1 || fetchedShown) && <span className="tw:ml-2 tw:opacity-50">·</span>}
             </span>
           ))}
           {/* Relative, with the exact stamp on hover — theirs did this and it is
               the right way round. "3 days ago" is what you want to know; the
               timestamp is what you want when the answer is surprising. */}
-          <Fetched iso={meta.fetchedAt} lead={facts.length > 0} />
+          <Fetched iso={meta.fetchedAt} now={now} />
         </p>
         {/* Where it came from, and the way back to it — `Origin` below. `owner`
             is `hasShelfRow` rather than a fresh test, because the link it gates
@@ -918,15 +1050,7 @@ export function Metadata({
             </p>
             <TagEditor
               tags={provenance.tags ?? []}
-              save={async (change) => {
-                const tags = await editArticleTags(slug, change);
-                /* A metadata GET already in flight may have read the old tags.
-                   Let it finish, then repair it from the server; with no GET in
-                   flight the PATCH answer already is the freshest answer. */
-                armRefresh();
-                setProvenance((p) => (p && p.slug === slug ? { ...p, tags } : p));
-                return tags;
-              }}
+              save={saveTags}
             />
           </div>
         )}
@@ -934,6 +1058,25 @@ export function Metadata({
         {/* The two acts people come here for most often, under the title —
             `TopActions`. */}
         <TopActions archive={archive} fixture={showingFixture} onShare={goToSharing} />
+
+        {/* **The contents list and its search box.** It reads its entries off
+            the `[data-section]` elements inside `main`, so there is no second
+            list of section names to keep in step — PageContents.tsx says why
+            that matters more here than usual. It is not a `[data-section]`
+            itself, so it does not list itself.
+
+            **Mounted here, under the title and its two buttons, because below
+            `lg` this is where it is drawn**: the search box, then a *Contents*
+            button that opens the list, above the first section. Greg,
+            2026-10-06, report `spya-vwf00u`: *"put the search bar and table of
+            contents above the actual contents of the page"*. Until then it was
+            `main`'s sibling and not drawn at all on a narrow window. From `lg`
+            it is fixed in the left margin, so its place in the markup does not
+            move it; until the centred margin is wide enough there is only room
+            once `main` steps right to clear it, which is `CONTENTS_MARGIN`
+            above.
+            docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md. */}
+        <PageContents containerRef={body} label="Sections of this page" />
 
         {/* --------------------------------------------- 2. in one sentence --
             Serif, because this is the article talking rather than the app —
@@ -1035,13 +1178,16 @@ export function Metadata({
                 value={`${stats.minutes} min`}
                 /* The bottom bar carried a dimmed "Reading time" placeholder
                    until 2026-08-26, when Greg said it *"should be part of
-                   Metadata"* — and it already was, right here. What only the
-                   placeholder knew is now in this sentence: the original
-                   version dropped the standard readability formulas for a
-                   model's judgement, then scaled the estimate by how confident
-                   the model said it was. See Dock.tsx, and
-                   original-version/difficulty-and-reading-time.md. */
-                tip={`Words ÷ ${WPM} a minute, rounded, and never less than one. A flat rate: it does not know how hard this particular article is.`}
+                   Metadata"* — and it already was, right here. The same card
+                   as the masthead's minutes since 2026-10-05 (spya-jew7ds):
+                   ReadTimeCard.tsx. */
+                card={
+                  <ReadTimeCard
+                    words={stats.words}
+                    supplementWords={stats.supplementWords}
+                    difficulty={stats.difficulty}
+                  />
+                }
               />
               <Stat
                 icon={Blocks}
@@ -1062,7 +1208,7 @@ export function Metadata({
                 icon={BookOpen}
                 label="Parts"
                 value={stats.parts.toLocaleString()}
-                tip="The article's top-level divisions, and the rungs of the leftmost gist column."
+                tip="The article's top-level divisions."
               />
               <Stat
                 icon={List}
@@ -1115,6 +1261,7 @@ export function Metadata({
             pressing it is how you find out. */}
         <SharingSection
           onVisibility={onVisibility}
+          onPrivateLink={onPrivateLink}
           slug={slug}
           title={meta.title}
           /* **Not `hasShelfRow`**, which is false while the fetch is out and
@@ -1132,6 +1279,9 @@ export function Metadata({
              day it was written; this door was not. AccessSharing.tsx §
              asArticleSharing. */
           sharing={asArticleSharing(provenance?.sharing)}
+          /* Still out, which is not the same as failed: the card has a
+             sentence for each. */
+          checking={provenance === null && !provenanceFailed}
         />
 
         {/* ------------------------------------------------ 6. your reading --
@@ -1162,6 +1312,7 @@ export function Metadata({
               disabled={purpose.saved === null}
               rows={2}
               save={purpose.state}
+              inFlight={purpose.inFlight}
             />
 
             {/* The global half, shown rather than edited. A reader looking at
@@ -1177,7 +1328,7 @@ export function Metadata({
                   Edit on your profile →
                 </Link>
               </div>
-              <AboutYou profile={provenance?.profile ?? null} failed={Boolean(provenanceError)} />
+              <AboutYou profile={provenance?.profile ?? null} failed={provenanceFailed} />
             </div>
           </div>
 
@@ -1185,9 +1336,9 @@ export function Metadata({
             <Row icon={MessageCircle} label="Comments">
               <Questions
                 count={provenance?.comments ?? null}
-                failed={Boolean(provenanceError)}
+                failed={provenanceFailed}
                 slow={slow}
-                href={readHref(slug, withPanel(carriedSearch(location.search)), "article")}
+                href={readHref(slug, withPanel(carriedSearch(location.search), "questions"), "article")}
               />
             </Row>
             <Row icon={Target} label="Where you left off">
@@ -1250,6 +1401,7 @@ export function Metadata({
           error={provenanceError}
           slow={slow}
           aside={pipelineLine}
+          now={now}
           structureGenerator={`${tree.generator} · ${tree.version}`}
           arcGenerator={arc ? `${arc.generator} · ${arc.version}` : undefined}
         />
@@ -1293,7 +1445,7 @@ export function Metadata({
             title={meta.title?.trim() || slug}
             known={provenance !== null}
             offline={provenanceOffline}
-            failed={Boolean(provenanceError)}
+            failed={provenanceFailed}
             fixture={showingFixture}
             /* Off the same fetch the sharing card reads, so the two cannot
                disagree about whether this article is public. **False where the
@@ -1317,8 +1469,10 @@ export function Metadata({
            fixture, where there is no row and both requests would 404 — the
            rule `ArchiveArticle` and `ExportSection` follow. Not gated on
            `hasShelfRow`'s provenance wait: CommandBar.tsx §
-           `CommandBarArticle.shelfRow` says why the bar need not wait. */
-        shelfRow={showingFixture ? undefined : { archive }}
+           `CommandBarArticle.shelfRow` says why the bar need not wait.
+           `tags` is the editor's own save (`saveTags`), so a tag added from
+           the bar is on the page at once (GPT Sol's F4 on plan 261003f). */
+        shelfRow={showingFixture ? undefined : { archive, tags: { edit: saveTags } }}
       />
     </>
   );
@@ -1347,12 +1501,15 @@ function SharingSection({
   title,
   offer,
   sharing,
+  checking,
   onVisibility,
+  onPrivateLink,
 }: {
   slug: string;
   title: string;
   /** Straight through to the card — see `Metadata`'s prop of the same name. */
   onVisibility: (slug: string, visibility: Visibility | null) => void;
+  onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
   /** There is a shelf row and we know it — `hasShelfRow` in `Metadata`. */
   offer: boolean;
   /**
@@ -1362,12 +1519,61 @@ function SharingSection({
    * in flight, and for ever on a store with no column to read.
    */
   sharing: ArticleSharing | undefined;
+  /** That fetch is still in flight: it has neither landed nor failed. */
+  checking: boolean;
 }) {
   if (!offer) return null;
+  return <SharingCard slug={slug} title={title} sharing={sharing} checking={checking} onVisibility={onVisibility} onPrivateLink={onPrivateLink} />;
+}
+
+/**
+ * The card itself: the private link, then the public switch (plan 261005e).
+ *
+ * **Two controls, and one thing passes between them**: whether the article is
+ * public now. The private link's control says so when both are on, because
+ * turning the link off then closes nothing. It hears it the way the masthead
+ * does, from what the public switch reports upwards: the page's own answer
+ * first, `null` the moment a write goes out, then the server's answer. Until
+ * the switch has said anything, the page's fetch is the answer.
+ */
+function SharingCard({
+  slug,
+  title,
+  sharing,
+  checking,
+  onVisibility,
+  onPrivateLink,
+}: {
+  slug: string;
+  title: string;
+  sharing: ArticleSharing | undefined;
+  checking: boolean;
+  onVisibility: (slug: string, visibility: Visibility | null) => void;
+  onPrivateLink?: ((slug: string, on: boolean | null) => void) | undefined;
+}) {
+  /* `undefined` is *the switch has reported nothing yet*; `null` is its own
+     *we no longer know*. */
+  const [reported, setReported] = useState<Visibility | null | undefined>(undefined);
+  const visibility = reported === undefined ? (sharing?.visibility ?? null) : reported;
+  const report = useCallback(
+    (forSlug: string, to: Visibility | null) => {
+      if (forSlug === slug) setReported(to);
+      onVisibility(forSlug, to);
+    },
+    [slug, onVisibility],
+  );
+  /* And the other way: whether a private link is on, from the control that
+     reads it to the switch whose *"Only you can read this"* depends on it.
+     `null` until that control has read it, and whenever it cannot say. */
+  const [linkOn, setLinkOn] = useState<boolean | null>(null);
+  const reportLink = useCallback((on: boolean | null) => {
+    setLinkOn(on);
+    onPrivateLink?.(slug, on);
+  }, [slug, onPrivateLink]);
   return (
     <Section
       label="Access & sharing"
-      keywords="anyone everybody readers signed in account permission public link privacy visible who can read send friend colleague republish"
+      keywords="anyone everybody readers signed in account permission public private link key privacy visible who can read send friend colleague republish"
     >
       {/* **In a card, like every other section on this page**, since
           2026-09-04. It was the one section whose contents sat straight on the
@@ -1380,12 +1586,30 @@ function SharingSection({
           `${CARD} p-4`, matching the compact control cards elsewhere on the
           page rather than "In one sentence"'s `p-5`. */}
       <div className={`${CARD} tw:p-4`}>
-        <AccessSharing
+        <PrivateLink
           slug={slug}
           title={title}
           sharing={sharing}
-          onVisibility={onVisibility}
+          checking={checking}
+          isPublic={visibility === null ? null : visibility === "public"}
+          onLink={reportLink}
         />
+        {/* The second control, under its own heading and a rule, so the card
+            reads as two switches and not one paragraph. */}
+        <div className="tw:mt-4 tw:border-t tw:border-rule tw:pt-4">
+          <h3 className="tw:m-0 tw:mb-2 tw:flex tw:items-center tw:gap-2 tw:font-sans tw:text-sm tw:font-semibold tw:text-ink">
+            <Globe size={14} />
+            Public
+          </h3>
+          <AccessSharing
+            slug={slug}
+            title={title}
+            sharing={sharing}
+            checking={checking}
+            onVisibility={report}
+            privateLinkOn={linkOn}
+          />
+        </div>
       </div>
     </Section>
   );
@@ -1453,7 +1677,7 @@ function SharingSection({
  * **Shut by default, and still mounted.** `keepMounted` hides the rows rather
  * than unmounting them, so every row's `useStepJob` subscription lives for the whole
  * visit, and a run that finishes while the section is shut still refreshes the
- * page — see `Section`'s `keepMounted` for what unmounting lost.
+ * page — see `Section`'s `keepMounted` (PageSection.tsx) for what unmounting lost.
  *
  * The cost, said out loud: one subscription per row to one shared engine
  * (`useJobs` is a `useSyncExternalStore` over `jobEngine`), so these are store
@@ -1467,6 +1691,7 @@ function RerunSection({
   error,
   slow,
   aside,
+  now,
   structureGenerator,
   arcGenerator,
 }: {
@@ -1486,6 +1711,8 @@ function RerunSection({
   slow: boolean;
   /** `N of M stages · last wrote …`, kept on the heading so shutting it takes only the detail. */
   aside: string | null;
+  /** The page's clock, for the rows' "ran …" — `Metadata`'s one `useNow`. */
+  now: number;
   structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
@@ -1496,11 +1723,11 @@ function RerunSection({
     <Section
       label="AI processing"
       keywords={`${AI_PROCESSING_KEYWORDS}${reset ? ` ${WHOLE_ARTICLE_KEYWORDS}` : ""}`}
-      collapsible={!error}
+      collapsible={error === null}
       keepMounted
-      aside={error ? null : aside}
+      aside={error !== null ? null : aside}
     >
-      {error && (
+      {error !== null && (
         <p
           className={`${CARD} tw:m-0 tw:mb-3 tw:border-destructive/40 tw:bg-destructive/10 tw:p-4 tw:text-sm tw:text-foreground`}
         >
@@ -1567,6 +1794,7 @@ function RerunSection({
         provenance={provenance}
         error={error}
         slow={slow}
+        now={now}
         structureGenerator={structureGenerator}
         arcGenerator={arcGenerator}
       />
@@ -1588,25 +1816,27 @@ function StageRecord({
   provenance,
   error,
   slow,
+  now,
   structureGenerator,
   arcGenerator,
 }: {
   provenance: ArticleMetadata | null;
   error: string | null;
   slow: boolean;
+  now: number;
   structureGenerator: string;
   arcGenerator: string | undefined;
 }) {
   return (
     <>
-      {/* Which stages have run, and the two that carry a model's name. A stage
-          counts as run only when *all* of its outputs are on disk —
-          src/pipeline.ts owns that rule and this page borrows it rather than
-          restating it. */}
+      {/* Which stages have run, and the two that carry a model's name. The
+          metadata response supplies `done`: a completed run whose result is
+          current according to src/store/pg.ts. This page displays that verdict
+          rather than rechecking the pipeline's outputs. */}
       <SubHeading>What we did to it</SubHeading>
       {/* Named, not "Loading…", and only after the timer — their loading
           rules on both counts (original-version/design-system.md#loading-states). */}
-      {!error && provenance === null && slow && (
+      {error === null && provenance === null && slow && (
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
           Checking which files the pipeline wrote…
         </p>
@@ -1621,6 +1851,7 @@ function StageRecord({
               <StageRow
                 key={stage.step}
                 stage={stage}
+                now={now}
                 generator={
                   stage.step === "structure"
                     ? structureGenerator
@@ -2090,6 +2321,42 @@ function Questions({
 }
 
 /**
+ * **The title as it arrived, when import tidied it, and the way back.**
+ *
+ * Import makes a title printed in capitals title case and keeps the original
+ * (`Meta.titleOriginal`, src/title-tidy.ts). Greg asked that the tidying could
+ * be undone, and this line is the undo: the button writes the original as the
+ * reader's own title through the page's one rename, so it survives the article
+ * being imported again. Nothing is drawn when import changed nothing, or when
+ * the title showing already is the original.
+ * docs/plans/261005g-tidy-an-imported-title-and-keep-the-original.md
+ */
+export function ImportedTitle({
+  original,
+  showing,
+  onUse,
+}: {
+  original: string | undefined;
+  showing: string;
+  onUse: (title: string) => void;
+}) {
+  if (!original || original === showing) return null;
+  return (
+    <p
+      data-imported-title
+      className="tw:mt-1 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-sm tw:text-muted-foreground"
+    >
+      <span className="tw:min-w-0">
+        Imported as “<span className={voiceClass("author")}>{original}</span>”.
+      </span>
+      <Button type="button" variant="outline" size="sm" onClick={() => onUse(original)}>
+        Use that title
+      </Button>
+    </p>
+  );
+}
+
+/**
  * **Where the article came from: a web address, or a file the reader uploaded.**
  *
  * This line was the source URL and nothing else, `{meta.url && …}`, so an
@@ -2377,7 +2644,8 @@ function SubHeading({ children }: { children: ReactNode }) {
  *
  * On 2026-10-01 *What we did to it* left this section for *AI processing*,
  * beside the re-run rows — Greg, `spya-qgh5ta`: *"amalgamate "What we did to
- * it" and "Re-run AI processing""*. The error and `collapsible={!error}` went
+ * it" and "Re-run AI processing""*. The error and its `collapsible` rule
+ * (`error === null` since 2026-10-06, one test of "failed" for the page) went
  * with the rows (`RerunSection`, `StageRecord`), so this section, which is
  * now only identifiers and a fingerprint, is always collapsible.
  * docs/plans/261001j-five-small-feedback-tooltips-and-labels.md § 5.
@@ -2655,11 +2923,11 @@ function ArchiveArticle({
            the reader did this on purpose, so it is a confirmation rather than an
            emergency.
 
-           `timeAgo` on a `useNow` clock rather than this file's own `ago`, and
-           both halves of that matter. The clock, because this line is written
-           the instant the reader presses Archive: `ago` reads `Date.now()` once
-           during render, so "Archived just now" would still say "just now" an
-           hour later, on a page nothing else re-renders. And `timeAgo`, because
+           `timeAgo` on a `useNow` clock, and both halves of that matter. (This
+           file had a private `ago` until 2026-10-04 that had neither.) The
+           clock, because this line is written the instant the reader presses
+           Archive: a `Date.now()` read once during render would have "Archived
+           just now" still saying "just now" an hour later. And `timeAgo`, because
            it hands back `undefined` for a date it cannot parse instead of
            feeding `NaN` to `Intl.RelativeTimeFormat`, which throws. Both found
            by a cross-model review, 2026-08-27. */
@@ -3060,9 +3328,12 @@ function DeletePermanently({
        * the server what is actually there. So a route that really did delete
        * and merely answered oddly still ends with the reader in their library —
        * by evidence rather than by assumption.
+       *
+       * A `ReaderFacingError` because the catch draws this sentence as it is
+       * when the article turns out to be still there.
        */
       if (answer.destroyed !== slug) {
-        throw new Error("The server did not confirm which article was deleted");
+        throw new ReaderFacingError("The server did not confirm which article was deleted");
       }
       await leave(reader);
       /* No `setBusy(false)`: the article is gone and we are on our way out.
@@ -3382,193 +3653,13 @@ function found(recall: number): number {
 }
 
 /**
- * A section's heading turned into an element id, for the contents list to aim at.
- *
- * Deriving it rather than passing one in: an `id` prop is a second name for the
- * section that nothing checks against the first, and the failure is a contents
- * entry that scrolls nowhere. The labels here are short English phrases, so
- * lower-casing and hyphenating is enough — `"Access & sharing"` becomes
- * `"access-sharing"`, and there is no pair of labels on this page that collide
- * under it.
- */
-function sectionId(label: string): string {
-  return `sec-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-}
-
-/**
  * **The element a `?section=` value names** — the value is the id `sectionId`
- * makes, without its prefix, so the address reads `section=ai-processing`
+ * (PageSection.tsx) makes, without its prefix, so the address reads `section=ai-processing`
  * rather than `section=sec-ai-processing`. tests/metadata-section-param.test.tsx
  * checks every accepted value against this page's real sections.
  */
 function sectionIdFor(section: MetadataSection): string {
   return `sec-${section}`;
-}
-
-export function Section({
-  label,
-  aside,
-  keywords,
-  collapsible,
-  keepMounted,
-  children,
-}: {
-  label: string;
-  /** One line answering the section's question, on the heading row. */
-  aside?: ReactNode;
-  /**
-   * **Words a reader might search for that the section does not print** — the
-   * search box above the contents list reads them (`data-keywords`,
-   * page-search.ts). Mostly for the sections that unmount their body when
-   * shut, whose words are otherwise not on the page to find. The synonyms
-   * the whole page shares live in page-search.ts § METADATA_SYNONYMS; these
-   * are this section's own. Plan 261001s.
-   *
-   * **Required, and generous**: the words a reader *types* — *regenerate*,
-   * *get rid of*, *who can see it* — not the words the section prints. A new
-   * section, or a new control in one, comes with its words, and a case in
-   * tests/metadata-contents-reveal.test.tsx § the words a reader brings.
-   * Greg, `spya-nkjpte`, 2026-10-02 — docs/project/web-client.md, the
-   * Metadata.tsx row. Plan 261002c.
-   */
-  keywords: string;
-  collapsible?: boolean;
-  /**
-   * **Shut hides the children rather than unmounting them.** For *AI
-   * processing*, whose rows each hold a `useStepJob` subscription: unmounted,
-   * a run that finished while the section was shut would never call
-   * `onFinished`, and reopening would not replay it — `useJobs` starts a new
-   * subscriber's cursor at the latest completion, and the fallback needs the
-   * row's own `startedId`, which went with it. GPT Sol, plan review of
-   * docs/plans/260929b-one-place-to-re-run-ai-processing.md, P1.
-   */
-  keepMounted?: boolean;
-  children: ReactNode;
-}) {
-  /* Local state, not a URL parameter, and this page's own `at` two hundred
-     lines up is the reason that needs saying: url-state.md puts every bit of
-     view state in the address bar. A shut section is not view state in that
-     sense — it is the same kind of thing as an open drawer, which
-     `carriedSearch` deliberately strips on every navigation because a drawer
-     you left open is not a place you were. Nothing about a shut section is
-     worth linking to, and a `?stages=open` in every shared metadata URL would
-     be noise in the one place this app keeps clean. */
-  /**
-   * **`open` is the reader's toggle; `showing` is what actually renders.**
-   *
-   * This was `useState(!collapsible)`, and that is a bug that had been live
-   * since the section was written, found by tests/metadata-page-order.test.tsx
-   * on 2026-09-03. `useState`'s argument is an *initial* value: it is read on
-   * the first render and never again. But the one caller that passes a varying
-   * `collapsible` computes it from a request that has not answered yet —
-   * `collapsible={!provenanceError}` — so the section mounts collapsible,
-   * latches `open: false`, and then the request fails.
-   *
-   * At that moment `collapsible` goes false, which takes the disclosure button
-   * away (the heading stops being a control), while `open` is still false. The
-   * section was left **shut, with nothing on the page that could open it**, and
-   * what was sealed inside was the error message — the exact outcome the rule
-   * was written to prevent, by a cross-model review on 2026-08-27 which said
-   * "a shut section is exactly where it would have gone". It went there anyway.
-   *
-   * Deriving it fixes the class rather than the instance: a section that is not
-   * collapsible shows its children, whenever it stopped being collapsible and
-   * whatever the reader had toggled beforehand. docs/postmortems/260903d-a-collapsible-section-latched-shut-and-sealed-the-error-in.md
-   */
-  const [open, setOpen] = useState(false);
-  const showing = !collapsible || open;
-  /* **Opened from outside** — the contents list and its search box send
-     `SECTION_REVEAL` to the section they are taking the reader to
-     (PageContents.tsx § reveal; Greg, SPIDERYARN-READING2-7Y: *"expand that
-     section (if needed)"*). An event on this element rather than lifted state,
-     because lifting it would need a list of the page's sections — the second
-     list PageContents exists not to have. Opens, never shuts: a reveal of an
-     open section leaves it open. A section that is not collapsible is already
-     showing, and setting `open` on it changes nothing. */
-  const sectionEl = useRef<HTMLElement>(null);
-  /* Layout, not passive: a MutationObserver can see this section's committed
-     DOM before passive effects run. The arrival hook may dispatch immediately,
-     so its listener must exist in the same commit as the element. */
-  useLayoutEffect(() => {
-    const el = sectionEl.current;
-    if (!el) return;
-    /* `flushSync` so the body is in the DOM when the event returns: the
-       sender scrolls next, and near the foot of the page a shut section may
-       not leave the scroll range to bring its heading up. Sol, plan review. */
-    const reveal = () => flushSync(() => setOpen(true));
-    el.addEventListener(SECTION_REVEAL, reveal);
-    return () => el.removeEventListener(SECTION_REVEAL, reveal);
-  }, []);
-  const head = (
-    <>
-      <span
-        aria-hidden="true"
-        className="tw:inline-block tw:h-3.5 tw:w-[3px] tw:shrink-0 tw:rounded-full tw:bg-highlight/70"
-      />
-      {label}
-    </>
-  );
-  return (
-    /* `data-section` is what the contents list in the margin reads, and `id` is
-       where it scrolls to — PageContents.tsx, which derives its whole list from
-       these rather than from a second array of section names.
-
-       `scroll-mt-24` is 6rem, and "reached" over there is deliberately a
-       little MORE than it — the section a click has just scrolled to must be
-       the section the list then marks, and setting the two equal put that on a
-       knife edge that a browser lost. Since 2026-10-03 it reads this margin off
-       the element (`reachedPx`), so changing the 24 needs no second edit —
-       and neither does a reader whose rem is not 16px. */
-    <section
-      ref={sectionEl}
-      id={sectionId(label)}
-      data-section={label}
-      data-keywords={keywords}
-      className="tw:mt-8 tw:scroll-mt-24"
-    >
-      {/* **Every heading can take focus from a script** (`tabIndex={-1}`: not a
-          Tab stop), for whatever sends the reader here — *Share…* in
-          `TopActions`, which lands on *Access & sharing*, and the contents list
-          and its search box, which land on any section (PageContents.tsx §
-          reveal). The heading rather than the first control inside, because
-          that control changes with the card's state, and a landing that puts
-          an action under Enter is the wrong kind of arrival. GPT Sol, plan
-          reviews, 2026-09-30 and 261001s. It was one section's `landing` prop
-          until the contents list needed the same for all of them. */}
-      <h2
-        tabIndex={-1}
-        className="tw:m-0 tw:mb-3 tw:flex tw:items-center tw:gap-2 tw:text-[0.68rem] tw:font-normal tw:uppercase tw:tracking-[0.09em] tw:text-ink-faint">
-        {collapsible ? (
-          /* The heading itself is the control, so the target is the whole line
-             rather than a 12px chevron. `aria-expanded` on the button and
-             nothing on the section: the button is what opens, and the h2 stays
-             a heading so the page's outline is the same shut or open. */
-          <button
-            type="button"
-            onClick={() => setOpen((was) => !was)}
-            aria-expanded={showing}
-            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
-          >
-            {head}
-            {showing ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-          </button>
-        ) : (
-          head
-        )}
-        {/* Shown open or shut, and that is the point of it: shutting the
-            section must not take the answer away, only the detail. */}
-        {aside && (
-          <span
-            data-section-aside=""
-            className="tw:ml-auto tw:min-w-0 tw:truncate tw:normal-case tw:tracking-normal tw:text-ink-faint"
-          >
-            {aside}
-          </span>
-        )}
-      </h2>
-      {keepMounted ? <div hidden={!showing}>{children}</div> : showing && children}
-    </section>
-  );
 }
 
 /**
@@ -3582,16 +3673,28 @@ function Stat({
   icon: Icon,
   label,
   value,
-  tip,
+  ...said
 }: {
   icon: ComponentType<{ size?: number }>;
   label: string;
   value: string;
-  tip: string;
-}) {
+  /* A sentence, or a whole card of short paragraphs set in `ControlTip`'s
+     classes — one or the other, so a tile cannot say two things. */
+} & ({ tip: string; card?: undefined } | { card: ReactNode; tip?: undefined })) {
   return (
-    <Tooltip placement="top" content={<TipNote>{tip}</TipNote>}>
-      <div className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40`}>
+    <Tooltip
+      placement="top"
+      {...(said.card !== undefined
+        ? { className: "tip-soon", content: said.card }
+        : { content: <TipNote>{said.tip}</TipNote> })}
+    >
+      {/* Focusable since 2026-10-05: the card is the only place the
+          explanation is, and a keyboard had no way to it (GPT Sol, plan 261005c). */}
+      <div
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: focus opens the explanation; pressing does nothing
+        tabIndex={0}
+        className={`${CARD} tw:p-4 tw:cursor-help tw:transition-colors tw:hover:border-highlight/40 tw:focus-visible:border-highlight-text`}
+      >
         <div className="tw:mb-2 tw:flex tw:items-center tw:gap-2">
           <Chip icon={Icon} />
           <span className="tw:border-b tw:border-dotted tw:border-rule-strong tw:text-[0.68rem] tw:uppercase tw:tracking-[0.06em] tw:text-ink-faint">
@@ -3656,11 +3759,19 @@ function Row({
  * `article.html`. This is the page you open to go and look at a file, and a
  * name you cannot find on disk is worse than no name.
  */
-function StageRow({ stage, generator }: { stage: StageState; generator: string | undefined }) {
+function StageRow({
+  stage,
+  generator,
+  now,
+}: {
+  stage: StageState;
+  generator: string | undefined;
+  now: number;
+}) {
   const { step, label, outputs, done } = stage;
   // `stage.ranAt` / `stage.bytes` are read off the object below rather than
   // destructured here, so a reader of `<Wrote>` can see which they are.
-  const Icon = STAGE_ICONS[step];
+  const Icon = stageIcon(step);
   return (
     <div className={`tw:px-4 tw:py-3 ${done ? "" : "tw:opacity-60"}`}>
       <div className="tw:flex tw:items-center tw:gap-3">
@@ -3704,7 +3815,7 @@ function StageRow({ stage, generator }: { stage: StageState; generator: string |
         {done && (
           <span className="tw:min-w-0 tw:font-mono tw:break-all">{outputs.join(" · ")}</span>
         )}
-        <Wrote at={stage.ranAt} began={stage.startedAt} bytes={stage.bytes} done={done} />
+        <Wrote at={stage.ranAt} began={stage.startedAt} bytes={stage.bytes} done={done} now={now} />
       </div>
     </div>
   );
@@ -3743,11 +3854,13 @@ function Wrote({
   began,
   bytes,
   done,
+  now,
 }: {
   at: string | null;
   began: string | null;
   bytes: number | null;
   done: boolean;
+  now: number;
 }) {
   if (!at) return null;
   const t = Date.parse(at);
@@ -3788,7 +3901,7 @@ function Wrote({
         {/* "last wrote" rather than "ran" for a stage that is not done: something
             of its is on disk and the set is incomplete, which is precisely the
             state this page gets opened to look at. */}
-        {done ? "ran" : "last wrote"} {ago(when)}
+        {done ? "ran" : "last wrote"} {whenSaid(at, now)}
       </button>
     </Tooltip>
   );
@@ -3862,10 +3975,14 @@ function weight(bytes: number): string {
  * Renders nothing at all if stage 2 never recorded one, rather than a stranded
  * separator; `lead` is whether anything precedes it on the line.
  */
-function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
-  if (!iso) return null;
+/** Whether `Fetched` draws anything — the caller's separator before it depends on the same answer. */
+function fetchedIsShown(iso: string | undefined): iso is string {
+  return Boolean(iso) && !Number.isNaN(Date.parse(iso ?? ""));
+}
+
+function Fetched({ iso, now }: { iso: string | undefined; now: number }) {
+  if (!fetchedIsShown(iso)) return null;
   const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
   const when = new Date(t);
   return (
     <Tooltip
@@ -3881,9 +3998,8 @@ function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
       }
     >
       <span className="tw:cursor-help">
-        {lead && <span className="tw:mr-2 tw:opacity-50">·</span>}
         <span className="tw:border-b tw:border-dotted tw:border-rule-strong">
-          fetched {ago(when)}
+          fetched {whenSaid(iso, now)}
         </span>
       </span>
     </Tooltip>
@@ -3891,44 +4007,32 @@ function Fetched({ iso, lead }: { iso: string | undefined; lead: boolean }) {
 }
 
 /**
- * "3 days ago", from `Intl.RelativeTimeFormat` rather than a date library.
+ * **A time, as the words after a verb**: "ran 3 days ago", "fetched just now",
+ * and past a month "last wrote on 5 Aug 2026".
  *
- * Theirs used date-fns' `formatDistanceToNow` for this one string. The platform
- * has done it since 2018 and this app has no other use for a date library, so
- * the dependency would be carrying ~20KB to say "yesterday".
- */
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ["year", 365 * 24 * 3600e3],
-  ["month", 30 * 24 * 3600e3],
-  ["week", 7 * 24 * 3600e3],
-  ["day", 24 * 3600e3],
-  ["hour", 3600e3],
-  ["minute", 60e3],
-];
-
-function ago(when: Date): string {
-  const fmt = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
-  const elapsed = when.getTime() - Date.now();
-  /* `Intl.RelativeTimeFormat.format` throws a RangeError on a non-finite
-     number, so an unparseable date anywhere upstream would take the whole page
-     down rather than print a wrong time. Same rule `timeAgo` in
-     relative-time.ts keeps, arrived at the same way — a review, 2026-08-27. */
-  if (!Number.isFinite(elapsed)) return "at an unknown time";
-  for (const [unit, ms] of UNITS) {
-    if (Math.abs(elapsed) >= ms) return fmt.format(Math.round(elapsed / ms), unit);
-  }
-  return fmt.format(Math.round(elapsed / 1000), "second");
-}
-
-/**
- * A carried query string asking for the questions drawer.
+ * The shared formatter (relative-time.ts) on the page's `useNow` clock, since
+ * 2026-10-04. Until then this file had a private `ago()` that read
+ * `Date.now()` during render, so it never moved while the page was open, said
+ * "ran in 4 seconds" when the server's clock was a little ahead of the
+ * browser's, and counted in "last month" and "2 months ago" where everything
+ * else in the app gives the date.
  *
- * `carriedSearch` strips `?panel=` deliberately — a drawer left open across a
- * navigation is not a place you were. This puts one back for the one case where
- * the navigation IS for the drawer, exactly as Dock.tsx does for its own button.
+ * **"on", because `timeAgo`'s absolute half is a bare date** and all three
+ * callers put a verb in front: "ran Aug 5, 2026" is not a sentence. The
+ * threshold stays `relativeAgo`'s — it answers `undefined` exactly where the
+ * date takes over. GPT Sol's plan review, S4, in
+ * docs/plans/261004d-sweep-clusters-13-and-18-lint-gates-census-test-and-client-tidy.md.
+ *
+ * Every caller has already refused an unparseable stamp and draws nothing for
+ * it; the last arm is what the old copy said for one, kept so that this cannot
+ * print "on undefined" if a caller ever stops checking.
+ * tests/metadata-relative-times.test.tsx.
  */
-function withPanel(search: string): string {
-  return search ? `${search}&panel=questions` : "panel=questions";
+function whenSaid(iso: string, now: number): string {
+  const recent = relativeAgo(iso, now);
+  if (recent !== undefined) return recent;
+  const date = timeAgo(iso, now);
+  return date === undefined ? "at an unknown time" : `on ${date}`;
 }
 
 /** Enough of a paragraph to recognise it, cut on a word boundary. */

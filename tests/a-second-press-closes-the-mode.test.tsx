@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type { Article } from "../src/types.js";
 
 /** Who `useSession` says is here. Hoisted, because `vi.mock` is. */
@@ -43,7 +44,7 @@ vi.mock("../src/web/useSession.js", async () => {
     useSession: () => ({
       session: null,
       user: useSyncExternalStore(who.subscribe, who.get, who.get),
-      loading: false,
+      loading: false, known: true,
     }),
   };
 });
@@ -149,6 +150,7 @@ const ARTICLE: PublicArticle = {
   searches: [],
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
 };
 
 const OWNED: Article = {
@@ -266,10 +268,10 @@ const modeInUrl = (): string => new URLSearchParams(location.search).get("mode")
 
 async function press(label: string): Promise<void> {
   const before = modeInUrl();
-  const button = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(button, `the bar must draw ${label}`).toBeDefined();
+  /* The bar's button, or the item under More (plan 261007c). An open gathered
+     mode is drawn in the bar, so its second press is still a bar press. */
+  const button = modeDoor(host, label);
+  expect(button, `the bar must offer ${label}`).toBeDefined();
   await act(async () => button?.click());
   // `?mode=` is written behind nuqs' throttle, so one read is a race.
   for (let i = 0; i < 40 && modeInUrl() === before; i++) {
@@ -440,9 +442,9 @@ describe("Plain closes both columns", () => {
     expect(modeInUrl()).toBe("summary");
   });
 
-  /* The column's relation words are asked for by the press that turns it on
-     (plan 261003f). The press that turns it off arms nothing: its feed is still
-     mounted for that instant and would claim the token. */
+  /* The column's relation words are asked for when it is shown (plan 261005d),
+     so no press of the toggle arms anything, and the one that turns it off
+     starts nothing either. */
   it("the press that turns the notes off arms nothing", async () => {
     await open("?mode=summary&margin=1");
     armed.length = 0;
@@ -473,24 +475,32 @@ describe("Plain closes both columns", () => {
   );
 });
 
-describe("the bar is three frames: Plain, the bands, Marginalia", () => {
-  it("draws Plain alone in the first frame and Marginalia alone in the last", async () => {
+/* Four since 2026-10-07: the More button has a frame of its own between the
+   bands and Marginalia, outside the radiogroup as Marginalia's is (plan
+   261007c, D6). It was three from 2026-10-02. */
+describe("the bar is four frames: Plain, the bands, More, Marginalia", () => {
+  it("draws Plain alone in the first frame, More alone in the third and Marginalia alone in the last", async () => {
     await open("?margin=1");
     const frames = [...host.querySelectorAll(".dock-modes .dock-frame")];
-    expect(frames).toHaveLength(3);
+    expect(frames).toHaveLength(4);
     const labels = (f: Element | undefined) =>
       [...(f?.querySelectorAll("button") ?? [])].map((b) => b.getAttribute("aria-label"));
     expect(labels(frames[0])).toEqual([MODE_LABEL.plain]);
-    expect(labels(frames[2])).toEqual([MODE_LABEL.marginalia]);
+    expect(labels(frames[2])).toEqual(["More"]);
+    expect(labels(frames[3])).toEqual([MODE_LABEL.marginalia]);
     expect(labels(frames[1])).toContain(MODE_LABEL.summary);
-    /* Plain and the bands are still one radiogroup: exactly one is on. */
+    /* Plain and the bands are still one radiogroup: exactly one is on. More
+       and Marginalia are outside it: neither is one of the things the middle
+       column shows. */
     const group = host.querySelector('.dock-modes [role="radiogroup"]');
     expect(group?.contains(frames[0] ?? null)).toBe(true);
     expect(group?.contains(frames[1] ?? null)).toBe(true);
     expect(group?.contains(frames[2] ?? null)).toBe(false);
-    /* A frame's edge separates Plain and Marginalia; no run line beside them. */
+    expect(group?.contains(frames[3] ?? null)).toBe(false);
+    /* A frame's edge separates Plain, More and Marginalia; no run line beside them. */
     expect(frames[1]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
     expect(frames[2]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
+    expect(frames[3]?.querySelector("button")?.classList.contains("dock-group-start")).toBe(false);
     expect(
       [...(frames[1]?.querySelectorAll("button.dock-group-start") ?? [])].map((button) =>
         button.getAttribute("aria-label"),

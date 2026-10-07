@@ -1,5 +1,7 @@
 # Icons
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 The reading view uses **[Lucide](https://lucide.dev)** (`lucide-react`), and only Lucide. This doc is
 why that rather than Phosphor, what the house defaults are, and the two ways an icon swap breaks a
 layout without anyone noticing.
@@ -81,7 +83,7 @@ Set once, in [`src/web/main.tsx`](../../src/web/main.tsx), via Lucide's own cont
 dark ground the icons read as bold and start competing with the prose. They are chrome; the article
 is the thing.
 
-Per-icon `size` overrides are fine for a specific fit (the masthead chevron is 14, the search globe
+Per-icon `size` overrides are fine for a specific fit (the chat card's `ChevronDown` is 14, the search globe
 is 12) — **weight overrides are not**, because a single icon at a different stroke is the one that
 looks wrong.
 
@@ -91,6 +93,12 @@ looks wrong.
   There was a hand-rolled globe in `CommentDialog.tsx`; it's gone. Composing an extra path *into* a
   Lucide icon is fine when there's a reason (see the next rule); drawing a whole icon from scratch
   is not.
+- **One glyph, one meaning. `Info`, the (i), means "about this"**: about this mode (`BandAbout`),
+  about this list, about your plan. It is not a button's own icon. The bottom bar's Metadata button
+  wore it until 2026-10-04 and now wears `FileCog`. Greg, spya-jt4gmg:
+
+  > that information icon is the same one we use elsewhere for information about a mode, and I
+  > think they are different, and so it's a bit confusing to use the same icon for both.
 - **Colour comes from `currentColor`**, so state is a CSS colour change on the parent and never a
   prop. See `.cmt-search.on` / `.cmt-search.off` in
   [`src/web/styles/annotations.css`](../../src/web/styles/annotations.css).
@@ -223,7 +231,7 @@ Going forwards, then:
 
 - **A control that takes you somewhere** — into another mode, to a whole list — is an icon button,
   and its words live in its tooltip and its `aria-label`. For a mode, use **that mode's own icon**
-  from the bar (`MODES_UI` in [`Dock.tsx`](../../src/web/Dock.tsx)), so the button looks like where
+  from the bar (`MODE_ICON` in [`mode-icons.ts`](../../src/web/mode-icons.ts)), so the button looks like where
   it goes: Skim's stop card opens Glossary with `BookA` and Ideas with `Lightbulb` (`OpenIn`
   in [`SkimPanel.tsx`](../../src/web/SkimPanel.tsx)).
 - **Every icon has a tooltip.** No bare icon, anywhere. If the control has a keyboard shortcut, the
@@ -237,10 +245,32 @@ Going forwards, then:
 [design-css-overview.md](design-css-overview.md) carries it as a one-line pointer, approved by Greg
 on 2026-09-29 (`1a44cb57`).
 
+## A chat is two bubbles
+
+> In the vertical gutter next to blocks, change the comment icon to a chat icon (because that's
+> really what it is)
+>
+> — Greg, 2026-10-06 (`spya-vj7wv0`)
+
+**A conversation with the AI wears `MessagesSquare`, Chat mode's own icon, wherever it is drawn**:
+the gutter's chat button, the head of the card it opens (`ChatDialog.tsx`), the marks that reopen a
+chat started from a Glossary entry, a cited work or a Debate claim or angle (`OriginChat.tsx`,
+`DebatePanel.tsx`), and *Ask about this paragraph in chat* (`SimplePanel.tsx`).
+
+**One square bubble is the comment family**: `MessageSquareText` on the bar's Comments button,
+`MessageSquarePlus` on the comment box. Until 2026-10-06 the bare one bubble also meant "a
+conversation opened beside the mode, not in Chat's band", a split that was written down nowhere and
+that the gutter's button showed did not read. What tells a control that reopens one conversation
+from one that starts a new one is what sits beside the glyph: a count, the answer's first words, or
+a label. [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)
+has the narrower option that was passed over. Two places still cross the families and were left:
+Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Debate row wears
+`MessagesSquare` while Debate's mode icon is `Globe`.
+
 ## Where they're used
 
-- [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `ChevronDown`, rotated by `.chevron.up` for
-  the article-details disclosure.
+- [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `Archive`, `Undo2`, `Upload`, `Globe` and
+  `Lock` for the title line's actions and sharing mark. (Its `ChevronDown` disclosure is gone.)
 - [`src/web/CommentDialog.tsx`](../../src/web/CommentDialog.tsx) — `X` to close, `ChevronLeft` /
   `ChevronRight` to step between comments, and `Globe` — struck through by a composed diagonal when
   the model didn't search — for whether it went to the web ([comments.md](comments.md)).
@@ -252,7 +282,7 @@ on 2026-09-29 (`1a44cb57`).
   [260912c](../plans/260912c-send-button-icon-and-primary-style.md#what-gpt-sol-added-to-the-diagnosis).
 - [`src/web/QuizPanel.tsx`](../../src/web/QuizPanel.tsx) — the quiz's step row as `ChevronLeft`,
   `ChevronRight` and `List`, each in a tooltip, and since 2026-10-03 Answer as chat's
-  `SendHorizontal` in the same 36px box (spya-fzgcqu); the Recall | Tutorial | Quiz switch beside it
+  `SendHorizontal` in the same 36px box (spya-fzgcqu); the Recall | Tutorial | Explore | Quiz switch beside it
   kept its words, and [quiz.md § On screen](quiz.md) says why (SPIDERYARN-READING2-71).
 
 ## See also

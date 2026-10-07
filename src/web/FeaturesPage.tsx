@@ -47,6 +47,7 @@
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { WebsitePlans } from "./PlanCards.js";
 import { PublicShowcase } from "./PublicShowcase.js";
 import { PRICING_HREF } from "./router.js";
@@ -73,6 +74,8 @@ import {
  */
 export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
   useDocumentTitle(pageTitle({ kind: "features" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
 
   return (
     <div className="site tw:font-sans tw:text-muted-foreground">
@@ -168,7 +171,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               levels; 2026-10-01, the outline removed (spya-b3ggv4, plan 261001p).
               Summary mode, src/web/modes/summary/SummaryMode.tsx. */}
           <Tile name="Summary." mode="summary" span="wide">
-            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
+            The piece in plain words — brief or a little fuller — each paragraph linked to the
             passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Plain mode: the article alone, with the band closed. */}
@@ -303,12 +306,13 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
         <H2 eyebrow="Internalise">Find out what you kept.</H2>
         <Gallery>
           {/* Greg, 2026-08-27, the review-mode request, rephrased to the reader. */}
-          <Portrait shot={SHOTS.remember} title="Remember." mode="remember">
+          <Portrait shot={SHOTS.learn} title="Learn." mode="learn">
             Type or talk about what you remember of the piece. Short replies correct what comes apart
             from it, link the passage, and usually nudge you to remember a little more — filling the
             gap when you are stuck rather than making you fail. Written not to be annoying,
             patronising or superior. Or choose Tutorial: short turns that teach a little of the piece
-            at a time and ask you to put it in your own words.
+            at a time and ask you to put it in your own words. Or Explore, one of the Experimental
+            Features, which starts from what you have marked and helps you work out what you think.
           </Portrait>
           {/* Greg, 2026-08-31, the quiz request; and 2026-09-29
               (SPIDERYARN-READING2-5W, quoted in src/quiz.ts's header), which
@@ -318,8 +322,8 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               dozen at a time" and "ordered by a combination of ease and value"
               were the retired batch of twelve sorted by band and value; it is
               now a path of up to MAX_QUESTIONS = 20 that nothing re-sorts.
-              Only that sentence changed. A Remember sub-mode, so `remember`. */}
-          <Portrait shot={SHOTS.quiz} title="Quiz." mode="remember">
+              Only that sentence changed. A Learn sub-mode, so `learn`. */}
+          <Portrait shot={SHOTS.quiz} title="Quiz." mode="learn">
             Questions that need a sentence or two each, up to twenty at a time, each building on the
             one before towards the piece’s key takeaways. Marked against the article, not an answer
             key.
@@ -328,7 +332,7 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
 
         {/* ------------------------------------------------- for peer reviewers -- */}
         <H2 eyebrow="A mode for one job">For peer reviewers.</H2>
-        {/* docs/project/referee-mode.md, its title and its four sub-modes; the
+        {/* docs/project/referee-mode.md, its title and its five sub-modes; the
             confidentiality sentence is the one the mode itself shows. */}
         <Showcase shot={SHOTS.referee} title="Referee mode." mode="referee" offset under>
           Helps a referee read a paper without reading it for them. Your own criteria, streamed
@@ -394,10 +398,13 @@ export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
               passage id, and threads from before tweets/5 have none). GPT Sol's
               code review caught the first draft promising both without the
               limits; "the passages they came from" is unqualified because a
-              post with no surviving id says so in place (`UnlinkedNote`). */}
-          <Tile name="Tweets." mode="tweets">
-            The piece as a thread, in a column beside the text, written the first time you open it
-            on an article of your own. Posts link back to the passages they came from.
+              post with no surviving id says so in place (`UnlinkedNote`).
+              2026-10-03: the thread is Summary's Thread view, so the tile is
+              tagged with Summary and says where to find it (plan 261003l). */}
+          <Tile name="Thread." mode="summary">
+            The piece as a thread, in Summary’s Thread view: a column beside the text, written the
+            first time you open it on an article of your own. Posts link back to the passages they
+            came from.
           </Tile>
           {/* Greg, 2026-09-30, docs/project/cross-references.md, rephrased to
               the reader: "if it describes a result, then it would create an

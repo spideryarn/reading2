@@ -32,9 +32,10 @@
  * things that can have happened — see `ClaimRow`, which is where the third one
  * is drawn and why.
  *
- * **3. Linkage, never adequacy.** Said in words at the top of the panel
- * (`LINKAGE_NOT_ADEQUACY`), because it is the thing a referee is likeliest to
- * read past. The model asserts that a passage takes the claim up; whether it
+ * **3. Linkage, never adequacy.** Said in words (`LINKAGE_NOT_ADEQUACY`) — at
+ * the top of the panel until 2026-10-03, and behind the band's *How to read
+ * this* button since (plan 261003m) — because it is the thing a referee is
+ * likeliest to read past. The model asserts that a passage takes the claim up; whether it
  * carries it is theirs, and it is the interesting part.
  *
  * **This is the one of the three that is not a property of the code**, and the
@@ -113,7 +114,6 @@ import {
   CLAIMS_AT_CAP,
   claimsOmittedNote,
   DOCUMENT_ORDER_NOTE,
-  LINKAGE_NOT_ADEQUACY,
   MAX_CLAIMS,
   MAX_OTHER_TEXT,
   NO_PASSAGE_FOUND,
@@ -133,6 +133,7 @@ import { usePassageLifecycle } from "./passage-lifecycle.js";
 import { type Found, resolveClaim } from "./search-hits.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 import { type ClaimsApi, useClaims } from "./useClaims.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /* ------------------------------------------------------------------ band -- */
 
@@ -354,10 +355,9 @@ export function ClaimsView({
     cut > 0 ? claimsOmittedNote(cut) : claims.length >= MAX_CLAIMS ? CLAIMS_AT_CAP : null;
   return (
     <div className="clm">
-      {/* **Above the button, not under the results.** Both sentences are about
-          how to read what is below, and a note under a list is a note read after
-          the list has already been read the wrong way. */}
-      <p className="clm-what">{LINKAGE_NOT_ADEQUACY}</p>
+      {/* `LINKAGE_NOT_ADEQUACY` opened the panel here until 2026-10-03; it is
+          behind the band's *How to read this* button now (RefereeMode.tsx
+          § HowToRead). */}
 
       {/* **The one button on this panel that spends money**, and the label says
           neither that nor what it is going to read. The card carries the cost
@@ -387,16 +387,12 @@ export function ClaimsView({
       </Tooltip>
 
       {api.error && <p className="clm-error">{api.error}</p>}
-      {!api.loaded && <p className="gloss-quiet">Loading…</p>}
+      {!api.loaded && <BandWaiting className="gloss-quiet">Loading the claims…</BandWaiting>}
 
-      {api.loaded && run === null && !api.error && (
-        <p className="gloss-quiet">
-          The claims this paper makes about its own work, each with the passages where the paper
-          takes it up. Every row is a door into the prose.
-        </p>
-      )}
+      {/* The empty state described the sub-mode here until 2026-10-03; the
+          band's lead line above the panel says it now (RefereeMode.tsx). */}
 
-      {pending && claims.length === 0 && <p className="gloss-quiet">Reading the paper…</p>}
+      {pending && claims.length === 0 && <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>}
 
       {run?.status === "error" && (
         <p className="clm-error">
@@ -412,7 +408,7 @@ export function ClaimsView({
            which is the shorter, more natural sentence and a finding we have no
            standing to make. An answer where the model *did* name claims and none
            of them could be found in the paper is a failed run
-           (`CLAIMS_UNUSABLE`, src/referee-claims-run.ts) and lands in the error
+           (`ANSWER_UNUSABLE`, src/messages.ts) and lands in the error
            branch above with a Try again, so this branch does not cover it.
            tests/referee-copy-is-about-the-model.test.ts. */
         <p className="gloss-quiet">

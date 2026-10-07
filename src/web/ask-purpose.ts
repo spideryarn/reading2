@@ -9,7 +9,9 @@
  * > — Greg, 2026-10-01, spya-hbqezu
  *
  * The add page writes it (`markAskPurpose`) only when it opens an article by
- * itself with the box empty and never touched — the "didn't notice it" case.
+ * itself with the box never touched — the "didn't notice it" case. (On a re-add
+ * the untouched box may be showing the purpose already stored; the reading view
+ * then finds one and asks nothing.)
  * The reading view, for the owner only, peeks at it (src/web/PurposePrompt.tsx)
  * and clears it once it knows the answer. docs/plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md
  * § Stage 3.

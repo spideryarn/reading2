@@ -90,8 +90,10 @@ import { noteNoConnection, noteReachedServer, noteServedCopy } from "../offline.
 import { recordLog } from "../log-buffer.js";
 import { setClientMonitoringUser } from "../monitoring.js";
 import { markUnreachable, ReaderFacingError } from "./reader-facing.js";
+import { heldReader, heldToken, onSession, sessionObserved, sessionRevision, tokenOwnerOf } from "./session.js";
 import { supabase } from "./supabase.js";
 import { noteRequest } from "./writes.js";
+import type { QuizResponse } from "../../types.js";
 
 /** How much of an unexpected body reaches the console. Enough to recognise it. */
 const SNIPPET = 300;
@@ -117,7 +119,11 @@ function statusLabel(res: Response): string {
  * not do what it was for.
  */
 function logFailure(res: Response, text: string, parsed: boolean): void {
-  console.error(`[api] ${res.status} ${res.url || "(no url)"}${parsed ? "" : " — reply was not JSON"}`, {
+  /* Public reads may carry a private link's key, including an expected 409
+     while importing. Redact here too: the buffer's safePath does not protect
+     the console output. */
+  const url = (res.url || "(no url)").split(/[?#]/)[0];
+  console.error(`[api] ${res.status} ${url}${parsed ? "" : " — reply was not JSON"}`, {
     status: res.status,
     contentType: header(res, "content-type"),
     bytes: text.length,
@@ -422,8 +428,67 @@ export async function readJson<T>(res: Response): Promise<T> {
  * the hour simply keeps arriving. Worth stating because it is the first
  * question anyone asks about this design.
  */
-export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  return (await apiFetchOwned(input, init)).response;
+export async function apiFetch(
+  input: string,
+  init: RequestInit = {},
+  /**
+   * **The reader this request was made for**, when it must not go out as
+   * anybody else — see `NotThisReader` below. `null`, which is every caller
+   * that names nobody, means the reader this tab held as the call was made
+   * (`apiFetchOwned` § *Bound when it is made*).
+   */
+  madeFor: string | null = null,
+): Promise<Response> {
+  return (await apiFetchOwned(input, init, madeFor)).response;
+}
+
+/**
+ * **A request made for one reader was about to be sent as another, and was
+ * not sent.** docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2.
+ *
+ * Some requests are owed by a reader rather than by a page: the add page's
+ * purpose session sends its last words after the page has gone, its
+ * High-powered intent retries each second, and a job engine's POST can sit
+ * waiting for its token. If the reader changes meanwhile (another tab signs in
+ * as somebody else), the token that arrives is the new reader's, and reader
+ * A's sentence is written onto reader B's article of the same slug. Resetting
+ * the screen does not stop that; only a check where the token goes on does.
+ *
+ * So a caller that knows who a request is for passes them as `apiFetch`'s
+ * third argument, and gets this instead of a response when the credential is
+ * somebody else's. **A caller that names nobody gets the same, for the reader
+ * the tab held as the call was made** (`apiFetchOwned` § *Bound when it is
+ * made*), so naming a reader is only for a request made after its page or its
+ * reader may have gone: a retry loop, a retirement flush, a module-level
+ * service.
+ *
+ * **No HTTP status**, so `statusOf` answers `null`: nothing was asked, and a
+ * caller that retries on a 404 or pauses on a 401 does neither.
+ *
+ * **It never fires for the reader's own request**, and `tokenOwner` on
+ * `Credential` is why: the comparison is with the reader named by the very
+ * session object the token came out of, and with nothing else. No token is
+ * nobody's: the request is sent, and the server refuses it in its own words. A
+ * token from a session that names nobody is not known to be another reader's,
+ * so it is sent too. **Not `owner`**, the cache drawer, which falls back to
+ * the reader this tab last saw: that is a second lookup, and it can be a
+ * reader behind the token beside it.
+ *
+ * **A third argument and not a second function**, because of the tests: over a
+ * hundred suites replace `apiFetch` in this module and leave the rest real, and
+ * a sibling export would go round every one of them to the network (§ *A call
+ * whose test intercepts `apiFetch`*, further down).
+ */
+export class NotThisReader extends Error {
+  constructor() {
+    super("This was for another account, so it was not sent.");
+    this.name = "NotThisReader";
+  }
+}
+
+/** Whether a token is known to belong to somebody other than `madeFor`. */
+function notTheirs(tokenOwner: string | null, madeFor: string | null): boolean {
+  return madeFor !== null && tokenOwner !== null && tokenOwner !== madeFor;
 }
 
 /**
@@ -441,10 +506,34 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
  * **And every write is counted here, sent and finished** (writes.ts), which is
  * what tells a held read it may have gone stale.
  */
-export async function apiFetchOwned(input: string, init: RequestInit = {}): Promise<Owned> {
+export async function apiFetchOwned(
+  input: string,
+  init: RequestInit = {},
+  madeFor: string | null = null,
+): Promise<Owned> {
+  /**
+   * **Bound when it is made.** A caller that names nobody is making the
+   * request for whoever this tab holds right now, so that reader is read here,
+   * synchronously, before anything is awaited: the token lookup below can wait
+   * across a change of account, and what it answers with is then the next
+   * reader's. `heldReader()` is what the SDK last told this tab, and it is
+   * the same answer the screen was drawn from: `useSession` and this file
+   * both read lib/session.ts, which makes the one subscription. So the
+   * reader bound here is the reader whose screen made the call.
+   *
+   * **Nobody is not a reader.** Before the SDK has said anything, or signed
+   * out, this is `null` and the request is unfenced, as it always was: a
+   * request made by nobody and sent as the reader who then signed in carries
+   * nobody else's words.
+   *
+   * A named reader is believed over the tab: the callers that name one are
+   * the ones whose request is made long after the reader's gesture.
+   * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md.
+   */
+  const boundTo = madeFor ?? heldReader();
   noteRequest(input, init.method);
   try {
-    return await sendOwned(input, init);
+    return await sendOwned(input, init, boundTo);
   } finally {
     noteRequest(input, init.method);
   }
@@ -456,7 +545,11 @@ export interface Owned {
   owner: string | null;
 }
 
-async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
+async function sendOwned(
+  input: string,
+  init: RequestInit,
+  madeFor: string | null,
+): Promise<Owned> {
   if (!input.startsWith("/api/")) {
     throw new Error(`apiFetch is for our own API only, and this is not: ${input}`);
   }
@@ -497,7 +590,26 @@ async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
    * docs/plans/260903g-faster-shelf-load-and-tidier-homepage-controls.md,
    * 2026-09-03.
    */
-  const { token, owner } = await accessToken();
+  const { token, owner, tokenOwner } = await accessToken();
+  /* Here and not before the lookup: a lookup that was waiting while the
+     reader changed answers with the new reader's token (`NotThisReader`). */
+  if (notTheirs(tokenOwner, madeFor)) {
+    /* Said where a bug report can see it: to the caller this is one more
+       failed request, and nothing else would tell it from the network. */
+    recordLog({
+      kind: "api",
+      outcome: "not-sent",
+      method: (init.method ?? "GET").toUpperCase(),
+      path: input,
+      status: null,
+      ms: null,
+      vercelId: null,
+      bytes: null,
+      contentType: null,
+      error: "NotThisReader",
+    });
+    throw new NotThisReader();
+  }
   /**
    * **The queue place, taken before the request goes out.**
    *
@@ -533,6 +645,7 @@ async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
   /* The refresh answers with a whole session, so the retry's drawer comes from
      that one rather than from the session the first attempt used. */
   let refreshedOwner = owner;
+  let refreshedTokenOwner: string | null = null;
   try {
     /* Offline this cannot succeed, and the SDK will spend around twenty-five
        seconds finding that out — see `accessToken` below. A 401 we already have
@@ -541,10 +654,20 @@ async function sendOwned(input: string, init: RequestInit): Promise<Owned> {
     const { data } = await supabase.auth.refreshSession();
     refreshed = data?.session?.access_token;
     refreshedOwner = data?.session?.user?.id ?? owner;
+    refreshedTokenOwner = tokenOwnerOf(data?.session);
   } catch {
     return { response: first, owner };
   }
   if (!refreshed) return { response: first, owner };
+  /* **The retry is the same request, so it goes out as the same reader or not
+     at all**, for every caller. A refresh that comes back as somebody else is
+     a change of account that landed between the two attempts, and sending
+     reader A's write again with reader B's token is the thing `NotThisReader`
+     exists to stop. The first 401 is the answer. An owner nobody knows is not
+     a different one. Plan 261006e § 2. */
+  if (notTheirs(refreshedTokenOwner, tokenOwner) || notTheirs(refreshedTokenOwner, madeFor)) {
+    return { response: first, owner };
+  }
   /* **A fresh ticket, not the one above.** The retry is a newly issued request:
      it may belong to a refreshed owner, and it has to see any mutation that
      happened between the two attempts. Reusing the first ticket would let the
@@ -627,8 +750,13 @@ async function ticketFor(
  * that dies mid-read and `readJson` does not, so a 500 on a cut connection keeps
  * its status message instead of surfacing as a `TypeError` about the network.
  */
-export async function fetchOk(input: string, init: RequestInit = {}): Promise<Response> {
-  const res = await apiFetch(input, init);
+export async function fetchOk(
+  input: string,
+  init: RequestInit = {},
+  /** As `apiFetch`'s: the reader a request made late is for. */
+  madeFor: string | null = null,
+): Promise<Response> {
+  const res = await apiFetch(input, init, madeFor);
   if (!res.ok) throw await failure(res);
   return res;
 }
@@ -821,7 +949,33 @@ function saving(
     const copy = res.clone();
     void copy
       .json()
-      .then((body) => writeCached(input, body, ticket, slugOf(input)))
+      .then(async (body) => {
+        /* **"Not made yet" is not kept** — the `200 null` ten artefact
+           reads ask for (`NONE_YET_AS_NULL_HEADER`, src/types.ts).
+           A copy is filed under reader and URL and replayed as a 200 whatever
+           the request's headers, so a kept `null` would reach, offline, a tab
+           opened before the deploy, which never asked for one and reads
+           `loaded.quiz` or `loaded.ideas.…` off it. Returning here is what the 404 it replaces did
+           (`res.status !== 200`, above): nothing written, and an earlier copy
+           of a real artefact neither replaced nor thrown away. GPT Sol's F1 on
+           plan 261006g. */
+        if (body === null && NONE_YET_AS_NULL.test(input)) return;
+        /* "Could not read" must not replace a complete copy of this batch.
+           Leave the existing record untouched: copying its answers into this
+           newer ticket could overwrite a full read that commits meanwhile.
+           The live response remains null for useQuizRead to handle. */
+        if (/^\/api\/quiz\/[^/?]+$/.test(input)) {
+          const quiz = body as Partial<QuizResponse> | null;
+          if (quiz?.attempts === null && typeof quiz.quiz?.batchId === "string") {
+            const previous = (await readCached(input, owner))?.body as Partial<QuizResponse> | undefined;
+            if (
+              previous?.quiz?.batchId === quiz.quiz.batchId &&
+              Array.isArray(previous.attempts)
+            ) return;
+          }
+        }
+        await writeCached(input, body, ticket, slugOf(input));
+      })
       .catch(() => {
         /* A body that dies after its headers arrived. Nothing to save, and the
            previous copy — if any — is left alone rather than replaced by half
@@ -832,6 +986,18 @@ function saving(
   }
   return res;
 }
+
+/**
+ * The ten reads that may answer `200 null` for "not made yet" — see the note
+ * where it is used, above.
+ *
+ * **The same ten as the routes that call `orNullWhenNotMadeYet`** in
+ * src/routes.ts, and nothing derives one list from the other: moving a read
+ * over is a name here as well as the helper there. Exported for the test that
+ * fails when they differ (tests/api-fetch-offline.test.ts).
+ */
+export const NONE_YET_AS_NULL =
+  /^\/api\/(?:quiz|crossrefs|citations|simple|ideas|faq|timeline|debate|glossary|quotes)\/[^/?]+$/;
 
 /** `application/json`, whatever parameters follow it. */
 function isJson(res: Response): boolean {
@@ -937,9 +1103,22 @@ const CACHEABLE = [
   "/api/reader",
 ];
 
+/**
+ * **One path under a kept prefix that is never kept: a private link's state.**
+ *
+ * `GET /api/article/<slug>/share-link` begins `/api/article/` and answers with
+ * the link's key (plan 261005e). Kept, the key would sit in this browser's
+ * IndexedDB, and with no connection the owner's card would draw a link from a
+ * copy when the link may have been turned off since. So it is neither written
+ * nor read back: offline, the request fails and the card says it could not
+ * check. The server marks the answer `no-store` for the same reason.
+ */
+const NEVER_KEPT = /^\/api\/article\/[^/]+\/share-link$/;
+
 function cacheable(input: string): boolean {
   const path = input.split("?")[0] ?? input;
   if (path === "/api/library") return true;
+  if (NEVER_KEPT.test(path)) return false;
   return CACHEABLE.some((prefix) => path.startsWith(prefix));
 }
 
@@ -949,18 +1128,27 @@ function cacheable(input: string): boolean {
  *
  * A non-GET is assumed to have changed the thing it names, which is right for
  * every route but one: `POST /api/quiz/<slug>/mark` sends one answer and
- * streams the marking back. **It stores no quiz state** — no attempt, no score,
- * no answer, no change to the questions — so `GET /api/quiz/<slug>` answers
- * exactly what it answered before and the cached copy is still current.
+ * streams the marking back. **It changes nothing about the questions**, and
+ * the questions are what a reader with no network needs from the copy.
  *
- * **It is not literally a write that writes nothing**, which is what this used
- * to be called. Marking makes a model call, and that call's spend goes through
- * the request's collector to an `ai_calls` ledger row — the route says so
- * itself, of the article it attaches to *"every row this request writes"*.
- * Accounting is recorded; nothing the offline store holds is affected by it.
- * That distinction is the whole name: the test is not *did the server write*,
- * it is *did the thing we cached change*. GPT Sol, 2026-09-02:
- * docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 3.
+ * **Since 2026-10-05 it does change what `GET /api/quiz/<slug>` answers**: a
+ * mark that finishes is stored, and the read returns it under `attempts`
+ * (plan 261005b). Until then this comment said the copy was "still current"
+ * after a mark, and it was. The exemption stays anyway, because the two ways
+ * of being wrong are not equal: throwing the copy away here happens when the
+ * response *headers* arrive, before anybody knows whether the mark will
+ * finish — so a mark that then failed would have cost the reader every
+ * question for the sake of an answer that was never stored. Instead the copy
+ * is kept and **brought up to date by a read**: `useQuiz.mark` reads the quiz
+ * again after a mark the server said it stored, and a successful GET rewrites
+ * the copy with the answer in it. In between, the copy is one answer behind,
+ * which is the same thing a second device is.
+ *
+ * Marking also makes a model call, whose spend goes through the request's
+ * collector to an `ai_calls` ledger row; nothing the offline store holds is
+ * affected by that. The first version of this exemption was reviewed by GPT
+ * Sol, 2026-09-02: docs/plans/260902o-adding-a-mode-wave1-a-code-review-sol.md § 3;
+ * this one in docs/plans/261005b-quiz-answers-plan-review-sol.md, F1.
  *
  * Exempted here rather than inside `resourceOf`, which answers a different
  * question — *which* resource a URL is about — and would still be right if it
@@ -1072,13 +1260,26 @@ async function accessToken(): Promise<Credential> {
      expired, in which case the server says 401 and the existing refresh-and-
      retry below handles it. Being refused quickly is recoverable. Hanging is
      not. */
+  /* What this tab held as the lookup went out: see `sessionObserved` below. */
+  const before = sessionRevision();
   return await Promise.race([
-    supabase.auth.getSession().then((r) => ({
+    supabase.auth.getSession().then((r) => {
+      /* **The lookup knows something the tab does not.** It answered as a
+         different reader from the one held: storage has moved on and the
+         SDK's event has not arrived. Tell the store, so the screen redraws
+         for the reader this token belongs to. The request that noticed is
+         still refused by its caller's check, since it was made for the
+         earlier reader. Not if an event arrived while this was out: then the
+         tab has newer news than this answer. lib/session.ts § `sessionObserved`. */
+      if (r.data.session) sessionObserved(r.data.session, before);
+      return r;
+    }).then((r) => ({
       token: r.data.session?.access_token,
       /* **Out of the same session object as the token**, so the two cannot
          disagree. `lastKnownUser()` behind it is for a session shape with no
          user on it, which the SDK does not produce and a test stub does. */
       owner: r.data.session?.user?.id ?? lastKnownUser(),
+      tokenOwner: tokenOwnerOf(r.data.session),
     })),
     after(SESSION_DEADLINE_MS).then(fromCache),
   ]);
@@ -1095,17 +1296,25 @@ interface Credential {
   token: string | undefined;
   /** An id, never a token: it selects a drawer and authorises nothing. */
   owner: string | null;
+  /**
+   * **Whose the token is, said by the session it came out of**, or `null`
+   * when that session named nobody or there is no token. Usually `owner`, and
+   * kept apart from it because `owner` has a fallback (the reader this tab
+   * last saw) that suits choosing a drawer and would make `NotThisReader`
+   * refuse a reader's own request.
+   */
+  tokenOwner: string | null;
 }
 
 /**
- * The pair the auth listener last saw.
+ * The pair this tab last heard.
  *
- * Safe as a pair because that listener writes `cachedToken` and calls
- * `rememberUser` in the same callback, so these two never disagree — see the
- * bottom of this file.
+ * Safe as a pair because the token is replaced in lib/session.ts before its
+ * subscribers are told, and the subscriber at the bottom of this file calls
+ * `rememberUser` in that same pass, so these two never disagree.
  */
 function fromCache(): Credential {
-  return { token: cachedToken, owner: lastKnownUser() };
+  return { token: heldToken(), owner: lastKnownUser(), tokenOwner: heldReader() };
 }
 
 /**
@@ -1140,16 +1349,36 @@ const after = (ms: number) => new Promise<void>((go) => setTimeout(go, ms));
  * refused, and the save is lost. That is strictly better than the request never
  * being made — and the real fix is not to arrive here with unsaved work, which
  * is why useProfile.ts also flushes on `visibilitychange`. GPT Sol, 2026-08-26.
+ *
+ * **Answers with a promise that settles when the request does, and never
+ * rejects** — whether it was stored, refused, lost or never sent. Nobody may
+ * wait on it before the page goes; it is for a page that turns out to survive
+ * (an unmount, a bfcache restore) and has something to throw away once the
+ * write has landed: src/web/useProfile.ts § `leaveProfile`. Most callers
+ * ignore it.
  */
-export function leavingFetch(input: string, init: RequestInit = {}): void {
-  if (!input.startsWith("/api/")) return;
+export function leavingFetch(
+  input: string,
+  init: RequestInit = {},
+  /**
+   * **The reader this write is for**, as `apiFetch`'s third argument. The
+   * token below is the one this tab last saw, so nothing is sent when that is
+   * known to be somebody else's, or when there is none: a write for a reader
+   * has no use for no token. `null` is unfenced.
+   */
+  madeFor: string | null = null,
+): Promise<void> {
+  if (!input.startsWith("/api/")) return Promise.resolve();
+  if (madeFor !== null && (heldToken() === undefined || notTheirs(heldReader(), madeFor))) {
+    return Promise.resolve();
+  }
 
   /* **Browsers cap the total body of all in-flight `keepalive` requests at
-     about 64KiB, and reject over it.** Nothing here comes close — the only
-     caller is the reader profile, capped near 1,500 characters — but this
-     function is generic and swallows its own failures by design, so a future
-     caller sending something large would fail completely silently. Better to
-     say so in the console than to be that silent. GPT Sol, 2026-08-27. */
+     about 64KiB, and reject over it.** None of the current callers — reader
+     profile, reading time and comment drafts — comes close, but this function
+     is generic and swallows its own failures by design, so a future caller
+     sending something large would fail completely silently. Better to say so
+     in the console than to be that silent. GPT Sol, 2026-08-27. */
   const method = (init.method ?? "GET").toUpperCase();
   const body = init.body;
   if (typeof body === "string" && body.length > KEEPALIVE_LIMIT) {
@@ -1172,11 +1401,11 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
       contentType: null,
       error: null,
     });
-    return;
+    return Promise.resolve();
   }
 
   const headers = new Headers(init.headers);
-  const token = cachedToken;
+  const token = heldToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
   /* `keepalive` lets the request outlive the page. Deliberately unawaited: there
      is no one left to tell — but the buffer is not a person, and if the page
@@ -1186,39 +1415,40 @@ export function leavingFetch(input: string, init: RequestInit = {}): void {
      saved on the way out is a `PATCH /api/library/<slug>`, which may change
      what an article preload is holding. */
   noteRequest(input, method);
-  void fetch(input, { ...init, headers, keepalive: true })
+  return fetch(input, { ...init, headers, keepalive: true })
     .finally(() => noteRequest(input, method))
-    .catch((e: unknown) => {
-    recordLog({
-      kind: "api",
-      outcome: "transport-failed",
-      method,
-      path: input,
-      status: null,
-      ms: null,
-      vercelId: null,
-      bytes: null,
-      contentType: null,
-      error: e instanceof Error ? e.name : "Error",
-    });
-  });
+    .then(
+      () => undefined,
+      (e: unknown) => {
+        recordLog({
+          kind: "api",
+          outcome: "transport-failed",
+          method,
+          path: input,
+          status: null,
+          ms: null,
+          vercelId: null,
+          bytes: null,
+          contentType: null,
+          error: e instanceof Error ? e.name : "Error",
+        });
+      },
+    );
 }
 
 /** The browser's keepalive body budget, less a little for headers. */
 const KEEPALIVE_LIMIT = 60 * 1024;
 
 /**
- * The last token we saw, kept for `leavingFetch`.
+ * **What this file does when the tab's session changes.**
  *
- * Updated from the SDK's own auth events rather than polled, so it is exactly
- * as fresh as the SDK is. This is the one place in the client that holds a
- * token in a variable, and it exists solely because `pagehide` has no time to
- * await anything.
+ * The token `leavingFetch` uses, and whose it is, are no longer kept here:
+ * they are lib/session.ts § `heldToken` and `heldReader`, the one place in
+ * the client that holds a session in a variable, so that the request fence
+ * and the screen cannot hold different readers. Registered at import, so it
+ * hears the first event.
  */
-let cachedToken: string | undefined;
-supabase.auth.onAuthStateChange((_event, session) => {
-  cachedToken = session?.access_token;
-
+onSession((session) => {
   /* **Whose cache to read, kept beside the token and for the same reason.** A
      request needs to know which reader's copies to look in before it knows
      whether the network works, and asking the SDK would be the very wait this

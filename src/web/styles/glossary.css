@@ -10,9 +10,10 @@
    that, which means the import list in ../styles.css decides it. Move this file
    later and both go wrong with nothing to show for it.
 
-   It also carries `.srch-gate-*`, the search panel's confidence bar, kept
-   beside `.gloss-gate` on purpose — the comment above it says why they are
-   grouped rather than merged. The glossary's own tail (the foot, its buttons
+   Two of those base classes are whole controls that other bands draw as they
+   are: the order row (`.gloss-sort*`, in Glossary, Quotes, Citations, FAQ and
+   Debate) and the threshold slider (`.gloss-gate*`, in those five and Search).
+   Each is written once, here. The glossary's own tail (the foot, its buttons
    and the *Look up a term* box) is at the end of footnotes.css. */
 
 /* ------------------------------------------------------- § glossary mode ----
@@ -30,7 +31,12 @@
 /* The sort control. Small, quiet, and always visible when there is a choice —
    the whole condition on keeping the model's scores is that ordering by them is
    something the reader presses rather than something the list arrives already
-   having done. */
+   having done.
+
+   **Every band's order row but Search's.** Quotes had a copy of these rules
+   under `.quotes-rank*` until 2026-10-07 (plan 261007a § K5); its row carries
+   these classes now, as Citations', FAQ's and Debate's always did. Search's
+   row keeps its own look and class (search.css § `.srch-sort`). */
 .gloss-sort {
   display: flex;
   flex-wrap: wrap;
@@ -47,7 +53,7 @@
    is drawn (no head then), so it clears the (i) the same way — mode-band.css §
    `.mode-band > .band-about`. Its own padding is in footnotes.css § `.gloss-ask`. */
 .mode-band.has-about .gloss-ask { padding-right: calc(0.7rem + var(--band-about-room)); }
-/* The run row, *Find more* or *Find terms again*, above the Look up box since
+/* The run row, *Find more* or *Write a new list*, above the Look up box since
    2026-10-03 (Greg, spya-s660yh; plan 261003c), so it is the owner's top row
    now and clears the (i) too. Its own padding is in footnotes.css § `.gloss-more`. */
 .mode-band.has-about .gloss-more { padding-right: calc(0.7rem + var(--band-about-room)); }
@@ -77,8 +83,8 @@
    sorted by. `:active` is the half a finger *does* get, and without it a tap
    that landed and a tap that missed looked identical.
 
-   Both spellings live in quotes.css too, and the two rows must not drift; see
-   § a coarse pointer in narrow-window.css and tests/touch-controls.test.ts. */
+   The finger floor is in narrow-window.css § a coarse pointer;
+   tests/touch-controls.test.ts holds all of it. */
 @media (hover: hover) {
   .gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
 }
@@ -100,11 +106,10 @@
    `pointer: coarse` because the floor is: the wrap is the floor's, so it is
    undone under the same query, and a mouse at any width is untouched.
 
-   **Here, not in narrow-window.css**, because that sheet loads before
-   quotes.css, and an equal-weight `.quotes-rank { flex-wrap: nowrap }` there
-   would lose to quotes.css's own `wrap` (GPT Sol, on the plan). Each row's
-   one-line rule sits in the sheet that owns the row, after its base rule; the
-   Quotes row's is in quotes.css.
+   **Here, after the base rule**, so that source order gives a touch screen
+   the one line: the two are equal in weight. (While Quotes' row had its own
+   class in quotes.css, which loads after narrow-window.css, this could not
+   have lived in that sheet at all; GPT Sol, on the plan.)
 
    The scrolling is the bottom bar's treatment, cited rather than shared —
    dock.css § the floor under the bar's fit ladder; its rules are unconditional
@@ -129,6 +134,14 @@
 
 /* The threshold slider — the one control in this panel that sets a number
    rather than picking from a list. Shown only in `prioritised` order.
+
+   **One set of rules for every band's slider.** Glossary, Citations and FAQ
+   draw it through ThresholdSlider.tsx; Search's `ConfSlider`, Quotes'
+   `BarSlider` and Debate's `StopBar` are components of their own that emit the
+   same classes. Until 2026-10-07 the last three each had a copy of these ten
+   rules under their own names (`.srch-gate*`, `.quotes-bar*`, `.dbt-bar*`),
+   kept in step by hand; plan 261007a § K5 measured the four alike and left
+   one. The range input's `id` is still each band's own.
 
    A native `<input type="range">`, styled with `accent-color` and nothing else:
    the moment you reach for `::-webkit-slider-thumb` you own the track, the
@@ -159,6 +172,11 @@
   font-size: 0.79rem;
   white-space: nowrap;
 }
+/* **Debate's value is words, not a number**, so it is not mono: a proportional
+   face is what stops *"bears partly · 2 of 3"* reading as a reading off an
+   instrument (debate.css § the relevance bar). `inherit` is what the span had
+   when it set no face of its own. */
+.gloss-gate-value.in-words { font-family: inherit; }
 .gloss-gate-reset {
   display: flex;
   align-items: center;
@@ -179,73 +197,12 @@
 }
 .gloss-gate-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
 /* Said in words, because a bar that is holding rows back looks exactly like a
-   glossary that never had them. Until 2026-09-03 this said when the bar had
-   *divided* nothing; the bar hides rather than groups now, so what it reports
-   is the count — `hiddenNote` in threshold.ts owns the wording for all three
-   panels. */
+   glossary that never had them — or a search that found nothing, or a debate
+   nobody answered. Until 2026-09-03 this said when the bar had *divided*
+   nothing; the bar hides rather than groups now, so what it reports is the
+   count — `hiddenNote` in threshold.ts owns the wording. Search and Debate
+   print it only when something is hidden; the others always. */
 .gloss-gate-note {
-  margin: 0.3rem 0 0;
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.35;
-}
-
-/* ---- the search panel's confidence bar ----
-   The prioritised order's threshold — see search.md § Prioritised. Deliberately
-   the same rules as `.gloss-gate` above, and the shared block below is where
-   they are actually shared: one idea in the reader's hands, one look, whichever
-   band it is in. What is NOT shared is the value's alignment story — the
-   glossary's number lines up with scores on its rows, and this one lines up
-   with the confidence chips on its own. Both are mono for that reason.
-
-   Grouped by selector rather than merged into one `.gate` class because the two
-   panels' paddings differ and always have; sharing the class would have meant a
-   modifier on every rule to say which band it was in. */
-.srch-gate {
-  padding: 0.4rem 0.7rem 0.5rem;
-  border-bottom: 1px solid var(--rule);
-}
-.srch-gate-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.srch-gate-label {
-  color: var(--ink-faint);
-  font-size: 0.83rem;
-  text-transform: lowercase;
-}
-.srch-gate-value {
-  margin-left: auto;
-  color: var(--ink-soft);
-  font-family: var(--font-mono);
-  font-size: 0.79rem;
-  white-space: nowrap;
-}
-.srch-gate-reset {
-  display: flex;
-  align-items: center;
-  padding: 0.1rem;
-  border: none;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.srch-gate-reset:hover { color: var(--ink); }
-.srch-gate-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.srch-gate-range {
-  display: block;
-  width: 100%;
-  margin: 0.3rem 0 0;
-  accent-color: var(--highlight-text);
-  cursor: pointer;
-}
-.srch-gate-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-/* Said in words, because a bar that is hiding everything looks exactly like a
-   search that found nothing. The clause that used to end this — *and unlike the
-   glossary's, this one really does take rows away* — went on 2026-09-03, when
-   the glossary and quotes started taking rows away too. */
-.srch-gate-note {
   margin: 0.3rem 0 0;
   color: var(--ink-faint);
   font-size: 0.81rem;
@@ -265,6 +222,12 @@
   color: var(--highlight-ink);
   font-size: 0.88rem;
 }
+/* A failed read and its *Try again* (ReadError.tsx) — every band's, so it sits
+   here beside the sentence it wraps. It was `.faq-read-error`, with a copy in
+   skim.css and summary.css. The wrapper carries the gutter; the sentence gives
+   its own up and keeps a gap above the button. */
+.read-error { margin: 0.4rem 0.7rem 0; }
+.read-error .gloss-error { margin: 0 0 0.5rem; }
 
 .gloss-empty { padding: 1rem 0.9rem; color: var(--ink-faint); }
 .gloss-empty p { margin: 0 0 0.5rem; }
@@ -503,6 +466,9 @@
    because it is a different KIND of thing from either of them: not the article,
    not the model's memory, but a thing that was checked on a particular day. */
 .gloss-look { margin: 0.55rem 0 0; }
+/* *Ask in chat*, beside Dig deeper (OriginChat.tsx; plan 261006d). The two
+   are inline, so the gap is a margin and survives a wrap onto a second line. */
+.gloss-ask-chat { margin-left: 0.35rem; }
 .gloss-look.on {
   padding: 0.45rem 0.5rem;
   border-radius: var(--radius);

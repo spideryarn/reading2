@@ -1,7 +1,8 @@
 /**
  * **The Topics row's "More detail" view**: one row per topic instead of pills
  * on one line — its colour, its chip, its live count as a small bar, and the
- * three articles that use it most, as links.
+ * three articles that use it most (or, for a topic a model named, its newest
+ * three), as links.
  *
  * Greg, 2026-09-29 (`spya-f28vqj`), on this view: *"there are these coloured
  * bars … It took me a while to figure out that they're probably a
@@ -47,6 +48,9 @@ import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 /** How many articles a row names. */
 const ROW_ARTICLES = 3;
 
+/** A row's chip indent by depth — whole class names, so Tailwind sees them. */
+const INDENT = ["", "tw:pl-3", "tw:pl-6"] as const;
+
 /**
  * What a row's links need for their paper cards, and only they — kept out of
  * `TermTipScope`, which every chip in both views carries (GPT Sol's plan
@@ -62,6 +66,7 @@ export interface PaperScope {
 export function ShelfTermsDetail({
   terms,
   slotOf,
+  depthOf,
   count,
   chosen,
   onToggle,
@@ -72,6 +77,12 @@ export function ShelfTermsDetail({
   terms: readonly ShelfTerm[];
   /** Each topic's hue-ring stop — the same one its pill's dot wears. */
   slotOf: (key: string) => number;
+  /**
+   * How many broader topics each is inside (shelf-narrow.ts § `topicDepth`):
+   * a finer row's chip is indented a step per level, on top of the `›` the
+   * chip itself wears, so the rows read as an outline. Absent means flat.
+   */
+  depthOf?: (key: string) => number;
   /** The live count, from the one formula in shelf-narrow.ts. */
   count: (key: string) => number;
   chosen: ReadonlySet<string>;
@@ -95,7 +106,10 @@ export function ShelfTermsDetail({
               className="tw:grid tw:grid-cols-[0.625rem_minmax(0,1fr)_3rem] tw:items-center tw:gap-x-3 tw:gap-y-1 tw:border-b tw:border-border/50 tw:py-1.5 tw:text-xs tw:sm:grid-cols-[0.625rem_12rem_3rem_minmax(0,1fr)]"
             >
               <TopicDot slot={slot} className="tw:size-2.5" />
-              <span className="tw:min-w-0">
+              <span
+                data-topic-depth={depthOf?.(t.key) ?? 0}
+                className={`tw:min-w-0 ${INDENT[Math.min(depthOf?.(t.key) ?? 0, INDENT.length - 1)] ?? ""}`}
+              >
                 <TermChip
                   term={t}
                   count={n}

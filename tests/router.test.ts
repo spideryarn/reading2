@@ -23,6 +23,7 @@ import {
   carriedSearch,
   CONTACT_HREF,
   HELP_HREF,
+  liftedLegacyHref,
   liftedTweetsHref,
   navigate,
   PRIVACY_HREF,
@@ -263,15 +264,42 @@ describe("the help route", () => {
     expect(parseRoute(HELP_HREF)).toEqual({ kind: "help" });
   });
 
-  it("is not a prefix: a section is a fragment, never a path", () => {
-    expect(parseRoute("/help/spine")).toEqual({ kind: "not-found" });
+  /* Since 2026-10-07 a page of Help is a path (help-anchors.ts § helpHref).
+     docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
+     § Routing and old links. */
+  it("gives Help one segment under it, with or without a trailing slash", () => {
+    expect(parseRoute("/help/spine")).toEqual({ kind: "help", page: "spine" });
+    expect(parseRoute("/help/spine/")).toEqual({ kind: "help", page: "spine" });
+    expect(parseRoute("/help/questions")).toEqual({ kind: "help", page: "questions" });
   });
 
-  /* A link into Help is all fragment (help-anchors.ts § helpHref). Nothing
-     on the way in may rewrite it, or every `/help#spine` lands at the top. */
+  /* Whether the segment names a page is Help's to say, so the router imports
+     none of Help and Help can answer a wrong address itself
+     (help-anchors.ts § resolveHelpPage). */
+  it("does not judge the segment, and hands it over decoded", () => {
+    expect(parseRoute("/help/nonsense")).toEqual({ kind: "help", page: "nonsense" });
+    expect(parseRoute("/help/mode-trajectory")).toEqual({ kind: "help", page: "mode-trajectory" });
+    expect(parseRoute("/help/mode%2Dskim")).toEqual({ kind: "help", page: "mode-skim" });
+    /* A mangled escape is handed over as it came rather than thrown on. */
+    expect(parseRoute("/help/%E0%A4%A")).toEqual({ kind: "help", page: "%E0%A4%A" });
+  });
+
+  it("is one segment deep and no more, and is not a prefix of another word", () => {
+    expect(parseRoute("/help/a/b")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/help/spine/more")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/help//")).toEqual({ kind: "not-found" });
+    expect(parseRoute("/helpful")).toEqual({ kind: "not-found" });
+  });
+
+  /* An old link into Help is all fragment (`/help#spine`), and a question's
+     still is (`/help/questions#faq-…`). Nothing on the way in may rewrite
+     either: the page itself carries the old one over (HelpPage.tsx §
+     Arriving), and it needs the fragment to do it. */
   it("is left alone by settleAddress, fragment and all", () => {
     expect(settleAddress("/help", "", "#spine")).toBeNull();
     expect(settleAddress("/help", "", "#mode-trajectory")).toBeNull();
+    expect(settleAddress("/help/spine", "", "")).toBeNull();
+    expect(settleAddress("/help/questions", "", "#faq-older-profile")).toBeNull();
   });
 });
 
@@ -368,74 +396,157 @@ describe("readHref", () => {
 });
 
 /**
- * **Lifting the old Tweets address.** The thread was a page at
- * `/read/<slug>/tweets` from 2026-08-25 until 2026-09-29, when it became the
- * mode `?mode=tweets` (Greg, SPIDERYARN-READING2-5A;
- * docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
- * Links to the page are pasted, bookmarked and in a tab's own history, and each
- * of them must land on the mode rather than on *not found* — at boot
- * (`settleAddress`), on an in-app link (`navigate()`) and on Back
- * (`useRoute`, which shares `liftedTweetsHref`).
+ * **Lifting the old Tweets addresses.** The thread was a page at
+ * `/read/<slug>/tweets` from 2026-08-25 until 2026-09-29, then the mode
+ * `?mode=tweets` until 2026-10-03, when it became Summary's Thread view
+ * (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md,
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md).
+ * Links to either are pasted, bookmarked and in a tab's own history, and each
+ * must land on `?mode=summary&summary=thread` — at boot (`settleAddress`), on an
+ * in-app link (`navigate()`) and on Back (`useRoute`, which shares
+ * `liftedTweetsHref`). `RETIRED_MODES` alone would open Summary at Brief.
  */
-describe("lifting the old Tweets address", () => {
-  it("sends the bare page to the mode", () => {
-    expect(settleAddress("/read/x/tweets", "", "")).toBe("/read/x?mode=tweets");
+describe("lifting the old Tweets addresses", () => {
+  const THREAD = "mode=summary&summary=thread";
+
+  it("sends the bare page to Summary's thread", () => {
+    expect(settleAddress("/read/x/tweets", "", "")).toBe(`/read/x?${THREAD}`);
     // The trailing slash `parseRoute` accepts on every other view.
-    expect(settleAddress("/read/x/tweets/", "", "")).toBe("/read/x?mode=tweets");
+    expect(settleAddress("/read/x/tweets/", "", "")).toBe(`/read/x?${THREAD}`);
   });
 
-  it("carries the reader's place", () => {
-    expect(settleAddress("/read/x/tweets", "?at=spya-k3m9qt", "")).toBe(
-      "/read/x?at=spya-k3m9qt&mode=tweets",
+  it("sends the retired mode word there too", () => {
+    expect(settleAddress("/read/x", "?mode=tweets", "")).toBe(`/read/x?${THREAD}`);
+    expect(settleAddress("/read/x", "?%6Dode=tweets", "")).toBe(`/read/x?${THREAD}`);
+    /* On the metadata page as well: the bar's links there carry the query back
+       to the article, and a carried `mode=tweets` would open Brief. */
+    expect(settleAddress("/read/x/metadata", "?mode=tweets", "")).toBe(`/read/x/metadata?${THREAD}`);
+  });
+
+  it("carries the reader's place and anything else on the link", () => {
+    expect(settleAddress("/read/x/tweets", "?at=spya-k3m9qt", "")).toBe(`/read/x?at=spya-k3m9qt&${THREAD}`);
+    expect(settleAddress("/read/x", "?at=spya-k3m9qt&mode=tweets&margin=1&cols=0,1", "")).toBe(
+      `/read/x?at=spya-k3m9qt&margin=1&cols=0,1&${THREAD}`,
     );
   });
 
   it("replaces a mode already on the link, because the path said which one it meant", () => {
     expect(settleAddress("/read/x/tweets", "?mode=summary&at=spya-k3m9qt", "")).toBe(
-      "/read/x?at=spya-k3m9qt&mode=tweets",
+      `/read/x?at=spya-k3m9qt&${THREAD}`,
     );
+  });
+
+  it("overrides a carried `summary`, and leaves exactly one of each pair", () => {
+    /* GPT Sol's F4: the legacy spelling says Thread, whatever level the link
+       also carried; two `summary` pairs would let the first one win. */
+    for (const [pathname, search] of [
+      ["/read/x", "?summary=brief&mode=tweets"],
+      ["/read/x", "?mode=tweets&summary=fuller&summary=brief"],
+      ["/read/x", "?mode=tweets&%73ummary=fuller"],
+      ["/read/x/tweets", "?summary=fuller"],
+      ["/read/x/tweets", "?mode=glossary&summary=brief"],
+    ] as const) {
+      const lifted = settleAddress(pathname, search, "");
+      expect(lifted, `${pathname}${search}`).toBe(`/read/x?${THREAD}`);
+      const params = new URLSearchParams((lifted ?? "").split("?")[1]);
+      expect(params.getAll("mode")).toEqual(["summary"]);
+      expect(params.getAll("summary")).toEqual(["thread"]);
+    }
   });
 
   it("replaces an encoded `mode` too, or the stale one would win `get(\"mode\")`", () => {
     /* `%6Dode` is `mode` to `URLSearchParams`, which returns the first match —
-       so a literal-only removal would leave the reader in Summary. The ninth
-       address bug's shape (§ `hasKey`). */
-    const lifted = settleAddress("/read/x/tweets", "?%6Dode=summary", "");
-    expect(lifted).toBe("/read/x?mode=tweets");
-    expect(new URLSearchParams((lifted ?? "").split("?")[1]).getAll("mode")).toEqual(["tweets"]);
+       so a literal-only removal would leave the reader somewhere else. The
+       ninth address bug's shape (§ `hasKey`). */
+    const lifted = settleAddress("/read/x/tweets", "?%6Dode=glossary", "");
+    expect(lifted).toBe(`/read/x?${THREAD}`);
+    expect(new URLSearchParams((lifted ?? "").split("?")[1]).getAll("mode")).toEqual(["summary"]);
   });
 
   it("keeps a hash", () => {
     expect(settleAddress("/read/x/tweets", "?at=spya-k3m9qt", "#section-2")).toBe(
-      "/read/x?at=spya-k3m9qt&mode=tweets#section-2",
+      `/read/x?at=spya-k3m9qt&${THREAD}#section-2`,
     );
     /* A block-id hash goes on to become `?at=`, as it does on any read address
        — the lift runs first and hands the rest of the chain an ordinary one. */
-    expect(settleAddress("/read/x/tweets", "", "#spya-k3m9qt")).toBe(
-      "/read/x?at=spya-k3m9qt&mode=tweets",
-    );
+    expect(settleAddress("/read/x/tweets", "", "#spya-k3m9qt")).toBe(`/read/x?at=spya-k3m9qt&${THREAD}`);
   });
 
   it("runs before `?about=1`, which then goes to Metadata as it does from the article", () => {
     /* The order matters: lifted second, the tweets path would already have been
        handed to `liftLegacyAbout` as a route `parseRoute` cannot read. */
-    expect(settleAddress("/read/x/tweets", "?about=1", "")).toBe("/read/x/metadata?mode=tweets");
+    expect(settleAddress("/read/x/tweets", "?about=1", "")).toBe(`/read/x/metadata?${THREAD}`);
   });
 
-  it("leaves everything that is not an article's tweets page alone", () => {
+  it("leaves everything that is not an old Tweets address alone", () => {
     expect(settleAddress("/tweets", "", "")).toBeNull();
     expect(settleAddress("/read/x/y/tweets", "", "")).toBeNull();
     expect(settleAddress("/read/x/tweetsy", "", "")).toBeNull();
     expect(settleAddress("/read/Not A Slug/tweets", "", "")).toBeNull();
-    // Already the mode: nothing to do, which is what makes the rewrite settle.
-    expect(settleAddress("/read/x", "?mode=tweets", "")).toBeNull();
+    // Already there: nothing to do, which is what makes the rewrite settle.
+    expect(settleAddress("/read/x", `?${THREAD}`, "")).toBeNull();
+    // Summary at a length is not the thread, and another mode's word is not ours.
+    expect(settleAddress("/read/x", "?mode=summary&summary=fuller", "")).toBeNull();
+    expect(settleAddress("/read/x", "?mode=tweetsy", "")).toBeNull();
+    expect(settleAddress("/read/x", "?find=mode%3Dtweets", "")).toBeNull();
   });
 
   it("`liftedTweetsHref` answers a whole href, and `null` for anything else", () => {
-    expect(liftedTweetsHref("/read/x/tweets?at=spya-a#h")).toBe("/read/x?at=spya-a&mode=tweets#h");
-    expect(liftedTweetsHref("/read/x?mode=tweets")).toBeNull();
+    expect(liftedTweetsHref("/read/x/tweets?at=spya-a#h")).toBe(`/read/x?at=spya-a&${THREAD}#h`);
+    expect(liftedTweetsHref("/read/x?mode=tweets&at=spya-a#h")).toBe(`/read/x?at=spya-a&${THREAD}#h`);
+    expect(liftedTweetsHref(`/read/x?${THREAD}`)).toBeNull();
     expect(liftedTweetsHref("/read/x/metadata")).toBeNull();
     expect(liftedTweetsHref("/read/x")).toBeNull();
+  });
+
+  /**
+   * **Debate's *by claim* order became the Claims sub-mode** on 2026-10-03
+   * (plan 261003o; GPT Sol's F7). The old value is rewritten once, here, so
+   * nothing downstream reads it: a legacy fallback inside the panel would
+   * bounce a reader who pressed Reception straight back to Claims, since
+   * Reception is the absent parameter.
+   */
+  describe("lifting Debate's old by-claim order", () => {
+    it("sends `debateby=claim` to the Claims sub-mode, and removes it", () => {
+      expect(settleAddress("/read/x", "?mode=debate&debateby=claim", "")).toBe("/read/x?mode=debate&debate=claims");
+      expect(settleAddress("/read/x", "?mode=debate&%64ebateby=claim&at=spya-k3m9qt", "")).toBe(
+        "/read/x?mode=debate&at=spya-k3m9qt&debate=claims",
+      );
+      expect(settleAddress("/read/x/metadata", "?debateby=claim", "")).toBe("/read/x/metadata?debate=claims");
+    });
+
+    it("lets an explicit `debate=` win, and still removes the old order", () => {
+      expect(settleAddress("/read/x", "?debate=reception&debateby=claim", "")).toBe("/read/x?debate=reception");
+      expect(settleAddress("/read/x", "?debateby=claim&debate=claims", "")).toBe("/read/x?debate=claims");
+    });
+
+    it("leaves Reception's own orders alone, and Claims with one of them carried", () => {
+      expect(settleAddress("/read/x", "?mode=debate&debateby=stance", "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=debate&debateby=date", "")).toBeNull();
+      /* `debate=claims&debateby=date` is Claims; `debateby` is Reception's and
+         waits there. Nothing to rewrite. */
+      expect(settleAddress("/read/x", "?debate=claims&debateby=date", "")).toBeNull();
+      expect(settleAddress("/read/x", "?find=debateby%3Dclaim", "")).toBeNull();
+    });
+
+    /* What makes the rewrite settle, and what keeps Reception reachable: the
+       address a press on Reception writes from a lifted link has no `debate`
+       and no `debateby`, and it is left exactly so. */
+    it("settles: the lifted address, and the one Reception then writes, are both left alone", () => {
+      const lifted = settleAddress("/read/x", "?mode=debate&debateby=claim", "") ?? "";
+      const at = lifted.indexOf("?");
+      expect(settleAddress(lifted.slice(0, at), lifted.slice(at), "")).toBeNull();
+      expect(settleAddress("/read/x", "?mode=debate", "")).toBeNull();
+    });
+
+    it("is lifted on Back and on `navigate()` too, through `liftedLegacyHref`", () => {
+      expect(liftedLegacyHref("/read/x?mode=debate&debateby=claim#h")).toBe("/read/x?mode=debate&debate=claims#h");
+      expect(liftedLegacyHref("/read/x?mode=debate&debateby=stance")).toBeNull();
+      /* Both old spellings on one link. */
+      expect(liftedLegacyHref("/read/x/tweets?debateby=claim")).toBe(`/read/x?${THREAD}&debate=claims`);
+      expect(liftedLegacyHref("/read/x/tweets")).toBe(`/read/x?${THREAD}`);
+      expect(liftedLegacyHref("/read/x")).toBeNull();
+    });
   });
 
   describe("navigate()", () => {
@@ -456,22 +567,28 @@ describe("lifting the old Tweets address", () => {
       vi.unstubAllGlobals();
     });
 
-    it("lands an old link on ?mode=tweets", () => {
+    it("lands an old link on Summary's thread", () => {
       pose("/read/x");
       navigate("/read/x/tweets?at=spya-k3m9qt");
-      expect(written).toEqual(["push /read/x?at=spya-k3m9qt&mode=tweets"]);
+      expect(written).toEqual([`push /read/x?at=spya-k3m9qt&${THREAD}`]);
+    });
+
+    it("and the retired mode word, on a client navigation", () => {
+      pose("/read/y");
+      navigate("/read/x?mode=tweets");
+      expect(written).toEqual([`push /read/x?${THREAD}`]);
     });
 
     it("and with `replace`", () => {
       pose("/read/x");
       navigate("/read/x/tweets", { replace: true });
-      expect(written).toEqual(["replace /read/x?mode=tweets"]);
+      expect(written).toEqual([`replace /read/x?${THREAD}`]);
     });
 
     it("writes nothing when the old link names where the reader already is", () => {
       /* The `href === location` guard compares the *lifted* address — or an old
-         link clicked from inside Tweets would push a duplicate entry. */
-      pose("/read/x", "?mode=tweets");
+         link clicked from inside the thread would push a duplicate entry. */
+      pose("/read/x", `?${THREAD}`);
       navigate("/read/x/tweets");
       expect(written).toEqual([]);
     });
@@ -480,9 +597,9 @@ describe("lifting the old Tweets address", () => {
       /* A hash is part of the destination. Comparing only path and search made
          this look like the same address after the legacy link was lifted, so
          the hash from the page being left survived the navigation. */
-      pose("/read/x", "?mode=tweets", "#old-section");
+      pose("/read/x", `?${THREAD}`, "#old-section");
       navigate("/read/x/tweets");
-      expect(written).toEqual(["push /read/x?mode=tweets"]);
+      expect(written).toEqual([`push /read/x?${THREAD}`]);
     });
 
     it("the positive control: an ordinary address goes through as written", () => {

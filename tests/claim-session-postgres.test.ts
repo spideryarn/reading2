@@ -40,8 +40,8 @@
  * **Fake:** the bodies of the pipeline steps, and only those. The thirteen real
  * ones fetch web pages and call models. They return `parts` and let the session
  * write them, which is exactly what the real stages do — that is the whole
- * precondition of the flip (`LEGACY_UNCONVERTED_STEPS` is empty,
- * src/pipeline.ts). A real stage committing through a real `pgStoreSession` is
+ * precondition of the flip (no step is exempt from returning `parts`,
+ * src/pipeline.ts § `ConvertedProduct`). A real stage committing through a real `pgStoreSession` is
  * `tests/pg-session-real-step.test.ts`; what that file cannot show is the
  * *selection*, because it injects `openPgStoreSession` itself. This file is the
  * other half.
@@ -84,7 +84,7 @@ import { stat } from "node:fs/promises";
 import path from "node:path";
 
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 /*
  * **A `vi.hoisted` block stood here until 2026-09-05**, saving
@@ -96,8 +96,10 @@ import { afterAll, describe, expect, it } from "vitest";
  * it has no root to point anywhere.
  */
 
+import { openRouterJson } from "../src/ai-call.js";
 import { getDb } from "../src/db/client.js";
 import {
+  aiCalls,
   articleRevisions,
   articles,
   jobs as jobsTable,
@@ -108,7 +110,9 @@ import { mintId } from "../src/ids.js";
 import {
   DEADLINE_MARGIN_MS,
   REQUEUE_BUDGET,
+  STEP_BUDGET_MS,
   advanceJobWith,
+  cancelJob,
   claimSession,
   retryJob,
 } from "../src/jobs.js";
@@ -171,6 +175,8 @@ const SLUGS = {
   pauseStop: "claim-session-pg-deadline-pause-stop",
   pauseSpent: "claim-session-pg-deadline-pause-spent",
   pauseLapse: "claim-session-pg-pause-then-lapse",
+  callDeadline: "claim-session-pg-call-under-deadline",
+  callStop: "claim-session-pg-call-under-stop",
 } as const;
 
 /* ----------------------------------------------- the article is not on disk -- */
@@ -438,7 +444,11 @@ function articleSteps(
         extractedHtml: html,
         meta: { slug, title: "A fixture article" },
       }),
-      blocks: returningStep("blocks", { blocks: { blocks }, stampedHtml: html }),
+      blocks: returningStep("blocks", {
+        blocks: { blocks },
+        stampedHtml: html,
+        readingDifficulty: { rated: false },
+      }),
       structure: returningStep(
         "structure",
         { tree: treeFor(slug, blocks), labels: labelsFor(slug, blocks), blocks: { blocks } },
@@ -593,7 +603,12 @@ describe("a claim under Postgres", () => {
   afterAll(async () => {
     const database = getDb();
     const slugs = Object.values(SLUGS);
-    for (const slug of slugs) await database.delete(jobsTable).where(eq(jobsTable.slug, slug));
+    for (const slug of slugs) {
+      /* A failed advance or assertion may never reach callsOf(). Ledger rows
+         survive job/article deletion, so sweep this suite's slugs explicitly. */
+      await database.delete(aiCalls).where(eq(aiCalls.articleSlug, slug));
+      await database.delete(jobsTable).where(eq(jobsTable.slug, slug));
+    }
     for (const slug of slugs) {
       const [row] = await database
         .select({ id: articles.id })
@@ -1282,8 +1297,11 @@ describe("a claim under Postgres", () => {
    * ## The arrangement
    *
    * `extract` finishes at once and `blocks` never finishes at all. The lease
-   * leaves an 8 s deadline: enough for the walk to admit `blocks`, whose
-   * `STEP_BUDGET_MS` is 5 s, and not enough for it to survive.
+   * leaves a deadline 3 s longer than `blocks`'s `STEP_BUDGET_MS`: enough
+   * for the walk to admit it, and not enough for a step that never ends to
+   * survive. Read off the table, so the next change to that row (it went from
+   * 5 s to 25 s when the step gained its rating call) cannot strand this test
+   * on `extract` again.
    */
   it("hands the job back mid-step when it runs out of time, and resumes on the same draft", async () => {
     const slug = SLUGS.pause;
@@ -1308,10 +1326,9 @@ describe("a claim under Postgres", () => {
           inFlightDraft = (await jobRow(job.id))?.draftRevisionId ?? null;
         }),
       } as never,
-      /* 8s of deadline after `DEADLINE_MARGIN_MS`: `extract` runs and commits,
-         `blocks` is admitted with more than its 5s budget left, and the timer
-         fires while it is in flight. */
-      leaseMs: DEADLINE_MARGIN_MS + 8_000,
+      /* `extract` runs and commits, `blocks` is admitted with more than its
+         budget left, and the timer fires while it is in flight. */
+      leaseMs: DEADLINE_MARGIN_MS + STEP_BUDGET_MS.blocks + 3_000,
     });
 
     /* **`done: false`, which is what makes this work with no client change.**
@@ -1480,6 +1497,136 @@ describe("a claim under Postgres", () => {
     await assertNothingOnDisk(slug, "the claim the reader stopped");
   }, 120_000);
 
+  /* ---------------------------------------------------------------- 8b -- */
+
+  /**
+   * **Who stopped the model call, as its `ai_calls` row says it.** Plan
+   * docs/plans/261006f-count-the-pipeline-job-deadline-as-a-deadline-and-class-live-conversation-stops.md.
+   *
+   * Through the queue rather than on the class alone, because the fact wanted
+   * is about the row: the claimant's own deadline and a reader's Stop abort the
+   * same controller, and the reason is all a gateway has to tell them apart by.
+   * The step makes one real gateway call on `ctx.signal`, against a transport
+   * that hangs until that signal fires, and awaits it, so the row is written
+   * before the step comes apart.
+   */
+  describe("a model call in flight when the job is stopped", () => {
+    /** Only the model call hangs; Supabase Storage goes on using the real `fetch`. */
+    function hangTheProvider(): () => void {
+      const real = globalThis.fetch;
+      vi.stubEnv("OPENROUTER_API_KEY", "sk-test-key");
+      vi.stubGlobal("fetch", (url: unknown, init?: { signal?: AbortSignal }) => {
+        if (!String(url instanceof Request ? url.url : url).includes("openrouter.ai")) {
+          return real(url as never, init as never);
+        }
+        const signal = init?.signal;
+        return new Promise((_resolve, reject) => {
+          if (signal?.aborted) reject(signal.reason);
+          else signal?.addEventListener("abort", () => reject(signal.reason), { once: true });
+        });
+      });
+      return () => {
+        vi.unstubAllGlobals();
+        vi.unstubAllEnvs();
+      };
+    }
+
+    /** A step that is one model call, with `during` run once the call is out. */
+    function callingStep(
+      name: StepName,
+      during?: () => Promise<void>,
+      seen?: { reason?: unknown },
+    ): PipelineStep {
+      return {
+        name,
+        label: STEPS[name].label,
+        produces: STEPS[name].produces,
+        async run(ctx: { signal: AbortSignal }): Promise<StepProduct> {
+          expect(ctx.signal.aborted, "the model call must start before the job stops it").toBe(false);
+          const call = openRouterJson("pdf", { model: "m", messages: [] }, { signal: ctx.signal });
+          call.catch(() => undefined);
+          await during?.();
+          try {
+            await call;
+          } finally {
+            if (seen) seen.reason = ctx.signal.reason;
+          }
+          throw new Error(`${name} got an answer from a provider that never answers`);
+        },
+      } as unknown as PipelineStep;
+    }
+
+    async function callsOf(jobId: string) {
+      const rows = await db()
+        .select({
+          outcome: aiCalls.outcome,
+          failureClass: aiCalls.failureClass,
+          failurePhase: aiCalls.failurePhase,
+        })
+        .from(aiCalls)
+        .where(eq(aiCalls.jobId, jobId));
+      await db().delete(aiCalls).where(eq(aiCalls.jobId, jobId));
+      return rows;
+    }
+
+    it("records the call as stopped by a deadline when the job's own deadline stops it", async () => {
+      const slug = SLUGS.callDeadline;
+      const { steps } = articleSteps(slug, "pzd", "the article the deadline cut off");
+      const job = await queueJob(slug, INGEST);
+      const restore = hangTheProvider();
+      const seen: { reason?: unknown } = {};
+      try {
+        await advanceUntilItRuns(job.id, {
+          power: async () => "standard",
+          session: claimSession,
+          steps: { ...STEPS, ...steps, extract: callingStep("extract", undefined, seen) } as never,
+          /* Session opening and step preflight share this budget. Leave them
+             ten seconds, and assert above that the call starts before it fires. */
+          leaseMs: DEADLINE_MARGIN_MS + 10_000,
+        });
+      } finally {
+        restore();
+      }
+      expect(await callsOf(job.id), "the job deadline was recorded as an ordinary stop").toEqual([
+        { outcome: "aborted", failureClass: "deadline", failurePhase: "before_answer" },
+      ]);
+      /* What the job's reason promised before the ledger knew it as a deadline:
+         `Error`'s name, which src/log.ts puts in a log line, and the reader's
+         sentence. */
+      expect(seen.reason).toMatchObject({ name: "Error", message: INTERRUPTED.message });
+    }, 120_000);
+
+    it("records the call as an ordinary stop when the reader stops the job", async () => {
+      const slug = SLUGS.callStop;
+      const { steps } = articleSteps(slug, "pze", "the article the reader stopped");
+      const job = await queueJob(slug, INGEST);
+      const restore = hangTheProvider();
+      let advanced: Awaited<ReturnType<typeof advanceUntilItRuns>>;
+      try {
+        advanced = await advanceUntilItRuns(job.id, {
+          power: async () => "standard",
+          session: claimSession,
+          steps: {
+            ...STEPS,
+            ...steps,
+            extract: callingStep("extract", async () => {
+              await runAsOwner(DEV_OWNER_ID, () => cancelJob(job.id));
+            }),
+          } as never,
+          /* Long, so the only thing that can stop the call is the Stop. */
+          leaseMs: DEADLINE_MARGIN_MS + 60_000,
+        });
+      } finally {
+        restore();
+      }
+      expect(advanced?.job.status).toBe("cancelled");
+      expect(await callsOf(job.id), "a reader's Stop was recorded as a clock of ours").toEqual([
+        { outcome: "aborted", failureClass: "abort", failurePhase: "before_answer" },
+      ]);
+    }, 120_000);
+  });
+
+
   /* ------------------------------------------------------------------ 9 -- */
 
   /**
@@ -1604,6 +1751,7 @@ describe("a claim under Postgres", () => {
           parts: {
             blocks: { blocks: minted },
             stampedHtml: `<html><body>${minted.map((b) => b.html).join("")}</body></html>`,
+            readingDifficulty: { rated: false },
           } as never,
           detail: "blocks ran",
         };

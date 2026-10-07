@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import * as messages from "../src/messages.js";
 import { OWNED_ARTEFACT, sharingPersonalisedList } from "../src/messages.js";
 import type { ProfileCarrying } from "../src/store/pg.js";
+import type { FetchFailureCode } from "../src/types.js";
 import {
   canRetry,
   CODE_KINDS,
@@ -28,7 +29,9 @@ import {
   type ReaderFacingFailure,
   articleHadNoText,
   documentHadTooLittleText,
+  documentIsABotCheck,
   documentHasNoArticle,
+  fetchFailed,
   pdfChunkTooBig,
   pdfPagesCutOff,
   pdfPagesFiltered,
@@ -104,6 +107,26 @@ type FactoryName = {
  * too few calls is not caught by anything, so the comments say which branches
  * each one is reaching.
  */
+const EVERY_FETCH_CODE: Record<FetchFailureCode, true> = {
+  "invalid-url": true,
+  "unsupported-scheme": true,
+  "blocked-address": true,
+  dns: true,
+  connection: true,
+  certificate: true,
+  timeout: true,
+  "too-many-redirects": true,
+  unauthorized: true,
+  forbidden: true,
+  "not-found": true,
+  "rate-limited": true,
+  "server-error": true,
+  "http-error": true,
+  "too-large": true,
+  "unsupported-type": true,
+  empty: true,
+};
+
 const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   providerHttpFailure: [
     400, 401, 402, 403, 404, 408, 409, 413, 418, 422, 429, 451, 500, 502, 503, 504, 599,
@@ -172,6 +195,9 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
      invariant in this file, which is the exact shape the header above records
      `placingFailed` shipping in. */
   documentHasNoArticle: [documentHasNoArticle("url"), documentHasNoArticle("upload")],
+  /* Stage 2's third refusal, 2026-10-06, and both origins for the same reason:
+     two sentences, two codes. */
+  documentIsABotCheck: [documentIsABotCheck("url"), documentIsABotCheck("upload")],
   /* Stage 3's, and both origins for the same reason. It was a constant that the
      first sweep of this split missed — reachable from an uploaded scan, where a
      PDF's only text is a publisher record stage 2 withholds. ⟨GPT Sol, F24⟩ */
@@ -181,6 +207,15 @@ const FROM_FACTORIES: Record<FactoryName, ReaderFacingFailure[]> = {
   pdfPagesCutOff: [pdfPagesCutOff([12, 13])],
   pdfPagesFiltered: [pdfPagesFiltered([12, 13])],
   pdfPagesIncomplete: [pdfPagesIncomplete([12, 13])],
+  /* Every code, and `http-error` three times for its two answers: no status
+     and a 5xx are one sentence, a 4xx is the other. The list of codes is a
+     `Record` over the union, so a new code cannot be left out of this sweep.
+     tests/fetch-failure-sentences.test.ts holds the kind each one should be. */
+  fetchFailed: [
+    ...(Object.keys(EVERY_FETCH_CODE) as FetchFailureCode[]).map((code) => fetchFailed(code, null)),
+    fetchFailed("http-error", 413),
+    fetchFailed("http-error", 599),
+  ],
 };
 
 const EVERY: ReaderFacingFailure[] = [...CONSTANTS, ...Object.values(FROM_FACTORIES).flat()];
@@ -261,10 +296,12 @@ describe("the code table and the messages are one fact, not two", () => {
    * Asserting `codes(EVERY) === keys(CODE_KINDS)` checked both directions at
    * once, which is why it was written that way — but the reverse direction
    * silently required that **every registered code's sentence lives in this
-   * file**. That is not true and was never quite true: `ai-unusable` is raised
-   * by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts) and `ANSWER_UNUSABLE`
-   * (src/referee-criteria-run.ts), both of which ask in their own comments to be
-   * registered here.
+   * file**. That is not true and was never quite true: `ai-unusable` was raised
+   * by two sentences in the Referee runners' own files
+   * (src/referee-claims-run.ts and src/referee-criteria-run.ts), both of which
+   * asked in their own comments to be registered here. They are one sentence in
+   * src/messages.ts since 2026-10-04, `ANSWER_UNUSABLE`, so that example has
+   * gone; the assumption is still not one this file should make.
    *
    * The cost of the assumption was four days of not registering it. Adding the
    * table entry alone turned this test red, and the only way to satisfy the

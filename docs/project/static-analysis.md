@@ -10,6 +10,8 @@ npm run check          # everything below, gates first — MINUTES, not seconds;
 npm run check -- --offline   # the same, minus the database suites — NOT the real gate
 npm run knip           # unused files, exports, dependencies
 npm run cycles         # import cycles
+npm run lint:hook-deps # React hooks whose dependency list is wrong
+npm run lint:promises  # promises nobody awaits or handles
 npm run check:conflicts # unresolved merge conflicts in tracked files
 npm run complexity     # the functions worth looking at
 npm run dupes          # copy-paste
@@ -30,10 +32,17 @@ expensive command is a trap that documentation sets, not one a careless reader w
 So: `npm run typecheck`, `npm run knip`, `npm run cycles` and the rest are what you reach for while
 working. `npm run check` is the pre-commit gate, and you should expect to wait — run it under
 [`scripts/tmux-job.ts`](../../scripts/tmux-job.ts), because a backgrounded process is OOM-killed on
-*system* memory pressure here. `--fast` skips the build but **not** the suite.
+*system* memory pressure here. `--fast` narrows the build to its API pass but does **not** skip the suite. Start it early rather
+than waiting on it in series: commit on the fast gates — `npm run typecheck`, the suites you
+touched, and `npx vitest run tests/doc-links.test.ts` after any doc edit — and read `check`'s
+verdict when it lands.
+
+Started beside an `npm test` it is two full suites. On 2026-09-05 both ran in tmux at once: each
+took over half an hour, available memory fell to 6 GB of 30, and six waiters were OOM-killed in one
+burst. Ending the `check` session let the suite finish in minutes.
 
 Its neighbours: [linting.md](linting.md) is Biome as a *linter* (why not ESLint, which rules are off
-and why), [typechecking.md](typechecking.md) is `tsc` and the three projects, and
+and why), [typechecking.md](typechecking.md) is `tsc` and its projects, and
 [testing.md](testing.md) is what we run rather than what we read.
 
 ## The one fact that decides everything here
@@ -51,12 +60,14 @@ That single fact is why the list below is so short, and why two obvious names ar
 |---|---|---|
 | **[Knip](https://knip.dev) 6.32.2** (`npm run knip`) | unused **files**, **exports**, **dependencies** | advisory |
 | **Biome `noImportCycles`** (`npm run cycles`) | import cycles | **gate** |
+| **Biome `useExhaustiveDependencies`** (`npm run lint:hook-deps`) | a React hook whose dependency list does not match what it reads | **gate** |
+| **Biome `noFloatingPromises`** (`npm run lint:promises`) | a promise nobody awaits, handles or marks `void` | **gate** |
 | **[`conflict-markers.ts`](../../scripts/conflict-markers.ts)** (`npm run check:conflicts`) | unresolved merge conflicts in tracked files | **gate** |
 | **Biome `noExcessiveCognitiveComplexity`** (`npm run complexity`) | functions worth a second look | advisory |
 | **[jscpd](https://github.com/kucherenko/jscpd) 5.0.16** (`npm run dupes`) | copy-paste | advisory |
 
-Only Knip and jscpd are new dependencies. The other two were already inside the Biome we had
-installed, switched off — which is worth remembering next time a tool is proposed: **mine the tool
+Only Knip and jscpd are new dependencies. Cycles and cognitive complexity were already inside the
+Biome we had installed, switched off when adopted — which is worth remembering next time a tool is proposed: **mine the tool
 you already have before adding one.**
 
 ### Knip is the project-wide layer, and only that
@@ -79,6 +90,14 @@ The `api/` and `src/vercel.ts` entries are there because the deploy is reachable
 `vercel.json`, which no tool here reads. Delete those entries and four live files start reporting as
 dead.
 
+`scripts/eval/*.ts` and `scripts/probes/*.ts` are entries since 2026-10-04, for a similar reason:
+they are research CLIs run by hand, so nothing imports them and Knip reported all fifteen as unused
+files. The entry is those two folders and not `scripts/**/*.ts`, because an entry is never reported
+as unused, and that glob would hide a helper module under `scripts/` that had really gone dead.
+A full Knip run now reports no unused files. `knip --include files` still reports
+`vite.api.config.ts` and `vite.fleet.config.ts`; [knip.jsonc](../../knip.jsonc) records the mode
+difference. The other categories still have findings, so Knip remains advisory.
+
 ### Knip does not need a build
 
 Knip *imports* every Vite config it finds, `vite.api.config.ts` included, and reads the exported
@@ -97,14 +116,24 @@ history. In this repo the load error happened not to change a single finding (35
 the error still made every run look broken, and the next config to fail that way may not be so
 harmless.
 
-### Cycles gate; nothing else does
+### Cycles gate
 
 There are **zero** import cycles, confirmed independently by four tools, which is exactly why this
 one gates: it is green, so a failure means something is newly wrong today. Biome parses with its own
-parser, so it is untouched by the TypeScript 7 problem, and it checks 183 files in 14ms.
+parser, so it is untouched by the TypeScript 7 problem, and it checks the whole tree in seconds.
 
 It was **proved red against a two-file fixture before being switched on**. A check nobody has watched
 fail is not yet a check — [silent-success.md](../reusable/silent-success.md).
+
+### Hook dependencies and floating promises gate
+
+Two more single Biome rules, each with its own command, each a gate since 2026-10-04 on the same
+rule as cycles: they reached zero that day. `npm run lint:hook-deps` is
+`useExhaustiveDependencies` and `npm run lint:promises` is `noFloatingPromises`; each runs over the
+whole tree in a few seconds. Whole `npm run lint` is still advice.
+
+What to do when one names your code, and why its red control lives in a scratch directory, is in
+[linting.md § Two rules that are gates on their own](linting.md#two-rules-that-are-gates-on-their-own).
 
 ### Conflict markers gate, and the false-positive story is the design
 
@@ -116,8 +145,8 @@ recommendation 3 — a repo-wide check rather than one file's guard — is this,
 widest fix, and the one not yet done"*. It matters here because a dozen agents integrate with
 `git merge` in trees they share, so this is a standing risk rather than an accident.
 
-**Gates from day one**, on this page's own rule: zero findings over 3,935 tracked files today, no
-database, no network, about 400 ms.
+**Gates from day one**, on this page's own rule: zero findings over every tracked file, no
+database, no network, under a second.
 
 Most of the work is in *not* firing, because a marker is seven identical characters and this repo
 quotes merge conflicts in its own documentation. Three rules, each paying for a measured case:
@@ -139,7 +168,8 @@ skips a file with a NUL byte in its first 8 KB.
 
 `maxAllowedComplexity` is **25**, not the default 15, and the severity is `info`. At 15 it reports 41
 functions, which buries the ones that mean something — the same argument that turned
-`noNonNullAssertion` off in [linting.md](linting.md). At 25 it reports about 16.
+`noNonNullAssertion` off in [linting.md](linting.md). At 25 it reported about 16 when this was written;
+the repo has grown, and on 2026-10-07 it reports 455 — a to-do list for a lull, not a read-through.
 
 Read a high score as *go and look*, never as *this is wrong*. The metric punishes a long flat
 `switch` about as hard as genuinely nested logic, and the worst score in the repo is a route
@@ -155,13 +185,16 @@ monsters are gone, if anyone still cares.
 The lint baseline is deliberately not clean, and Knip has real findings that are queued rather than
 fixed. If `npm run check` exited non-zero for those, its exit code would be ignored — and the day a
 *test* broke, that would be ignored too. So gates are things that are green **today**: typecheck,
-tests, the production build, and cycles.
+tests, the production build, cycles, and the others marked **gate** in the table above.
 
 `npm run build` is a gate because a typecheck does not prove Vite can resolve, bundle and parse the
 CSS. Before it was here, that class of failure was only ever discovered by a deploy. **It runs above
 the test gate**, because `tests/pdf-bundle-trace.test.ts` inspects the built API bundle and fails
 loudly when it is missing — with the order the other way round, `npm run check` was red on every
-clean checkout, which is this section's own rule breaking on this section's own command.
+clean checkout, which is this section's own rule breaking on this section's own command. The same
+thing recurred for the fleet dashboard's client, which three fleet test files need and `build` does
+not make; since 2026-10-06 `check` runs `build:fleet` as a gate between `build` and `test`, from the
+deploy gate's own list (`GATE_TOOLING_BUILDS`), and `tests/check-steps.test.ts` holds the order.
 
 A check earns promotion from advisory to gate on the day its findings reach zero, and not before.
 **`committed` is the first one to have earned it**: it landed advisory because `HEAD` had five

@@ -30,15 +30,15 @@
    ## The breakpoint is derived, not chosen
 
    732px is `GIST_MIN (176) + PROSE_MIN (544) + the spine (12)` — the exact width
-   at which layout.ts can still fit one gist column beside the prose. Below it
-   `fitView` shows no gist columns at all, so **the prose column IS the window**,
-   and every horizontal luxury the reading view affords itself stops being free:
-   136px reserved for a wordmark and 83px reserved for a block id are 21% and 35%
-   of a 390px screen.
+   at which layout.ts could still fit one gist column beside the prose, while
+   there were gist columns (they went on 2026-09-29; `NARROW_WINDOW_MAX` in
+   layout.ts keeps the sum). Plain gives the prose the available width below
+   it; a mode band can still share that width when `fitMode` finds room. At
+   the time, 136px reserved for a wordmark and 83px for a block id consumed 35%
+   and 21% of a 390px screen. Those reservations have since gone (shell.css).
 
    That is why one number governs all of it. If `GIST_MIN` or `PROSE_MIN` ever
-   moves, this query moves with it — tests/layout.test.ts pins the crossover at
-   732/731 so the pair cannot drift silently, and tests/spine-width.test.ts checks
+   moves, this query moves with it — tests/spine-width.test.ts checks
    that the query below is still that sum minus one.
 
    ## The other axis has its own query
@@ -139,7 +139,8 @@
   .controls {
     overflow-x: auto;
     overflow-y: hidden;
-    /* The bar is 44px tall with no room for a scrollbar inside it, and this is
+    /* The bar is 44px tall (68px while it holds the headings breadcrumb,
+       crumbs.css § a narrow window) with no room for a scrollbar inside it, and this is
        a touch surface where scrollbars are overlays anyway. */
     scrollbar-width: none;
     /* **This was `calc(--feedback-w + 0.75rem)`, and it became wrong rather
@@ -244,7 +245,7 @@
 
   /* **The labels are not dropped here any more.** Every button losing its text,
      and the 0.45rem that goes with it, is the ladder's bottom rungs — 3 and 4
-     since 2026-10-02 (rung 4 only adds the search box going to the ⚡), rung 3
+     since 2026-10-02 (rung 4 only adds the search box going), rung 3
      alone from 2026-09-06, rung 2 before that —
      measured rather than keyed to this width, because at thirteen modes the row
      stops fitting a long way above 731px and did so silently. This query used to
@@ -606,9 +607,18 @@
      has the measurements either side, and
      tests/the-dock-hides-in-a-mode-beside-the-article.test.ts fails if any rule
      in this query goes back to asking whether a band is merely open. */
+  /* **`.dock-more-trigger[data-state="open"]`, since 2026-10-07**: the More
+     menu is portalled out of `.dock` and takes focus with it, so
+     `.dock:focus-within` goes false the moment it opens and the bar could
+     slide away from under its own menu (GPT Sol, PR-4 of plan 261007c).
+     (0,2,0), the same as `.dock:focus-within`, so the arithmetic above holds.
+     Dock.tsx § `MORE_OPEN` is the same selector, and
+     tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds the two
+     together. */
   :root:has(
     .dock-drawer,
     .dock:focus-within,
+    .dock-more-trigger[data-state="open"],
     .install-hint:focus-within,
     .cmt-dialog,
     .chat-dialog,
@@ -794,7 +804,7 @@
      an element is bigger than its content.
 
      `.dock-modes` grows as as many buttons as it draws (`--dock-mode-count`,
-     set by `DockModes`; it was a fixed eight until 2026-10-02) against each
+     set by `DockModes` and `DockModeLinks`; it was a fixed eight until 2026-10-02) against each
      loose button's one, so a bar with room to spare spreads it in proportion
      to what is inside rather than handing the segment the same share as a
      single icon. Inside it each `.dock-frame` takes its own count
@@ -836,7 +846,7 @@
      bottom bar when he made it. The rule reached one other control in the
      fortnight after — the footnote's *back to your place* link, 44px, in
      footnotes.css § a coarse pointer, 2026-09-06 — and **no control inside a
-     mode band, ever**. So the two order rows were whatever height their text
+     mode band, ever**. So the order rows were whatever height their text
      happened to be, which is **23px**, with 64% of the row's own box not on a
      button. (An earlier version of this comment said the dock was the only
      thing this query governed. That was wrong, and GPT Sol found the
@@ -848,10 +858,12 @@
      its diagnosis; it is the floor the control should have had, and the plan
      doc is honest about the difference.
 
-     **Both rows, and the pairing is the point.** `.gloss-sort-btn` and
-     `.quotes-rank-btn` are one control written twice — the same declarations,
-     character for character, in two sheets — so a floor given to one is a bug
-     filed about the other. tests/touch-controls.test.ts holds them together.
+     **One rule for every band's order buttons but Search's.** Quotes' were
+     `.quotes-rank-btn`, the same declarations written a second time, and this
+     rule named both so a floor given to one was not a bug filed about the
+     other; since 2026-10-07 they are `.gloss-sort-btn` too (plan 261007a § K5).
+     Search's buttons have the same floor under their own class, in search.css.
+     tests/touch-controls.test.ts holds both.
 
      `min-height` rather than padding: the button is `inline-flex` centred below,
      so the label sits in the middle of the taller box and the row is the only
@@ -860,17 +872,16 @@
      already made in the axis that has room. **Since 2026-10-01 the row does not
      wrap on a touch screen** — one line that scrolls sideways, Greg's choice —
      in glossary.css § a touch screen (plan 261001o). */
-  .gloss-sort-btn,
-  .quotes-rank-btn {
+  .gloss-sort-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 2.5rem;
   }
 
-  /* Glossary's compact profile badge is a button in the same row, not a
-     decorative mark. Its 13px icon plus desktop padding makes an ~18px target,
-     so it shares the row's existing finger floor on both axes. */
+  /* The profile icon is a button, not a decorative mark. Its 13px icon plus
+     desktop padding makes an ~18px target, so it shares the row's existing
+     finger floor on both axes. */
   .prof-badge.icon-only {
     min-width: 2.5rem;
     min-height: 2.5rem;
@@ -898,7 +909,7 @@
    Every hand-styled text field in the reading view was under 16px on 2026-09-08
    — `.gloss-ask-input` 14.4, `.fb-input` 13.1, `.srch-input`, `.chat-input`,
    `.chat-edit-box`, `.prof-box-input` and `.quiz-answer` 15.0, `.cmt-note` 14.4,
-   `.cnd-box` 14.1, `.crit-text` 14.6, `.remember .chat-input` 15.7 — eleven of
+   `.cnd-box` 14.1, `.crit-text` 14.6, `.learn .chat-input` 15.7 — eleven of
    them, and only `.cmdbar-input` (16px, from a Tailwind utility) escaped. So
    this is one rule about *fields* rather than eleven rules about classes, and a
    twelfth field is covered the day it is written.
@@ -932,10 +943,10 @@
    how this rule shipped once applying to nothing at all — the chat composer
    stayed at 15.04px with the rule three lines above it, and a browser
    measurement caught what a green suite did not. One class is not the ceiling
-   either: `.remember .chat-input` in mode-band.css is (0,2,0). `:root` is a
+   either: `.learn .chat-input` in mode-band.css is (0,2,0). `:root` is a
    pseudo-class, so it counts in the same column and takes each half to (0,2,1),
    which clears both. tests/touch-controls.test.ts pins that against the
-   Remember rule by name.
+   Learn rule by name.
 
    `:not([hidden])` on the textarea half is true on its own terms — an unshown
    box is not focusable. `[readonly]` was the first choice and is wrong: the
@@ -976,7 +987,7 @@
 
    `:not([hidden])` earns its place here for a second reason beyond matching the
    textarea half. A rule holds a select under 1rem — `.place-pick select`
-   (dialogs.css); `.chat-stance select` was another until Remember's stance
+   (dialogs.css); `.chat-stance select` was another until Learn's stance
    picker went on 2026-10-02, and the measurements below were taken on it, and
    `.chat-live-mic select` a third until the noise-reduction picker moved into
    Live's Advanced disclosure the same day (261002j) — and each is (0,1,1). A bare `:root select` is **also**
@@ -1027,7 +1038,9 @@
    **The utilities layer is out of reach from here**, whatever the specificity:
    `@layer theme, base, app, utilities` in tailwind.css puts every `tw:` class
    after this file. The Tailwind-classed fields carry `tw:any-pointer-coarse:text-base`
-   at their own call sites instead — grep for it. */
+   at their own call sites instead — grep for it. `text-base` is `1rem`, so
+   those fields are still under 16px at a root smaller than 16px; the `max()`
+   below does not reach them. */
 @media (any-pointer: coarse) {
   :root input:is(
       :not([type]),
@@ -1041,7 +1054,11 @@
     ),
   :root select:not([hidden]),
   :root textarea:not([hidden]) {
-    font-size: 1rem;
+    /* `max()`, because the threshold is 16 CSS pixels and `1rem` is only that
+       at a 16px root: a reader whose browser is set to 12px got a 12px field
+       (measured in Chrome, 2026-10-07). Never a bare `16px`, which would
+       shrink the field for a reader who has made their type larger. */
+    font-size: max(1rem, 16px);
   }
 }
 
@@ -1296,11 +1313,12 @@
 
    **The condition is "the prose is the table's only column", asked of the
    table itself.** That is exactly when this bar and the reading cell are the
-   same box — both start at `--spine-w + --mode-w` and both run to the right
-   edge — which is the fact the arithmetic below depends on. In Hierarchy the
-   gist columns are in front of the prose, the two boxes are not the same, and
-   `:has` does not match: the title stays where the gists start, which is where
-   the reader's eye enters that view anyway. `.text-alone` is excluded because
+   same horizontal region when Marginalia reserves no room on the right:
+   both start at `--spine-w + --mode-w`. With Marginalia beside a band, the
+   calculation below subtracts `--marg-reserve` to follow the reading cell. In Hierarchy the
+   gist columns were in front of the prose, the two boxes were not the same, and
+   `:has` did not match; since those columns went on 2026-09-29 the prose is
+   always the table's only column. `.text-alone` is excluded because
    the rule above already has that case and does it with the cap instead.
 
    **Not `margin-inline: auto`**, which is what the alone rule can afford, and

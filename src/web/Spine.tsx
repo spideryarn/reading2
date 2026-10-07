@@ -109,11 +109,12 @@ import {
   jumpOriginMark,
   laneOrder,
   quoteRailMarks,
+  readingAreaPaths,
   readingRuns,
   spineMarks,
   type Row,
 } from "./spine-marks.js";
-import type { ReadLevel } from "./reading-time.js";
+import type { ReadReach } from "./reading-time.js";
 import { useJumpOrigin } from "./router.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
 import { WhereCard } from "./WhereCard.js";
@@ -277,14 +278,15 @@ interface Props {
    */
   matches?: Map<BlockId, BlockMatch> | undefined;
   /**
-   * How long the reader has spent on each block, as a step — `useReadingTime`.
-   * Empty for a visitor and with experimental features off, so nothing is drawn.
+   * How long the reader has spent on each block, as a reach in sixteenths of
+   * the rail — `useReadingTime`'s `reach`, reading-time.ts § `readReach`.
+   * Empty for a visitor, so nothing is drawn.
    */
-  reading?: ReadonlyMap<BlockId, ReadLevel> | undefined;
+  reading?: ReadonlyMap<BlockId, ReadReach> | undefined;
   /**
-   * The quotes the prose outlines, as each block's brightest alpha —
+   * The quotes the prose fills, as each block's brightest alpha —
    * `quoteAlphaByBlock` in spine-marks.ts. **In every mode**, because the
-   * outlines are: unlike `matches`, this is not something the reader asked for
+   * fills are: unlike `matches`, this is not something the reader asked for
    * by opening a band, it is the rail showing what the prose already wears.
    * Drawn as its own strip, never a lane (spine-marks.ts § `quoteRailMarks`).
    */
@@ -297,7 +299,7 @@ const READING_LINE = 0.35;
 
 /** Nothing to draw, and a stable identity so the memos below do not rerun. */
 const NO_MATCHES: Map<BlockId, BlockMatch> = new Map();
-const NO_READING: ReadonlyMap<BlockId, ReadLevel> = new Map();
+const NO_READING: ReadonlyMap<BlockId, ReadReach> = new Map();
 const NO_QUOTES: ReadonlyMap<BlockId, number> = new Map();
 
 /**
@@ -936,11 +938,16 @@ function SpineInner({
    */
   const jumpOrigin = useJumpOrigin();
 
-  /** Where the reader has spent time — spine-marks.ts § `readingRuns`. */
-  const readRuns = useMemo(
-    () => (metrics && reading.size > 0 ? readingRuns(metrics.rows, reading) : []),
-    [metrics, reading],
-  );
+  /**
+   * Where the reader has spent time, as the two paths of an area chart —
+   * spine-marks.ts § `readingRuns` and `readingAreaPaths`. Null when there is
+   * nothing to draw, which is every visitor.
+   */
+  const readPaths = useMemo(() => {
+    if (!metrics || reading.size === 0) return null;
+    const runs = readingRuns(metrics.rows, reading);
+    return runs.length > 0 ? readingAreaPaths(runs, docHeight) : null;
+  }, [metrics, reading, docHeight]);
 
   const from = useMemo(
     () => (metrics ? jumpOriginMark(metrics.rows, jumpOrigin) : null),
@@ -1072,32 +1079,43 @@ function SpineInner({
           );
         })}
 
-        {/* **Where you have spent time reading** — wider where longer.
-            docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md.
+        {/* **Where you have spent time reading** — an area chart on its side:
+            a tinted area from the left edge, further across where longer, and
+            a line down its right-hand edge.
+            docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md,
+            and docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md
+            for the chart, which replaced four widths of one faint bar:
 
-            > maybe the spine is narrower in places where we haven't spent much
-            > time reading and thicker in places where we have
+            > I'm almost imagining like a water level but rotated 90 degrees.
+            > So the distance from the left-hand margin would be an indication
+            > of how much time I've spent reading it
             >
-            > — Greg, 2026-09-12
+            > — Greg, 2026-10-03 (spya-jhe9mc)
 
             That is a width the reader has to learn, which the rail has refused
             for a count of matches (the header); Greg asked for this one by
-            name. **After the parts and before `.spine-here` and the ticks**,
+            name. **An svg over the whole track** (and a second for the edge, below): sixteen units across, the
+            document's pixels down, stretched to the rail on both axes
+            (`preserveAspectRatio="none"`), so a run's `top` and `height` are
+            the numbers every other mark here is placed by.
+
+            **After the parts and before `.spine-here` and the ticks**,
             for the reason given at `.spine-here` below: tree order is paint
             order, a permanent fill after the hairlines would hide the
             article's subdivision, and one after the search marks would hide
             the hits. tests/spine-reading.test.ts asserts it. `aria-hidden`: a
-            screen reader has no use for a thickness, and nothing here is
+            screen reader has no use for a width, and nothing here is
             pressable. */}
-        {readRuns.map((r) => (
-          <div
-            key={`read-${r.top}`}
+        {readPaths && (
+          <svg
             className="spine-read"
-            data-level={r.level}
             aria-hidden="true"
-            style={{ top: pct(r.top), height: pct(r.height) }}
-          />
-        ))}
+            preserveAspectRatio="none"
+            viewBox={`0 0 16 ${docHeight}`}
+          >
+            <path className="spine-read-area" d={readPaths.area} />
+          </svg>
+        )}
 
         {/* **The section you are in**, filled — see `hereRing` above for why
             the part alone was not enough and when this is deliberately absent.
@@ -1157,6 +1175,26 @@ function SpineInner({
               } as CSSProperties
             }
           />
+        )}
+
+        {/* **The chart's edge line, over the section fill.** The area stays
+            under `.spine-here`; the line alone comes back on top, because
+            under that 0.8 wash it kept a fifth of its colour, and the section
+            you are in is where you most want to see how far you got (the
+            browser check in
+            docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md).
+            One pixel of line costs the *you are here* nothing. Still before
+            the ticks and the search marks, for the reasons above;
+            tests/spine-reading.test.ts asserts both. */}
+        {readPaths && (
+          <svg
+            className="spine-read-line"
+            aria-hidden="true"
+            preserveAspectRatio="none"
+            viewBox={`0 0 16 ${docHeight}`}
+          >
+            <path className="spine-read-edge" d={readPaths.edge} />
+          </svg>
         )}
 
         {/* Subdivision is always drawn, so the shape of the article is visible

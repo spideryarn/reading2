@@ -18,17 +18,20 @@ Two rules an agent will otherwise break:
 |---|---|---|
 | `npm test` | the deterministic vitest suites in [`tests/`](../../tests) | **gate** |
 | `npm run test:watch` | the same, while you work | — |
-| `npm run typecheck` | all three tsconfig projects, plus guards that the checking happened | **gate** |
-| `npm run build` | that vite can resolve, bundle and parse it — typechecking does not prove this. **Both passes**: the client, then the API function | **gate** |
+| `npm run typecheck` | every tsconfig project (four today: the node side, the client, the fleet client, the tests), plus guards that the checking happened | **gate** |
+| `npm run build` | that vite can resolve, bundle and parse it — typechecking does not prove this. **Both passes**: the client, then the API function. `npm run build:fleet` is a gate of its own inside `check`, because three fleet test files read its output | **gate** |
 | `npm run typecheck:committed` | that `HEAD` compiles, as opposed to your copy of it — they differ by your uncommitted files | **gate** |
 | `npm run cycles` | import cycles (zero today, so a failure is news) | **gate** |
+| `npm run lint:hook-deps` | React hooks whose dependency list does not match what they read — one Biome rule, [linting.md](linting.md#two-rules-that-are-gates-on-their-own) | **gate** |
+| `npm run lint:promises` | promises nobody awaits, handles or marks `void` — one Biome rule, same section | **gate** |
 | `npm run db:chain` | that `drizzle/meta/` is one unforked chain | **gate** |
+| `npm run check:conflicts` | that no file carries a conflict marker — [static-analysis.md](static-analysis.md) | **gate** |
 | `npm run check:staged-revert` | whether the shared index is quietly undoing somebody's commit — run it before you commit, [version-control.md](version-control.md#commit-your-own-files-by-name-in-one-command) | before a commit |
 | `npm run lint` / `lint:fix` | Biome over everything `biome.jsonc` allows | advice |
 | `npm run knip` | unused files, exports, dependencies | advice |
 | `npm run complexity` | functions worth a second look | advice |
 | `npm run dupes` | copy-paste | advice |
-| `npm run check` | all of the above bar the last, gates first (`-- --fast` narrows the build to its API pass, which the test gate needs; `-- --offline` drops the database requirement below) | **gate** |
+| `npm run check` | all the rows above it except `check:staged-revert`, gates first (`-- --fast` narrows the build to its API pass, which the test gate needs; `-- --offline` drops the database requirement below) | **gate** |
 | `npm run count-lines` | how big the repo is, by what a file is *for* | — |
 | `npm run db:check` | that the database in `DATABASE_URL` has the columns this build reads | needs a database |
 | `npm run eval:*` | model quality — by hand, costs money, minutes | — |

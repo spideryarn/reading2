@@ -37,6 +37,7 @@ import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
 import type { Attempt, UseQuiz } from "../src/web/useQuiz.js";
 import type { ReadSoFar } from "../src/web/read-filter.js";
 import { STARTING } from "../src/job-state.js";
+import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 
 /**
  * Dictation is mocked, and only so that rule 4 above can be tested at all.
@@ -54,6 +55,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
     dictation: { supported: true, armed, transcribing: readOnly },
     readOnly,
+    busy: readOnly || armed,
     toggle: () => {},
   }),
 }));
@@ -140,6 +142,7 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     outdated: false,
     slug: "a-piece",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     /* Nothing pressed, so nothing is in flight. The case where this is true is
@@ -151,6 +154,11 @@ function owner(over: Partial<UseQuiz> = {}): UseQuiz {
     stalled: false,
     attempt: null,
     answered: new Set<string>(),
+    /* Nothing kept: restoring an answer is tests/quiz-kept-answers.test.tsx,
+       which runs the real hooks. */
+    kept: new Map(),
+    keptUnread: false,
+    showKept: () => {},
     profiled: false,
     profileChanged: false,
     rewriting: false,
@@ -453,7 +461,7 @@ describe("a mark stays bound to the answer it was computed from", () => {
     expect(host.textContent).not.toContain("answered");
     /* The mark itself stays on screen. Throwing it away on a keystroke is the
        other way of being wrong here — it is the thing the reader is editing
-       against, and nothing stores it. */
+       against. */
     expect(host.textContent).toContain("You have the cost claim");
   });
 
@@ -1308,10 +1316,21 @@ describe("only what you have read", () => {
   });
 
   it("waits while the levels are loading, rather than calling that read nothing", () => {
-    paintRead(owner({ quiz: PATH }), read([], "loading"));
-    expect(host.textContent).toContain("Looking for what you have read");
-    expect(host.textContent).not.toContain("None of these questions");
-    expect(host.querySelector("textarea")).toBeNull();
+    /* The shared wait line (BandWaiting.tsx): nothing in it before 600ms. */
+    vi.useFakeTimers();
+    try {
+      paintRead(owner({ quiz: PATH }), read([], "loading"));
+      expect(host.querySelector('.band-waiting[role="status"]')).not.toBeNull();
+      expect(host.textContent).not.toContain("Looking for what you have read");
+      act(() => {
+        vi.advanceTimersByTime(SLOW_AFTER_MS + 1);
+      });
+      expect(host.textContent).toContain("Looking for what you have read");
+      expect(host.textContent).not.toContain("None of these questions");
+      expect(host.querySelector("textarea")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("walks every question, and says why, when the levels could not be loaded", () => {
@@ -1361,7 +1380,57 @@ describe("only what you have read", () => {
     const rows = [...host.querySelectorAll(".quiz-list-row")].map((r) => r.textContent ?? "");
     expect(rows).toHaveLength(1);
     expect(rows[0]).toContain(first.question);
-    expect(host.textContent).toContain("2 more are about passages you have not read yet");
+    expect(host.textContent).toContain(UNREAD_2_OF_3);
+    /* Moved up beside the count, not said a second time under the list. */
+    expect(host.textContent?.split("you have not read yet")).toHaveLength(2);
+  });
+
+  /**
+   * **Each count says what it counts** (plan 261006g § The Quiz count). The
+   * (i) card said "12 questions" and the band "Question 1 of 5", both true and
+   * neither explained; the sentence that did explain was under the list, which
+   * is closed until asked for.
+   */
+  const UNREAD_2_OF_3 = "There are 3 in all: the other 2 are about passages you have not read yet.";
+
+  it("says what 'of N' leaves out with the list closed, beside the count", () => {
+    paintRead(owner({ quiz: PATH }), read([KNOWN]));
+    expect(host.querySelector(".quiz-list-row"), "the list is closed").toBeNull();
+    expect(host.textContent).toContain("Question 1 of 1");
+    const count = host.querySelector(".gloss-count");
+    expect(count?.nextElementSibling?.textContent).toBe(UNREAD_2_OF_3);
+  });
+
+  it("says it of one question in the singular", () => {
+    paintRead(owner({ quiz: PATH }), read([KNOWN, OTHER]));
+    expect(host.textContent).toContain("Question 1 of 2");
+    expect(host.textContent).toContain(
+      "There are 3 in all: the other one is about a passage you have not read yet.",
+    );
+    press("Next question");
+    expect(host.textContent).toContain("Question 2 of 2");
+    expect(host.textContent).toContain(
+      "There are 3 in all: the other one is about a passage you have not read yet.",
+    );
+  });
+
+  it("says nothing of the kind when the filter hides none", () => {
+    paintRead(owner({ quiz: PATH }), read([KNOWN, OTHER, THIRD]));
+    expect(host.textContent).toContain("Question 1 of 3");
+    expect(host.textContent).not.toContain("in all");
+    paintRead(owner({ quiz: PATH }), read([KNOWN]));
+    tick();
+    expect(host.textContent).toContain("Question 1 of 3");
+    expect(host.textContent).not.toContain("in all");
+  });
+
+  it("the (i) card's count is the whole batch, and says so", async () => {
+    paintRead(owner({ quiz: PATH }), read([KNOWN]));
+    const about = host.querySelector<HTMLButtonElement>('.band-about[aria-label="About this mode"]');
+    await act(async () => about?.click());
+    const tip = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
+    expect(tip).toContain("3 questions in all.");
+    await act(async () => about?.click());
   });
 
   it("keeps the question and the draft as more of the piece is read", () => {
@@ -1684,6 +1753,8 @@ describe("an arrival from the prose", () => {
     paintAt(o, { batchId: PATH.batchId, questionId: third.id }, { readSoFar });
     expect(stem()).toBe(third.question);
     expect(box()?.checked, "the tick-box should say it gave way").toBe(false);
+    expect(host.textContent).toContain("Question 3 of 3");
+    expect(host.textContent).not.toContain("you have not read yet");
   });
 
   it("wins when the filter tries to move off that same unread opening question", () => {
@@ -1703,6 +1774,28 @@ describe("an arrival from the prose", () => {
     paintAt(owner({ quiz: PATH }), arrival, { readSoFar });
     expect(stem(), "the earlier filter effect overruled the prose arrival").toBe(first.question);
     expect(host.querySelector<HTMLInputElement>(".quiz-only-read input")?.checked).toBe(false);
+  });
+
+  it("preserves a live mark when reading levels exclude the same question requested by an arrival", () => {
+    const readSoFar: ReadSoFar = {
+      levels: new Map([[OTHER, 4 as const]]),
+      status: "failed",
+      bodyWords: new Map([[KNOWN, 100], [OTHER, 100], [THIRD, 100]]),
+    };
+    const marking: Attempt = { questionId: first.id, answer: "half", status: "marking", reply: "So far", error: null };
+    const o = owner({ quiz: PATH, attempt: marking });
+    paintAt(o, null, { readSoFar });
+    const before = cleared.length;
+    const a: QuizArrival = { batchId: PATH.batchId, questionId: first.id };
+    paintAt(o, a, { readSoFar: { ...readSoFar, status: "loaded" } });
+    expect(cleared.length, "the earlier filter aborted the requested question's mark").toBe(before);
+    expect(stem()).toBe(first.question);
+
+    /* A handled arrival cannot permanently override a later filter press,
+       even if its owner has not yet removed it from the props. */
+    act(() => host.querySelector<HTMLInputElement>(".quiz-only-read input")?.click());
+    expect(stem()).toBe(second.question);
+    expect(cleared.length).toBeGreaterThan(before);
   });
 });
 

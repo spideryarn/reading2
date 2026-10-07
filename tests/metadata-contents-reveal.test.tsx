@@ -2,7 +2,7 @@
 /**
  * **The Metadata page's contents list opens, scrolls to and flashes a section,
  * and the search box above it finds one** — PageContents.tsx § reveal, and
- * Metadata.tsx § Section, which listens for `SECTION_REVEAL`.
+ * PageSection.tsx § Section, which listens for `SECTION_REVEAL`.
  *
  * Greg, SPIDERYARN-READING2-7Y, 2026-10-01:
  *
@@ -37,7 +37,12 @@ vi.mock("nuqs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("nuqs")>()),
   useQueryState: () => [null, () => {}],
 }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const experimental = vi.hoisted(() => ({ on: false }));
 vi.mock("../src/web/useExperimental.js", () => ({
@@ -334,6 +339,26 @@ describe("the search box above it (83)", () => {
     ).toBeTruthy();
   });
 
+  /* **Where it is in the page, by its neighbours.** On a window too narrow for
+     a margin the nav is drawn in the column, so its place in the markup is its
+     place on the screen: under the title and the Archive/Share row, above the
+     first section. "Somewhere in `main`" would pass with it at the foot of the
+     page. Greg, 2026-10-06, report `spya-vwf00u`;
+     docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md. */
+  it("sits in the page's column, after the Archive/Share row and before the first section", () => {
+    const list = nav();
+    const actions = host.querySelector('main [data-testid="metadata-top-actions"]');
+    const first = host.querySelector("main [data-section]");
+    if (!list || !actions || !first) throw new Error("missing the nav, the actions or a section");
+    expect(list.closest("main")).toBe(host.querySelector("main"));
+    expect(actions.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(list.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    /* Nothing between the actions and the list but what the page already put
+       under the title, and no section above it. */
+    expect(list.previousElementSibling).toBe(actions);
+    expect(list.closest("[data-section]")).toBeNull();
+  });
+
   it("narrows the list to what matches, by a synonym, and Enter opens and flashes the first", async () => {
     const all = entries();
     await type("download");
@@ -386,6 +411,54 @@ describe("the search box above it (83)", () => {
     await press("Escape");
     expect(searchBox()?.value).toBe("");
     expect(entries()).toEqual(all);
+  });
+
+  /* jsdom draws nothing, so this reads the classes: the entries had the outline
+     switched off and only a colour change on focus. The mark is an outline
+     pulled inside the box, because the list scrolls and would clip one outside
+     it. Measured in Chrome on /profile, both themes: plan 261007a-ui-sweep-k2. */
+  it("gives every entry a focus mark, drawn inside the entry", () => {
+    const buttons = [...(nav()?.querySelectorAll<HTMLButtonElement>("li button") ?? [])];
+    expect(buttons.length).toBeGreaterThan(1);
+    for (const b of buttons) {
+      const classes = b.className.split(/\s+/);
+      expect(classes).not.toContain("tw:focus-visible:outline-none");
+      expect(classes).toContain("tw:focus-visible:outline-2");
+      expect(classes).toContain("tw:focus-visible:-outline-offset-2");
+      expect(classes).toContain("tw:focus-visible:outline-highlight-text");
+    }
+  });
+
+  /* An input method's Enter accepts a candidate and its Escape dismisses the
+     list; neither is a press on this box. Plan 261007a-ui-sweep-k2. */
+  it.each([
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+  ])("goes nowhere and clears nothing while an input method is composing (%s)", async (_how, init) => {
+    await type("download");
+    const narrowed = entries();
+    expect(narrowed.length).toBeGreaterThan(0);
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
+    const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    const heard: string[] = [];
+    const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+    document.addEventListener("keydown", watch);
+    try {
+      await act(async () => {
+        searchBox()?.dispatchEvent(enter);
+        searchBox()?.dispatchEvent(escapeKey);
+      });
+    } finally {
+      document.removeEventListener("keydown", watch);
+    }
+    expect(heard).toEqual(["Enter"]);
+    await settle();
+    expect(searchBox()?.value).toBe("download");
+    expect(entries()).toEqual(narrowed);
+    expect(enter.defaultPrevented).toBe(false);
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(escapeKey.defaultPrevented).toBe(true);
   });
 });
 

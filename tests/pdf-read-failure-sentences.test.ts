@@ -105,15 +105,23 @@ describe("a chunk too big to send", () => {
   });
 
   it("tells the reader the size, not that the step did not finish", async () => {
-    /* The key is read before the size check and its absence is a different
-       failure, so it has to be present — and nothing is sent, because the
-       refusal is arithmetic on the encoded length. */
+    /* The key is read before the size check, and on the real wire its absence
+       is a different failure. Nothing is sent, because the refusal is
+       arithmetic on the encoded length. */
     process.env.OPENROUTER_API_KEY = "not-a-real-key";
-    /* Base64 is four characters per three bytes, so this encodes to ~32 MB
-       against the 30 MB a request can carry. Not a valid PDF, and it does not
-       need to be: nothing parses it on this path. */
-    const oversized = new Uint8Array(24 * 1024 * 1024);
-    const err = await threw(() => openRouterReader().read(oversized, "read this"));
+    /* Base64 is four characters per three bytes, so this encodes to ~41 MB
+       against the 40 MB a request to this model can carry (it was 24 MB against
+       30 until 2026-10-04; tests/pdf-chunk-size-policy.test.ts has the limit's
+       own tests). Not a valid PDF, and it does not need to be: nothing parses
+       it on this path. `ask` is the wire, and it throws so that a limit raised
+       past this size fails here rather than sending a request. */
+    const oversized = new Uint8Array(31 * 1024 * 1024);
+    const ask = async (): Promise<never> => {
+      throw new Error("this test must not reach the wire");
+    };
+    const err = await threw(() =>
+      openRouterReader(undefined, undefined, { ask }).read(oversized, "read this"),
+    );
 
     const reader = readerFailureOf(err, LABEL);
     expect(reader.message).toMatch(/\bMB\b/);

@@ -55,6 +55,7 @@ import type { SavedCriterion } from "../saved-criteria.js";
 import { blocksArtefact } from "../blocks.js";
 import { type RawManifest, sniffKind } from "../fetch.js";
 import { metaRawSha256 } from "./artifacts.js";
+import { blockOf } from "./block-rows.js";
 import { type RawSourceStore, postgresBlobStore } from "./blobs.js";
 /* **Moved to a module of its own on 2026-08-31**, and re-exported below so that
    every existing importer — and tests/store-export-raw.test.ts — is unchanged.
@@ -70,7 +71,8 @@ export { ArticleNotFound };
 import { ownedByReader } from "./pg.js";
 import { log } from "../log.js";
 import type { Block, ChatAnchor, ChatMessage, Comment, SearchRun } from "../types.js";
-import { isThreadKind } from "../types.js";
+import { storedThreadKind } from "../types.js";
+import { originFromColumns } from "../thread-origin.js";
 
 const logger = log("store");
 
@@ -370,6 +372,9 @@ export async function exportArticle(
   const meta = compact({
     slug,
     title: revision.title,
+    /* The title as it arrived, when import tidied it: an export that left it
+       out would lose the one copy of the author's own capitals. Plan 261005g. */
+    titleOriginal: revision.titleOriginal,
     byline: revision.byline,
     authors: decodeAuthors(revision.authors),
     siteName: revision.siteName,
@@ -383,6 +388,10 @@ export async function exportArticle(
        the field. Placed where stage 2 writes it, so the round trip is
        byte-identical. src/db/schema.ts § `publishedAt`. */
     publishedAt: revision.publishedAt,
+    /* The year alone, for a paper with no whole day: the same fact, so it is
+       exported where the date is. `journal` and `doi` are still not, which is
+       261004a's open question and not this one's. */
+    publishedYear: revision.publishedYear,
     note: revision.note,
     source: revision.source,
     method: revision.extractMethod,
@@ -395,6 +404,24 @@ export async function exportArticle(
     unverified: revision.unverified,
     recall: revision.recall,
     pagesChecked: revision.pagesChecked,
+    /* The difficulty rating with all five of its facts, the model and the
+       time included: this file is the reader's own copy, and nothing else in
+       it says where the minutes on their shelf came from. Absent when the
+       piece is not rated. Plan 261005j. */
+    readingDifficulty:
+      revision.readingLanguage !== null &&
+      revision.readingIdeas !== null &&
+      revision.readingDifficultyReason !== null &&
+      revision.readingDifficultyModel !== null &&
+      revision.readingDifficultyRatedAt !== null
+        ? {
+            language: revision.readingLanguage,
+            ideas: revision.readingIdeas,
+            reason: revision.readingDifficultyReason,
+            model: revision.readingDifficultyModel,
+            ratedAt: revision.readingDifficultyRatedAt.toISOString(),
+          }
+        : null,
   });
   if (revision.title) await put("article_revisions", "meta.json", meta);
 
@@ -404,23 +431,7 @@ export async function exportArticle(
      guarantees it is in `readArticleRows`. */
   const blockRows = rows.blocks;
 
-  const blocks: Block[] = blockRows.map((row) => ({
-    id: row.blockId,
-    tag: row.tag,
-    kind: row.kind as Block["kind"],
-    ...(row.level === null ? {} : { level: row.level }),
-    text: row.text,
-    words: row.words,
-    html: row.html,
-    gistable: row.gistable,
-    ...(row.note === null ? {} : { note: row.note }),
-    ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
-    ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
-    ...(row.noteId === null ? {} : { noteId: row.noteId }),
-    ...(row.contextId === null || row.contextType === null
-      ? {}
-      : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-  }));
+  const blocks: Block[] = blockRows.map((row) => blockOf(row.blockId, row));
   /* `blocksArtefact`, for the same reason src/structure.ts uses it: the export is a
      rollback, and a rollback that writes artefacts the pipeline would not have
      written is not one. Without the stamp every exported article reads back
@@ -607,6 +618,10 @@ export async function exportArticle(
            fields is exactly how `tools` went missing from an export once
            already; the anchor is the same trap one row up. */
         ...anchorFragment(thread),
+        /* Where the conversation was started from, omitted where there is
+           none. The same mapping the store reads with (src/thread-origin.ts,
+           which is pure and has no store behind it). */
+        ...originFromColumns(thread),
         /* **Always written, unlike the anchor above and `stopped` below**, and
            the difference is that `ChatThread.kind` is *required*. Both stores
            therefore always have one: `withTurn` sets it on every thread it
@@ -614,7 +629,7 @@ export async function exportArticle(
            file written before this field existed is read — so the next write of
            that file has it too.
 
-           Emitting it only for Remember threads was the first attempt and was
+           Emitting it only for Learn threads was the first attempt and was
            wrong:
            tests/store-roundtrip.test.ts compares this file against the one the
            filesystem store wrote, byte for byte, and that one carries
@@ -624,8 +639,16 @@ export async function exportArticle(
            passed through. */
         /* The stored kind whenever it is one we know — Candidates and Tutorial
            were exported as chats until 2026-10-02, because this was a
-           Remember-or-chat ternary. GPT Sol's plan review of 261002i. */
-        kind: isThreadKind(thread.kind) ? thread.kind : ("chat" as const),
+           Learn-or-chat ternary. GPT Sol's plan review of 261002i. Explore
+           (2026-10-03) rode through `isThreadKind` with nothing to do here.
+
+           **A kind this code does not know fails the export** (2026-10-06); it
+           was written as `"chat"` until then, which is a rollback file that
+           restores a Recall conversation as a chat. src/types.ts
+           § storedThreadKind, and
+           docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
+           stage 0. */
+        kind: storedThreadKind(thread.kind),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,
@@ -647,7 +670,7 @@ export async function exportArticle(
             /* **The field this file's own comment warned about**, four lines
                up: `tools` went missing from an export exactly this way once
                already, because the row is built from named fields and a new one
-               is easy not to add. A Remember thread exported without its stances
+               is easy not to add. A Learn thread exported without its stances
                and imported back is a conversation whose every answer has lost
                the instruction that produced it, and nothing reports an error.
                GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 6. */
@@ -658,6 +681,10 @@ export async function exportArticle(
                absent key via `compact`, which is what the filesystem store
                writes for a question nobody pressed "?" for. */
             help: row.help ? true : null,
+            /* The reader's press on Hint under a Recall answer. Named for the
+               reason `stance` gives above: a column not named here is not
+               exported, and nothing says so. */
+            hintOpenedAt: row.hintOpenedAt?.toISOString() ?? null,
             editedAt: row.editedAt?.toISOString() ?? null,
           }) as ChatMessage,
         ),
@@ -872,6 +899,13 @@ export async function exportArticle(
         paperSelectionVersion: row.paperSelectionVersion,
         paperReadAt: row.paperReadAt?.toISOString() ?? null,
         paperPassages: row.paperPassages,
+        /* The web influence (plan 261003m stage 2), column for column; all
+           null when the press kept none. */
+        influence: row.influence,
+        influenceQuote: row.influenceQuote,
+        influenceSourceUrl: row.influenceSourceUrl,
+        influenceSourceTitle: row.influenceSourceTitle,
+        influenceVersion: row.influenceVersion,
       };
     }
     await put("citation_investigations", "citation-investigations.json", { investigations });
@@ -894,6 +928,22 @@ export async function exportArticle(
   /* The reader's own tags — plan 261003d. */
   if (rows.articleTags.length) {
     await put("article_tags", "tags.json", { tags: rows.articleTags.map((row) => row.tag) });
+  }
+
+  /* The reader's finished quiz marks, oldest first, every batch — plan 261005b.
+     Each carries its question's words, because the batch a row names may have
+     been replaced since. */
+  if (rows.quizAttempts.length) {
+    await put("quiz_attempts", "quiz-attempts.json", {
+      attempts: rows.quizAttempts.map((row) => ({
+        batchId: row.batchId,
+        questionId: row.questionId,
+        question: row.question,
+        answer: row.answer,
+        reply: row.reply,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    });
   }
 
   logger.info({ slug, files: written.length, tables: wroteFrom.size }, "article exported");

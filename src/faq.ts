@@ -45,9 +45,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleWordCounts, isBodyEvidence } from "./block-policy.js";
 import { normaliseName } from "./ideas.js";
 import { mintUniqueId } from "./ids.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -62,7 +60,7 @@ import {
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
 import {
@@ -666,7 +664,8 @@ export async function generateFaq(opts: {
   const sourceHash = inputFingerprint(blocks, tree, realMeta);
 
   /* The body only, applied here at the call site as `ideas` does — the same
-     bytes, which is the cache share. And passages are verified against the
+     bytes, though not a shared cache: the two schemas differ
+     (`sharesArticleCache` in src/pipeline.ts). And passages are verified against the
      same set, so an id from the bibliography is an invented one. */
   const evidence = blocks.filter(isBodyEvidence);
   const words = articleWordCounts(blocks).body;
@@ -718,24 +717,8 @@ export async function generateFaq(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("faq", maxTokens, ANSWER_TOKENS, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "faq", maxTokens, ANSWER_TOKENS);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyDropped();
   const scoreDrops = noDifficultyCentralityDrops();

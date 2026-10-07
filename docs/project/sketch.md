@@ -58,6 +58,7 @@ positional hues through the same `--cat-rgb` indirection everything else uses.
 | the prompt and the model call | [`src/sketch.ts`](../../src/sketch.ts) |
 | the panel | [`src/web/SketchView.tsx`](../../src/web/SketchView.tsx), [`useSketch.ts`](../../src/web/useSketch.ts), `§ sketch` in [`styles/diagram-sketch.css`](../../src/web/styles/diagram-sketch.css) |
 | the harness that renders one offline | [`evals/sketch/`](../../evals/sketch/) |
+| the tests | [`sketch-scene.test.ts`](../../tests/sketch-scene.test.ts), [`sketch-paint.test.ts`](../../tests/sketch-paint.test.ts), [`sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx), [`sketch-zoom-and-peek.test.tsx`](../../tests/sketch-zoom-and-peek.test.tsx) |
 
 **One painter, two sinks.** `sketch-paint.ts` is pure and returns primitives;
 the panel maps each to an element and hangs the handlers off the nodes, and the
@@ -87,6 +88,14 @@ It is the same rule at both ends of a wire that has a database and a year in the
 middle of it. The same pass is where a region's door gets *derived* when the
 model did not write one, which is why both ends of that wire agree about which
 names are pressable without the artefact on disk having to change.
+
+**A stored value the check leaves no scene of is "none", and "none" carries no facts.** The hook
+holds the picture, which stored value it is, and its four flags (stale, outdated, profiled,
+profile changed) as one value that is there or not, so the flags cannot stay behind a picture that
+has gone; until 2026-10-07 that branch cleared the picture and left the last one's flags standing.
+What the check refused is kept apart, because with nothing to draw it is the only account of why.
+[`useIllustrated.ts`](../../src/web/useIllustrated.ts) is built the same way
+([261007e § 3](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
 
 **Reachability is two numbers, and they answer different questions.** A scene
 nothing opens is a scene the reader can never get to — the plainest silent
@@ -123,11 +132,11 @@ taste. The old `high` measurements were 121–194 seconds and about $0.20.
 - **Picking the Sketch chip draws it, if nobody ever has.** Since 2026-09-02,
   and it is the chip's `onClick` that arms it, never `?diagram=` — that is query
   state, so Back and Forward move it, and a pasted
-  `?mode=diagram&diagram=sketch` must not buy a model call. *Opening
-  Diagram costs nothing*: with nothing drawn the mode lands on the empty state
-  below, so the bar's Diagram button arms nothing at all — `diagram` is
-  deliberately absent from `MODE_TARGET`, and that mattered more from 2026-09-04,
-  when the button went into every reader's bar.
+  `?mode=diagram&diagram=sketch` must not buy a model call. *Arriving
+  costs nothing*: with nothing drawn the mode lands on the empty state
+  below. *Pressing Diagram in the bar* did arm nothing until 2026-09-06; now `diagram` is
+  a delegated row in `MODE_TARGET` and the press arms the picture `?diagram=` names
+  ([diagram.md](diagram.md#why-force-was-the-default-and-why-sketch-is-now)).
   [`src/web/activation.ts`](../../src/web/activation.ts),
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts), and
   [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)

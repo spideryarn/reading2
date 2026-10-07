@@ -24,6 +24,7 @@ import { describe, expect, it } from "vitest";
 import { sanitizeArticle, sanitizeBlockHtml } from "../src/web/sanitize.js";
 import { sanitizeHtml as sanitizeOnServer } from "../src/sanitize.js";
 import type { Article, Block } from "../src/types.js";
+import { runtimeImportsOf } from "./helpers/import-graph.js";
 
 /** Every interesting shape, in one place, so both suites see the same corpus. */
 const CORPUS: Array<[string, string]> = [
@@ -277,19 +278,32 @@ describe("the ingress is wired up", () => {
        and the old pattern called it the jsdom one. Resolving says which file,
        at any depth, and it is wrong in neither direction. */
     const nodeSanitiser = path.resolve("src/sanitize.ts");
+    const clientSanitiser = path.resolve("src/web/sanitize.ts");
     let resolved = 0;
     for (const file of clientFiles) {
-      const src = readFileSync(file, "utf8");
-      for (const [, spec] of src.matchAll(/from\s+["'](\.{1,2}\/[^"']*sanitize\.js)["']/g)) {
-        resolved++;
-        const target = path.resolve(path.dirname(file), spec as string).replace(/\.js$/, ".ts");
+      /* **Every run-time import, read by the shared reader** (tests/helpers/
+         import-graph.ts § `runtimeImportsOf`), not by a pattern of this file's
+         own. Until 2026-10-06 this was `/from\s+["'](…sanitize\.js)["']/`, which
+         wants the word `from`: `await import("../sanitize.js")` and a bare
+         `import "jsdom"` both load the module and neither has one, so both
+         passed. The shared reader parses the file, so it follows static,
+         side-effect and dynamic imports however they are spelled (after a
+         comment on the same line included, which the old pattern caught and
+         the reader's first, regex version did not — GPT Sol, 2026-10-06),
+         skips the ones that erase (`import type`), and refuses a dynamic
+         import it cannot name. */
+      const specs = runtimeImportsOf(path.resolve(file));
+      for (const spec of specs) {
+        if (!spec.startsWith(".")) continue;
+        const target = path.resolve(path.dirname(file), spec).replace(/\.js$/, ".ts");
+        if (target === clientSanitiser) resolved++;
         expect(target, `${file} imports ${spec}`).not.toBe(nodeSanitiser);
       }
-      expect(src, file).not.toMatch(/from\s+["']jsdom["']/);
+      expect(specs, file).not.toContain("jsdom");
     }
     /* The scan must have found something to resolve. Client files importing the
-       *client* sanitiser are what make the loop above meaningful, and a regex
-       that matched nothing would pass this test in silence —
+       *client* sanitiser are what make the loop above meaningful, and a reader
+       that found nothing would pass this test in silence —
        docs/reusable/silent-success.md. */
     expect(
       resolved,

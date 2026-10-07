@@ -23,7 +23,7 @@
  *
  * See docs/project/chat-tools.md.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHAT_TOOLS,
   LINKS_CHARS,
@@ -41,6 +41,7 @@ import {
   parseToolArgs,
   runTool,
   searchArticleWords,
+  toolsFor,
   untrusted,
 } from "../src/chat-tools.js";
 import {
@@ -52,6 +53,79 @@ import {
 } from "../src/converse.js";
 import { sameTarget } from "../src/urls.js";
 import type { Block, Meta } from "../src/types.js";
+
+/**
+ * **No test in this file may ask real DNS.** `read_web_page` goes through
+ * `fetchDocument`, whose address guard resolves the hostname before it fetches
+ * (`defaultResolve` in src/fetch.ts), so stubbing `fetch` alone left a real
+ * lookup in front of the stub, and three unstubbed calls here could make a
+ * real request as well. This lookup refuses unless a test gives it an answer,
+ * which fails the address guard before any socket. GPT Sol's F9 on plan
+ * 261005i; docs/plans/261005m-a-docs-size-cap-and-a-chat-tools-test-that-stops-doing-dns.md.
+ *
+ * The lookup is not the only door: a literal IP address skips it, and `converse`
+ * calls `fetch` itself. So `fetch` refuses by default as well, and because
+ * `read_web_page` catches what a fetch throws, the refusal is also counted and
+ * a test that reached it fails afterwards. A test that wants a response stubs
+ * its own over this one, as they all did already. Install the default directly:
+ * `vi.unstubAllGlobals()` must restore it, rather than the real transport that
+ * was here before the test. The suite's setup restores that transport afterwards.
+ */
+const dns = vi.hoisted(() => ({ lookup: vi.fn() }));
+vi.mock("node:dns/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:dns/promises")>()),
+  lookup: dns.lookup,
+}));
+const unstubbedFetches: string[] = [];
+beforeEach(() => {
+  dns.lookup.mockReset();
+  dns.lookup.mockRejectedValue(new Error("a test in chat-tools.test.ts reached DNS"));
+  unstubbedFetches.length = 0;
+  globalThis.fetch = (input) => {
+    unstubbedFetches.push(String(input instanceof Request ? input.url : input));
+    return Promise.reject(new Error("a test in chat-tools.test.ts reached fetch without a stub"));
+  };
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  expect(unstubbedFetches).toEqual([]);
+});
+
+describe("fetch isolation survives global cleanup", () => {
+  // A safe canary in place of the real transport: a bypass must never dial.
+  const transport = vi.fn<typeof fetch>().mockRejectedValue(new Error("transport canary"));
+  const url = "https://93.184.216.34/a-page";
+  const ctx = { slug: "example", meta: { title: "A piece" } as Meta, blocks: [], power: "standard" as const };
+  let originalFetch: typeof fetch;
+
+  beforeAll(() => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = transport;
+  });
+  afterAll(() => {
+    globalThis.fetch = originalFetch;
+  });
+  beforeEach(() => {
+    transport.mockClear();
+  });
+
+  it.each([false, true])("counts unstubbed fetch after cleanup (response stub: %s)", async (stub) => {
+    if (stub) vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("response stub")));
+    vi.unstubAllGlobals();
+    await runTool("read_web_page", { url }, ctx);
+    // Consume this deliberately unexpected call before the outer hook checks.
+    expect(unstubbedFetches.splice(0)).toEqual([url]);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  afterEach(async () => {
+    // Nested cleanup runs before the file-level hook, just like the loop tests.
+    vi.unstubAllGlobals();
+    await runTool("read_web_page", { url }, ctx);
+    expect(unstubbedFetches.splice(0)).toEqual([url]);
+    expect(transport).not.toHaveBeenCalled();
+  });
+});
 
 const block = (id: string, text: string, over: Partial<Block> = {}): Block =>
   ({
@@ -350,8 +424,10 @@ describe("runTool — what goes back to the model", () => {
     // The cap must not break the common case — a tracked link is not an attack.
     const normal = "https://example.com/essays/x?utm_source=newsletter&utm_medium=email&page=2";
     const out = await runTool("read_web_page", { url: normal }, ctx);
-    // It will fail to fetch in a test, but it must not be REFUSED before trying.
+    /* It fails in a test, at the lookup this file refuses, but it must not be
+       REFUSED before trying, and reaching the lookup is what trying means. */
     expect(out.detail).not.toBe("refused");
+    expect(dns.lookup).toHaveBeenCalledWith("example.com", { all: true });
   });
 
   it("refuses a slug that is not one before it reaches the store", async () => {
@@ -758,17 +834,23 @@ describe("read_web_page will not fetch the article the reader has open", () => {
     for (const url of ["https://www.example.com/essays/x", "http://example.com/essays/x"]) {
       const out = await runTool("read_web_page", { url }, ctx);
       expect(out.detail).not.toBe("already open");
+      // Not refused means it went on to look the host up, which is as far as a test goes.
+      expect(dns.lookup).toHaveBeenLastCalledWith(new URL(url).hostname, { all: true });
     }
   });
 
   it("still fetches a different page on the same host", async () => {
     /* Asserting "not refused" would pass on any failure at all, including one
        that never reached the network. So the check is that a fetch happened.
-       GPT Sol code review, 2026-08-27. */
+       GPT Sol code review, 2026-08-27. The address guard looks the host up
+       before it fetches, so the lookup is answered here too, with a public
+       address the guard will let through. */
+    dns.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("no network here"));
     try {
       const out = await runTool("read_web_page", { url: "https://example.com/essays/y" }, ctx);
       expect(out.detail).not.toBe("already open");
+      expect(dns.lookup).toHaveBeenCalledWith("example.com", { all: true });
       expect(fetchSpy).toHaveBeenCalled();
       expect(new URL(String(fetchSpy.mock.calls[0]?.[0])).pathname).toBe("/essays/y");
     } finally {
@@ -1078,7 +1160,11 @@ describe("converse — a turn that uses a tool", () => {
     }
     const tools = (sent[0] as { tools: { type: string }[] }).tools;
     expect(tools[0]?.type).toBe("openrouter:web_search");
-    expect(tools.length).toBe(CHAT_TOOLS.length + 1);
+    /* A turn with no `kind` is a chat, and a chat's list is `toolsFor("chat")`:
+       the shared eight and `reader_notes`. What each other kind is offered is
+       tests/reader-notes-tool.test.ts. */
+    expect(tools.length).toBe(toolsFor("chat").length + 1);
+    expect(toolsFor("chat").length).toBe(CHAT_TOOLS.length + 1);
   });
 
   it("leaves our tools out entirely when the caller says so", async () => {

@@ -4,19 +4,20 @@
  * Until 2026-08-29 every ingest wrote an arc before the article could be opened
  * at all, so the reading view could take `article.arc` as a fact and this hook
  * had no reason to exist. `arc` is no longer in `DEFAULT_INGEST_STEPS` — the
- * article opens as soon as the tree is built — so a reader can now arrive at an
- * article that has none, and something has to ask for one.
+ * article can open before structure finishes, with arc generation held until
+ * the real tree arrives (`structureAwaited` below). A reader can arrive at an
+ * article with no arc, and something has to ask for one.
  *
  * ## Seeded from the payload, so the ordinary path is unchanged
  *
  * When `/api/article/:slug` already carried an arc, that is the arc, and this
- * hook makes no request and starts no job. It is *only* the missing case that
- * costs anything. That matters more than it looks: the alternative — always
+ * hook makes no opening request. A current payload starts no job; an older
+ * prompt version can regenerate (`outdated` below). The alternative — always
  * fetching `/api/arc/:slug` to learn the staleness the payload does not carry —
  * would put a second request on every article open for a question that is almost
  * always "it is fine".
  *
- * ## It starts the job itself, which no other `useStepJob` caller does
+ * ## It starts the job on an owner's arrival
  *
  * `useGlossary`, `useIdeas` and `useSummaries` all wait for a reader to press
  * something. Greg asked for this one to run on arrival:
@@ -26,17 +27,18 @@
  * > meantime the "Contents" mode would be in a "Loading" state (with a spinner
  * > etc).
  * >
- * > — Greg, 2026-08-29 (the mode is called Hierarchy now)
+ * > — Greg, 2026-08-29 (the mode became Hierarchy, which retired into
+ * > Structure on 2026-09-29)
  *
  * **On the owner opening the article, not on entering the mode.** Hierarchy
  * stopped being the default on 2026-08-31, but the arc is also read by
  * Structure's narrow face. It remains article-level work, and the mode lives
- * below the capability seam in `App.tsx`, so keying the run off either view
+ * below the capability seam in `article/ArticlePage.tsx`, so keying the run off either view
  * would mean lifting `mode` above `OwnedReader` and would make the other wait.
  *
  * **The ref is not belt-and-braces.** `<StrictMode>` runs every effect twice in
  * development, so without it every article opened would POST two arc jobs. The
- * open-counter in `App.tsx` carries the same guard for the same reason, and its
+ * open-counter in `article/ArticlePage.tsx` carries the same guard for the same reason, and its
  * docstring records what happened when it did not.
  *
  * ## Who must not reach this
@@ -44,15 +46,14 @@
  * **Mount it in `OwnedReader`, never in `Reader`.** The acceptance test for
  * public reading is that a signed-out browser issues no POST whatever
  * (tests/visitor-gaps.test.ts), and starting a job is a POST that spends money.
- * A visitor therefore sees no arc on an article whose owner has not opened it
- * since this shipped — including every article in the library on the day it
- * shipped, because the freshness field is new and nothing on disk carries it.
+ * A visitor cannot request a missing arc on arrival; it must already be in
+ * their payload.
  *
  * That is a deliberate trade and not an oversight: Greg was offered a second,
  * non-blocking arc job after ingest — which would have closed it — and chose the
- * smaller change (2026-08-29). The fallback is good: `TableView` shows the root
- * gist where the arc column would be, which is why this needs writing down. It
- * looks like nothing is wrong.
+ * smaller change (2026-08-29). At the time `TableView` showed the root gist
+ * where a missing arc column would be. Those columns went on 2026-09-29;
+ * Structure's list face now reads the arc when available.
  *
  * See docs/plans/260829f-defer-arc-and-rename-hierarchy.md § 2.2.
  */
@@ -62,6 +63,7 @@ import type { Arc, ArcFound } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { useStepJob } from "./useStepJob.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 /**
  * `absent` is the state this hook exists for, and it is not an error: no arc
@@ -90,7 +92,20 @@ export interface UseArc {
   error: string | null;
 }
 
-export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
+export function useArc(
+  slug: string,
+  fromPayload: Arc | undefined,
+  /**
+   * **The article's tree is a stand-in the real structure is about to
+   * replace** (`awaitingStructure`, src/types.ts) — an article opened before
+   * its structure was built. No arc is asked for while it is: the arc is one
+   * sentence per *part*, and the parts are about to change; the server's gate
+   * would end the job `blocked` anyway, which has no Retry. It reads as usual.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md
+   * § Review record, GPT Sol's F8.
+   */
+  structureAwaited = false,
+): UseArc {
   /* The payload's arc is the answer whenever there is one, so the opening state
      is `ready` rather than `loading` for almost every reader. */
   const [arc, setArc] = useState<Arc | null>(fromPayload ?? null);
@@ -125,7 +140,7 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
       setStatus(found.stale ? "absent" : "ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* A failed revalidation must not take a good arc off the screen — `load`
          runs again every time a job finishes, not only on the first read. Only
          the opening read has nothing to fall back on. Same guard and same
@@ -137,7 +152,7 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). Arc is the one that could sometimes
      repair itself afterwards, because a later job completion reads again; a
      reader who asks for nothing more still keeps the pre-job arc for ever. */
@@ -172,15 +187,22 @@ export function useArc(slug: string, fromPayload: Arc | undefined): UseArc {
   const outdated = fromPayload !== undefined && isArcOutdated(fromPayload.version);
   useEffect(() => {
     if (status !== "absent" && !outdated) return;
+    /* **Before the once-guard, not after it**, and the order is the whole of
+       this line: a wait that had already written `started` would be a wait for
+       ever, because nothing below runs twice for one slug. Left unspent, the
+       guard lets this effect run as it does on any open the moment the real
+       tree is in — `structureAwaited` is a dependency for that reason.
+       tests/arc-waits-for-structure.test.tsx. */
+    if (structureAwaited) return;
     if (started.current === slug) return;
     started.current = slug;
     /* Unforced. The step's own freshness check is the thing being trusted here,
        and it will agree: we only reach `absent` when there is no arc, or when
-       the one on disk is stale — and a stale artefact is exactly what an
+       the stored one is stale — and a stale artefact is exactly what an
        unforced run regenerates. Forcing would also work and would cost a model
        call on any race where another tab wrote one first. */
     void queue.start();
-  }, [status, outdated, slug, queue]);
+  }, [status, outdated, structureAwaited, slug, queue]);
 
   return {
     status,

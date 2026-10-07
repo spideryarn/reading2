@@ -166,8 +166,9 @@ loadEnvLocal();
  *
  * The filesystem version had one slug and re-copied `example/` in `beforeEach`.
  * A published revision is not editable, and re-seeding one per case would pay
- * ~300ms eight times over for an endpoint that **stores nothing** — every case
- * here is a read. So the states are separated by slug instead: one current, one
+ * ~300ms eight times over for cases that **store nothing** — none of them
+ * reaches a finished mark, which is the only thing the endpoint keeps (since
+ * 2026-10-05; tests/quiz-attempts-route.test.ts). So the states are separated by slug instead: one current, one
  * source-stale, and one that a revision lands on top of.
  */
 const SLUG = "test-quiz-mark-route-fixture";

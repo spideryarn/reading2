@@ -306,7 +306,7 @@ import type { Verifier, VerifyResult } from "../src/auth.js";
 import { WEBHOOK_PATH } from "../src/billing/webhook.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UNEXPECTED_FAILURE } from "../src/messages.js";
-import { modelFor, powerFor } from "../src/models.js";
+import { modelFor, powerFor, TASK_TIER, wireFor, type Task } from "../src/models.js";
 import { isPublicNamespace } from "../src/public/routes.js";
 import { handleApi } from "../src/routes.js";
 import { acceptAny, AUTHED_HEADERS, TEST_SUB } from "./helpers/authed.js";
@@ -378,6 +378,18 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback"],
   },
   {
+    /* An admin's own earlier reports, 261007d. One segment, so the pair route below cannot take it. */
+    match: { kind: "literal", path: "/api/admin/feedback/earlier" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/feedback/earlier"],
+  },
+  {
+    /* An admin's reply to a question an agent asked, 261007d stage 2. One segment, as `earlier` is. */
+    match: { kind: "literal", path: "/api/admin/feedback/answers" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/feedback/answers"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
     /* PATCH since 261003j: mark one report ignored, or take the mark back. */
     methods: ["GET", "PATCH"],
@@ -396,6 +408,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/admin/articles/w1/cost"],
+  },
+  /* The cost cube, for /admin/costs, 261005a. */
+  {
+    match: { kind: "literal", path: "/api/admin/costs" },
+    methods: ["GET"],
+    witnesses: ["/api/admin/costs"],
   },
   // -------------------------------------------------------- library / shelf
   {
@@ -462,6 +480,18 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/transcribe"],
   },
   {
+    /* The command bar's sentence, 261003k. */
+    match: { kind: "literal", path: "/api/command-pick" },
+    methods: ["POST"],
+    witnesses: ["/api/command-pick"],
+  },
+  {
+    /* The bar's short list from why you are reading, 261005k. */
+    match: { kind: "regex", source: "^\\/api\\/command-suggest\\/([\\w.%-]+)$", flags: "" },
+    methods: ["POST"],
+    witnesses: ["/api/command-suggest/w1"],
+  },
+  {
     match: { kind: "literal", path: "/api/feedback" },
     methods: ["GET", "POST"],
     witnesses: ["/api/feedback"],
@@ -486,6 +516,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/visibility$", flags: "" },
     methods: ["PUT"],
     witnesses: ["/api/article/w1/visibility"],
+  },
+  /* The private link, plan 261005e: read it, make one, turn it off. One
+     matcher, three verbs. */
+  {
+    match: { kind: "regex", source: "^\\/api\\/article\\/([\\w.%-]+)\\/share-link$", flags: "" },
+    methods: ["GET", "POST", "DELETE"],
+    witnesses: ["/api/article/w1/share-link"],
   },
   /* High-powered AI's switch, plan 260930k — out of the admin namespace once
      readers could switch it on (and be charged for it); beside visibility. */
@@ -586,18 +623,15 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/debate/w1"],
   },
   {
+    /* Who cites the article, from OpenAlex — plan 261004h. Owner only, no model. */
+    match: { kind: "regex", source: "^\\/api\\/citers\\/([\\w.%-]+)$", flags: "" },
+    methods: ["GET"],
+    witnesses: ["/api/citers/w1"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/citations\\/([\\w.%-]+)$", flags: "" },
     methods: ["GET"],
     witnesses: ["/api/citations/w1"],
-  },
-  {
-    match: {
-      kind: "regex",
-      source: "^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/find$",
-      flags: "",
-    },
-    methods: ["POST"],
-    witnesses: ["/api/citations/w1/w2/find"],
   },
   {
     match: {
@@ -791,6 +825,16 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/chat/w1/w2/spoken"],
   },
   {
+    /* The reader pressed Hint under a Recall answer (plan 261004h). */
+    match: {
+      kind: "regex",
+      source: "^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/hint-opened$",
+      flags: "",
+    },
+    methods: ["POST"],
+    witnesses: ["/api/chat/w1/w2/hint-opened"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/live\\/([\\w-]+)\\/connected$", flags: "" },
     methods: ["POST"],
     witnesses: ["/api/live/w1/connected"],
@@ -904,8 +948,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 ];
 
 /** Loud failure controls. Never the oracle — see the header. */
-const EXPECTED_MATCHER_COUNT = 89;
-const EXPECTED_GUARD_COUNT = 109;
+/* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
+   the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
+   feedback (plan 261007d); 96 with their replies to questions (its stage 2). */
+const EXPECTED_MATCHER_COUNT = 96;
+/* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
+   with the admin's earlier feedback; 118 with their replies to questions. */
+const EXPECTED_GUARD_COUNT = 118;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -1359,6 +1408,9 @@ const ENTRY_KEYS: Record<"exact" | "pattern", string[]> = {
  * `"first-capture"` on an exact row, which has no capture. The type says the
  * same; this says it about the literal the table actually holds.
  */
+/** The one function that attributes spend: src/ai-spend.ts. */
+const SPEND_WRAPPER = "withSpendAttribution";
+
 const ARTICLE_VALUES: Record<"exact" | "pattern", string[]> = {
   exact: ["handler", "none"],
   pattern: ["first-capture", "handler", "none"],
@@ -1492,6 +1544,22 @@ function readTableEntry(element: unknown, constants: Map<string, AstNode>): Pars
     (nodeType(handler) !== "ArrowFunctionExpression" && nodeType(handler) !== "FunctionExpression")
   ) {
     refuse(element, `an ${ROUTE_TABLE} entry whose \`handler\` is not written out here`);
+  }
+  /* **A `first-capture` row is attributed by the dispatcher, and only there.**
+     Sixteen rows wrapped their own body in `withSpendAttribution` as well, with
+     the same slug: two ways to say one thing, left over from before the
+     `article` field existed (docs/plans/261004e-fifth-sweep-cluster-8-routes-deletions.md
+     § R4). A row whose slug arrives some other way says `"handler"` and wraps
+     its own call; a row that says `"first-capture"` may not. */
+  if (article === "first-capture") {
+    for (const node of descend(handler)) {
+      if (nodeType(node) !== "CallExpression") continue;
+      if (identName(node.callee) !== SPEND_WRAPPER) continue;
+      refuse(
+        node,
+        `an ${ROUTE_TABLE} \`first-capture\` entry whose handler calls ${SPEND_WRAPPER} itself — ${TABLE_DISPATCHER} already attributes it`,
+      );
+    }
   }
 
   const method = stringValue(byKey.get("method"));
@@ -2043,12 +2111,18 @@ describe("the authenticated API's route contract", () => {
         // voucher email Retry, 261001p — beside the voucher routes
         "POST regex /^\\/api\\/admin\\/voucher-emails\\/([\\w-]+)\\/retry$/",
         "GET literal /api/admin/feedback",
+        // an admin's own earlier reports, 261007d — beside the list across owners
+        "GET literal /api/admin/feedback/earlier",
+        // an admin's reply to a question, 261007d stage 2 — beside the list that carries the questions
+        "POST literal /api/admin/feedback/answers",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)\\/screenshot$/",
         // one article's cost, for the metadata page, 260930f
         "GET regex /^\\/api\\/admin\\/articles\\/([\\w.%-]+)\\/cost$/",
+        // the cost cube, for /admin/costs, 261005a — beside the article's cost
+        "GET literal /api/admin/costs",
         "GET literal /api/library",
         "GET literal /api/library/search",
         "GET literal /api/library/terms",
@@ -2059,6 +2133,10 @@ describe("the authenticated API's route contract", () => {
         "DELETE regex /^\\/api\\/library\\/([\\w.%-]+)$/",
         "GET literal /api/models",
         "POST literal /api/transcribe",
+        // the command bar's sentence, 261003k
+        "POST literal /api/command-pick",
+        // the bar's short list from why you are reading, 261005k
+        "POST regex /^\\/api\\/command-suggest\\/([\\w.%-]+)$/",
         "POST literal /api/feedback",
         // the reader's own earlier reports, 260916c — beside the POST it lists
         "GET literal /api/feedback",
@@ -2070,6 +2148,10 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/link-preview",
         "GET literal /api/link-summary",
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/visibility$/",
+        // the private link, 261005e — beside visibility, the other way an article is shared
+        "GET regex /^\\/api\\/article\\/([\\w.%-]+)\\/share-link$/",
+        "POST regex /^\\/api\\/article\\/([\\w.%-]+)\\/share-link$/",
+        "DELETE regex /^\\/api\\/article\\/([\\w.%-]+)\\/share-link$/",
         // High-powered AI's switch, 260930k — moved here from the admin namespace, beside visibility
         "PUT regex /^\\/api\\/article\\/([\\w.%-]+)\\/high-power$/",
         // reset and regenerate, 260928a — beside visibility, the other article sub-resource
@@ -2095,9 +2177,9 @@ describe("the authenticated API's route contract", () => {
         "GET regex /^\\/api\\/simple\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/skim\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/debate\\/([\\w.%-]+)$/",
+        "GET regex /^\\/api\\/citers\\/([\\w.%-]+)$/",
         "GET regex /^\\/api\\/citations\\/([\\w.%-]+)$/",
-        "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/find$/",
-        // Citations' Investigate, 260930a — beside Find it, its sibling POST
+        // Citations' Investigate, 260930a (Find it, its sibling POST, went 2026-10-04)
         "POST regex /^\\/api\\/citations\\/([\\w.%-]+)\\/([\\w.%-]+)\\/investigate$/",
         "POST regex /^\\/api\\/source-guess\\/([\\w.%-]+)$/",
         // reading time, 260916c
@@ -2134,6 +2216,7 @@ describe("the authenticated API's route contract", () => {
         "POST regex /^\\/api\\/live\\/([\\w-]+)\\/close$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/spoken$/",
         "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/stop$/",
+        "POST regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)\\/hint-opened$/",
         "PATCH regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         "DELETE regex /^\\/api\\/chat\\/([\\w.%-]+)\\/([\\w.%-]+)$/",
         // search, 260907b stage 5
@@ -2308,6 +2391,16 @@ describe("the authenticated API's route contract", () => {
       );
     });
 
+    it("lets a `handler` row attribute its own spend", () => {
+      /* The positive half of the `first-capture` refusal below: the same body
+         under `article: "handler"` is the documented shape, so the refusal is
+         about the pairing and not about the call. */
+      const body = "async (_c, captures) => { await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () => work()); }";
+      expect(
+        read(`{ kind: "pattern", method: "POST", pattern: /^\\/api\\/x\\/(\\w+)$/, article: "handler", handler: ${body} }`),
+      ).toHaveLength(1);
+    });
+
     /**
      * The other positive half, and the shape jobs needed: a matcher two rows
      * share is a module-scope `const` they both name.
@@ -2345,6 +2438,9 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       ["a row says nothing about its article", `{ kind: "exact", method: "GET", path: "/api/x", handler: async () => {} }`],
       ["an exact row claims a capture it cannot have", `{ kind: "exact", method: "GET", path: "/api/x", article: "first-capture", handler: async () => {} }`],
       ["the article is not a literal", `{ kind: "pattern", method: "GET", pattern: /^\\/api\\/x$/, article: WHERE, handler: async () => {} }`],
+      /* The dispatcher wraps a `first-capture` row; a second wrap inside it is
+         the duplicate cluster 8 deleted sixteen of. */
+      ["a first-capture row attributes its own spend as well", `{ kind: "pattern", method: "POST", pattern: /^\\/api\\/x\\/(\\w+)$/, article: "first-capture", handler: async (_c, captures) => { await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () => work()); } }`],
       /* An identifier is resolved only against a module-scope `const` holding a
          string or regex literal, so one this file does not declare — or one
          holding anything a call could have built — is still a refusal. */
@@ -2628,6 +2724,23 @@ const ${ROUTE_TABLE}: readonly AuthRoute[] = [
       const simple = (reply.body.tasks as { task: string; id: string }[]).find((t) => t.task === "simple");
       expect(simple?.id).toBe(modelFor("simple", powerFor("simple", "standard")));
       expect(simple?.id).toBe(modelFor("simple", "high"));
+    });
+
+    it("sends each task's wire in the real model response", async () => {
+      const reply = await call("GET", "/api/models");
+      expect(reply.status).toBe(200);
+      const rows = reply.body.tasks as { task: string; wire?: string }[];
+      /* The Profile fixture supplies this field itself. Only the HTTP reply
+         catches a resolver value that modelsInUse forgot to put on the wire. */
+      for (const task of Object.keys(TASK_TIER) as Task[]) {
+        expect(rows.find((row) => row.task === task)?.wire, task).toBe(wireFor(task));
+      }
+      /* Independent witnesses for both API shapes, and a row with no task. */
+      expect(rows.find((row) => row.task === "glossary")?.wire).toBe("messages");
+      expect(rows.find((row) => row.task === "chat")?.wire).toBe("chat");
+      const pdf = rows.find((row) => row.task === "pdf");
+      expect(pdf).toBeDefined();
+      expect(pdf).not.toHaveProperty("wire");
     });
 
     it("still refuses a method that is not, and quotes the raw URL back", async () => {

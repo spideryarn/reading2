@@ -37,7 +37,7 @@ import { ADMIN_USER_ID_LOCAL } from "../src/admin.js";
 import type { VerifyResult, Verifier } from "../src/auth.js";
 import { blocksArtefact } from "../src/blocks.js";
 import { closeDb, getDb } from "../src/db/client.js";
-import { articles, ingestEvents, jobs as jobsTable, uploads } from "../src/db/schema.js";
+import { articleRevisions, articles, ingestEvents, jobs as jobsTable, uploads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { buildTree } from "../src/structure.js";
 import {
@@ -55,7 +55,8 @@ import { duplicateOnShelfSql, isMinimalJob } from "../src/minimal-paper.js";
 import { NotProcessed } from "../src/not-processed.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
 import type { PaperMetadata } from "../src/paper-metadata.js";
-import { DEFAULT_INGEST_STEPS, STEPS, metadataReaders, type PipelineStep } from "../src/pipeline.js";
+import { DEFAULT_INGEST_STEPS, STEPS, articleRegistryDeps, metadataReaders, titleTidiers, type PipelineStep } from "../src/pipeline.js";
+import { ruleTitleTidier } from "../src/title-tidy.js";
 import { handleApi } from "../src/routes.js";
 import { hashBlocks, structureHash } from "../src/source-hash.js";
 import { stagingKey } from "../src/source.js";
@@ -224,6 +225,23 @@ beforeEach(() => {
   /* No network, ever: both readers answer from the fixture. */
   vi.spyOn(metadataReaders, "pdf").mockResolvedValue(found());
   vi.spyOn(metadataReaders, "html").mockResolvedValue(found({ title: null, abstract: null, doi: null }));
+  /* Nor the title's tidy, which in the real step is a model's (plan 261005j). */
+  vi.spyOn(titleTidiers, "import").mockImplementation(ruleTitleTidier);
+  /* Nor the registry: the fetch guard refuses Crossref, so the steps are handed
+     an answer. It is the fixture paper's own record, by title and author. */
+  vi.spyOn(articleRegistryDeps, "lookup").mockImplementation(async (id) => ({
+    kind: "found",
+    record: {
+      id,
+      source: "crossref",
+      title: "A paper about entropy",
+      authors: [{ family: "Lovelace", given: "Ada" }],
+      year: 2022,
+      venue: "Entropy",
+      published: "2022-07-06",
+      doi: "10.3390/e24070930",
+    },
+  }));
 });
 
 const EXTRACTED_HTML = ["<h1>A Paper About Entropy</h1>", ...PARAGRAPHS.map((p) => `<p>${p}</p>`)].join("\n");
@@ -391,6 +409,19 @@ describe("a minimal paper, added", () => {
       filename: "entropy.pdf",
       kind: "pdf",
     });
+    /* The registry's record for that DOI agreed on title and author, so the
+       revision keeps where and when it was published (261004a). */
+    const [revision] = await getDb()
+      .select({ journal: articleRevisions.journal, publishedAt: articleRevisions.publishedAt })
+      .from(articleRevisions)
+      .where(eq(articleRevisions.id, article.currentRevisionId ?? randomUUID()));
+    expect(revision).toEqual({ journal: "Entropy", publishedAt: "2022-07-06" });
+
+    /* The step asked import's tidier for the title, with the abstract as the
+       rule's evidence (plan 261005j). */
+    expect(vi.mocked(titleTidiers.import).mock.calls.map(([title, context]) => [title, context?.body])).toEqual([
+      ["A Paper About Entropy", "We measure something and find it is entropy."],
+    ]);
 
     const rows = await ledgerOf(article.id);
     expect(rows.map((r) => [r.kind, r.succeededAt !== null])).toEqual([["minimal", true]]);
@@ -530,6 +561,72 @@ describe("no free way into a minimal paper", () => {
     const term = await call(READER, "POST", `/api/glossary/${slug}/ask`, { term: "entropy" });
     expect(term.status).toBe(409);
     expect(term.body.code).toBe("not-processed");
+  });
+
+  /**
+   * **Search and a referee criterion ask a gate of their own first**
+   * (`refuseAPaperNotReadYet` in src/routes.ts), ahead of `loadArticle`. For a
+   * minimal paper whose metadata has been published, as here, the two refuse
+   * alike but for the body: the gate's is exactly `{ error, code }`, and
+   * `loadArticle`'s (chat's) also carries `paper`.
+   *
+   * SVO5 deleted the gate as a duplicate on the strength of this case alone,
+   * and plan 261007d § 4 put it back: the case below this one is the state
+   * only the gate covers. What must not move in either is that the paper is
+   * refused **before a row is written** — both routes store a run and then
+   * stream, so a refusal that came late would be a stored failure.
+   */
+  it.each([
+    ["a search", "search", { criterion: "entropy", kind: "meaning" }],
+    ["a referee criterion", "referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
+  ] as const)("refuses %s with chat's 409 and sentence, and stores nothing", async (_name, family, body) => {
+    const rows = async () => {
+      const out = (await getDb().execute(sql`
+        select
+          (select count(*)::int from spideryarn.search_runs r join spideryarn.articles a on a.id = r.article_id where a.slug = ${slug}) as searches,
+          (select count(*)::int from spideryarn.referee_criteria r join spideryarn.articles a on a.id = r.article_id where a.slug = ${slug}) as criteria
+      `)) as unknown as { rows: { searches: number; criteria: number }[] };
+      return out.rows[0];
+    };
+    const before = await rows();
+    const reply = await call(READER, "POST", `/api/${family}/${slug}`, body);
+    expect(reply.status).toBe(409);
+    const chat = await call(READER, "POST", `/api/chat/${slug}`, { threadId: randomUUID(), question: "What is it about?" });
+    expect(chat.status).toBe(409);
+    expect(chat.body.paper).toBeDefined();
+    expect(reply.body).toEqual({ error: NOT_READ_YET.message, code: "not-processed" });
+    expect(chat.body).toMatchObject(reply.body);
+    expect(await rows()).toEqual(before);
+    expect(before).toEqual({ searches: 0, criteria: 0 });
+  });
+
+  /* **The state only the gate covers.** A minimal ingest creates the article
+     row before `metadata` publishes its first revision. `loadArticle`'s
+     revision join finds nothing then and would answer 404; the gate reads the
+     `articles` row alone and answers 409. Found by the C6 code review after
+     SVO5 had deleted the gate; red (404) without it. */
+  it.each([
+    ["search", { criterion: "entropy", kind: "meaning" }],
+    ["referee/criteria", { criterion: "Are the controls adequate?", kind: "single" }],
+  ] as const)("refuses an unpublished minimal paper on %s before writing a run", async (family, body) => {
+    const unpublished = `unpublished-minimal-${randomUUID()}`;
+    const [row] = await getDb().insert(articles).values({
+      ownerId: READER, slug: unpublished, processing: "minimal",
+    }).returning({ id: articles.id });
+    try {
+      const reply = await call(READER, "POST", `/api/${family}/${unpublished}`, body);
+      expect(reply.status).toBe(409);
+      expect(reply.body).toEqual({ error: NOT_READ_YET.message, code: "not-processed" });
+      expect((await call(DUPER, "POST", `/api/${family}/${unpublished}`, body)).status).toBe(404);
+      const counts = (await getDb().execute(sql`
+        select
+          (select count(*)::int from spideryarn.search_runs where article_id = ${row!.id}) as searches,
+          (select count(*)::int from spideryarn.referee_criteria where article_id = ${row!.id}) as criteria
+      `)) as unknown as { rows: { searches: number; criteria: number }[] };
+      expect(counts.rows).toEqual([{ searches: 0, criteria: 0 }]);
+    } finally {
+      await getDb().delete(articles).where(eq(articles.id, row!.id));
+    }
   });
 
   /**
@@ -709,6 +806,8 @@ describe("Read this", () => {
     const twice = await withoutTheWorker(() => call(READER, "POST", "/api/jobs", { slug, readThis: true }));
     expect(twice.status).toBe(409);
 
+    /* The registry is unreachable by the time the paper is read in full. */
+    vi.spyOn(articleRegistryDeps, "lookup").mockResolvedValue({ kind: "unavailable", why: "busy" });
     const job = await drive(READER, String(queued.body.id));
     expect(job.status, job.error).toBe("done");
 
@@ -718,6 +817,8 @@ describe("Read this", () => {
     expect(read.blocks.length).toBeGreaterThan(0);
     /* The abstract the shelf showed survives a re-read that found none. */
     expect(read.meta.abstract).toBe("We measure something and find it is entropy.");
+    /* And so does what the registry said about its DOI, though nobody could ask again. */
+    expect(read.meta).toMatchObject({ doi: "10.3390/e24070930", journal: "Entropy", publishedAt: "2022-07-06" });
 
     const rows = await ledgerOf(article.id);
     const minimal = rows.find((r) => r.kind === "minimal");

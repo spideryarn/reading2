@@ -25,10 +25,10 @@ import {
   watchBarVisibility,
 } from "../scroll.js";
 import { positionToWrite, type Section } from "../position.js";
-import { beginJump } from "../keynav.js";
+import { beginJump, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
-import { isFolded, subscribeFold } from "../fold.js";
+import { isFoldedAway, subscribeFold, visibleFrom } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -145,6 +145,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   }, [layoutKey, at]);
 
   // Page → URL, once the reader stops moving.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `layoutKey` is the trigger, not an input — a column toggle reflows every row with no scroll event, so the effect re-runs to look the rows up again and measure once.
   useEffect(() => {
     /* One pass over the table, not one document scan per section — see
        rows.ts. This loop was 38.1% of all script time on a 2,046-block
@@ -164,6 +165,15 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          function throw the answer away. The rects are the expensive half of
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
+      /* Closing the front matter can leave the address holding a finer block
+         inside it, and so can folding a heading over a paragraph a jump put
+         there. Canonicalise that held value before asking whether the
+         measured section changed (fold.ts § `visibleFrom`): `positionToWrite`
+         deliberately returns null while two ids are in the same section, but
+         the hidden id must still be replaced or the next restore would open
+         the run, or the fold, again. */
+      const held =
+        synced.current === null ? null : (visibleFrom(synced.current) as BlockId | null);
       const next = positionToWrite({
         sections,
         rowOf,
@@ -175,18 +185,35 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         line: stickyOffset() + 1,
         jumpInFlight,
         atTop: window.scrollY <= stickyOffset(),
-        held: synced.current,
+        held,
         anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
         /* A folded section start is never written: restoring it would unfold
-           it (scroll.ts § `scrollToBlock`). fold.ts. */
+           it (scroll.ts § `scrollToBlock`). fold.ts. `isFoldedAway`, not
+           `isFolded`: the first section starts on the masthead's echo, which
+           is hidden with its section still on screen, and skipping it wrote
+           the next section while the reader was in the first. */
         skip: (i) => {
           const s = sections[i];
-          return s !== undefined && isFolded(s.blockId);
+          return s !== undefined && isFoldedAway(s.blockId);
         },
       });
-      if (next === null) return;
-      synced.current = next.at;
-      void setAt(next.at);
+      if (next === null) {
+        if (held !== synced.current) {
+          synced.current = held;
+          void setAt(held);
+        }
+        return;
+      }
+      /* **A section that starts in the shut front matter is written as its
+         first visible block** (fold.ts § `visibleFrom`; Greg, spya-duh4w3).
+         The restore effect and the re-anchor above both go through
+         `scrollToBlock`, which opens the front matter for any block of it: a
+         reload, or a turned phone, would have opened it under a reader who was
+         in the abstract. A finer block inside the section is a value this spy
+         already leaves standing (position.ts § `positionToWrite`). */
+      const at = next.at === null ? null : (visibleFrom(next.at) as BlockId | null);
+      synced.current = at;
+      void setAt(at);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);
@@ -266,11 +293,14 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   // must leave it alone, or the restore effect would stop recognising the
   // position the reader is actually standing at.
   const jumpTo = useCallback(
-    /* `aim`: a passage key, or a quote to paint on landing — flash.ts § `JumpAim`. */
-    (blockId: BlockId, aim?: JumpAim) => {
+    /* `aim`: a passage key, or a quote to paint on landing — flash.ts § `JumpAim`.
+       `ended`: told when the jump is over, moved or not — keynav.ts § `JumpEnded`.
+       The Diagram's step buttons are the caller that needs it (Reader.tsx §
+       `followTo`). */
+    (blockId: BlockId, aim?: JumpAim, ended?: JumpEnded) => {
       const moved = beginJump(blocks, blockId, (id) => {
         void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
-      }, aim);
+      }, aim, ended);
       if (moved) synced.current = blockId;
     },
     [blocks, setAt],

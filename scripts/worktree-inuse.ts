@@ -353,8 +353,13 @@ export interface CwdUser {
  * called `python3` is an unknown and refuses the removal; an opaque `sshd` is
  * counted and printed. Adding a name here is a decision somebody makes on
  * purpose, not a default.
+ *
+ * `box-tidy` was added on 2026-10-07. It is the hourly disk tidy
+ * (infra/hetzner/box-tidy.mjs), which holds two capabilities to read `/proc`
+ * and is therefore not dumpable for the seconds it runs. It names itself with
+ * `process.title`, and its unit runs it with `WorkingDirectory=/`.
  */
-export const AMBIENT_OPAQUE_COMMS: readonly string[] = ["systemd", "(sd-pam)", "sshd", "postgrest"];
+export const AMBIENT_OPAQUE_COMMS: readonly string[] = ["systemd", "(sd-pam)", "sshd", "postgrest", "box-tidy"];
 
 /** A process we could not see into, and could not place. */
 export interface OpaqueUser {

@@ -1,0 +1,158 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "after-5",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "ca281278da17c7ad6fd52995ef8c0c21f438e65eb7bb0e296fa9265b4d57e796",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Ball lightning",
+      "kind": "concept",
+      "aliases": [
+        "Kugelblitz",
+        "foudre globulaire"
+      ],
+      "senseHere": "A still-unexplained glowing sphere that appears briefly during or near thunderstorms, lasting seconds before vanishing with or without leaving a trace. The article treats it as a real but poorly documented atmospheric phenomenon, distinct from ordinary lightning, known mainly through eyewitness testimony rather than instruments."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A description of ball lightning research as scattered across unconnected individual efforts, with different people collecting sightings, building theories, and running lab experiments without coordinating into one unified field."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "COST Action"
+      ],
+      "senseHere": "A European research collaboration on the physics of lightning, cited as a body of about 30 researchers who reached a formal consensus that ball lightning is a genuine, real phenomenon despite its lack of hard evidence."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "senseHere": "A US camera network built to photograph the night sky continuously in search of meteorite falls, mentioned because its decade of images happened to capture only two probable ball lightning events despite covering thousands of photographic records."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "Austria's network for detecting and recording the location, timing, and electrical strength of lightning strokes, used by the author to check whether reported ball lightning sightings coincided with real, measured lightning strikes nearby."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's lightning-detection network, used in the article to confirm the timing and strength of a lightning stroke that coincided with a reported ball lightning sighting at Neuruppin."
+    },
+    {
+      "name": "positive and negative lightning strokes",
+      "kind": "term",
+      "aliases": [
+        "positive stroke",
+        "negative stroke"
+      ],
+      "senseHere": "A way of classifying lightning strikes by which electrical charge travels to the ground, with peak current values of tens to hundreds of kiloamperes. The article notes an unexpectedly high share of positive strokes among lightning events that coincided with ball lightning sightings."
+    },
+    {
+      "name": "angular diameter",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The apparent size of an object measured as an angle from the observer's eye, rather than its true physical size. Haidinger used it to record how large the glowing ball looked from his window without knowing its actual distance or size."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist and member of the Imperial Academy of Sciences at Vienna, who recorded one of the earliest detailed scientific ball lightning sightings in 1868, including a sketch and measured angular size."
+    },
+    {
+      "name": "Axel Wittmann",
+      "kind": "person",
+      "aliases": [
+        "Wittmann"
+      ],
+      "background": "A German astrophysicist who, as a child in 1951, witnessed a ball lightning event that broke into smaller spheres, later reporting it scientifically and calculating the plasma's energy density from melted asphalt it left behind."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "An American paleontologist at Yale University and president of the US National Academy of Sciences, known for major dinosaur discoveries, who reported a ball lightning encounter aboard a yacht in 1878."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor best known for a 1922 experiment demonstrating that electrons have quantized spin. In 1927 he reported and mathematically analyzed his own ball lightning sighting, calculating its speed from timing of thunder and an explosion."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer at Jodrell Bank Observatory and later a professor of physical electronics, whose widely publicized 1963 account of a glowing sphere moving down an airplane aisle became one of the most cited ball lightning reports."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "senseHere": "A frequently cited case the article shows to be a myth: his death is widely retold as a ball lightning strike, but the investigation record shows it was an ordinary lightning accident, the ball-shaped image coming from a later, inaccurate popular engraving.",
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences who studied atmospheric electricity and was killed in 1753 while experimenting with an ungrounded conductor during a storm."
+    },
+    {
+      "name": "keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A short-lived paralysis or loss of feeling in a limb caused by a nearby lightning or ball lightning strike, distinguished in the article from longer-lasting nervous aftereffects such as thunderstorm phobia or skin numbness."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician regarded as the founder of modern neurology, based at the Salpêtrière Hospital in Paris, and a teacher of Sigmund Freud. He examined a patient who claimed to have seen ball lightning and distinguished short-term nerve effects from lasting psychological trauma."
+    },
+    {
+      "name": "triggered lightning",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "An experimental technique for artificially causing a lightning strike on command, by launching a small rocket trailing a thin grounded wire into a thundercloud, letting researchers study the strike's effects on chosen ground materials."
+    },
+    {
+      "name": "soil strike theory",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that ball lightning forms when a lightning strike vaporizes minerals in soil, producing a glowing cloud of burning metal and silicon particles. The article cites a spectral analysis of a recorded ball lightning event whose chemical signatures matched this explanation."
+    },
+    {
+      "name": "cloud\\u2013ground and cloud\\u2013cloud strokes",
+      "kind": "term",
+      "aliases": [
+        "cloud\\u2013ground stroke",
+        "cloud\\u2013cloud stroke"
+      ],
+      "senseHere": "A distinction between lightning that strikes the earth versus lightning that discharges between clouds without reaching the ground, used to classify the strokes correlated with ball lightning reports."
+    }
+  ]
+}

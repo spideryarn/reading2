@@ -254,6 +254,10 @@ const rawPgLinkSummaryStore: LinkSummaryStore = {
             model: inputs.model,
             createdAt: sql`now()`,
             expiresAt: sql`now() + make_interval(secs => ${leaseMs / 1000})`,
+            /* A reclaim is a question that has not been answered yet; the
+               answer it is replacing took its finish with it. (A first claim
+               is the insert above, where the column is simply absent.) */
+            finishedAt: null,
           },
         });
       return { kind: "claimed", claimId };
@@ -271,7 +275,10 @@ const rawPgLinkSummaryStore: LinkSummaryStore = {
        argument at greater length. */
     const written = await db
       .update(linkSummaries)
-      .set({ status: "ready", summary, claimId: null, expiresAt })
+      /* `finished_at` is when the answer landed — `created_at` is the claim.
+         In this statement, so the claim token decides it with the answer: a
+         claimant that lost its claim changes neither. */
+      .set({ status: "ready", summary, claimId: null, expiresAt, finishedAt: sql`now()` })
       .where(and(addresses(at), eq(linkSummaries.claimId, claimId)))
       /* **`returning` so the caller can be told, not merely so the row is
          right.** A `rowCount` would do the same job; this is the shape the rest

@@ -1,0 +1,316 @@
+{
+  "arm": "high-none-len1b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "dodo-spya-nyc4ud",
+  "version": "simple-prompt/9",
+  "sourceSha256": "4489cb29836c49d266fdadbd055eead7a950f26a63beb5d18a4c744ebf8c45f0",
+  "at": "2026-10-05T02:34:05.259Z",
+  "bodyWords": 12143,
+  "band": "standard",
+  "bodyBlocks": 251,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "426908bf469027b8",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 34932,
+  "costUsd": 0.103402,
+  "tokens": {
+    "input": 13118,
+    "output": 4040,
+    "reasoning": 1417
+  },
+  "briefReadyMs": 16445,
+  "fullerReadyMs": 34928,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 482,
+  "briefWords": 118,
+  "fuller": [
+    {
+      "text": "This encyclopedia article covers the dodo, an extinct bird that could not fly and lived only on Mauritius, an island east of Madagascar. It was a large relative of pigeons and doves, and its closest living relative is the Nicobar pigeon. The article gathers what is known of its family tree, body, behaviour, extinction, remains and fame.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article covers the dodo, an extinct bird that could not fly and lived only on Mauritius, an island east of Madagascar.",
+          "id": "spya-yksdv0",
+          "key": "extinct bird that could not fly"
+        },
+        {
+          "text": "It was a large relative of pigeons and doves, and its closest living relative is the Nicobar pigeon.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "The article gathers what is known of its family tree, body, behaviour, extinction, remains and fame.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "The article says the dodo matters because it vanished less than a century after Dutch sailors first recorded it in 1598. That fast loss drew attention to a problem nobody had recognised: humans could wipe out whole species. Since 1833 it has served as an example of human-caused extinction, and it is often called an \"icon of extinction\".",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-jnkm7z"
+      ],
+      "sentences": [
+        {
+          "text": "The article says the dodo matters because it vanished less than a century after Dutch sailors first recorded it in 1598.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "That fast loss drew attention to a problem nobody had recognised: humans could wipe out whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans could wipe out whole species"
+        },
+        {
+          "text": "Since 1833 it has served as an example of human-caused extinction, and it is often called an \"icon of extinction\".",
+          "id": "spya-jnkm7z"
+        }
+      ]
+    },
+    {
+      "text": "No complete specimen exists, so the evidence is patchy. Its looks are known only from drawings and written accounts made between 1598 and 1662. Few of those accounts are reliable, since many copy earlier ones and none were written by scientists. Physical evidence includes a dried head at Oxford, the only soft tissue left, plus bones of over 300 dodos from the Mare aux Songes swamp.",
+      "ids": [
+        "spya-t635r4",
+        "spya-ts737k",
+        "spya-ras4ad"
+      ],
+      "sentences": [
+        {
+          "text": "No complete specimen exists, so the evidence is patchy.",
+          "id": "spya-t635r4"
+        },
+        {
+          "text": "Its looks are known only from drawings and written accounts made between 1598 and 1662.",
+          "id": "spya-t635r4"
+        },
+        {
+          "text": "Few of those accounts are reliable, since many copy earlier ones and none were written by scientists.",
+          "id": "spya-ts737k"
+        },
+        {
+          "text": "Physical evidence includes a dried head at Oxford, the only soft tissue left, plus bones of over 300 dodos from the Mare aux Songes swamp.",
+          "id": "spya-ras4ad"
+        }
+      ]
+    },
+    {
+      "text": "Early scientists called it an ostrich, a vulture or an albatross. In the 1840s, studies of a skull and the Oxford head linked it to pigeons through shared features of the beak, legs and bones. A 2002 DNA study confirmed this and placed the Nicobar pigeon as its closest living relative. But that DNA came from the damaged Oxford specimen, so the article says these findings still need checking independently.",
+      "ids": [
+        "spya-mqwjb3",
+        "spya-dbqyy9",
+        "spya-fva080"
+      ],
+      "sentences": [
+        {
+          "text": "Early scientists called it an ostrich, a vulture or an albatross.",
+          "id": "spya-mqwjb3"
+        },
+        {
+          "text": "In the 1840s, studies of a skull and the Oxford head linked it to pigeons through shared features of the beak, legs and bones.",
+          "id": "spya-mqwjb3"
+        },
+        {
+          "text": "A 2002 DNA study confirmed this and placed the Nicobar pigeon as its closest living relative.",
+          "id": "spya-dbqyy9"
+        },
+        {
+          "text": "But that DNA came from the damaged Oxford specimen, so the article says these findings still need checking independently.",
+          "id": "spya-fva080",
+          "key": "still need checking independently"
+        }
+      ]
+    },
+    {
+      "text": "Modern research has reshaped the old picture of the bird. Remains show it stood about 62.6 to 75 cm tall, and wild birds may have weighed 10.6 to 17.5 kg, though weight estimates are still disputed. The famous fat look probably came from overfed birds kept in captivity or badly stuffed specimens. A 2016 brain study found its brain-to-body size matched modern pigeons, so it was probably about as clever, despite its reputation.",
+      "ids": [
+        "spya-w2anzw",
+        "spya-naj2n2",
+        "spya-rzgebh"
+      ],
+      "sentences": [
+        {
+          "text": "Modern research has reshaped the old picture of the bird.",
+          "id": null
+        },
+        {
+          "text": "Remains show it stood about 62.6 to 75 cm tall, and wild birds may have weighed 10.6 to 17.5 kg, though weight estimates are still disputed.",
+          "id": "spya-w2anzw",
+          "key": "62.6 to 75 cm tall"
+        },
+        {
+          "text": "The famous fat look probably came from overfed birds kept in captivity or badly stuffed specimens.",
+          "id": "spya-naj2n2"
+        },
+        {
+          "text": "A 2016 brain study found its brain-to-body size matched modern pigeons, so it was probably about as clever, despite its reputation.",
+          "id": "spya-rzgebh"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Contrary to popular belief, hunting was not the main cause of extinction. Fewer than 50 people lived on Mauritius then, but they brought pigs, macaques, dogs, cats and rats that raided nests and competed for food. People also cleared the forests, and the dodo may already have been rare or limited to small areas.",
+      "ids": [
+        "spya-rdu8bv",
+        "spya-t3y9gu"
+      ],
+      "sentences": [
+        {
+          "text": "Contrary to popular belief, hunting was not the main cause of extinction.",
+          "id": "spya-rdu8bv",
+          "key": "hunting was not the main cause"
+        },
+        {
+          "text": "Fewer than 50 people lived on Mauritius then, but they brought pigs, macaques, dogs, cats and rats that raided nests and competed for food.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "People also cleared the forests, and the dodo may already have been rare or limited to small areas.",
+          "id": "spya-t3y9gu"
+        }
+      ]
+    },
+    {
+      "text": "The last widely accepted sighting was in 1662, on a small islet off Mauritius. A 2003 statistical study instead estimated 1693, with a likely range of 1688 to 1715. Many later reports probably described the red rail, another flightless bird, so the date may never be settled; the dodo was probably gone by 1700.",
+      "ids": [
+        "spya-csctds",
+        "spya-h0vyww",
+        "spya-nfhcvx"
+      ],
+      "sentences": [
+        {
+          "text": "The last widely accepted sighting was in 1662, on a small islet off Mauritius.",
+          "id": "spya-csctds"
+        },
+        {
+          "text": "A 2003 statistical study instead estimated 1693, with a likely range of 1688 to 1715.",
+          "id": "spya-h0vyww"
+        },
+        {
+          "text": "Many later reports probably described the red rail, another flightless bird, so the date may never be settled; the dodo was probably gone by 1700.",
+          "id": "spya-nfhcvx"
+        }
+      ]
+    },
+    {
+      "text": "The main conclusion is that the dodo was long misjudged. It is now thought to have been well suited to its island, not fat and clumsy. Its fame in Alice's Adventures in Wonderland spread a cartoonish image of a clumsy bird destined to die out, which the article calls inaccurate.",
+      "ids": [
+        "spya-tre7b7",
+        "spya-w59b0k"
+      ],
+      "sentences": [
+        {
+          "text": "The main conclusion is that the dodo was long misjudged.",
+          "id": null
+        },
+        {
+          "text": "It is now thought to have been well suited to its island, not fat and clumsy.",
+          "id": "spya-tre7b7",
+          "key": "well suited to its island"
+        },
+        {
+          "text": "Its fame in Alice's Adventures in Wonderland spread a cartoonish image of a clumsy bird destined to die out, which the article calls inaccurate.",
+          "id": "spya-w59b0k"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This encyclopedia article is about the dodo, a large bird that could not fly. It lived only on Mauritius, an island in the Indian Ocean, and is now extinct. It was a kind of pigeon, and its closest living relative is the Nicobar pigeon.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article is about the dodo, a large bird that could not fly.",
+          "id": null
+        },
+        {
+          "text": "It lived only on Mauritius, an island in the Indian Ocean, and is now extinct.",
+          "id": "spya-yksdv0",
+          "key": "lived only on Mauritius"
+        },
+        {
+          "text": "It was a kind of pigeon, and its closest living relative is the Nicobar pigeon.",
+          "id": "spya-yksdv0"
+        }
+      ]
+    },
+    {
+      "text": "Sailors first wrote about it in 1598, and the last widely accepted sighting was in 1662. Hunting was not the main cause, despite popular belief. Animals people brought, like pigs and monkeys, raided nests and took food, while forests were cut down.",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-rdu8bv"
+      ],
+      "sentences": [
+        {
+          "text": "Sailors first wrote about it in 1598, and the last widely accepted sighting was in 1662.",
+          "id": "spya-ae8a2x",
+          "key": "the last widely accepted sighting was in 1662"
+        },
+        {
+          "text": "Hunting was not the main cause, despite popular belief.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "Animals people brought, like pigs and monkeys, raided nests and took food, while forests were cut down.",
+          "id": "spya-rdu8bv"
+        }
+      ]
+    },
+    {
+      "text": "The dodo's fast loss showed people that humans can wipe out a whole species. It is often pictured as fat and clumsy, but it was probably well suited to its island home.",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "The dodo's fast loss showed people that humans can wipe out a whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans can wipe out a whole species"
+        },
+        {
+          "text": "It is often pictured as fat and clumsy, but it was probably well suited to its island home.",
+          "id": "spya-tre7b7"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

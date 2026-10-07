@@ -103,7 +103,7 @@
  * referee's own work, which wants thought before it wants code.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryState } from "nuqs";
 
 import type {
@@ -113,6 +113,7 @@ import type {
   RefereePoles,
   RefereeResult,
 } from "../referee-criteria.js";
+import { worthRetrying } from "../messages.js";
 import type { Block, BlockId, Comment } from "../types.js";
 import { BlockRef } from "./BlockRef.js";
 import { assignSlots, PALETTE_BY_HUE } from "./hit-colours.js";
@@ -121,6 +122,8 @@ import { critsParam, refScaleParam } from "./params.js";
 import { placementWords } from "./PlaceOnCriterion.js";
 import { type Found, resolveCriterion } from "./search-hits.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
+import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useCriteria, type SavedCriterionState } from "./useCriteria.js";
 import {
   directionWords,
@@ -130,6 +133,7 @@ import {
   valenceToken,
   valenceWords,
 } from "./valence.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **Starter packs, taken from real referee forms** — Nature's, PLOS ONE's
@@ -392,33 +396,18 @@ function CriteriaView({
       {api.loadError && <p className="crit-error">{api.loadError}</p>}
       {api.error && <p className="crit-error">{api.error}</p>}
 
-      {!api.loaded && <p className="gloss-quiet">Loading your criteria…</p>}
+      {!api.loaded && <BandWaiting className="gloss-quiet">Loading your criteria…</BandWaiting>}
       {api.loadFailed && (
         <p className="gloss-quiet">Couldn't load your criteria. Reload to try again.</p>
       )}
-      {api.loaded && !api.loadFailed && api.criteria.length === 0 && (
-        <p className="gloss-quiet">
-          Nothing yet. Write what you have been asked to judge this paper against, and it becomes a
-          pass over the prose.
-        </p>
-      )}
+      {/* The empty state said *"Nothing yet. Write what you have been asked to
+          judge this paper against…"* until 2026-10-03. The band prints that
+          instruction above the form now (RefereeMode.tsx § the lead), where it
+          is read before the box rather than after it. */}
 
-      {/* **What the tick does, in visible text above the list.** Claims labels
-          its identical checkbox in words — *"Mark these passages in the paper"* —
-          and this one's label is the criterion itself, so a first-time referee
-          had no way to know that the box is what paints the paper. Sol's finding
-          8. It says what a finished run does to the tick as well, because that
-          is the one thing the panel does *for* the referee and the sentence read
-          as a flat contradiction of it until Sol's finding 7 on the built
-          code. */}
-      {api.criteria.length > 0 && <p className="crit-how">{WHAT_THE_TICK_DOES}</p>}
-
-      {/* Only once a run has come back with something, so the sentence arrives
-          with the numbers it is about. `WHAT_THE_RANK_IS` says why this is here
-          and not on the numeral. */}
-      {api.criteria.some((row) => row.results.length > 0) && (
-        <p className="crit-how">{WHAT_THE_RANK_IS}</p>
-      )}
+      {/* `WHAT_THE_TICK_DOES` and `WHAT_THE_RANK_IS` were two visible lines
+          here until 2026-10-03; both are behind the band's *How to read this*
+          button now (RefereeMode.tsx § HowToRead). */}
 
       {anyDiverging && <TheKey scale={scale} />}
 
@@ -466,7 +455,10 @@ function CriteriaView({
 }
 
 /**
- * **What the tick does**, in one visible sentence above the list.
+ * **What the tick does**, in one sentence — visible above the list until
+ * 2026-10-03, and behind the band's *How to read this* button since, when Greg
+ * chose shorter panels (plan 261003m; `HowToRead` in
+ * modes/referee/RefereeMode.tsx draws it).
  *
  * Reader-facing copy, and a fact about *this app* rather than about the paper —
  * docs/project/copy.md. Two sentences and both are load-bearing: the first names
@@ -482,16 +474,19 @@ function CriteriaView({
  * his replacement wording, which says the same rule the other way up: the tick
  * is the switch, and a run flips it for you.
  *
- * Module-local rather than exported. tests/referee-criteria-panel.test.tsx
- * asserts the sentence as a literal, which is the point: a copy test that read
- * the constant would pass over any wording at all.
+ * Exported only for `HowToRead`. tests/referee-notices.test.tsx asserts the
+ * sentence as a literal, which is the point: a copy test that read the
+ * constant would pass over any wording at all.
  */
-const WHAT_THE_TICK_DOES =
+export const WHAT_THE_TICK_DOES =
   "A criterion marks its passages while its tick is on. New runs turn it on automatically.";
 
 /**
- * **What the big number on a result is**, in one visible sentence above the
- * list — and now the only place that says it.
+ * **What the big number on a result is**, in one sentence — and the only place
+ * that says it. Visible above the list from 2026-09-02 to 2026-10-03, and
+ * behind the band's *How to read this* button since (plan 261003m). That
+ * button is a real `<button>` a tap toggles, so the gap the paragraph below
+ * describes — a card no keyboard or finger could reach — stays closed.
  *
  * There was a card on the numeral as well, and it was **hover-only** and could
  * not be otherwise: the numeral is a `<span>` inside the jump button, so it
@@ -503,17 +498,11 @@ const WHAT_THE_TICK_DOES =
  * a second copy for the one group that already had the first, so it went
  * (`CriterionResult`), 2026-09-02.
  *
- * Printed only when something has actually returned results, so a referee who
- * has written one criterion and not run it is not told about a number they
- * cannot see. Beside `WHAT_THE_TICK_DOES` rather than repeated above each
- * criterion's own list: it is the same sentence about every list, and three
- * copies of it in a narrow band is the wall this stage is against.
- *
- * Module-local and asserted as a literal in
- * tests/referee-criteria-panel.test.tsx, for `WHAT_THE_TICK_DOES`'s reason: a
- * copy test that read the constant would pass over any wording at all.
+ * Exported only for `HowToRead`, and asserted as a literal in
+ * tests/referee-notices.test.tsx, for `WHAT_THE_TICK_DOES`'s reason: a copy
+ * test that read the constant would pass over any wording at all.
  */
-const WHAT_THE_RANK_IS =
+export const WHAT_THE_RANK_IS =
   "The number beside a passage is the model's ordering of its own answers for that criterion. It is not a score, and nothing here ranks the paper.";
 
 /**
@@ -639,6 +628,8 @@ function NewCriterion({
 }) {
   const [text, setText] = useState("");
   const [kind, setKind] = useState<RefereeCriterionKind>("single");
+  const kinds = useRef<HTMLDivElement>(null);
+  useRevealChosen(kinds, kind);
   const [against, setAgainst] = useState("");
   const [favour, setFavour] = useState("");
 
@@ -683,7 +674,9 @@ function NewCriterion({
         onChange={(e) => setText(e.target.value)}
       />
 
-      <div className="crit-kinds" role="radiogroup" aria-label="What kind of criterion">
+      {/* The part-switcher every mode shares (mode-band.css § the
+          part-switcher): a choice of one kind, not an action. */}
+      <div ref={kinds} className="crit-kinds summ-views" role="radiogroup" aria-label="What kind of criterion">
         {/* **`KIND_NOTE` on the chip as well as under the row**, and that is the
             point of wiring the same constant into both rather than writing a
             second sentence: the paragraph below only ever describes the kind
@@ -709,7 +702,7 @@ function NewCriterion({
                    asking for and what tests/arrows-belong-to-the-article.test.tsx
                    sweeps every `role="radio"` in the client for. */
                 tabIndex={0}
-                className={`crit-kind-btn${k === kind ? " on" : ""}`}
+                className={`crit-kind-btn summ-view-btn${k === kind ? " on" : ""}`}
                 onClick={() => setKind(k)}
               >
                 {KIND_LABEL[k]}
@@ -1246,23 +1239,32 @@ function CriterionRow({
       )}
 
       <p className="crit-meta">
-        <span className="crit-kind">{KIND_LABEL[row.config.kind]}</span>
+        {/* A saved row's kind comes off the wire, unlike the form's above, so
+            a kind from a newer server shows as its own word: lib/own-label.ts. */}
+        <span className="crit-kind">{ownLabel(KIND_LABEL, row.config.kind) ?? plainWords(row.config.kind)}</span>
         {row.stale && (
           <span className="crit-stale"> · answered about an earlier version of this paper</span>
         )}
       </p>
 
       {row.status === "pending" && row.results.length === 0 && (
-        <p className="gloss-quiet">Reading the paper…</p>
+        <BandWaiting className="gloss-quiet" delayMs={0}>Reading the paper…</BandWaiting>
       )}
       {row.status === "error" && (
         <p className="crit-error">
           {row.error}{" "}
-          {/* "Try again" names nothing on its own, which is `DiagramPanel`'s
+          {/* **Only while another go could come out differently.** The
+              sentence stays either way; what goes, under an account out of
+              credit or a refusal that will be repeated, is the invitation to
+              spend a fresh full-price call on it. `worthRetrying` reads the
+              sentence's code, as Search's rows do (src/messages.ts). Offered
+              for every failure until 2026-10-07. */}
+          {worthRetrying(row.error) && (
+          /* "Try again" names nothing on its own, which is `DiagramPanel`'s
               `TryAgain` finding: a reader arriving here by Tab hears "button,
               Try again" and no object. The `aria-label` carries the name; the
               card carries what the press costs, which is the same call as the
-              first one rather than a cheap resume. */}
+              first one rather than a cheap resume. */
           <Tooltip
             placement="top"
             keepSide
@@ -1291,6 +1293,7 @@ function CriterionRow({
               Try again
             </button>
           </Tooltip>
+          )}
         </p>
       )}
       {row.status === "done" && row.results.length === 0 && (
@@ -1303,7 +1306,7 @@ function CriterionRow({
            **And this branch no longer covers a fourth thing it used to.** An
            answer where the model *did* point at passages and none of them could
            be kept — a diverging row with no valence, an invented block id — is
-           a failed run now (`ANSWER_UNUSABLE`, src/referee-criteria-run.ts) and
+           a failed run now (`ANSWER_UNUSABLE`, src/messages.ts) and
            lands in the `error` branch above with a Try again. It used to land
            here, where this sentence was false about it. GPT Sol's finding 4. */
         <p className="gloss-quiet">

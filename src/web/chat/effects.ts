@@ -23,10 +23,11 @@
 import type { ChatMessage, ChatThread, ToolRun } from "../../types.js";
 import { ENDED_UNFINISHED, NO_RESPONSE } from "../../messages.js";
 import { apiFetch, failure, readJson } from "../lib/api.js";
+import { heldReader } from "../lib/session.js";
 import { ReaderFacingError } from "../lib/reader-facing.js";
 import { readEvents, StreamStalled, STREAM_STALL_MS } from "../lib/sse.js";
 import { describeFetchFailure } from "../lib/describe-failure.js";
-import type { Begun, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
+import type { Begun, HintOutcome, ThreadsOutcome, TurnDone, WriteOutcome } from "./model.js";
 
 /**
  * A clock on each individual look for a lost answer.
@@ -168,11 +169,9 @@ export async function runTurn(
       // question over the size cap. After it starts, failures arrive as an
       // `error` frame inside a 200, and `drainTurn` handles those.
       const refusal = await failure(response);
-      /* **409 is the one status the screen cannot survive being wrong about.**
-         It means the server refused a retry or an edit this client had already
-         performed on screen — and an edit performs by *destroying*: the
-         question is rewritten and every turn below it is gone. The refusal
-         drops the operation, which is the whole of putting it back. */
+      /* A 409 proves the write was refused. Other failures leave its outcome
+         uncertain. The reducer withdraws and repairs a refused turn, and also
+         a retry or edit of a confirmed conversation that failed before `begin`. */
       if (response.status === 409) {
         sink.refused(refusal.message);
         return;
@@ -263,12 +262,25 @@ export type SpokenOutcome =
  * decide. A 409, a 500, a dead network and a body that will not parse all come
  * back as one `SpokenOutcome`, so the question of whether this answer is still
  * wanted is asked once, at the gate, rather than a second time in a `catch`.
+ *
+ * **Every attempt is for the reader the exchange was spoken by** (`madeFor`).
+ * A retry is made after a gap, and another tab can sign in as somebody else
+ * inside it; a first exchange creates its thread, so the id in the path
+ * protects nothing, and the retry stored one reader's transcript on the next
+ * one's article of the same slug. The reader is read as this is called,
+ * before anything is awaited, unless the caller hands one in: the band's
+ * controller does (useChat.ts), because the hang-up that writes the last
+ * exchange can run as the view unmounts, when the tab is already the next
+ * reader's. A refusal ends the loop as a plain failure, never `uncertain`:
+ * that would send the caller to read the next reader's conversations.
+ * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2.
  */
 export async function appendSpoken(
   slug: string,
   threadId: string,
   body: Record<string, unknown>,
   gapMs = SPOKEN_GAP_MS,
+  madeFor: string | null = heldReader(),
 ): Promise<SpokenOutcome> {
   let last = "";
   // A later definite refusal cannot establish what an earlier lost response
@@ -300,6 +312,7 @@ export async function appendSpoken(
           body: JSON.stringify(body),
           signal: late.signal,
         },
+        madeFor,
       );
       /* **Returned rather than retried.** A conflict is an answer, and asking
          again would get the same one — with the added cost that the caller's
@@ -335,6 +348,12 @@ export async function appendSpoken(
          varies by engine, and reading a reader-facing sentence off it would be
          reading whichever one this browser happens to use. `runTurn` above
          does the same. */
+      /* The tab is another reader's now: nothing was sent, and no later
+         attempt can be. By name, as `statusOf` reads a status: a suite that
+         replaces lib/api.js has no class to compare with. */
+      if ((e as Error | null)?.name === "NotThisReader") {
+        return { ok: false, conflict: false, error: (e as Error).message };
+      }
       uncertain = true;
       last = late.signal.aborted
         ? "The server did not answer in time."
@@ -506,6 +525,42 @@ export function cancelThread(
       expectedTailId: messageId,
     }),
   }, "/cancel");
+}
+
+/**
+ * Tell the server the reader opened a Recall answer's hint.
+ *
+ * Checked like `writeThread` above, and for its reason: a 409 (the answer has
+ * been retried since) or a 500 resolves a bare `fetch`, and treating that as
+ * saved would keep a hint open after a reload that the server never recorded.
+ * It differs only in reading the answer, because the caller wants the time the
+ * server stored. A `200` with no time in it is a failure too.
+ *
+ * `hint` is the hint's own text, which the server matches against the stored
+ * answer before it stamps — `hintOpened` in src/routes.ts.
+ */
+export async function markHintOpened(
+  slug: string,
+  threadId: string,
+  messageId: string,
+  hint: string,
+): Promise<HintOutcome> {
+  try {
+    const r = await apiFetch(
+      `/api/chat/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/hint-opened`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messageId, hint }),
+      },
+    );
+    if (!r.ok) throw await failure(r);
+    const { hintOpenedAt } = await readJson<{ hintOpenedAt?: unknown }>(r);
+    if (typeof hintOpenedAt !== "string") return { ok: false, error: "The server did not say when." };
+    return { ok: true, hintOpenedAt };
+  } catch (e) {
+    return { ok: false, error: describeFetchFailure(e as Error) };
+  }
 }
 
 export function renameThread(slug: string, threadId: string, title: string): Promise<WriteOutcome> {

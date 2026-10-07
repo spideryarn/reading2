@@ -19,9 +19,9 @@
  * length: it is copy, it will be edited, and a test spelling it out is a second
  * copy to keep in step. What has to hold is structural.
  *
- *  - **Every mode, in both arms.** The segment on the reading view and the
- *    fourteen loose links on the metadata and tweets pages are two different
- *    components, and the loose one is the one that had a `title` attribute for
+ *  - **Every mode, in both arms.** The buttons on the reading view and the
+ *    framed links on the metadata page are two different components, and the
+ *    links arm is the one that had a `title` attribute for
  *    a fortnight without anybody noticing.
  *  - **Two paragraphs, and the second is not the first again.** `restates`
  *    below catches a copy and cannot catch a paraphrase — its value is that it
@@ -56,7 +56,7 @@
  */
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES, type Mode } from "../src/modes.js";
@@ -65,8 +65,16 @@ import type { PublicArtefacts } from "../src/types.js";
 import { Dock } from "../src/web/Dock.js";
 import { markedModes } from "../src/web/visitor.js";
 import { EXPERIMENTAL_ON, EXPERIMENTAL_SIGNED_OUT } from "./helpers/experimental-fixtures.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 /* ---------------------------------------------------------------- harness -- */
+
+/**
+ * Past whichever open delay applies to the card being hovered: `Tooltip.tsx`'s
+ * own, or the 300ms a `TooltipGroup` on this surface sets instead. Both kinds
+ * of card go through the one helper below.
+ */
+const PAST_THE_OPEN_DELAY = Math.max(DELAY.open, 300);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -82,6 +90,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.useRealTimers();
 });
 
 /**
@@ -106,9 +115,9 @@ function reading(props: Record<string, unknown> = {}): void {
   });
 }
 
-/** The bar off the reading view: loose links rather than a segment. */
-function loose(props: Record<string, unknown> = {}): void {
-  history.replaceState(null, "", "/read/a-piece/metadata");
+/** The bar off the reading view: links in the same frames, rather than buttons. */
+function loose(props: Record<string, unknown> = {}, search = ""): void {
+  history.replaceState(null, "", `/read/a-piece/metadata${search}`);
   act(() => {
     root.render(
       // biome-ignore lint/suspicious/noExplicitAny: as above
@@ -127,7 +136,7 @@ function modeControls(): HTMLElement[] {
   /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
   return [
     ...host.querySelectorAll<HTMLElement>(
-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], a.dock-mode',
+      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
     ),
   ];
 }
@@ -150,9 +159,12 @@ const flat = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
  * card attached to the wrong button.
  */
 async function cardFor(el: Element): Promise<{ head: string; paras: string[] }> {
+  /* **A faked clock from here to the end of the case**, since 2026-10-04: these
+     were real sleeps, 1.3 seconds a card and most of the file's running time. */
+  vi.useFakeTimers();
   el.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(PAST_THE_OPEN_DELAY);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering this control opened no card, or more than one").toHaveLength(1);
@@ -188,7 +200,7 @@ async function cardFor(el: Element): Promise<{ head: string; paras: string[] }> 
      docs/project/tooltips.md § Three things about testing a card in jsdom. */
   for (const _ of [0, 1, 2]) {
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 300));
+      vi.advanceTimersByTime(300);
     });
   }
   expect(
@@ -307,10 +319,21 @@ describe("the catalog's two sentences per mode", () => {
   });
 });
 
+/**
+ * **The five modes under More have a bar button only while they are the open
+ * mode** (plan 261007c, D3) — so that is the bar each is drawn in here, and
+ * every mode still has its card checked. A mode that is not gathered is drawn
+ * whatever is open; Plain stands in. What a gathered mode says while it is
+ * *not* open is its item in the menu, which carries the card's first
+ * paragraph: tests/dock-more.test.tsx § what an item under More says.
+ */
+const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+const openFor = (mode: Mode): Mode => (UNDER_MORE.includes(mode) ? mode : "plain");
+
 describe("the mode segment on the reading view", () => {
   it("gives every mode a card of its own, with both paragraphs in it", async () => {
-    reading();
     for (const mode of MODES) {
+      reading({ mode: openFor(mode) });
       const { head, paras } = await cardFor(controlFor(mode));
       expect(head, `${mode}'s card is headed with somebody else's name`).toBe(MODE_LABEL[mode]);
       expect(paras.length, `${mode}'s card is not two paragraphs`).toBe(2);
@@ -337,7 +360,7 @@ describe("the mode segment on the reading view", () => {
   });
 });
 
-describe("the loose mode links, off the reading view", () => {
+describe("the framed mode links, off the reading view", () => {
   /**
    * **The arm that was left behind.** These carried a `title` attribute until
    * 2026-09-07 while the segment had a card, so the same fourteen modes
@@ -345,8 +368,9 @@ describe("the loose mode links, off the reading view", () => {
    * metadata page.
    */
   it("give every mode the same card the segment does", async () => {
-    loose();
     for (const mode of MODES) {
+      /* The carried `?mode=` is what draws a gathered mode's link here. */
+      loose({}, UNDER_MORE.includes(mode) ? `?mode=${mode}` : "");
       const { head, paras } = await cardFor(controlFor(mode));
       expect(head, `${mode}'s card is headed with somebody else's name`).toBe(MODE_LABEL[mode]);
       expect(paras.length, `${mode}'s card is not two paragraphs`).toBe(2);
@@ -401,8 +425,12 @@ describe("a mode a visitor cannot have", () => {
     const gapped = [...marked.keys()];
     expect(gapped.length, "no mode is marked, so this test asserts nothing").toBeGreaterThan(0);
 
-    reading({ marked });
+    /* Most of the gapped modes are the five under More, so a vacuity guard:
+       at least one of each kind is exercised. */
+    expect(gapped.some((m) => UNDER_MORE.includes(m))).toBe(true);
+    expect(gapped.some((m) => !UNDER_MORE.includes(m))).toBe(true);
     for (const mode of gapped) {
+      reading({ marked, mode: openFor(mode) });
       const { paras } = await cardFor(controlFor(mode));
       expect(paras.length, `${mode}'s card is not three paragraphs`).toBe(3);
       expect(paras[0], `${mode}: the visitor's sentence is not first`).toBe(
@@ -436,8 +464,12 @@ describe("a mode a visitor cannot have", () => {
  * is asserted is what a reader is shown.
  *
  * **Help joined on 2026-10-02** (docs/plans/261002b-help-page.md, R5): one
- * link in both arms, whose href follows the mode — tests/dock-help-link.test.tsx
- * holds that; this list holds its card to the same shape as its neighbours'.
+ * link in both arms, whose href follows the mode. It was out of this list from
+ * 2026-10-04 to 2026-10-07, while only a visitor's bar drew it (spya-dev7pf,
+ * plan 261004j), and is back now that every bar does (spya-ucftjt, plan
+ * 261007e). These cases render the owner's bar; the last case below holds the
+ * same card on a visitor's; tests/dock-help-link.test.tsx holds who gets the
+ * link and where it opens.
  */
 const NOT_MODES = ["Comments", "Metadata", "Help"] as const;
 
@@ -470,7 +502,7 @@ function withDrawer(drawer: Record<string, unknown> = {}): void {
   });
 }
 
-describe("the three buttons in the bar that are not modes", () => {
+describe("the buttons in the bar that are not modes", () => {
   it("each open a card of two paragraphs, headed with their own name", async () => {
     withDrawer();
     for (const label of NOT_MODES) {
@@ -502,13 +534,14 @@ describe("the three buttons in the bar that are not modes", () => {
   /**
    * The same product decision the modes are under: the command bar marks a
    * generating row with the word `generates` and no number, so a `$` here would
-   * be that decision reversed by accident. Tweets is the one that would attract
-   * a price, being the only one of these that can start a paid run — so it is
-   * kept in this check after becoming a mode, beside the two that are not.
+   * be that decision reversed by accident. Tweets was the one that would
+   * attract a price, being the only one of these that could start a paid run;
+   * it is Summary's Thread view since 2026-10-03, so Summary's button stands
+   * in for it here, beside the three that are not modes.
    */
   it("carry no currency-symbol figure", async () => {
     withDrawer();
-    for (const label of [...NOT_MODES, "Tweets"]) {
+    for (const label of [...NOT_MODES, "Summary"]) {
       const { paras } = await cardFor(barControl(label));
       expect(paras.join(" "), `${label} names a price`).not.toMatch(/[$£€]\s*\d/);
     }
@@ -526,7 +559,7 @@ describe("the three buttons in the bar that are not modes", () => {
    * **The arm that drifts.** Off the reading view both are `DockLink`s, and
    * Comments changes shape entirely: there is no drawer to open, so the button
    * goes back to the article with it already open. The card has to say so —
-   * exactly as the loose mode links say *back in the article itself* — and
+   * exactly as the framed mode links say *back in the article itself* — and
    * everything else in it must be the same words.
    */
   it("give Comments the same card off the reading view, plus where the press lands", async () => {
@@ -542,6 +575,27 @@ describe("the three buttons in the bar that are not modes", () => {
     expect(offIt.paras[1], "the second paragraph differs between the arms").toBe(
       onReadingView.paras[1],
     );
+  });
+
+  /**
+   * **Help, on a visitor's bar too.** The cases above render the owner's
+   * bar; a visitor's is a different arm of `Dock` (no Commands, and from
+   * 2026-10-04 to 2026-10-07 the only bar with Help at all — plan 261004j).
+   * The same four claims the list above makes, in both arms of the bar.
+   */
+  it("hold a visitor's Help card to the same shape, in either arm", async () => {
+    for (const render of [reading, loose]) {
+      render({ visitor: true });
+      const help = barControl("Help");
+      expect(help.hasAttribute("title"), "Help carries a `title`").toBe(false);
+      const { head, paras } = await cardFor(help);
+      expect(head).toBe("Help");
+      expect(paras.length, "Help's card is not two paragraphs").toBe(2);
+      const [what, how] = paras as [string, string];
+      expect(restates(what, how), "Help: the second paragraph is the first again").toBe(false);
+      expect(restates("Help", what), "Help: the first paragraph is the label again").toBe(false);
+      expect(paras.join(" "), "Help names a price").not.toMatch(/[$£€]\s*\d/);
+    }
   });
 });
 

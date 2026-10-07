@@ -1,0 +1,351 @@
+{
+  "arm": "high-none-len1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "race-human-categorization-spya-rpwc59",
+  "version": "simple-prompt/9",
+  "sourceSha256": "4489cb29836c49d266fdadbd055eead7a950f26a63beb5d18a4c744ebf8c45f0",
+  "at": "2026-10-05T02:33:03.128Z",
+  "bodyWords": 16744,
+  "band": "long",
+  "bodyBlocks": 435,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "c90cc7ff5335a5ec",
+  "systemsSha256": "66e728409d9cbdbf2f527270883b0a9e3e5490e98945ba924331e42dfcb1ff69",
+  "power": "high",
+  "guard": true,
+  "wallMs": 53683,
+  "costUsd": 0.173668,
+  "tokens": {
+    "input": 13318,
+    "output": 6873,
+    "reasoning": 3833
+  },
+  "briefReadyMs": 23290,
+  "fullerReadyMs": 53677,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 620,
+  "briefWords": 139,
+  "fuller": [
+    {
+      "text": "This Wikipedia article explains race as a way of sorting people into groups, based on shared physical or social traits, that a society treats as distinct. Its central claim is that modern science sees race as a social construct: an identity assigned by rules a society makes, not something built into our biology. Different cultures draw different racial groups, and these groupings change over time.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-ru75x5"
+      ],
+      "sentences": [
+        {
+          "text": "This Wikipedia article explains race as a way of sorting people into groups, based on shared physical or social traits, that a society treats as distinct.",
+          "id": "spya-fcwu4k"
+        },
+        {
+          "text": "Its central claim is that modern science sees race as a social construct: an identity assigned by rules a society makes, not something built into our biology.",
+          "id": "spya-fcwu4k",
+          "key": "social construct"
+        },
+        {
+          "text": "Different cultures draw different racial groups, and these groupings change over time.",
+          "id": "spya-ru75x5"
+        }
+      ]
+    },
+    {
+      "text": "The article says the idea of race is the foundation of racism, the belief that some races are superior to others. Even as a social construct, race has real effects on people's lives, through institutions that favour some groups and discriminate against others. It links racism to tragedies including slavery and genocide.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-ss4m6e",
+        "spya-xubjsd"
+      ],
+      "sentences": [
+        {
+          "text": "The article says the idea of race is the foundation of racism, the belief that some races are superior to others.",
+          "id": "spya-fcwu4k"
+        },
+        {
+          "text": "Even as a social construct, race has real effects on people's lives, through institutions that favour some groups and discriminate against others.",
+          "id": "spya-ss4m6e",
+          "key": "real effects"
+        },
+        {
+          "text": "It links racism to tragedies including slavery and genocide.",
+          "id": "spya-xubjsd"
+        }
+      ]
+    },
+    {
+      "text": "The modern idea of race grew out of European colonial expansion between the 16th and 18th centuries, which sorted people by skin colour and other physical differences. In 1735 Carl Linnaeus split humans into four continental types, each tied to a temperament, calling Europeans active and Africans lazy. In 1775 Johann Blumenbach proposed five divisions, but noticed that each group shades into the next so that no limits can be marked between them.",
+      "ids": [
+        "spya-dmm7ua",
+        "spya-bbrfcn",
+        "spya-q5frbt"
+      ],
+      "sentences": [
+        {
+          "text": "The modern idea of race grew out of European colonial expansion between the 16th and 18th centuries, which sorted people by skin colour and other physical differences.",
+          "id": "spya-dmm7ua"
+        },
+        {
+          "text": "In 1735 Carl Linnaeus split humans into four continental types, each tied to a temperament, calling Europeans active and Africans lazy.",
+          "id": "spya-bbrfcn"
+        },
+        {
+          "text": "In 1775 Johann Blumenbach proposed five divisions, but noticed that each group shades into the next so that no limits can be marked between them.",
+          "id": "spya-q5frbt"
+        }
+      ]
+    },
+    {
+      "text": "The article gathers several kinds of genetic evidence against the idea of separate biological races. On average, about 85% of human genetic variation lies within local populations, about 7% between nearby populations, and about 8% between continents. Traits shift gradually across the map, along gradients called clines, and traits like skin colour and blood type do not line up, so one anthropologist concluded there are \"no races, only clines.\" A 2015 study of 1,037 people in 52 populations found non-African groups nested inside African ones, and many regional groups are not separate family branches.",
+      "ids": [
+        "spya-g25cx7",
+        "spya-ej8ugd",
+        "spya-j5rjnf"
+      ],
+      "sentences": [
+        {
+          "text": "The article gathers several kinds of genetic evidence against the idea of separate biological races.",
+          "id": null
+        },
+        {
+          "text": "On average, about 85% of human genetic variation lies within local populations, about 7% between nearby populations, and about 8% between continents.",
+          "id": "spya-g25cx7",
+          "key": "about 85%"
+        },
+        {
+          "text": "Traits shift gradually across the map, along gradients called clines, and traits like skin colour and blood type do not line up, so one anthropologist concluded there are \"no races, only clines.\"",
+          "id": "spya-ej8ugd",
+          "key": "no races, only clines"
+        },
+        {
+          "text": "A 2015 study of 1,037 people in 52 populations found non-African groups nested inside African ones, and many regional groups are not separate family branches.",
+          "id": "spya-j5rjnf"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Some researchers argue the other side: by analysing many genetic markers at once, people can be sorted into clusters that resemble traditional continental groups. Critics reply that, even then, individuals are frequently more genetically similar to members of other populations than to members of their own. They also note that clusters depend on who is sampled: sample only Icelanders, Mayans and Maoris, and three neat clusters appear.",
+      "ids": [
+        "spya-ek5t8p",
+        "spya-hjqwhr",
+        "spya-e535uf"
+      ],
+      "sentences": [
+        {
+          "text": "Some researchers argue the other side: by analysing many genetic markers at once, people can be sorted into clusters that resemble traditional continental groups.",
+          "id": "spya-ek5t8p"
+        },
+        {
+          "text": "Critics reply that, even then, individuals are frequently more genetically similar to members of other populations than to members of their own.",
+          "id": "spya-hjqwhr",
+          "key": "more genetically similar to members of other populations"
+        },
+        {
+          "text": "They also note that clusters depend on who is sampled: sample only Icelanders, Mayans and Maoris, and three neat clusters appear.",
+          "id": "spya-e535uf"
+        }
+      ]
+    },
+    {
+      "text": "Forensic anthropologists, who identify human remains, still estimate race from skeletons, and one asked why they are so good at it if races don't exist. His answer was that they are predicting the social category a person was placed in while alive, not proving that races exist in nature. One method's average accuracy dropped from 85% to 33% when it was retested on Native Americans.",
+      "ids": [
+        "spya-rxh4hu",
+        "spya-xuq2q6",
+        "spya-ag0cj4"
+      ],
+      "sentences": [
+        {
+          "text": "Forensic anthropologists, who identify human remains, still estimate race from skeletons, and one asked why they are so good at it if races don't exist.",
+          "id": "spya-rxh4hu"
+        },
+        {
+          "text": "His answer was that they are predicting the social category a person was placed in while alive, not proving that races exist in nature.",
+          "id": "spya-xuq2q6"
+        },
+        {
+          "text": "One method's average accuracy dropped from 85% to 33% when it was retested on Native Americans.",
+          "id": "spya-ag0cj4",
+          "key": "from 85% to 33%"
+        }
+      ]
+    },
+    {
+      "text": "Scientists still disagree, and the article tracks this through surveys asking whether biological races exist in humans. Among American anthropologists, rejection rose from 1985 to 1999: from 41% to 69% of physical anthropologists, and from 53% to 80% of cultural ones. Views also differ by country: Chinese anthropologists widely used the race concept, while US scientists are encouraged to avoid it.",
+      "ids": [
+        "spya-eyysp6",
+        "spya-k90dv3",
+        "spya-g7skvx"
+      ],
+      "sentences": [
+        {
+          "text": "Scientists still disagree, and the article tracks this through surveys asking whether biological races exist in humans.",
+          "id": "spya-eyysp6"
+        },
+        {
+          "text": "Among American anthropologists, rejection rose from 1985 to 1999: from 41% to 69% of physical anthropologists, and from 53% to 80% of cultural ones.",
+          "id": "spya-k90dv3",
+          "key": "from 41% to 69%"
+        },
+        {
+          "text": "Views also differ by country: Chinese anthropologists widely used the race concept, while US scientists are encouraged to avoid it.",
+          "id": "spya-g7skvx"
+        }
+      ]
+    },
+    {
+      "text": "Societies draw racial lines in different ways. In the United States, the \"one-drop rule\" counted anyone with any known African ancestry as Black, regardless of appearance. In Brazil, race rested more on appearance than on descent, so full siblings could belong to different racial groups. The European Union rejects theories of separate human races but still uses the word in law, to protect people wrongly seen as another race.",
+      "ids": [
+        "spya-fw4atq",
+        "spya-a0zdpu",
+        "spya-veua26"
+      ],
+      "sentences": [
+        {
+          "text": "Societies draw racial lines in different ways.",
+          "id": null
+        },
+        {
+          "text": "In the United States, the \"one-drop rule\" counted anyone with any known African ancestry as Black, regardless of appearance.",
+          "id": "spya-fw4atq",
+          "key": "one-drop rule"
+        },
+        {
+          "text": "In Brazil, race rested more on appearance than on descent, so full siblings could belong to different racial groups.",
+          "id": "spya-a0zdpu"
+        },
+        {
+          "text": "The European Union rejects theories of separate human races but still uses the word in law, to protect people wrongly seen as another race.",
+          "id": "spya-veua26"
+        }
+      ]
+    },
+    {
+      "text": "In medicine, some researchers find racial data useful, but others warn that a gap in disease rates between social groups does not prove a genetic cause. In 2023 the US National Academies of Sciences, Engineering, and Medicine said researchers should not use race as a stand-in for human genetic variation. The article's main conclusion is that race has no built-in biological meaning, yet as a social category it shapes people's lives in real ways.",
+      "ids": [
+        "spya-zeaj5c",
+        "spya-ahca2f",
+        "spya-ss4m6e"
+      ],
+      "sentences": [
+        {
+          "text": "In medicine, some researchers find racial data useful, but others warn that a gap in disease rates between social groups does not prove a genetic cause.",
+          "id": "spya-zeaj5c"
+        },
+        {
+          "text": "In 2023 the US National Academies of Sciences, Engineering, and Medicine said researchers should not use race as a stand-in for human genetic variation.",
+          "id": "spya-ahca2f",
+          "key": "should not use race as a stand-in"
+        },
+        {
+          "text": "The article's main conclusion is that race has no built-in biological meaning, yet as a social category it shapes people's lives in real ways.",
+          "id": null
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This encyclopedia article is about race, a way of sorting people into groups. The groups rest on shared looks or social traits that a society treats as separate. It matters because the idea of race is the root of racism. Racism has led to slavery and genocide.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-xubjsd"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article is about race, a way of sorting people into groups.",
+          "id": "spya-fcwu4k"
+        },
+        {
+          "text": "The groups rest on shared looks or social traits that a society treats as separate.",
+          "id": "spya-fcwu4k"
+        },
+        {
+          "text": "It matters because the idea of race is the root of racism.",
+          "id": "spya-fcwu4k",
+          "key": "the root of racism"
+        },
+        {
+          "text": "Racism has led to slavery and genocide.",
+          "id": "spya-xubjsd"
+        }
+      ]
+    },
+    {
+      "text": "Modern science sees race as a social construct: a label made by society's rules, not by biology. On average, about 85% of human genetic differences are found within local groups, not between them. Skin color, for example, shifts slowly from Europe into Africa, with no sharp border.",
+      "ids": [
+        "spya-fcwu4k",
+        "spya-g25cx7",
+        "spya-dwbmen"
+      ],
+      "sentences": [
+        {
+          "text": "Modern science sees race as a social construct: a label made by society's rules, not by biology.",
+          "id": "spya-fcwu4k",
+          "key": "social construct"
+        },
+        {
+          "text": "On average, about 85% of human genetic differences are found within local groups, not between them.",
+          "id": "spya-g25cx7",
+          "key": "about 85%"
+        },
+        {
+          "text": "Skin color, for example, shifts slowly from Europe into Africa, with no sharp border.",
+          "id": "spya-dwbmen"
+        }
+      ]
+    },
+    {
+      "text": "Scholars still debate how much race reflects biology and how much it reflects society. In 2023, a leading US science body said genetic research should not use race as a stand-in. Still, most scholars agree race has real effects on people's lives through unfair treatment.",
+      "ids": [
+        "spya-satk5b",
+        "spya-ahca2f",
+        "spya-ss4m6e"
+      ],
+      "sentences": [
+        {
+          "text": "Scholars still debate how much race reflects biology and how much it reflects society.",
+          "id": "spya-satk5b"
+        },
+        {
+          "text": "In 2023, a leading US science body said genetic research should not use race as a stand-in.",
+          "id": "spya-ahca2f",
+          "key": "should not use race"
+        },
+        {
+          "text": "Still, most scholars agree race has real effects on people's lives through unfair treatment.",
+          "id": "spya-ss4m6e"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

@@ -9,7 +9,7 @@
  *
  * *Brief* is the instruction, so this is four short sections and a row of
  * links, and it takes `ContactPage.tsx`'s shape rather than the marketing
- * shell — a Home icon link, an `h1`, prose, and the same `SiteFooter` every
+ * shell — a Home icon link (signed out), an `h1`, prose, and the same `SiteFooter` every
  * page a reader lands on carries. The reasoning for that choice is written
  * out in ContactPage.tsx § Why it looks like `/privacy`; it applies here
  * unchanged.
@@ -41,7 +41,7 @@
 
 import { REPO_URL } from "../changelog.js";
 import { GitHubMark } from "./GitHubMark.js";
-import { BackLink } from "./BackLink.js";
+import { DocumentPage } from "./DocumentPage.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { CHANGELOG_HREF, PRIVACY_HREF } from "./router.js";
@@ -62,9 +62,8 @@ export function OpenSourcePage() {
   useDocumentTitle(pageTitle({ kind: "opensource" }));
 
   return (
-    <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
-      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
-
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx. */
+    <DocumentPage here="opensource" className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pb-24 tw:font-sans">
       <h1 className="tw:m-0 tw:flex tw:items-center tw:gap-2.5 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         <GitHubMark size={22} className="tw:shrink-0 tw:text-ink-faint" />
         Open source
@@ -73,7 +72,7 @@ export function OpenSourcePage() {
       <div className="tw:mt-5 tw:flex tw:flex-col tw:gap-4 tw:text-sm tw:leading-relaxed tw:text-muted-foreground">
         <p className="tw:m-0">
           Spideryarn is built in the open. All of the code behind this site — the reading view, the
-          pipeline that turns an article into something you can zoom around, the deployment scripts
+          pipeline that turns an article into its table of contents and reading aids, the deployment scripts
           — lives at{" "}
           <a
             href={REPO_URL}
@@ -136,6 +135,6 @@ export function OpenSourcePage() {
       </div>
 
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }

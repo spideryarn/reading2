@@ -28,8 +28,11 @@
 import { jsdom } from "./jsdom-lazy.js";
 import { Readability } from "@mozilla/readability";
 import { escapeHtml, plainTitle } from "./html.js";
+import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { canonicaliseCallouts, type CalloutStats } from "./callouts.js";
+import { ChallengePage, challengeIn } from "./challenge-page.js";
 import { type FurnitureRemovals, removePlatformFurniture } from "./furniture.js";
+import { prepareLatexml } from "./latexml.js";
 import { canonicaliseMaths } from "./maths-import.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import { canonicaliseNotes, type NoteStats } from "./notes.js";
@@ -44,6 +47,8 @@ import {
 } from "./protect.js";
 /* The namespace and its scrub — src/reserved.ts is the only file allowed to
    name one of these attributes. See `stampSourceIds`. */
+import { ownIdsOfDocument } from "./article-registry.js";
+import type { WorkId } from "./bibliographic.js";
 import { authorsForByline, chooseByline, metaAuthors } from "./meta-authors.js";
 import { RESERVED_ATTRS, scrubReserved } from "./reserved.js";
 import { sanitizeHtml } from "./sanitize.js";
@@ -58,8 +63,9 @@ import type { Author, Meta } from "./types.js";
  * `Real&lt;/title&gt;&lt;img src=x onerror=…&gt;` gives us back a string with a
  * real `</title>` and a real `<img>` in it, and writing that into a template
  * puts them back in the document. Verified against real Readability output in
- * tests/extract-sanitize.test.ts, which is also where the byline — interpolated
- * straight into a `<div>` — was confirmed to be a working `<img onerror>`.
+ * tests/extract-sanitize.test.ts. (The byline and the site name were written
+ * into the page too until 2026-10-07, and the byline was a working
+ * `<img onerror>`; `debugPage` below says why they are no longer written.)
  *
  * All five characters, not the three that "look like markup". `"` is what holds
  * `lang` inside its attribute, and the source page's `lang` is the only one of
@@ -99,16 +105,22 @@ import type { Author, Meta } from "./types.js";
  * arrives clean is a no-op for it and blocks.json comes out identical — pinned
  * in tests/extract-sanitize.test.ts rather than assumed, because the two stages
  * share this file and stage 3 writes block ids back into it.
+ *
+ * **The body is the article and nothing else, since 2026-10-07.** Until then it
+ * opened with a header of ours: `<h1>{title}</h1>` and a `.meta` line of byline,
+ * site name and `~N min read`. Stage 3 splits this body into blocks, so the
+ * header became blocks 0 and 1 of every web article, and the reading view,
+ * whose masthead already shows all of it from `meta`, said the title twice.
+ * The title is still in `<head><title>`, which stage 3 does not read. Do not
+ * put chrome back in the body: whatever is in it is the author's words to every
+ * stage after this one. **New extractions only.** An article extracted before
+ * that day keeps its stored page and its two header blocks until it is
+ * extracted again.
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
+ * (reader report spya-t6cdve).
  */
 type Maybe = string | null | undefined;
-function debugPage(article: {
-  title: Maybe;
-  byline: Maybe;
-  siteName: Maybe;
-  lang: Maybe;
-  length: number | null | undefined;
-  content: Maybe;
-}): string {
+function debugPage(article: { title: Maybe; lang: Maybe; content: Maybe }): string {
   const text = (s: Maybe) => escapeHtml(s ?? "");
   return `<!doctype html>
 <html lang="${text(article.lang) || "en"}">
@@ -126,8 +138,6 @@ function debugPage(article: {
     color: #222;
     background: #fdfdfb;
   }
-  h1 { font-size: 2rem; line-height: 1.2; margin-bottom: 0.25rem; }
-  .meta { color: #777; font-family: -apple-system, sans-serif; font-size: 0.9rem; margin-bottom: 2rem; }
   img { max-width: 100%; height: auto; }
   figure { margin: 1.5rem 0; }
   figcaption { font-size: 0.85rem; color: #777; font-family: -apple-system, sans-serif; }
@@ -137,11 +147,6 @@ function debugPage(article: {
 </style>
 </head>
 <body>
-<h1>${text(article.title)}</h1>
-<div class="meta">
-  ${article.byline ? `${text(article.byline)} &middot; ` : ""}${text(article.siteName)}
-  ${article.length ? `&middot; ~${Math.round(article.length / 5 / 200)} min read` : ""}
-</div>
 ${sanitizeHtml(article.content ?? "")}
 </body>
 </html>`;
@@ -158,6 +163,12 @@ ${sanitizeHtml(article.content ?? "")}
 export interface ExtractResult {
   slug: string;
   meta: Meta;
+  /**
+   * The DOI or arXiv id the page declares for itself, for the step to ask a
+   * registry about (src/article-registry.ts). Beside `meta` and not in it: a
+   * candidate is not a fact until the registry's title agrees.
+   */
+  ownIds: WorkId[];
   /**
    * **The whole standalone page, and it *is* the `extractedHtml` artefact.**
    *
@@ -382,6 +393,13 @@ const CJK_SEGMENT_BREAK = new RegExp(`(?<=[${CJK}])[^\\S\\n]*\\n\\s*(?=[${CJK}])
  * means *this is too little text to build anything from*, `article` is whatever
  * Readability handed back anyway, and it is the caller's business what to do
  * about it.
+ *
+ * **Since 2026-10-06 `refusal` can also be a `ChallengePage`** — the document is
+ * a site's bot check (src/challenge-page.ts) — and it **wins over both older
+ * findings**: a bot check that is also short is reported as a bot check, and
+ * so is one Readability declines. So `article: null` can now arrive beside a
+ * non-null `refusal`, and a caller that wants the most specific answer asks
+ * about `refusal` first, as `runExtract` does. See `refusalFor`.
  */
 export function readArticle(
   html: string,
@@ -395,7 +413,9 @@ export function readArticle(
    * asking what Readability said still gets what Readability said.
    */
   authors: Author[] | null;
-  refusal: TooLittleTextToRead | null;
+  /** The identifiers the page declares for itself — src/article-registry.ts § `ownIdsOfDocument`. */
+  ownIds: WorkId[];
+  refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
   /** What `removePlatformFurniture` deleted, per selector — see src/furniture.ts. */
@@ -412,7 +432,8 @@ export function readArticle(
   return {
     article: shipped.article,
     authors: shipped.authors,
-    refusal: capabilityFloor(shipped.article),
+    ownIds: shipped.ownIds,
+    refusal: refusalFor(shipped),
     notes: shipped.notes,
     callouts: shipped.callouts,
     removed: shipped.removed,
@@ -435,7 +456,10 @@ function readingArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability["parse"]>;
+  /** What the source said it was, before anything rewrote it — `refusalFor`. */
+  challenge: ChallengePage | null;
   authors: Author[] | null;
+  ownIds: WorkId[];
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -458,6 +482,10 @@ function readingArm(
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
   const dom = sourceDom(html, url);
+  /* On the document as it arrived, and it has to be: `prepareDocument` rewrites
+     it and Readability deletes every `<script>`. `provenanceArm` has the same
+     line in the same place. */
+  const challenge = challengeIn(dom.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(dom.window.document, protect);
   /* Before the parse, and it has to be: Readability mutates the document it is
      given, and `keepClasses: false` takes the `noprint` class off whatever
@@ -466,10 +494,14 @@ function readingArm(
   /* Before the parse for the same reason: every author the page declares,
      which Readability collapses to one — src/meta-authors.ts. */
   const authors = metaAuthors(dom.window.document);
+  /* And the same again: the page's own DOI or arXiv id, off its meta tags and its address. */
+  const ownIds = ownIdsOfDocument(dom.window.document, url);
   const article = new Readability(dom.window.document).parse();
   return {
     article,
+    challenge,
     authors,
+    ownIds,
     notes,
     callouts,
     removed,
@@ -617,8 +649,9 @@ function visibleLength(text: string | null | undefined): number {
  * equally true of a genuine 300-character page, and that is the point. Fable,
  * 2026-09-06, quoted in the plan.
  *
- * **Not a bot-wall detector.** That is C1, a registry of conclusive markup, and
- * this knows nothing about *what* the page is.
+ * **Not a bot-wall detector.** That is C1, a registry of conclusive markup
+ * (src/challenge-page.ts, since 2026-10-06), and this knows nothing about
+ * *what* the page is. `refusalFor` below asks that question first.
  */
 function capabilityFloor(
   article: { textContent: string | null | undefined } | null,
@@ -629,6 +662,34 @@ function capabilityFloor(
   if (!article) return null;
   const chars = visibleLength(article.textContent);
   return chars < MIN_ARTICLE_CHARS ? new TooLittleTextToRead(chars) : null;
+}
+
+/**
+ * **Stage 2's verdict on one arm, and the order is the decision**: what the
+ * page *is* before how much of it there is.
+ *
+ * One helper for both read paths, for the reason `capabilityFloor`'s header
+ * gives — `readArticle` and `readArticleWithProvenance` do not call each other,
+ * and a verdict written into one of them leaves production and the eval
+ * harness disagreeing with nothing to show it.
+ *
+ * **The bot check wins** over the floor here and over `ReadabilityRefused` in
+ * `runExtract`, because it is the more specific finding and the more useful
+ * sentence: *"this is a bot check, open it in your own browser"* tells the
+ * reader what to do, where *"too little text"* and *"no article"* send them to
+ * look at an address that is fine.
+ *
+ * The verdict is taken by `readingArm` and `provenanceArm` on the pristine
+ * source and carried here, rather than thrown from `sourceDom`, which also
+ * parses Readability's output and the provenance copy (GPT Sol, 2026-10-06).
+ * Both arms of the prose-retention fallback read the same bytes, so whichever
+ * one ships carries the same answer.
+ */
+function refusalFor(arm: {
+  challenge: ChallengePage | null;
+  article: { textContent: string | null | undefined } | null;
+}): TooLittleTextToRead | ChallengePage | null {
+  return arm.challenge ?? capabilityFloor(arm.article);
 }
 
 /**
@@ -736,6 +797,16 @@ function prepareDocument(
      neither reads what the other writes — so it is simply the later arrival.
      src/callouts.ts. */
   const callouts = canonicaliseCallouts(doc);
+  /* **A LaTeXML page's own shapes (arXiv's HTML, ar5iv), put into the shapes
+     the rest of the pipeline already reads**: an aligned equation into one
+     display formula, an SVG plot in an `<object>` into an `<img>`, a code
+     listing into a `<pre>`, a boxed passage out of the SVG that frames it.
+     Before `canonicaliseMaths`, and it has to be: the aligned equation is
+     joined from each cell's TeX annotation, which that pass consumes, and a
+     boxed passage's formulas sit under an `<svg>`, where that pass converts
+     nothing. After the note and callout recognisers, so neither sees a changed
+     input. src/latexml.ts. */
+  prepareLatexml(doc);
   /* **A formula's TeX source, kept as the one form maths is stored in** — before
      the sanitiser deletes the `<annotation>` holding it. After the recognisers
      that read the publisher's own shapes, so none of them sees a changed input
@@ -884,8 +955,10 @@ export function readArticleWithProvenance(
    * are separate entry points and neither calls the other. Without this the
    * harness's `Candidate.refused` is permanently false on the very pages the
    * floor exists for, and `notAnArticle` scores a refusal that never happens.
+   *
+   * And the bot-check verdict, which wins over it — `refusalFor`.
    */
-  refusal: TooLittleTextToRead | null;
+  refusal: TooLittleTextToRead | ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
   /**
@@ -943,7 +1016,7 @@ export function readArticleWithProvenance(
   const shipped = armThatKeptTheProse(provenanceArm(html, url, {}), (opts) => provenanceArm(html, url, opts));
   return {
     article: shipped.article,
-    refusal: capabilityFloor(shipped.article),
+    refusal: refusalFor(shipped),
     notes: shipped.notes,
     callouts: shipped.callouts,
     removed: shipped.removed,
@@ -970,6 +1043,8 @@ function provenanceArm(
   protect: ProtectOptions,
 ): ProtectedArm & {
   article: ReturnType<Readability<Element>["parse"]>;
+  /** The same verdict `readingArm` takes, at the same point — `refusalFor`. */
+  challenge: ChallengePage | null;
   notes: NoteStats;
   callouts: CalloutStats;
   removed: FurnitureRemovals;
@@ -978,6 +1053,8 @@ function provenanceArm(
   stampedElements: number;
 } {
   const prepared = sourceDom(html, url);
+  /* Before the document is prepared, as on the shipping path. */
+  const challenge = challengeIn(prepared.window.document);
   const { notes, callouts, removed, kept } = prepareDocument(prepared.window.document, protect);
   /* Before Readability, for the reason `readingArm` gives. `stampSourceIds`
      below only adds an attribute, so either side of it would do; before it is
@@ -991,6 +1068,7 @@ function provenanceArm(
   }).parse();
   return {
     article,
+    challenge,
     notes,
     callouts,
     removed,
@@ -1083,6 +1161,13 @@ export function publicationDate(raw: Maybe): string | undefined {
  * says none of this — and which is a *pair* of sentences, because a reader who
  * uploaded the file has no address to be sent back to.
  */
+/**
+ * Re-exported so the three refusals stage 2 can throw are importable from the
+ * stage that throws them. It is defined beside its registry, in
+ * src/challenge-page.ts.
+ */
+export { ChallengePage };
+
 export class ReadabilityRefused extends Error {
   constructor() {
     super("Readability could not parse this page.");
@@ -1163,6 +1248,11 @@ export async function runExtract(opts: {
    */
   url: string | null;
   slug: string;
+  /**
+   * What tidies the title for the shelf. Import hands in the model's
+   * (src/title-tidy-model.ts); absent, the rule alone, and no call.
+   */
+  titleTidier?: TitleTidier;
 }): Promise<ExtractResult> {
   const { slug } = opts;
   /* Before the DOM pass that asks whether each formula would draw: this is the
@@ -1187,7 +1277,13 @@ export async function runExtract(opts: {
      Found by a GPT Sol review that reproduced it, 2026-08-26 — the fourth round
      of the same class, and the first one where the leak was a dependency's
      rather than ours. See docs/project/logging.md. */
-  const { article, authors, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
+  const { article, authors, ownIds, refusal, notes, callouts, removed, kept } = readArticle(opts.html, opts.url);
+  /* **Before the `!article` check, so it wins over `ReadabilityRefused` too.**
+     A bot check Readability happens to decline is still a bot check, and that
+     is the sentence with a move in it. src/challenge-page.ts. */
+  if (refusal instanceof ChallengePage) {
+    throw refusal;
+  }
   if (!article) {
     throw new ReadabilityRefused();
   }
@@ -1217,14 +1313,26 @@ export async function runExtract(opts: {
   const byline = chooseByline(authors?.map((a) => a.name) ?? null, tidyMetaText(article.byline));
   const declared = authorsForByline(authors, byline);
   /* **Plain text, once, before it branches** into `meta.title`, the page's
-     `<h1>` (which stage 3 turns into a block) and the job's title. A page's
+     `<title>` and the job's title. (Until 2026-10-07 also an `<h1>` of ours in
+     the page's body, which stage 3 turned into a block: `debugPage`.) A page's
      `<title>` or `og:title` can say `&lt;i&gt;Drosophila&lt;/i&gt;`, which
      Readability decodes into literal tags.
      docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
   const title = typeof article.title === "string" ? plainTitle(article.title) : article.title;
   const meta: Meta = {
     slug,
-    title: title ?? slug,
+    /* **Tidied for the shelf, and only here** — capitals, a site's name on the
+       end, the original kept beside it: by the tidier handed in (import's is a
+       small model, src/title-tidy-model.ts, plan 261005j) or by the rule
+       (src/title-tidy.ts, plan 261005g). The page's `<title>` below keeps
+       `title` as the author set it. */
+    ...(title
+      ? await (opts.titleTidier ?? ruleTitleTidier)(title, {
+          body: article.textContent,
+          lang: article.lang,
+          siteName: article.siteName,
+        })
+      : { title: slug }),
     ...(byline ? { byline } : {}),
     /* The same list, structured: names and the affiliations the page declares
        for each, for the masthead and the Metadata page to show one at a time.
@@ -1247,6 +1355,13 @@ export async function runExtract(opts: {
   return {
     slug,
     meta,
+    ownIds,
+    /* **No byline goes into the page any more** (2026-10-07, `debugPage`).
+       While one did, it had to be the byline chosen above and not
+       Readability's, which on a LaTeXML page was a cited author or the word
+       "and"
+       (docs/investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md).
+       `meta.byline` is now the only place it is written. */
     extractedHtml: debugPage({ ...article, title }),
     length: article.length ?? null,
     excerpt: article.excerpt ?? null,

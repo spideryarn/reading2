@@ -20,6 +20,9 @@
  * - **Fetches never write it.** A criterion arriving from the server is not
  *   something the reader typed, and that was a bug this panel once had
  *   (SearchPanel.tsx § the draft question).
+ * - **The command bar's *Quick search “X”* row writes it once, on its press**
+ *   (plan 261005i; command-runners.ts § `quickSearchPress`): the words the
+ *   reader typed or confirmed there, followed at once by an `enter` handoff.
  *
  * ## The three messages
  *
@@ -34,6 +37,7 @@
  *   inside the tap when the panel is already mounted.
  */
 import { useSyncExternalStore } from "react";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 import type { TypingControls } from "./SearchPanel.js";
 
 /**
@@ -41,7 +45,9 @@ import type { TypingControls } from "./SearchPanel.js";
  *
  * - `pause`: a qualifying pause in the bar's box — start a session with the
  *   draft and ask now.
- * - `enter`: Enter in the bar's box — ask the draft now, and seal it.
+ * - `enter`: Enter in the bar's box, or the command bar's *Quick search “X”*
+ *   row, which sends it whether or not the band is listening — ask the draft
+ *   now, and seal it.
  * - `quick`: the ⚡ — nothing to ask, only be on *quick*.
  */
 export type HandoffKind = "pause" | "enter" | "quick";
@@ -150,6 +156,12 @@ export function createSearchDraft(): SearchDraft {
  * strings; nothing here is worth evicting.
  */
 const drafts = new Map<string, SearchDraft>();
+
+/* One reader's words, so they go when the tab's reader changes: chat-draft.ts
+   has the same line and the reason. The bar and the panel that hold a draft
+   unmount with the reading view, and the next ones ask for a new one.
+   docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+forgetOnReaderChange(() => drafts.clear());
 
 /** This article's draft, made on first use. */
 export function searchDraftFor(slug: string): SearchDraft {

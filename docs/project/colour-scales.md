@@ -1,5 +1,19 @@
 # Colour scales
 
+Up: [design-css-overview.md](design-css-overview.md)
+
+## In this doc
+
+- [§ The table of scales](#colour-scales) — which scale means what, and which are in use (top of page)
+- [§ Two rules that apply to every scale](#two-rules-that-apply-to-every-scale) — why published palettes are upside down on black, and why stops rather than `color-mix`
+- [§ Categorical](#categorical-sixteen-hues-that-mean-these-are-different-things-eight-of-them-automatic) — the sixteen hues, why 8 are automatic, how a reader picks
+- [§ The original eight](#the-original-eight-and-why-those-eight) — Okabe–Ito, how many is too many, overlapping highlights, colour never the only carrier, slot assignment
+- [§ Sequential](#sequential-two-ramps-of-nine-steps-that-mean-this-much-of-it) — inferno (`--heat-*`) vs viridis (`--vir-*`), and where to start on a dark page
+- [§ Diverging](#diverging-nine-steps-with-a-middle-that-means-neither) — blue-red `--div-*` vs red-green `--div-rg-*`, how they were generated
+- [§ Hue ring](#hue-ring) — the thirty-two stops behind the shelf's topic colours
+- [§ What is not decided](#what-is-not-decided) — cividis, colour-blindness checks
+- [§ See also](#see-also) — the stylesheet, `hit-colours.ts`, and the sources list
+
 **Palettes that are not the brand.** `--spideryarn-orange` says *this is us*; these say
 *these are different things*, *this much of it*, *which side of the middle*, and — the hue ring,
 since 2026-09-30 — *near each other, related*. The values live in
@@ -31,7 +45,7 @@ two of those neither can be changed.
 | **Diverging** | `--div-0` … `--div-8`, `--div-rg-0` … `--div-rg-8` (+ `-rgb`) | which side of the middle | in use — how a referee's for/against criterion cuts, in the panel row **and** in the prose |
 | **Hue ring** | `--hue-0` … `--hue-31` (+ `-rgb`) | near each other, related | in use — the shelf's topics ([shelf-terms.md](shelf-terms.md)) |
 
-## Two rules that apply to all three
+## Two rules that apply to every scale
 
 ### The page is near-black, so every published scale is upside down
 
@@ -268,6 +282,12 @@ Slot 6 is close to `--spideryarn-orange` (`#DB8A45`), which on this page means *
 comment underlines. They are different marks in different places — a 2px rule at the foot of a wash
 against an underline on the text — so they are told apart by position rather than by hue. Worth
 knowing before anyone moves either.
+
+**And a second, since 2026-10-03: `--read-time`**, the cyan (hue 200) of the spine's reading-time
+area ([reading-time.md](reading-time.md)), is not a scale and lives in
+[`src/web/styles/tokens.css`](../../src/web/styles/tokens.css), but it sits between slots 11 (teal,
+191) and 12 (cyan-blue, 213), the two a reader can pick for a search. Told apart by position again:
+an area from the rail's left edge against a thin lane on its right.
 
 ### Assigning a colour to a search
 
@@ -509,7 +529,7 @@ report 5N, plan [260930b](../plans/260930b-shelf-topic-colours-by-relatedness.md
   ([diagram.md](diagram.md)), which colour a dot by how far through the article its paragraph is.
   That is an ordered quantity with no temperature in it, which is exactly the case this file said
   viridis was for — and the first draft of that feature reached for `--heat-*` because it was
-  already in the file. A GPT Sol review named it. See § Sequential below.
+  already in the file. A GPT Sol review named it. See § Sequential above.
 - **Nothing checks these against a colour-blindness simulator.** The lightness properties *are*
   measured now ([`tests/colour-scales.test.ts`](../../tests/colour-scales.test.ts)), which is the
   half that catches the silent failures. The other half — a dichromacy transform with a minimum
@@ -518,7 +538,7 @@ report 5N, plan [260930b](../plans/260930b-shelf-topic-colours-by-relatedness.md
   palette across real chart types and flags pairs that are too close under deuteranomaly and
   protanopia; the npm package `color-blind` would let it become a test.
 - **The eight categorical hues have not been measured, only sourced.** Okabe–Ito is well attested;
-  the three lifted values are ours, and lifting a colour changes its relationships with the others
+  the five lifted values are ours, and lifting a colour changes its relationships with the others
   by an amount nobody here has computed.
 - **Whether an eighth search should get a colour at all**, rather than a pattern or a number.
 

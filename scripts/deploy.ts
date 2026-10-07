@@ -62,6 +62,7 @@ import { LockHeldError, takeLockFile } from "./lockfile.js";
 import { forceRemoveThrowawayWorktree } from "./worktree-admin.js";
 import {
   assetUrlsIn,
+  judgeServedRobots,
   afterTheFactSummary,
   codeMayNotHaveShipped,
   deployBranchProblem,
@@ -1534,16 +1535,13 @@ async function verifyPage(): Promise<void> {
  * A path returning 200 is the worst way to be missing: the SPA catch-all
  * answered `/robots.txt` with `200 text/html`, which a crawler reads as *no
  * such file* rather than as a rule. The body is checked too — a `text/plain`
- * 200 holding our index.html would satisfy a content-type check.
+ * 200 holding our index.html would satisfy a content-type check. And it is
+ * checked by group, the way a crawler reads it: `judgeServedRobots`.
  */
 async function verifyRobots(): Promise<void> {
   const robots = await get(`${TARGET_HOST}/robots.txt`);
-  const type = robots.headers.get("content-type") ?? "";
-  const problems: string[] = [];
-  if (robots.status !== 200) problems.push(`answered ${robots.status}`);
-  if (!type.includes("text/plain")) problems.push(`served as ${type} — the SPA catch-all has eaten it`);
-  if (!/disallow/i.test(robots.body)) problems.push("has no Disallow rule in it");
-  record("GET /robots.txt is a real file with a rule in it", problems);
+  const problems = judgeServedRobots(robots.status, robots.headers.get("content-type") ?? "", robots.body);
+  record("GET /robots.txt is the file we ship: each group shut, and only the holes we mean", problems);
 }
 
 async function verify(expected: Expected, smoke: string): Promise<void> {

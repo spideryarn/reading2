@@ -23,8 +23,10 @@ import {
   useLayoutEffect,
   useState,
 } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
+import { TOAST_MS, useGoesByItself } from "../Toast.js";
 import type { CitedWork, Faq, Ideas, TimelineEvent } from "../../types.js";
+import { isFolded, subscribeFold } from "../fold.js";
 import { useDebateRead } from "../useDebate.js";
 import { useStepFinished } from "../useStepJob.js";
 import { useFaqRead } from "../useFaq.js";
@@ -50,10 +52,17 @@ import { type RelationsByBlock, useRelations } from "../useRelations.js";
 import { MARK_KIND_LABEL } from "../comment-nav.js";
 import { ARC_ORIGIN, IDEA_ORIGIN, MARG_TIPS, type MargTipKey, PATH_ORIGIN, RELATION_TIPS } from "./tips.js";
 import { type Voice, voiceClass, withVoice } from "../voice.js";
+import { ownLabel, plainWords } from "../lib/own-label.js";
 
 /** The gap the collision pass keeps between two notes, in px. */
 export const NOTE_GAP_PX = 8;
 
+/* An idea's provenance and a Debate row's relation (`RELATION_WORD`, below)
+   come off the wire, so these tables are read through `ownLabel`
+   (lib/own-label.ts). A value from a newer server is stamped as its own word,
+   and the sentence explaining it is left out of the card: this copy cannot
+   say what it means. A bare lookup of `__proto__` threw, and the slot's
+   boundary then dropped every note beside that block. */
 const PROVENANCE_WORD = { assumed: "assumes", introduced: "introduces" } as const;
 const PROVENANCE_TIP = {
   assumed: "The piece takes this for granted rather than arguing for it.",
@@ -235,6 +244,7 @@ function ShutNote({
   line,
   lineVoice,
   children,
+  lineOnly = false,
 }: {
   kind: string;
   stamp: string;
@@ -249,6 +259,13 @@ function ShutNote({
   lineVoice: Voice;
   /** The open half; null when there is nothing more to show than the line. */
   children: ReactNode | null;
+  /** **The line is the whole of it, and may be cut**: a press only lets it
+      wrap. A button with no panel, so there is no empty box to hide and
+      nothing for `aria-controls` or `aria-expanded` to describe. Assistive
+      technology already receives the full, unclipped line; this state is
+      visual only. A lone comment that is only its words (report spya-a0wpv4,
+      plan 261006i). `children` is not read. */
+  lineOnly?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const panel = useId();
@@ -258,6 +275,21 @@ function ShutNote({
       <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
     </span>
   );
+  if (lineOnly) {
+    return (
+      <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
+        <button
+          type="button"
+          className="marg-shut-button"
+          data-marg-tip={tip}
+          onClick={() => setOpen((was) => !was)}
+        >
+          <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
+          {label}
+        </button>
+      </div>
+    );
+  }
   if (children === null) {
     return (
       <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
@@ -322,8 +354,15 @@ function FaqNote({ items }: { items: Extract<MarginaliaNote, { kind: "faq" }>["i
  */
 function TimelineNote({ items }: { items: Extract<MarginaliaNote, { kind: "timeline" }>["items"] }) {
   const only = items.length === 1 ? items[0] : undefined;
-  const when = (event: TimelineEvent) => datingWords(event.dating, true).text;
-  const whenVoice = (event: TimelineEvent): Voice => (event.dating.kind === "words" ? "author" : "ui");
+  const when = (event: TimelineEvent) => {
+    const words = datingWords(event.dating, true).text;
+    // The margin has no header to explain the assumption.
+    return event.dating.kind === "dated" && event.dating.when.yearFrom === "piece"
+      ? `${words} (year assumed)` : words;
+  };
+  /* The tone, not the kind: a year-less date is drawn as the article's own words too. */
+  const whenVoice = (event: TimelineEvent): Voice =>
+    datingWords(event.dating, true).tone === "words" ? "author" : "ui";
   return (
     <ShutNote
       kind="timeline"
@@ -359,6 +398,7 @@ const RELATION_WORD: Record<MarginClaim["relation"], string> = {
   corroborates: "agrees",
   unclear: "discusses",
 };
+const relationWord = (relation: string): string => ownLabel(RELATION_WORD, relation) ?? plainWords(relation);
 
 /** A page's headline is its own, unless the model read one off it (`titleIsAI`,
     as the band's `dbt-title-ai`); a page's own words are third party, so ours. */
@@ -369,7 +409,7 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
   return (
     <ShutNote
       kind="debate"
-      stamp={only ? RELATION_WORD[only.relation] : "Debate"}
+      stamp={only ? relationWord(only.relation) : "Debate"}
       tip="debate"
       line={only ? rowWork(only).headline : plural(items.length, "page on the web", "pages on the web")}
       lineVoice={only ? headlineVoice(only) : "ui"}
@@ -377,7 +417,7 @@ function DebateNote({ items }: { items: readonly MarginClaim[] }) {
       {items.map((row) => (
         <div key={row.id} className="marg-open-item">
           <p className="marg-open-head">
-            {!only && <span className="marg-stamp">{RELATION_WORD[row.relation]}</span>}{" "}
+            {!only && <span className="marg-stamp">{relationWord(row.relation)}</span>}{" "}
             <a href={row.url} target="_blank" rel="noreferrer noopener" className={voiceClass(headlineVoice(row))}>
               {rowWork(row).headline}
             </a>
@@ -403,10 +443,14 @@ function CitationNote({ items }: { items: readonly CitedWork[] }) {
       {items.map((work) => {
         const by = byLineOf(work);
         return (
+          /* The article's own words about the work and nothing of ours: the
+             by-line and its reference entry, never the model's `why` (Greg,
+             spya-zmdb7y, plan 261003j). A lone work with neither repeats its
+             title, so the note never opens to nothing. */
           <div key={work.id} className="marg-open-item">
-            {!only && <p className="marg-open-head">{work.title}</p>}
+            {(!only || (!by && !work.entry)) && <p className="marg-open-head">{work.title}</p>}
             {by && <p className="marg-open-by">{by}</p>}
-            <p className="marg-cite-why">{work.why}</p>
+            {work.entry && <p className="marg-cite-entry">{work.entry}</p>}
           </div>
         );
       })}
@@ -439,6 +483,14 @@ function CommentNote({
   ]
     .filter(Boolean)
     .join(" · ");
+  /* **A lone comment's words are its line**, and the line un-truncates when
+     it opens (marginalia.css), so the open half must not print them again:
+     report spya-a0wpv4, the comment's half of the class spya-f6dpj5 named for
+     a question. What is left decides the shape. An answer: a panel holding
+     it. Only words: no panel, and the press just lets the line wrap. Neither
+     (a wordless *Ask AI*): nothing to open, so plain text. Plan 261006i. */
+  const lone = only && only.as !== "question" ? only.comment : undefined;
+  const loneShape = lone === undefined || lone.answer ? "panel" : lone.body ? "line" : "text";
   return (
     <ShutNote
       kind="comment"
@@ -446,18 +498,26 @@ function CommentNote({
       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
       line={only ? entryLine(only) : count}
       lineVoice={only ? entryVoice(only) : "ui"}
+      lineOnly={loneShape === "line"}
     >
-      {items.map((e) =>
+      {loneShape === "text" ? null : items.map((e) =>
         e.as === "question" ? (
           <div key={`q:${e.asked.id}`} className="marg-open-item">
-            <p className="marg-open-head">
-              <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
-              {e.asked.quote !== undefined ? (
-                <span className={voiceClass("author")}>“{e.asked.quote}”</span>
-              ) : (
-                "About this paragraph"
-              )}
-            </p>
+            {/* **Only among several**, as a comment's head is: that is how
+                they are told apart. A lone question's shut line is this same
+                stamp and line, and it un-truncates when it opens
+                (marginalia.css), so the head said it twice — report
+                spya-f6dpj5, plan 261004k § 7. */}
+            {!only && (
+              <p className="marg-open-head">
+                <span className="marg-stamp">{MARK_KIND_LABEL.question}</span>{" "}
+                {e.asked.quote !== undefined ? (
+                  <span className={voiceClass("author")}>“{e.asked.quote}”</span>
+                ) : (
+                  "About this paragraph"
+                )}
+              </p>
+            )}
             {onOpenAsked && (
               <button type="button" className="linky marg-open-asked" onClick={() => onOpenAsked(e.asked.id)}>
                 Open the conversation
@@ -471,7 +531,7 @@ function CommentNote({
                 <span className="marg-stamp">{MARK_KIND_LABEL[e.as]}</span>
               </p>
             )}
-            {e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
+            {!only && e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
             {e.comment.answer && <p className="marg-open-answer">{e.comment.answer}</p>}
           </div>
         ),
@@ -502,6 +562,7 @@ function entryVoice(e: MarginEntry): Voice {
  */
 function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }) {
   const [open, setOpen] = useState(false);
+  const provenanceTip = ownLabel(PROVENANCE_TIP, note.provenance);
   return (
     <Tooltip
       placement="bottom"
@@ -512,7 +573,7 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
         <>
           <div className="tip-soon-head marg-idea-tipname">{note.name}</div>
           <p className="marg-idea-statement">{note.statement}</p>
-          <p className="tip-soon-how">{PROVENANCE_TIP[note.provenance]}</p>
+          {provenanceTip !== undefined && <p className="tip-soon-how">{provenanceTip}</p>}
           <p className="tip-soon-how">{IDEA_ORIGIN}</p>
         </>
       }
@@ -523,7 +584,9 @@ function IdeaStamp({ note }: { note: Extract<MarginaliaNote, { kind: "idea" }> }
         aria-expanded={open}
         onClick={() => setOpen((was) => !was)}
       >
-        <span className="marg-stamp">{PROVENANCE_WORD[note.provenance]}</span>{" "}
+        <span className="marg-stamp">
+          {ownLabel(PROVENANCE_WORD, note.provenance) ?? plainWords(note.provenance)}
+        </span>{" "}
         <span className="marg-idea-name">{note.name}</span>
       </button>
     </Tooltip>
@@ -552,17 +615,7 @@ export function MarginaliaHead({
   arc: string | null;
 }) {
   useRenderCount("MarginaliaHead");
-  if (!room) {
-    return (
-      <aside className="marg-narrow" aria-label="Marginalia">
-        <p>
-          {beside
-            ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
-            : "The notes need a wider window — they sit to the right of the text."}
-        </p>
-      </aside>
-    );
-  }
+  if (!room) return <NarrowLine beside={beside} />;
   if (path.length === 0 && arc === null) return null;
   /* **Orientation, not a summary**: the arc cut at four (261002g), the whole of it in a
      card on hover, focus or tap. A head that grew to the arc's full six or
@@ -590,6 +643,63 @@ export function MarginaliaHead({
         </p>
       )}
       {arc !== null && <ArcLine arc={arc} />}
+    </aside>
+  );
+}
+
+/**
+ * **The line that says there is no room for the notes.** It goes by itself
+ * after a few seconds, or at once on its ×, because it sits over the foot of
+ * the article — Greg, spya-u264yb: *"there's no way to dismiss it, and it
+ * doesn't fade after a few seconds."*
+ *
+ * **Nothing is remembered.** "Gone" is this component's own state, so the line
+ * shows again each time it is mounted afresh: Marginalia switched off and on,
+ * the room found and lost again, or a covering band closed in a window still
+ * too narrow for the notes alone. That keeps its job — a mode that silently
+ * drew nothing would look broken.
+ *
+ * **Gone is a class, not an unmount**, for two reasons. The stylesheet hides
+ * the small-screen banner while this element exists
+ * (styles/narrow-window.css § `:has(.mode-band, .marg-narrow)`), and removing
+ * it would drop that banner into the top of the article mid-read. And the
+ * sentence is only made invisible, not hidden, when the clock runs out, so a
+ * screen reader still finds why there are no notes, as it did before this
+ * could fade. An explicit Dismiss does hide it from the accessibility tree:
+ * that control must do what its name says.
+ * docs/plans/261006i-marginalia-narrow-notice-fades-and-can-be-dismissed.md
+ */
+function NarrowLine({ beside }: { beside: boolean }) {
+  const [gone, setGone] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const reading = useGoesByItself(TOAST_MS, () => setGone(true));
+  return (
+    <aside
+      className={`marg-narrow${gone ? " is-gone" : ""}`}
+      aria-label="Marginalia"
+      aria-hidden={dismissed || undefined}
+      {...reading}
+    >
+      <p>
+        {beside
+          ? "The notes need a wider window — press Marginalia again to swap them in for the panel."
+          : "The notes need a wider window — they sit to the right of the text."}
+      </p>
+      <button
+        type="button"
+        className="marg-narrow-close close-x"
+        aria-label="Dismiss"
+        onClick={(event) => {
+          /* Do not leave focus inside the subtree we are about to hide from
+             assistive technology. The visual close already loses focus when
+             visibility:hidden applies. */
+          event.currentTarget.blur();
+          setDismissed(true);
+          setGone(true);
+        }}
+      >
+        <X aria-hidden="true" />
+      </button>
     </aside>
   );
 }
@@ -663,7 +773,8 @@ export type MarginFeed = {
 export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: null, claims: null, relations: null };
 
 /**
- * **The owner's ideas, FAQ, Timeline and Debate, read and never made.** A component of
+ * **The owner's ideas, FAQ, Timeline and Debate, read and never made** — and
+ * the relation words, which are made here. A component of
  * its own so the reads happen only while Marginalia is open — the read halves
  * (`useIdeasRead`, `useFaqRead`, `useTimelineRead`, `useDebateRead`), never the full hooks, which
  * arm the automatic run and could spend (Debate is the dearest step in the
@@ -673,9 +784,20 @@ export const NO_OWNER_FEED: MarginFeed = { ideas: null, faq: null, timeline: nul
  */
 export function OwnerMarginFeed({
   slug,
+  shown,
+  awaitingStructure = false,
   onFeed,
 }: {
   slug: string;
+  /** The column is on screen: switched on *and* the window has room for the notes. */
+  shown: boolean;
+  /**
+   * The article is still showing the outline it opened with. The relations
+   * step comes after `structure`, so the server would refuse it; the column
+   * waits and asks when the real tree is in, as the arc does (useArc.ts).
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+   */
+  awaitingStructure?: boolean;
   onFeed(feed: MarginFeed): void;
 }) {
   const ideasRead = useIdeasRead(slug);
@@ -683,9 +805,10 @@ export function OwnerMarginFeed({
   const timelineRead = useTimelineRead(slug);
   const debateRead = useDebateRead(slug);
   /* **The one thing here that can spend**: the relation words are Marginalia's
-     own, with no band to make them in, so the press that turned the column on
-     asks for them (useRelations.ts). Never on a mount. */
-  const relations = useRelations(slug);
+     own, and this mount is what asks for them where none is stored — once per
+     article per page load, whatever opened the column, and only while the
+     notes are on screen (useRelations.ts). */
+  const relations = useRelations(slug, shown && !awaitingStructure);
   /* **A list made while the margin is open reaches it** — FAQ run in the left
      band appears here without reopening the margin. The band refreshes its own
      read when its job finishes; this hears the same completion for the margin's
@@ -708,6 +831,28 @@ export function OwnerMarginFeed({
 }
 
 /**
+ * Every read `useMarginLayout` needs, in one pass: each visible note's wanted
+ * top and its height, and which notes are on hidden rows and so left out.
+ */
+function measureNotes(notes: readonly HTMLElement[]) {
+  const shown: HTMLElement[] = [];
+  const hidden: HTMLElement[] = [];
+  const desired: number[] = [];
+  const heights: number[] = [];
+  for (const note of notes) {
+    const row = note.closest("tr");
+    if (row && isFolded(row.dataset.block ?? "")) {
+      hidden.push(note);
+      continue;
+    }
+    shown.push(note);
+    desired.push(row ? row.getBoundingClientRect().top : 0);
+    heights.push(note.offsetHeight);
+  }
+  return { shown, hidden, desired, heights };
+}
+
+/**
  * **Keep the notes from overlapping.** Reads every note's wanted top and
  * height, then writes a `translate` to those that have to move — all reads,
  * then all writes.
@@ -718,9 +863,18 @@ export function OwnerMarginFeed({
  *
  * Re-runs, through one animation frame, when the table changes size (zoom,
  * images, maths), when any note changes size (fonts arriving, a longer
- * question), once the fonts are ready, and whenever `key` changes (the notes
- * themselves). Notes are absolutely positioned and translate is not layout, so
- * nothing written here can resize what is observed and loop it.
+ * question), once the fonts are ready, whenever `key` changes (the notes
+ * themselves), and when a section folds or the front matter opens. Notes are
+ * absolutely positioned and translate is not layout, so nothing written here
+ * can resize what is observed and loop it.
+ *
+ * **A note on a hidden row is left out** (fold.ts § `isFolded`). It lives in
+ * its row's cell, so it is not drawn; measured, it has no height and sits
+ * level with the next visible row, and the collision rule would still start
+ * that row's note one gap below it: 8px lower for every hidden note above.
+ * Relations writes an item on every byline paragraph, so the shut front
+ * matter would have pushed the abstract's first note down on arrival (GPT Sol,
+ * plan review of 261007d, F4; true of an ordinary fold before that).
  */
 export function useMarginLayout(active: boolean, key: unknown): void {
   // biome-ignore lint/correctness/useExhaustiveDependencies: `key` is a re-run trigger — the effect reads the notes only through the DOM it just rendered.
@@ -732,19 +886,16 @@ export function useMarginLayout(active: boolean, key: unknown): void {
     let frame = 0;
     const run = () => {
       frame = 0;
-      const desired: number[] = [];
-      const heights: number[] = [];
-      for (const note of notes) {
-        const row = note.closest("tr");
-        desired.push(row ? row.getBoundingClientRect().top : 0);
-        heights.push(note.offsetHeight);
-      }
+      const { shown, hidden, desired, heights } = measureNotes(notes);
       const tops = layoutNotes(desired, heights, NOTE_GAP_PX);
-      for (const [i, note] of notes.entries()) {
+      for (const [i, note] of shown.entries()) {
         const shift = Math.round((tops[i] ?? 0) - (desired[i] ?? 0));
         const value = shift > 0 ? `0 ${shift}px` : "";
         if (note.style.translate !== value) note.style.translate = value;
       }
+      /* A shift from before the row was hidden is not kept for when it shows
+         again: that run measures it afresh. */
+      for (const note of hidden) if (note.style.translate !== "") note.style.translate = "";
     };
     const schedule = () => {
       if (frame === 0) frame = requestAnimationFrame(run);
@@ -753,12 +904,16 @@ export function useMarginLayout(active: boolean, key: unknown): void {
     const observer = new ResizeObserver(schedule);
     observer.observe(table);
     for (const note of notes) observer.observe(note);
+    /* Asked of the store and not left to the table's resize: which notes are
+       left out changes with a fold, whatever the fold does to the height. */
+    const unfold = subscribeFold(schedule);
     let live = true;
     void document.fonts?.ready.then(() => {
       if (live) schedule();
     });
     return () => {
       live = false;
+      unfold();
       observer.disconnect();
       if (frame !== 0) cancelAnimationFrame(frame);
     };

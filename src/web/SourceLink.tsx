@@ -44,7 +44,10 @@
 import { useState } from "react";
 
 import type { Meta } from "../types.js";
+import { codeOfMessage } from "../messages.js";
 import { apiFetch } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { markUnreachable, ReaderFacingError } from "./lib/reader-facing.js";
 
 /**
  * **The article's own web address, or `null` when it has none.**
@@ -115,6 +118,16 @@ export function cameOffADisk(meta: Meta): boolean {
   return meta.filename !== undefined || meta.source === "pdf";
 }
 
+/**
+ * The journal to print beside the site name: the registry's name for where
+ * the piece appeared, or `undefined` when the site name already says it. One
+ * function for the owner's Metadata page and the visitor's, so the two agree
+ * on what counts as a repeat.
+ */
+export function journalBesideSite(journal: string | undefined, siteName: string | undefined): string | undefined {
+  return journal?.trim().toLowerCase() === siteName?.trim().toLowerCase() ? undefined : journal;
+}
+
 export function SourceLink({
   slug,
   children,
@@ -163,8 +176,17 @@ export function SourceLink({
     void (async () => {
       try {
         const res = await apiFetch(`/api/source/${encodeURIComponent(slug)}`);
-        if (!res.ok) throw new Error(`The server said ${res.status}.`);
-        const url = URL.createObjectURL(await res.blob());
+        /* Written here for a reader, and said so by its class: the body of a
+           refusal on this route is not read, since a success is a PDF. */
+        if (!res.ok) throw new ReaderFacingError(`The server said ${res.status}.`);
+        /* A body that dies part-way down rejects with a bare `TypeError`. It
+           is a lost connection, not a bug, and this is the place that knows it
+           came from the transport; `readJson` marks its own read the same way
+           (lib/api.ts), and a blob does not go through it. */
+        const bytes = await res.blob().catch((e: unknown) => {
+          throw e instanceof TypeError ? markUnreachable(e) : e;
+        });
+        const url = URL.createObjectURL(bytes);
         /* The fragment goes on the address the tab is sent to, and **not** on
            the object URL we revoke below: `revokeObjectURL` matches the URL it
            was given, so a `#page=7` glued on before the revoke would leave the
@@ -180,7 +202,11 @@ export function SourceLink({
         /* Close the blank tab rather than leaving the reader looking at
            about:blank wondering whether it is still loading. */
         tab?.close();
-        setError(`Couldn't open the original. ${(err as Error).message} [source-open]`);
+        /* One code, last (docs/project/copy.md): the reason's own when it
+           has one (`[net-down]`, `[web-unexpected]`), this control's when it
+           does not. */
+        const why = describeFetchFailure(err as Error);
+        setError(`Couldn't open the original. ${codeOfMessage(why) ? why : `${why} [source-open]`}`);
       }
     })();
   };

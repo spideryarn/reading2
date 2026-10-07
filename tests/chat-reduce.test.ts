@@ -706,6 +706,337 @@ describe("a turn", () => {
     expect(answer(refused, "a1")).toMatchObject({ text: "because.", status: "done" });
   });
 
+  /**
+   * **A failure before the `begin` frame is not the server's word on anything.**
+   * A `[db-busy]` 500, a request that never opened: the stored answer is still
+   * stored, and a retry or an edit only ever *drew* over it. `turn.failed` used
+   * to commit that drawing, so the answer was blank, or the later turns gone,
+   * until a reload. Only a 409 put the screen back.
+   * docs/plans/261006d-chat-keeps-the-previous-answer-when-a-retry-or-edit-fails-before-the-stream.md
+   */
+  it("gives a retry that failed before it began the answer it had blanked", () => {
+    const start = loaded(conversation());
+    const retried = twice(
+      start,
+      starting({ id: TURN_A, shape: "retry", replyId: "a1", reply: message({ id: "a1" }) }),
+    );
+    /* The control: the retry was drawn. */
+    expect(answer(retried.state, "a1")).toMatchObject({ text: "", status: "pending" });
+
+    const failed = twice(retried.state, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "could not reach the database [db-busy]",
+      repair: { id: REPAIR },
+    });
+    expect(answer(failed.state, "a1")).toMatchObject({ text: "because.", status: "done" });
+    expect(failed.state.base[0]?.messages.at(-1)).toMatchObject({ text: "because.", status: "done" });
+    expect(failed.state.error).toBe("could not reach the database [db-busy]");
+    expect(failed.state.operations.has(TURN_A)).toBe(false);
+    /* The response may have been lost after the write, so the server is asked. */
+    expect(failed.commands).toEqual([
+      { type: "repair", opId: REPAIR, slug: SLUG, threadId: "spya-t1" },
+    ]);
+    expect(failed.state.operations.get(REPAIR)).toMatchObject({ kind: "repair", drop: [] });
+  });
+
+  it("gives an edit that failed before it began its question and the turns under it", () => {
+    const long = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "first", status: "done" }),
+      message({ id: "a1", text: "one", status: "done" }),
+      message({ id: "q2", role: "user", text: "second", status: "done" }),
+      message({ id: "a2", text: "two", status: "done" }),
+    ]);
+    const edited = twice(
+      loaded(long),
+      starting({
+        id: TURN_A,
+        shape: "edit",
+        editing: "q1",
+        replyId: "a-new",
+        question: message({ id: "q1", role: "user", text: "first, rewritten", status: "done" }),
+      }),
+    );
+    expect(rows(edited.state)).toEqual(["q1", "a-new"]);
+
+    const failed = twice(edited.state, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "busy",
+      repair: { id: REPAIR },
+    });
+    expect(rows(failed.state)).toEqual(["q1", "a1", "q2", "a2"]);
+    expect(failed.state.base[0]?.messages.map((m) => `${m.id}: ${m.text}`)).toEqual([
+      "q1: first",
+      "a1: one",
+      "q2: second",
+      "a2: two",
+    ]);
+    expect(failed.commands).toEqual([
+      { type: "repair", opId: REPAIR, slug: SLUG, threadId: "spya-t1" },
+    ]);
+  });
+
+  /**
+   * The third ending before `begin`: the response opened and the stream died
+   * before its first frame. There is no server name to look for, so it was
+   * committed as a failure, over the same stored answer. GPT Sol's F2 on the plan.
+   */
+  it("gives a retry whose stream was lost before it began the answer it had blanked", () => {
+    const retried = twice(
+      loaded(conversation()),
+      starting({ id: TURN_A, shape: "retry", replyId: "a1", reply: message({ id: "a1" }) }),
+    ).state;
+    const lost = twice(retried, {
+      type: "turn.disconnected",
+      opId: TURN_A,
+      error: "the connection dropped",
+      recovery: { id: RECOVER, until: 1 },
+    });
+    expect(answer(lost.state, "a1")).toMatchObject({ text: "because.", status: "done" });
+    expect(lost.state.error).toBe("the connection dropped");
+    /* A repair under the id the event brought for whoever takes the row over. */
+    expect(lost.commands).toEqual([
+      { type: "repair", opId: RECOVER, slug: SLUG, threadId: "spya-t1" },
+    ]);
+    expect(lost.state.operations.get(RECOVER)).toMatchObject({ kind: "repair" });
+  });
+
+  /**
+   * **The failure does not prove the edit did not land**: the response can be
+   * lost after the write. The repair then brings back the rewritten question
+   * and its new answer, and the turns the edit discarded are gone on the server
+   * too. A merge that keeps every row this tab has and the server lacks would
+   * put them back underneath. GPT Sol's F1 on the plan.
+   */
+  it("does not put back the turns an edit discarded when the edit had landed after all", () => {
+    const long = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "first", status: "done" }),
+      message({ id: "a1", text: "one", status: "done" }),
+      message({ id: "q2", role: "user", text: "second", status: "done" }),
+      message({ id: "a2", text: "two", status: "done" }),
+    ]);
+    const edited = twice(
+      loaded(long),
+      starting({
+        id: TURN_A,
+        shape: "edit",
+        editing: "q1",
+        replyId: "a-new",
+        question: message({ id: "q1", role: "user", text: "first, rewritten", status: "done" }),
+      }),
+    ).state;
+    const failed = twice(edited, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "no response",
+      repair: { id: REPAIR },
+    }).state;
+    expect(rows(failed)).toEqual(["q1", "a1", "q2", "a2"]);
+
+    const repaired = twice(failed, {
+      type: "repair.succeeded",
+      opId: REPAIR,
+      thread: thread("spya-t1", "a conversation", [
+        message({ id: "q1", role: "user", text: "first, rewritten", status: "done" }),
+        message({ id: "a-srv", text: "a new answer", status: "done" }),
+      ]),
+    }).state;
+    expect(rows(repaired)).toEqual(["q1", "a-srv"]);
+  });
+
+  it("does not keep a stored answer deleted by an edit just because a retry still names it", () => {
+    const retried = twice(loaded(conversation()), starting({
+      id: TURN_B, shape: "retry", replyId: "a1",
+    })).state;
+    const edited = twice(retried, starting({
+      id: TURN_A, shape: "edit", editing: "q1", replyId: "a-new",
+      question: message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+    })).state;
+    const failed = twice(edited, {
+      type: "turn.failed", opId: TURN_A, error: "lost response", repair: { id: REPAIR },
+    }).state;
+    const fresh = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+      message({ id: "a-srv", text: "new answer", status: "done" }),
+    ]);
+    const repaired = twice(failed, {
+      type: "repair.succeeded", opId: REPAIR, thread: fresh,
+    }).state;
+    expect(rows(repaired)).toEqual(["q1", "a-srv"]);
+    expect(repaired.operations.has(TURN_B)).toBe(true);
+    const refused = twice(repaired, {
+      type: "turn.refused", opId: TURN_B, error: "row deleted", repair: { id: OTHER_REPAIR },
+    }).state;
+    const ended = twice(refused, {
+      type: "repair.succeeded", opId: OTHER_REPAIR, thread: fresh,
+    }).state;
+    expect(rows(ended)).toEqual(["q1", "a-srv"]);
+    expect(ended.operations.size).toBe(0);
+  });
+
+  it.each([
+    ["retry", "pending"], ["spoken", "pending"],
+    ["retry", "failed"], ["spoken", "failed"],
+  ] as const)("keeps an edit's discard when a %s replaces its %s repair", (shape, earlier) => {
+    const edited = twice(loaded(conversation()), starting({
+      id: TURN_A, shape: "edit", editing: "q1", replyId: "a-new",
+      question: message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+    })).state;
+    const failed = twice(edited, {
+      type: "turn.failed", opId: TURN_A, error: "lost edit", repair: { id: REPAIR },
+    }).state;
+    const ready = earlier === "pending" ? failed : twice(failed, {
+      type: "repair.failed", opId: REPAIR, error: "read offline",
+    }).state;
+    const retried = twice(ready, shape === "retry"
+      ? starting({ id: TURN_B, shape: "retry", replyId: "a1" })
+      : { type: "spoken.started", op: {
+        id: TURN_B, kind: "spoken", threadId: "spya-t1", expectedTailId: "a1", at: AT,
+        question: message({ id: "q-spoken", role: "user", text: "spoken question", status: "done" }),
+        reply: message({ id: "a-spoken", text: "spoken answer", status: "done" }),
+      } }).state;
+    const refused = twice(retried, shape === "retry" ? {
+      type: "turn.failed", opId: TURN_B, error: "lost retry", repair: { id: OTHER_REPAIR },
+    } : {
+      type: "spoken.refused", opId: TURN_B, error: "lost append", repair: { id: OTHER_REPAIR },
+    }).state;
+    const repaired = twice(refused, {
+      type: "repair.succeeded", opId: OTHER_REPAIR,
+      thread: thread("spya-t1", "a conversation", [
+        message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+        message({ id: "a-srv", text: "new answer", status: "done" }),
+      ]),
+    }).state;
+    expect(rows(repaired)).toEqual(["q1", "a-srv"]);
+    const old = twice(repaired, { type: "repair.succeeded", opId: REPAIR, thread: conversation() }).state;
+    expect(rows(old)).toEqual(["q1", "a-srv"]);
+    expect(old.operations.size).toBe(0);
+    expect(old.repairDrops.size).toBe(0);
+  });
+
+  it.each(["append", "repair"] as const)("honours an unresolved edit discard when a spoken %s confirms its pair", (ending) => {
+    const edited = twice(loaded(conversation()), starting({
+      id: TURN_A, shape: "edit", editing: "q1", replyId: "a-new",
+      question: message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+    })).state;
+    const failed = twice(edited, {
+      type: "turn.failed", opId: TURN_A, error: "lost edit", repair: { id: REPAIR },
+    }).state;
+    const unread = twice(failed, { type: "repair.failed", opId: REPAIR, error: "offline" }).state;
+    const question = message({ id: "q-speech", role: "user", text: "spoken", status: "done" });
+    const reply = message({ id: "a-speech", text: "reply", status: "done" });
+    const spoken = twice(unread, { type: "spoken.started", op: {
+      id: TURN_B, kind: "spoken", threadId: "spya-t1", at: AT,
+      expectedTailId: "a-srv", question, reply,
+    } }).state;
+    const fresh = thread("spya-t1", "a conversation", [
+      message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+      message({ id: "a-srv", text: "new answer", status: "done" }), question, reply,
+    ]);
+    const done = ending === "append"
+      ? twice(spoken, { type: "spoken.succeeded", opId: TURN_B, thread: fresh }).state
+      : twice(twice(spoken, {
+        type: "spoken.refused", opId: TURN_B, error: "lost append", repair: { id: OTHER_REPAIR },
+      }).state, { type: "repair.succeeded", opId: OTHER_REPAIR, thread: fresh }).state;
+    expect(rows(done)).toEqual(["q1", "a-srv", "q-speech", "a-speech"]);
+    expect(done.repairDrops.size).toBe(0);
+  });
+
+  it("does not keep a send's confirmed rows when the server deleted them for the edit", () => {
+    const sent = twice(loaded(conversation()), sending(TURN_B, "a2", "q2")).state;
+    const begun = twice(sent, {
+      type: "turn.began", opId: TURN_B,
+      begun: { threadId: "spya-t1", title: "a conversation", questionId: "q2", messageId: "a2" },
+    }).state;
+    const edited = twice(begun, starting({
+      id: TURN_A, shape: "edit", editing: "q1", replyId: "a-new",
+      question: message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+    })).state;
+    const failed = twice(edited, {
+      type: "turn.failed", opId: TURN_A, error: "lost response", repair: { id: REPAIR },
+    }).state;
+    const repaired = twice(failed, {
+      type: "repair.succeeded", opId: REPAIR,
+      thread: thread("spya-t1", "a conversation", [
+        message({ id: "q1", role: "user", text: "why not?", status: "done" }),
+        message({ id: "a-srv", text: "new answer", status: "done" }),
+      ]),
+    }).state;
+    expect(rows(repaired)).toEqual(["q1", "a-srv"]);
+    expect(repaired.operations.has(TURN_B)).toBe(true);
+  });
+
+  it.each([
+    ["retry", "failed"], ["retry", "disconnected"],
+    ["edit", "failed"], ["edit", "disconnected"],
+  ] as const)("keeps an unnamed draft after its %s %s before begin", (shape, ending) => {
+    const sent = twice(loaded(), starting({
+      id: TURN_A, shape: "send", replyId: "a-local",
+      question: message({ id: "q-local", role: "user", text: "my draft", status: "done" }),
+      opening: thread("spya-t1", "my draft"),
+    })).state;
+    const failed = twice(sent, {
+      type: "turn.failed", opId: TURN_A, error: "offline", repair: { id: REPAIR },
+    }).state;
+    expect(failed.unnamed.has("spya-t1")).toBe(true);
+    const named = renaming(failed, RENAME_A, "spya-t1", "my title");
+    const attempted = twice(named, starting({
+      id: TURN_B, shape, replyId: shape === "retry" ? "a-local" : "a-edit",
+      ...(shape === "edit" ? {
+        editing: "q-local",
+        question: message({ id: "q-local", role: "user", text: "my revised draft", status: "done" }),
+      } : {}),
+    })).state;
+    const ended = twice(attempted, ending === "failed" ? {
+      type: "turn.failed", opId: TURN_B, error: "offline again", repair: { id: REPAIR },
+    } : {
+      type: "turn.disconnected", opId: TURN_B, error: "offline again", recovery: { id: REPAIR, until: 1 },
+    });
+    const missing = twice(ended.state, { type: "repair.succeeded", opId: REPAIR, thread: null }).state;
+    expect(project(missing)[0]?.messages[0]?.text).toBe(shape === "retry" ? "my draft" : "my revised draft");
+    expect(ended.commands).toEqual([]);
+    expect(missing.operations.get(RENAME_A)).toMatchObject({ held: true });
+    expect(missing.operations.has(TURN_B)).toBe(false);
+  });
+
+  /** After `begin` the server has blanked the row itself, so the failure is the row's. */
+  it("keeps a retry's failure on the row once the server has begun it", () => {
+    const retried = twice(
+      loaded(conversation()),
+      starting({ id: TURN_A, shape: "retry", replyId: "a1", reply: message({ id: "a1" }) }),
+    ).state;
+    const begun = twice(retried, {
+      type: "turn.began",
+      opId: TURN_A,
+      begun: { threadId: "spya-t1", title: "a conversation", messageId: "a1" },
+    }).state;
+    const failed = twice(begun, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "the model is busy",
+      repair: { id: REPAIR },
+    });
+    expect(answer(failed.state, "a1")).toMatchObject({ status: "error", error: "the model is busy" });
+    expect(failed.commands).toEqual([]);
+    expect(failed.state.operations.has(REPAIR)).toBe(false);
+  });
+
+  /** A send has nothing older underneath, and the reader's words stay with the failure. */
+  it("keeps a send's question, and the failure under it, when it fails before it began", () => {
+    const sent = twice(loaded(conversation()), sending(TURN_A, "a-new", "q-new")).state;
+    const failed = twice(sent, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "busy",
+      repair: { id: REPAIR },
+    });
+    expect(rows(failed.state)).toContain("q-new");
+    expect(answer(failed.state, "a-new")).toMatchObject({ status: "error", error: "busy" });
+    expect(failed.commands).toEqual([]);
+    expect(failed.state.operations.has(REPAIR)).toBe(false);
+  });
+
   /** The gate, on the path stage 2 added. A repair nobody registered is nobody's. */
   it("refuses a repair's answer that belongs to no operation", () => {
     const start = loaded(conversation());
@@ -1406,8 +1737,14 @@ describe("a stop or a cancel", () => {
       type: "turn.failed",
       opId: TURN_A,
       error: "the model is busy",
+      repair: { id: REPAIR },
     });
-    expect(failed.commands, "a stop was sent for a turn that never started").toEqual([]);
+    /* The repair is the withdrawn retry's own (261006d); the stop is what must
+       not be here. */
+    expect(
+      failed.commands.filter((c) => c.type !== "repair"),
+      "a stop was sent for a turn that never started",
+    ).toEqual([]);
     expect(failed.state.operations.has(WISH), "a wish outlived the turn it waited on").toBe(false);
   });
 
@@ -2224,7 +2561,12 @@ describe("a mutation of a conversation the server has not named", () => {
       op: { id: DELETE, kind: "delete", threadId: "guess-thread" },
     });
     const held = removed.state;
-    const dead = twice(held, { type: "turn.failed", opId: TURN_A, error: "the network" });
+    const dead = twice(held, {
+      type: "turn.failed",
+      opId: TURN_A,
+      error: "the network",
+      repair: { id: REPAIR },
+    });
     /* Every command the whole sequence asked for, not only the last transition's
        — the request that must not exist is the one sent at the moment the reader
        pressed the button. */

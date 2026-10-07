@@ -26,13 +26,21 @@
  * next caller may ask again — unless the service told us to wait, which every
  * caller then honours.
  *
+ * **A Crossref record also carries Crossref's citation count and the moment it
+ * was read** (plan 261005i), for the Citations row. A record cached before the
+ * count was kept is asked about once more, by any caller, and a failed ask
+ * leaves it due again: so during a Crossref outage such a record is
+ * `unavailable` to every caller until one ask succeeds.
+ *
  * Nothing calls this from a route or a step yet: stages 3, 5 and 6 of the plan
  * are the callers.
  */
 
 import { ARXIV_ID_SHAPE, DOI_SHAPE, identityOf } from "./cited-in-spideryarn.js";
+import { doiPath } from "./doi-url.js";
 import { FetchFailure, fetchBibliographicJson } from "./fetch.js";
 import { errorFields, log, type Log } from "./log.js";
+import { isCitedByCount } from "./registry-work.js";
 import { CONTACT_EMAIL } from "./site-text.js";
 
 /* ------------------------------------------------------------ the types -- */
@@ -50,6 +58,15 @@ export type WorkId = string & { readonly __workId: true };
 
 export type Registry = "crossref" | "datacite";
 
+/**
+ * **Every outside service the shared limiter paces** — the two registries, and
+ * OpenAlex, the citation index src/citation-index.ts asks. A separate union
+ * from `Registry` on purpose: `Registry` is also a record's provenance
+ * (`WorkRecord.source`, and the `source` CHECK on `bibliographic_records`), and
+ * OpenAlex is never that (GPT Sol's F7 on plan 261004h).
+ */
+export type LimiterService = Registry | "openalex";
+
 export interface WorkAuthor {
   family: string;
   given?: string;
@@ -63,8 +80,31 @@ export interface WorkRecord {
   authors: WorkAuthor[];
   year?: number;
   venue?: string;
+  /**
+   * The calendar day the registry says the work was published, `YYYY-MM-DD` —
+   * only when it states a whole day. Crossref often gives a year or a month
+   * alone, and DataCite a year; a day made up from those would be a date
+   * nobody stated. Absent on an answer cached before 2026-10-04.
+   */
+  published?: string;
   /** The DOI the registry holds the record under — for an arXiv id, `10.48550/arxiv.<id>`. */
   doi: string;
+  /**
+   * **Crossref's `is-referenced-by-count`**: how many works Crossref holds that
+   * cite this one. Only ever on a Crossref record, and only a whole number
+   * `isCitedByCount` accepts. It counts citations from works whose publishers
+   * deposit their reference lists, so it runs lower than Google Scholar's.
+   * DataCite's count is not kept (plan 261005i § Passed over).
+   */
+  citedByCount?: number;
+  /**
+   * **When Crossref was asked for that count**, ISO, by the store's clock: on
+   * every Crossref record `lookupWork` returns, count or no count, because
+   * "asked, and there was none" is a different thing from "never asked". The
+   * parser never sets it; `withCountReadAt` does, from the moment the answer
+   * was stored. Absent on a DataCite record.
+   */
+  citedByCountReadAt?: string;
 }
 
 /**
@@ -86,6 +126,18 @@ export type LookupResult =
 
 /** What is remembered: an answer, never an error. */
 export type CachedAnswer = { kind: "found"; record: WorkRecord } | { kind: "not-found" };
+
+/**
+ * **An answer as the store keeps it, given the moment it was stored**: a
+ * Crossref record says that is when its count was read; a DataCite record and
+ * a miss say nothing. The one place that rule is written for a store kept in
+ * memory and for what `lookupWork` returns from a write; the Postgres store
+ * says the same thing in its `write` statement.
+ */
+export function withCountReadAt<A extends CachedAnswer>(answer: A, storedAt: Date): A {
+  if (answer.kind !== "found" || answer.record.source !== "crossref") return answer;
+  return { ...answer, record: { ...answer.record, citedByCountReadAt: storedAt.toISOString() } };
+}
 
 /* ------------------------------------------------------------ the policy -- */
 
@@ -119,10 +171,11 @@ const POLL_MS = 100;
 
 /**
  * Starts spaced globally: **Crossref 250 ms (4/s, under its 10), DataCite
- * 500 ms (2/s, under its 1,000 per 5 minutes)**. Slots: 2 and 1, seeded by the
- * migration — they are rows, not numbers here.
+ * 500 ms (2/s, under its 1,000 per 5 minutes), OpenAlex 500 ms (2/s, under its
+ * 10)**. Slots: 2, 1 and 1, seeded by the migrations — they are rows, not
+ * numbers here.
  */
-export const SPACING_MS: Record<Registry, number> = { crossref: 250, datacite: 500 };
+export const SPACING_MS: Record<LimiterService, number> = { crossref: 250, datacite: 500, openalex: 500 };
 
 /** A 429 or 503 without `Retry-After` cools the service this long; one with it, at most an hour. */
 export const DEFAULT_COOLDOWN_MS = 60_000;
@@ -137,7 +190,7 @@ export interface IdentifierClaim {
 }
 
 export interface SlotLease {
-  service: Registry;
+  service: LimiterService;
   slot: number;
   until: Date;
 }
@@ -155,17 +208,29 @@ export interface BibliographicStore {
   claim(id: WorkId, fresh: Freshness, leaseMs: number): Promise<IdentifierClaim | null>;
   /** Give a claim back with nothing learned. Only this claim: a later one is left alone. */
   release(claim: IdentifierClaim): Promise<void>;
-  /** Remember an answer and clear the claim, only while this exact claim still owns the row. */
-  write(claim: IdentifierClaim, answer: CachedAnswer): Promise<boolean>;
+  /**
+   * Remember an answer and clear the claim, only while this exact claim still
+   * owns the row. **The moment it was stored, by the store's clock, for every
+   * answer** (a DataCite record and a miss included), or null when the claim
+   * was lost and nothing was written. A Crossref record is kept with that
+   * moment as its `citedByCountReadAt`.
+   */
+  write(claim: IdentifierClaim, answer: CachedAnswer): Promise<Date | null>;
   /** Whether the service is cooling down right now. */
-  coolingDown(service: Registry): Promise<boolean>;
-  takeSlot(service: Registry, leaseMs: number): Promise<SlotLease | null>;
+  coolingDown(service: LimiterService): Promise<boolean>;
+  takeSlot(service: LimiterService, leaseMs: number): Promise<SlotLease | null>;
   freeSlot(lease: SlotLease): Promise<void>;
   /** Take the next start, unless the service is cooling down or the start is more than `maxWaitMs` away. */
-  takeStart(service: Registry, spacingMs: number, maxWaitMs: number): Promise<StartTaken>;
+  takeStart(service: LimiterService, spacingMs: number, maxWaitMs: number): Promise<StartTaken>;
   /** Nobody asks `service` again for `forMs`. Never shortens a cooldown already set. */
-  coolDown(service: Registry, forMs: number): Promise<void>;
+  coolDown(service: LimiterService, forMs: number): Promise<void>;
 }
+
+/** The limiter's half of the store: what one polite request needs, and nothing about the record cache. */
+export type ServiceLimiter = Pick<
+  BibliographicStore,
+  "coolingDown" | "takeSlot" | "freeSlot" | "takeStart" | "coolDown"
+>;
 
 export interface LookupDeps {
   store?: BibliographicStore;
@@ -241,11 +306,6 @@ export function doiFor(id: WorkId): string {
   return `10.48550/arxiv.${id.slice("arxiv:".length)}`;
 }
 
-/** Each path segment encoded, the slashes kept: both APIs take `/works/10.1038/nn.4304` as written. */
-function doiPath(doi: string): string {
-  return doi.split("/").map(encodeURIComponent).join("/");
-}
-
 export function crossrefUrl(doi: string): string {
   return `https://api.crossref.org/works/${doiPath(doi)}?mailto=${encodeURIComponent(CONTACT_EMAIL)}`;
 }
@@ -280,17 +340,17 @@ export function plainRegistryText(value: unknown, maxLength = 1000): string | nu
   return text.length > maxLength ? text.slice(0, maxLength).trimEnd() : text;
 }
 
-function record(value: unknown): Record<string, unknown> | null {
+export function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
 }
 
-function list(value: unknown): unknown[] {
+export function list(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function plausibleYear(value: unknown): number | undefined {
+export function plausibleYear(value: unknown): number | undefined {
   const n = typeof value === "string" && /^\d{4}$/.test(value.trim()) ? Number(value) : value;
   return typeof n === "number" && Number.isInteger(n) && n >= 1500 && n <= 2100 ? n : undefined;
 }
@@ -298,6 +358,22 @@ function plausibleYear(value: unknown): number | undefined {
 /** Crossref's `{ "date-parts": [[2016, 5, 16]] }`, as a year. `[[null]]` happens. */
 function crossrefYear(date: unknown): number | undefined {
   return plausibleYear(list(list(record(date)?.["date-parts"])[0])[0]);
+}
+
+/** `s` when it is a real calendar day spelled `YYYY-MM-DD`, else undefined. `2024-02-31` has the shape and is not one. */
+export function realIsoDay(s: unknown): string | undefined {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return undefined;
+  if (plausibleYear(Number(s.slice(0, 4))) === undefined) return undefined;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().startsWith(`${s}T`) ? s : undefined;
+}
+
+/** Crossref's `{ "date-parts": [[2016, 5, 16]] }`, as a day — only when all three parts are there. */
+function crossrefDay(date: unknown): string | undefined {
+  const [y, m, d] = list(list(record(date)?.["date-parts"])[0]);
+  if (![y, m, d].every((n) => typeof n === "number" && Number.isInteger(n))) return undefined;
+  const two = (n: unknown) => String(n).padStart(2, "0");
+  return realIsoDay(`${String(y).padStart(4, "0")}-${two(m)}-${two(d)}`);
 }
 
 const MAX_AUTHORS = 100;
@@ -338,6 +414,15 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     crossrefYear(msg["published-online"]) ??
     crossrefYear(msg.published);
   const venue = plainRegistryText(list(msg["container-title"])[0]);
+  /* The earliest whole day any of the four states: online usually precedes
+     print, and `issued` is Crossref's own earliest but often lacks the day. */
+  const published = [msg["published-online"], msg["published-print"], msg.published, msg.issued]
+    .map(crossrefDay)
+    .filter((day) => day !== undefined)
+    .sort()[0];
+  /* Anything but a whole number the column can hold is no count, and the
+     record is still an answer (plan 261005i, GPT Sol's F3). */
+  const citedByCount = msg["is-referenced-by-count"];
   return {
     id,
     source: "crossref",
@@ -345,7 +430,9 @@ export function parseCrossref(id: WorkId, doi: string, json: unknown): WorkRecor
     authors,
     ...(year !== undefined ? { year } : {}),
     ...(venue !== null ? { venue } : {}),
+    ...(published !== undefined ? { published } : {}),
     doi: normaliseDoi(msg.DOI, doi),
+    ...(isCitedByCount(citedByCount) ? { citedByCount } : {}),
   };
 }
 
@@ -420,8 +507,14 @@ async function resolveDeps(deps: LookupDeps): Promise<Resolved> {
   };
 }
 
+/** What a turn needs: the limiter, and a way to wait. */
+export interface TurnDeps {
+  store: ServiceLimiter;
+  sleep: (ms: number) => Promise<void>;
+}
+
 /** A service slot, polled for up to `MAX_WAIT_MS`. */
-async function slotFor(service: Registry, d: Resolved): Promise<SlotLease | null> {
+async function slotFor(service: LimiterService, d: TurnDeps): Promise<SlotLease | null> {
   for (let waited = 0; ; waited += POLL_MS) {
     const lease = await d.store.takeSlot(service, SLOT_LEASE_MS);
     if (lease !== null || waited >= MAX_WAIT_MS) return lease;
@@ -429,34 +522,75 @@ async function slotFor(service: Registry, d: Resolved): Promise<SlotLease | null
   }
 }
 
-/** One request to one registry, inside its slot, its start and its cooldown. */
-async function askService(id: WorkId, service: Registry, doi: string, d: Resolved): Promise<Asked> {
-  if (await d.store.coolingDown(service)) return { kind: "unavailable", why: "cooling-down" };
+/**
+ * A turn that was refused before any request went out, and where: the service
+ * was already `cooling`, there was `no-slot`, there was `no-start` (too far
+ * off, or cooling by then), or it `cooled-while-waiting` for its start.
+ */
+export interface TurnRefused {
+  kind: "refused";
+  why: "cooling-down" | "busy";
+  at: "cooling" | "no-slot" | "no-start" | "cooled-while-waiting";
+}
+
+/**
+ * **One request's turn at a service**: its cooldown respected, a leased slot,
+ * a globally spaced start, and the slot freed whatever `request` does. The one
+ * copy of the politeness, shared by the registry lookup below and by
+ * src/citation-index.ts. `request` is handed how long the start made it wait,
+ * for its log line.
+ */
+export async function inServiceTurn<T>(
+  service: LimiterService,
+  d: TurnDeps,
+  request: (waitMs: number) => Promise<T>,
+): Promise<{ kind: "ran"; value: T } | TurnRefused> {
+  if (await d.store.coolingDown(service)) return { kind: "refused", why: "cooling-down", at: "cooling" };
   const lease = await slotFor(service, d);
-  if (lease === null) {
-    d.log.info({ id, service, outcome: "busy", reason: "no-slot" }, "bibliographic lookup");
-    return { kind: "unavailable", why: "busy" };
-  }
+  if (lease === null) return { kind: "refused", why: "busy", at: "no-slot" };
   try {
     const start = await d.store.takeStart(service, SPACING_MS[service], MAX_WAIT_MS);
-    if (start.kind !== "start") {
-      d.log.info({ id, service, outcome: start.kind }, "bibliographic lookup");
-      return { kind: "unavailable", why: start.kind };
-    }
+    if (start.kind !== "start") return { kind: "refused", why: start.kind, at: "no-start" };
     if (start.waitMs > 0) {
       await d.sleep(start.waitMs);
       /* A request already in flight may have set a provider-wide cooldown while
          this start was waiting. Do not turn a valid reservation into one more
          request after the provider has told the fleet to stop. */
-      if (await d.store.coolingDown(service)) return { kind: "unavailable", why: "cooling-down" };
+      if (await d.store.coolingDown(service)) {
+        return { kind: "refused", why: "cooling-down", at: "cooled-while-waiting" };
+      }
     }
+    return { kind: "ran", value: await request(start.waitMs) };
+  } finally {
+    await d.store.freeSlot(lease);
+  }
+}
+
+/**
+ * **A 429 or a 503 cools the service for everybody**: its `Retry-After`, else a
+ * minute, at most an hour. Returns how long, or null when `err` is neither.
+ */
+export async function coolAfter(
+  err: FetchFailure,
+  service: LimiterService,
+  store: ServiceLimiter,
+): Promise<number | null> {
+  if (err.status !== 429 && err.status !== 503) return null;
+  const forMs = Math.min(err.retryAfterMs ?? DEFAULT_COOLDOWN_MS, MAX_COOLDOWN_MS);
+  await store.coolDown(service, Math.max(forMs, 1_000));
+  return forMs;
+}
+
+/** One request to one registry, inside its slot, its start and its cooldown. */
+async function askService(id: WorkId, service: Registry, doi: string, d: Resolved): Promise<Asked> {
+  const turn = await inServiceTurn(service, d, async (waitMs): Promise<Asked> => {
     const started = Date.now();
     const url = service === "crossref" ? crossrefUrl(doi) : dataciteUrl(doi);
     try {
       const json = await d.fetchJson(url);
       const parsed = service === "crossref" ? parseCrossref(id, doi, json) : parseDatacite(id, doi, json);
       d.log.info(
-        { id, service, status: 200, outcome: parsed ? "found" : "no-title", ms: Date.now() - started, waitMs: start.waitMs },
+        { id, service, status: 200, outcome: parsed ? "found" : "no-title", ms: Date.now() - started, waitMs },
         "bibliographic lookup",
       );
       /* A record with no title is, to every caller, no record: each of them
@@ -468,27 +602,25 @@ async function askService(id: WorkId, service: Registry, doi: string, d: Resolve
       if (!(err instanceof FetchFailure)) throw err;
       const status = err.status;
       if (status === 404 || status === 410) {
-        d.log.info({ id, service, status, outcome: "not-found", ms, waitMs: start.waitMs }, "bibliographic lookup");
+        d.log.info({ id, service, status, outcome: "not-found", ms, waitMs }, "bibliographic lookup");
         return { kind: "not-found" };
       }
-      if (status === 429 || status === 503) {
-        const forMs = Math.min(err.retryAfterMs ?? DEFAULT_COOLDOWN_MS, MAX_COOLDOWN_MS);
-        await d.store.coolDown(service, Math.max(forMs, 1_000));
-        d.log.warn(
-          { id, service, status, outcome: "cooling-down", cooldownMs: forMs, ms, waitMs: start.waitMs },
-          "bibliographic lookup",
-        );
+      const cooldownMs = await coolAfter(err, service, d.store);
+      if (cooldownMs !== null) {
+        d.log.warn({ id, service, status, outcome: "cooling-down", cooldownMs, ms, waitMs }, "bibliographic lookup");
         return { kind: "unavailable", why: "cooling-down" };
       }
-      d.log.warn(
-        { id, service, status, code: err.code, outcome: "error", ms, waitMs: start.waitMs },
-        "bibliographic lookup",
-      );
+      d.log.warn({ id, service, status, code: err.code, outcome: "error", ms, waitMs }, "bibliographic lookup");
       return { kind: "unavailable", why: "error" };
     }
-  } finally {
-    await d.store.freeSlot(lease);
+  });
+  if (turn.kind === "ran") return turn.value;
+  if (turn.at === "no-slot") {
+    d.log.info({ id, service, outcome: "busy", reason: "no-slot" }, "bibliographic lookup");
+  } else if (turn.at === "no-start") {
+    d.log.info({ id, service, outcome: turn.why }, "bibliographic lookup");
   }
+  return { kind: "unavailable", why: turn.why };
 }
 
 /** arXiv: DataCite. A DOI: Crossref, and only on its 404 DataCite. */
@@ -540,18 +672,20 @@ export async function lookupWork(id: WorkId, deps: LookupDeps = {}): Promise<Loo
     const asked = await ask(id, d);
     if (asked.kind === "unavailable") {
       await d.store.release(claim);
-    } else {
-      const written = await d.store.write(claim, asked);
       claim = null;
-      if (!written) {
-        /* This process paused past its lease and a successor owns the row. Its
-           answer may be perfectly plausible, but it is no longer authorised to
-           publish it or to clear the successor's claim. */
-        return await awaitOther(id, d);
-      }
+      return asked;
     }
+    const storedAt = await d.store.write(claim, asked);
     claim = null;
-    return asked;
+    if (storedAt === null) {
+      /* This process paused past its lease and a successor owns the row. Its
+         answer may be perfectly plausible, but it is no longer authorised to
+         publish it or to clear the successor's claim. */
+      return await awaitOther(id, d);
+    }
+    /* What the next caller will read from the cache, so the two agree: a
+       Crossref record carries the moment its count was read. */
+    return withCountReadAt(asked, storedAt);
   } catch (err) {
     d.log.error({ id, outcome: "store", ms: Date.now() - started, ...errorFields(err) }, "bibliographic lookup failed");
     if (claim !== null) await d.store.release(claim).catch(() => {});

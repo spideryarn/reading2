@@ -54,6 +54,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OWN_READING_PAGE } from "../src/messages.js";
 import type { Article } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -76,10 +77,15 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 /* The Dock reaches Supabase and the whole visitor layer, and none of it is
    what this file is about. Same reason as
    tests/background-reload-keeps-the-list.test.tsx. */
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
+const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");
 const { AddPage } = await import("../src/web/AddPage.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
@@ -453,5 +459,27 @@ describe("the add page, which is the fifth copy and was found in a browser", () 
 
     expect(host.textContent).toContain("The server was busy.");
     expect(host.textContent).toContain("It didn't get as far as the queue");
+  });
+
+  it("shows the sentence for a pasted Spideryarn reading page, with no Try again under it", async () => {
+    /* The route's own constant (src/messages.ts § `OWN_READING_PAGE`), so this
+       is the sentence a reader is really sent. Watched red on 2026-10-07 while
+       the sentence had no code: `worthRetrying` did not recognise it and the
+       page drew its *Try again* underneath. */
+    refused = OWN_READING_PAGE.message;
+    await act(async () => {
+      root.render(
+        createElement(AddPage, {
+          source: { kind: "url", url: "www.spideryarn.com/read/why-trees-spya-k3m9qt" },
+        }),
+      );
+    });
+    await settle();
+    await answerPolls();
+
+    expect(host.textContent).toContain(OWN_READING_PAGE.message);
+    /* And no *Try again* under it: the same link would be refused the same way. */
+    expect(host.textContent).not.toContain("It didn't get as far as the queue");
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).not.toContain("Try again");
   });
 });

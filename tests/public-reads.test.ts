@@ -25,20 +25,28 @@ import {
   publicBlocksQuery,
   publicCommentsQuery,
   publicCurrentRevisionQuery,
+  publicPendingImportQuery,
   publicSearchesQuery,
   publicSourceGuessQuery,
 } from "../src/store/public-reader.js";
 import { publicLibraryQuery } from "../src/store/public-library.js";
 import { lockedArticleQuery } from "../src/store/pg-visibility.js";
+import { currentShareLinkQuery } from "../src/store/pg-share-link.js";
+import { PUBLIC_ONLY, type PublicAccess } from "../src/store/public-access.js";
+import type { ShareKey } from "../src/share-key.js";
 
-const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "article").toSQL();
-const headQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "head").toSQL();
-const assetQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", "asset").toSQL();
+/* **Every statement above the private-link section is read with no key**,
+   which is what a request without `?key=` gives, and its SQL has to be what it
+   was before the link existed: a key that was not sent must add nothing. The
+   same statements with a key are read in their own section below. */
+const articleQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY, "article").toSQL();
+const headQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY, "head").toSQL();
+const assetQuery = publicCurrentRevisionQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY, "asset").toSQL();
 const article = articleQuery.sql;
 const headSql = headQuery.sql;
 const blocks = publicBlocksQuery(new QueryBuilder() as never, "rev-1").toSQL().sql;
-const commentsQuery = publicCommentsQuery(new QueryBuilder() as never, "a-slug").toSQL();
-const searchesQuery = publicSearchesQuery(new QueryBuilder() as never, "a-slug").toSQL();
+const commentsQuery = publicCommentsQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY).toSQL();
+const searchesQuery = publicSearchesQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY).toSQL();
 const publicListing = publicLibraryQuery(new QueryBuilder() as never, 7).toSQL();
 
 describe("the public revision read", () => {
@@ -50,6 +58,23 @@ describe("the public revision read", () => {
       ["listing", publicListing.sql],
     ] as const) {
       expect(sql, name).not.toContain("article_tags");
+    }
+  });
+
+  /* A visitor has no quiz, so nothing public may reach the owner's kept
+     answers (plan 261005b). The owner's side — a stranger's slug is a 404 — is
+     tests/quiz-attempts-route.test.ts. */
+  it("never asks for the owner's quiz answers in any public read", () => {
+    for (const [name, sql] of [
+      ["article", articleQuery.sql],
+      ["head", headQuery.sql],
+      ["asset", assetQuery.sql],
+      ["blocks", blocks],
+      ["comments", commentsQuery.sql],
+      ["searches", searchesQuery.sql],
+      ["listing", publicListing.sql],
+    ] as const) {
+      expect(sql, name).not.toContain("quiz_attempts");
     }
   });
 
@@ -358,17 +383,17 @@ describe("the public blocks read", () => {
 /**
  * **The switch's own read, which is the one query in this feature that writes.**
  *
- * Its `for update` is the whole of the concurrency argument: without it two
- * toggles both read the old value, both write, and both append an event. GPT
- * Sol's finding 6 was that deleting it left the entire suite green.
+ * Its `for update` makes the read of `processing` wait for a publication that
+ * is flipping a minimal paper to full — the one writer of this row that holds
+ * the article lock without the owner's billing lock. Two toggles at once are
+ * queued by that billing lock, not by this clause. GPT Sol's finding 6 was
+ * that deleting it left the entire suite green.
  *
- * There is a behavioural test for it too (tests/public-visibility-pg.test.ts,
- * "writes one event when two publishes race"), and this one exists because that
- * one can only catch the bug while the window is open — measured on this laptop,
- * two `PUT`s fired together usually do not overlap at all, and the race test
- * passed against the unlocked code until it was rewritten to hold the row from
- * outside. A timing test that has to be lucky is not the only evidence this
- * should rest on.
+ * The behavioural test is tests/public-visibility-pg.test.ts, "waits for a
+ * Read this that is landing". Its neighbour, "writes one event when two
+ * publishes race", passes with the clause deleted, and was credited with
+ * catching it until 2026-10-05. This assertion needs no database and fires on
+ * the mutation every time.
  */
 /**
  * **The two reads of the owner's own work**, added on 2026-09-04 when a shared
@@ -478,7 +503,7 @@ describe("the public reads of the owner's own work", () => {
  * SQL, and the columns it must not ask for absent from the statement.
  */
 describe("the public read of an upload's guessed source", () => {
-  const q = publicSourceGuessQuery(new QueryBuilder() as never, "a-slug").toSQL();
+  const q = publicSourceGuessQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY).toSQL();
 
   it("re-asks the visibility question in its own where", () => {
     expect(q.sql).toMatch(
@@ -522,6 +547,216 @@ describe("the public read of an upload's guessed source", () => {
     expect(q.sql).toContain('"url"');
     expect(q.sql).toContain('"kind"');
     expect(q.sql).toContain('"matched_by"');
+  });
+});
+
+/**
+ * **The same five reads, asked with a private link's key.** Plan 261005e.
+ *
+ * What has to be true of each, in its own statement:
+ *
+ *  - the `where` is *public **or** this key*, with the slug in both halves, so
+ *    a public article reads with any key and a key opens only its own article;
+ *  - the key is **bound**, and compared in SQL: `share_token` is never in a
+ *    select list, so the secret is not fetched to be compared in JavaScript;
+ *  - the row filters and the projection are what they are without a key. A key
+ *    widens *which article*, and nothing about what of it crosses.
+ */
+describe("the public reads, asked with a private link's key", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+  const LINK: PublicAccess = { kind: "link", key: KEY as ShareKey };
+  const qb = () => new QueryBuilder() as never;
+
+  const keyed = {
+    article: publicCurrentRevisionQuery(qb(), "a-slug", LINK, "article").toSQL(),
+    head: publicCurrentRevisionQuery(qb(), "a-slug", LINK, "head").toSQL(),
+    asset: publicCurrentRevisionQuery(qb(), "a-slug", LINK, "asset").toSQL(),
+    comments: publicCommentsQuery(qb(), "a-slug", LINK).toSQL(),
+    searches: publicSearchesQuery(qb(), "a-slug", LINK).toSQL(),
+    guess: publicSourceGuessQuery(qb(), "a-slug", LINK).toSQL(),
+  };
+  const bare = {
+    article: articleQuery,
+    head: headQuery,
+    asset: assetQuery,
+    comments: commentsQuery,
+    searches: searchesQuery,
+    guess: publicSourceGuessQuery(qb(), "a-slug", PUBLIC_ONLY).toSQL(),
+  };
+  const names = Object.keys(keyed) as (keyof typeof keyed)[];
+
+  const EITHER =
+    /\(\("spideryarn"\."articles"\."slug" = \$1 and "spideryarn"\."articles"\."visibility" = \$2\) or \("spideryarn"\."articles"\."slug" = \$3 and "spideryarn"\."articles"\."share_token" = \$4\)\)/;
+
+  it("asks for public or this key, with the slug in both halves, in every query's own where", () => {
+    for (const name of names) {
+      const q = keyed[name];
+      expect(q.sql, name).toMatch(EITHER);
+      expect(q.params.slice(0, 4), name).toEqual(["a-slug", "public", "a-slug", KEY]);
+      /* In the `where`, and not somewhere a join or a select could hold it. */
+      expect(q.sql.indexOf(" where "), name).toBeGreaterThan(-1);
+      expect(q.sql.indexOf('"share_token"'), name).toBeGreaterThan(q.sql.indexOf(" where "));
+    }
+  });
+
+  /* The key appears once, as a bound parameter, and never as text in the SQL. */
+  it("binds the key rather than writing it into the statement", () => {
+    for (const name of names) {
+      expect(keyed[name].sql, name).not.toContain(KEY);
+      expect(keyed[name].params.filter((p) => p === KEY), name).toHaveLength(1);
+    }
+  });
+
+  it("never selects the token, with a key or without", () => {
+    for (const name of names) {
+      for (const q of [keyed[name], bare[name]]) {
+        expect(q.sql.split(" from ")[0], name).not.toContain("share_token");
+        expect(q.sql.match(/"share_token"/g) ?? [], name).toHaveLength(q === keyed[name] ? 1 : 0);
+        expect(q.sql, name).not.toContain("share_token_at");
+        expect(q.sql, name).not.toContain("owner_id");
+      }
+    }
+  });
+
+  /**
+   * **A key changes the `where`'s first clause and nothing else.** The select
+   * list, the joins, the row filters, the ordering and the limit are compared
+   * whole with the keyless statement, by cutting the access clause out of both.
+   */
+  it("selects, joins, filters and orders exactly as it does without one", () => {
+    const NO_KEY = /\("spideryarn"\."articles"\."slug" = \$1 and "spideryarn"\."articles"\."visibility" = \$2\)/;
+    /* Later placeholders shift by two when two parameters are added. */
+    const renumber = (sql: string) => sql.replace(/\$(\d+)/g, (_, n: string) => `$${Number(n) - 2}`);
+    for (const name of names) {
+      const withKey = keyed[name].sql.split(EITHER);
+      const without = bare[name].sql.split(NO_KEY);
+      expect(withKey, name).toHaveLength(2);
+      expect(without, name).toHaveLength(2);
+      expect(withKey[0], name).toBe(without[0]);
+      expect(renumber(withKey[1] ?? ""), name).toBe(without[1]);
+      expect(keyed[name].params.slice(4), name).toEqual(bare[name].params.slice(2));
+    }
+  });
+
+  it("still refuses a referee's note, an unfinished call, an unfinished run and an unfound guess", () => {
+    expect(keyed.comments.sql).toMatch(/"criterion_id" is null/);
+    expect(keyed.comments.sql).toMatch(/"status" in \('none','done'\)/);
+    expect(keyed.searches.sql).toMatch(/"status" = 'done'/);
+    expect(keyed.guess.sql).toMatch(/"status" = 'found'/);
+  });
+
+  /**
+   * **Which way the visitor got in is asked in SQL**, as a yes-or-no, so the
+   * notice can say *private link* without the visibility column or the token
+   * crossing. It is on all three revision reads, key or no key.
+   */
+  it("asks whether the article is public as a boolean, on each revision read", () => {
+    for (const q of [keyed.article, keyed.head, keyed.asset, articleQuery, headQuery, assetQuery]) {
+      expect(q.sql).toMatch(/"spideryarn"\."articles"\."visibility" = 'public' as "is_public"/);
+    }
+  });
+});
+
+/**
+ * **"Is an import under way here?"**, the one read that names `jobs`. Plan
+ * 261005l § 2c: `loadArticle` asks it when it finds no published revision, and
+ * a row back is a 409 *still being added* where it used to be a 404.
+ *
+ * What the statement has to say for that to be safe, each read off the SQL:
+ * the same access predicate as every other public read, in its own `where`;
+ * no published revision; and a pending job tied to the article by slug **and**
+ * owner, since `jobs` has no article id. It is the one public statement where
+ * `owner_id` appears at all, and it appears only as one column compared with
+ * another.
+ */
+describe("the public read of an import still under way", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+  const LINK: PublicAccess = { kind: "link", key: KEY as ShareKey };
+  const bare = publicPendingImportQuery(new QueryBuilder() as never, "a-slug", PUBLIC_ONLY).toSQL();
+  const keyed = publicPendingImportQuery(new QueryBuilder() as never, "a-slug", LINK).toSQL();
+  const A = '"spideryarn"."articles"';
+  const J = '"spideryarn"."jobs"';
+
+  it("selects a constant from articles, and nothing of the article or the job", () => {
+    for (const q of [bare, keyed]) {
+      expect(q.sql.startsWith(`select true as "pending" from ${A} where `), q.sql).toBe(true);
+      for (const column of ["title", "url", "error", "steps", "share_token_at", "title_override"]) {
+        expect(q.sql, column).not.toContain(`"${column}"`);
+      }
+    }
+  });
+
+  it("carries the access predicate every public read carries, first in its own where", () => {
+    expect(bare.sql).toContain(` where ((${A}."slug" = $1 and ${A}."visibility" = $2) and `);
+    expect(bare.params.slice(0, 2)).toEqual(["a-slug", "public"]);
+    expect(keyed.sql).toContain(
+      ` where (((${A}."slug" = $1 and ${A}."visibility" = $2) or (${A}."slug" = $3 and ${A}."share_token" = $4)) and `,
+    );
+    expect(keyed.params.slice(0, 4)).toEqual(["a-slug", "public", "a-slug", KEY]);
+    /* Bound, never written into the statement, and never selected. */
+    expect(keyed.sql).not.toContain(KEY);
+    expect(keyed.sql.match(/"share_token"/g)).toHaveLength(1);
+    expect(bare.sql).not.toContain("share_token");
+  });
+
+  it("asks only about an article with no published revision", () => {
+    for (const q of [bare, keyed]) expect(q.sql).toContain(` and ${A}."current_revision_id" is null and exists (`);
+  });
+
+  it("ties the job to the article by slug and by owner, and compares the owner with nothing else", () => {
+    for (const q of [bare, keyed]) {
+      const inner = q.sql.slice(q.sql.indexOf("exists (")).replace(/\s+/g, " ");
+      expect(inner).toContain(
+        `select 1 from ${J} where ${J}."slug" = ${A}."slug" and ${J}."owner_id" = ${A}."owner_id" and (`,
+      );
+      /* Twice in the whole statement: the two sides of that one comparison.
+         No owner is selected and none is bound. */
+      expect(q.sql.match(/"owner_id"/g)).toHaveLength(2);
+      expect(q.sql.split(" from ")[0]).not.toContain("owner_id");
+    }
+  });
+
+  it("counts a job as pending only when queued, or running inside its lease on the database's clock", () => {
+    for (const q of [bare, keyed]) {
+      expect(q.sql.replace(/\s+/g, " ")).toContain(
+        `and (${J}."status" = 'queued' or (${J}."status" = 'running' and ${J}."lease_expires_at" > clock_timestamp())))`,
+      );
+      expect(q.sql).not.toContain("now()");
+    }
+    /* Nothing beyond the access predicate and the limit is bound. */
+    expect(bare.params).toEqual(["a-slug", "public", 1]);
+    expect(keyed.params).toEqual(["a-slug", "public", "a-slug", KEY, 1]);
+  });
+});
+
+/**
+ * **The owner's read of their own link**, which is the one statement in the
+ * app that selects the token. It names an owner, and it locks when it is about
+ * to write.
+ */
+describe("the owner's read of a private link", () => {
+  const plain = currentShareLinkQuery(new QueryBuilder() as never, "a-slug", false).toSQL();
+  const locked = currentShareLinkQuery(new QueryBuilder() as never, "a-slug", true).toSQL();
+
+  it("resolves the slug by owner, never by slug alone", () => {
+    for (const q of [plain, locked]) {
+      expect(q.sql).toMatch(/"slug" = \$1 and "spideryarn"\."articles"\."owner_id" = \$2/);
+      expect(q.params[0]).toBe("a-slug");
+      expect(q.sql).not.toContain("visibility");
+    }
+  });
+
+  it("locks the row before a write, and not for a read", () => {
+    expect(locked.sql).toMatch(/for update/i);
+    expect(plain.sql).not.toMatch(/for update/i);
+  });
+
+  it("takes the token, its time and what the refusal needs, and no more of the row", () => {
+    expect(plain.sql).toContain('"share_token"');
+    expect(plain.sql).toContain('"share_token_at"');
+    expect(plain.sql).toContain('"processing"');
+    expect(plain.sql).not.toContain("title_override");
+    expect(plain.sql).not.toContain('"purpose"');
   });
 });
 

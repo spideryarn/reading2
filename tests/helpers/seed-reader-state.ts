@@ -93,7 +93,8 @@ import { isSpideryarnId } from "../../src/ids.js";
 import { currentOwnerId } from "../../src/owner.js";
 import { loadRuns } from "../../src/searches.js";
 import { loadShelf } from "../../src/shelf.js";
-import { isThreadKind } from "../../src/types.js";
+import { originColumns } from "../../src/thread-origin.js";
+import { isClaimOrigin } from "../../src/types.js";
 
 /**
  * Find the article row for `slug`, or say which call was missing.
@@ -261,7 +262,17 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
   await db.delete(chatMessages).where(eq(chatMessages.articleId, articleId));
   await db.delete(chatThreads).where(eq(chatThreads.articleId, articleId));
 
-  const anchors = [...new Set(threads.flatMap((t) => (t.anchor ? [t.anchor.blockId] : [])))];
+  /* An origin's block points at an identity through the same kind of foreign
+     key (`chat_threads_origin_identity_fk`), so it is minted here too. Only a
+     claim has one: a lens, a glossary entry and a cited work name no block. */
+  const anchors = [
+    ...new Set(
+      threads.flatMap((t) => [
+        ...(t.anchor ? [t.anchor.blockId] : []),
+        ...(t.origin && isClaimOrigin(t.origin) ? [t.origin.blockId] : []),
+      ]),
+    ),
+  ];
   if (anchors.length) {
     await db
       .insert(blockIdentities)
@@ -284,10 +295,13 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
       anchorBlockId: thread.anchor?.blockId ?? null,
       anchorQuote: thread.anchor && "quote" in thread.anchor ? thread.anchor.quote : null,
       anchorStart: thread.anchor && "start" in thread.anchor ? thread.anchor.start : null,
-      /* A `chat.json` written before Remember mode has no `kind`, and the column
-         is `not null`. `"chat"` is the default `normaliseKind` applies in
-         src/chat.ts and the one the column declares. */
-      kind: isThreadKind(thread.kind) ? thread.kind : "chat",
+      /* `loadThreads` has already settled the kind (`kindFromFile` in
+         src/chat.ts: absent is a chat, a retired word is what it became,
+         anything else refused). Preserve it without another default. */
+      kind: thread.kind,
+      /* Where it was started from. Named here or the restore drops it
+         (tests/chat-origin-route.test.ts). */
+      ...originColumns(thread.origin),
     });
     for (const [ordinal, message] of thread.messages.entries()) {
       await db.insert(chatMessages).values({
@@ -312,6 +326,8 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
         /* Without this a restore drops the "?" metadata from every help question
            and says nothing — the same failure the line above it records. */
         help: message.help ?? false,
+        /* And without this a restore closes every hint the reader had opened. */
+        hintOpenedAt: message.hintOpenedAt ? new Date(message.hintOpenedAt) : null,
         createdAt: new Date(message.createdAt),
       });
       messages += 1;

@@ -55,6 +55,56 @@ export function controlsBar(): HTMLElement | null {
 }
 
 /**
+ * **`data-bar-stuck`: the controls bar has reached the top of the window.**
+ *
+ * The bar is sticky and sits in flow under the masthead, so at the top of an
+ * article it is level with a mode band, which is `position: fixed` from
+ * `--bar-bottom` at every scroll position. Only once the masthead has gone is
+ * the bar above the band, and only then may it take the strip over it:
+ * crumbs.css § above the band is the one rule that reads this.
+ *
+ * `sentinel` is a zero-height element directly before the bar
+ * (BarStuckSentinel.tsx). Its top distinguishes leaving above from sitting
+ * below the viewport. An observer rather than a rect read in
+ * `watchBarVisibility`, whose callback is deliberately free of DOM reads; and
+ * an attribute rather than React state, for `data-bars`'s reason.
+ *
+ * **Late is safe and early is not.** The root margin is `0px`, not
+ * `--safe-top`, so in the installed app the attribute arrives a few pixels
+ * after the bar sticks and leaves a few before it lets go. Both leave a stuck
+ * bar narrower than it could be. The other direction would put the bar's left
+ * end behind the band.
+ *
+ * `stopped` because `disconnect()` does not drop entries already queued: a
+ * callback delivered after teardown would put the attribute back with nothing
+ * left to clear it. Without `IntersectionObserver` this does nothing and the
+ * bar stays where it always was.
+ *
+ * Returns its own teardown.
+ * docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md
+ */
+export function watchBarStuck(sentinel: Element): () => void {
+  if (typeof IntersectionObserver === "undefined") return () => {};
+  let stopped = false;
+  const observer = new IntersectionObserver((entries) => {
+    if (stopped) return;
+    const last = entries.at(-1);
+    if (!last) return;
+    if (!last.isIntersecting && last.boundingClientRect.top < 0) {
+      document.documentElement.dataset.barStuck = "";
+    } else {
+      delete document.documentElement.dataset.barStuck;
+    }
+  });
+  observer.observe(sentinel);
+  return () => {
+    stopped = true;
+    observer.disconnect();
+    delete document.documentElement.dataset.barStuck;
+  };
+}
+
+/**
  * Height of the fixed bar along the bottom — Dock.tsx.
  *
  * The counterpart to `stickyOffset`, and it exists for the same reason: a line
@@ -73,7 +123,7 @@ export function dockOffset(): number {
    * **How much of the bottom of the viewport the bar is covering** — not how
    * tall it is. The distinction is exactly `stickyOffset`'s, and it arrived
    * here for exactly the same reason: since 2026-08-28 the bar slides out of
-   * the way on a small device scrolled down through (styles.css § a small
+   * the way on a small device scrolled down through (narrow-window.css § a small
    * device), by `transform`, which moves where it is drawn and **does not
    * change what it measures**. Reading `.height` went on reporting a confident
    * 52 for a bar that was entirely off screen, so a centred jump would have
@@ -110,10 +160,10 @@ export function dockOffset(): number {
  * term, `document.querySelector("thead th")`, and two things went wrong with
  * that at once:
  *
- *  - **It measures nothing now.** The head keeps its element — the fisheye
- *    panels take every column's rectangle from it (useColumnContext.ts) and a
- *    `<th scope="col">` is what names a column for a screen reader — and gives
- *    up its height (styles.css § the head with no row). A term that is always zero
+ *  - **It measures nothing now.** The head keeps its element — a
+ *    `<th scope="col">` names the column for a screen reader (the fisheye
+ *    panels also took column rectangles from it until 2026-09-29) — and gives
+ *    up its height (table.css § the head with no row). A term that is always zero
  *    is not a term.
  *  - **The query had no scope on it.** An article's own prose can contain a
  *    `<table><thead><th>`, and it survives sanitising — checked by running
@@ -144,7 +194,7 @@ export function stickyOffset(): number {
    *
    * The height was right for as long as the bar could only ever be stuck at
    * `top: 0`. On a small device it now slides out of the way while you read
-   * forwards (styles.css § a small device) — by `transform`, which moves where
+   * forwards (narrow-window.css § a small device) — by `transform`, which moves where
    * it is drawn and **does not change what it measures**. (`getBoundingClientRect`
    * does include the transform, which is why reading `bottom` below works and
    * reading `height` would not.) So the old expression
@@ -161,7 +211,7 @@ export function stickyOffset(): number {
    * a row will end up — and by the time anything arrives at the top of the
    * viewport the bar will be stuck across it. Answering "0, it covers nothing
    * right now" would be the more literal reading of the rect and would send
-   * every jump from the top of the article 44px too high.
+   * every jump from the top of the article a bar's height too high.
    *
    * An earlier version of this comment claimed the number was current coverage.
    * It is not, and GPT Sol was right to say so — the value was already what the
@@ -217,7 +267,7 @@ export function stickyOffset(): number {
  * **Why the destination half is needed.** `scrollToBlock` used to call this
  * **once** and hand the number to `glide()` as a fixed target (since 2026-09-28
  * it is asked every frame — `aimAt` — but the frames early in a glide still
- * need a prediction rather than a half-slid bar); `markOurScroll` stops
+ * need a prediction rather than a half-slid bar); `ourScrollY` stops
  * the bar *reacting* to the jump but cannot stop a transition already in
  * flight. So a reader who scrolled up — starting the reveal — and clicked a
  * gist 90ms later got a target computed against half a bar, and the row they
@@ -288,11 +338,12 @@ export const BAR_KEEP_UNTIL = 160;
  * **How long `data-bar-moving` may stay on without a `transitionend` to end
  * it**, and the reason there is a number here at all.
  *
- * The attribute scopes the fisheye panels' `transition: top` to the one case
- * that should have one — the bar moving — because a panel's `top` also changes
- * on ordinary scrolling, while the sticky head settles out from under the
- * masthead over the first ~150px, and there a slide is a lag rather than an
- * animation (useColumnContext.ts § ColumnRect.top; GPT Sol F1, 2026-09-07).
+ * Historically, the attribute scoped the fisheye panels' `transition: top` to
+ * the one case that should have one — the bar moving — because a panel's `top` also changed
+ * on ordinary scrolling, while the sticky head settled out from under the
+ * masthead over the first ~150px, and there a slide was a lag rather than an
+ * animation (useColumnContext.ts § ColumnRect.top, since removed; GPT Sol F1,
+ * 2026-09-07). Those panels went on 2026-09-29; the attribute's lifecycle remains.
  *
  * `transitionend` is what normally ends it. **A transition that never starts
  * never ends**, and there are at least three ways to have one: `prefers-
@@ -389,9 +440,9 @@ export function stepBar(hidden: boolean, y: number, from: number): BarStep {
  * What that costs, stated rather than waved past, because performance.md argues
  * against a scroll listener on every machine: this one is `passive`, coalesced
  * into a `requestAnimationFrame`, and its body is `stepBar` — arithmetic on
- * three numbers with no DOM read in it. The page already installs a scroll
- * listener at every width for the fisheye panels (useColumnContext.ts), and
- * that one measures rects.
+ * three numbers with no DOM read in it. When Structure or the headings crumbs
+ * are mounted, useColumnContext.ts also installs a scroll listener and measures
+ * rects; that sampler once served the fisheye panels too.
  *
  * **The bottom bar did not come with it.** `--dock-bottom` stays inside § a
  * small device: the Dock is 40px, it names the mode and it is the way out of
@@ -407,6 +458,9 @@ export function watchBarVisibility(): () => void {
 
   /**
    * **`data-bar-moving`: the bar is travelling right now.**
+   *
+   * The rationale below describes the fisheye panels before they went on
+   * 2026-09-29; the attribute's lifecycle is still here.
    *
    * The fisheye panels are the one thing under the bar that CSS does not move:
    * they are `position: fixed` with a `top` measured off the table head by
@@ -485,29 +539,25 @@ export function watchBarVisibility(): () => void {
     pending = 0;
     // A jump we started is not the reader scrolling, and chrome that answers to
     // it would move the ground under a destination already calculated. See
-    // `markOurScroll`.
-    if (
-      performance.now() < quietUntil &&
-      ourScrollY !== null &&
-      Math.abs(window.scrollY - ourScrollY) < 0.5
-    ) {
+    // `ourScrollY`.
+    /* Exactly, not within a tolerance: `ourScrollY` is the browser's own
+       readback, so an unmoved page reports the same number, and a quarter of a
+       pixel is the reader. With no clock to end it, a tolerance would ignore
+       that movement for good (GPT Sol, plan review of 261005c, F1). */
+    if (window.scrollY === ourScrollY) {
       from = window.scrollY;
       return;
     }
-    /* A different pixel inside the quiet window is the reader taking over,
-       not our delayed scroll event. Let the bar answer this movement and end
-       the window now rather than deafening it for the remaining 150ms. */
-    if (performance.now() < quietUntil) {
-      quietUntil = 0;
-      ourScrollY = null;
-    }
+    /* Any other pixel is the reader taking over. Let the bar answer this
+       movement, and forget ours. */
+    ourScrollY = null;
     const next = stepBar(hidden, window.scrollY, from);
     from = next.from;
     if (next.hidden === hidden) return;
     hidden = next.hidden;
-    /* Before the attribute the panels answer to, so a `MutationObserver` on
-       `data-bars` (useColumnContext.ts) already sees the slide is on when it
-       takes its fresh measurement. */
+    /* Before `data-bars`: the fisheye panels' `MutationObserver` used to need
+       the slide marked before taking its fresh measurement
+       (in useColumnContext.ts, until 2026-09-29). */
     startMoving();
     if (hidden) document.documentElement.dataset.bars = "hidden";
     else delete document.documentElement.dataset.bars;
@@ -519,13 +569,15 @@ export function watchBarVisibility(): () => void {
   };
 
   /**
-   * **Focus moves the bar too, and nothing else can tell.**
+   * **The historical reason for watching focus as well as scroll.**
+   * The rationale below describes the fisheye panels and granularity pills
+   * before they went on 2026-09-29; the focus listener is still here.
    *
    * `:root:has(.controls:focus-within, .mode-band)` in shell.css puts
    * `--bar-bottom` and `--bar-hide` back **while `data-bars` is still
    * `"hidden"`** — that is the guard that stops the bar sliding out from under
    * a keyboard reader tabbing the granularity pills. So focus alone moves the
-   * bar and the table head 44px, twice, and neither end of it changes an
+   * bar and the table head by the bar's height, twice, and neither end of it changes an
    * attribute on `<html>`.
    *
    * Nothing would have noticed. The fisheye panels take their `top` from the
@@ -602,29 +654,39 @@ let aiming: number | null = null;
  * When the page is being moved by us rather than by the reader.
  *
  * **The bar must not react to our own scrolling, and this is a correctness
- * problem rather than a tidiness one.** Every jump in this file computes its
- * destination once, from `stickyOffset()`, and then travels. If the travel
- * itself can hide the controls bar — and a jump down the article is a downward
- * scroll, so it can — the clearance the destination was calculated with is no
- * longer the clearance that exists when it arrives, and the row lands 44px
- * under the header it was supposed to clear. An upward jump has the mirror
- * fault: it reveals the bar and lands behind it.
+ * problem rather than a tidiness one.** A jump must not hide or reveal the
+ * controls as though the reader had scrolled. When this guard was introduced,
+ * the destination was measured once, so reacting to the jump also changed the
+ * clearance underneath that fixed target. Caught by GPT Sol reviewing the
+ * plan, 2026-08-27, before it was ever run.
  *
- * Neither shows up as an error, and both look exactly like a jump that worked.
- * Caught by GPT Sol reviewing the plan, 2026-08-27, before it was ever run.
+ * The target is now re-measured every frame by `aimAt`, using
+ * `stickyDestination()` to reserve the bar's eventual coverage. That corrects
+ * the destination when layout changes; this guard keeps the bar's visibility
+ * from changing in response to our own movement.
  *
- * `mark()` is called by every path in this file that moves the page, and the
- * window it opens covers the whole animation with a little either side.
- * `watchBarVisibility` sits out anything inside it — chrome answers to the
- * reader's gesture, never to ours, which is the rule that makes the race
- * impossible rather than unlikely.
+ * **A scroll event that reports the pixel we last moved the page to is ours,
+ * whenever it arrives; one at any other pixel is the reader's.** Every path in
+ * this file that moves the page goes through `moveWindow`, which remembers
+ * where the browser actually put it, and `watchBarVisibility` and the arrival
+ * anchor sit out an event at that pixel — chrome answers to the reader's
+ * gesture, never to ours.
+ *
+ * **It used to be a clock**, and that was the bug: a *quiet window* opened when
+ * the glide began and closed 150ms after it was due to end, and outside it
+ * every scroll event was the reader. But a click that jumps also re-renders
+ * the reading view, and the glide's own last event waits behind that render —
+ * 745 to 1,243ms on a 1,025-block article, measured. It arrived after the
+ * window, at the very pixel the glide had reached, and was read as the reader
+ * leaving: the anchor went, `?at=` was rewritten to the section before the one
+ * clicked, and the bar hid itself for a jump. How long our event takes is not
+ * ours to promise; which pixel it reports is.
+ * docs/postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md.
+ *
+ * Nothing here expires. It is forgotten when an event arrives at another
+ * pixel, or when the reader's wheel or finger stops a glide (`cancel`).
  */
-let quietUntil = 0;
-/** The last pixel one of this module's `scrollTo` calls actually reached. */
 let ourScrollY: number | null = null;
-function markOurScroll(ms = SCROLL_MS + 150) {
-  quietUntil = performance.now() + ms;
-}
 
 /** Move the page and remember the browser's clamped/rounded answer. */
 function moveWindow(top: number): void {
@@ -646,21 +708,18 @@ let landing: ((outcome: ScrollOutcome) => void) | null = null;
  * the glide's own last frame, which ends the animation through here too.
  */
 function cancel(outcome: ScrollOutcome = "cancelled") {
-  /* **The reader taking over ends the quiet window, and must.** `cancel` is what
-     a wheel, a touch or a `pointercancel` runs (see `bail` below), so past this
-     line the page is moving because *they* are moving it — and leaving
-     `quietUntil` set would go on ignoring their scrolling for up to 350ms,
-     which is exactly the gesture most likely to be them reaching for the chrome
-     this suppresses. Cheap to get wrong, invisible when wrong: the bar would
-     merely feel unresponsive now and then. Raised by GPT Sol, 2026-08-27. */
+  /* **The reader taking over ends our claim on the pixel, and must.** `cancel`
+     is what a wheel, a touch or a `pointercancel` runs (see `bail` below), so
+     past this line the page is moving because *they* are moving it — and a
+     reader's first event can land on the pixel our last frame reached, which
+     is exactly the gesture most likely to be them reaching for the chrome this
+     suppresses. Cheap to get wrong, invisible when wrong: the bar would merely
+     feel unresponsive now and then. Raised by GPT Sol, 2026-08-27. */
   /* …but a glide's own last frame is not the reader taking over, and its
-     scroll event is still to come: keep the window it opened, which ends
-     150ms later on its own, so that event is not read as the reader scrolling
-     away from the arrival it has just made (`anchor`, plan 260929a). */
-  if (outcome !== "settled") {
-    quietUntil = 0;
-    ourScrollY = null;
-  }
+     scroll event is still to come: keep the pixel, so that event is not read
+     as the reader scrolling away from the arrival it has just made (`anchor`,
+     plan 260929a). */
+  if (outcome !== "settled") ourScrollY = null;
   /* Any movement at all ends a centred arrival's hold on the position. */
   clearArrivalAnchor();
   if (frame) cancelAnimationFrame(frame);
@@ -717,10 +776,6 @@ function glide(
     if (!provisional()) return done?.("settled");
     ms = 0;
   }
-  // AFTER the early return, not before it: a jump to where we already are moves
-  // nothing, and opening the quiet window for it would deafen the bar to a third
-  // of a second of the reader's own scrolling for no reason at all.
-  markOurScroll(ms + 150);
   const started = performance.now();
   /* An instant move has already arrived as far as `glideTarget` is concerned:
      the re-check only corrects. */
@@ -781,7 +836,6 @@ export function reducedMotion(): boolean {
  */
 export function scrollToTop() {
   cancel();
-  markOurScroll(150); // instant, so only the event it fires needs covering
   moveWindow(0);
 }
 
@@ -789,10 +843,13 @@ export function scrollToTop() {
  * **How a `scrollToBlock` ended**, for a caller that has something to do on
  * arrival — the flash (flash.ts, called from keynav.ts § `beginJump`).
  *
- *  - `settled`: the row is where it was sent — where it is *then*, re-measured,
- *    not where it was when asked. At once only for a move of less than a
- *    pixel; on the glide's last frame; and for an instant move (reduced motion,
- *    `"auto"`) one frame after it, when the post-commit re-check has run.
+ *  - `settled`: the destination is where it was sent. Ordinarily that means
+ *    the row is there — where it is *then*, re-measured, not where it was when
+ *    asked. A masthead-echo row instead settles at the page top, where its
+ *    visible copy lives; the hidden row itself is not measured. At once only
+ *    for a move of less than a pixel; on the glide's last frame; and for an
+ *    instant move (reduced motion, `"auto"`) one frame after it, when the
+ *    post-commit re-check has run.
  *    docs/postmortems/260928c-a-scroll-aimed-at-a-pixel-not-at-the-element.md.
  *  - `cancelled`: the reader's wheel or touch stopped the glide, or a newer
  *    movement replaced it (another jump, an arrow key, Back, `abandonScroll`).
@@ -873,39 +930,52 @@ export function alignedOffset(o: {
  *
  * It lasts until the next movement of any kind — `cancel`, which every glide
  * runs first and which a wheel or touch mid-glide also runs — or a scroll
- * event outside our own quiet window. Inside that window, the glide's delayed
- * event keeps the same pixel and a reader's movement does not, so the pixel
- * decides. A re-flow that makes the browser scroll ends it too, and then the
- * reading line answers again, which is the old behaviour rather than a wrong
- * one.
+ * event at any pixel but the one it arrived at. The glide's own delayed event
+ * reports that pixel and a reader's movement does not, so the pixel decides,
+ * however late the event is (§ `ourScrollY`). A re-flow that makes the browser
+ * scroll ends it too, and then the reading line answers again, which is the
+ * old behaviour rather than a wrong one.
  */
 let anchor: { id: string; passage: string | undefined } | null = null;
 let anchorY = 0;
 let anchorListening = false;
+const anchorListeners = new Set<() => void>();
+
+/** Anchor changes can settle or end without scrolling; live position samplers must hear them. */
+export function subscribeArrivalAnchor(listener: () => void): () => void {
+  anchorListeners.add(listener);
+  return () => {
+    anchorListeners.delete(listener);
+  };
+}
 
 function onScrollWhileAnchored(): void {
-  /* The glide's delayed event reports the pixel it just reached. A reader can
-     scroll during that same 150ms window, though, and a different pixel is the
-     distinction the clock alone cannot make (plan 260929a code review, F1). */
-  if (performance.now() < quietUntil && Math.abs(window.scrollY - anchorY) < 0.5) return;
+  /* The glide's delayed event reports the pixel it just reached, and may
+     arrive a second later behind a render. The page has not moved, so the
+     reader has not left — no clock is asked (§ `ourScrollY`). */
+  if (window.scrollY === anchorY) return; // exactly: `anchorY` is a readback too
   clearArrivalAnchor();
 }
 
 /** End a centred arrival without implying that a glide is in flight. */
 export function clearArrivalAnchor(): void {
+  const held = anchor !== null;
   anchor = null;
   if (anchorListening) {
     window.removeEventListener("scroll", onScrollWhileAnchored);
     anchorListening = false;
   }
+  if (held) for (const listener of anchorListeners) listener();
 }
 
 function holdAnchor(id: string, passage: string | undefined): void {
   anchor = { id, passage };
   anchorY = window.scrollY;
-  if (anchorListening) return;
-  window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
-  anchorListening = true;
+  if (!anchorListening) {
+    window.addEventListener("scroll", onScrollWhileAnchored, { passive: true });
+    anchorListening = true;
+  }
+  for (const listener of anchorListeners) listener();
 }
 
 /** The centred arrival the reader is standing on, or `null` — see `anchor`. */
@@ -940,6 +1010,19 @@ export function scrollToBlock(
     cancel();
     return done?.("missing");
   }
+  const instant = behavior !== "smooth" || reducedMotion();
+  /* **Still hidden after the reveal: the masthead's echo** (masthead-echo.ts;
+     Greg, spya-t6cdve). Its row has no height and no fold opens it, so there
+     is nothing to measure and nothing to centre. The visible copy of its
+     words is the masthead, so the jump goes to the top of the page: `?at=`,
+     ↑ to the first section's start, a search hit or a quote that names it.
+     No arrival anchor is left, since the top of the page is where every
+     position reader already says "nowhere yet". GPT Sol, plan review F6,
+     docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md. */
+  if (isFolded(id)) {
+    glide(() => 0, done, instant ? 0 : SCROLL_MS);
+    return;
+  }
   const align = how.align ?? "top";
   const aim = aimAt(id, row, align, align === "centre" ? how.passage : undefined);
   glide(
@@ -951,7 +1034,7 @@ export function scrollToBlock(
       if (outcome === "settled" && align === "centre") holdAnchor(id, how.passage);
       done?.(outcome);
     },
-    behavior === "smooth" && !reducedMotion() ? SCROLL_MS : 0,
+    instant ? 0 : SCROLL_MS,
     aim.finish,
     aim.provisional,
   );
@@ -1135,7 +1218,7 @@ export function isPassageOnScreen(id: string, passage: string): boolean {
 export function whereIsBlock(id: string): Whereabouts {
   const row = blockRow(id);
   if (!row) return "nowhere";
-  if (isFolded(id)) return "away"; // a jump to it will unfold it
+  if (isFolded(id)) return "away"; // a jump unfolds it, or for the masthead's echo goes to the top
   if (anchor?.id === id) return "here"; // § `anchor`
   const { top, bottom } = row.getBoundingClientRect();
   const line = stickyOffset();

@@ -10,6 +10,11 @@ one — **how a new piece of AI work gets its cost tracked, and where the figure
 >
 > — Greg, 2026-09-30
 
+Adding a column to the ledger (a new thing recorded per call) is a migration: how it is named and
+generated is [database.md § Two worktrees generated at once](database.md#two-worktrees-generated-at-once),
+how it is applied [§ Step two: apply the migrations](database.md#step-two-apply-the-migrations). The
+table is `aiCalls` in [`src/db/schema.ts`](../../src/db/schema.ts).
+
 ## The short version: you should not have to do anything
 
 Every gateway call made inside a collector writes one row to `spideryarn.ai_calls`, priced when the
@@ -21,7 +26,7 @@ three rules**, and each rule has something that enforces it:
 1. **Call a model through the gateway**, never with your own client or `fetch`: `streamMessage`
    ([`src/messages-stream.ts`](../../src/messages-stream.ts)) for the pipeline stages,
    `openRouterStream` / `openRouterJson` / the embeddings, images, transcription and decisions
-   (`openRouterDecisions`, quick search's) seams in
+   (`openRouterDecisions`, quick search's and the command bar's pick) seams in
    [`src/ai-call.ts`](../../src/ai-call.ts) for everything else. The gateway is what writes the row;
    `tests/no-undeclared-spend.test.ts` fails on any other way to reach a provider.
 2. **Make the call inside a scope.** A pipeline step runs inside `runStep`
@@ -59,6 +64,10 @@ so a very long article's rows may be understated (`LIVE_BACKEND_PRICES` in
 |---|---|
 | What has this article cost, in total and by mode? | the **What it cost** section of the article's metadata page — the administrator, on their own articles |
 | What has each account cost this month? | `/admin/users`, the spend column — [admin.md](admin.md#the-spend-column-and-the-two-things-that-keep-it-honest) |
+| Which user, article, mode or model is the money going on, and when? | `/admin/costs` — [admin-costs.md](admin-costs.md) |
+| Where are the inefficiencies, with a report Greg can read? | `npm run cost:analyse` — [admin-costs.md § Running an analysis](admin-costs.md#running-an-analysis) |
+| How often is a call asked again, given up on, cut off part-way, or stopped by our own clock, and why? | `/admin/costs` and `npm run cost:analyse` — [admin-costs.md § Failures and retries](admin-costs.md#failures-and-retries) |
+| Is what the ledger records right, and what is it missing? | the 2026-10-05 audit — [261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md) |
 | Where did the money go, and how much of it can we see? | `npm run cost`, `npm run cost -- --owners` — [ai-gateway.md](ai-gateway.md), § *The pricing report* |
 | What does a fresh ingest or a mode cost, cold? | `npm run eval:cost` — [evals/cost/run.ts](../../evals/cost/run.ts) |
 | Does the recording itself still work, end to end? | `npm run test:paid` — [below](#the-paid-check-npm-run-testpaid) |
@@ -121,6 +130,23 @@ uses. [`src/web/ArticleCost.tsx`](../../src/web/ArticleCost.tsx) draws it.
   only, since the fee is on buying credits; BYOK and our own arithmetic are not uplifted. The page
   shows the credits figure separately for that reason
   ([ai-gateway.md § What it cost](ai-gateway.md#what-it-cost)).
+
+## What the ledger is known to get wrong
+
+The 2026-10-05 audit against OpenRouter's own records found three limits. Open it for the measured
+scope, counts and amounts
+([261005a](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md)):
+
+- **Dictation's transcription calls are recorded with no money.** The provider's reply says the
+  call cost nothing, and the gateway refuses to record that as free.
+- **Some calls that were stopped or failed are recorded with no money**, though they were usually
+  charged. A stopped chat answer is the common case.
+- **The scan for calls that go round the gateway is a tripwire, not a wall.** It knows four
+  provider hosts; a provider it has never heard of passes it.
+
+`npm run cost:analyse -- --lookup-unpriced` asks OpenRouter about a bounded set of those calls when
+they carry a generation id, and prints the resulting known shortfall as a floor. Each fix has a
+queue entry.
 
 ## Spend that keeps going
 
@@ -186,5 +212,5 @@ they appear. Run it after a change to the gateway, the ledger or the attribution
 the article attribution removed (exit 1).
 
 Not covered yet: the transcription and images wires, which need an audio file and cost more per
-call, and the decisions wire (quick search, since 2026-10-02), which this check does not call yet —
+call, and the decisions wire (quick search, since 2026-10-02, and the command bar's pick), which this check does not call yet —
 its ledger row is pinned in `tests/ai-call.test.ts` against a stubbed provider, not against a real bill.

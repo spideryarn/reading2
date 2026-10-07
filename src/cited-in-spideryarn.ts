@@ -13,7 +13,8 @@
  *
  * - **doi / arxiv** — the work's identifier (`keysOf`, from the link code found
  *   in the article) is the one a candidate's address **is**: a `doi.org` path
- *   or an `arxiv.org` abstract/PDF path, parsed by host. Not a DOI anywhere in
+ *   or an address the paper-source registry knows as an arXiv paper (arXiv's
+ *   own pages, and Hugging Face's and alphaXiv's page about one). Not a DOI anywhere in
  *   a URL — a publisher's query string or a lookalike host can carry somebody
  *   else's (GPT Sol, plan review).
  * - **guessed-id** — the same, against the DOI or arXiv address **we found**
@@ -33,6 +34,7 @@
  */
 
 import { firstAuthor, keyWords, keysOf } from "./citations.js";
+import { ARXIV_ID_PATTERN, arxivIdOf } from "./paper-sources.js";
 import type { Citations, CitedInSpideryarn, CitedMatchedBy, CitedWork } from "./types.js";
 import { sameTarget } from "./urls.js";
 
@@ -70,7 +72,8 @@ const TIER: Record<CitedMatchedBy, number> = { doi: 0, arxiv: 0, "guessed-id": 0
 const DOI_BODY = "10\\.\\d{4,9}\\/[^\\s\"'<>?#]+";
 /** A DOI resolver path, whole: no prefix/suffix that merely contains a DOI. */
 const DOI_PATH = new RegExp(`^\\/(${DOI_BODY})$`, "i");
-const ARXIV_ID = "(\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?\\/\\d{7})";
+/** The id pattern itself lives in src/paper-sources.ts — one copy; this is it as a capture group. */
+const ARXIV_ID = `(${ARXIV_ID_PATTERN})`;
 /**
  * The same two shapes as a whole bare string — a DOI, or an arXiv id with an
  * optional version — for src/bibliographic.ts, so there is one parser of each
@@ -78,8 +81,6 @@ const ARXIV_ID = "(\\d{4}\\.\\d{4,5}|[a-z-]+(?:\\.[a-z]{2})?\\/\\d{7})";
  */
 export const DOI_SHAPE = new RegExp(`^(${DOI_BODY})$`, "i");
 export const ARXIV_ID_SHAPE = new RegExp(`^${ARXIV_ID}(?:v\\d+)?$`, "i");
-const ARXIV_PAGE_PATH = new RegExp(`^/(?:abs|html)/${ARXIV_ID}(?:v\\d+)?/?$`, "i");
-const ARXIV_PDF_PATH = new RegExp(`^/pdf/${ARXIV_ID}(?:v\\d+)?(?:\\.pdf)?/?$`, "i");
 
 function decodedPath(pathname: string): string | null {
   try {
@@ -108,11 +109,21 @@ export function identityOf(url: string): { doi?: string; arxiv?: string } {
     const doi = DOI_PATH.exec(path)?.[1];
     return doi === undefined ? {} : { doi: doi.toLowerCase() };
   }
-  if (host === "arxiv.org" || host === "www.arxiv.org" || host === "export.arxiv.org") {
-    const arxiv = ARXIV_PAGE_PATH.exec(path)?.[1] ?? ARXIV_PDF_PATH.exec(path)?.[1];
-    return arxiv === undefined ? {} : { arxiv: arxiv.toLowerCase() };
-  }
-  return {};
+  /* **arXiv is asked of the registry** (src/paper-sources.ts § `arxivIdOf`), so
+     every address it knows as an arXiv paper is one here: arXiv's own pages
+     and PDFs, and the pages *about* a paper on Hugging Face and alphaXiv. This
+     had a parser of its own until 2026-10-06, which knew fewer shapes
+     (docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+     § The arXiv mirrors are arXiv).
+
+     It is asked about the host without a trailing dot and the path decoded, as
+     that parser read them. A decoded path with anything in it but an id's own
+     characters is refused first, because handing `?`, `#` or `\` back to a URL
+     parser would turn part of the path into something else. arXiv's DOI never
+     reaches here: `doi.org` answered above, as a DOI. */
+  if (!/^[A-Za-z0-9._/-]*$/.test(path)) return {};
+  const arxiv = arxivIdOf(`${u.protocol}//${host}${path}`);
+  return arxiv === null ? {} : { arxiv: arxiv.workId };
 }
 
 /** Which identifier, if any, the work's `idKey` shares with the address that is one. */

@@ -178,10 +178,83 @@ describe("Tweets' copy buttons", () => {
     expect(status?.getAttribute("aria-atomic")).toBe("true");
     expect(status?.classList.contains("tw:sr-only")).toBe(false);
     expect(visibleText(thread.parentElement as Element)).toBe("Couldn't copy the thread");
+    /* The warning triangle every other failed copy draws; an x on a button
+       reads as "close" (plan 261004g). */
+    expect(thread.querySelector("svg")?.getAttribute("class")).toContain("lucide-triangle-alert");
     // And it goes back to quiet.
     act(() => vi.advanceTimersByTime(2000));
     expect(status?.textContent).toBe("");
     expect(status?.classList.contains("tw:sr-only")).toBe(true);
     expect(visibleText(thread.parentElement as Element)).toBe("");
+  });
+});
+
+/**
+ * **What the button says is about the newest press.** Both were red against
+ * the hand-written handler this button had until 2026-10-04, which had no
+ * per-press token and hung its timer off an effect keyed on the state. They
+ * are `useCopy`'s now (plan 261004e, stage 3).
+ */
+describe("Tweets' copy buttons, pressed twice", () => {
+  it("let the newest press win when an older one is refused afterwards", async () => {
+    const settlers: Array<{ ok(): void; no(): void }> = [];
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((ok, no) => {
+          settlers.push({ ok, no: () => no(new Error("denied")) });
+        }),
+    );
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    draw();
+    const post = button("Copy this post")[0];
+    if (!post) throw new Error("no post button");
+    await press(post);
+    await press(post);
+    expect(settlers).toHaveLength(2);
+    const status = post.parentElement?.querySelector("[aria-live]");
+    // Mid-flight it claims nothing.
+    expect(status?.textContent).toBe("");
+
+    await act(async () => {
+      settlers[1]?.ok();
+      await Promise.resolve();
+    });
+    expect(status?.textContent).toBe("Post copied");
+    // The first press is refused after the second worked. The clipboard holds
+    // the post, so "Couldn't copy" in red beside the button would be false.
+    await act(async () => {
+      settlers[0]?.no();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(status?.textContent).toBe("Post copied");
+    expect(status?.classList.contains("tw:sr-only")).toBe(true);
+    expect(visibleText(post.parentElement as Element)).toBe("");
+    expect(post.querySelector("svg")?.getAttribute("class")).toContain("lucide-check");
+  });
+
+  it("give a second copy its own full time on screen", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    draw();
+    const post = button("Copy this post")[0];
+    if (!post) throw new Error("no post button");
+    const status = post.parentElement?.querySelector("[aria-live]");
+    const glyph = () => post.querySelector("svg")?.getAttribute("class") ?? "";
+    await press(post);
+    expect(status?.textContent).toBe("Post copied");
+
+    // 1000 ms into a 1600 ms tick, copy again.
+    act(() => vi.advanceTimersByTime(1000));
+    await press(post);
+    // 1000 ms later the first tick's timer has long run out. The second copy
+    // is 1000 ms old and still has 600 ms to show.
+    act(() => vi.advanceTimersByTime(1000));
+    expect(status?.textContent).toBe("Post copied");
+    expect(glyph()).toContain("lucide-check");
+    // And it does go: 1700 ms after the second copy.
+    act(() => vi.advanceTimersByTime(700));
+    expect(status?.textContent).toBe("");
+    expect(glyph()).toContain("lucide-copy");
   });
 });

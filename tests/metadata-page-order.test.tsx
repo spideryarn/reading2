@@ -54,7 +54,12 @@ vi.mock("nuqs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("nuqs")>()),
   useQueryState: () => [null, () => {}],
 }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { Metadata } = await import("../src/web/Metadata.js");
 
@@ -155,18 +160,26 @@ async function mount(meta: Partial<Meta> = {}) {
 const sections = () =>
   [...host.querySelectorAll<HTMLElement>("[data-section]")].map((el) => el.dataset.section);
 
-/** The contents list in the margin, in its own order. */
+/**
+ * The contents list's entries, in its own order.
+ *
+ * `li button`, not every button in the nav: since 2026-10-07 the nav also
+ * holds a *Contents* button, which opens the list on a narrow window and is
+ * not a section (PageContents.tsx). The wider query counted it as one.
+ */
 const contents = () =>
-  [...host.querySelectorAll("nav[aria-label] button")].map((b) => b.textContent);
+  [...host.querySelectorAll("nav[aria-label] li button")].map((b) => b.textContent);
 
 /**
  * A section's own disclosure button, by heading.
  *
- * Scoped to `main` on purpose: the contents list in the margin carries a button
- * per section with the same words in it, and it comes first in the document. A
- * page-wide `find` therefore returned the nav entry, whose click handler is
- * `scrollIntoView` — so the first version of these tests was clicking the
- * wrong control and failing on a method jsdom does not implement.
+ * `h2 button` on purpose: the contents list carries a button per section with
+ * the same words in it, and it comes first in the document. A page-wide `find`
+ * therefore returned the nav entry, whose click handler is `scrollIntoView` —
+ * so the first version of these tests was clicking the wrong control and
+ * failing on a method jsdom does not implement. **Scoping to `main` no longer
+ * does that by itself**: the nav is inside `main` since 2026-10-07. The `h2` is
+ * what keeps its entries out, none of them being in a heading.
  */
 const sectionHeading = (label: string) =>
   [...(host.querySelector("main")?.querySelectorAll("h2 button") ?? [])].find((b) =>
@@ -634,6 +647,9 @@ describe("the top of the page: Archive, Share…, and what is shut", () => {
     history.replaceState(null, "", `/read/${SLUG}/metadata`);
     vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
       calls.push({ url: String(url), init });
+      /* The sharing card's own read of its private link (PrivateLink.tsx).
+         Answered apart, so it does not take a turn from `metaAnswers`. */
+      if (String(url).endsWith("/share-link")) return Promise.resolve(json({ on: false }));
       if (init?.method === "PATCH") {
         const next = patchAnswers.shift();
         if (next === "hang") return new Promise<Response>(() => {});

@@ -7,14 +7,17 @@
  * >
  * > — Greg, 2026-08-31
  *
- * Eleven targets can do this — Glossary, Ideas, Quotes, Timeline, Debate and
- * Citations; the Sketch and Illustrated pictures inside Diagram; the Quiz half
- * of Remember; Referee's Claims and Candidates — reached by twelve controls,
- * since Diagram's bar button and its Sketch chip both arm the Sketch. The Tweets
- * page was a twelfth target until 2026-09-15 and now starts on arrival instead:
- * `useAutoRunOnArrival` at the foot of this file. This is the whole of it, in
- * one place, because eleven copies of a rule about spending money is eleven
- * chances to get one of them wrong.
+ * The targets that can do this are `AutoRunTarget`'s, in auto-run-targets.ts,
+ * which is the list and says why each is on it; they are not counted here. Most
+ * are a mode with a generated artefact. Some are a part of one: the Sketch and
+ * Illustrated pictures inside Diagram, the Quiz half of Learn, Summary's
+ * plain-words levels, and Referee's Claims and Candidates (whose chip stopped
+ * arming it on 2026-10-03, so nothing reaches that one today). A target can have
+ * more than one control: Diagram's bar button and its Sketch chip both arm the
+ * Sketch. The Tweets page was a target a press armed until 2026-09-15 and now
+ * starts on arrival instead: `useAutoRunOnArrival` at the foot of this file.
+ * This is the whole of it, in one place, because a copy per mode of a rule
+ * about spending money is a chance per mode to get it wrong.
  *
  * **Two of them have no job behind them.** `claims` and `candidates` are SSE
  * streams rather than pipeline steps (auto-run-targets.ts), so `ensure` starts
@@ -53,13 +56,23 @@
  * network cannot loop. If the second read comes back empty the press is still in
  * hand and the run starts, which is what pressing a mode means.
  *
- * This is the way out of a failed GET, and there has to be one: Ideas, Quotes
- * and Timeline draw no button at all in their error state, so the bar is the
- * only control the reader has. Before 2026-09-02 the press was retired on
- * `error` and pressing the same mode again did nothing whatever — GPT Sol's
- * second finding. Retiring it was defending against a kept press firing against
- * whatever mounted next, and `owner` now stops that structurally: the only mount
- * that can spend this press is the one still looking at the error.
+ * This is one way out of a failed GET, and until 2026-10-04 it was the only
+ * one in Ideas, Quotes and Timeline, which drew no button at all in their error
+ * state. Before 2026-09-02 the press was retired on `error` and pressing the
+ * same mode again did nothing whatever — GPT Sol's second finding. Retiring it
+ * was defending against a kept press firing against whatever mounted next, and
+ * `owner` now stops that structurally: the only mount that can spend this press
+ * is the one still looking at the error.
+ *
+ * **There are three routes to the answer, and the press is honoured by
+ * whichever arrives**: the opening read, this one automatic re-read, and the
+ * panel's own *Try again* (`retryRead`, drawn by src/web/ReadError.tsx in every
+ * band since 2026-10-04). *Try again* itself sends only a GET. If that GET says
+ * there is nothing and the press is still in hand, the run starts — unforced,
+ * and once per `(slug, target)` — exactly as it would have had the first read
+ * answered. Pressing the bar button again in the same state would start it
+ * too. tests/read-error-matrix.test.tsx § Try again answered by a 404 pins both
+ * halves: a press in hand runs once, a pasted link runs nothing.
  *
  * ## Unforced, and the empty-state button must be too
  *
@@ -103,9 +116,8 @@ export type ArtefactStatus = "loading" | "none" | "ready" | "error";
  * @returns whether this mount made the automatic attempt. The glossary, ideas,
  *   quotes and sketch panels used it to say *Using your profile* instead of
  *   offering a tickbox the run had already decided; both pieces of UI went on
- *   2026-09-13 and those four hooks now ignore the return. Timeline,
- *   citations, debate and illustrated still carry it as
- *   `automatic` for their own consumers.
+ *   2026-09-13 and those hooks now ignore the return. The hooks that still
+ *   carry it return it as `automatic`, for their own consumers.
  */
 export function useAutoRun(
   slug: string,
@@ -177,8 +189,12 @@ export function useAutoRun(
 
 /**
  * **A page the owner opened, with nothing on it, starts itself — no press.**
- * One caller: the Tweets band (useTweets.ts) — the Tweets page until it became
- * a mode on 2026-09-29, when the arrival rule came with it (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
+ * Two callers. Marginalia's relation words since 2026-10-05, asked for when
+ * the owner's column is on screen (useRelations.ts, which has Greg's words for
+ * it). And the first, which the rest of this note is about: the thread's band
+ * (useTweets.ts), Summary's Thread view — the
+ * Tweets page until it became a mode on 2026-09-29, when the arrival rule came
+ * with it (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md).
  *
  * > The Tweets mode should automatically start generating (if it hasn't already
  * > generated) when opened (without having to click a button to kick it off)
@@ -191,15 +207,18 @@ export function useAutoRun(
  * `/read/<slug>/tweets` was a **path**, and arriving at it was the intent. So the
  * token went, and everything else stayed. When the page became a mode on
  * 2026-09-29 the rule came with it — Greg's *"when opened"* was not revoked —
- * and the one arrival nobody chose, a last-view restore, drops `?mode=tweets`
- * instead (last-view.ts § `NEEDS_AN_EXPLICIT_PRESS`). What stays:
+ * and it came again on 2026-10-03, when the mode became Summary's Thread view
+ * (`?mode=summary&summary=thread`). The one arrival nobody chose, a last-view
+ * restore, drops the mode instead (last-view.ts § `opensTheThread`). What
+ * stays:
  *
  *  - **one attempt per `(slug, target)` per page load** — `beginAutoAttempt`,
  *    which records before it answers, so `<StrictMode>`'s double effect is
  *    refused and a failed job cannot loop;
  *  - **a failed read is not an answer** — read again, once per slug per mount,
- *    and run if that says there is nothing. The page's `error` branch draws no
- *    button, so without this a transient failure would leave it dead;
+ *    and run if that says there is nothing. The page's `error` branch drew no
+ *    button when this was written; it has *Try again* now, and that press is
+ *    honoured the same way — § A failed read is not an answer;
  *  - the callbacks in refs, so a caller that rebuilds them every render cannot
  *    re-fire the effect.
  *

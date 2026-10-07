@@ -116,13 +116,15 @@ import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 /** The stamp the release and the source maps went up under, if this is a build. */
 import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
-import { EarlierFilter, EarlierList, useEarlierFeedback } from "./FeedbackEarlier.js";
+import { EarlierFilter, EarlierList, EarlierQuestions, useEarlierFeedback } from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
+import { noteFeedbackDraft } from "./safe-to-reload.js";
 import { Toast, type ToastMessage } from "./Toast.js";
+import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
 import { useVisualViewport } from "./useVisualViewport.js";
 
@@ -179,6 +181,12 @@ interface Props {
   where: FeedbackWhere;
   /** The latest request to fill the box, if anything has asked. */
   prefill?: FeedbackPrefill | null;
+  /**
+   * Whether the reader is an admin, by the client's cosmetic flag
+   * (src/admin.ts § `isAdmin`): the Earlier tab then asks the admin route,
+   * which says what became of each report. Not a gate; the server's is.
+   */
+  admin?: boolean;
 }
 
 /**
@@ -358,7 +366,20 @@ function reportBody(input: {
   };
 }
 
-export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) {
+/**
+ * **Tell anything about to reload the page that a draft is held** — the Write
+ * box's words, picture or recording, or a half-written reply to a question —
+ * and take it back when neither is, or when the dialog is unmounted.
+ */
+function useDraftHeld(...held: boolean[]): void {
+  const any = held.some(Boolean);
+  useEffect(() => {
+    noteFeedbackDraft(any);
+    return () => noteFeedbackDraft(false);
+  }, [any]);
+}
+
+export function FeedbackDialog({ open, onClose, where, prefill = null, admin = false }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   /** The one box. `useDictationField` needs it to find the caret. */
   const box = useRef<HTMLTextAreaElement>(null);
@@ -375,8 +396,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   const [shot, setShot] = useState<Shot | null>(null);
   const [shotProblem, setShotProblem] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>({ kind: "editing" });
-  const [copied, setCopied] = useState(false);
-  const [copyFailed, setCopyFailed] = useState(false);
+  /* How the newest press of "Copy the report" went. Neither outcome times out:
+     both stay until a later press settles or the report is done with
+     (`discard`). The write, and why only the newest press may speak, are
+     `useCopy`'s (useCopy.ts). */
+  const { state: copyState, copy: writeToClipboard, reset: resetCopy } = useCopy({
+    copiedMs: null,
+    failedMs: null,
+  });
   /** A pasted image is still being decoded and re-encoded. See `takeFile`. */
   const [preparing, setPreparing] = useState(false);
 
@@ -547,12 +574,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
       setShotProblem(null);
     }
     setStage({ kind: "editing" });
-    setCopied(false);
-    setCopyFailed(false);
+    /* Also overtakes a copy still out, which would otherwise settle later and
+       say "Copied" on the next report's failure panel. */
+    resetCopy();
     setPreparing(false);
     sending.current = false;
     setReportId(mintId());
-  }, []);
+  }, [resetCopy]);
 
   /**
    * **The thank-you, as a toast rather than a dialog stage** — `toast` below.
@@ -672,18 +700,28 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * reader's own profile prose. A third `Where` kind for feedback would buy
    * nothing these two do not already give.
    */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: body,
     onChange: setBody,
     box,
     context: where.slug === null ? { kind: "profile" } : { kind: "article", slug: where.slug },
-    transcribe: sendForTranscription,
+    transcribe,
     /* **Only while open.** This dialog is mounted on every page whether or not
        it is showing, so a keeper here while shut would let any background tab
        claim a recording left from a closed one — and hold it where nobody can
        see it. One box for the whole site: a recording is offered back on
        whichever page Feedback is next opened. Plan 260929h. */
     ...(open ? { keep: keepDictation("feedback") } : {}),
+    /* A double press on Stop also sends (dictation.md § A double press). `send`
+       refuses by itself on Earlier, over length, or with nothing said. **Not
+       when shut**: this dialog stays mounted, and a reader who closed it while
+       the words were on their way did not ask for a report to be filed unseen. */
+    onDone: () => {
+      if (open) void send();
+    },
+    /* And shutting it, even for a moment, withdraws the wish. */
+    doneKey: open ? "open" : "shut",
   });
 
   /**
@@ -697,7 +735,15 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
    * has no live recogniser — and the microphone is still on after the report
    * has gone. `armed` is the other half. GPT Sol, 2026-09-02.
    */
-  const dictationBusy = dictate.dictation.armed || dictate.readOnly;
+  const dictationBusy = dictate.busy;
+  /* Dismissed words, screenshots and audio all survive navigation here.
+     Audio may have no transcript yet, and its device backup is best effort.
+     `open` is deliberately not part of the reload veto. */
+  const holdsDraft =
+    body.trim() !== "" || shot !== null || preparing || dictationBusy || Boolean(dictate.dictation.recording);
+  /* Told to the reload veto below, with any half-written reply to a question:
+     the Earlier hook is called after the tabs' state it needs. */
+
   /* Both stable (`useCallback` in the hook), so `send` is not remade every render. */
   const { artifact: dictationArtifact, dismiss: dismissDictation } = dictate.dictation;
 
@@ -732,7 +778,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, counts, show, setShow, retry } = useEarlierFeedback(open, view === "earlier");
+  const { earlier, choice, setShow, retry, questions, openQuestionCount, replies } = useEarlierFeedback(
+    open,
+    view === "earlier",
+    admin,
+  );
+  /* A half-written reply to a question is a draft too (261007d): an automatic
+     reload would lose it exactly as it would lose the Write box's words. */
+  useDraftHeld(holdsDraft, replies.holds);
   const ids = useId();
   const tabId = (which: View) => `${ids}-tab-${which}`;
   const panelId = (which: View) => `${ids}-panel-${which}`;
@@ -885,8 +938,9 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
         ),
       });
       if (!res.ok) {
-        /* 501 is this deployment having no database rather than anything the
-           reader did — src/store/index.ts. Everything else already carries a
+        /* 501 was this deployment having no database rather than anything the
+           reader did; nothing in src/ sends one since the filesystem store
+           went on 2026-09-05. Everything else already carries a
            sentence written for a reader, with an `[fb-…]` code on the end. */
         const message =
           res.status === 501 ? FEEDBACK_NOT_AVAILABLE.message : (await failure(res)).message;
@@ -952,16 +1006,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
   ]);
 
   const copy = useCallback(() => {
-    const clipboard = navigator.clipboard;
-    if (!clipboard) return setCopyFailed(true);
-    void clipboard
-      .writeText(asPlainText(body, kind, where))
-      .then(() => {
-        setCopied(true);
-        setCopyFailed(false);
-      })
-      .catch(() => setCopyFailed(true));
-  }, [body, kind, where]);
+    writeToClipboard(asPlainText(body, kind, where));
+  }, [body, kind, where, writeToClipboard]);
 
   return (
     <>
@@ -1161,6 +1207,8 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                 dictation={dictate.dictation}
                 toggle={dictate.toggle}
                 disabled={stage.kind === "sending"}
+                again={dictate.again}
+                sendingAfter={dictate.sendingAfter}
               />
             )}
             {/* **"Not sure what to write?" used to open here**, and it is gone —
@@ -1173,7 +1221,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                 the next person to want help text here will reach for a tooltip
                 too. */}
           </div>
-          <DictationStrip dictation={dictate.dictation} />
+          <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
 
           {over ? (
             <span className="fb-over">
@@ -1255,7 +1303,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
               <div className="fb-failed-outs">
                 <button type="button" className="fb-copy" onClick={copy}>
                   <Copy size={14} />
-                  {copied ? "Copied" : "Copy the report"}
+                  {copyState === "copied" ? "Copied" : "Copy the report"}
                 </button>
                 <a
                   className="fb-copy"
@@ -1272,7 +1320,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
                   not see. Saying so matters more here than anywhere else, because
                   a reader who believes they have copied their words and has not is
                   one Escape away from losing them. */}
-              {copyFailed ? (
+              {copyState === "failed" ? (
                 <p className="fb-shot-problem">
                   Your browser would not let us reach the clipboard. Select the text
                   in the box above and copy it by hand.
@@ -1295,8 +1343,19 @@ export function FeedbackDialog({ open, onClose, where, prefill = null }: Props) 
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierFilter show={show} counts={counts} onShow={setShow} />
-          <EarlierList earlier={earlier} show={show} retry={retry} />
+          <EarlierFilter choice={choice} onShow={setShow} questionCount={openQuestionCount} />
+          {/* An agent's questions, for an admin: the top of Needs a decision.
+              Hidden, not unmounted, on every other filter and tab, so a reply
+              in progress survives (FeedbackEarlier.tsx § EarlierQuestions). */}
+          <EarlierQuestions
+            questions={questions}
+            replies={replies}
+            choice={choice}
+            earlier={earlier}
+            open={open}
+            onEarlier={view === "earlier"}
+          />
+          <EarlierList earlier={earlier} choice={choice} retry={retry} />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

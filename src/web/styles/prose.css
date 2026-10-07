@@ -273,15 +273,16 @@ td.text.has-hit[data-hues].block-flash-still {
 
 /* **The same flash on a passage's own words** — Skim's stop is a quote,
    so flash.ts washes its `mark.hit` fragments instead of the cell (plan
-   260928a § 7b). `background-color`, not `box-shadow`: the quote's outline IS
-   its box-shadow (annotations.css § quotes), and the wash must sit inside it
-   rather than replace it.
+   260928a § 7b). `background-color`, not `box-shadow`: the ring a pressed
+   quote wears IS its box-shadow (annotations.css § quote fills), and the wash
+   must sit inside it rather than replace it. Since 2026-10-03 the quote has a
+   fill of its own, which this covers while it flashes and returns to.
 
    **No `100%` keyframe**, on purpose: an omitted end keyframe animates back to
-   the element's own value, which for the current stop is the rung quote's
-   0.18 tint (`mark.hit[data-quote][data-hit-open]`) — so the wash fades into
-   the ring instead of dropping to transparent and snapping back. The still
-   rule is `td.text`-scoped so it outranks that later, equal-weight rule. */
+   the element's own value, which for the current stop is the quote's priority
+   fill (`mark.hit[data-quote]`) — so the wash fades into the fill inside its
+   ring instead of dropping to transparent and snapping back. The still
+   rule is `td.text`-scoped so it outranks the later quote-fill rule. */
 @keyframes passage-flash {
   0%, 35% { background-color: var(--highlight-wash); }
 }
@@ -876,4 +877,56 @@ td.text.kind-caption .prose {
   font-size: 0.85rem;
   line-height: 1.45;
   color: var(--ink-faint);
+}
+
+/* ---- the end of the article -------------------------------------------
+   One footer row after the last block: a short hairline, a small diamond, a
+   short hairline. Greg, 2026-10-04: *"Add some subtle pleasant visual marker at
+   the very end of the article in the text column to show that it is the end."*
+   TableView.tsx § Where the article ends says why it is a `<tfoot>` and not a
+   block; plan 261005e.
+
+   **Centred on the prose, not on the cell.** The cell takes `td.text`'s own
+   inline padding and the mark is `margin-inline: auto` inside it, which is
+   exactly how `.prose` finds its centre, so the diamond sits under the middle
+   of the last line's measure in Plain and in a band mode alike.
+
+   Drawn rather than typed: a glyph (a fleuron, a tombstone) comes from
+   whichever font the reader's machine has one in, and a border and a rotated
+   square come from the tokens and follow the theme. `--rule-strong` for the
+   lines and `--ink-faint` for the diamond: it should be found by a reader who
+   has reached the end, and missed by one who is scrolling past. */
+/* **A footer group is repeated at the foot of every printed page** (CSS 2.2
+   § 17.2, `table-footer-group`), which would announce the end of the article
+   on each one. As a plain row group it is drawn once, after the last block,
+   on paper and on screen alike. GPT Sol's plan review, 2026-10-05. */
+table.zoom > tfoot { display: table-row-group; }
+td.article-end {
+  /* Multiples of `--block-pad`, like every other vertical gap in this column
+     (typography.md § Vertical rhythm): six above, eight below. */
+  padding: calc(var(--block-pad) * 6) var(--text-pad-r) calc(var(--block-pad) * 8) var(--text-pad-l);
+  background: var(--page);
+  border: 0;
+}
+.article-end-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 9rem;
+  max-width: 100%;
+  margin-inline: auto;
+}
+.article-end-mark::before,
+.article-end-mark::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--rule-strong);
+}
+.article-end-mark > span {
+  flex: none;
+  width: 0.375rem;
+  height: 0.375rem;
+  background: var(--ink-faint);
+  transform: rotate(45deg);
 }

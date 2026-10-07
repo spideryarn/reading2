@@ -1,5 +1,22 @@
 # Adding a mode
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ Where else to look](#where-else-to-look) — visitors, auto-run on import, browser checks: what this list leaves to others
+- [§ Adjacent shapes](#adjacent-shapes-that-reuse-part-of-the-machinery) — a pipeline step with no band, or a per-reader setting
+- [§ The client](#the-client) — the total tables the compiler asks for, then the residue: band, surface, (i), voices, cacheable
+- [§ Patterns requested for existing modes](#patterns-requested-for-existing-modes) — marks in the prose, thresholds, Marginalia candidacy
+- [§ The card on the button](#the-card-on-the-button) — writing `description` and `how`
+- [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch) — the three edits, and why nothing counts modes
+- [§ The artefact](#the-artefact-if-the-mode-shows-one) — store, step, route, export, public read, prompt version
+- [§ The words](#the-words-the-mode-puts-in-front-of-the-reader) — plain words, paperwork, JSON schema
+- [§ Its cost](#its-cost) — route table, `JOB_DISPOSITION`, cache group
+- [§ Retiring a mode](#retiring-a-mode) — `RETIRED_MODES`, aliases, the tests that list the rest
+- [§ Renaming a mode](#renaming-a-mode) — where the name is stored outside the unions, loud or silent, and the two precedents
+- [§ Before you call it finished](#before-you-call-it-finished) — what a new mode turns red, and what only the suite finds
+
 The one checklist for adding a mode to the reader — the client half and, if the mode shows a
 generated artefact, the pipeline-and-store half. It was two sections until 2026-09-03,
 [web-client.md § Adding a mode](web-client.md#adding-a-mode) and
@@ -10,6 +27,13 @@ Greg asked for one place, and those two now point here.
 > easy/consistent/robust/reusable to add new modes.
 >
 > — Greg, 2026-09-02
+
+**Modes that do the same kind of thing should do it the same way**, through the same code: a read
+and its loading, empty and failed states, a threshold, a sort, the band's (i), the size of the same
+kind of line. A difference nobody chose is a defect, and the periodic sweep looks for them —
+[improve-the-codebase.md](../reusable/improve-the-codebase.md), *Look for siblings that have
+drifted apart*.
+Greg, 2026-10-06: *"looking for inconsistencies across modes is a good thing to try and improve"*.
 
 What a mode *is* is [reading-view-overview.md](reading-view-overview.md); the reasoning, the
 measured counts, and the shapes deliberately **rejected** — a mode registry, a sixteen-prop
@@ -43,10 +67,14 @@ For things this checklist does not hold:
   model behind it is [security-map.md](security-map.md). The checklist's rows for it are `POLICY`
   below and [§ The artefact](#the-artefact-if-the-mode-shows-one)'s `PUBLIC_PROJECTIONS` bullet.
 - **A mode can start without being opened.** Besides the first press
-  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), the add page queues every
-  main mode once an import finishes — derived from `MODE_CATALOG`'s `experimental` flag, so a new
-  non-experimental mode joins it with no edit, and is paid for on every import that keeps the box
-  ticked. [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) and
+  ([`auto-run-targets.ts`](../../src/web/auto-run-targets.ts), below), an import's publication
+  queues every main mode — the modes outside `MODE_CATALOG`'s `experimental` flag. The server
+  queues from a written list ([`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts)), and
+  `tests/auto-modes.test.tsx` fails until that list matches the one derived from the catalogue
+  ([`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)): a new non-experimental mode is one
+  line there, and is paid for on every import by a reader who has not switched it off.
+  Marginalia is the one main mode left off: its relation words are made the first time its column
+  is shown ([marginalia.md § Relation words](marginalia.md#relation-words)).
   [ingest-queue.md § The add page](ingest-queue.md#the-add-page).
 - **Checking it in a browser**: [browser-control.md](browser-control.md), then
   [browser-testing.md](browser-testing.md); `CLAUDE.md` § Delegating says who does it.
@@ -66,8 +94,8 @@ Two existing shapes borrow half this page:
   profile row:
   [experimental-features.md § Where it lives](experimental-features.md#where-it-lives). (View
   choices carried in a shared link are URL parameters — [url-state.md](url-state.md). The add
-  page's browser-only tick box instead uses `localStorage` —
-  [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) § `readAutoModes`, which says why.)
+  page's *generate the main modes* box is a second column on that row since 2026-10-04,
+  `auto_modes_off_at` — [ingest-queue.md § The add page](ingest-queue.md#the-add-page).)
 
 ## The client
 
@@ -79,7 +107,8 @@ rest.** A new word there is red until it has a row in each of these totals:
 | `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
 | `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
 | `MODE_CATALOG` | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) — **what the mode *is***: the **two sentences** on its bar-button card (`description` and `how` — see [§ The card on the button](#the-card-on-the-button), which is where the second one is written), the words they might type meaning it (`aliases`, which the command bar matches on), and whether it is still behind the experimental switch. A pure module importing only `modes.js`, so both runtimes can read it. All four fields are required, so a new mode means choosing its aliases and **deciding whether it is finished enough to draw for everybody** — [experimental-features.md](experimental-features.md). Say why in the table there either way; moving one later is [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch). The `description` and `experimental` fields were on the `MODES_UI` row until 2026-09-07 ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md)); `how` arrived the same day ([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)) |
-| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **Layout only** since 2026-09-07: the row is `{ mode, group, icon, keepLabel? }`, the icon being a React component, `group` the run of related modes it sits in (a line is drawn between runs, since 2026-09-29 — put it next to its run, and add it to the hand-written order in `tests/dock-mode-order.test.ts`), and `keepLabel` a fact about the bar's fit ladder |
+| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **Layout only** since 2026-09-07: the row is `{ mode, group, keepLabel?, more? }` (the icon left for `MODE_ICON`, below, on 2026-10-05), `group` the run of related modes it sits in (a line is drawn between runs, since 2026-09-29 — put it next to its run, and add it to the hand-written order in `tests/dock-mode-order.test.ts`), `keepLabel` a fact about the bar's fit ladder, and `more: true` **whether the mode is gathered under the bar's More button** instead of drawn in it (since 2026-10-07, [261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)). A new mode's row says which: leave `more` off and it is a direct button whenever that reader is offered the mode; set it and, when offered, it is an item in the menu, drawn in the bar only while it is the open mode. Either way an offered mode is in an owner's command bar; visitors have no command bar and reach gathered modes through More. Setting it means adding the mode to the by-name lists in `tests/dock-more.test.tsx` and `tests/dock-experimental-modes.test.tsx` |
+| `MODE_ICON` | [`src/web/mode-icons.ts`](../../src/web/mode-icons.ts) — the mode's icon, a Lucide component. The bar draws it, and so does a row of Chat's list that came from the mode, which is why it is not on the `MODES_UI` row: the panel cannot import the Dock |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
 | `MODE_TARGET` | [`src/web/activation.ts`](../../src/web/activation.ts) — **whether pressing it spends money.** Total since 2026-09-06, over a tagged union: `fixed` carries the target, `delegated` carries **an arming function** (Diagram, whose target is whatever `?diagram=` says), `none` carries the reason in a sentence. A `delegated` row holding a *name* rather than a function was the first draft and GPT Sol refused it — nothing consumes a string, so a mode could claim delegation with no arming path anywhere |
@@ -110,9 +139,9 @@ Then the residue, which is why this page exists:
   > — Greg, 2026-10-01 (7T; Summary was the last artefact mode that waited on a button —
   > [261002a](../plans/261002a-summary-generates-on-open.md))
 
-  Modes with nothing to generate (Plain, Structure and Marginalia) open without a run. So do
+  Modes with nothing to generate (Plain and Structure) open without a run. So do
   surfaces that need the reader's words first (Search, Chat, Referee's Criteria and Mirror,
-  Remember's Recall). So a new
+  Learn's Recall). So a new
   artefact-backed mode wants a name in
   [`auto-run-targets.ts`](../../src/web/auto-run-targets.ts) and `useAutoRun` in its hook, called
   with the **unforced** verb. The traps, and the one mode deliberately left out, are
@@ -154,7 +183,7 @@ Then the residue, which is why this page exists:
   count, a sub-mode switch, a control that cannot wrap. Summary and Search have none at all.
   [260905d](../plans/260905d-declutter-the-reading-view-top-bars.md) § Stage 5. *Nothing.*
 - **A second way into a mode from the bar is a view of the mode's state, never a copy of it.** One
-  mode has one so far: Search's quick-search box (a ⚡ on touch screens), beside its button since
+  mode has one so far: Search's quick-search box (not drawn on touch screens), beside its button since
   2026-10-02. It shares the panel's draft through a small per-article store and hands its words to
   the band, which does all the asking — so there is still one request, one list and one set of
   marks. Its gate is `hasQuickSearch` in [`Dock.tsx`](../../src/web/Dock.tsx): only where the band
@@ -199,8 +228,9 @@ Then the residue, which is why this page exists:
   can act on; a count beside the control it describes (a threshold's "8 of 24"); navigation
   ("Question 3 of 8"); and a caveat the visible rows cannot be read without — Timeline's *"Everything
   dated here is in 2026"*, because its rows leave the year out. A head row whose only content was a
-  count goes, and gives the space back. The one band without a corner (i) is Referee, whose *how
-  this works* card is too long for a tooltip and opens inside the band instead.
+  count goes, and gives the space back. Every band has a corner (i); Referee was the one exemption
+  until 2026-10-03, when its *how this works* card became its (i)
+  ([referee-mode.md](referee-mode.md)).
 
   **Your top row has to leave the corner clear.** The (i) is out of flow (`position: absolute` in
   the band), and the band gets `has-about`, which sets `--band-about-room`. `.band-head` and
@@ -209,8 +239,8 @@ Then the residue, which is why this page exists:
   ([design-css-overview.md](design-css-overview.md) § The band's (i)). Plan
   [261001m](../plans/261001m-every-mode-gets-an-i-in-its-top-right-corner.md).
 
-  **If your mode's output is written for the reader's profile**, hand its `<WrittenForYou compact
-  … />` to `ModeSurface` as `profile`, not into a row of your own: it goes in the corner beside the
+  **If your mode's output is written for the reader's profile**, hand its `<WrittenForYou … />`
+  to `ModeSurface` as `profile`, not into a row of your own: it goes in the corner beside the
   (i), the same size and in the same place in every mode, and the room your top row keeps clear
   grows by itself when it renders. Plan
   [261002e](../plans/261002e-mode-corner-icons-and-gutter-icon-polish.md).
@@ -233,6 +263,23 @@ Then the residue, which is why this page exists:
   [`voice.ts`](../../src/web/voice.ts) where the voice depends on the data. *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
   `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
   element you forgot to name.*
+- **What [`Reader.tsx`](../../src/web/reader/Reader.tsx) asks about the mode outside the
+  `modeBand()` switch.** A signpost, not a rule: the switch is compiler-checked, and the plain
+  `mode === "…"` comparisons elsewhere in that file are not, so a new mode that needs one finds
+  them by reading (search the file for `mode ===` and `mode !==`). They decide five kinds of
+  thing: **the chrome** (whether a band is open at all, whether the breadcrumbs are drawn);
+  **what ← and → step through** (Skim's stops, the quiz, the quotes, Structure's sections);
+  **hand-offs that end when the reader leaves a mode** (Chat's, the quiz's arrival, the chat list
+  asked for again on leaving Chat); **the Dock press** (Plain pressed with nothing left to close;
+  a chat opened from the drawer while Chat's band has stepped aside); and **overlays, and what is
+  drawn in the prose** (no floating chat over Chat or Learn; the comment and annotate boxes offer
+  a placement only in Referee; the quote card knowing it is already in Quotes; Skim's door after
+  the current stop).
+  If the mode has **sub-modes**, two typed tables ask for it by themselves: `subModeViews` in
+  `Reader.tsx` (§ `surface`, what counts as the reader having chosen something else) and
+  `SUB_MODE_SELECTS_A_BAND_FOR` in
+  [`ModeBoundary.tsx`](../../src/web/reader/ModeBoundary.tsx) (the reset key: whose band the
+  sub-mode chooses). *The compiler, for the two tables; nothing, for the comparisons.*
 
 A mode that shows nothing generated — Plain, Search — stops here.
 
@@ -301,17 +348,17 @@ the current modes that is almost always one of three things: **it reads somethin
 stored** (Summary's plain-words levels, Glossary, Ideas, Quotes, Timeline, Debate, Citations, FAQ, Skim and Diagram's Sketch
 or Illustrated picture — the artefact-backed surfaces a press on the reading view can start paying
 for, `MODE_TARGET` in [`activation.ts`](../../src/web/activation.ts)),
-or **it waits on the reader's own words** (Search, Chat, Referee, Remember). Plain is the remaining
+or **it waits on the reader's own words** (Search, Chat, Referee, Learn). Plain is the remaining
 one and generates nothing at all.
 
 Five things to get right, and the first is the one that cost this field a whole review round:
 
 - **Write about the mode, not about pressing the button.** The same string is read on four surfaces
-  at least — the segment on the reading view, the loose links on the metadata page
+  at least — the segment on the reading view, the links on the metadata page
   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
   Four of the then fourteen cards opened that way in first draft (2026-09-07) and every one was caught by a cross-family
-  review rather than by anything in the diff. *"One model pass over the article, written once and
+  review rather than by anything in the diff. *"One model call over the article, written once and
   then stored"* says the same thing and is true wherever the card is read — and it is what makes
   `how` an intrinsic fact about the mode rather than a Dock string parked in a shared module, which
   is the argument for it living in the catalog at all.
@@ -335,7 +382,7 @@ Five things to get right, and the first is the one that cost this field a whole 
 
 *[`tests/dock-mode-tooltips.test.tsx`](../../tests/dock-mode-tooltips.test.tsx) — that both exist,
 that the second is not a copy of the first, that no price crept in, and that every mode's card opens
-in **both** arms of the bar: the segment on the reading view, and the loose links on the metadata
+in **both** arms of the bar: the segment on the reading view, and the links on the metadata
 page, which are a different component and were the arm left carrying a `title` attribute.*
 
 ## Moving a mode in or out of the switch
@@ -345,6 +392,10 @@ Three edits, and the second is the point:
 1. **The `experimental` flag on its `MODE_CATALOG` entry**, [`src/mode-catalog.ts`](../../src/mode-catalog.ts)
    — it was on the `MODES_UI` row until 2026-09-07. That is the whole of the behaviour — the route,
    the band and the URL do not change, and a hidden mode was always reachable by `?mode=…` anyway.
+   **With one exception since 2026-09-30: a mode whose press makes something** joins or leaves the
+   steps queued on import, and `tests/auto-modes.test.tsx` is red until
+   [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts) follows — a per-import cost, so say it
+   in the plan (Marginalia, [261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)).
 2. **Its name in `BEHIND_THE_SWITCH`**, [`tests/dock-experimental-modes.test.tsx`](../../tests/dock-experimental-modes.test.tsx).
    An independent copy of the policy on purpose, so that nobody moves a mode in or out of every
    reader's bar by editing one boolean: change the flag alone and six of that file's tests go red,
@@ -394,7 +445,7 @@ Then the residue nothing refuses at compile time:
 - **`PUBLIC_PROJECTIONS` and the public DTO** — and a visitor may read it by default. A mode that
   stores what it generates shows the stored output to a visitor on a public article, and only
   *making* it is the owner's; `owners-only` is for a mode whose stored output is the reader's own
-  writing (Chat, Remember, Referee). Four modes took `owners-only` as "a staging decision" and a
+  writing (Chat, Learn, Referee). Four modes took `owners-only` as "a staging decision" and a
   visitor was refused a Skim that had already been paid for —
   [the postmortem](../postmortems/260929a-one-policy-row-decided-who-may-make-a-mode-and-who-may-see-it.md):
   [`public-reader.ts`](../../src/store/public-reader.ts) and
@@ -424,11 +475,40 @@ Then the residue nothing refuses at compile time:
       article in the fixture a query filtering on nothing returns the same rows as one filtering
       correctly, so the predicate is untestable —
       *[`tests/public-visibility-pg.test.ts`](../../tests/public-visibility-pg.test.ts)*.
+- **A read that failed, and a forced re-run** — signposts, both since 2026-10-04
+  ([261004c](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
+  The panel draws [`ReadError`](../../src/web/ReadError.tsx) with the hook's `retryRead`, and the
+  panel is a row in *[`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx)*,
+  whose second half fails a `useOrderedRead` caller that is neither a row nor a named exclusion.
+  **Once the server has said "none yet" for this article, a failed read does not unsay it**: a
+  failed refresh or a failed *Try again* ends at `none`, with the failure shown beside the empty
+  state and its Generate button, never at `error`. Only a failed *opening* read — nothing ever
+  answered — ends at `error`. Each hook keeps the slug the server last said "none yet" for in a
+  `saidNoneFor` ref, read by its catch; Thread's `answered` ref (`useTweets.ts`) was the
+  precedent. The cost, accepted: the reader can start a run while the app does not know whether
+  one has landed since — and so can a mode press made in that state, which `useAutoRun` reads as
+  *none* and spends on, once. Twelve modes dropped the button there until the owner's answer:
+
+  > ok, i'll go along with you on this. I don't quite follow
+  >
+  > — Greg, 2026-10-07, relayed by the Overseer
+
+  ([261007g](../plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md);
+  the rows are "Try again answered by another failure, after none yet" in the matrix test.) A
+  forced verb goes through `useRewriteHold`
+  ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);
+  [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)),
+  every forced control in the panel honours `rewriting`, and the mode is a row in
+  *[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)*, whose second half (since
+  2026-10-07) fails a file under `src/web` that writes a `force` into a request and is neither a
+  row's hook nor a named exclusion. It cannot see whether each forced control in your panel honours
+  `rewriting`; the row's `forced` list is where you say which they are.
 - **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
-  is nothing there**; arriving does not. (One mode starts on arrival instead: Tweets, since
-  2026-09-29 a mode rather than a page, kept the rule Greg asked of its page on 2026-09-12 —
-  `useAutoRunOnArrival` in the same file — and is in last-view's `NEEDS_AN_EXPLICIT_PRESS` so a
-  restore cannot spend. A new mode that wants the same needs both halves.)
+  is nothing there**; arriving does not. (One view starts on arrival instead: the thread, since
+  2026-10-03 Summary's Thread view rather than a mode, kept the rule Greg asked of its page on
+  2026-09-12 — `useAutoRunOnArrival` in the same file — and last-view's `opensTheThread` drops the
+  mode from a restore that would open it, so a restore cannot spend. A new mode that wants the same
+  needs both halves.)
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts) is the whole rule, and
   [reading-view-overview.md § True across the whole view](reading-view-overview.md#true-across-the-whole-view)
   is why. *Nothing.*
@@ -476,7 +556,10 @@ Two things to check:
   or its spend is shown in the `unknown` category. The compiler asks for this one too.
 
 Then generate the mode once on a local article and open the metadata page: the mode's line should
-be there.
+be there. `/admin/costs` grouped by *mode or task* should show it too, under the name you expect
+([admin-costs.md](admin-costs.md)). What these checks cannot catch — a call that goes round the
+gateway to a provider the scan has never heard of — is in
+[the 2026-10-05 audit § 5](../investigations/261005a-cost-tracking-audit-accuracy-and-completeness.md#5-will-new-work-be-tracked-without-anyone-remembering).
 
 **Its cache group.** If the mode's marked article block is byte-identical to the shared `articleText`
 or `articleWithIds` prefix, add it to `ArticleStage`, then give it a row in `STAGE_EFFORT` and
@@ -501,8 +584,9 @@ on 2026-09-10, when its nested list became Structure's narrow face
 1. **Take the word out of `MODES` and put it in `RETIRED_MODES`** ([`src/modes.ts`](../../src/modes.ts)),
    pointing at the mode that took it over, so links readers already have land somewhere.
    `modeFromParam` is the one place both the view and the tab title read it.
-2. **Give the successor the retired name as an alias** in `MODE_CATALOG`, so a reader who types the
-   old word in the command bar lands on the new mode, and rewrite any `description` or `how` —
+2. **Give the successor the retired name as an alias** in `MODE_CATALOG` — on the sub-mode row when
+   the successor is a sub-mode, so the old word opens the view that replaced it — and rewrite any
+   `description` or `how` —
    the successor's and its neighbours' — that named it.
 3. **The compiler lists the totals**: every table in [§ The client](#the-client), and in tests
    `BAND_SAYS`, `SPENDS`, `DRAWS` and `GENERATES`.
@@ -523,6 +607,82 @@ instead, so it is translated there by `isMarginaliaModeWord` in [`src/modes.ts`]
 which the Reader, the Dock's links and the remembered last view all ask —
 [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md).
 
+## Renaming a mode
+
+A rename is [§ Retiring a mode](#retiring-a-mode) for the old word, plus renaming everything stored
+under it, in the same piece of work:
+[rename-or-move.md § A rename on screen is a rename all the way down](../reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)
+(Greg, 2026-10-06). The TypeScript unions (`MODES`, `StepName`, `Task`) and their total tables go
+red by themselves. These do not all, and `debate` is the specimen each was checked against on
+2026-10-07:
+
+**Where a mode's name is stored**
+
+- [`src/db/schema.ts`](../../src/db/schema.ts) § `articleRevisions` — the jsonb column named for
+  the mode (`debate`). *Silent in the worst way:* `drizzle-kit generate` asks create-or-rename, and
+  without a TTY it cannot take the answer —
+  [database.md § That rename question needs a terminal](database.md#that-rename-question-needs-a-terminal-and-without-one-you-get-silence);
+  the migration itself is [database.md § A new migration, in five lines](database.md#a-new-migration-in-five-lines).
+- Same file § `revision_step_runs_step` — the hand-kept CHECK listing every step name, and the rows
+  under it. *Loud:* [`tests/db-step-constraint.test.ts`](../../tests/db-step-constraint.test.ts).
+  `jobs.steps[].name` and `jobs.reset.regenerate[]` hold the step name too, in jsonb. *Silent.*
+  `jobs.work_key` hashes the ordered step names (`workKeyFor` in
+  [`src/store/jobs.ts`](../../src/store/jobs.ts)); the Skim migration deliberately kept it, accepting
+  a possible duplicate run across the deploy window.
+- [`src/debate.ts`](../../src/debate.ts) § `PROMPT_VERSION` — stored in `debate.version` and
+  `revision_step_runs.prompt_version`. A rename alone keeps this tag, as the Skim precedent did;
+  changing it would mark unchanged output outdated. *A string, not checked by the compiler.*
+- [`src/db/schema.ts`](../../src/db/schema.ts) § `chat_threads_origin_mode`, `chat_threads_origin_debate`,
+  `chat_threads_origin_lens_debate_only` — the mode as a chat's origin, with `ORIGIN_MODES` in
+  [`src/types.ts`](../../src/types.ts). *The CHECK is loud at write time; the rows need an `UPDATE`.*
+- [`src/cost-categories.ts`](../../src/cost-categories.ts) § `JOB_DISPOSITION` (compiler) and
+  § `RENAMED` — `ai_calls.purpose` and `ai_calls.step_name` are append-only and are **not** rewritten,
+  so the old job/step name gets a row in `RENAMED`. *Silent if forgotten.*
+- Same schema § `feedback` — the saved URL and diagnostics (`article.mode`, `job.step`)
+  keep old names as evidence. Incoming stale-tab names are normalised in
+  [`src/feedback-payload.ts`](../../src/feedback-payload.ts); stored reports are not rewritten.
+- [`src/models.ts`](../../src/models.ts) § `MODEL_ENV_VAR` — the key is checked, the value
+  (`SPIDERYARN_DEBATE_MODEL`) is a string, and so is wherever it is set. *Silent.*
+- [`src/web/params.ts`](../../src/web/params.ts) — the mode's own URL words (`?debate=`,
+  `?debateby=`, `?debatethread=`) and `CHAT_FROM_WORDS`; the literal query keys are in
+  [`DebateMode.tsx`](../../src/web/modes/debate/DebateMode.tsx). *Silent:* an old link loses the parameter.
+- [`src/web/last-view.ts`](../../src/web/last-view.ts) § `REMEMBERED`, `lastViewKey` — localStorage
+  keeps `mode=debate` and the mode's query keys in the saved search. Decide which old words restore;
+  the Learn precedent also moves a retired query key to `NEVER_REMEMBERED` so an old link still wins.
+  *The compiler does not check these strings; `tests/last-view.test.ts` checks the key inventory.*
+- [`src/routes.ts`](../../src/routes.ts) and [`src/web/useDebate.ts`](../../src/web/useDebate.ts) —
+  `/api/debate/:slug`, also in `CACHEABLE` and `NONE_YET_AS_NULL` in
+  [`src/web/lib/api.ts`](../../src/web/lib/api.ts). The IndexedDB offline copy stores that URL
+  (`keyFor` in [`offline-store.ts`](../../src/web/lib/offline-store.ts)). *The path is a string:*
+  renaming it loses the old offline read until fetched again, a cost the Skim precedent accepted.
+- [`src/public-types.ts`](../../src/public-types.ts) § `PublicArtefactSet` — the visitor's key.
+  *Compiler.*
+- [`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) § `REVISION_WRITTEN_ELSEWHERE`
+  and the `at("<name>.json")` lines — the file in the owner's zip. A mode with no file there
+  (Debate) ships as its column's key in `content/revision.json`. *A file name is a string.*
+- [`src/command-pick-catalogue.generated.json`](../../src/command-pick-catalogue.generated.json) —
+  *loud:* [`tests/command-pick-catalogue.test.ts`](../../tests/command-pick-catalogue.test.ts)
+  fails until `WRITE_COMMAND_PICK_CATALOGUE=1 npx vitest run tests/command-pick-catalogue.test.ts`.
+- [`package.json`](../../package.json) § `eval:debate`, and `evals/debate/`. *Silent.*
+
+**The precedents**
+
+- **Trajectory → Skim**
+  ([261001r](../plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md)) is the
+  template for a mode with a pipeline step: one in-place migration for the column, the step CHECK
+  and `jobs.steps` / `jobs.reset.regenerate` (`drizzle/20261001224759_skim.sql`), and what deliberately
+  **kept** the old word — the prompt version tag, the input-hash namespace, `ai_calls`, feedback
+  evidence and the immutable `jobs.work_key`.
+- **Remember → Learn**
+  ([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)) is the
+  template for a name stored as a value under a CHECK (`chat_threads.kind`, plus the partial unique
+  index rebuilt with the new kind in its predicate), for which old URL words
+  get an alias and which are let go, and for the list of what keeps the old word on purpose.
+
+**Two cautions.** An ordinary English word ("debate") also matches prose, comments and Greg's
+quotes, none of which is renamed. And dated plans, postmortems and applied migrations are history:
+they keep their words and their file names; retarget their links to renamed live files.
+
 ## Before you call it finished
 
 The dock, the visitor's view, the exported bundle and the offline copy each have a test that
@@ -539,7 +699,7 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 |---|---|
 | [`src/title-text.ts`](../../src/title-text.ts) § `MODE_LABEL` | the word a person sees |
 | [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, with `experimental:` decided |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, in a run (`group`), saying whether it is gathered under More (`more`) — whether it is behind the switch is `MODE_CATALOG`'s `experimental` now |
 | [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
 | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `modeBand()` | the band, or an explicit `null` |
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |
@@ -576,11 +736,8 @@ walks `MODES` and requires the new mode to be named a producer or a non-producer
 guard against the cheap wrong fix, quietly adding it to the `NO_FOUND` arm to make the compiler
 stop.
 
-**Since 2026-10-02 the Help page asks too**, with two more `Record<Mode, …>` tables in
-`src/web/help/`: the mode's own section (when to use it, how to read it) and its row in *Which mode
-when*. Write them for a reader, not a developer — [help-page.md](help-page.md). Retiring a mode keeps
-its `#mode-…` link working on its own, through `RETIRED_MODES`.
-
----
-
-Up: [reading-view-overview.md](reading-view-overview.md)
+**Since 2026-10-02 Help asks too**, with two more `Record<Mode, …>` tables in `src/web/help/`: the
+mode's own page, a Markdown file under `pages/modes/` since 2026-10-07 (when to use it, how to read
+it), and its row in *Which mode when*. Write them for a reader, not a developer —
+[help-page.md](help-page.md). Retiring a mode keeps its `/help/mode-…` link working on its own,
+through `RETIRED_MODES`.

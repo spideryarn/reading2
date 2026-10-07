@@ -303,6 +303,7 @@ function ctxOf(slug: string = SLUG): StepContext {
     power: "standard",
     slug,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
   };
@@ -1616,6 +1617,8 @@ describe("blocks is only done if it was built from the HTML the store holds now"
       if (step === "extract" && kind === "extractedHtml") return held.extractedHtml;
       if (step === "blocks" && kind === "stampedHtml") return held.stampedHtml;
       if (step === "blocks" && kind === "blocks") return { blocks: held.blocks };
+      // Blocks with no rating recorded read as unrated, as they do in Postgres.
+      if (step === "blocks" && kind === "readingDifficulty") return { rated: false };
       return null;
     };
     return {

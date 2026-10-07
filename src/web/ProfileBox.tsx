@@ -44,11 +44,13 @@
  * the timer, the warning and the status line without writing any of them.
  * docs/plans/261001l-autosave-about-you-and-honest-mic-fallback.md.
  */
-import { Check, LoaderCircle, TriangleAlert } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { Check, TriangleAlert } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
+import { Tooltip } from "./Tooltip.js";
+import { warnBeforeUnload } from "./unload-guard.js";
 import type { SaveState } from "./useAutosavedText.js";
 import { useDictationField } from "./useDictationField.js";
 
@@ -59,9 +61,73 @@ import { useDictationField } from "./useDictationField.js";
  */
 export const AUTOSAVE_IDLE_MS = 2_000;
 
-/** Text the server may not have: what the timer, the warning and the hidden tab act on. */
+/** Text the server may not have, as the status line knows it: what the warning asks about. */
 function pending(s: SaveState): boolean {
   return s.kind === "dirty" || s.kind === "saving" || s.kind === "error";
+}
+
+/**
+ * **Saved after a pause.** Calls `commit` once the text has sat still for `ms`.
+ *
+ * It takes the facts it acts on rather than a `SaveState`, because two of
+ * them cannot be read off one:
+ *
+ * - **Armed only while `dirty`.** Never over a refusal: a timer re-armed by
+ *   `error` would retry a refused save for as long as the page stayed open. A
+ *   keystroke is what earns a new attempt, and it clears the error to dirty.
+ * - **Keyed on the text and on `inFlight`.** Load S, type A, its write goes,
+ *   type back to S: the box says clean and nothing is armed. When A lands the
+ *   box is dirty against A with no keystroke to start the pause, and nothing
+ *   sent S until a blur. A write ending restarts it. GPT Sol's F2.
+ *
+ * `paused` is for a box that must not save yet (disabled, or dictating).
+ */
+export function useIdleCommit({
+  text,
+  dirty,
+  inFlight,
+  paused,
+  ms,
+  commit,
+}: {
+  text: string;
+  dirty: boolean;
+  inFlight: boolean;
+  paused: boolean;
+  ms: number;
+  commit(): void;
+}): void {
+  /* Read by a timer that outlives the render it was set up in. */
+  const latest = useRef({ dirty, paused, commit });
+  latest.current = { dirty, paused, commit };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `text` and `inFlight` are the triggers. Every keystroke, and every write ending, restarts the pause; `dirty` is read as it stands then.
+  useEffect(() => {
+    if (paused || !latest.current.dirty) return;
+    const t = window.setTimeout(() => {
+      if (!latest.current.paused) latest.current.commit();
+    }, ms);
+    return () => window.clearTimeout(t);
+  }, [text, inFlight, paused, ms]);
+}
+
+/**
+ * **Leaving with words unsaved is questioned.** Desktop only in practice:
+ * iOS does not fire `beforeunload`, which is why the save behind these boxes
+ * also saves on `visibilitychange` and fires a `keepalive` on `pagehide`
+ * (useAutosavedText.ts). Attached only while something is unsaved, because a
+ * page with a `beforeunload` listener is kept out of some browsers'
+ * back-forward cache whether or not the listener ever objects.
+ *
+ * The caller says what unsaved means. For the add page that includes words
+ * typed before there is an article to save them to (plan 261004l, Sol's F6).
+ */
+export function useUnsavedWarning(unsaved: boolean): void {
+  useEffect(() => {
+    if (!unsaved) return;
+    /* The shared guard, so a page that reloads itself for a new build hears
+       the same fact the reader is warned by — safe-to-reload.ts. */
+    return warnBeforeUnload("unsaved");
+  }, [unsaved]);
 }
 
 export function ProfileBox({
@@ -76,6 +142,7 @@ export function ProfileBox({
   disabled,
   rows = 4,
   save,
+  inFlight = false,
   onBusyChange,
 }: {
   id: string;
@@ -92,6 +159,13 @@ export function ProfileBox({
   rows?: number;
   /** Where the save stands. The page owns the save; the box owns saying so. */
   save: SaveState;
+  /**
+   * Whether a write is on the wire, including one for older text
+   * (`useAutosavedText`'s `inFlight`). `save` cannot say: it reads `clean`
+   * when the box has moved back to the loaded value under an older write. The
+   * idle timer restarts when it ends, and the leave warning counts it.
+   */
+  inFlight?: boolean;
   /**
    * Told when the microphone goes on, or its words start or stop being on
    * their way. For a container that can be dismissed from under the box — the
@@ -112,24 +186,22 @@ export function ProfileBox({
      with the reader's own existing profile text. Their field's jargon, in their
      own spelling, is the best guess available at what they are about to say
      more of. src/transcribe.ts. */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value,
     onChange,
     onCommit,
     box,
     context: { kind: "profile" },
-    transcribe: sendForTranscription,
+    transcribe,
     keep: keepDictation(`profile:${id}`),
   });
   const dictation = dictate.dictation;
 
   const over = value.length > max;
 
-  /* Read by listeners and timers that outlive the render they were set up in. */
   /* The microphone is on, or its words are still on their way. */
   const busy = dictation.armed || dictation.transcribing;
-  const latest = useRef({ save, onCommit, busy });
-  latest.current = { save, onCommit, busy };
 
   /* Through a ref, so a caller passing a fresh arrow each render does not
      re-announce an unchanged `busy`. */
@@ -139,41 +211,22 @@ export function ProfileBox({
     tell.current?.(busy);
   }, [busy]);
 
-  /* **Saved after a pause.** Keyed on the text, never on the state: a refused
-     save moves the state to `error`, and a timer re-armed by that would retry a
-     refused save every two seconds for as long as the page stayed open. A new
-     keystroke is what earns a new attempt.
+  /* **Saved after a pause** (`useIdleCommit` above has the two rules).
 
-     Not while dictating, nor while the transcript is coming back — which can
+     Not while dictating, nor while the transcript is coming back, which can
      take longer than the pause. The dictation commits for itself when its words
      land, and a save before then is a save of the recogniser's rough guesses,
      or of the box without the words at all. GPT Sol's plan review, item 3. */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the trigger — every keystroke restarts the pause, which is the whole of an idle timer
-  useEffect(() => {
-    if (disabled || busy || !pending(latest.current.save)) return;
-    const t = window.setTimeout(() => {
-      if (!latest.current.busy) latest.current.onCommit();
-    }, AUTOSAVE_IDLE_MS);
-    return () => window.clearTimeout(t);
-  }, [value, disabled, busy]);
+  useIdleCommit({
+    text: value,
+    dirty: save.kind === "dirty",
+    inFlight,
+    paused: Boolean(disabled) || busy,
+    ms: AUTOSAVE_IDLE_MS,
+    commit: onCommit,
+  });
 
-  /* **Leaving with words unsaved is questioned.** Desktop only in practice:
-     iOS does not fire `beforeunload`, which is why the save behind this box
-     also saves on `visibilitychange` and fires a `keepalive` on `pagehide` —
-     useAutosavedText.ts. Attached only while something is pending, because a
-     page with a `beforeunload` listener is kept out of some browsers'
-     back-forward cache whether or not the listener ever objects. */
-  const unsaved = pending(save);
-  useEffect(() => {
-    if (!unsaved) return;
-    const warn = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      // Older Chromium and Safari want the legacy return value as well.
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [unsaved]);
+  useUnsavedWarning(pending(save) || inFlight);
 
   return (
     <div className="prof-box">
@@ -232,9 +285,26 @@ export function ProfileBox({
 
 /**
  * The line that says where the save is. Mounted for the life of the box and
- * `aria-live`, so what is announced is the change.
+ * `aria-live`, so what is announced is the change. Exported for the add
+ * page's box, which is not a `ProfileBox` (it has no microphone) and says the
+ * same things once its article exists.
+ *
+ * **Quiet unless something failed.** Greg, 2026-10-05:
+ *
+ * > can we make it a bit less visually intrusive, e.g. a faint green tick that
+ * > appears when it saves (with a tooltip) and then fades away, with no scary
+ * > "unsaved" indicator.
+ *
+ * So the words do not change while the reader types or a write is out: there
+ * is no *Unsaved changes* and no *Saving…*. A save that landed mounts a tick,
+ * which CSS fades and then hides (profile.css § `.prof-save-tick`); it exists
+ * only in `saved`, so the next save mounts a new one and the fade runs again.
+ * A refusal is the one thing that takes the line over, and it stays until the
+ * next keystroke: losing the reader's words silently is worse than a label.
+ * What still guards words that are not saved yet is the leave warning
+ * (`useUnsavedWarning`), which says nothing until it is needed.
  */
-function SaveStatus({ save }: { save: SaveState }) {
+export function SaveStatus({ save }: { save: SaveState }) {
   return (
     <p className={`prof-save is-${save.kind}`} aria-live="polite">
       {saveWords(save)}
@@ -242,25 +312,24 @@ function SaveStatus({ save }: { save: SaveState }) {
   );
 }
 
+/** The promise, standing in every state where nothing has gone wrong. */
+const QUIET = <span className="prof-save-words">Saves as you type.</span>;
+
 function saveWords(save: SaveState) {
   switch (save.kind) {
     case "loading":
       return "Loading…";
     case "clean":
-      return "Saves as you type.";
     case "dirty":
-      return "Unsaved changes";
     case "saving":
-      return (
-        <>
-          <LoaderCircle size={12} className="cmt-spinner" aria-hidden="true" /> Saving…
-        </>
-      );
+      return QUIET;
     case "saved":
       return (
         <>
-          <Check size={12} aria-hidden="true" />
-          Saved
+          {QUIET}
+          <SavedTick />
+          {/* Polite announcements may wait longer than the visual tick. */}
+          <span className="sr-only">Saved</span>
         </>
       );
     case "error":
@@ -274,4 +343,18 @@ function saveWords(save: SaveState) {
       return never;
     }
   }
+}
+
+function SavedTick() {
+  const [finished, setFinished] = useState(false);
+  if (finished) return null;
+  /* The tooltip is portalled outside the hidden span. Unmount it explicitly
+     when the animation ends, including after the reduced-motion hold. */
+  return (
+    <Tooltip content="Saved" placement="top">
+      <span className="prof-save-tick" aria-hidden="true" onAnimationEnd={() => setFinished(true)}>
+        <Check size={13} aria-hidden="true" />
+      </span>
+    </Tooltip>
+  );
 }

@@ -61,7 +61,7 @@ vi.mock("../src/web/lib/api.js", async () => {
     if (url.startsWith("/api/library/") && init?.method === "PATCH") return patchAnswer(body);
     return new Response(null, { status: 404 });
   };
-  return { ...real, apiFetch, leavingFetch: () => {} };
+  return { ...real, apiFetch, leavingFetch: () => Promise.resolve() };
 });
 
 /* The microphone is not what this file is about; feedback-dialog.test.tsx stubs it the same way. */
@@ -69,6 +69,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
     dictation: { supported: false, armed: false, transcribing: false },
     readOnly: false,
+    busy: false,
     toggle: () => {},
   }),
 }));
@@ -94,6 +95,7 @@ beforeEach(() => {
 });
 
 const { PurposePrompt } = await import("../src/web/PurposePrompt.js");
+const { AUTOSAVE_IDLE_MS } = await import("../src/web/ProfileBox.js");
 
 /* ------------------------------------------------------------- the harness -- */
 
@@ -356,4 +358,25 @@ describe("PurposePrompt", () => {
     expect(showModals).toBe(1);
     expect(session.has(MARK)).toBe(false);
   });
+});
+
+
+it("Done completes after an older refused save is replaced by newer words", async () => {
+  const answers: Array<(r: Response) => void> = [];
+  patchAnswer = () => new Promise((resolve) => answers.push(resolve));
+  session.set(MARK, SLUG);
+  render();
+  await settle();
+  type("A");
+  press("Done");
+  type("B");
+  answers[0]?.(new Response(JSON.stringify({ error: "A was refused" }), { status: 503 }));
+  await settle();
+  expect(host.querySelector(".prof-save")?.textContent).not.toContain("A was refused");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_IDLE_MS + 30)); });
+  expect(patches().map((p) => p.body)).toEqual([{ purpose: "A" }, { purpose: "B" }]);
+  expect(isOpen()).toBe(true);
+  answers[1]?.(new Response(JSON.stringify({ purpose: "B" }), { status: 200 }));
+  await settle();
+  expect(isOpen(), "the Done latch waited forever after an unrelated refusal").toBe(false);
 });

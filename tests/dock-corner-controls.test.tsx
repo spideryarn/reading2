@@ -80,7 +80,7 @@ import {
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 /**
@@ -211,6 +211,7 @@ const SHARED: PublicArticle = {
   tree: TREE,
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   comments: [],
   searches: [],
 };
@@ -244,7 +245,7 @@ function json(body: unknown, status = 200): Response {
    this line, so the mocks are already in place.
    tests/public-network-trace.test.tsx says the same about its own two. */
 const { App } = await import("../src/web/App.js");
-const { Dock, fitSignature, visibleModes } = await import("../src/web/Dock.js");
+const { Dock, fitSignature, splitForMore, visibleModes } = await import("../src/web/Dock.js");
 const { FeedbackHost, FEEDBACK_TRIGGER_SELECTOR } = await import("../src/web/FeedbackButton.js");
 /* The shelf's masthead case asks whether the Feedback trigger joined the row
    `Profile` is in, and this is that link's address rather than a second copy of
@@ -266,11 +267,16 @@ beforeEach(() => {
   /* The switch's store is a module singleton and keeps the last case's session,
      so an event is not news unless it is reset first. */
   resetExperimental();
-  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(typeof input === "string" ? input : input instanceof URL ? input : input.url);
     if (url.startsWith(`/api/article/${SLUG}`)) return ownedReply();
     if (url.startsWith("/api/public/article/")) return publicReply();
     if (url.startsWith("/api/library")) return json([]);
+    /* The add page's own POST is refused. It was answered with the list, and
+       since plan 261005l § 2a the page draws its card from the POST's answer,
+       so a list read as a job threw on `job.steps`. Nothing here is about the
+       import: a refused add leaves the corner as it is. */
+    if (url === "/api/jobs" && init?.method === "POST") return json({ error: "refused" }, 503);
     if (url === "/api/jobs") return json({ jobs: [] });
     /* The three endpoints whose *shape* the pages below read into rather than
        merely test for, so a bare `{}` throws where a real answer would not.
@@ -554,15 +560,22 @@ describe("the route walk: one branded home control, never two triggers", () => {
     expect(home.closest('[role="radiogroup"]'), "it is inside the modes").toBeNull();
     expect(home.classList.contains("dock-btn"), "it would inherit the hover wash").toBe(false);
     expect(home.getAttribute("aria-current")).toBeNull();
+    /* **And it is the page's one link home**, since 2026-10-07: the masthead
+       drew an arrow to the shelf above the title until Greg asked for it to go
+       (spya-us7e4v, *"We have the Spideryarn logo for that"*). Both halves, so
+       an arrow that came back and a wordmark that stopped linking each fail. */
+    expect(home.getAttribute("href")).toBe("/");
+    expect(document.querySelector(".masthead"), "no masthead to look in").not.toBeNull();
+    expect(document.querySelector('.masthead a[href="/"]'), "the masthead's arrow came back").toBeNull();
     expect(home.getAttribute("aria-checked")).toBeNull();
   });
 
   /**
    * **And the radiogroup still announces the visible modes.**
    *
-   * Against `visibleModes` rather than against a number: there are fourteen
-   * modes and five of them are experimental, so a literal count in a test is
-   * either wrong today or an invitation to delete a live mode to make it pass.
+   * Against `visibleModes` rather than against a number: which modes are
+   * experimental changes, so a literal count in a test is either wrong today
+   * or an invitation to delete a live mode to make it pass.
    * GPT Sol, G6. What it is really guarding is the wordmark and the Feedback
    * button having been added *outside* the group — a `DockHome` rendered as a
    * child of `.dock-modes` would move this number by one and nothing else in
@@ -573,9 +586,16 @@ describe("the route walk: one branded home control, never two triggers", () => {
     await show(`/read/${SLUG}`);
     const group = document.querySelector('[role="radiogroup"]');
     expect(group).not.toBeNull();
-    expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(
-      visibleModes(false, "plain").length,
-    );
+    /* Less Marginalia, which is on every bar since 2026-10-05 and is a toggle
+       drawn after the group, never a radio in it (plan 261005d). And the
+       drawn modes only, since 2026-10-07: five are under the More button,
+       which is outside the group too (plan 261007c). */
+    const drawn = splitForMore(visibleModes(false, "plain"), "plain").drawn.filter((m) => m.mode !== "marginalia");
+    expect(drawn.length, "the fixture draws a bar").toBeGreaterThan(5);
+    expect(group?.querySelectorAll('[role="radio"]')).toHaveLength(drawn.length);
+    /* More would move that number by one if it were drawn inside the group. */
+    expect(group?.querySelector(".dock-more-trigger")).toBeNull();
+    expect(document.querySelector(".dock-modes .dock-more-trigger")).not.toBeNull();
   });
 
   /**
@@ -653,7 +673,11 @@ describe("a signed-out stranger on a shared article", () => {
     /* The way home is still theirs: a stranger has the most need of something
        on screen that says what this site is. */
     expect(waysHome()).toHaveLength(1);
-    expect(document.querySelector(".dock-home")).not.toBeNull();
+    expect(document.querySelector(".dock-home")?.getAttribute("href")).toBe("/");
+    /* The masthead's *Back to Spideryarn* arrow went with the owner's,
+       2026-10-07 (spya-us7e4v): the bar's wordmark goes to the same place. */
+    expect(document.querySelector(".masthead"), "no masthead to look in").not.toBeNull();
+    expect(document.querySelector('.masthead a[href="/"]'), "the masthead's arrow came back").toBeNull();
   });
 
   it("gets none on the visitor metadata page or in Tweets either", async () => {
@@ -747,7 +771,7 @@ describe("the bar's Feedback trigger is gated on its own", () => {
 describe("the fit signature", () => {
   const noop = () => {};
   const sig = (feedback: boolean) =>
-    fitSignature(visibleModes(false, "plain"), "plain", noop, undefined, null, "ready", feedback);
+    fitSignature(splitForMore(visibleModes(false, "plain"), "plain"), "plain", noop, undefined, null, "ready", feedback);
 
   it("changes when the Feedback trigger appears", () => {
     expect(sig(true)).not.toBe(sig(false));
@@ -827,10 +851,16 @@ describe("nothing reserves the corners they left", () => {
        reading view now (plan 260929f), so it has no page padding to keep — only
        the corner's room must not have come back with it. */
     expect(src("Tweets.tsx"), "Tweets.tsx still reserves the corner").not.toContain("pt-[calc(3.5rem");
-    for (const file of ["ProfilePage.tsx", "ContactPage.tsx", "PrivacyPage.tsx"]) {
+    /* `/contact` and `/privacy` keep the room through `DocumentPage` since
+       2026-10-07 (plan 261007h, F4b), which holds it signed in only — signed
+       out the site bar is above them instead. */
+    for (const file of ["ProfilePage.tsx", "DocumentPage.tsx"]) {
       expect(src(file), `${file} draws the corner pair and needs the room`).toContain(
         "pt-[calc(3.5rem",
       );
+    }
+    for (const file of ["ContactPage.tsx", "PrivacyPage.tsx"]) {
+      expect(src(file), `${file} no longer takes its top from DocumentPage`).toContain("<DocumentPage");
     }
   });
 });

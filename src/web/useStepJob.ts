@@ -92,7 +92,10 @@ interface StepRun<S extends StepName> {
    * or blanket force. **Every step this hook is used for is in
    * `FORCE_ONLY_WHEN_NAMED`** (src/pipeline.ts), and it is not a coincidence — a
    * step a surface offers a button for is a step that knows whether it is
-   * current.
+   * current. (**One exception since 2026-10-05**: `structure`, from
+   * StructureNotice.tsx. It has no freshness check at all, so naming it is
+   * what makes a one-step job run, and nothing follows it in that job for the
+   * cascade to sweep in.)
    *
    * The concrete callers now cover all thirteen members of that set. Metadata's
    * `METADATA_RERUN_STEPS` (src/rerun-steps.ts) is the deliberate subset:
@@ -236,6 +239,9 @@ export interface StepFailure {
   retry: (() => void) | null;
 }
 
+/** A mode's artefact hold can wrap the job-level Retry as well as its forced verb. */
+export type RetryHold = (start: () => Promise<string | null>) => Promise<void>;
+
 /**
  * @typeParam S the step this hook was made for — inferred from the `step`
  *   argument, and what `StepRun.precededBy` is checked against. Defaults to the
@@ -243,6 +249,8 @@ export interface StepFailure {
  *   check widens away with it, so annotate `StepJob<"sketch">` if you write one.
  */
 export interface StepJob<S extends StepName = StepName> {
+  /** Register this mount's artefact hold for Retry; cleanup removes only this registration. */
+  registerRetryHold?(hold: RetryHold): () => void;
   /**
    * The job writing this article's artefact, if one is. Null otherwise.
    *
@@ -264,7 +272,7 @@ export interface StepJob<S extends StepName = StepName> {
   /**
    * The job list has been read at least once, so `job === null` means *no job*
    * rather than *not looked yet*. A pass-through of `useJobs().loaded`; the
-   * quiz's Regenerate hold reads it (useQuiz.ts § `rewriting`).
+   * Regenerate hold reads it (rewrite-hold.ts § What releases it).
    */
   loaded: boolean;
   /**
@@ -310,8 +318,18 @@ export interface StepJob<S extends StepName = StepName> {
    * the moment the id `start` returned turns up in a list.
    */
   starting: boolean;
-  /** Ask for a run. Resolves once the POST has been answered, not when the job has. */
-  start(run?: StepRun<S>): Promise<void>;
+  /**
+   * Ask for a run. Resolves once the POST has been answered, not when the job
+   * has — with the new job's id, or null when nothing was made. The id is for
+   * Regenerate's hold, which outlives the mount that pressed (rewrite-hold.ts).
+   */
+  start(run?: StepRun<S>): Promise<string | null>;
+  /**
+   * **This job is in the list and is over** — done, failed or cancelled. Null
+   * for one the list has not shown yet, which from here looks the same as one
+   * that never existed: rewrite-hold.ts § Why the hold carries the job's id.
+   */
+  ended(jobId: string): "done" | "error" | "cancelled" | null;
   cancel(id: string): void;
 }
 
@@ -369,7 +387,7 @@ function writesStep(job: Job, step: StepName): boolean {
  * Ideas through their read halves, and with the margin open beside the band
  * that runs one of them, the band's read was refreshed and the margin's was
  * not. The always-mounted reads `OwnedReader` holds for the prose — citations,
- * glossary, quotes — are the others: the band refreshed them, but only while it
+ * glossary, quotes, quiz — are the others: the band refreshed them, but only while it
  * was mounted (useCitations.ts § An always-mounted read is not an always-fresh
  * read). Calling `useStepJob` in either place would work and would hand each a
  * `start` it must never call — the thing the read halves were split out to
@@ -576,6 +594,13 @@ export function useStepJob<S extends StepName>(
      both went red with it there). Metadata's run button latches in `RerunRow`
      instead, where one press is the whole of what it means. */
   const inFlight = useRef(false);
+  const retryHold = useRef<RetryHold | null>(null);
+  const registerRetryHold = useCallback((hold: RetryHold) => {
+    retryHold.current = hold;
+    return () => {
+      if (retryHold.current === hold) retryHold.current = null;
+    };
+  }, []);
   const [starting, setStarting] = useState(false);
 
   /**
@@ -663,12 +688,13 @@ export function useStepJob<S extends StepName>(
       if (started) {
         setWatchedId(started.id);
         startedId.current = started.id;
-        return;
+        return started.id;
       }
       /* Nothing was made, so there is nothing to wait for and the button is the
          right thing to show — with the reason under it. */
       startedId.current = null;
       setStarting(false);
+      return null;
     },
     [queue, slug, step],
   );
@@ -695,17 +721,18 @@ export function useStepJob<S extends StepName>(
       /* React commits a discrete click promptly in the browser, but the action
          itself must still be single-flight: two events can reach this closure
          before that commit removes the button. */
-      if (inFlight.current) return;
+      if (inFlight.current) return null;
       inFlight.current = true;
       setStarting(true);
       const next = await queue.retry(id);
       if (next) {
         setWatchedId(next.id);
         startedId.current = next.id;
-        return;
+        return next.id;
       }
       inFlight.current = false;
       setStarting(false);
+      return null;
     },
     [queue],
   );
@@ -766,7 +793,9 @@ export function useStepJob<S extends StepName>(
       ? {
           message: stopped.message,
           retryable: stopped.retryable,
-          retry: () => void retry(stopped.id),
+          /* Retry writes an artefact too. Its hold must survive the new job
+             finishing, just as the mode's forced verb does. */
+          retry: () => void (retryHold.current ? retryHold.current(() => retry(stopped.id)) : retry(stopped.id)),
         }
       : null;
 
@@ -775,6 +804,7 @@ export function useStepJob<S extends StepName>(
   const stalled = job !== null && driverStalled(queue.driverFailures, job.id);
 
   return {
+    registerRetryHold,
     job,
     loaded: queue.loaded,
     failed,
@@ -783,6 +813,12 @@ export function useStepJob<S extends StepName>(
        spinner over a spinner is a state nobody can read. */
     starting: starting && job === null,
     start,
+    ended: (jobId) => {
+      const seen = queue.jobs.find((j) => j.id === jobId);
+      return seen && (seen.status === "done" || seen.status === "error" || seen.status === "cancelled")
+        ? seen.status
+        : null;
+    },
     /* `void`, because the interface promises nothing to await: every surface
        fires this from a click and the outcome arrives through the polled list. */
     cancel: (id) => void queue.cancel(id),

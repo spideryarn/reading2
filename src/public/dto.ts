@@ -97,11 +97,14 @@ import {
   anchorFields,
   identifiesOf,
   isUsableSimpleSummary,
+  paragraphShape,
+  publishedYearOf,
   readStoredBears,
   readStoredLean,
-  usableSentences,
 } from "../types.js";
 import type { DebateSynthesis } from "../types.js";
+import { dayFrame } from "../timeline-time.js";
+import { ratedDifficultyOf } from "../reading-time.js";
 import { ENTRY_CAP, entryOfText } from "../citation-entry.js";
 import { readStoredSynthesis, settleSynthesis, type SynthesisRow } from "../debate-synthesis.js";
 import { readCitationRegistry, readRegistryWork } from "../registry-work.js";
@@ -125,6 +128,7 @@ import type {
   PublicQuotes,
   PublicMeta,
   PublicSearchRun,
+  PublicSharedBy,
   PublicSketch,
   PublicSourceGuess,
   PublicTimeline,
@@ -152,6 +156,18 @@ function publicMeta(row: {
   siteName: string | null;
   lang: string | null;
   excerpt: string | null;
+  journal: string | null;
+  /**
+   * The owner's `Meta.publishedAt`, **not the thing that goes out**: it may
+   * carry a time of day and an offset. Named for the column, like `finalUrl`
+   * below, and cut to the calendar day here.
+   */
+  publishedAt: string | null;
+  publishedYear: number | null;
+  /** The three rating columns a screen is shown; `ratedDifficultyOf` makes one value of them or none. */
+  readingLanguage: number | null;
+  readingIdeas: number | null;
+  readingDifficultyReason: string | null;
   headingTitle: string | null;
   /**
    * Stage 1's post-redirect address, **still not the thing that goes out**.
@@ -168,6 +184,20 @@ function publicMeta(row: {
      a field, and this computes one — and the spread it saves you from is the one
      that compiles clean with the key misspelled. */
   const url = row.finalUrl === null ? null : publicSourceUrl(row.finalUrl);
+  /* **The day, not the stored string**, and a day or a year, never both
+     (plan 261004h). Computed like `url`, so named consts and shorthand keys
+     for its reason. A stored string that does not start with a real day sends
+     nothing; a year is sent only when there is no day to send. */
+  const published = dayFrame(row.publishedAt);
+  const publishedYear = published === null ? publishedYearOf(row.publishedYear) : undefined;
+  /* Rebuilt field by field through the owner's own rule, so a visitor's
+     minutes are the owner's and nothing beside the three fields can ride
+     along. The model's id and the time are not in the row to begin with. */
+  const readingDifficulty = ratedDifficultyOf({
+    language: row.readingLanguage,
+    ideas: row.readingIdeas,
+    reason: row.readingDifficultyReason,
+  });
   return {
     slug: row.slug,
     title: row.title ?? row.headingTitle ?? row.slug,
@@ -178,12 +208,22 @@ function publicMeta(row: {
     ...(row.siteName === null ? {} : { siteName: row.siteName }),
     ...(row.lang === null ? {} : { lang: row.lang }),
     ...(row.excerpt === null ? {} : { excerpt: row.excerpt }),
+    /* Where and when it was published. Greg, 2026-10-04: "Q-visitor-page yes".
+       The journal is copied, so its name is a checked literal (`optNull`); the
+       other two are computed, so shorthand keys. A DOI is not named and must
+       not be. */
+    ...optNull(row, "journal"),
+    ...(published === null ? {} : { published }),
+    ...(publishedYear === undefined ? {} : { publishedYear }),
     /* **Two ways to get no key**, and they collapse on purpose: no address at
        all, and an address the policy will not publish. A visitor is told the
        same thing by both — nothing — because there is nothing they could do
        differently, and a "we have one but will not show you" would be a fact
        about us rather than about the piece. src/urls.ts § `publicSourceUrl`. */
     ...(url === null ? {} : { url }),
+    /* A model's judgement of the published text: the levels and its sentence
+       (plan 261005j). Computed, so a shorthand key, like `url`. */
+    ...(readingDifficulty === null ? {} : { readingDifficulty }),
   };
 }
 
@@ -215,6 +255,15 @@ function publicMeta(row: {
  */
 function opt<T, K extends keyof T>(source: T, key: K): Partial<Pick<T, K>> {
   return source[key] === undefined ? {} : ({ [key]: source[key] } as Partial<Pick<T, K>>);
+}
+
+/**
+ * `opt`, for a database row: a column Postgres had nothing in is `null`, and
+ * crosses as an absent key. The same checked name, for the same reason.
+ */
+function optNull<T, K extends keyof T>(source: T, key: K): { [P in K]?: NonNullable<T[P]> } {
+  const value = source[key];
+  return value == null ? {} : ({ [key]: value } as { [P in K]?: NonNullable<T[P]> });
 }
 
 /**
@@ -280,7 +329,12 @@ function publicTree(tree: Tree): Tree {
       id: node.id,
       depth: node.depth,
       parent: node.parent,
-      children: [...node.children],
+      /* **`?? []`: a node with no list is a leaf, and goes out with an empty
+         one.** The tree is JSON out of the store and its type is a claim, not
+         a check; spreading a list that is not there throws, and the public
+         route answers a visitor with a 500. The same rule as the client's
+         mend, src/web/tree.ts § `withChildLists`. tests/public-dto.test.ts. */
+      children: [...(node.children ?? [])],
       range: [node.range[0], node.range[1]],
       title: node.title,
       ...opt(node, "gist"),
@@ -290,6 +344,8 @@ function publicTree(tree: Tree): Tree {
       ...opt(node, "navLabel"),
       ...opt(node, "summary"),
       ...opt(node, "sourceHeading"),
+      /* Whose words the title is, as `sourceHeading` is: a visitor's page draws the same faces. */
+      ...opt(node, "titleFrom"),
       /* **`treatment` crosses, and that is a decision.** The safe default here
          is to drop an optional field, and this one was dropped until 2026-08-29
          — with the test below saying in as many words that whoever landed the
@@ -483,10 +539,13 @@ function publicTimeline(timeline: Timeline): PublicTimeline {
  * **The Skim route, rebuilt stop by stop** — since 2026-09-29
  * (SPIDERYARN-READING2-56).
  *
- * Four fields of a stop and `offered`, and nothing else: `profileHash` is
+ * Five fields of a stop and `offered`, and nothing else: `profileHash` is
  * who the route was planned for and never crosses, and the rest of the
  * document is pipeline provenance. `cue` is optional on a stored stop (routes
- * before `trajectory/5` have none), so it goes through `opt`.
+ * before `trajectory/5` have none), so it goes through `opt`; so is `again`
+ * (absent before `skim/9`, and on any stop carried nowhere). `again` is which
+ * passes the stop is walked in — the route itself, so without it a visitor
+ * would walk a different pass from the owner (plan 261003l, Sol F4).
  * src/public-types.ts § `PublicSkim` is the argument for each.
  */
 function publicSkim(skim: Skim): PublicSkim {
@@ -497,6 +556,7 @@ function publicSkim(skim: Skim): PublicSkim {
         depth: stop.depth,
         role: stop.role,
         ...opt(stop, "cue"),
+        ...opt(stop, "again"),
       }),
     ),
     offered: skim.offered,
@@ -530,23 +590,36 @@ function publicFaq(faq: Faq): PublicFaq {
 
 /**
  * **Simple, rebuilt level by level and paragraph by paragraph** — each
- * `{ text, ids }`, plus `sentences` when they are usable, and nothing else;
+ * `{ text, ids }`, plus `sentences` when they are usable (each with its `key`
+ * when that is valid) and `list: true` when it draws as one, and nothing else;
  * the stamp is pipeline provenance, and `profileHash` is the owner's.
  * src/public-types.ts § `PublicSimpleSummary` is the argument.
  */
 function publicSimpleSummary(simple: SimpleSummary): PublicSimpleSummary {
   /* Sentences cross only through `usableSentences` — the owner's panel asks
      the same question — so a visitor never gets a list that is not the
-     paragraph's own checked text (plan 261002e, Sol F2). */
+     paragraph's own checked text (plan 261002e, Sol F2). It returns each
+     sentence rebuilt as `{ text, id }` and a `key` only when that is a phrase
+     of the sentence, so bold discloses no word the text does not (plan
+     261004b). `list` is one boolean about sentences that already cross, and
+     goes only with them: without usable sentences there is no list to draw. */
   const level = (paragraphs: readonly SimpleParagraph[]): SimpleParagraph[] =>
     paragraphs.map((p): SimpleParagraph => {
-      const sentences = usableSentences(p);
-      return { text: p.text, ids: [...p.ids], ...(sentences ? { sentences } : {}) };
+      const shape = paragraphShape(p);
+      const sentences =
+        shape.kind === "text" ? null : shape.kind === "prose" ? shape.sentences : [shape.lead, ...shape.items];
+      return {
+        text: p.text,
+        ids: [...p.ids],
+        ...(sentences ? { sentences } : {}),
+        ...(shape.kind === "list" ? { list: true } : {}),
+      };
     });
+  /* Named one by one, so a row stored before 2026-10-04, which still has the
+     removed middle level, sends a visitor only these two (plan 261004f). */
   return {
     levels: {
       brief: level(simple.levels.brief),
-      simple: level(simple.levels.simple),
       fuller: level(simple.levels.fuller),
     },
   };
@@ -1166,11 +1239,26 @@ function publicTweets(thread: TweetThread): PublicTweets {
  */
 export function publicArticle(row: {
   slug: string;
+  /**
+   * Which way the visitor was let in: `PublicArticle.sharedBy`. The reader
+   * works it out from the row the access predicate matched, never from whether
+   * the request carried a key. Required, so a caller that forgot is a type
+   * error rather than a private link wearing the public notice.
+   */
+  sharedBy: PublicSharedBy;
   title: string | null;
   byline: string | null;
   siteName: string | null;
   lang: string | null;
   excerpt: string | null;
+  journal: string | null;
+  /** The owner's string — `publicMeta` sends the calendar day of it, or the year, never this. */
+  publishedAt: string | null;
+  publishedYear: number | null;
+  /** The difficulty rating's three shown columns — `publicMeta` makes one value of them or none. */
+  readingLanguage: number | null;
+  readingIdeas: number | null;
+  readingDifficultyReason: string | null;
   headingTitle: string | null;
   /** Stage 1's post-redirect address — `publicMeta` decides what of it is published. */
   finalUrl: string | null;
@@ -1218,6 +1306,8 @@ export function publicArticle(row: {
       ? undefined
       : publicCrossrefs(row.crossrefs, row.crossrefsFresh, row.slug, blocksById);
   return {
+    /* One of two words, and nothing about the key that was or was not sent. */
+    sharedBy: row.sharedBy,
     meta: publicMeta(row),
     blocks,
     tree: publicTree(row.tree),
@@ -1310,4 +1400,23 @@ export function publicSourceGuess(row: SourceGuessRow): PublicSourceGuess | null
 function optionalSourceGuess(row: SourceGuessRow | null): { sourceGuess?: PublicSourceGuess } {
   const guess = row === null ? null : publicSourceGuess(row);
   return guess === null ? {} : { sourceGuess: guess };
+}
+
+/**
+ * **The authors' names a visitor is already shown**, for the end of a link
+ * preview's title (`PublicHead.authors`, src/store/public-reader.ts).
+ *
+ * A visitor is sent `byline` and never `authors`, so a name is published here
+ * only when the public byline already contains it. For a paper the byline is
+ * derived from these names, so that is all of them; for a web page with no
+ * structured authors it is none, and the page's own free-text byline ("By Jane
+ * Doe | Staff reporter") is not clean enough to print in a title. Names only:
+ * an affiliation never leaves through this.
+ */
+export function publicAuthorNames(
+  authors: readonly { name: string }[] | null,
+  byline: string | null,
+): string[] {
+  if (authors === null || byline === null) return [];
+  return authors.map((a) => a.name).filter((name) => name.trim() !== "" && byline.includes(name));
 }

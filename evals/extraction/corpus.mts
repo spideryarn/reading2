@@ -184,6 +184,23 @@ export const EXTRA_FIXTURES: { name: string; file: string; url: string; slot: st
     url: "https://www.npr.org/sections/goatsandsoda/" },
   { name: "archwiki-install", file: "archwiki_install.html", slot: "—",
     url: "https://wiki.archlinux.org/title/Installation_guide" },
+  /* **One added 2026-10-06, and it is not an article**: the Anubis bot check
+     hal.science answers a plain GET with. It is the long wall
+     docs/plans/260904e-extraction-repair-evals-and-llm-post-processing.md § C1
+     was waiting for — 1,034 characters of article text, twice the capability
+     floor — and the page src/challenge-page.ts's first entry was written
+     against. See fixtures/README.md, "The bot check added 2026-10-06", for the
+     one edit made to its bytes. */
+  { name: "hal-anubis", file: "hal_anubis.html", slot: "—",
+    url: "https://hal.science/hal-05779468" },
+  /* **A second, the same day, and not an article either**: the Anubis check
+     bugs.winehq.org answers with. It is an older version of the same software
+     (v1.15), whose page does not carry the element the entry above was written
+     against, so it was an article of 1,106 characters until the entry was
+     widened — docs/plans/261006f-other-bot-check-walls-that-clear-the-floor.md.
+     Its bytes are unedited. */
+  { name: "winehq-anubis", file: "winehq_anubis.html", slot: "—",
+    url: "https://bugs.winehq.org/" },
 ];
 
 /** Every committed fixture, for an eval whose denominator is not `CORPUS`'s. */

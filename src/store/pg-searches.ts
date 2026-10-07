@@ -2,7 +2,8 @@
  * "Find every passage that…" — the Postgres half. src/searches.ts is the other.
  *
  * The decision about *which* run a request produces is not here. It is
- * `withRun` in src/searches.ts, which both stores call, because it holds the
+ * `withRun` in src/searches.ts, which this store calls (as the deleted
+ * filesystem store did), because it holds the
  * three-condition retry rule this repo carries a postmortem for
  * (docs/postmortems/260826f-search-retry-remints-instead-of-resetting.md) and a rule
  * with two implementations is a rule with two behaviours. What is here is
@@ -12,8 +13,8 @@
  * ## The attempt fence
  *
  * A *run* is the reader's question. An *attempt* is one call to the model. The
- * filesystem store has only the first, and sweeps stale runs by asking an
- * in-process `Set` which ones it started — right for one server on one disk,
+ * filesystem store (gone 2026-09-05) had only the first, and swept stale runs by
+ * asking an in-process `Set` which ones it started — right for one server on one disk,
  * and wrong the moment two processes share a database:
  *
  * 1. Process A takes the POST and starts a run.
@@ -24,18 +25,17 @@
  *    and nothing else — writes the old answer over the retry.
  *
  * Nothing in that sequence is exotic; on Vercel it is the ordinary shape. So
- * every attempt gets an id and a start time, the sweep may only bury an attempt
- * old enough that no process could still be on it, and a finish must name the
+ * every attempt gets an id and a start time, the sweep waits for the grace
+ * window unless this process is still writing it, and a finish must name the
  * attempt it is reporting for. GPT Sol's review called this the single change
  * that most reduces risk in this step.
  *
  * ## The article lock is the mutex
  *
- * src/searches.ts serialises every write in the process through one promise
- * chain. Here it is `select … from articles … for update`, which is stronger
- * (it holds across processes) and observably the same (every concurrent pair
- * that both succeed today both succeed here). Article-wide rather than
- * per-run because minting scans every id in the article.
+ * The deleted filesystem writer serialised writes through a process-local
+ * promise chain. Here it is `select … from articles … for update`, which holds
+ * across processes. Article-wide rather than per-run because minting scans
+ * every id in the article.
  *
  * **No model call happens inside these transactions.** The lock is held for the
  * two or three statements it takes to write rows the caller already has.
@@ -58,7 +58,7 @@ import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
 import { MAX_RUNS, requireColour, withRun } from "../searches.js";
 import { type SearchHit, type SearchKind, type SearchRun, isSearchKind } from "../types.js";
-import { MissingAttempt, type SearchStore, type SweepOptions } from "./contracts.js";
+import { MissingAttempt, type SearchFinish, type SearchStore, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow, sourceHashFor } from "./pg.js";
@@ -139,12 +139,13 @@ const rawPgSearchStore: SearchStore = {
 
   async begin(
     slug: string,
+    sourceHash: string,
     criterion: string,
     searchKind: SearchKind,
     wantedId?: string,
     now: () => string = () => new Date().toISOString(),
     options: { revises?: boolean } = {},
-  ): Promise<{ run: SearchRun; attempt: string | undefined }> {
+  ): Promise<{ run: SearchRun; attempt: string }> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = now();
@@ -152,29 +153,14 @@ const rawPgSearchStore: SearchStore = {
 
     const run = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
-      /* Inside the lock, so the fingerprint and the row are written against one
-         state of the article. Outside it, a re-extraction committing between
-         **these two reads** would stamp a run with a hash of blocks the model
-         was never shown. The filesystem half cannot take a lock and says so
-         where it reads (src/searches.ts § beginRun).
+      /* **The fingerprint is the caller's, not read here** (plan 261005i § D).
+         It is the hash of the blocks the caller is about to send the model, so
+         the row and the answer are about the same blocks whatever is extracted
+         in between. Until 2026-10-05 it was read under this lock and the
+         handler loaded the article afterwards, and a re-extraction in the gap
+         stamped a fresh answer with the old hash (GPT Sol, 2026-09-04).
 
-         **What the lock does not cover, found by GPT Sol on 2026-09-04.** It
-         ends when this transaction commits, and `search` in src/routes.ts calls
-         `loadArticle(slug)` *after* that — so a re-extraction landing in the
-         gap gives the model R2's blocks and leaves this row holding R1's hash.
-         The run is then reported **stale when it is exactly current**, which is
-         the opposite failure from the one above and the harmless one of the
-         two: a false "older version" on a fresh answer, self-correcting on the
-         next run. The comment here used to imply the lock closed both windows
-         and it never did.
-
-         Fixing it properly means fingerprinting the blocks the model was
-         actually shown — `finishRun` writing the hash of `article.blocks`
-         rather than `begin` writing the hash of whatever was current when it
-         took the lock — which is a change to this store's write path and
-         belongs to whoever owns searches, not to the public read that surfaced
-         it. docs/plans/260904c-more-modes-on-a-shared-link.md § Still open. */
-      const sourceHash = await sourceHashFor(articleId, tx);
+         The lock stays: it orders the read of existing runs against the write. */
       const existing = await runsFor(articleId, tx);
       const { run: decided, kind } = withRun(
         existing,
@@ -207,6 +193,8 @@ const rawPgSearchStore: SearchStore = {
             sourceHash: decided.sourceHash ?? null,
             attemptId: attempt,
             attemptStartedAt: DB_NOW,
+            // Back to pending: the superseded answer's finish goes with its hits.
+            finishedAt: null,
           })
           .where(
             and(
@@ -251,6 +239,9 @@ const rawPgSearchStore: SearchStore = {
             sourceHash: decided.sourceHash ?? null,
             attemptId: attempt,
             attemptStartedAt: DB_NOW,
+            /* Cleared for the reason `error` is: the failed attempt's finish
+               must not sit under the retry's spinner. */
+            finishedAt: null,
           })
           .where(
             and(
@@ -350,20 +341,20 @@ const rawPgSearchStore: SearchStore = {
   async finish(
     slug: string,
     runId: string,
-    patch: Partial<SearchRun>,
-    attempt?: string,
+    patch: SearchFinish,
+    attempt: string,
   ): Promise<SearchRun | undefined> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
 
     /* **Refused without an attempt, rather than falling back to identity.**
 
-       The token is optional in the interface because the filesystem store has
-       none. Letting it be optional *here* would mean a caller that simply
-       forgot to carry it through got the whole cross-process race back — A's
-       buried answer landing on B's retry — with nothing anywhere reporting it.
-       The column exists to close that; accepting `undefined` would reopen it
-       silently. GPT Sol, 2026-08-26. */
+       The interface requires the token (since 2026-10-04; it was optional for
+       the filesystem store). This is the same rule for a caller the compiler
+       did not see: one that dropped the token would get the whole
+       cross-process race back — A's buried answer landing on B's retry — with
+       nothing anywhere reporting it. The column exists to close that;
+       accepting `undefined` would reopen it silently. GPT Sol, 2026-08-26. */
     if (attempt === undefined) {
       throw new MissingAttempt("SearchStore.finish", "begin()");
     }
@@ -371,8 +362,11 @@ const rawPgSearchStore: SearchStore = {
     /* **And the status has to be one this run can end on.** The attempt is
        released below whatever the patch says, so a patch that leaves the run
        `pending` would strip the fence off a row that is still waiting for an
-       answer — after which anybody's late write can land on it. */
-    if (patch.status !== "done" && patch.status !== "error") {
+       answer — after which anybody's late write can land on it. `SearchFinish`
+       says so in the type; read as a plain string here so the refusal below
+       can still name what an untyped caller sent. */
+    const status: string = patch.status;
+    if (status !== "done" && status !== "error") {
       /* **`status`, so the guard lets the sentence through.** A fence violation
          is a caller's bug that never reached the database, and its whole
          content is which invariant broke — scrubbed, it arrives as *"this app
@@ -392,7 +386,7 @@ const rawPgSearchStore: SearchStore = {
          is the sibling refusal in this same family. */
       throw Object.assign(
         new Error(
-          `SearchStore.finish must end a run: status was ${JSON.stringify(patch.status)}, ` +
+          `SearchStore.finish must end a run: status was ${JSON.stringify(status)}, ` +
             'expected "done" or "error".',
         ),
         { status: 500 },
@@ -402,18 +396,25 @@ const rawPgSearchStore: SearchStore = {
     /* `id` and `criterion` are deliberately not settable — src/searches.ts pins
        them back after the spread, and building the SET explicitly is the same
        guarantee without depending on key order. */
+    const fields: Partial<Pick<SearchRun, "hits" | "model" | "error">> = patch;
     const rows = await db
       .update(searchRuns)
       .set({
-        ...(patch.status === undefined ? {} : { status: patch.status }),
-        ...(patch.hits === undefined ? {} : { hits: patch.hits }),
-        ...(patch.model === undefined ? {} : { model: patch.model }),
-        ...(patch.error === undefined ? {} : { error: patch.error }),
+        status: patch.status,
+        /* Preserve defined-field writes. A structurally typed variable can
+           carry fields beyond its union arm, and those were always written. */
+        ...(fields.hits === undefined ? {} : { hits: fields.hits }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way. Both columns or neither — the CHECK
         // on the table says so, and half an attempt is a run that can never be
         // swept or never be finished.
         attemptId: null,
         attemptStartedAt: null,
+        /* **When the hits landed, or the call failed** — in the fenced
+           statement, so an attempt the sweep buried stamps nothing. The guard
+           above has already refused a patch that does not end the run. */
+        finishedAt: DB_NOW,
       })
       .where(
         and(
@@ -473,7 +474,9 @@ const rawPgSearchStore: SearchStore = {
        as `withColour` on the filesystem side. */
     await db
       .update(searchRuns)
-      .set({ colour })
+      /* `colour_at` beside it, a cleared colour included. Neither `created_at`
+         (when it was asked) nor `finished_at` (when it was answered) is named. */
+      .set({ colour, colourAt: DB_NOW })
       .where(and(eq(searchRuns.articleId, articleId), eq(searchRuns.id, runId)));
     /* The whole list, not the row — one run's colour changes which slots are
        free, so it can move another row's. `SearchStore.recolour` says why. */
@@ -491,7 +494,7 @@ const rawPgSearchStore: SearchStore = {
        clock says, or a four-minute search gets killed by the same server that
        started it. The age check is for every other process: an attempt younger
        than the grace window might still be in flight somewhere else, and
-       burying it is what the filesystem store does wrong.
+       burying it is what the filesystem store did wrong.
 
        A `pending` row with no attempt at all is sweepable outright. That is an
        imported run, or one from before this column existed — either way the
@@ -518,7 +521,14 @@ const rawPgSearchStore: SearchStore = {
 
     const swept = await db
       .update(searchRuns)
-      .set({ status: "error", error: SWEPT, attemptId: null, attemptStartedAt: null })
+      // `finished_at` is when the sweep ended the attempt — the only ending it had.
+      .set({
+        status: "error",
+        error: SWEPT,
+        attemptId: null,
+        attemptStartedAt: null,
+        finishedAt: DB_NOW,
+      })
       .where(stale)
       .returning({ id: searchRuns.id });
 

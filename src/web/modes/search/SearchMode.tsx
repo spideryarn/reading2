@@ -35,6 +35,7 @@ import {
 } from "../../params.js";
 import { assignSlots } from "../../hit-colours.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
+import { useMadeFor } from "../../lib/made-for.js";
 import { useRenderCount } from "../../perf.js";
 import { useSearch, type SavedSearch } from "../../useSearch.js";
 import { SearchPanel } from "../../SearchPanel.js";
@@ -51,6 +52,19 @@ import {
   type QuickSession,
   stepQuickSession,
 } from "../../quick-session.js";
+import { type AutoThoroughWiring, useAutoThorough } from "./auto-thorough.js";
+import { storedPairsFor } from "./stored-pairs.js";
+
+/** Until `SearchBand` has filled it in, on its first render: nothing owns, nothing runs. */
+const UNWIRED: AutoThoroughWiring = {
+  running: () => false,
+  launch: () => "",
+  drop: () => {},
+  owns: () => false,
+  boxWords: () => "",
+  ticked: () => false,
+  swap: () => {},
+};
 
 /**
  * Search, and the fetch that belongs to it.
@@ -104,18 +118,46 @@ export function SearchBand({
      nothing if the reader has already unticked or deleted the search. */
   const renameActive = useRef<(from: string, to: string) => void>(() => {});
   const renameSession = useRef<(from: string, to: string) => void>(() => {});
+  const renameUpgrade = useRef<(from: string, to: string) => void>(() => {});
   /* Only a request this tab started is known to be in flight — `running` and
      `isRunning` are the hook's, because only the hook knows the id the server
      answered under. useSearch.ts § inFlight. */
-  const { runs, loaded, loadError, ask, retry, revise, running, isRunning, remove, recolour, error } =
+  const { runs, loaded, loadError, loadFromCopy, ask, retry, revise, running, isRunning, remove, recolour, error } =
     useSearch(slug, {
       onRenamed: (from, to) => {
         renameActive.current(from, to);
         renameSession.current(from, to);
+        renameUpgrade.current(from, to);
       },
     });
-  const { panel, setActive } = useSearchMode({
+  /* **A settled quick answer starts its thorough search, unseen** (plan
+     261004l, src/web/modes/search/auto-thorough.ts). The thorough row is
+     hidden until it is complete, so everything below that draws, counts,
+     colours or ticks is given `upgrade.visible`; `runs` is kept for the
+     hook's own lookups. The wiring is filled in further down, once the
+     typing session and `?runs=` exist. */
+  const wiring = useRef<AutoThoroughWiring>(UNWIRED);
+  /* **Whose remembered pairs these are** (stored-pairs.ts): the reader this
+     band was mounted for, as `useSearch` above has it. That answer is frozen
+     at mount and is right here because the band cannot outlive its reader:
+     it is under `ArticlePage`'s access gate, which answers `loading` and
+     unmounts everything below it the moment the reader changes (access.ts
+     § `useArticleAccess`). `useLastView` cannot use the frozen answer: it
+     lives in `App`, which outlives every reader, and is told the current one. */
+  const readerId = useMadeFor();
+  const storedPairs = useMemo(() => storedPairsFor(readerId), [readerId]);
+  /* `loaded` is true for a failed read too, and a failed read's empty list
+     would read as "both rows have gone": only a list that arrived is tidied. */
+  const upgrade = useAutoThorough({
+    slug,
+    readerId,
     runs,
+    loaded: loaded && loadError === null && !loadFromCopy,
+    wiring,
+  });
+  renameUpgrade.current = upgrade.renamed;
+  const { panel, setActive } = useSearchMode({
+    runs: upgrade.visible,
     blocks,
     words: true,
     onJump,
@@ -138,22 +180,71 @@ export function SearchBand({
       const id = ask(words, "quick");
       setActive((ids) => [...ids, id]);
       onOpenHit(null);
+      // Only rows this tab's typing made are upgraded by themselves.
+      upgrade.watch(id);
       return id;
     },
-    revise,
+    revise: (id, words) => {
+      // Revoke before React can batch a revision with leaving the mode.
+      storedPairs.invalidate(id);
+      revise(id, words);
+    },
+    submitted: upgrade.submitted,
   });
   renameSession.current = typing.renamed;
+  const draft = searchDraftFor(slug);
+  wiring.current = {
+    running: (words) => isRunning(words, "meaning"),
+    /* Quiet, and not added to `?runs=`: the reader did not press for it, and
+       it is not theirs to see until it is complete (review F7). */
+    launch: (words) => ask(words, "meaning", undefined, { quiet: true }),
+    drop: (meaningId) => remove(meaningId, { quiet: true }),
+    owns: typing.owns,
+    boxWords: () => draft.text().trim(),
+    ticked: (id) => panel.active.includes(id),
+    swap: ({ meaningId, quickId }) => {
+      /* The colour the quick row is drawn in **now**, not at launch: the
+         reader may have recoloured it while the thorough search ran (review
+         F4). The resolved slot, as *thorough* below, because an automatic
+         colour is stored nowhere. */
+      const slot = panel.slots.get(quickId);
+      if (slot !== undefined) recolour(meaningId, slot);
+      // In place: an unticked quick row gives an unticked thorough row.
+      setActive((ids) => ids.map((id) => (id === quickId ? meaningId : id)));
+      typing.rowGone(quickId);
+      remove(quickId);
+      /* The open hit is not cleared here. If it was one of the quick row's,
+         it is no longer in the results, and `usePassageLifecycle` drops it. */
+    },
+  };
   /* A matcher switch ends the session; the words stay in the box, inert. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `panel.matcher` is the trigger, not an input — a switch is what ends the session.
   useEffect(() => {
     typing.end();
   }, [panel.matcher, typing]);
-  const draft = searchDraftFor(slug);
   useBarHandoff(draft, panel.matcher, typing, () => onOpenHit(null));
 
   return (
     <SearchPanel
       {...panel}
+      /* **A tick or a press on a thorough row is the reader choosing**, so a
+         pair a reload left behind is no longer tidied over it, even if they
+         untick it again (stored-pairs.ts; `forget` does nothing for any other
+         row). A gesture on the quick row is not: its tick is what the thorough
+         row inherits. */
+      onToggle={(id, on) => {
+        storedPairs.forget(id);
+        panel.onToggle(id, on);
+      }}
+      onSolo={(id) => {
+        storedPairs.forget(id);
+        panel.onSolo(id);
+      }}
+      // Select all ticks every thorough row, a left-behind one included: this reader's, and only theirs.
+      onToggleAll={(on) => {
+        if (on) for (const pair of storedPairs.of(slug)) storedPairs.forget(pair.meaningId);
+        panel.onToggleAll(on);
+      }}
       access={{
         kind: "owner",
         loaded,
@@ -161,6 +252,8 @@ export function SearchBand({
         error,
         typing,
         draft,
+        upgrading: upgrade.upgrading,
+        hidden: upgrade.hidden,
         onAsk: (criterion, kind, sourceId) => {
           const question = criterion.trim();
           // Thorough ends only the session belonging to that quick row.
@@ -176,6 +269,7 @@ export function SearchBand({
              second to ask again, and the plan says what keeping it would
              cost. */
           if (sourceId !== undefined) {
+            storedPairs.invalidate(sourceId);
             const id = ask(question, kind, panel.slots.get(sourceId));
             remove(sourceId);
             setActive((ids) => [...ids.filter((x) => x !== sourceId), id]);
@@ -197,6 +291,7 @@ export function SearchBand({
         onRetry: (id) => {
           const run = runs.find((candidate) => candidate.id === id);
           if (!run || isRunning(run.criterion, run.kind)) return;
+          storedPairs.invalidate(id);
           retry(id);
         },
         /* Straight through. Unlike every other write on this panel it does not
@@ -204,6 +299,7 @@ export function SearchBand({
            like, never which marks are drawn or which one the reader is on. */
         onRecolour: recolour,
         onDelete: (id) => {
+          storedPairs.invalidate(id);
           typing.rowGone(id);
           remove(id);
           setActive((ids) => ids.filter((x) => x !== id));
@@ -222,10 +318,17 @@ export function SearchBand({
  *   bar's keystrokes, Enter, focus and blur reach the very session the
  *   panel's box drives. One session, one row, whichever box is typed in.
  * - **A handoff is taken** — the bar's pause, Enter or ⚡ that arrived while
- *   this band was closed or on another matcher. Not on *quick* yet: switch,
- *   replacing the history entry the mode's own press just pushed so one Back
- *   still leaves Search mode, and take it on the next pass. On *quick*: ask
- *   with the draft as it is now, which is the latest the reader typed.
+ *   this band was closed or on another matcher, or the command bar's *Quick
+ *   search “X”* row (plan 261005i). Not on *quick* yet: switch, and take it on
+ *   the next pass. On *quick*: ask with the draft as it is now, which is the
+ *   latest the reader typed.
+ *
+ *   **The switch replaces the history entry only when the band has just
+ *   mounted**, which is when the press that left the handoff also pushed
+ *   Search open: one Back then still leaves Search mode. A band already open
+ *   on words or meaning had nothing pushed for it (both openers skip a
+ *   same-mode write), so there the switch pushes, and Back returns to the view
+ *   the reader was on rather than skipping it (GPT Sol's F3 on that plan).
  *
  * Declared after the matcher-switch effect in `SearchBand`, so a switch's
  * `end` runs before the handoff starts the new session, not after it.
@@ -238,6 +341,10 @@ function useBarHandoff(
 ): void {
   const [, setMatch] = useQueryState("match", matchParam);
   const handoff = useHandoff(draft);
+  /* Is this the band's first look at the handoffs, the one a mount gets? A
+     handoff found then came with the press that opened Search; one found
+     later reached a band that was already open, and nothing was pushed. */
+  const opening = useRef(true);
   const lifetime = useRef<{ draft: SearchDraft } | null>(null);
   useEffect(() => {
     const token = { draft };
@@ -262,9 +369,12 @@ function useBarHandoff(
   useEffect(() => {
     let live = true;
     queueMicrotask(() => {
-      if (!live || draft.handoff() === null) return;
+      if (!live) return;
+      const opened = opening.current;
+      opening.current = false;
+      if (draft.handoff() === null) return;
       if (matcher !== "quick") {
-        void setMatch("quick", { history: "replace" });
+        void setMatch("quick", { history: opened ? "replace" : "push" });
         clearOpenHit();
         return;
       }
@@ -302,18 +412,28 @@ function useTypingSession({
   loaded,
   start,
   revise,
+  submitted,
 }: {
   slug: string;
   loaded: boolean;
   /** Ask a new quick search, returning its id — or `null` if it was refused. */
   start(words: string): string | null;
   revise(id: string, words: string): void;
+  /**
+   * Enter or *find* was pressed on these words for this row — **whether or not the
+   * session then asks anything**. A pause followed by Enter on unchanged
+   * words emits neither `start` nor `revise`, and it is still the reader
+   * saying "these words" (plan 261004l, review F1).
+   */
+  submitted(quickId: string, words: string): void;
 }): BandTyping & {
   renamed(from: string, to: string): void;
   rowGone(id: string): void;
+  /** Is this the row the open session is revising? (plan 261004l, review F2) */
+  owns(id: string): boolean;
 } {
-  const latest = useRef({ loaded, start, revise });
-  latest.current = { loaded, start, revise };
+  const latest = useRef({ loaded, start, revise, submitted });
+  latest.current = { loaded, start, revise, submitted };
 
   const controls = useMemo(() => {
     let state: QuickSession = IDLE;
@@ -326,14 +446,24 @@ function useTypingSession({
       blurTimer = undefined;
     };
     const dispatch = (event: QuickEvent): void => {
+      const before = state;
       const out = stepQuickSession(state, event);
       state = out.state;
       if (!state.open) stop();
       const effect = out.effect;
+      let submittedId = before.rowId;
       if (effect?.type === "ask") {
         const id = latest.current.start(effect.words);
+        submittedId = id;
         if (!out.sealed) dispatch({ type: "asked", id });
-      } else if (effect?.type === "revise") latest.current.revise(effect.id, effect.words);
+      } else if (effect?.type === "revise") {
+        latest.current.revise(effect.id, effect.words);
+        submittedId = effect.id;
+      }
+      if ((event.type === "flush" || out.sealed) && submittedId !== null) {
+        const words = effect?.words ?? (event.type === "flush" ? event.text.trim() : "");
+        latest.current.submitted(submittedId, words);
+      }
       // Drain sealed flushes before any pause carried by the new session.
       if (out.sealed) dispatch({ type: "loaded" });
     };
@@ -345,6 +475,9 @@ function useTypingSession({
           ? setTimeout(() => dispatch({ type: "pause", loaded: latest.current.loaded }), PAUSE_MS)
           : undefined;
       },
+      /* Dispatch associates explicit submission with its own row, including
+         a sealed flush held until loading and Enter after an unchanged pause.
+         The panel, bar and handoffs all reach it through here. */
       flush(text: string) {
         clearTimeout(pauseTimer);
         dispatch({ type: "flush", loaded: latest.current.loaded, text });
@@ -371,6 +504,7 @@ function useTypingSession({
       loaded: () => dispatch({ type: "loaded" }),
       renamed: (from: string, to: string) => dispatch({ type: "renamed", from, to }),
       rowGone: (id: string) => dispatch({ type: "rowGone", id }),
+      owns: (id: string) => state.open && state.rowId === id,
       stop,
     };
   }, []);

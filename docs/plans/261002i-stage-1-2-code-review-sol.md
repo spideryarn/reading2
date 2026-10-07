@@ -13,17 +13,17 @@ No P0 findings. I fixed the in-scope issues, but the current prompt still needs 
   - aim for 60–100 words with 120 as the ceiling;
   - permit exactly one interrogative sentence/question mark.
 
-  I did not overwrite the existing uncommitted eval evidence with a new paid run. [remember-mode.md](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/docs/project/remember-mode.md:139) records that this remains to be measured.
+  I did not overwrite the existing uncommitted eval evidence with a new paid run. [remember-mode.md](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/docs/project/learn-mode.md:139) records that this remains to be measured.
 
 ### P2
 
 - Fixed — the central live mode catalog still advertised the retired stance behaviour. Updated [mode-catalog.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/src/mode-catalog.ts:332), Help and Features copy, including the clarification/direct-answer exceptions, with a catalog regression test.
 
-- Fixed — the eval’s `expert` reader incorrectly claimed the article had three arguments, so the model’s valid correction looked like undesirable behaviour. The corrected case is in [remember-recall.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/evals/remember-recall.ts:205). The brevity counter now measures the documented 120-word target rather than 180 words at [remember-recall.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/evals/remember-recall.ts:370).
+- Fixed — the eval’s `expert` reader incorrectly claimed the article had three arguments, so the model’s valid correction looked like undesirable behaviour. The corrected case is in [remember-recall.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/evals/learn-recall.ts:205). The brevity counter now measures the documented 120-word target rather than 180 words at [remember-recall.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/evals/learn-recall.ts:370).
 
 - Fixed — an optimistic retry test still expected the legacy stance to survive. It now asserts removal in [chat-turn-paths.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/tests/chat-turn-paths.test.ts:153).
 
-- Fixed — the new kind-less legacy-follow-up route test used an invalid Spideryarn id, so it would not address the seeded thread. Corrected in [remember-route.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/tests/remember-route.test.ts:172).
+- Fixed — the new kind-less legacy-follow-up route test used an invalid Spideryarn id, so it would not address the seeded thread. Corrected in [remember-route.test.ts](/home/greg/code/spideryarn2/.claude/worktrees/fb97-98-remember-recall-and-tutorial/tests/learn-route.test.ts:172).
 
 ### Confirmed
 

@@ -1,0 +1,148 @@
+{
+  "slug": "source-spya-f550ta",
+  "arm": "v3-4",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Vladimir Lvovich Bychkov",
+      "kind": "person",
+      "aliases": [
+        "Bychkov"
+      ],
+      "background": "A physics professor who maintains a Russian database of ball lightning eyewitness reports, including firsthand accounts gathered from Soviet and Russian witnesses as well as his own sighting."
+    },
+    {
+      "name": "COST Action P18",
+      "kind": "organization",
+      "aliases": [
+        "P18"
+      ],
+      "background": "A European research collaboration, convened around 2005, bringing together roughly thirty researchers to study the physics of lightning, including the open question of ball lightning."
+    },
+    {
+      "name": "fragmented science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Describes ball lightning research as scattered into disconnected efforts, with different people collecting reports, building theories, or running lab experiments without a shared, coordinated approach."
+    },
+    {
+      "name": "Prairie Meteorite Network",
+      "kind": "organization",
+      "aliases": [
+        "US Prairie Meteorite Network"
+      ],
+      "background": "A United States photographic network that watched the night sky daily for over a decade to catch meteorite falls on camera, incidentally also capturing a couple of probable ball lightning events."
+    },
+    {
+      "name": "ALDIS",
+      "kind": "organization",
+      "aliases": [
+        "Austrian lightning detection and information system"
+      ],
+      "senseHere": "A nationwide Austrian network of sensors that pinpoints where and when lightning strikes occur, used here to match recorded strokes to the times and locations of reported ball lightning sightings."
+    },
+    {
+      "name": "BLIDS",
+      "kind": "organization",
+      "aliases": [
+        "German lightning information service"
+      ],
+      "senseHere": "Germany's counterpart to the Austrian lightning-detection network, used in the same way to cross-check reported ball lightning sightings against recorded lightning strikes."
+    },
+    {
+      "name": "positive stroke",
+      "kind": "term",
+      "aliases": [
+        "negative stroke",
+        "positive lightning",
+        "negative lightning"
+      ],
+      "senseHere": "Refers to the electrical polarity of a lightning stroke, which the author uses to classify lightning strokes that coincided with reported ball lightning sightings, finding an unusually high share were positive."
+    },
+    {
+      "name": "Wilhelm von Haidinger",
+      "kind": "person",
+      "aliases": [
+        "Haidinger"
+      ],
+      "background": "A 19th-century Austrian geologist and mineralogist and member of the Imperial Academy of Sciences in Vienna, known for his mineralogical research."
+    },
+    {
+      "name": "Othniel Charles Marsh",
+      "kind": "person",
+      "aliases": [
+        "Marsh"
+      ],
+      "background": "An American professor of palaeontology at Yale University and president of the US National Academy of Sciences, famous for major 19th-century fossil discoveries."
+    },
+    {
+      "name": "Walther Gerlach",
+      "kind": "person",
+      "aliases": [
+        "Gerlach"
+      ],
+      "background": "A German physics professor best known for the 1922 Stern-Gerlach experiment, which showed that electron spin is quantized rather than continuous."
+    },
+    {
+      "name": "Roger Clifton Jennison",
+      "kind": "person",
+      "aliases": [
+        "Jennison"
+      ],
+      "background": "A British radio astronomer who worked at the Jodrell Bank Observatory before becoming a professor of physical electronics at the University of Kent."
+    },
+    {
+      "name": "Anatoly Il'ich Nikitin",
+      "kind": "person",
+      "aliases": [
+        "Nikitin"
+      ],
+      "background": "A physics professor at the Russian Academy of Sciences who, besides recalling his own childhood sighting, led a field investigation of a video-recorded ball lightning case near Moscow in 2015."
+    },
+    {
+      "name": "Georg Wilhelm Richmann",
+      "kind": "person",
+      "aliases": [
+        "Richmann"
+      ],
+      "background": "An 18th-century Baltic German physicist and member of the St Petersburg Academy of Sciences, killed in 1753 while experimenting with an ungrounded lightning conductor. His death was later mythologised in engravings as caused by a fireball, though the original investigation found it was an ordinary lightning strike."
+    },
+    {
+      "name": "Keraunoparalysis",
+      "kind": "term",
+      "aliases": [],
+      "background": "A temporary paralysis or loss of sensation that can follow a nearby lightning strike, without the strike necessarily causing burns. It differs from the longer-lasting psychological trauma a strike can also leave behind."
+    },
+    {
+      "name": "Jean-Martin Charcot",
+      "kind": "person",
+      "aliases": [
+        "Charcot"
+      ],
+      "background": "A 19th-century French physician regarded as a founder of modern neurology, who taught at the University of Paris and lectured Sigmund Freud. He studied patients who reported shock and paralysis after storm encounters."
+    },
+    {
+      "name": "Camp Blanding triggered-lightning experiment",
+      "kind": "event",
+      "aliases": [
+        "Camp Blanding"
+      ],
+      "background": "A field experiment by Martin A. Uman's research group at a Florida military base, where rockets trailing metal wire were used to deliberately trigger lightning strikes onto various ground materials to observe and photograph the resulting light effects."
+    },
+    {
+      "name": "cloud-ground stroke",
+      "kind": "term",
+      "aliases": [
+        "cloud-cloud stroke",
+        "cloud\\u2013ground strokes",
+        "cloud\\u2013cloud strokes"
+      ],
+      "senseHere": "Describes which path a lightning stroke takes: one that connects a cloud down to the ground, versus one that discharges between clouds or within a cloud and never reaches the ground."
+    }
+  ]
+}

@@ -61,7 +61,7 @@ import {
 } from "../src/fetch.js";
 import { PINNED, pinnedNames } from "../src/env.js";
 import { keepTheOriginal } from "../src/pdf-read.js";
-import { STEPS, UNCONVERTED_STEPS } from "../src/pipeline.js";
+import { STEPS } from "../src/pipeline.js";
 import { canonicalKey } from "../src/source.js";
 import { fsBlobs } from "../src/store/blobs-fs.js";
 import type { RawSourceStore } from "../src/store/blobs.js";
@@ -522,16 +522,10 @@ describe("the product guard over stage 1 and stage 2", () => {
    * below is the stronger one that became available: **an absent `parts` is now
    * refused too.**
    *
-   * The list is asserted empty rather than "extract is not on it", because that
-   * is the fact worth guarding now: a step added to the pipeline is converted by
-   * default and this list is the only way out of that (src/pipeline.ts). A name
-   * reappearing on it should be a decision somebody made, not something a test
-   * shrugged at.
+   * A case here asserted that list empty until 2026-10-07, when the list itself
+   * was deleted: no step can be exempt, so `checkProduct` takes no exemption
+   * and there is nothing left to assert empty.
    */
-  it("has no steps left on the unconverted exemption", () => {
-    expect([...UNCONVERTED_STEPS]).toEqual([]);
-  });
-
   it("refuses an extract product missing extractedHtml, by name", () => {
     expect(STEPS.extract.produces).toContain("extractedHtml");
     expect(STEPS.extract.produces).toContain("meta");
@@ -539,14 +533,13 @@ describe("the product guard over stage 1 and stage 2", () => {
       checkProduct(
         STEPS.extract,
         { detail: "x", parts: { meta: { slug: "s", title: "T", fetchedAt: "" } } },
-        UNCONVERTED_STEPS,
       ),
     ).toThrow(/missing extractedHtml/);
   });
 
   /** The case the exemption used to hide: no artefacts at all. */
   it("refuses an extract product with no parts whatsoever", () => {
-    expect(() => checkProduct(STEPS.extract, { detail: "x" }, UNCONVERTED_STEPS)).toThrow(
+    expect(() => checkProduct(STEPS.extract, { detail: "x" })).toThrow(
       /returned no artefacts to write/,
     );
   });
@@ -554,9 +547,7 @@ describe("the product guard over stage 1 and stage 2", () => {
   /** And stage 1, whose single artefact is the manifest. */
   it("refuses a fetch product with no raw manifest", () => {
     expect(STEPS.fetch.produces).toEqual(["raw"]);
-    expect(() => checkProduct(STEPS.fetch, { detail: "x", parts: {} }, UNCONVERTED_STEPS)).toThrow(
-      /missing raw/,
-    );
+    expect(() => checkProduct(STEPS.fetch, { detail: "x", parts: {} })).toThrow(/missing raw/);
   });
 
   it("accepts an extract product that has both artefacts", () => {
@@ -570,7 +561,6 @@ describe("the product guard over stage 1 and stage 2", () => {
             extractedHtml: "<html><body><p>words</p></body></html>",
           },
         },
-        UNCONVERTED_STEPS,
       ),
     ).not.toThrow();
   });

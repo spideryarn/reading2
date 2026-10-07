@@ -1006,3 +1006,22 @@ lists four requirements. Answering its explicit question — **it is storage, no
 - [original-version/](../project/original-version/overview.md) — the app that already did all this once
 - [silent-success.md](../reusable/silent-success.md) — the pattern behind every item in
   [§ The traps](#the-traps)
+
+## History moved from library.md (2026-10-07)
+
+Moved verbatim from [library.md § When this becomes Postgres](../project/library.md#when-this-becomes-postgres)
+when the docs sweep split over-long reference docs. Nothing here is current unless library.md says so.
+
+**Done, since 2026-09-01, and since 2026-09-05 the only store there is** — kept here because the
+left column below is what the filesystem store actually did, and the reasoning for the move still
+holds.
+
+So the migration was:
+
+| Then (filesystem, gone 2026-09-05) | Now |
+|---|---|
+| `listArticles()` walks `data/*/`, reads three JSON files per directory | one `SELECT` over an `articles` table |
+| counts (`words`, `blocks`, `parts`, `sections`) derived per request | columns, written once at ingest |
+| `addedAt` from `meta.fetchedAt`, falling back to file mtime | a `fetched_at` column, no fallback |
+| `comments` counted by reading `comments.json` | `SELECT count(*)` or a denormalised column |
+| the `example/` fixture, always listed, flagged `fixture: true` | a seed row, listed like any other article — see [§ The fixture was always on the shelf](../project/library.md#the-fixture-was-always-on-the-shelf) |

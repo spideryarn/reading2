@@ -9,12 +9,24 @@
  * drawn as it was then. Every other state is read back only with the fields
  * its CHECKs promise; a row that breaks them throws rather than drawing a
  * paper we cannot vouch for.
+ *
+ * **The influence columns (plan 261003m stage 2) are all null when a press
+ * kept no influence**, and that reads back as no `influence` at all. All five
+ * are named on every write, so a second press that keeps none clears the
+ * first's.
  */
 import type { citationInvestigations } from "../db/schema.js";
 import type { PaperUnreadableReason } from "../messages.js";
-import type { CitationInvestigation, InvestigatedPaper, PaperMatchedBy } from "../types.js";
+import type { CitationInvestigation, CitationWebInfluence, InvestigatedPaper, PaperMatchedBy } from "../types.js";
 
-type Row = typeof citationInvestigations.$inferSelect;
+/**
+ * **Without `created_at`, on purpose.** That column is the first press's time
+ * and only the database default writes it; `Columns` is what the upsert sets on
+ * a later press, so leaving it out of the type is what stops a re-run naming
+ * it and moving it. Nothing reads it back either — it is stored, not shown
+ * (docs/plans/261003j-store-when-it-happened-timestamp-audit.md).
+ */
+type Row = Omit<typeof citationInvestigations.$inferSelect, "createdAt">;
 type Columns = Omit<Row, "articleId" | "entryId" | "ownerId">;
 type PaperColumns = Pick<
   Columns,
@@ -141,7 +153,51 @@ export function paperFromRow(row: PaperColumns): InvestigatedPaper | undefined {
   }
 }
 
-/** Every column but the key and the owner — so an upsert replaces the whole answer, the paper included. */
+type InfluenceColumns = Pick<
+  Columns,
+  "influence" | "influenceQuote" | "influenceSourceUrl" | "influenceSourceTitle" | "influenceVersion"
+>;
+
+/** The web influence as columns — every one named, so an upsert never leaves the last press's number behind. */
+export function influenceColumns(influence: CitationWebInfluence | undefined): InfluenceColumns {
+  if (!influence) {
+    return {
+      influence: null,
+      influenceQuote: null,
+      influenceSourceUrl: null,
+      influenceSourceTitle: null,
+      influenceVersion: null,
+    };
+  }
+  return {
+    influence: influence.value,
+    influenceQuote: influence.quote,
+    influenceSourceUrl: influence.sourceUrl,
+    influenceSourceTitle: influence.sourceTitle ?? null,
+    influenceVersion: influence.version,
+  };
+}
+
+/**
+ * The web influence back from its columns, or `undefined` when the press kept
+ * none. A row with the number and not the rest breaks its CHECK; it is read
+ * as none rather than throwing, so a damaged number cannot hide the answer
+ * beside it.
+ */
+export function influenceFromRow(row: InfluenceColumns): CitationWebInfluence | undefined {
+  if (row.influence === null || row.influenceQuote === null || row.influenceSourceUrl === null || row.influenceVersion === null) {
+    return undefined;
+  }
+  return {
+    value: row.influence,
+    quote: row.influenceQuote,
+    sourceUrl: row.influenceSourceUrl,
+    ...(row.influenceSourceTitle === null ? {} : { sourceTitle: row.influenceSourceTitle }),
+    version: row.influenceVersion,
+  };
+}
+
+/** Every column but the key, the owner and `created_at` — so an upsert replaces the whole answer, the paper included. */
 export function investigationColumns(inv: CitationInvestigation): Columns {
   return {
     answer: inv.answer,
@@ -156,12 +212,14 @@ export function investigationColumns(inv: CitationInvestigation): Columns {
     promptVersion: inv.promptVersion,
     at: new Date(inv.at),
     ...paperColumns(inv.paper),
+    ...influenceColumns(inv.influence),
   };
 }
 
 /** One stored row as the type the owner's payload carries. */
 export function investigationFromRow(row: Row): CitationInvestigation {
   const paper = paperFromRow(row);
+  const influence = influenceFromRow(row);
   return {
     answer: row.answer,
     sources: row.sources,
@@ -175,5 +233,6 @@ export function investigationFromRow(row: Row): CitationInvestigation {
     contextHash: row.contextHash,
     promptVersion: row.promptVersion,
     ...(paper ? { paper } : {}),
+    ...(influence ? { influence } : {}),
   };
 }

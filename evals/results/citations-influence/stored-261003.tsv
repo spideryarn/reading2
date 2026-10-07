@@ -1,0 +1,9 @@
+{"level":"info","time":"2026-10-03T18:57:08.840Z","service":"spideryarn","env":"development","component":"store","msg":"serving article reads from Postgres"}
+{"level":"debug","time":"2026-10-03T18:57:08.844Z","service":"spideryarn","env":"development","component":"store","local":true,"ssl":"disabled","max":5,"msg":"database pool created"}
+slug	rows	with number	without	<=0.15	0.0	0.1	0.2	0.3	0.4	0.5	0.6	0.7	0.8	0.9+	version
+spider-silk-spya-ge30uz	80	80	0	5	0	5	24	31	13	3	3	0	1	0	citations/2
+antikythera-mechanism-spya-zhxrzm	46	46	0	2	0	2	9	10	8	8	4	2	1	2	citations/1
+vb-spya-vu3xen	2	2	0	0	0	0	0	2	0	0	0	0	0	0	citations/3
+openai-huggingface	8	8	0	3	0	3	2	2	1	0	0	0	0	0	citations/1
+scaling-hypothesis	58	58	0	0	0	0	1	12	13	14	6	3	2	7	citations/2
+ALL (5 lists)	194	194	0	10	0	10	36	57	35	25	13	5	4	9

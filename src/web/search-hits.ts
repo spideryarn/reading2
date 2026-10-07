@@ -170,13 +170,14 @@ export interface Found {
    * Absent everywhere else.
    *
    * Not `whole`, which means quote placement *failed* on a hit that did name
-   * words — that one keeps its wash. Plan 261003i B4.
+   * words — that one keeps its outline. Plan 261003i B4.
    */
   readonly bare?: true;
   /**
    * **`null` at every source but Quotes**, and that is the whole meaning of it:
-   * a passage carrying a stroke is drawn as an outline, and one carrying `null`
-   * is drawn as a search hit's wash.
+   * a passage carrying a `QuoteStroke` is drawn as a quote fill, and one
+   * carrying `null` is drawn as a search outline. The type name is retained from
+   * before the two paintings swapped (plan 261003l).
    *
    * This is the field that lets quotes have their own visual language without a
    * run id of their own — the rail still packs one lane for `QUOTES_RUN`, and
@@ -1334,14 +1335,17 @@ function baseMarks(
       f.valence !== null && f.slot !== null
         ? { slot: f.slot, hue: valenceRgbToken(scale, f.valence), dir: valenceDirection(f.valence) }
         : { slot: f.slot };
-    /* **A quote carries a stroke and no strength; everything else the reverse.**
+    /* **A quote carries `quoteStroke` and no search strength; everything else the reverse.**
+       (`quoteStroke` is how strongly a quote is filled, and `strength` how
+       firmly a search hit's outline is closed, since 2026-10-03; the story
+       below is from when they were an outline and a wash.)
        `strength` is what `annotateHtml` turns into the confidence wash, and it
        takes the *maximum* over every mark covering a run. While a quote was a
        `strength: 1` hit, a quote lying over a 0.4-confidence search hit repainted
        that hit's wash at full — silently overwriting the one channel that says
        how sure the model was, and invisible only because quotes and search were
-       drawn identically. Splitting the two here is what makes "search fills,
-       quotes outline" true rather than merely intended.
+       drawn identically. Splitting the two here lets the quote fill and search
+       outline retain independent strengths where they overlap.
        docs/plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md */
     const quoted = f.quoteStroke !== null;
     list.push({

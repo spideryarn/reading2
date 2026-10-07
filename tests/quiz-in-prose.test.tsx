@@ -17,7 +17,7 @@
  *    mode open; the question's words are there and its premise is **nowhere**
  *    in the prose.
  * 2. A `stale` quiz draws nothing; an `outdated`, non-stale one still does.
- * 3. Pressing a line is **one** pushed entry to `mode=remember&remember=quiz`
+ * 3. Pressing a line is **one** pushed entry to `mode=learn&learn=quiz`
  *    with `thread` cleared, undone by one Back, buying nothing — and the band
  *    lands on that question with its premise shown (a jump).
  * 4. A second press while Quiz is open moves the band.
@@ -62,7 +62,7 @@ vi.mock("../src/web/useSession.js", async () => {
     useSession: () => ({
       session: null,
       user: useSyncExternalStore(who.subscribe, who.get, who.get),
-      loading: false,
+      loading: false, known: true,
     }),
   };
 });
@@ -269,7 +269,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 const quizBody = (quiz: Quiz, stale = false, outdated = false): Response =>
-  json({ quiz, stale, outdated, profileChanged: false } satisfies QuizResponse);
+  json({ quiz, stale, outdated, profileChanged: false, attempts: [] } satisfies QuizResponse);
 
 function reply(url: string, method: string): Response | Promise<Response> {
   if (url === `/api/article/${SLUG}`) return json(OWNED);
@@ -461,18 +461,18 @@ describe("the quiz's questions in the prose", () => {
 describe("pressing a line", () => {
   it("opens Quiz at that question in one pushed entry, and buys nothing", async () => {
     who.set(OWNER_A);
-    const before = `?mode=glossary&remember=recall&thread=${THREAD}`;
+    const before = `?mode=glossary&learn=recall&thread=${THREAD}`;
     await open(before);
     const startSearch = location.search;
     /* The starting address survived the mount, so the Back check means something. */
     expect(param("mode")).toBe("glossary");
-    expect(param("remember")).toBe("recall");
+    expect(param("learn")).toBe("recall");
     expect(param("thread")).toBe(THREAD);
     expect(host.querySelector(".quiz-one"), "Quiz is not open yet").toBeNull();
     trace.length = 0;
     const length = history.length;
     /* Every address written, pushed or replaced, so "no frame in which the URL
-       says both" is something this can see: Remember's rule 2 would clean a
+       says both" is something this can see: Learn's rule 2 would clean a
        leftover `thread` up afterwards with a replace, and the end state alone
        would not know. */
     const writes: { kind: "push" | "replace"; search: string }[] = [];
@@ -494,7 +494,7 @@ describe("pressing a line", () => {
 
     try {
       await act(async () => lineFor(Q3).click());
-      await until(() => param("mode") === "remember");
+      await until(() => param("mode") === "learn");
       await settle();
     } finally {
       history.pushState = origPush;
@@ -505,13 +505,13 @@ describe("pressing a line", () => {
     for (const w of writes) {
       const q = new URLSearchParams(w.search);
       expect(
-        q.get("remember") === "quiz" && q.get("thread") !== null,
-        `an address said both remember=quiz and thread: ${w.search}`,
+        q.get("learn") === "quiz" && q.get("thread") !== null,
+        `an address said both learn=quiz and thread: ${w.search}`,
       ).toBe(false);
     }
 
-    expect(param("mode")).toBe("remember");
-    expect(param("remember")).toBe("quiz");
+    expect(param("mode")).toBe("learn");
+    expect(param("learn")).toBe("quiz");
     expect(param("thread"), "thread must be cleared in the same write").toBeNull();
     expect(history.length, "exactly one pushed entry").toBe(length + 1);
     expect(jobPosts(), "a press in the prose bought something").toEqual([]);
@@ -533,7 +533,7 @@ describe("pressing a line", () => {
     who.set(OWNER_A);
     await open();
     await act(async () => lineFor(Q2).click());
-    await until(() => param("mode") === "remember");
+    await until(() => param("mode") === "learn");
     await settle();
     expect(bandQuestion().question, "the first press landed").toBe(Q2.question);
     expect(bandQuestion().premise, "Q2 has no premise").toBeNull();
@@ -559,8 +559,8 @@ describe("pressing a line", () => {
     expect(pushes, "a second press pushed an entry").toBe(0);
     expect(history.length).toBe(length);
     expect(bandQuestion()).toEqual({ question: Q4.question, premise: Q4.premise });
-    expect(param("mode")).toBe("remember");
-    expect(param("remember")).toBe("quiz");
+    expect(param("mode")).toBe("learn");
+    expect(param("learn")).toBe("quiz");
     expect(jobPosts()).toEqual([]);
   });
 });
@@ -570,7 +570,7 @@ describe("memo(TableView) and the quiz lines", () => {
     who.set(OWNER_A);
     /* Marginalia is open too: this is the callback added to its memo in 261002j,
        so an `?at=`-only render has to prove that map stays stable. */
-    await open("?mode=remember&remember=recall&margin=1");
+    await open("?mode=learn&learn=recall&margin=1");
     expect(allLines()).toHaveLength(4);
     const reader = host.querySelector<HTMLElement>(".reader");
     expect(param("margin"), "the render-budget case never asked for Marginalia").toBe("1");
@@ -593,7 +593,7 @@ describe("memo(TableView) and the quiz lines", () => {
         release = go;
       });
     await act(async () => lineFor(Q1).click());
-    await until(() => param("remember") === "quiz");
+    await until(() => param("learn") === "quiz");
     await settle();
     expect(
       trace.filter((r) => r.url === `/api/quiz/${SLUG}`).length,

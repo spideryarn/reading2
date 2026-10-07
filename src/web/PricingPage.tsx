@@ -122,6 +122,7 @@ import { SiteFooter } from "./SiteFooter.js";
 import { buyIntentIsFresh, rememberBuyIntent, takeBuyIntent } from "./buy-intent.js";
 import type { BuyIntent } from "./buy-intent.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { useBilling } from "./useBilling.js";
 import { PRICING_HREF, loginHref, navigate } from "./router.js";
 import type { UseBilling } from "./useBilling.js";
@@ -129,10 +130,12 @@ import type { UseBilling } from "./useBilling.js";
 
 export function PricingPage({ readerId }: { readerId: string | null }) {
   useDocumentTitle(pageTitle({ kind: "pricing" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
-       properties are declared on `.site` (styles.css § the site), so without it
+       properties are declared on `.site` (site.css § the site), so without it
        every `site-panel` on this page draws a transparent border over no fill
        and the ghost buttons lose their outline — a page that looks unstyled
        rather than broken, which is the version nobody reports. */
@@ -202,7 +205,8 @@ export function PricingPage({ readerId }: { readerId: string | null }) {
             caller does.
 
             **No `site-reveal` around the cards**, unlike the plans block on the
-            other two pages. A scroll-driven reveal on the first thing below the
+            other two pages. A reveal (scroll-driven until 2026-10-07, once-only
+            since — reveal-once.ts) on the first thing below the
             hero is a page that opens empty for a reader who does not scroll, on
             the one page whose entire purpose is above the fold — and it is also
             what makes a full-page screenshot of this page come back blank
@@ -764,14 +768,14 @@ function useBuyIntent(billing: UseBilling): void {
  *   the sentence being long.
  *
  * The other three keep the headline alone: `free` and a renewing `paid` are
- * explained by the cards six inches above, and `exempt` and `off` are
+ * explained by the cards six inches above, and `exempt` is
  * self-contained. Two explanations of one rule read as a page that is not sure.
  *
  * **And the headline is printed as it stands, with no sentence built around
  * it.** The obvious framing — *"You are on {headline}"* — works for the two
- * states anybody thinks of and is broken English in the other four: *"You are
+ * states anybody thinks of and is broken English in other cases: *"You are
  * on We could not confirm your plan just now"*, *"You are on Your plan has
- * ended"*. `describePlan` returns six headlines in three grammatical shapes, so
+ * ended"*. `describePlan` returns headlines in three grammatical shapes, so
  * the only safe thing to add around one is nothing. `/profile` prints it bare
  * for the same reason.
  *

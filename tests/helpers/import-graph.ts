@@ -15,17 +15,30 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { refuseUntraceableImportsInSource } from "./ts-ast.js";
+import { type AstNode, dynamicImportSpec, parseSource, refuseUntraceableImports, walkAst } from "./ts-ast.js";
 
 export const ROOT = path.resolve(import.meta.dirname, "..", "..");
 
 /**
- * The specifiers one file imports **at run time**.
+ * The specifiers one file imports **at run time**, in source order.
  *
  * `import type { X } from "y"` and a brace clause whose every specifier is
  * `type X` both erase, so neither is followed. Everything else is — including
  * `export … from`, a bare side-effect `import "…"`, and a dynamic `import("…")`,
  * because all three execute the module.
+ *
+ * **Parsed, not pattern-matched** (tests/helpers/ts-ast.ts). Until 2026-10-06
+ * this was three regular expressions anchored at a line start, and it lost
+ * edges in the quiet direction: `/* parser *\/ import { JSDOM } from "jsdom";`
+ * came back as no import at all, and so did `import ("x")` with a space before
+ * the parenthesis. It also counted the text of an import inside a comment or a
+ * template string. GPT Sol found the first two reviewing a test that had just
+ * been moved onto this reader; tests/import-graph-helper.test.ts has every
+ * spelling, and nine of its cases were red against the regexes.
+ *
+ * A file the parser cannot read is **refused**, not half-read: with error
+ * recovery on, a syntax error mid-file would otherwise return the imports above
+ * it and say nothing about the ones below.
  *
  * A dynamic `import()` whose specifier is **not** a literal is refused rather
  * than dropped: the walks built on this ask "is anything server-only reachable
@@ -36,20 +49,49 @@ export const ROOT = path.resolve(import.meta.dirname, "..", "..");
  */
 export function runtimeImportsOf(file: string): string[] {
   const text = readFileSync(file, "utf8");
-  refuseUntraceableImportsInSource(text, path.relative(ROOT, file), "tests/helpers/import-graph.ts");
-  const found: string[] = [];
-  for (const m of text.matchAll(/(?:^|\n)\s*(?:import|export)\s+([^;'"]*?)from\s*["']([^"']+)["']/g)) {
-    const clause = (m[1] ?? "").trim();
-    if (clause === "type" || clause.startsWith("type ")) continue;
-    const braces = /^\{([\s\S]*)\}$/.exec(clause);
-    if (braces) {
-      const names = (braces[1] ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-      if (names.length > 0 && names.every((n) => n.startsWith("type "))) continue;
-    }
-    if (m[2]) found.push(m[2]);
+  const rel = path.relative(ROOT, file);
+  const unparsed = (why: unknown): Error =>
+    new Error(
+      `${rel} could not be parsed (${String((why as { message?: unknown } | undefined)?.message ?? why)}), so ` +
+        "tests/helpers/import-graph.ts cannot say what it imports — and will not guess.",
+    );
+  let ast: ReturnType<typeof parseSource>;
+  try {
+    ast = parseSource(text);
+  } catch (cause) {
+    /* Recovery is on, and some errors are still thrown rather than collected. */
+    throw unparsed(cause);
   }
-  for (const m of text.matchAll(/(?:^|\n)\s*import\s*["']([^"']+)["']/g)) if (m[1]) found.push(m[1]);
-  for (const m of text.matchAll(/\bimport\(\s*["']([^"']+)["']\s*\)/g)) if (m[1]) found.push(m[1]);
+  const errors = ast.errors ?? [];
+  if (errors.length > 0) throw unparsed(errors[0]);
+  refuseUntraceableImports(ast.program, rel, "tests/helpers/import-graph.ts");
+
+  const found: string[] = [];
+  const sourceOf = (n: AstNode): string | undefined => {
+    const value = (n.source as AstNode | null | undefined)?.value;
+    return typeof value === "string" ? value : undefined;
+  };
+  walkAst(ast.program, (n) => {
+    if (n.type === "ImportDeclaration") {
+      if (n.importKind === "type") return;
+      const specifiers = (n.specifiers ?? []) as AstNode[];
+      /* `import { type A, type B } from "y"` erases too. An empty clause
+         (`import {} from "y"`) and a side-effect import do not. */
+      const named = specifiers.filter((s) => s.type === "ImportSpecifier");
+      if (specifiers.length > 0 && named.length === specifiers.length && named.every((s) => s.importKind === "type")) {
+        return;
+      }
+      const spec = sourceOf(n);
+      if (spec) found.push(spec);
+    } else if (n.type === "ExportNamedDeclaration" || n.type === "ExportAllDeclaration") {
+      if (n.exportKind === "type") return;
+      const spec = sourceOf(n);
+      if (spec) found.push(spec);
+    } else {
+      const dyn = dynamicImportSpec(n);
+      if (dyn && dyn.spec !== null) found.push(dyn.spec);
+    }
+  });
   return found;
 }
 

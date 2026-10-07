@@ -2,6 +2,23 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ The parameters](#the-parameters) — what a `?param=` means, which push and which replace, and which old ones are retired
+- [§ The library's own five](#the-librarys-own-five) — the shelf's parameters (there are ten now), and the superseded `?about=` and `?spine=` spellings
+- [§ One conversation id, two ways of drawing it](#one-thread-id) — why `?thread=` serves both Chat and the other modes
+- [§ Which article is the path](#which-article-is-the-path) — the path/query split, and the old `?slug=` and `#hash` addresses
+- [§ Three decisions](#three-decisions) — replace versus push, debouncing, and why the unit is a section
+  - [Position replaces history](#position-replaces-history-deliberate-acts-push) — why scrolling never adds a Back entry
+  - [The way back](#the-way-back-lives-until-you-leave-the-article) — the pushed entry, the "back to X" chip, and jumps landing centred
+  - [The unit is a section](#the-unit-is-a-section-not-a-position) — what `?at=` addresses
+- [§ Reopening an article where you left it](#reopening-an-article-where-you-left-it) — the remembered last view, what is never remembered, and the default for a new article
+- [§ Why the query string and not the hash](#why-the-query-string-and-not-the-hash) — the double-scroll reason
+- [§ The library: nuqs](#the-library-nuqs) — why this library, and what was rejected
+- [§ `note` replaces](#note-replaces-even-though-opening-a-dialog-is-deliberate) — `?note=` against `?at=` when both are present
+
+Code: [`params.ts`](../../src/web/params.ts), [`router.ts`](../../src/web/router.ts) (the legacy-address rewrites), [`last-view.ts`](../../src/web/last-view.ts); tests [`url-state.test.ts`](../../tests/url-state.test.ts), [`router.test.ts`](../../tests/router.test.ts).
+
 Everything about *how you are looking at an article* lives in the query string — and, since
 2026-08-26, everything about how you are looking at **the shelf** does too
 ([§ The library's own five](#the-librarys-own-five)). Which article you are looking at is the
@@ -18,8 +35,8 @@ rather than to the view, and only sparingly and for a stated reason:
 
 What it holds today: the address you last left an article at
 ([§ Reopening an article where you left it](#reopening-an-article-where-you-left-it)), and
-per-browser preferences and dismissals — the referee card (`src/web/referee-card.ts`), hidden shelf
-columns (`src/web/shelf-hidden-columns.ts`), the add page's tick box (`src/web/auto-modes.ts`), the
+per-browser preferences and dismissals — hidden shelf
+columns (`src/web/shelf-hidden-columns.ts`), the
 install and small-screen hints, the chosen microphone and its placement, the offline cache's
 partition, the `spya-perf` flag and the auth SDK's session (by `grep -rln localStorage src/web`,
 2026-10-01). Every direct access in our code is wrapped because a private window can throw; the auth
@@ -53,13 +70,14 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `at` | the section in view, as its first block's id | **replace**, debounced | `?at=spya-tgnssb` |
 | `note` | the explanation dialog that is open, as its comment id — [comments.md](comments.md) | **replace** | `?note=spya-k6fpme` |
 | `panel` | which drawer panel is open, or absent for a shut drawer — [260825c-bottom-bar.md](../plans/260825c-bottom-bar.md) | **replace** | `?panel=questions` |
-| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10 (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
+| `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10, and `?mode=hierarchy` does too; `?mode=trajectory` opens Skim; `?mode=remember` opens Learn; `?mode=tweets` is rewritten to `?mode=summary&summary=thread` (`liftLegacyTweets` in [`router.ts`](../../src/web/router.ts)) (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
+| `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `glossary`, `citations`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
 | `quote` | which quote is selected, absent for a list nobody has picked from — [quotes.md](quotes.md). Mirrors `term` and `idea` above in every respect | **replace** | `?quote=spya-k3m9qt` |
-| `depth` | how deep Skim walks — `1` Gist, `2` More, `3` Most — absent for Gist. **Always written together with `stop`**, in one `useQueryStates` update, so a depth change and the stop it lands on are one entry. A depth the route does not offer draws the deepest offered below it, and a `stop` on the route wins over it: its own pass is drawn, since each pass walks only its own stops ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) — [skim.md](skim.md) | push | `?depth=2` |
+| `depth` | how deep Skim walks — `1` Gist, `2` More, `3` Most — absent for Gist. **Always written together with `stop`**, in one `useQueryStates` update, so a depth change and the stop it lands on are one entry. A depth the route does not offer draws the deepest offered below it, and a `stop` on the route wins over it: the asked pass is drawn when the stop is walked in it, otherwise the stop's own — the shallowest it is in. A stop is in one pass ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)) unless the route carries it into a deeper one too ([261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md)), so on a route with no carried stop the stop's own pass is always the one drawn. A depth change can land on the stop already stood at; it is still one pushed entry — [skim.md](skim.md) | push | `?depth=2` |
 | `stop` | which Skim stop the reader is on — a quote id, so it validates like `quote`. A step along the route (← / →, the band's ‹ ›, the door in the prose) replaces it; a stop on no pass falls back to the asked pass's first stop. A link that carries one scrolls to that stop and flashes it, once, when the band opens | **replace** | `?stop=spya-k3m9qt` |
 | `rank` | how the quote list is ordered, absent for `document` — which is the **default**, on Greg's own instruction, unlike the glossary's `sort` below | push | `?rank=prioritised` |
 | `bar` | the bar the quotes' prioritised order hides under — `max(importance, striking)`, where the glossary's `gate` is a product. **Absent means nobody has touched it**, which the panel reads as `QUOTE_BAR_DEFAULT` ([`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx)) | **replace**, debounced | `?bar=0.55` |
@@ -71,28 +89,50 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `runs` | which saved meaning-searches are switched on, as a comma list of ids (`none` for the empty set); a bad id drops only itself — [search.md](search.md). `?run=` alone is still read, for links from before 2026-08-26 ([`params.ts`](../../src/web/params.ts) § `runsParam`) | **replace** | `?runs=spya-p7w2dn,spya-k3m9qt` |
 | `order` | how the results list is stacked: `document`, `confidence` or `prioritised` — the default, and absent, since 2026-09-15 ([search.md](search.md)) | push | `?order=document` |
 | `conf` | the bar the search results' `prioritised` order hides under, 0–100, in the unit the rows print. No default: absent means untouched | replace, debounced | `?conf=65` |
-| `name` | the bar debate mode's group-one rows hide under — **the word, not a number**: `named`, `quoted` or `linked`, the name of the strongest evidence that a page is about this piece. **Absent means nobody has touched it**, which the panel reads as `DEBATE_LEVEL_DEFAULT` ([`debate-levels.ts`](../../src/web/debate-levels.ts)); rows answering what the article *claims* carry no level and are never under it | **replace** | `?name=linked` |
-| `debateby` | how debate mode's list is ordered: `prioritised` (the default, and absent), `claim` (*by claim* — grouped under the claim in the piece each row answers, in article order), `date` or `stance` (most critical first). An order the rows cannot support — `prioritised` and `date` on any debate from before stage 2 of [260929h](../plans/260929h-debate-mode-clearer-sources-and-orders.md), and on every visitor's — draws *by claim* instead, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveDebateOrder`). Its own key for `citeby`'s reason. Independent of `name`: the bar filters, the order arranges | push | `?debateby=stance` |
-| `bears` | debate mode's **relevance bar**, shown only while `prioritised` is the order drawn: how directly the AI judged a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only, so it and `name` never hide the same row; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
-| `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
+| `debate` | which of debate mode's two sub-modes is showing: `reception` (the default, and absent — what others have written about the piece itself) or `claims` (what has been written about the claims it makes). An unknown value reads as Reception. Both draw the one stored search, so writing it never spends ([`params.ts`](../../src/web/params.ts) § `debateParam`, [debate.md](debate.md)) | push | `?debate=claims` |
+| `debateby` | how debate's **Reception** list is ordered: `prioritised` (*as found* — the default, and absent), `date` or `stance` (most critical first), each within Reception's two groups. An order the rows cannot support, or one that would draw the same list, draws *as found*, and the bar presses the order actually drawn ([`debate-order.ts`](../../src/web/debate-order.ts) § `effectiveReceptionOrder`). Claims ignores it: that sub-mode is always grouped by claim. Its own key for `citeby`'s reason. **`claim` was a fourth value until 2026-10-03**; `?debateby=claim` is rewritten to `?debate=claims` at boot and on Back ([`router.ts`](../../src/web/router.ts) § `liftLegacyDebateBy`) | push | `?debateby=stance` |
+| `bears` | debate mode's **relevance bar**, shown in Claims when some row carries the AI's judgment: how directly a claim row bears on its claim — **the word, not a number**: `loosely`, `partly` or `directly`. **Absent means nobody has touched it**, which the panel reads as `RELEVANCE_DEFAULT` — `loosely`, which hides nothing ([`debate-order.ts`](../../src/web/debate-order.ts)). Claim rows only; a row the AI did not judge is never hidden | **replace** | `?bears=partly` |
+| `debatethread` | which of debate's threads narrows its list: a theme's id, or `key` for the key sources; absent is no filter, and an id this debate does not have reads as no filter — as does one with no stored row in the sub-mode on screen — [debate.md](debate.md). **Not `thread`**, which is the open conversation ([`params.ts`](../../src/web/params.ts) § `debateThreadParam`) | **replace** | `?debatethread=key` |
 | `citeby` | how the citations list is ordered: `prioritised` (the default, and absent), `document` (first cited), `relevance`, `influence` or `date` (oldest first; a list with no year draws first cited) — [citations.md](citations.md). **Not the glossary's `sort`**: every parameter survives a mode switch, and a shared key would carry one mode's order into the other | push | `?citeby=relevance` |
 | `citebar` | the bar the citations' prioritised order hides under — `(2 × relevance + influence) / 3`. **Absent means nobody has touched it**, which the panel reads as `CITATION_BAR_DEFAULT` ([`CitationsPanel.tsx`](../../src/web/CitationsPanel.tsx)). Not the glossary's `gate`, which `Reader` reads in every mode | **replace**, debounced | `?citebar=0.55` |
 | `faqby` | how the FAQ is ordered: `prioritised` (the default, and absent), `document` (reading order), `centrality` (most central) or `difficulty` (hardest); one the list has nothing for falls back to `document` — [faq.md](faq.md). Its own key for `citeby`'s reason | push | `?faqby=document` |
 | `faqbar` | the bar the FAQ's prioritised order hides under — `centrality × (1 − difficulty)`. **Absent means nobody has touched it**, which the panel reads as `FAQ_BAR_DEFAULT` ([`faq-order.ts`](../../src/web/faq-order.ts)) | **replace**, debounced | `?faqbar=0.35` |
 | `event` | which timeline event is selected, absent for a list nobody has picked from — [timeline.md](timeline.md). Mirrors `term`, `idea` and `quote`; the id survives a re-run ([`params.ts`](../../src/web/params.ts) § `eventParam`) | **replace** | `?event=spya-k3m9qt` |
 | `structure` | how Structure is drawn: `fisheye`, opened up around the part you are reading (the default, and absent), or `expanded`, every part and section with its gist in one scrolling list — [structure.md](structure.md). Nothing to generate either way. [261001q](../plans/261001q-structure-fisheye-expanded-and-arrow-keys.md) | push | `?structure=expanded` |
-| `summary` | which of Summary's three plain-words levels the slider is on: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `simple` or `fuller` — [summaries.md](summaries.md). Arriving on it never spends; only touching the slider does. `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
+| `summary` | which of Summary's three views is showing: `brief` (the default, and absent — Greg's 8N, [261002c](../plans/261002c-summary-opens-on-brief.md)), `fuller` or `thread` — [summaries.md](summaries.md), [tweets.md](tweets.md). `simple` was a value until 2026-10-03 and reads as `brief`. Arriving on a length never spends; an explicit press on Summary's button or command row, or on Brief or Fuller, can. **`thread` is the exception**: its band writes the thread when its owner arrives, so a remembered view on the thread is restored without `mode` (below). `?summary=gists` and its partner `?deep=` went with Summary's outline on 2026-10-01: an old link carrying either lands on `brief`, and `deep` is in `last-view.ts`'s `NEVER_REMEMBERED`, so a restored view cannot override that link | push | `?summary=fuller` |
 | `diagram` | which of the five pictures diagram mode is drawing, absent for the default `sketch` — [diagram.md](diagram.md) | push | `?diagram=trail` |
 | `dx` | on `drift` only: what sideways means — `lanes` (the default) or `spread` | **replace** | `?dx=spread` |
 | `dhue` | on `drift` and `trail`: what a dot's colour means — `section` (the default), `progress` or `topic` | **replace** | `?dhue=progress` |
-| `referee` | which of Referee's four sub-modes is open: `criteria` (the default), `claims`, `mirror` or `candidates` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
+| `referee` | which of Referee's five sub-modes is open: `criteria` (the default), `claims`, `mirror`, `candidates` or `hidden` — [referee-mode.md](referee-mode.md) | push | `?referee=mirror` |
 | `crits` | which Referee criteria are painting the prose, as a comma list of ids, `none` for the empty set. **Absent is the empty set**: the article is not marked until the reader asks — [referee-mode.md](referee-mode.md) ([`params.ts`](../../src/web/params.ts) § `critsParam`) | **replace** | `?crits=spya-k3m9qt` |
 | `refscale` | which diverging colour ramp the whole of Referee mode is drawn with: `rg` (the default, omitted) or `br`. A URL param rather than a column, so it applies to criteria already run; [`params.ts`](../../src/web/params.ts) § `refScaleParam` says whether a control writes it yet | **replace** | `?refscale=br` |
-| `remember` | which part of Remember is open: `recall` (the default), `tutorial` or `quiz` — [remember-mode.md](remember-mode.md). Recall and Tutorial each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?remember=quiz` |
+| `learn` | which part of Learn is open: `recall` (the default), `tutorial`, `explore` or `quiz` — [learn-mode.md](learn-mode.md). Recall, Tutorial and Explore each open their own one conversation and write its id to `?thread=`. **Switching to Quiz clears `?thread=` in the same navigation**, and a pasted URL carrying both keeps Quiz and drops the thread with a *replace* — a conversation selected and invisible is the state this defines away | push | `?learn=quiz` |
 
-**`referee` and `remember` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
+**`key` is not in this table, because it is not view state.** `/read/<slug>?key=<key>` is a private
+link, and the key is a credential
+([public-readable-sharing.md § A private link](public-readable-sharing.md#a-private-link-the-same-republishing-to-fewer-people)).
+No parser owns it and nothing in the app writes it. It stays on the address because nuqs and
+`carriedSearch` both keep parameters they do not own, so a mode change, a passage link and the trip
+to the Metadata page and back all carry it. It is read in one place
+([`src/web/useShareKey.ts`](../../src/web/useShareKey.ts)), never remembered (`last-view.ts` writes
+an allowlist it is not on), and taken off the address a bug report records.
+
+**The Learn words said `remember` until 2026-10-06** ([261006a](../plans/261006a-remember-identifiers-become-learn-all-the-way-down.md)). `?mode=remember` still opens Learn, as a retired mode word. `?remember=<sub-mode>` and `?chatfrom=remember` did not carry over: an old link opens Learn at Recall, and Chat's list shows All.
+
+**`referee` and `learn` are `diagram`'s shape, deliberately** — *which thing, within this mode* —
 so all three push, and all three land an unrecognised value on the default rather than on an error
 page. [`src/web/params.ts`](../../src/web/params.ts) says why beside each parser.
+
+**A sub-mode parameter outlives its mode, deliberately.** `learn`, `diagram`, `referee`,
+`summary`, `structure` and `debate` each say *which thing, within one mode*, and the bar's mode
+buttons write `mode` alone. So `?mode=chat&learn=quiz` is not a leak: the parameter is read only
+by its own mode and does nothing under any other, and it is what makes pressing Learn again
+return the reader to the Quiz, or Diagram to the picture last chosen. One return writes a second
+key: back to Learn with `learn=quiz` kept also clears `?thread=`, in the same pushed entry,
+because Quiz and a selected conversation cannot both be shown
+([`sub-modes.ts`](../../src/web/sub-modes.ts) § `returnToSubMode`;
+`tests/sub-mode-param-outlives-its-mode.test.tsx`;
+[261004l](../plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md) § C).
 
 **`dx` and `dhue` replace where `diagram` pushes**, and the split is the one this
 file draws everywhere: `?diagram=` is a *different picture* and Back should undo
@@ -126,7 +166,7 @@ sent to anybody. Now:
 | Param | Meaning | History | Example |
 |---|---|---|---|
 | `q` | what is in the shelf's search box — [library.md § Finding an article](library.md#finding-an-article-and-finding-a-passage-in-one) | **replace**, debounced | `?q=seth` |
-| `by` | which keys the shelf is ordered by, coarsest first: `added`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
+| `by` | which keys the shelf is ordered by, coarsest first: `added`, `published`, `opened`, `title`, `length`, `opens`, `questions` | push | `?by=length,title` |
 | `dir` | `asc` or `desc`, paired with `by` by position. **May be shorter than `by`, or absent, and the rest fall back to each column's own natural end** — newest first for a date, longest first for a length, A-to-Z for a title | push | `?dir=desc,asc` |
 | `view` | `cards` (the default) or `table` — the same list, painted the other way | push | `?view=table` |
 | `show` | `all` (the default) or `unread`, which is "never opened" | push | `?show=unread` |
@@ -134,9 +174,10 @@ sent to anybody. Now:
 | `tags` | the reader's own tags chosen in the Tags row, ANDed with each other and with `topics`. A tag no article in scope carries is ignored, and never rewritten away — [shelf-terms.md § Your own tags, in the row above](shelf-terms.md#your-own-tags-in-the-row-above) | push | `?tags=ai,memory` |
 | `archived` | `1` when the **Include archived** chip is on: the archived articles join the shelf's one list — sorted, narrowed, searched (passages too) and counted with it, each marked — and the topics' scope — [shelf-terms.md](shelf-terms.md) | push | `?archived=1` |
 | `topicsView` | `detail` for one row per topic; absent is the row of pills — [shelf-terms.md](shelf-terms.md) | push | `?topicsView=detail` |
+| `public` | `1` when the **Include public** chip is on: what other readers have shared, in its own section under the shelf and narrowed by the same search box — [library.md § Include public](library.md#include-public-and-an-empty-shelf-that-says-where-to-go), [public-shelf.md](public-shelf.md) | push | `?public=1` |
 
-Eight since 2026-09-28, when `topics`, `archived` and `topicsView` arrived; the heading keeps "five" because other
-docs and source comments link to its anchor.
+Ten today (`topics`, `archived` and `topicsView` arrived 2026-09-28; `tags` and `public` since); the heading keeps "five" because other
+docs and source comments link to its anchor. Each is parsed in [`params.ts`](../../src/web/params.ts) (`library*Param`).
 
 **A list rather than one value**, because a shift-click adds a second sort key, and a compound order
 the URL cannot carry is an order you cannot reload into or send to anybody. One key is a list of one.
@@ -243,6 +284,12 @@ opposite of "the reader turned every column off".
 So "open in full chat" from the floating panel is `setMode("chat")` and nothing else — the id is
 already right — and leaving chat mode puts the panel back where the reader left it, for free.
 
+**In `mode=chat` the id has to name a chat.** Learn writes its own conversation's id into
+`?thread=`, and it survives a switch to Chat like every parameter. Chat's band opens only
+`chat`-kind conversations, so once its list has loaded it clears an id of another kind, by replace,
+and shows the list. Going the other way is one navigation: a press on a Learn row in Chat's list
+sets `mode=learn`, `learn=<sub-mode>` and `thread=<id>` together, pushed.
+
 A second parameter was drafted for the floating panel and rejected in review: it would have carried
 nothing `mode` does not already carry, and two ids that can disagree is a bug waiting to be written.
 See [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
@@ -314,13 +361,20 @@ links are unaffected — they all say what they want — and a glossary whose sc
 prioritising falls back to `document` in the panel without touching the URL. See
 [glossary.md § Prioritised, which is now the default](glossary.md#prioritised-which-is-now-the-default).
 
-**`?name=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
-The other three sit on scores, so a number is the fact itself; debate's sits on the *name of the
-strongest evidence* a page gave that it is about this piece — a link, a quotation, a title — and there
-is a rank inside the panel only because `applyThreshold` needs one. Putting that rank in the URL would
-be our arithmetic dressed as a measurement, which is the composite the feature refused
+**`?bears=` is the only threshold that carries a word**, and that is a decision rather than a shortcut.
+The others sit on scores, so a number is the fact itself; debate's sits on one of three named
+judgments — *loosely*, *partly*, *directly* — and there is a rank inside the panel only because
+`applyThreshold` needs one. Putting that rank in the URL would be our arithmetic dressed as a
+measurement, which is the composite the feature refused
 ([260906b § 2](../plans/260906b-an-evaluation-for-debate-mode-and-what-it-finds.md)). A word also needs
 none of `snapToStop`'s machinery: it is a stop or it is nothing, and anything else reads as untouched.
+
+**`?name=` was the first such threshold, and it is retired** (2026-10-03): debate's identification
+bar — `named`, `quoted` or `linked` — whose default, `quoted`, hid the citing papers and published
+replies the search was changed to find
+([postmortem 261003h](../postmortems/261003h-debate-default-bar-hides-the-citing-papers-the-search-was-changed-to-find.md)).
+Nothing reads it now, so a link carrying it shows every row; Reception draws the title-only rows
+under their own heading instead ([`debate-levels.ts`](../../src/web/debate-levels.ts)).
 
 **`?gate=`, `?bar=` and `?conf=` are deliberately left without parser defaults**, which is the same
 call `?cols=` makes and for a related reason. Each carries the threshold its mode hides under, and
@@ -332,13 +386,13 @@ asked for and one that simply arrived
 ([glossary.md § The threshold, and whose it is](glossary.md#the-threshold-and-whose-it-is)). All
 three replace rather than push, and are debounced, for the reason `?at=` and `?find=` are: a range
 input writes on every pixel of a drag, and Back should undo the decision that got you here rather
-than the drag. **`?name=` makes the same call about the default and, alone, is not debounced**: it
+than the drag. **`?bears=` makes the same call about the default and, alone, is not debounced**: it
 has three stops, so a drag across the whole track writes twice and there is nothing to rate-limit.
 
 `?term=` is in the URL for a reason worth stating: **a selected term underlines every one of its
 occurrences in the prose**, so "the article as I am currently looking at it" is not fully described
 without it. Sending someone a link to a term sends them the underlines too. `?find=` and `?run=` are
-there for exactly the same reason, and it is the same reason a fourth time: a search washes the
+there for exactly the same reason, and it is the same reason a fourth time: a search outlines the
 passages that match, so a URL without it shows you a different page from the one you were sent.
 
 **Search mode has four parameters and every other mode has one or two**, which is worth explaining
@@ -356,7 +410,7 @@ default to mean what it used to. Anywhere else, reaching words mode is something
 doing it pushed the parameter. See [search.md § The URL](search.md#the-url).
 
 **A third segment says which of the article's pages**, added the same day:
-`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode and the old address began redirecting to it — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)). That does not bend the rule — those are still the
+`/read/<slug>/metadata` (and `/read/<slug>/tweets` until 2026-09-29, when the thread became the `?mode=tweets` mode — [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) — and then, on 2026-10-03, Summary's Thread view; both old addresses now land on `?mode=summary&summary=thread`, on a cold load, an in-app link and Back or Forward, with any carried `mode` or `summary` replaced: `liftLegacyTweets` in [`router.ts`](../../src/web/router.ts), [plan](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)). That does not bend the rule — those are still the
 same article, and which page you are on is not something you would want to reset by changing a
 parameter. An unknown third segment is the shelf too. The query string travels between all three, so
 stepping out to the metadata page and back returns you to the paragraph you left; `?panel=` is the
@@ -558,9 +612,14 @@ position is a top-of-section fact. `ScrollAlign` in [`scroll.ts`](../../src/web/
 asks "where is the reader" — the spy that writes `?at=`, the next jump's origin (so the chip),
 `beginJump`'s "already there", ↑ / ↓, `whereIsBlock` — measures at the reading line just under the
 bars, and a centred block's top sits below it, so every one of them would otherwise name the block
-*above*. `scroll.ts` keeps one *arrival anchor*, set when a centred movement settles and cleared by
-the next movement of any kind or by the reader scrolling; those callers answer with it while it
-holds. [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
+*above*. Structure's current row (`useColumnContext`, since 2026-10-05) reads at 40% of the window;
+a short centred heading sits below that line too. `scroll.ts` keeps one *arrival anchor*, set when
+a centred movement settles and cleared by the next movement of any kind or by the reader scrolling;
+those callers answer with it while it holds. "The reader scrolling" means a scroll event at
+**a different pixel** from the one the arrival
+reached: the jump's own scroll event can turn up a second late behind a render, and until 2026-10-05
+a clock decided whose it was, so `?at=` was rewritten to the section before the one clicked
+([postmortem](../postmortems/261005d-whose-scroll-was-that-decided-by-a-clock.md)). [260929a](../plans/260929a-trajectory-opens-on-stop-one-two-end-of-pass-doors-centred-jumps-compact-position.md)
 § After the plan review, F1.
 
 ### Debounced, not throttled
@@ -579,7 +638,12 @@ flew over on the way. `POSITION_SETTLE_MS` is 300ms.
 
 `?at=` always holds a **block id**. Ordinary scrolling writes the id of the **first block of the
 section the reader is in** — depth `leafDepth - 1`, what the reader sees called "Sections"
-(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). A deliberate jump may name a finer block, and the spy preserves it while the reader
+(`sectionDepth` in [`position.ts`](../../src/web/position.ts)). **When that first block is hidden,
+the section's first visible block is written instead**: a section that starts in the front matter
+folded away under the title is written as the first block after it, and an id a fold has since
+hidden is replaced by the folded heading (`visibleFrom` in [`fold.ts`](../../src/web/fold.ts)), so
+that restoring `?at=` never opens something the reader did not open. A deliberate jump may name a
+finer block, and the spy preserves it while the reader
 stays inside that block's section; that is the paragraph below on what the spy writes. Three things
 follow from the unit the spy works in:
 
@@ -639,10 +703,12 @@ easy to lose because the section *is* a node — hence the id of its first **blo
 
 Everything above is why that was nearly free. The state was already in one string; the only missing
 piece was something to keep a copy of it and put it back. So: **the query string is copied into
-`localStorage` under the slug as the reader moves, and put back when they open that article at an
-address that says nothing.** [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
-[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `ArticlePage`
-([`src/web/article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). Per-device, no server, no schema — which is what he said was
+`localStorage` under the reader and the slug as the reader moves, and put back when that reader
+opens that article at an address that says nothing.** (Under the reader since 2026-10-06, because
+two readers can share a browser:
+[auth.md § Browser storage that is a reader's is keyed by that reader](auth.md#browser-storage-that-is-a-readers-is-keyed-by-that-reader).) [`src/web/last-view.ts`](../../src/web/last-view.ts), pinned in
+[`tests/last-view.test.ts`](../../tests/last-view.test.ts), wired into `App` above its auth branches
+([`src/web/App.tsx`](../../src/web/App.tsx)). Per-device, no server, no schema — which is what he said was
 fine.
 
 **This does not make `localStorage` a second source of truth**, which is what the rule at the top of
@@ -661,13 +727,16 @@ an open conversation and a search are things the reader **did**, not places they
 `?note=`, `?panel=`, `?thread=`, and search mode's whole matcher (`?match=`, `?find=`, `?run=`,
 `?runs=`, `?order=`, `?conf=`).
 
-**And three values of `?mode=` are remembered as *no mode*: `chat`, `diagram` and `remember`.** Each
+**And three values of `?mode=` are remembered as *no mode*: `chat`, `diagram` and `learn`.** Each
 of those starts something merely by being arrived in — Diagram POSTs `/api/similar` or
-`/api/projection` for three of its five pictures, which costs a model call; Remember and Chat both
+`/api/projection` for three of its five pictures, which costs a model call; Learn and Chat both
 open a conversation. Their subordinate parameters are still remembered, so pressing Diagram or
-Remember later returns the reader to the picture or the half they had chosen. The list is
+Learn later returns the reader to the picture or the half they had chosen. The list is
 `NEEDS_AN_EXPLICIT_PRESS` in [`last-view.ts`](../../src/web/last-view.ts), with the evidence for
-each beside it. Two of the three were found by a cross-family review after a survey had reported all
+each beside it. **Summary is remembered as no mode too while its view is the thread**
+(`mode=summary` with `summary=thread`, or the older `mode=tweets`): opening the thread with none
+stored writes one, and a restore is the one arrival nobody chose. `summary=thread` itself stays
+remembered, like the others' subordinate parameters — `opensTheThread`, same file. Two of the three were found by a cross-family review after a survey had reported all
 thirteen modes inert — so **check the mode's own hook before adding one back**, and note that a
 `?mode=` a reader *sent* in a link is untouched either way: this is only about what is replayed
 unasked.
@@ -677,6 +746,60 @@ that is the one that bites: a link carrying only the new parameter would look li
 and be written over. `tests/last-view.test.ts` scans the client for `useQueryState` keys and fails on
 one that neither list has heard of, so the next parameter is a decision rather than an
 omission.
+
+### An article never opened here arrives at a default
+
+> When I open an article for the first time, default to Summary/Briefer in left-hand (if there's
+> room) and (if there's even more room) Marginalia mode in right-hand
+>
+> — Greg, 2026-10-04 (spya-ax5tmm)
+
+One more case in the same decision, since 2026-10-05
+([261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md)).
+A signed-in reader who opens an article at a bare address, in a browser that holds **no key** for
+it, arrives at:
+
+| Usable width (rail on) | Arrives at |
+|---|---|
+| below 700px | the article alone — a band would cover the prose |
+| 700px and up | `?mode=summary` (Brief) |
+| 900px and up | `?mode=summary&margin=1` |
+
+The widths are not written down in `last-view.ts`: `firstOpenSearch` asks `bandCoversProse`
+([`layout.ts`](../../src/web/layout.ts)) and `notesFit`
+([`marginalia/press.ts`](../../src/web/marginalia/press.ts)), which are what the reading view and
+the Marginalia button use, with the reader's own two measurements
+([`reader/measure.ts`](../../src/web/reader/measure.ts)). So the default cannot name a column the
+layout would decline to draw. It is measured once, on arrival; resizing afterwards never reapplies
+it.
+
+- **The link always wins**, as for a restore, and so does anything the reader has done: the default
+  is applied only while the address still says nothing.
+- **It does not override a later choice.** An empty view is stored as `""` rather than the key being
+  removed, so going back to Plain at the top and reopening stays Plain. Only *no key* is a first
+  open.
+- **"First open" means this reader's first open in this browser.** An article read on another
+  device gets the default once here. A bare Metadata visit does not use up the article's first
+  open. The key is written on every open of the reading view, so a visit on a window too narrow
+  for a band uses the first open up: the default is not held over for a wider window. A visit
+  while signed out used it up too until 2026-10-06; the key is the reader's now, so that visit is
+  recorded for nobody and the reader's first open is still to come. An article already in this
+  browser that was last left in Plain at the top had no key before this shipped, so it gets the
+  default once.
+- **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
+  experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
+  switch on. The default still waits for the settings store's answer, because that is where
+  "signed in" comes from. If settings are already loaded, the address is settled before paint;
+  otherwise the default waits for them, whether the article payload has arrived yet or not. The
+  shelf does not load settings itself. A store that never answers means no default.
+- **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
+- **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
+  open would be a first one. `readLastView` tells *failed* from *no key* for this.
+- **It starts one thing, since 2026-10-05: the notes' relation words.** Arriving in Summary spends
+  nothing ([summaries.md](summaries.md)); with no summary stored the owner sees the empty state and
+  **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
+  none, once, which is what Greg asked for
+  ([marginalia.md § Relation words](marginalia.md#relation-words)).
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

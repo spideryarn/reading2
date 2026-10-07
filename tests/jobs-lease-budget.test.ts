@@ -20,9 +20,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
+import { PDF_FIGURES_BUDGET_MS } from "../src/collect-pdf-figures.js";
+import { DEFAULTS as FETCH_DEFAULTS, retryDelayMs } from "../src/fetch.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
+import { SOURCES } from "../src/paper-sources.js";
+import { ANSWER_TOKENS as DEBATE_ANSWER_TOKENS } from "../src/debate.js";
+import { SYNTHESIS_ANSWER_TOKENS } from "../src/debate-themes.js";
+import { ideasAnswerTokens, suggestedIdeas } from "../src/ideas.js";
+import { ILLUSTRATED_ANSWER_TOKENS } from "../src/illustrated.js";
 import { QUIZ_MAX_TOKENS } from "../src/quiz.js";
-import { deadlineFor } from "../src/token-budget.js";
+import { SKETCH_ANSWER_TOKENS } from "../src/sketch.js";
+import { budgetFor, deadlineFor } from "../src/token-budget.js";
+import { suggestedLength, threadAnswerTokens } from "../src/tweets.js";
 import { DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
@@ -76,12 +85,9 @@ describe("the job lease and the platform's kill", () => {
    * has never claimed to, and is what the per-chunk checkpoints and the
    * hand-back exist for.
    *
-   * Today every step gets its own fresh deadline, because each `/advance` takes
-   * its own claim. Under the claim-once coordinator the whole job runs inside
-   * **one** claim, so the budget stops being per-step and becomes per-job, and
-   * the sum below is what has to fit. It is asserted against `maxDuration`
-   * because that bound is true in both worlds: the job has to fit one
-   * invocation either way.
+   * Each `/advance` takes one claim with one deadline for the steps it walks.
+   * The sum below is an ordinary-page estimate, asserted against `maxDuration`
+   * and the claimant's deadline; it is not a bound for all source types.
    *
    * Requested by the session that owns the coordinator, for the reason that
    * makes it worth having: without it, **the next person to add a step to
@@ -89,10 +95,12 @@ describe("the job lease and the platform's kill", () => {
    * job aborting near the end of a long article — the most expensive possible
    * way to find out.
    *
-   * The costs are measurements, not guesses, and each is the worst observed:
-   * `structure` from the ledger, `assets` from a real run against the 10-image
-   * article (7.1s measured, but its 180s cap is what bounds it), and the three
-   * cheap steps rounded generously upward.
+   * The estimates mix observations, caps and guesses, labelled below.
+   * `structure` is from the ledger; `assets` uses `collectAssets`'s 180s cap
+   * without extra unwinding (7.1s observed on the 10-image article). This
+   * arithmetic totals 625.4s; jobs.ts's 630.4s includes 5s of assets unwinding.
+   * Neither includes PDF figure recovery or multiple paper-source fetches;
+   * src/jobs.ts § `LEASE_MS` explains those limits.
    */
   /* **"Fits one invocation" is about elapsed time, not about how many requests
      it actually takes** — and since 2026-09-04 those are different answers. The
@@ -311,5 +319,176 @@ describe("the job lease and the platform's kill", () => {
     expect(deadlineFor(QUIZ_MAX_TOKENS), "a quiz that uses its whole allowance outlives the claim").toBeLessThan(claimMs);
     expect(STEP_BUDGET_MS.quiz, "the quiz reservation is under its slowest measured run").toBeGreaterThanOrEqual(452_000);
     expect(STEP_BUDGET_MS.quiz).toBeLessThan(claimMs);
+  });
+
+  /**
+   * **A step's admission estimate covers the clocks the step sets on itself.**
+   *
+   * `STEP_BUDGET_MS` decides whether the walk starts a step on what is left of
+   * the claim. A step with its own wall-clock caps has told us, in code, how
+   * long it may legitimately run; a budget under the sum of those caps admits
+   * the step on a remnant it is entitled to outlive, and it meets our deadline
+   * instead of its own. Since 2026-10-07 that is a pause and a re-run, not a
+   * lost job, but each one spends one of `REQUEUE_BUDGET`'s windows and three
+   * of them end the import.
+   *
+   * `assets` was admitted on 185 s — `collectAssets`'s cap and its unwinding —
+   * while the step goes on, for a PDF, to `recoverPdfFigures` and a second
+   * 180 s cap. Both caps are read from the modules that enforce them, so moving
+   * either moves the floor here. docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md.
+   */
+  it("reserves at least both `assets` collector clocks, and less than a claim", () => {
+    const ownCapsMs = ASSETS_BUDGET_MS + PDF_FIGURES_BUDGET_MS;
+    expect(
+      STEP_BUDGET_MS.assets,
+      "the walk would start `assets` with less window than its own two caps allow it to run",
+    ).toBeGreaterThanOrEqual(ownCapsMs);
+    expect(
+      STEP_BUDGET_MS.assets,
+      "a budget at or over the claimant's deadline can never be met, so the table has " +
+        "stopped saying anything about this step",
+    ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
+
+  /**
+   * **The same for `fetch`, whose clocks are per request and whose requests
+   * are several.** One `fetchDocument` has `attempts` tries of `timeoutMs`, with
+   * the longest wait `retryDelayMs` will ever sleep between them (a server's
+   * `Retry-After`, capped). Since 261006i the step may make one of those for the
+   * pasted address and then one per candidate of the paper source it led to
+   * (`fetchByAddress`, src/pipeline.ts), so the nominal clock total is that
+   * times one more than the most candidates a sampled address gives. Untimed
+   * cleanup, page counting and storage are not bounded by this assertion.
+   *
+   * The samples must cover exactly the exported source registry, so adding
+   * a source without a sample fails before its candidates can be missed.
+   * Candidate counts are sampled: a source with different counts for different
+   * address shapes still needs a sample exercising its longest list.
+   *
+   * `fetch` is the first step of every job that names it, and the walk runs
+   * the first step of a claim ungated, so today this row decides nothing about
+   * admission. It is held to its clocks anyway so the table states the truth
+   * the day something comes to precede it.
+   */
+  it("reserves the sampled `fetch` request clocks, and less than a claim", () => {
+    const attempts = FETCH_DEFAULTS.attempts;
+    let longestWaitMs = 0;
+    for (let attempt = 1; attempt < attempts; attempt += 1) {
+      longestWaitMs += Math.max(
+        retryDelayMs(attempt, Number.MAX_SAFE_INTEGER, () => 1),
+        retryDelayMs(attempt, null, () => 1),
+      );
+    }
+    const oneFetchDocumentMs = attempts * FETCH_DEFAULTS.timeoutMs + longestWaitMs;
+
+    const onePerSource: Record<string, string> = {
+      arxiv: "https://arxiv.org/abs/2608.13566",
+      acl: "https://aclanthology.org/2020.acl-main.703/",
+      pmlr: "https://proceedings.mlr.press/v139/radford21a.html",
+      neurips: "https://proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html",
+      cvf: "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      jmlr: "https://jmlr.org/papers/v15/srivastava14a.html",
+      nber: "https://www.nber.org/papers/w30000",
+    };
+    expect(SOURCES, "the candidate-budget check needs the actual source registry").toBeDefined();
+    expect(
+      SOURCES.map((source) => source.name).sort(),
+      "every registered paper source needs a candidate-budget sample",
+    ).toEqual(Object.keys(onePerSource).sort());
+    const mostCandidates = Math.max(
+      ...SOURCES.map((source) => {
+        const address = onePerSource[source.name]!;
+        const paper = source.resolve(new URL(address));
+        if (paper === null) throw new Error(`no paper source recognises ${address} any more; pick another sample`);
+        return paper.candidates.length;
+      }),
+    );
+    const requestsAtMost = 1 + mostCandidates;
+
+    expect(
+      STEP_BUDGET_MS.fetch,
+      `\`fetch\` may make ${requestsAtMost} requests with ${oneFetchDocumentMs} ms of clocks each`,
+    ).toBeGreaterThanOrEqual(requestsAtMost * oneFetchDocumentMs);
+    expect(STEP_BUDGET_MS.fetch).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
+
+  /**
+   * **Admission estimates derived from the steps' token counts.**
+   *
+   * `ideas`, `tweets`, `sketch` and the `illustrated` brief are one streamed
+   * Messages call each, and `debate` up to three non-streamed ones; none has a wall
+   * clock of its own (`streamMessage` sets none, the SDK's timeout stops at
+   * the response headers, `openRouterJson` fetches without one). What the code
+   * does state is each call's `max_tokens`, and `deadlineFor` is this repo's
+   * own conversion of that into time — the one the quiz case above uses. So
+   * the floor is the token time of the step's largest request, built from the
+   * same exported sizing the step itself calls. Transport backoffs (a few
+   * seconds), debate's searches and anything untimed are not in it; the rows
+   * in src/jobs.ts carry estimated slack and say so. The rate was measured on
+   * Sonnet, not Opus; failed attempts, prefill and slower streams are outside
+   * this estimate. These assertions do not establish a wall-clock bound.
+   *
+   * Assumes the default `THINKING_HEADROOM` in `budgetFor`, which is what all
+   * four call sites pass today. docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md.
+   */
+  const claimMs = LEASE_MS - DEADLINE_MARGIN_MS;
+  const tokenTimeMs = (stage: string, answerTokens: number) => deadlineFor(budgetFor(stage, answerTokens));
+
+  it("reserves the token time of the longest Ideas call, and less than a claim", () => {
+    const floor = tokenTimeMs("ideas", ideasAnswerTokens(suggestedIdeas(Number.MAX_SAFE_INTEGER)));
+    expect(STEP_BUDGET_MS.ideas, `the longest ideas call may stream for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.ideas).toBeLessThan(claimMs);
+  });
+
+  it("reserves the token time of the longest thread, and less than a claim", () => {
+    const floor = tokenTimeMs("thread", threadAnswerTokens(suggestedLength(Number.MAX_SAFE_INTEGER)));
+    expect(STEP_BUDGET_MS.tweets, `the longest thread may stream for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.tweets).toBeLessThan(claimMs);
+  });
+
+  it("reserves the token time of the Sketch call, and less than a claim", () => {
+    const floor = tokenTimeMs("sketch", SKETCH_ANSWER_TOKENS);
+    expect(STEP_BUDGET_MS.sketch, `the sketch call may stream for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.sketch).toBeLessThan(claimMs);
+  });
+
+  it("reserves the token time of Debate's three calls, and less than a claim", () => {
+    /* Two search passes and one synthesis, in sequence (src/debate.ts §
+       `generateDebate`). The searches add time no token count bounds, so this
+       is a floor and not a ceiling. */
+    const floor = 2 * deadlineFor(DEBATE_ANSWER_TOKENS) + deadlineFor(SYNTHESIS_ANSWER_TOKENS);
+    expect(STEP_BUDGET_MS.debate, `debate's three calls may run for ${floor} ms`).toBeGreaterThanOrEqual(floor);
+    expect(STEP_BUDGET_MS.debate).toBeLessThan(claimMs);
+  });
+
+  /**
+   * PINS AN OPEN DEFECT: the brief's estimated full-token time alone exceeds
+   * the claim, before any plates. This is an estimate at the measured Sonnet
+   * rate, not a claim that every brief takes this long. See 261007h's
+   * "Open design question: Illustrated outlasts a claim".
+   *
+   * Pin the exact observed estimate so a larger allowance cannot quietly make
+   * this gap worse. A red pin is news, including an improvement; when the
+   * defect is fixed, replace it with brief time < claim and account for plates.
+   * This follows tests/adversarial-shapes.test.ts's open-defect pins.
+   */
+  it("PINS AN OPEN DEFECT: Illustrated's brief is estimated at 948 s against a 740 s claim", () => {
+    const briefMs = tokenTimeMs("illustrated", ILLUSTRATED_ANSWER_TOKENS);
+    expect(briefMs, "the known brief-time estimate changed — reassess the open defect").toBe(948_000);
+    expect(claimMs, "the claim changed — reassess the open defect").toBe(740_000);
+  });
+
+  /** Reserve a fresh claim after every Sketch duration in the recorded sample.
+   * This does not guarantee hand-back after an unmeasured, faster Sketch. */
+  it("hands Illustrated a fresh claim after any measured Sketch", () => {
+    /* MEASURED 2026-10-07, production `revision_step_runs`: the fastest
+       `sketch` that ran is 49.6 s (25 runs). A budget over what it leaves
+       hands every chain in this sample back before `illustrated`. */
+    const fastestMeasuredSketchMs = 49_600;
+    expect(
+      STEP_BUDGET_MS.illustrated,
+      "the walk would start `illustrated` after the fastest measured Sketch, on a remnant its brief can outlive",
+    ).toBeGreaterThan(claimMs - fastestMeasuredSketchMs);
+    expect(STEP_BUDGET_MS.illustrated).toBeLessThan(claimMs);
   });
 });

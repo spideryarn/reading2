@@ -1,0 +1,50 @@
+[
+  {
+    "id": "P01",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len2a",
+    "B": "len1a"
+  },
+  {
+    "id": "P02",
+    "kind": "control",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len1a"
+  },
+  {
+    "id": "P03",
+    "kind": "test",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len2b"
+  },
+  {
+    "id": "P04",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len2b"
+  },
+  {
+    "id": "P05",
+    "kind": "test",
+    "slug": "race-human-categorization-spya-rpwc59",
+    "level": "fuller",
+    "A": "len1a",
+    "B": "len2a"
+  },
+  {
+    "id": "P06",
+    "kind": "control",
+    "slug": "s3-gdl-45mb-spya-cc9kr8",
+    "level": "fuller",
+    "A": "len1b",
+    "B": "len1a"
+  }
+]

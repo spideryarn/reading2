@@ -76,7 +76,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq, lt } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { refereeClaims } from "../db/schema.js";
@@ -101,8 +101,8 @@ type Db = ReturnType<typeof getDb>;
  * contracts.ts is explicit about why both are needed: `keep` alone is a
  * cross-process bug. Process B sees process A's live row in nobody's set and
  * errors an answer that is still arriving, which on Vercel is the ordinary shape
- * rather than an edge case. The filesystem store can live with one boolean
- * because two servers sharing one `data/` directory is a thing nobody does.
+ * rather than an edge case. The filesystem store could live with one boolean
+ * because two servers sharing one `data/` directory was a thing nobody did.
  *
  * So the window is applied **here**, in the store that has other processes to be
  * wrong about, rather than being pushed into a signature src/routes.ts would
@@ -150,9 +150,10 @@ function toRun(row: typeof refereeClaims.$inferSelect): ClaimsRun {
     createdAt: row.createdAt.toISOString(),
     claims: row.claims as Claim[],
     ...(row.model === null ? {} : { model: row.model }),
-    /* Absent, not zero. Null means *not recorded* — the route does not write it
-       yet — and a zero here would tell the panel that nothing was cut off, which
-       is a different sentence from the one it prints when it does not know. */
+    /* Absent, not zero. Null means *not recorded*: an older run, a pending one,
+       or a failed one. The route records it on success. A zero here would tell
+       the panel that nothing was cut off, which is a different sentence from
+       the one it prints when it does not know. */
     ...(row.claimsOmitted === null ? {} : { claimsOmitted: row.claimsOmitted }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.sourceHash === null ? {} : { sourceHash: row.sourceHash }),
@@ -230,6 +231,10 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
           sourceHash,
           // The row is this run's now; an older run's `finish` matches nothing.
           attemptId: attempt,
+          /* A run that has just begun has not finished. Named here because the
+             upsert writes over the last run's row; a first run is the insert
+             above, where the column is simply absent. */
+          finishedAt: null,
         },
       })
       .returning();
@@ -262,16 +267,27 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
        columns over a blob. tests/store-pg-referee-claims.test.ts holds the round
        trip that goes red when it happens, and `EVERY_RUN_FIELD` in that file
        makes the *next* one a typecheck failure rather than a silent drop. */
+    /* `ClaimsFinish` is a two-armed union; this is its fields with the arms
+       folded together, so each is written when it is there. An `error` arm's
+       `claims` can only be `[]` (the type), and the row it lands on is `pending`
+       and so already empty (`referee_claims_empty_unless_done`): whatever is
+       written here is written as given, and a caller that cast its way past
+       the type is refused by the database rather than tidied up. */
+    const fields: Partial<Pick<ClaimsRun, "claims" | "model" | "claimsOmitted" | "error">> = patch;
     const rows = await db
       .update(refereeClaims)
       .set({
         status: patch.status,
-        ...(patch.claims === undefined ? {} : { claims: patch.claims }),
-        ...(patch.model === undefined ? {} : { model: patch.model }),
-        ...(patch.claimsOmitted === undefined ? {} : { claimsOmitted: patch.claimsOmitted }),
-        ...(patch.error === undefined ? {} : { error: patch.error }),
+        ...(fields.claims === undefined ? {} : { claims: fields.claims }),
+        ...(fields.model === undefined ? {} : { model: fields.model }),
+        ...(fields.claimsOmitted === undefined ? {} : { claimsOmitted: fields.claimsOmitted }),
+        ...(fields.error === undefined ? {} : { error: fields.error }),
         // The attempt is over either way.
         attemptId: null,
+        /* **When the claims landed, or the call failed** — in the fenced
+           statement, so a run a newer `begin` replaced stamps nothing. The
+           database's clock; `created_at` stays the run's start. */
+        finishedAt: sql`clock_timestamp()`,
       })
       .where(
         and(
@@ -302,7 +318,13 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
       const cutoff = new Date(Date.now() - CLAIMS_ORPHAN_GRACE_MS);
       const swept = await db
         .update(refereeClaims)
-        .set({ status: "error", error: CLAIMS_SWEPT, attemptId: null })
+        // `finished_at` is when the sweep ended the run — the only ending it had.
+        .set({
+          status: "error",
+          error: CLAIMS_SWEPT,
+          attemptId: null,
+          finishedAt: sql`clock_timestamp()`,
+        })
         .where(
           and(
             eq(refereeClaims.articleId, articleId),
@@ -315,7 +337,7 @@ const rawPgRefereeClaimsStore: RefereeClaimsStore = {
     }
 
     /* The run as it now stands, so a GET is one call — the filesystem store
-       answers the same way. */
+       answered the same way. */
     return runFor(articleId, db);
   },
 };

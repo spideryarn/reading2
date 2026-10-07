@@ -45,6 +45,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type BandMode, isBandMode } from "../src/modes.js";
 import { modePress } from "../src/web/reader/mode-press.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type { BlockId, Job } from "../src/types.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 
@@ -155,6 +156,7 @@ const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
 const { useDebate } = await import("../src/web/useDebate.js");
+const { useCiters } = await import("../src/web/useCiters.js");
 const { useFaq } = await import("../src/web/useFaq.js");
 const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
@@ -243,6 +245,10 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  */
 function DebateBand({ slug }: { slug: string }): ReactElement {
   const view = useDebate(slug);
+  /* The owner's band makes a second read, the papers that cite the piece
+     (src/web/modes/debate/DebateMode.tsx, plan 261004h). It is here so the two
+     Debate cases below can show it asks on arrival and can start nothing. */
+  useCiters(slug, true);
   return createElement(
     "div",
     { "data-band": "debate" },
@@ -346,7 +352,9 @@ const SETTLED_EMPTY_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
   clear: () => {},
@@ -383,7 +391,9 @@ const SETTLED_EMPTY_QUOTES_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };
@@ -396,7 +406,9 @@ const SETTLED_EMPTY_IDEAS_READ = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
+  retryRead: async () => {},
   reload: async () => {},
   refresh: async () => {},
 };
@@ -443,7 +455,7 @@ function Reading({ slug, start }: { slug: string; start: BandMode }): ReactEleme
       ? createElement(IllustratedBand, { slug })
       : null,
     /* **The switch on**, because modes this file presses — Timeline and
-       Remember, and Quotes until it came out on 2026-09-06 — went behind it on
+       Learn, and Quotes until it came out on 2026-09-06 — went behind it on
        2026-09-03, and a bar with the default answer draws no Timeline button
        for `press("Timeline")` to find. As a prop that is one literal; had `Dock` subscribed to the store
        itself it would be a posed session and an `/api/reader` body in a file
@@ -491,8 +503,13 @@ async function reopen(slug: string, start: BandMode): Promise<void> {
 }
 
 function press(label: string): Promise<void> {
-  const found = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-  if (!found) throw new Error(`no ${label} button in the bar`);
+  /* The bar's button, or the mode's item under More where it is one of the
+     five gathered there (plan 261007c). An item's pick goes through the
+     command bar's door, which arms exactly as the bar button does and never
+     toggles shut; an open gathered mode is drawn in the bar, so the press that
+     closes it is still the bar button's. */
+  const found = modeDoor(host, label);
+  if (!found) throw new Error(`no ${label} button in the bar, and no item under More`);
   return act(async () => {
     found.click();
   });
@@ -670,7 +687,25 @@ describe("a press", () => {
     await settle();
 
     expect(artefactGets("debate").length).toBeGreaterThan(0);
+    /* Exactly the one search it started before *Cited by* existed: the citers
+       read beside it is a GET and adds no job (plan 261004h, F8). */
+    expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
     expect(posts).toEqual([{ slug: "constitution", steps: ["debate"] }]);
+  });
+
+  /* **The other half, and the one that guards the money.** A bookmarked
+     `?mode=debate` mounts the band with nobody having pressed anything. The
+     free list is asked for at once — once, under StrictMode's doubled effects —
+     and no search starts, although the artefact GET has settled on "nothing
+     here", which is the state a press would spend on. */
+  it("asks who cites the piece on a bookmarked arrival, and starts no search", async () => {
+    await open("debate");
+    await settle();
+
+    expect(artefactGets("debate").length).toBeGreaterThan(0);
+    expect(bandSays()).toBe("none");
+    expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
+    expect(posts).toEqual([]);
   });
 
   /* The fifth positive control. See FaqBand above. */

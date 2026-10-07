@@ -123,6 +123,7 @@ import {
 } from "./pdf.js";
 import { type Check, check, comparisonWords, report } from "./pdf-score.js";
 import { plainTitle } from "./html.js";
+import { ruleTitleTidier, type TitleTidier } from "./title-tidy.js";
 import { mathsAsText, plainMaths } from "./pdf-tex.js";
 import { loadMathsRenderer } from "./maths-server.js";
 import {
@@ -134,7 +135,7 @@ import {
 } from "./pdf-integrity.js";
 import type { Author, Meta } from "./types.js";
 import { MAX_PAGES } from "./uploads.js";
-import { ProviderRefused, openRouterJson } from "./ai-call.js";
+import { ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js";
 
 /**
  * The prompt's name, which goes in `meta.method` so an article on disk says
@@ -189,8 +190,8 @@ const ASSUMED_WORDS = 500;
  * call in a run whose per-call mean was 52 s and p95 96 s. That outlier is the
  * whole reason this exists.
  *
- * **This is a planning bound and not the request limit.** `MAX_ENCODED_BYTES`
- * below is the hard ceiling a provider will accept, two orders of magnitude
+ * **This is a planning bound and not the request limit.** `READER_REQUEST_BYTES`
+ * below is the hard ceiling a provider will accept, an order of magnitude
  * above this, and it refuses a chunk that is already built. This one shapes the
  * plan so that nothing normal ever gets near it.
  *
@@ -339,16 +340,63 @@ const ATTEMPTS = 2;
  */
 export const CHUNK_CONCURRENCY = 100;
 
+const MIB = 1024 * 1024;
+
 /**
- * Anthropic's own limit is on the whole encoded request; OpenRouter's providers
- * are no kinder.
+ * **The most one request may carry, encoded, for a reader nobody has measured.**
+ *
+ * Anthropic's limit is 32 MB on the whole encoded request, and this sits under
+ * it. It was the only number here until 2026-10-04, and it was wrong for the
+ * model that actually reads PDFs — see `READER_REQUEST_BYTES`.
+ */
+const UNMEASURED_READER_BYTES = 30 * MIB;
+
+/**
+ * **The most one request may carry, encoded, by the model that reads it.**
  *
  * **The hard ceiling, and not the planning bound** — `MAX_CHUNK_BYTES` is that,
  * ten times smaller, and it is what stops an ordinary document ever coming near
- * this one. This stays as the refusal for a chunk that is already built, which
- * a single enormous page can still be.
+ * this one. This is the refusal for a chunk that is already built, which a
+ * single enormous page can still be.
+ *
+ * **Keyed on the model, and the key is checked by the compiler.** The limit is
+ * a fact about a provider, so it cannot be one constant beside another: the
+ * reader moved from a Claude model to an OpenAI one and the 30 MB written for
+ * the first stayed, refusing a 9-page paper whose heaviest chunk encoded to
+ * 31.85 MB that the provider would have taken
+ * (docs/plans/260928b-pdf-chunk-too-big-for-one-request.md). `satisfies` below
+ * makes `PDF_READER_MODEL` a required key, so changing that string in
+ * src/models.ts fails `npm run typecheck` here until somebody has written down
+ * what the new model takes. A model that is not listed — `openRouterReader`
+ * accepts any string — gets `UNMEASURED_READER_BYTES`.
+ *
+ * **40 MiB for `openai/gpt-5.6-luna`, and where that comes from.** OpenAI
+ * documents 50 MB a file, and OpenRouter passes a PDF through natively. Nobody
+ * documents OpenRouter's limit on the whole request, and the one live run was at
+ * 32 MB (2026-09-28, the paper above, $0.066). 40 fixes that paper and leaves
+ * room for the request's own JSON and whatever a proxy adds — GPT Sol's number,
+ * reviewing 260928b, where the draft said 45. A request near 40 has not been
+ * sent; one would settle it for a few cents.
  */
-const MAX_ENCODED_BYTES = 30 * 1024 * 1024;
+const READER_REQUEST_BYTES = {
+  "openai/gpt-5.6-luna": 40 * MIB,
+} as const satisfies Record<typeof PDF_READER_MODEL, number>;
+
+/** The most `model` takes in one request, in encoded bytes. See `READER_REQUEST_BYTES`. */
+export function maxEncodedBytesFor(model: string): number {
+  const known: Readonly<Record<string, number>> = READER_REQUEST_BYTES;
+  return Object.hasOwn(known, model) ? (known[model] ?? UNMEASURED_READER_BYTES) : UNMEASURED_READER_BYTES;
+}
+
+/**
+ * What `rawBytes` of PDF weigh in a request: base64, four characters for every
+ * three bytes, padded. Exactly the length of the string the reader sends, worked
+ * out without building it — so `runPdfExtract` can ask of a cut what the reader
+ * will ask of it, and a 40 MB string is not made only to be refused.
+ */
+export function encodedBytes(rawBytes: number): number {
+  return 4 * Math.ceil(rawBytes / 3);
+}
 
 // ────────────────────────────────────────────────────────────── the ask
 
@@ -778,6 +826,16 @@ export function knownNativeFinish(raw: string | undefined): NativeFinish | undef
 export interface PdfReader {
   /** Recorded in `meta.method`, so an article says what read it. */
   readonly id: string;
+  /**
+   * The most this reader can take in one request, in encoded bytes
+   * (`encodedBytes`). `read` refuses anything over it.
+   *
+   * Said out loud, rather than kept inside `read`, because only `runPdfExtract`
+   * can do anything about a chunk that is over: the reader is handed bytes, and
+   * it is the caller that knows one of the pages in them is only context.
+   * Absent on a reader with no such limit, which is every test double.
+   */
+  readonly maxEncodedBytes?: number;
   read(pdf: Uint8Array, instruction: string, signal?: AbortSignal): Promise<ChunkReading>;
 }
 
@@ -801,9 +859,25 @@ export interface PdfReader {
 export function openRouterReader(
   model: string = PDF_READER_MODEL,
   gate: WidthGate = sharedGate,
+  /**
+   * **The wire, and the limit, for a test.** Production passes neither.
+   *
+   * `ask` is the one call that leaves the process. Swapping it runs everything
+   * else in this function for free — the size refusal, the request body, the
+   * retries, the parsing — where swapping the whole `PdfReader` runs none of
+   * it, which is how the size refusal went unmeasured
+   * (docs/plans/261004f-big-pdfs-and-long-documents-import-reliably-up-to-our-stated-limits.md § F2).
+   * The key check below is about the real wire, so a reader given another one
+   * does not make it. `maxEncodedBytes` lets a test meet the limit with a
+   * fixture of kilobytes.
+   */
+  wire: { ask?: typeof openRouterJson; maxEncodedBytes?: number } = {},
 ): PdfReader {
+  const ask = wire.ask ?? openRouterJson;
+  const maxEncodedBytes = wire.maxEncodedBytes ?? maxEncodedBytesFor(model);
   return {
     id: `${model}/${PROMPT_VERSION}`,
+    maxEncodedBytes,
     async read(pdf, instruction, signal) {
       const key = process.env.OPENROUTER_API_KEY;
       /* **A missing key is a misconfiguration, and it was reaching the reader
@@ -821,14 +895,14 @@ export function openRouterReader(
          `{ authored }`: the variable's name and a documentation path, both
          ours, nothing interpolated — so the diagnostic reaches the log *and*
          Sentry, while the reader's half names neither. */
-      if (!key)
+      if (!key && !wire.ask)
         throw stageFailure(NOT_CONFIGURED, {
           authored: "OPENROUTER_API_KEY is not set — see docs/project/setup-dev.md.",
         });
-      const data = Buffer.from(pdf).toString("base64");
-      if (data.length > MAX_ENCODED_BYTES) {
-        const megabytes = Math.round(data.length / 1024 / 1024);
-        const limit = MAX_ENCODED_BYTES / 1024 / 1024;
+      const encoded = encodedBytes(pdf.byteLength);
+      if (encoded > maxEncodedBytes) {
+        const megabytes = Math.round(encoded / MIB);
+        const limit = Math.round(maxEncodedBytes / MIB);
         /* **The reader's sentence and the diagnostic, which are not the same
            sentence.** The `blocked` kind is unchanged and for the reason the
            page cap gives: the chunk plan is worked out from the same cached
@@ -846,6 +920,7 @@ export function openRouterReader(
             `carry. Fewer pages per chunk.`,
         });
       }
+      const data = Buffer.from(pdf).toString("base64");
       const started = performance.now();
       /* **Each attempt is its own metered call**, which falls out of the retry
          wrapping the whole of `openRouterJson` rather than only the `fetch`: a
@@ -855,7 +930,7 @@ export function openRouterReader(
          — `allow_fallbacks: false` is not a preference here, because an upstream
          that quietly ignores the JSON schema writes prose instead. */
       const call = await pdfCall(async () => {
-        const answer = await openRouterJson(
+        const answer = await ask(
           "pdf",
           {
             model,
@@ -886,7 +961,10 @@ export function openRouterReader(
               },
             },
           },
-          ...(signal ? [{ signal }] : []),
+          /* `retryTransport: false`: `withTransportRetries` below is this
+             call's retry, through a width gate the gateway cannot see. With
+             both, one chunk on a bad minute would be nine requests. */
+          { ...(signal ? { signal } : {}), retryTransport: false },
         );
         /* **Inside the retried call, not after it** — see `refuseBodyError`. */
         refuseBodyError(answer.json as OpenRouterResponse | null);
@@ -1011,7 +1089,7 @@ function refuseBodyError(json: OpenRouterResponse | null): void {
   const code = (error as { code?: unknown }).code;
   const kind = (error as { metadata?: { error_type?: unknown } }).metadata?.error_type;
   if (code === 429 || code === "429" || kind === "rate_limit_exceeded") {
-    throw new ProviderRefused(429, "", new Headers());
+    throw new ProviderRefused(429, "", new Headers(), true);
   }
   /* **A numeric code is the provider's own status and is carried as one**, so
      `withTransportRetries` refuses it once rather than three times — a 400 in a
@@ -1023,7 +1101,10 @@ function refuseBodyError(json: OpenRouterResponse | null): void {
      an ordinary `Error` and is retried like a dropped connection: an unknown
      refusal genuinely might be transient, and two extra attempts on one chunk is
      the cheaper mistake of the two available. */
-  if (typeof code === "number") throw new ProviderRefused(code, "", new Headers());
+  /* `priced: true` on both: this is a `200`, so the provider accepted the work,
+     and the meter that would know is not in reach. It keeps a 5xx-in-a-200 the
+     verdict it has always been here, rather than something the loop re-buys. */
+  if (typeof code === "number") throw new ProviderRefused(code, "", new Headers(), true);
   throw new Error("The transcription service refused this chunk.");
 }
 
@@ -1076,7 +1157,7 @@ async function pdfCall<T>(send: () => Promise<T>, signal: AbortSignal | undefine
 }
 
 /**
- * How many times a call is asked again — a *transport* failure, or the one
+ * How many times a call is asked again — a *transport* failure, an unpriced 5xx, or the one
  * refusal that means "later". Three goes in total, not three retries.
  */
 const TRANSPORT_ATTEMPTS = 3;
@@ -1267,6 +1348,16 @@ function backoffFor(asked: number | null, rateLimited: boolean, attempt: number)
  * with no credit. Asking again changes neither, and asking again a hundred times
  * over turns one bad request into three hundred.
  *
+ * **A second exception since 2026-10-05: a 5xx the gateway says is
+ * `worthAskingAgain`** — a transient status whose body priced nothing. Until
+ * then a 503 failed the chunk and with it the PDF step, while a dropped
+ * connection was retried. The gateway's own retry is switched off for this call
+ * (`retryTransport: false`), so this loop is the only one; it asks the
+ * gateway's predicate so that it cannot re-buy a refusal that was billed. What
+ * this loop does with any *other* thrown error is older and wider than the
+ * gateway's rule: it asks again after any non-abort throw, including a `200`
+ * whose body broke. Known, and left as it is (plan 261005j).
+ *
  * The wait honours `Retry-After` in full where the provider sent one it can
  * afford (`MAX_RETRY_AFTER_MS`), gives up rather than truncating one it cannot,
  * doubles from `RATE_LIMIT_BACKOFF_MS` where there was no header at all, is
@@ -1295,7 +1386,7 @@ async function withTransportRetries<T>(
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") throw error;
       const rateLimited = error instanceof ProviderRefused && error.status === 429;
-      if (error instanceof ProviderRefused && !rateLimited) throw error;
+      if (error instanceof ProviderRefused && !rateLimited && !worthAskingAgain(error)) throw error;
       if (attempt >= TRANSPORT_ATTEMPTS) throw error;
       const asked = error instanceof ProviderRefused ? error.retryAfterMs : null;
       /* **A wait we cannot afford is a refusal, not a shorter wait.** The
@@ -1784,11 +1875,15 @@ export function mendSeamHyphens(
  * docs/plans/261001q-pdf-tables-and-composite-figures.md, stage 1.
  */
 export function renderHtml(
-  records: PdfRecord[],
+  transcribed: PdfRecord[],
   title: string,
   rawSha256: string,
-  targets: readonly (number | null)[] = continuationTargets(records),
+  targets: readonly (number | null)[] = continuationTargets(transcribed),
 ): string {
+  /* The one seam: the body loop, `collectNotes` and `findMarkers` all read the
+     records from here down, so a mistyped endnote leaves the body and joins the
+     notes in the same step. Indexes do not move, so `targets` still lines up. */
+  const records = endnotesTypedAsProse(transcribed);
   /* **Whole blocks first, HTML second.** A continuation's text is added to its
      block before anything is written, so a caption continued onto the next page
      is inside its `<figcaption>` and the figure's ref is minted from the whole
@@ -2028,6 +2123,101 @@ const NOTE_LABEL = /^([1-9]\d{0,2}|[¹²³⁴⁵⁶⁷⁸⁹][⁰¹²³⁴⁵⁶
 /** The prose a marker may sit in. Captions and headings are left alone. */
 const CITING: ReadonlySet<RecordType> = new Set<RecordType>(["paragraph", "quote", "listitem"]);
 
+/** A note's leading label as a number, or null: no label, a symbol, or a label with nothing after it. */
+function numericLabel(text: string): number | null {
+  const label = NOTE_LABEL.exec(text);
+  if (!label || !text.slice(label[0].length).trim()) return null;
+  const plain = markerSpellings(label[1]!)[0]!;
+  return /^\d+$/.test(plain) ? Number(plain) : null;
+}
+
+/**
+ * **A page of endnotes the model typed as `paragraph`, given back to the notes.**
+ *
+ * Measured on a fresh import of the MDPI *Entropy* paper, 2026-10-04: its 62
+ * endnotes run over four "Notes" pages, and the model typed the second page —
+ * notes 18 to 32, fifteen records — as `paragraph`, each opening with the next
+ * label, between `footnote` records for 17 and 33. They came out as fifteen body
+ * paragraphs at the end of the article, and their markers in the prose
+ * (`remarkable28 is`) stayed bare digits with no note to link to.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ *
+ * Found in code, like the markers, and for the same reason: no prompt or schema
+ * change, so no import pays and no cached chunk goes stale. The copy returned
+ * has those records typed `footnote`; nothing else about them, and no index,
+ * changes.
+ *
+ * **Deliberately narrow**, because the wrong direction here moves the author's
+ * prose out of the article and into a note. A page is retyped only when:
+ *
+ * 1. **every** `paragraph`, `quote` and `listitem` on it opens with the next
+ *    numeric label, or is an unlabelled `continues` of the preceding note;
+ * 2. a `Notes` or `Endnotes` heading established the section, and the adjacent
+ *    preceding page ends in a numbered note and contains no body prose. Page
+ *    footnotes and title-page affiliations cannot anchor the repair;
+ * 3. the candidate page contains only notes, their prose and `publisher`
+ *    furniture. A heading, a reference or a figure leaves the page alone.
+ *
+ * The next `footnote` record is not required: notes may end on the mistyped
+ * page. Each accepted page can anchor the next; a failed trial changes nothing.
+ * A continuation may carry on a typed or recovered note, across a page turn.
+ */
+function endnotesTypedAsProse(records: readonly PdfRecord[]): PdfRecord[] {
+  const out = [...records];
+  let last: number | null = null;
+  let previousPage: number | null = null;
+  let previousWasNotes = false;
+  let inNotes = false;
+
+  for (let start = 0; start < out.length;) {
+    const page = out[start]!.page;
+    let end = start + 1;
+    while (end < out.length && out[end]!.page === page) end++;
+    const original = out.slice(start, end);
+    const candidate = [...original];
+    let number = last;
+    let fits: boolean = inNotes && previousWasNotes && previousPage === page - 1 && number !== null;
+    for (let j = 0; j < candidate.length && fits; j++) {
+      const r = candidate[j]!;
+      if (r.type === "publisher" || !r.text.trim()) continue;
+      if (r.type === "footnote") {
+        if (!r.continues) number = numericLabel(r.text.trim());
+      } else if (CITING.has(r.type)) {
+        const n = numericLabel(r.text.trim());
+        if (number !== null && n === number + 1) {
+          number = n;
+          // A new label starts a note even when the model says `continues`.
+          candidate[j] = { ...r, type: "footnote", continues: false };
+        } else if (number !== null && n === null && r.continues) {
+          candidate[j] = { ...r, type: "footnote" };
+        } else {
+          fits = false;
+        }
+      } else {
+        fits = false;
+      }
+    }
+    // Commit a whole page, or none of it. A failed trial cannot affect later pages.
+    const accepted: PdfRecord[] = fits ? candidate : original;
+    out.splice(start, accepted.length, ...accepted);
+    previousWasNotes = accepted.some((r) => r.type === "footnote" && r.text.trim()) &&
+      !accepted.some((r) => CITING.has(r.type) && r.text.trim());
+    if (previousPage !== page - 1) last = null;
+    for (const r of accepted) {
+      if (r.type === "publisher" || !r.text.trim()) continue;
+      if (r.type === "footnote") {
+        if (!r.continues || last === null) last = numericLabel(r.text.trim());
+      } else {
+        last = null;
+        if (r.type.startsWith("heading")) inNotes = /^(?:end)?notes$/i.test(r.text.trim());
+      }
+    }
+    previousPage = page;
+    start = end;
+  }
+  return out;
+}
+
 /** The footnote records, as notes. A record marked `continues` joins the note before it. */
 function collectNotes(records: readonly PdfRecord[]): PdfNote[] {
   const notes: Omit<PdfNote, "id">[] = [];
@@ -2196,7 +2386,19 @@ function findMarkers(blocks: readonly RenderBlock[], notes: readonly PdfNote[]):
   return markers;
 }
 
-/** A block's text, escaped, with its markers written in as links to their notes. */
+/**
+ * A block's text, escaped, with its markers written in as links to their notes.
+ *
+ * **The space the model leaves after a marker stays** — `stories9 . This`,
+ * `memories29 , and` — though once the digits are raised it is a full stop
+ * adrift of its sentence. Taking it out changes the block's text, and stage 3
+ * carries an id from an article split before its notes were linked only when
+ * the whole text is unchanged (`legacyKey`, src/blocks.ts). Measured on the
+ * *Entropy* paper's stored transcription, 2026-10-04: tidying it cost 10 of 77
+ * block ids, one of them under a reader's comment. The place to close the gap
+ * is where the block is drawn, not here.
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md.
+ */
 function withMarkers(text: string, markers: readonly Marker[]): string {
   let out = "";
   let at = 0;
@@ -2319,7 +2521,8 @@ export interface PdfExtractResult {
    * counts the originals, and the two numbers agree: hiding retypes, never
    * deletes.
    *
-   * Nothing in the pipeline reads it: `src/pipeline.ts` wants the count and the
+   * The pipeline reads it for one thing, the identifiers printed on the first
+   * pages (src/article-registry.ts § `ownIdsOfPdf`); otherwise it wants the count and the
    * HTML. It is here for `evals/pdf/titles.mts`, which buys a transcription
    * once and then runs several title arms over it offline — an eval that
    * re-transcribed per arm would be comparing arms that read different records,
@@ -2363,6 +2566,11 @@ export interface PdfExtractOptions {
   url?: string;
   /** The reader's own name for an uploaded file. The title ladder's last rung prefers it. */
   filename?: string;
+  /**
+   * What tidies the title for the shelf. Import hands in the model's
+   * (src/title-tidy-model.ts); absent, the rule alone, and no call.
+   */
+  titleTidier?: TitleTidier;
   /**
    * **Where the per-chunk transcriptions are kept, and it is not a path.**
    *
@@ -2808,24 +3016,98 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   const cached = new Map<number, ChunkReading>();
   const defectiveCached = new Set<number>();
   const bodies = new Map<number, Uint8Array>();
-  for (const [at, chunk] of chunks.entries()) {
+  /* The chunks whose cut, context page included, is more than the reader takes
+     in one request. See the block after this loop. */
+  const overWithContext: number[] = [];
+  const place = async (at: number, found: ReadonlyMap<string, unknown>): Promise<void> => {
     /* `keys` is built from `chunks` by `map`, so the index is the same chunk —
        but `noUncheckedIndexedAccess` is on and a missing key would be a wiring
        bug rather than a miss, so it says so instead of quietly checkpointing
        under `undefined`. */
+    const chunk = chunks[at];
     const key = keys[at];
-    if (key === undefined) {
+    if (chunk === undefined || key === undefined) {
       throw new Error(`No checkpoint key was minted for chunk ${at} of ${chunks.length}.`);
     }
-    const storedValue = stored.get(key);
+    const storedValue = found.get(key);
     const reading = usableChunkReading(storedValue, {
       slug: opts.slug,
       chunk: key,
       pages: chunk.pages,
     });
-    if (reading) cached.set(at, reading);
-    else if (storedValue !== undefined) defectiveCached.add(at);
-    else bodies.set(at, await cuts.cut(sentPages(chunk)));
+    if (reading) {
+      cached.set(at, reading);
+      return;
+    }
+    if (storedValue !== undefined) {
+      defectiveCached.add(at);
+      return;
+    }
+    const body = await cuts.cut(sentPages(chunk));
+    const tooBig =
+      reader.maxEncodedBytes !== undefined && encodedBytes(body.byteLength) > reader.maxEncodedBytes;
+    if (tooBig && chunk.context !== undefined) overWithContext.push(at);
+    else bodies.set(at, body);
+  };
+  for (const at of chunks.keys()) await place(at, stored);
+
+  /**
+   * **A chunk that is too big for one request only with its context page in
+   * front of it goes without the context page.**
+   *
+   * The context page is there so the model can finish a sentence that runs
+   * across the page break. It is sent whole, so a page of 20 MB costs 20 MB
+   * again in front of its neighbour — and on the paper this was written for,
+   * that was the entire failure: page 7 with page 6 in front of it was more than
+   * a request carries, page 7 alone was 5 MB, and the reader was told the PDF
+   * could not be imported
+   * (docs/plans/260928b-pdf-chunk-too-big-for-one-request.md § B).
+   *
+   * **Decided on the real bytes of the real cut**, against the reader's own
+   * limit, and only for a chunk that would otherwise be refused. Every other
+   * chunk keeps its context page and is exactly the request it was. The planner
+   * is not involved and still charges a chunk for the context page it plans to
+   * carry.
+   *
+   * **What it costs**: a paragraph running across that one page break comes out
+   * as two, because nothing shows the model where the first half ended, and a
+   * word hyphenated across the break is not mended (`mendSeamHyphens` needs
+   * `continues`). Said in `notes` and in the log, by page number.
+   *
+   * **The chunk becomes a different chunk, key and all.** `chunkKey` folds the
+   * context page in, so the reading is stored under the key of "these pages,
+   * no context" and can never be handed to a later run that asks for the same
+   * pages *with* context, or the other way round. That is why its checkpoint is
+   * looked up again here: the first read asked about the chunk as planned. A
+   * reading already stored for the chunk as planned is used as it is — the loop
+   * above found it and never cut anything.
+   *
+   * A page that is too big with nothing in front of it is not helped by any of
+   * this. It is cut alone and sent, and the reader refuses it
+   * (`pdfChunkTooBig`), as before.
+   */
+  const withoutContext: { pages: number[]; context: number }[] = [];
+  for (const at of overWithContext) {
+    const planned = chunks[at];
+    if (planned?.context === undefined) continue;
+    const alone: Chunk = { pages: planned.pages };
+    chunks[at] = alone;
+    keys[at] = chunkKey(alone, { rawSha256, readerId: reader.id });
+    withoutContext.push({ pages: planned.pages, context: planned.context });
+    /* Page numbers and nothing else: no size that could be mistaken for the
+       request's, and nothing off the page. */
+    log("pipeline").warn(
+      { slug: opts.slug, step: "extract", pages: planned.pages, context: planned.context },
+      "dropped the context page from a pdf chunk; with it the chunk was too big for one request",
+    );
+  }
+  if (overWithContext.length) {
+    const again = await storedChunks(
+      opts.checkpoints,
+      opts.slug,
+      overWithContext.flatMap((at) => keys[at] ?? []),
+    );
+    for (const at of overWithContext) await place(at, again);
   }
 
   const all: PdfRecord[] = [];
@@ -2842,7 +3124,12 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
   let pagesChecked = 0;
   const seen = new Set<string>();
   const failures: string[] = [];
-  const notes: string[] = [];
+  const notes: string[] = withoutContext.map(
+    ({ pages, context }) =>
+      `${pages.length === 1 ? "page" : "pages"} ${pages.join(", ")}: transcribed without page ${context} as context, ` +
+      `because the two together were too large for one request — a paragraph that runs across ` +
+      `that page break may come out as two`,
+  );
   /* Every chunk that had to be asked twice, and why. Logged from the seam —
      a retry nobody counts is a cost nobody sees. */
   const retries: string[] = [];
@@ -3410,7 +3697,16 @@ export async function runPdfExtract(opts: PdfExtractOptions): Promise<PdfExtract
 
   const meta: Meta = {
     slug: opts.slug,
-    title,
+    /* **Tidied for the shelf, and only here** — all capitals made title case,
+       the original kept beside it (src/title-tidy.ts, plan 261005g). The
+       transcription is the body that says which of its words are acronyms; the
+       rendered page below keeps `title` as it came. A PDF declares no
+       language, so it is taken for English. */
+    ...(await (opts.titleTidier ?? ruleTitleTidier)(title, {
+      /* Paragraphs only: a heading is as likely to be set in capitals as the title is. */
+      body: mended.filter((r) => r.type === "paragraph").map((r) => r.text).join("\n"),
+      signal: opts.signal,
+    })),
     /* **The first byline a PDF has ever had.** Not decoration: Referee mode
        excludes a paper's own authors from the reviewer shortlist by reading
        `meta.byline`, and src/referee-candidates.ts already names "a PDF ingested

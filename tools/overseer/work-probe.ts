@@ -26,6 +26,7 @@
  */
 import { spawnSync } from "node:child_process";
 
+import type { ProbeOwner } from "../fleet/child.js";
 import { parseProcessTable, type ProcessTableReading } from "./work.js";
 
 /**
@@ -88,9 +89,15 @@ export function readingFromPs(
 }
 
 /**
- * Long enough that a swapping box still answers, short enough that a tick does
- * not wedge. Measured at ~40 ms on an ordinary read of ~1000 processes here;
- * the box has been seen at load 391, hence three orders of magnitude of slack.
+ * Long enough that a swapping box still answers. Measured at ~40 ms on an
+ * ordinary read of ~1000 processes here; the box has been seen at load 391,
+ * hence three orders of magnitude of slack.
+ *
+ * **This is when the signal is sent, not the most a call can cost.**
+ * `spawnSync` goes on waiting until the child has exited, so a ps that will
+ * not die holds the caller past it — which is why a long-running process
+ * should use the owned asynchronous probe instead.
+ * docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md
  */
 const TIMEOUT_MS = 10_000;
 
@@ -101,8 +108,9 @@ const TIMEOUT_MS = 10_000;
  * empty `ps` is impossible on a live machine, so it is reported as a failure
  * rather than as a box with nothing running on it.
  */
-export function probeProcessTable(opts: { bin?: string; selfPid?: number } = {}): ProcessTableReading {
+export function probeProcessTable(opts: { bin?: string; selfPid?: number; timeoutMs?: number } = {}): ProcessTableReading {
   const bin = opts.bin ?? "ps";
+  const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   // The pid this reading must contain if it is a reading of this machine. A
   // parameter rather than a hard-coded `process.pid` only so the control itself
   // can be tested — pass a pid that cannot exist and the probe must refuse.
@@ -110,7 +118,7 @@ export function probeProcessTable(opts: { bin?: string; selfPid?: number } = {})
   const startedMs = Date.now();
   const run = spawnSync(bin, [...PS_ARGV], {
     encoding: "utf8",
-    timeout: TIMEOUT_MS,
+    timeout: timeoutMs,
     // No shell: the argv is fixed, and a shell would put a second process
     // between us and ps for no gain.
     shell: false,
@@ -121,21 +129,70 @@ export function probeProcessTable(opts: { bin?: string; selfPid?: number } = {})
 
   // TIMED AFTER ps RETURNS, not before it. `etimes` is relative to when ps read
   // /proc, so a reading stamped before the spawn makes every derived start time
-  // early by the whole probe duration - ~40 ms here, but up to the 10-second
-  // timeout on a box that is swapping, which is exactly when the numbers matter.
+  // early by the whole probe duration - ~40 ms here, but ten seconds or more
+  // on a box that is swapping, which is exactly when the numbers matter.
   // Neither end is the true instant; the interval between them is, and stamping
   // the later end at least means no row can be older than the reading claims.
   const atMs = Date.now();
   const tookMs = atMs - startedMs;
 
-  if (run.error !== undefined) return { read: false, why: `${bin} could not be run: ${run.error.message}` };
-  if (run.signal !== null) {
-    return { read: false, why: `${bin} was killed by ${run.signal} after ${tookMs} ms (timeout is ${TIMEOUT_MS} ms)` };
+  // THE TIMEOUT FIRST, AND WITH THE CLOCK. On a timeout `spawnSync` sets `error`
+  // (ETIMEDOUT) whether or not the child died of the signal: one that obeys
+  // also has `signal` set, one that ignores TERM and exits later has it null.
+  // Checking `error` first reported both as "could not be run", naming a
+  // deadline nobody kept. Only the measured time tells a ps that stopped on
+  // time from one that held this thread for a minute. Postmortem 260910a.
+  const timedOut = (run.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
+  if (timedOut || run.signal !== null) {
+    const how = run.signal !== null ? `was killed by ${run.signal}` : "was signalled and did not stop at once";
+    return { read: false, why: `${bin} ${how}: it returned after ${tookMs} ms (the signal is sent at ${timeoutMs} ms)` };
   }
+  if (run.error !== undefined) return { read: false, why: `${bin} could not be run: ${run.error.message}` };
   if (run.status !== 0) {
     const stderr = (run.stderr ?? "").trim().slice(0, 200);
     return { read: false, why: `${bin} exited ${String(run.status)}${stderr === "" ? "" : `: ${stderr}`}` };
   }
 
   return readingFromPs(run.stdout ?? "", atMs, { bin, selfPid });
+}
+
+/**
+ * Read one process table without blocking the thread that asked.
+ *
+ * The owned asynchronous twin of `probeProcessTable`, and what a long-running
+ * process uses: the fleet dashboard's collector, and the Overseer daemon on
+ * every inventory it folds. It lives beside the synchronous one so both sit
+ * next to the parse and the positive control they share (`readingFromPs`).
+ *
+ * The caller stops waiting at the owner's `timeout + grace` whether or not
+ * `ps` died, and a `ps` still unaccounted for refuses the next one under the
+ * same key rather than starting a sibling. Either is a `read: false` with the
+ * owner's sentence, never a throw.
+ */
+export async function probeProcessTableAsync(owner: ProbeOwner): Promise<ProcessTableReading> {
+  try {
+    const outcome = await owner.run({
+      // Both ends of the dashboard's bracket (collect.ts § `readExecutions`)
+      // deliberately share one key and are awaited sequentially. If the first `ps` is still unaccounted for, starting a
+      // second cannot produce a usable bracket and would multiply stuck
+      // children; the owner's refusal instead carries that first child's pid.
+      key: "process-table",
+      cmd: "ps",
+      args: PS_ARGV,
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: 32 * 1024 * 1024,
+    });
+    if (outcome.kind !== "ok") return { read: false, why: outcome.why };
+
+    // TIMED AFTER ps RETURNS. `etimes` is relative to when ps read /proc, so a
+    // stamp from before the await would make every derived start time early by
+    // the entire probe duration — worst on the swapping box this watches.
+    const atMs = Date.now();
+    return readingFromPs(outcome.stdout, atMs, { bin: "ps", selfPid: process.pid });
+  } catch (cause) {
+    return {
+      read: false,
+      why: `the owned process table probe threw: ${cause instanceof Error ? cause.message : String(cause)}`,
+    };
+  }
 }

@@ -45,7 +45,12 @@ vi.mock("nuqs", async (importOriginal) => ({
   ...(await importOriginal<typeof import("nuqs")>()),
   useQueryState: () => [null, () => {}],
 }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { Metadata, tookFor } = await import("../src/web/Metadata.js");
 const { howLong } = await import("../src/web/relative-time.js");
@@ -123,6 +128,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function answer(stageRows: StageState[]) {
@@ -184,9 +190,10 @@ async function cardText(stageRows: StageState[]): Promise<string> {
   );
   expect(trigger, "no 'ran … ago' trigger in the step row").toBeTruthy();
 
+  vi.useFakeTimers();
   trigger?.dispatchEvent(new MouseEvent("mouseenter"));
   await act(async () => {
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(400);
   });
   const cards = document.querySelectorAll('[role="tooltip"]');
   expect(cards, "hovering the step row's time opened no card, or more than one").toHaveLength(1);

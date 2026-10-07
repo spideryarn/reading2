@@ -34,7 +34,7 @@
  *   captured in real Chrome at commit
  *   `6dacbd2e84ff0fd52df91c5464d0911541260dff`, **before** the migration.
  * - **Read from the pre-migration source.** Every `aria-label` (the baseline
- *   recorded geometry, not accessible names), the `REMEMBER` shape, and the
+ *   recorded geometry, not accessible names), the `LEARN` shape, and the
  *   `SEARCH_VISITOR` and `CHAT_LIST` shapes are transcribed from the panels as
  *   they were at `369699af~1`, the commit before the migration. That is weaker
  *   evidence than a measurement and stronger than reading the code that was just
@@ -128,7 +128,7 @@
  * - the **ordered list of direct element children** is the check that catches a
  *   wrapper, since a wrapper changes `children` to one element while leaving
  *   every `querySelector` in the app satisfied;
- * - Chat is checked in **both** of its shapes, `chat` and `chat remember`,
+ * - Chat is checked in **both** of its shapes, `chat` and `chat learn`,
  *   because `feature` is a space-separated string built by a ternary and a
  *   dropped conditional class is exactly the sort of thing a migration loses in
  *   silence.
@@ -202,7 +202,7 @@ import type {
 const OWNER = { id: "owner-1", email: "owner@example.com" };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: OWNER, loading: false }),
+  useSession: () => ({ session: null, user: OWNER, loading: false, known: true }),
 }));
 
 const authListeners: ((event: string, session: unknown) => void)[] = [];
@@ -404,7 +404,7 @@ const SEARCH: BandShape = {
   className: "mode-band srch has-about",
   label: "Search this article",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.srch-box", "div.srch-sort", "p.srch-legend", "ul.srch-hits"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.srch-box", "div.srch-sort", "ul.srch-hits"],
 };
 
 /** Chat with a conversation open, baseline § "Chat mode". */
@@ -422,20 +422,20 @@ const CHAT: BandShape = {
 };
 
 /**
- * Remember is the same band wearing one more class and a different name.
+ * Learn is the same band wearing one more class and a different name.
  *
  * Not measured separately in Chrome — the baseline captured Chat — but the two
  * strings are `ChatPanel`'s own conditionals, and they are the thing a migration
  * onto a `feature: string` prop drops. Kept as literals here for the same reason
  * as the rest.
  */
-const REMEMBER: BandShape = {
-  className: "mode-band chat remember has-about",
-  label: "Remember what you took from this article",
+const LEARN: BandShape = {
+  className: "mode-band chat learn has-about",
+  label: "Recall what you took from this article",
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
   /* The title and `ArmedDelete` in its unarmed state, as Start over — and,
-     since plan 261001m (2026-10-01), no "All conversations" close: Remember is
+     since plan 261001m (2026-10-01), no "All conversations" close: Learn is
      one conversation and has no list to close back to. `subMode` renders
      nothing for this fixture. */
   headChildren: ["h2", "button.chat-icon.danger[title,type]"],
@@ -668,7 +668,7 @@ async function mountSearchVisitor(): Promise<void> {
 
 const AT = "2026-09-06T00:00:00.000Z";
 
-function thread(kind: "chat" | "remember"): ChatThread {
+function thread(kind: "chat" | "learn"): ChatThread {
   return {
     id: "spya-k3m9qt",
     title: "About block dfqq59",
@@ -689,7 +689,7 @@ function thread(kind: "chat" | "remember"): ChatThread {
  * `.chat-composer` on screen; left null, the band draws the thread list instead
  * and this file would be checking a different band.
  */
-async function mountChat(kind: "chat" | "remember"): Promise<void> {
+async function mountChat(kind: "chat" | "learn"): Promise<void> {
   const open = thread(kind);
   await act(async () => {
     root.render(
@@ -771,12 +771,12 @@ describe("the migrated bands render the DOM the baseline recorded", () => {
     expectShape(CHAT);
   });
 
-  it("keeps Remember's extra class and its own name", async () => {
+  it("keeps Learn's extra class and its own name", async () => {
     /* The conditional half of `feature`. A migration that passed `"chat"`
-       unconditionally would leave every Remember rule in the stylesheet
+       unconditionally would leave every Learn rule in the stylesheet
        matching nothing, and every test above would still be green. */
-    await mountChat("remember");
-    expectShape(REMEMBER);
+    await mountChat("learn");
+    expectShape(LEARN);
   });
 
   it("draws Search's band for a visitor, without the box an owner gets", async () => {
@@ -1279,10 +1279,13 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
     profileChanged: false,
     slug: SLUG,
     error: null,
+    retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     find: async () => {},
     more: async () => {},
     refresh: async () => {},
@@ -1314,10 +1317,12 @@ function ideasOwner(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): IdeasO
     profileChanged: false,
     slug: SLUG,
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     ensure: async () => {},
     regenerate: async () => {},
     refresh: async () => {},
@@ -1336,13 +1341,17 @@ function quotesOwner(quotes: Quotes | null): QuotesOwner {
     profileChanged: false,
     slug: SLUG,
     error: null,
+    retryRead: async () => {},
     job: null,
+    loaded: true,
     failed: null,
     stalled: false,
     starting: false,
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
   };
 }
 
@@ -1354,6 +1363,7 @@ function timelineOwner(timeline: Timeline | null, over: Partial<TimelineOwner> =
     outdated: false,
     slug: SLUG,
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,
@@ -1362,6 +1372,8 @@ function timelineOwner(timeline: Timeline | null, over: Partial<TimelineOwner> =
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }
@@ -1374,6 +1386,7 @@ function debateOwner(debate: Debate | null, over: Partial<DebateOwner> = {}): De
     outdated: false,
     slug: SLUG,
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,
@@ -1382,6 +1395,8 @@ function debateOwner(debate: Debate | null, over: Partial<DebateOwner> = {}): De
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }
@@ -1394,12 +1409,16 @@ function quizOwner(quiz: Quiz | null, over: Partial<UseQuiz> = {}): UseQuiz {
     outdated: false,
     slug: SLUG,
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     starting: false,
     stalled: false,
     attempt: null,
     answered: new Set<QuizQuestionId>(),
+    kept: new Map(),
+    keptUnread: false,
+    showKept: () => {},
     profiled: false,
     profileChanged: false,
     rewriting: false,
@@ -1460,7 +1479,13 @@ function mountSummary(): ReactNode {
   return createElement(
     NuqsAdapter,
     null,
-    createElement(VisitorSummaryBand, { simple: undefined, onJump: noop }),
+    createElement(VisitorSummaryBand, {
+      slug: SLUG,
+      simple: undefined,
+      thread: undefined,
+      article: OWNED,
+      onJump: noop,
+    }),
   );
 }
 
@@ -1524,7 +1549,14 @@ function mountTimeline(timeline: Timeline | null, over: Partial<TimelineOwner> =
    Tweets shapes below are simply what the band draws *now*, printed from the
    mounted panel and then checked against `Tweets.tsx` by eye: they pin the
    shape from here on, against the next refactor, and say nothing about a
-   baseline. GPT Sol code review, findings 3 and 4. */
+   baseline. GPT Sol code review, findings 3 and 4.
+
+   **Summary's Thread view since 2026-10-03** (plan 261003l), so the panel is
+   mounted the way `SummaryBand` mounts it: with Summary's row of controls,
+   which it draws first, above its own header. */
+
+/** Stands in for `SummaryControls`: the shape is the row's, not the control's. */
+const THREAD_CONTROLS = createElement("div", { className: "summ-views" });
 
 const TWEET_THREAD: TweetThread = {
   version: "tweets/5",
@@ -1551,6 +1583,7 @@ function tweetsOwner(thread: TweetThread | null, over: Partial<UseTweets> = {}):
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     retryRead: async () => {},
     ensure: async () => {},
     regenerate: async () => {},
@@ -1566,6 +1599,7 @@ function mountTweets(owner: UseTweets): ReactNode {
     article: OWNED,
     slug: SLUG,
     onJump: noop,
+    controls: THREAD_CONTROLS,
   });
 }
 
@@ -1575,15 +1609,21 @@ function mountVisitorTweets(): ReactNode {
     article: OWNED,
     slug: SLUG,
     onJump: noop,
+    controls: THREAD_CONTROLS,
   });
 }
 
+/** The owner has chat, and nothing here presses it (tests/debate-claim-chat.test.tsx does). */
+const NO_CLAIM_CHATS = { summaries: [], onCheck: () => {}, onLens: () => {}, onOpen: () => {} };
+
 function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): ReactNode {
   return createElement(DebatePanel, {
-    access: { kind: "owner", owner: debateOwner(debate, over) },
+    access: { kind: "owner", owner: debateOwner(debate, over), citers: { result: { kind: "no-doi" }, retry: () => {} }, claimChats: NO_CLAIM_CHATS },
     onJump: noop,
-    level: null,
-    onLevel: noop,
+    /* What a reader who has never touched `?debate=` sends: Reception. */
+    view: "reception",
+    onView: noop,
+    articleTitle: null,
     /* What a reader who has never touched `?debateby=` sends. The fixture has
        one row, so no two orders differ and no order bar is drawn — which is why
        `DEBATE_SHAPE` has no `.gloss-sort`. */
@@ -1601,7 +1641,7 @@ function mountDebate(debate: Debate | null, over: Partial<DebateOwner> = {}): Re
 /**
  * Quiz, always with a `subMode` control.
  *
- * `RememberBand` (src/web/modes/conversation/ConversationModes.tsx) passes
+ * `LearnBand` (src/web/modes/conversation/ConversationModes.tsx) passes
  * one on every render, so a Quiz band with an
  * empty header is not a state a reader can reach — but the prop is optional, so
  * one *is* a state a refactor can create by accident. **`QUIZ_NO_SUBMODE` is
@@ -1720,12 +1760,16 @@ const GLOSSARY_SHAPE: BandShape = {
  * Nothing in the suite could see that before this literal existed. The shape
  * stage 2 has to write is a fragment that is always present, with the
  * conditionals inside it.
+ *
+ * **Edited on purpose, 2026-10-07**: every `*_LOADING` shape's last child went
+ * from a bare `p.gloss-quiet` (or `p.quotes-quiet`) to the shared wait line,
+ * `p.band-waiting.gloss-quiet[role]` — BandWaiting.tsx, plan 261007h § F1.
  */
 const GLOSSARY_LOADING: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
 };
 
@@ -1756,7 +1800,7 @@ const IDEAS_LOADING: BandShape = {
   className: "mode-band gloss ideas has-about",
   label: "Ideas",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
 };
 
@@ -1773,7 +1817,7 @@ const QUOTES_LOADING: BandShape = {
   className: "mode-band quotes has-about",
   label: "Quotes",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.quotes-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.band-waiting.quotes-quiet[role]"],
   headChildren: [],
 };
 
@@ -1791,43 +1835,54 @@ const TIMELINE_LOADING: BandShape = {
   className: "mode-band gloss timeline has-about",
   label: "Timeline",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
 };
 
 /* Tweets — see the note above `TWEET_THREAD`: these are what the band draws
-   now, not a baseline. */
+   now, not a baseline. The band is Summary's (its label, and `summ` in its
+   class), and its first row after the (i) is Summary's control row. */
 const TWEETS_SHAPE: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: true,
   /* No foot for a settled thread since 2026-10-01: who wrote it went into the
      (i), first in the band (spya-ucu35y, plan 261001m). */
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: [
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
+    "div.summ-controls",
+    "div.band-head",
+    "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4",
+  ],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
-/** No thread yet: no header, no footer, only the empty state. */
+/** No thread yet: no header, no footer, only the control row and the empty state. */
 const TWEETS_NONE: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.gloss-empty"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "div.gloss-empty"],
 };
 
 const TWEETS_LOADING: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "p.band-waiting.gloss-quiet[role]"],
 };
 
 /** A visitor has the posts and the (i), and no footer. */
 const TWEETS_VISITOR: BandShape = {
-  className: "mode-band gloss tweets has-about",
-  label: "Tweets",
+  className: "mode-band summ gloss tweets has-about",
+  label: "Summary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4"],
+  children: [
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
+    "div.summ-controls",
+    "div.band-head",
+    "div.tw:min-h-0.tw:flex-1.tw:overflow-y-auto.tw:px-4.tw:pb-4",
+  ],
   headChildren: ["div.tw:flex.tw:w-full.tw:flex-wrap.tw:items-center.tw:gap-x-3.tw:gap-y-1"],
 };
 
@@ -1840,11 +1895,16 @@ const TWEETS_VISITOR: BandShape = {
  * attributes onto the `<svg>`. Recorded rather than trimmed — an icon that
  * stopped being `aria-hidden` is exactly the sort of change this file is for.
  *
- * `.dbt-bar` is the identification threshold, and it sits **above the scroller
- * and outside it**, where every other threshold in this app sits. It is drawn
- * only when group one has rows, which is why `DEBATE_LOADING` below has no
- * trace of it — a slider over an empty group is a control that cannot change
- * anything. See `NameBar` in `src/web/DebatePanel.tsx`.
+ * `.dbt-controls` is the Reception | Claims control, **above the scroller and
+ * outside it**, drawn only once a debate is stored — which is why
+ * `DEBATE_LOADING` below has no trace of it. Until 2026-10-03 a `p.dbt-frame`
+ * (the order's sentence) and `div.dbt-bar.dbt-name` (the identification
+ * threshold) sat here instead; both went with plan 261003o. The relevance bar
+ * (`.dbt-rel`) is Claims', so Reception, which this fixture opens on, has none.
+ *
+ * `div.gloss-ask.dbt-lens` is the owner's *Look at the debate from an angle*
+ * box, the first row since 2026-10-05 (plan 261005k, A) and a deliberate
+ * change to both shapes: it is drawn with or without a stored debate.
  */
 const DEBATE_SHAPE: BandShape = {
   className: "mode-band gloss dbt has-about",
@@ -1853,10 +1913,8 @@ const DEBATE_SHAPE: BandShape = {
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
-    "p.dbt-frame",
-    /* `.dbt-name` since 2026-09-29, when the relevance bar (`.dbt-rel`, drawn
-       only in *prioritised*) joined it and one component draws both. */
-    "div.dbt-bar.dbt-name",
+    "div.gloss-ask.dbt-lens",
+    "div.summ-controls.dbt-controls",
     "div.dbt-scroll",
   ],
   headChildren: [
@@ -1867,12 +1925,23 @@ const DEBATE_SHAPE: BandShape = {
 
 /** The same header, which no longer has a count either (the (i) since 2026-10-01,
  *  plan 261001m) — not empty, which is what makes Debate the
- *  control for the five bands whose headers do empty out. */
+ *  control for the five bands whose headers do empty out.
+ *
+ *  `div.dbt-scroll` holds the owner's *Cited by*, which since 2026-10-04 is on
+ *  screen before a search is stored (plan 261004h) — a deliberate change to
+ *  this shape. In `DEBATE_SHAPE` it is inside `div.dbt-scroll`, at the end of
+ *  Reception's list, so that shape did not move. */
 const DEBATE_LOADING: BandShape = {
   className: "mode-band gloss dbt has-about",
   label: "Debate",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: [
+    "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
+    "div.band-head",
+    "div.gloss-ask.dbt-lens",
+    "p.band-waiting.gloss-quiet[role]",
+    "div.dbt-scroll",
+  ],
   headChildren: [
     "svg.lucide.lucide-globe.band-head-icon[aria-hidden,fill,height,stroke,stroke-linecap,stroke-linejoin,stroke-width,viewBox,width,xmlns]",
     "h2",
@@ -1899,7 +1968,7 @@ const QUIZ_SHAPE: BandShape = {
  * fragment was written to prevent, and it was unpinned. GPT Sol F25,
  * 2026-09-07.
  *
- * Not a state a reader reaches — `RememberBand` always passes one — but very
+ * Not a state a reader reaches — `LearnBand` always passes one — but very
  * much a state the next refactor can create, which is what this file is for.
  */
 const QUIZ_NO_SUBMODE: BandShape = {
@@ -1957,13 +2026,15 @@ const DIAGRAM_VISITOR: BandShape = {
  * mode's narrow face (docs/plans/260910g-structure-mode-subsumes-outline.md):
  * the label is the mode's name, `Structure`, and `data-outline-clamp` joined
  * the rung as the second half of what the fit chose — whether titles had to
- * be cut to one line to fit (OutlinePanel.tsx § `fit`).
+ * be cut to one line to fit (OutlinePanel.tsx § `fit`). On 2026-10-03 the
+ * clamp went and `data-outline-scroll` took its place: whether the list
+ * scrolls (plan 261003k).
  */
 const OUTLINE: BandShape = {
   className: "mode-band outln has-about",
   label: "Structure",
   head: false,
-  attrs: ["aria-label", "class", "data-outline-clamp", "data-outline-rung"],
+  attrs: ["aria-label", "class", "data-outline-rung", "data-outline-scroll"],
   children: [
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "ol.outln-list[aria-activedescendant,aria-label,role,tabindex]",
@@ -1980,15 +2051,15 @@ const OUTLINE: BandShape = {
  * standing in for the whole-output check the other ten get.
  */
 const REFEREE: BandShape = {
-  className: "mode-band gloss referee",
+  className: "mode-band gloss referee has-about",
   label: "Referee",
-  head: true,
+  /* No `.band-head` since 2026-10-03: "How this works" became the band's (i),
+     and the chips' own row holds the Notices button. `.ref-brief` is absent
+     because Notices is shut unless the scan found something (plan 261003k;
+     tests/referee-notices.test.tsx holds when it opens). */
+  head: false,
   parent: ".reader",
-  children: ["div.band-head", "div.ref-brief", "div.ref-views[aria-label,role]", "div.ref-panel"],
-  /* The mode's name went in September; the row stays for the "how this works"
-     button, which is unconditional — so Referee's header is the second that
-     cannot empty out. */
-  headChildren: ["button.ref-how-btn[aria-expanded,type]"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.ref-top", "div.ref-panel"],
 };
 
 describe("the bands stage 2 migrated, as they stood before it", () => {
@@ -2171,22 +2242,22 @@ describe("the bands stage 2 migrated, as they stood before it", () => {
     expectShape(OUTLINE);
   });
 
-  it("draws Tweets' band for the owner with a thread: the (i), header and posts", async () => {
+  it("draws the thread's band for the owner with a thread: the (i), the control row, header and posts", async () => {
     await paint(mountTweets(tweetsOwner(TWEET_THREAD)));
     expectShape(TWEETS_SHAPE);
   });
 
-  it("draws Tweets' band with no header and no footer when nobody has written a thread", async () => {
+  it("draws the thread's band with no header and no footer when nobody has written a thread", async () => {
     await paint(mountTweets(tweetsOwner(null)));
     expectShape(TWEETS_NONE);
   });
 
-  it("draws Tweets' band with no header while the thread is being looked for", async () => {
+  it("draws the thread's band with no header while the thread is being looked for", async () => {
     await paint(mountTweets(tweetsOwner(null, { status: "loading" })));
     expectShape(TWEETS_LOADING);
   });
 
-  it("draws Tweets' band for a visitor, with the (i) and the posts and no footer", async () => {
+  it("draws the thread's band for a visitor, with the (i), the control row and the posts, and no footer", async () => {
     await paint(mountVisitorTweets());
     expectShape(TWEETS_VISITOR);
   });

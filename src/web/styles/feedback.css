@@ -125,7 +125,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 10px;
   background: var(--surface-raised);
-  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  box-shadow: var(--shadow-sheet);
   font-family: var(--font-ui);
 }
 
@@ -207,6 +207,17 @@
 .fb-earlier-page {
   overflow-wrap: anywhere;
 }
+/* A link to that page (spya-tqk7au). The row's own quiet colour, underlined so
+   it reads as a link, and darker under the pointer or the keyboard. */
+a.fb-earlier-page {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a.fb-earlier-page:hover,
+a.fb-earlier-page:focus-visible {
+  color: var(--ink);
+}
 /* `pre-wrap` keeps the reader's own line breaks; `anywhere` stops a pasted URL
    from pushing the panel sideways on a phone. */
 .fb-earlier-body {
@@ -240,10 +251,124 @@
 .fb-earlier-unshipped {
   color: var(--ink-soft);
 }
+/* An admin's rows (261007d). The number is how the report is said out loud, so
+   it is ink rather than the meta line's faint, in figures that line up down the
+   list; it never breaks from its `#`. */
+.fb-earlier-number {
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* "Needs a decision" is the one status that asks something of the reader: full
+   ink and the same weight Shipped has, with no colour of its own. */
+.fb-earlier-waiting {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* The one line a note says about the report, under the reader's own words. A
+   model wrote it: styles/voices.css gives it the model's face, and the rule to
+   its left sets it apart from what the reader wrote. `anywhere` for the same
+   reason as the body: one long word must not push the panel sideways. */
+.fb-earlier-comment,
+.fb-earlier-note {
+  margin: 0.35rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
 .fb-earlier:focus-visible {
   outline: 1px solid var(--highlight-text);
   outline-offset: -1px;
 }
+
+/* Questions an agent has put to an admin (261007d stage 2): at the top of
+   Needs a decision, above the reports. Every colour here is one the list
+   already uses. Block-level throughout, so a phone needs no rule of its own. */
+.fb-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.fb-questions[hidden] { display: none; }
+.fb-questions-heading {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.fb-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* One question: a card, so its reply box plainly belongs to it. */
+.fb-question {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+}
+.fb-question > * { max-width: 100%; }
+.fb-question .fb-earlier-meta { margin: 0; }
+.fb-question-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* Plain text with its own line breaks: the options are one a line. */
+.fb-question-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fb-question-report-line { overflow-wrap: anywhere; }
+/* What the admin replied, set apart the way a note's comment is. */
+.fb-question-answer {
+  align-self: stretch;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+}
+.fb-question-answer-body {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fb-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-self: stretch;
+}
+.fb-reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fb-reply-send:disabled { opacity: 0.45; cursor: default; }
+/* On the Needs a decision pill, after its report count: how many questions. */
+.fb-show-questions { font-weight: 400; }
 
 .fb-head {
   display: flex;
@@ -376,7 +501,7 @@
 .fb-show-button[aria-pressed="true"] {
   color: var(--highlight-text);
   border-color: var(--highlight);
-  background: color-mix(in oklch, var(--highlight) 12%, transparent);
+  background: color-mix(in oklab, var(--highlight) 12%, transparent);
 }
 /* The count on an Earlier pill (261003b): the word's own colour, so it keeps
    the pill's contrast, with tabular figures. */
@@ -556,7 +681,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   color: var(--ink);
   font-family: var(--font-ui);
 }
@@ -623,7 +748,7 @@
    `tw:text-sm` sets a size while leaving the family alone.
 
    The visible result was the collapsible section headings. A shut section's
-   heading is a button (Metadata.tsx § Section) carrying the h2's 0.68rem
+   heading is a button (PageSection.tsx § Section) carrying the h2's 0.68rem
    uppercase classes on its parent and nothing of its own, so it drew half again
    the size of every heading beside it, in a different typeface. Everything else
    on the page was subtler: the right size in the wrong face.

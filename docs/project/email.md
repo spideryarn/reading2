@@ -132,7 +132,8 @@ The three notices, and why each fires when it does:
   and kept out of the subject; the page address stays live only on our own origin. **It has its
   own cap, because this is the one notice a reader can trigger at will:** at most 20 in any 24 hours
   across every reader and 5 from any one, taken from the `feedback-notice` bucket of the shared
-  rate-limit table (`FEEDBACK_NOTICE_POLICY`, [pg-rate-limit.ts](../../src/store/pg-rate-limit.ts)),
+  rate-limit table (`FEEDBACK_NOTICE_POLICY` in [feedback-notice.ts](../../src/feedback-notice.ts), counted by
+[pg-rate-limit.ts](../../src/store/pg-rate-limit.ts)),
   which counts mails attempted, atomically, rather than reports filed. Resend's 100 a day is shared
   with auth mail, and one reader at the feedback hourly cap of 30 would otherwise spend it in under
   four hours. Every mail says the cap exists; `/admin/feedback` is the full record. **The cap fails open**: if the allowance cannot be read — the database down, or the bucket's migration not yet run, whose CHECK then refuses the row — the mail is sent uncapped and a warning logged, because missing a report is the worse mistake at this volume.
@@ -195,7 +196,18 @@ review that reshaped it):
   is the one value in the email we did not write, so it is untrusted on render: `noteText`
   ([`src/email.ts`](../../src/email.ts)) makes its line breaks plain and its other control characters
   spaces, and the HTML part escapes it. Never in the subject. Editing it re-sends nothing; an address
-  change sends the note as it then stands. It is one of two letters, chosen before the
+  change sends the note as it then stands. Since 2026-10-07 it may also open with **their name**
+  (`recipient_name`): *Dear <name>,* as its own plain line under the heading and above the note, in
+  both parts and both letters, from `giftEmailGreeting` in
+  [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), which the page's sketch calls too
+  ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md)). The name
+  follows the note's rules — untrusted, made one line by `cleanRecipientName`, with invisible separators and
+  bidirectional formatting controls made plain (but the joiners used in real names and emoji kept),
+  escaped in the HTML, never in the subject, the claim notice or a log line, and editing it re-sends
+  nothing. The renderer takes the
+  two as one object, `{ recipientName, recipientNote }`, so they cannot be passed the wrong way
+  round. With no name the email is byte for byte what it was, which
+  `tests/billing-voucher-emails.test.ts` holds as whole-email snapshots. It is one of two letters, chosen before the
   event's transaction by `giftAudienceFor` ([261002a](../plans/261002a-fb99-voucher-email-for-existing-user.md)):
   - **An existing reader** — exactly one account with that address *confirmed*, found in the same
     count-checked account list `/admin/users` reads — is told the articles they had left on Free and

@@ -31,10 +31,14 @@
  *   2026-10-02: an owner's laptop sits on rung 3);
  * - the last rung (4), a window under 732px, or **any touch screen**
  *   (`pointer: coarse` — a text box in a fixed bar at the foot of an iPad is
- *   where the on-screen keyboard misbehaves): the ⚡, which opens Search mode
- *   on *quick* with the panel's box focused;
- * - **Search mode open and this box not focused**: the ⚡ too (a class this
- *   component sets), so there is only ever one box to type in.
+ *   where the on-screen keyboard misbehaves): **nothing**. Until 2026-10-05
+ *   these drew the ⚡ alone; Greg, `spya-n8pgy2`: "if there isn't much room,
+ *   don't bother showing the quick search icon alone without the input text
+ *   bar" — the Search button is in the same bar (plan 261005h). `/` still
+ *   works there, and does what the ⚡ did;
+ * - **Search mode open and this box not focused**, at a width that has the
+ *   box: the ⚡ (a class this component sets), so there is only ever one box
+ *   to type in. It opens Search mode on *quick* with the panel's box focused.
  *
  * The ⚡ focuses the panel's box inside the tap when the panel is already
  * mounted. When it is not, the box mounts a render later and focuses itself
@@ -42,10 +46,23 @@
  * tap**. That is the accepted cost, written down rather than claimed away; the
  * browser check cannot show it (plan § Sol F9).
  *
+ * ## The cross
+ *
+ * > Can you add a little X to it so that after I've searched with it, I can
+ * > easily wipe it? Or maybe even automatically wipe it after I've searched
+ * > with it.
+ * >
+ * > — Greg, 2026-10-04
+ *
+ * Shown while the box has words in it. It is Escape's clear (`clear` below,
+ * one path for both) with the focus kept. The box does not wipe itself after
+ * a search: the words stay so the next keystroke refines them.
+ *
  * ## `/`
  *
  * The web's usual key for "jump to search" (GitHub, YouTube, Gmail). It
- * focuses this box, or does the ⚡'s job where the box is not shown. The
+ * focuses this box, or does the ⚡'s job where the box is not shown — which
+ * includes everywhere the ⚡ is not drawn either. The
  * guards are G's (TermJump.tsx § isOurKey) less one: **Shift is not refused**,
  * because some layouts need it to type `/` at all (Sol F10). It overrides
  * Firefox's Quick Find, a niche duplicate of ⌘F/Ctrl-F, as GitHub does.
@@ -54,7 +71,7 @@
  * visitor's read-only band, would answer (Sol F8; Dock.tsx §
  * `hasQuickSearch`). So the `/` listener exists only there too.
  */
-import { Zap } from "lucide-react";
+import { X, Zap } from "lucide-react";
 import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
 import { isImeComposing, isTyping } from "./key-chord.js";
 import { IDLE, PAUSE_MS, type QuickSession, stepQuickSession } from "./quick-session.js";
@@ -149,7 +166,7 @@ export function DockQuickSearch({
     let frame = 0;
     const check = () => {
       frame = 0;
-      if (document.activeElement === input.current && field.current &&
+      if (field.current?.contains(document.activeElement) &&
           getComputedStyle(field.current).display === "none") {
         latest.current.bolt();
       }
@@ -203,6 +220,13 @@ export function DockQuickSearch({
       : undefined;
   };
 
+  /** Empty the draft and end whatever session was listening — Escape's and the cross's one clear. */
+  const clear = () => {
+    stopWaiting();
+    draft.set("");
+    draft.band()?.edit("");
+  };
+
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !isImeComposing(e)) {
       e.preventDefault();
@@ -217,16 +241,41 @@ export function DockQuickSearch({
     }
     if (e.key === "Escape") {
       e.preventDefault();
-      stopWaiting();
-      draft.set("");
-      draft.band()?.edit("");
+      /* Not the Escape that dismisses an input method's candidates: the words
+         and the caret stay. It is still cancelled above, because a
+         `type="search"` box is emptied by the browser itself on Escape
+         (measured in Chrome, 2026-10-07). */
+      if (isImeComposing(e)) return;
+      clear();
       e.currentTarget.blur();
     }
   };
 
   return (
     <span className={`dock-qs${searching && !focused ? " dock-qs--bolt" : ""}`}>
-      <span className="dock-qs-field" ref={field}>
+      {/* biome-ignore lint/a11y/useSemanticElements: the dock's inline field groups its input and clear button without a fieldset's layout defaults. */}
+      <span
+        className={`dock-qs-field${text === "" ? "" : " dock-qs-field--filled"}`}
+        ref={field}
+        role="group"
+        aria-label="Quick search controls"
+        onFocus={() => {
+          setFocused(true);
+          draft.setBarFocused(true);
+          draft.band()?.focus();
+        }}
+        onBlur={(e) => {
+          // Moving to the clear button stays in this field, including with Tab.
+          if (e.currentTarget.contains(e.relatedTarget)) return;
+          setFocused(false);
+          draft.setBarFocused(false);
+          /* A pause still pending here is dropped: a reader who typed and
+             clicked away did not ask for Search mode to open behind them.
+             With the band listening, its own blur rule decides (Opus). */
+          if (timer.current !== undefined) stopWaiting();
+          draft.band()?.blur();
+        }}
+      >
         <Zap size={13} aria-hidden className="dock-qs-icon" />
         <input
           ref={input}
@@ -241,25 +290,31 @@ export function DockQuickSearch({
           value={text}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
-          onFocus={() => {
-            setFocused(true);
-            draft.setBarFocused(true);
-            draft.band()?.focus();
-          }}
-          onBlur={() => {
-            setFocused(false);
-            draft.setBarFocused(false);
-            /* A pause still pending here is dropped: a reader who typed and
-               clicked away did not ask for Search mode to open behind them.
-               With the band listening, its own blur rule decides (Opus). */
-            if (timer.current !== undefined) stopWaiting();
-            draft.band()?.blur();
-          }}
         />
         {text === "" && !focused && (
           <kbd className="dock-qs-key" aria-hidden>
             /
           </kbd>
+        )}
+        {text !== "" && (
+          /* **The cross that empties the box** (plan 261004g). Escape's clear,
+             but the focus stays: the words are kept after a search so the
+             reader can refine them, and this is the one press that wipes them
+             for the next. Mousedown keeps the input focused; focus handling on
+             the field also lets keyboard and other input paths reach the cross
+             without collapsing it into the ⚡ (`dock-qs--bolt`). */
+          <button
+            type="button"
+            className="dock-qs-clear"
+            aria-label="Clear the search"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              clear();
+              input.current?.focus({ preventScroll: true });
+            }}
+          >
+            <X size={14} aria-hidden />
+          </button>
         )}
       </span>
       <button

@@ -34,7 +34,8 @@ import type { Block, Meta, Tree } from "./types.js";
  * to prevent. src/store/pg-searches.ts is the caller that needed it.
  */
 /**
- * **What a fingerprint of the article actually needs**, which is two fields.
+ * **What a fingerprint of the article actually needs** — identity, text and
+ * classification.
  *
  * Named rather than spelled out at each caller, because the four staleness
  * checks that use it are also the four reads that had been fetching every
@@ -55,7 +56,7 @@ import type { Block, Meta, Tree } from "./types.js";
  * finding no earlier review caught; docs/plans/260828o-footnotes.md § Reclassification
  * must invalidate the caches.
  *
- * `null` as well as `undefined` because the filesystem store carries an absent
+ * `null` as well as `undefined` because a `Block` carries an absent
  * field and Postgres carries a null column, and the two must hash identically —
  * see the normalisation in `hashBlocks`.
  *

@@ -58,7 +58,9 @@ export const RERUN_LABEL: Record<MetadataRerunStep, string> = {
   citations: "Citations",
   /* Not a mode, so no `MODE_LABEL` to borrow: the links it draws in the prose. */
   crossrefs: "Cross-references",
-  /* A sub-mode of Summary, named as its chip is. */
+  /* Summary's plain-words lengths, which this one step writes together. Named
+     for the step, as src/web/ResetArticle.tsx names it; Simple was also a level
+     a reader could choose until 2026-10-03. */
   simple: "Simple summary",
 };
 
@@ -91,15 +93,18 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
  * reaches the glossary because `terms` already reaches Glossary.
  *
  * Absent for the steps that are not a mode of their own: the arc (the
- * one-sentence gist on the masthead), the quiz (a sub-mode of Remember, whose
+ * one-sentence gist on the masthead), the quiz (a sub-mode of Learn, whose
  * own name is already the label), the sketch (one of Diagram's five pictures —
  * `rerun diagram` would be a guess about which), cross-references (links in the
- * prose) and the simple summary (one of Summary's three levels). A `Partial`
+ * prose), and **both of Summary's steps**: the plain-words lengths and the
+ * thread. Summary shows two artefacts, so borrowing its name and aliases for
+ * either step would make `rerun summarise` a guess — and for the thread it
+ * would make `rerun summary` force a thread (GPT Sol, F5 of the 261003l
+ * review). Each is named by hand in `RERUN_ALSO_CALLED` instead. A `Partial`
  * on purpose: a mode borrowed wrongly would teach the bar a word that runs
  * something the reader did not name.
  */
 const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
-  tweets: "tweets",
   glossary: "glossary",
   quotes: "quotes",
   ideas: "ideas",
@@ -112,14 +117,22 @@ const RERUN_MODE: Partial<Record<MetadataRerunStep, Mode>> = {
 
 /**
  * **Names a reader might use that neither the label nor a mode supplies.**
- * Sparse, for the reason the mode aliases are (reading-view-overview.md § The
- * command bar): the cost of a loose alias is not a missed match, it is the
- * wrong row ranked first — and every row this table names spends.
+ * Sparse, for the reason that still limits the mode aliases, which are no
+ * longer sparse themselves (reading-view-overview.md § The command bar): the
+ * cost of a loose alias is not a missed match, it is the wrong row ranked
+ * first — and every row this table names spends.
  */
 const RERUN_ALSO_CALLED: Partial<Record<MetadataRerunStep, readonly string[]>> = {
   crossrefs: ["cross references", "crossrefs"],
   relations: ["relations"],
-  simple: ["simple"],
+  /* `summary` and the mode's two spellings, written here because Summary is
+     not this step's `RERUN_MODE` (above): `rerun summary` writes the
+     plain-words lengths again and never a thread. */
+  simple: ["simple", "summary", "summarise", "summarize"],
+  /* The Tweets mode's name and aliases, kept when the mode went on 2026-10-03
+     so `rerun tweets` still forces the thread. Not `x`: `rerun x` is too
+     little to hang a paid run on. */
+  tweets: ["tweets", "tweet thread", "twitter", "social"],
 };
 
 /**
@@ -210,6 +223,8 @@ export function rerunCommand(
     ...rerunWords(step),
     generates: true,
     typedOnly: true,
+    /* It posts a paid run. */
+    opensOnly: false,
     run,
   };
 }

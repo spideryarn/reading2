@@ -123,6 +123,7 @@ const dialog = (props: Record<string, unknown>) =>
     onOpenFull: () => {},
     onCreated: () => {},
     onDropped: () => {},
+    onRenamed: () => {},
     ...props,
     // biome-ignore lint/suspicious/noExplicitAny: the props are built per case
   } as any);
@@ -283,6 +284,90 @@ describe("the '?' sends once, and says what the reader was looking at", () => {
  * change rather than one: an ✕ that merely closed would have left a first
  * answer with no way to stop at all.
  */
+/**
+ * **A follow-up typed under an explanation sends itself too, once.**
+ *
+ * The box under an AI explanation ends in *Ask in chat*. Until 2026-10-06 its
+ * question was carried into this dialog's box and waited for a second press.
+ * Greg (spya-x896vu): *"When I click "ask in Chat" anywhere, automatically
+ * submit the input (rather than just prefilling the input box and waiting for
+ * me to hit send)"*. So `Reader`'s `onDiscuss` sets `sendNow` beside the
+ * question, and the same two kinds of "once" as the "?" apply.
+ * docs/plans/261006j-ask-in-chat-sends-the-question.md, D4.
+ */
+describe("a follow-up the reader already asked sends once", () => {
+  const ASKED = "Why does that follow?";
+  const asked = (extra: Record<string, unknown> = {}) => ({
+    kind: "draft",
+    anchor: { blockId: BLOCK },
+    opening: OPENING,
+    question: ASKED,
+    sendNow: true,
+    ...extra,
+  });
+  const box = () => document.querySelector<HTMLTextAreaElement>("textarea");
+
+  it("leaves a carried question in the box, unsent, without `sendNow`", () => {
+    /* The control: `question` alone still means an editable draft. If it became
+       the trigger, any ordinary pre-filled composer would start spending. */
+    act(() => {
+      root.render(dialog({ target: { kind: "draft", anchor: { blockId: BLOCK }, opening: OPENING, question: ASKED } }));
+    });
+    expect(sends).toEqual([]);
+    expect(box()?.value).toBe(ASKED);
+  });
+
+  it("sends the question as the panel opens, about the same passage, and not as a help press", () => {
+    act(() => root.render(dialog({ target: asked() })));
+    expect(sends).toHaveLength(1);
+    expect(sends[0]?.text).toContain(ASKED);
+    expect(sends[0]?.anchor).toEqual({ blockId: BLOCK });
+    expect(sends[0]?.help).toBeUndefined();
+  });
+
+  it("says it is asking, with no box offering to send the question again", () => {
+    /* The draft exists for a frame or two before it becomes a conversation.
+       An ordinary draft's body says "Nothing is asked until you send" and
+       mounts a composer that takes focus, which on a phone raises the
+       keyboard: both wrong over a question already sent. */
+    act(() => root.render(dialog({ target: asked() })));
+    expect(box()).toBeNull();
+    expect(document.body.textContent).toContain("Asking…");
+    expect(document.body.textContent).not.toContain("Nothing is asked until you send");
+  });
+
+  it("still sends once under StrictMode", () => {
+    act(() => root.render(createElement(StrictMode, null, dialog({ target: asked() }))));
+    expect(sends).toHaveLength(1);
+  });
+
+  it("does not send again when the target is re-created with the same words", () => {
+    act(() => root.render(dialog({ target: asked() })));
+    act(() => root.render(dialog({ target: asked() })));
+    act(() => root.render(dialog({ target: asked() })));
+    expect(sends).toHaveLength(1);
+  });
+
+  it("sends the same question again once the first has become a conversation", () => {
+    /* The latch is let go when the draft is gone. Without that, asking the
+       same follow-up of the same passage a second time would open the panel
+       and send nothing: a button that looks unwired. */
+    act(() => root.render(dialog({ target: asked() })));
+    act(() => root.render(dialog({ target: { kind: "thread", threadId: "spya-newthr" } })));
+    act(() => root.render(dialog({ target: asked() })));
+    expect(sends).toHaveLength(2);
+  });
+
+  it("asks to have the passage explained when nothing was written, once", () => {
+    /* The comment box's Ask AI with an empty box. */
+    const { question: _none, ...wordless } = asked();
+    act(() => root.render(createElement(StrictMode, null, dialog({ target: wordless }))));
+    expect(sends).toHaveLength(1);
+    expect(sends[0]?.text).toContain("Explain this passage.");
+    expect(box()).toBeNull();
+  });
+});
+
 describe("the way out of a first answer", () => {
   const streamingThread = {
     kind: "chat",

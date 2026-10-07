@@ -165,7 +165,7 @@ describe("a rate limit on a PDF chunk", () => {
    * to retry at about the right time*.
    *
    * The first version of this stage clamped the header twice — to 30 s where it
-   * is parsed (`retryAfterMs`, src/ai-call.ts) and to 30 s again by
+   * is parsed (then `retryAfterMs` in src/ai-call.ts) and to 30 s again by
    * `MAX_BACKOFF_MS` — so a provider asking for 45 s was asked again at 30 s,
    * inside its own window, by every one of sixteen chunks. Forty-five seconds is
    * a wait the step can afford, and the only party that knows when the queue

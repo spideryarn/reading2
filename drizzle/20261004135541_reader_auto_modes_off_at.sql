@@ -1,0 +1,1 @@
+ALTER TABLE "spideryarn"."reader_profiles" ADD COLUMN "auto_modes_off_at" timestamp with time zone;

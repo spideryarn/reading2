@@ -1,5 +1,26 @@
 # Referee mode — helping a peer reviewer read, without reading for them
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- Status (the paragraphs below, before the first section) — what is built, with the day each part landed (largely history)
+- [§ What the band looks like](#what-the-band-looks-like-since-2026-10-03) — the current layout: chips, Notices button, the lead line; read first for the UI as it is now; and [§ The scan has its own chip](#the-scan-has-its-own-chip-since-2026-10-07)
+- [§ How to read a panel](#how-to-read-a-panel-one-press-away-since-2026-10-03) — where the "how to read this" sentences went
+- [§ The job](#the-job-and-the-tension-it-was-built-to-hold) — Greg's tension and the research number behind it
+- [§ Why `referee`](#why-the-mode-is-referee-not-reviewer) — the name, and the clash it avoids
+- [§ The five sub-modes](#the-five-sub-modes) — URL shape; then Criteria (§ 1), Claims (§ 2), Mirror (§ 3), Candidates (§ 4), Hidden text (§ 5)
+- [§ The referee's own mark](#the-referees-own-mark) — placing a passage yourself, and why it is never averaged with the model's
+- [§ Where each of Candidates' four rules lives](#where-each-of-the-four-rules-actually-lives) — what code enforces and what is only a prompt
+- [§ Every control says what it does](#every-control-says-what-it-does) — the hover cards, and which labels changed
+- [§ The (i) in the corner](#what-the-mode-is-for-the-i-in-the-corner) — what the mode is, in two sentences
+- [§ The rules the whole mode obeys](#the-rules-the-whole-mode-obeys) — no verdict, identity-stripped calls, the injection scan
+- [§ Confidentiality](#confidentiality-exact-and-unflinching-about-the-tense) — the three sentences and why their tenses differ
+- [§ The band has to fit](#the-band-has-to-fit-and-for-a-day-it-did-not) — the layout accident (history, partly superseded)
+- [§ What the evidence says](#what-the-evidence-actually-says-and-where-the-plan-overstated-it) — the two numbers, and what the plan overstated
+- [§ Website copy notes](#website-copy-notes-kept-for-later) — raw material for a referee landing page
+- [§ See also](#see-also) — plans, research and the source files, by name
+
 **Status, 2026-09-01: all four sub-modes are built, and all four work in the store that deploys.**
 
 **Criteria works end to end** — write a criterion, it streams, its hits are marked in the prose and
@@ -48,20 +69,16 @@ table landed with its entry and with a fixture that inserts a row and requires i
 
 **One run per article, and no id.** A referee writes several criteria and asks the paper what *it*
 claims exactly once, so the primary key is `article_id` alone and starting a run **replaces** what is
-there. `created_at` doubles as the sweep's clock, which is how the Postgres store gets the grace
+there. `created_at` is the run's start (`finished_at`, stored and not shown, is its end) and doubles
+as the sweep's clock, which is how the Postgres store gets the grace
 window `RefereeClaimsStore.sweep`'s one boolean cannot express — without it a second Vercel process
 loading the panel would error a run the first one is still streaming
 ([`src/store/pg-referee-claims.ts`](../../src/store/pg-referee-claims.ts)).
 
-**Candidates works end to end** as of 2026-09-01 — open the sub-mode and the opening ask goes out on
-the press that opened it, creating the thread; then scope the search in the composer and names arrive
-with the shortlist above the transcript. **The brief used to arrive unprompted**, on a `useEffect`
-the first time the sub-mode was *mounted*, and that is why the button was added: a mount is not a
-gesture — a pasted link, a Back step and a re-render all reach one — so a first-time referee paid for
-a model call and sent paper-derived terms to a search engine without having asked for either
-(2026-09-02). The press-not-mount rule survives; since 2026-09-06 a press on the **chip** counts as
-one, and the button stays for the reader whose automatic attempt failed
-([260906b](../plans/260906b-opening-a-mode-starts-it-generating.md), and § the disclosure, below). It is a third `ThreadKind` on chat's own machinery
+**Candidates works end to end** — open the sub-mode, then press *Build the reviewer brief* to
+create its thread; scope the search in the composer and names arrive with the shortlist above the
+transcript. Opening the panel and retrying a failed read start no turn (§ What the band looks like).
+It is a third `ThreadKind` on chat's own machinery
 (`drizzle/0050_candidates_thread_kind.sql`, [`src/converse.ts`](../../src/converse.ts) § `systemFor`,
 [`src/referee-candidates.ts`](../../src/referee-candidates.ts),
 [`src/web/CandidatesPanel.tsx`](../../src/web/CandidatesPanel.tsx)). See § 4 below for where each of
@@ -73,10 +90,11 @@ caller**, which the cross-family review put plainly: *"it does not run before a 
 cannot reach a referee, and its `coverage` cannot stop any UI from saying 'nothing found'."*
 `GET /api/referee/scan/:slug` now runs it over the stored **raw source**
 ([`src/source-scan.ts`](../../src/source-scan.ts)), and
-[`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer at the
-**mode** level — above the sub-mode chips, on screen whichever panel is open — because a hidden
-instruction is a fact about the document and bears on Criteria, Claims, Mirror and Candidates
-alike. Rule 5 below says where each of its rules is enforced.
+[`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx) draws the answer as the
+**Hidden text** sub-mode since 2026-10-07, with a mark on its chip when it found something
+(§ The scan has its own chip). Before that it was drawn at the mode level, above every panel,
+because a hidden instruction is a fact about the document. Rule 5 below says where each of its
+rules is enforced.
 
 **The referee's own judgement is built, reachable and editable**, as of 2026-09-01 — and for one
 day it was none of those while looking finished from a test file, which is worth keeping in view:
@@ -97,6 +115,126 @@ day it was none of those while looking finished from a test file, which is worth
 plan before anything was built, and the plan's own § *Where this plan still disagrees with the
 review* is candid about the one it did not take.
 **Research**: [260831e-helping-peer-reviewers/](../research/260831e-helping-peer-reviewers/README.md).
+
+## What the band looks like, since 2026-10-03
+
+Greg, 2026-10-03 (`spya-vbeyse`):
+
+> The referee mode is, the UI is very confusing. … It seems to bury the actual actions and useful
+> stuff underneath a whole bunch of warnings. I mean, maybe those warnings are necessary, but
+> perhaps we could hide them inside the information tooltip or something, or create a warning
+> tooltip, and in general see how you can improve that whole mode UI.
+
+Measured that day at 1280 × 800, the criterion box started 607px down a 760px band. So, top to
+bottom, the band is now:
+
+1. **One row: the five chips and a *Notices* button**, with the band's (i) in the corner. The
+   chips are the part-switcher every mode shares (`mode-band.css` § the part-switcher, since
+   2026-10-07): one joined bar, with Notices beside it, or on a line under it when the band is too
+   narrow for both. On the 288px band an iPad gives this mode the bar scrolls sideways inside its
+   own outline, the chosen chip kept in view.
+2. **The Notices box, only while it is open** — the confidentiality sentences in full. It is shut
+   on every visit, remembers nothing and never opens itself. The document-specific source scan is
+   the Hidden text chip below.
+3. **The panel**, which starts with one line saying what to do in this sub-mode: the first
+   sentence of the chip's own hover card, from the same constant. In Criteria, Claims and Mirror
+   that line ends in a small button, ***How to read this*** (§ How to read a panel, below).
+
+***How Referee mode works* is the (i)**, in the corner where every other mode keeps its own
+([mode.md](mode.md)): the mode's two sentences from `MODE_CATALOG`, then *What the colours mean*.
+The card that used to open inside the band, its `localStorage` bit and its header button are gone.
+
+**The Candidates chip opens the panel and starts nothing.** The panel's *Build the reviewer brief*
+button starts the turn, and the search-engine sentence is printed at the top of that panel before
+and after the first turn. That is what let the sentence leave the top of the other three sub-modes.
+
+**What this gave up**, each a reversal of something argued further down this page: the one-line
+*"text has already been sent"* fact and the scan's headline are no longer on screen in every state
+(a finding still is), and Candidates takes one more press. All three are open questions for Greg in
+[261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md),
+which also has the before and after screenshots. Where a later section describes the notice's own
+collapse, the line above the chips or the chip starting Candidates, it is describing the
+arrangement before this one and the reasoning that arrangement answered.
+[`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) holds the new one.
+
+### The scan has its own chip, since 2026-10-07
+
+Greg, 2026-10-07 (`spya-y6590g`):
+
+> Re Referee / Hidden instructions:
+> - Perhaps squirrel this info away as a sub-mode? It doesn't seem important enough to be right at
+>   the top of Criteria
+> - And it found stuff like `Characters that render as nothing / math#footnote1.m1.ltx_Math >
+>   semantics > mrow > mo / 1× zero-width space U+200B`. Firstly, this is uninterpretable gibberish
+>   to the user, and secondly it looks innocuous. Let's pre-filter with a small LLM to try and only
+>   show stuff that might actually be of real concern/interest.
+
+The paper he was reading gave the scan 41 findings: 39 single zero-width spaces, one per invisible
+operator arXiv's LaTeX-to-HTML converter writes into MathML, and two `navigation`-labelled bits of
+arXiv's own page. Notices opened itself for any finding, so the first thing above Criteria was 39
+rows of CSS path. Now:
+
+- **The scan is the fifth chip, *Hidden text*** (`?referee=hidden`), last in the row. Pressing it
+  runs nothing; the band has already fetched the scan. **Notices holds only the confidentiality
+  sentences and never opens itself.**
+- **The chip carries a mark when something was found** (`sourceScanMark` in
+  [`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx)): a filled dot for a finding with
+  no everyday label, a ring when every finding wears one, and the same sentence either way for a
+  screen reader. A ring and not nothing, because a label is read off class names and a document
+  can wear one on purpose; a ring and not a dot, because arXiv's own furniture would otherwise light
+  the dot on nearly every paper.
+- **Each finding is in plain words** — a sentence per kind saying what the trick is and what it
+  would look like if it mattered, with the CSS path and code points last, under *In the source*.
+  The path stays raw evidence rather than becoming a place description: ids and classes are
+  document-written, and can forge its separators too. Bidi controls are printed as code points so
+  they cannot reorder the evidence that names them; paths and detail are capped on screen so an
+  attacker-written id, class or CSS value cannot bury the finding's words. **Identical findings are
+  one row with a count**, keyed on every field a referee reads except the path, so a payload's own
+  words always make it a row of its own; every path is still listed.
+
+**What this gave up**: rule 5's *before anything else*. A referee who never presses the chip sees
+a dot, not the finding. That was Greg's call. **What it did not do** is the pre-filter he asked
+for, or anything else that changes what the scanner finds or labels: those edit a defence, and are
+waiting on him in
+[261007h § Questions for Greg](../plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md#questions-for-greg).
+`tests/referee-notices.test.tsx` § *a finding marks the Hidden text chip* and
+`tests/source-scan-notice.test.tsx` § *findings in plain words* hold it.
+
+### How to read a panel: one press away, since 2026-10-03
+
+Each panel used to open with a sentence or two of visible text saying how to read it. 261003k left
+them and asked Greg whether to thin them ([Q-referee-panel-rules]: leave them, or *"move them into
+each panel's hover cards or the (i)"*). His answer, the same day:
+
+> Q-referee-panel-rules B
+
+So four sentences left the panels, word for word, for a card behind the ***How to read this***
+button at the end of the lead line (`HowToRead` and `REFEREE_HOW_TO_READ` in
+[`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)):
+
+| Panel | Behind the button |
+|---|---|
+| Criteria | `WHAT_THE_TICK_DOES` and `WHAT_THE_RANK_IS` (*the number is the model's ordering, not a score*) |
+| Claims | `LINKAGE_NOT_ADEQUACY` (*where the paper takes each claim up; whether the passage carries it is yours*) |
+| Mirror | `MIRROR_IS_NOT_GIVEN_THE_PAPER` |
+| Candidates | nothing moved, so no button |
+
+**These sentences are what stop a list of passages reading as a verdict, so the button is one a
+finger can press.** It is the corner (i)'s shape ([tooltips.md](tooltips.md) § Where the code is,
+`BandAbout.tsx`): a controlled card on a real `<button>`, which a tap toggles and hover or keyboard
+focus also opens. It has words beside its icon because the band's corner already holds a bare (i)
+with a different job.
+
+**What this gave up**: none of the four is on screen unasked any more, which reverses what later
+sections of this page argue for each (*"a tooltip is not read by anybody in a hurry"*; the rank
+number's *"visible line above the list"*). Those sections describe the arrangement before this one.
+What still holds from the rank argument is reach: the old card on the numeral could not be opened by
+keyboard or touch, and this button can. Not moved, because each sits beside results already on
+screen: Claims' `DOCUMENT_ORDER_NOTE`, Mirror's `EVIDENCE_NOTE`, Criteria's key, and Candidates'
+`COI_NOT_CHECKED`. Plan:
+[261003m](../plans/261003m-referee-panels-how-to-read-sentences-behind-a-tap-to-open-button.md);
+[`tests/referee-notices.test.tsx`](../../tests/referee-notices.test.tsx) § one press away holds the
+sentences as literals.
 
 ## The job, and the tension it was built to hold
 
@@ -119,10 +257,10 @@ the more obvious way: every one of them stops short of telling the referee what 
 
 ## Why the mode is `referee`, not `reviewer`
 
-`review` is already a mode — the reader says what they took from a piece they have read for
-themselves and the model shows them where it comes apart
-([remember-mode.md](remember-mode.md); `review` was renamed to `remember` on 2026-09-01, after this
-name was chosen). A `reviewer` mode beside a `review` mode would be one word meaning two things,
+`review` was already a mode when this name was chosen — the reader says what they took from a piece
+they have read for themselves and the model shows them where it comes apart
+([learn-mode.md](learn-mode.md); `review` was renamed to `remember` on 2026-09-01, and to `learn`
+on 2026-10-06). A `reviewer` mode beside a `review` mode would be one word meaning two things,
 which this repo has already paid a rename to get out of once
 ([`src/modes.ts`](../../src/modes.ts) on `toc`/`hierarchy`,
 [260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md)).
@@ -132,9 +270,9 @@ Greg had not seen the name when the plan was written; the button's word is **one
 It was three until 2026-09-02 — the dock and the visitor's owners-only sentence each kept their own
 copy — and now everything that names a mode reads that record.
 
-## The four sub-modes
+## The five sub-modes
 
-`?mode=referee` with `?referee=criteria|claims|mirror|candidates`
+`?mode=referee` with `?referee=criteria|claims|mirror|candidates|hidden`
 ([`src/web/referee-views.ts`](../../src/web/referee-views.ts)), following Diagram's `?diagram=`
 precedent — a `role="radiogroup"` of buttons, each its own tab stop, arrow-key *selection*
 deliberately withheld so the article's own arrow keys still reach the article
@@ -318,6 +456,73 @@ and it is also a ranking of the referee's own work, which wants thought first.
 [`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) and `tests/referee-gap.test.tsx`,
 which collects every digit on the row and compares it against the numbers that went in.
 
+#### A criterion is never dropped; a criterion with comments on it cannot be deleted <a id="a-criterion-with-comments-on-it"></a>
+
+**An add never deletes a criterion.** Until 2026-10-07 a list was capped at twenty and an add past
+that deleted the oldest finished criterion to make room, without a word; and when that criterion had
+the referee's comments placed on it, the key refused the delete and the add failed every time. The
+cap and the drop-oldest rule were **not an instruction of Greg's**: an agent chose them on
+2026-09-01 (`b9f1d2a53`, *Criteria: the referee says what they are judging the paper against*) by
+analogy with searches' `MAX_RUNS`. Asked first whether a criterion with comments should be kept even
+if the list ran past twenty:
+
+> yes, agreed. is there a good reason why we cap at 20 in the first place? I don't think that was an
+> instruction from me
+>
+> — Greg, 2026-10-07, relayed by the Overseer
+
+and then, to *never drop a reader's criterion silently; replace drop-oldest with a high ceiling of
+200; refuse a new criterion past that with a plain sentence saying why*:
+
+> 1 agreed
+>
+> — Greg, 2026-10-07, relayed by the Overseer
+
+So there is no trim. `MAX_CRITERIA` ([`src/saved-criteria.ts`](../../src/saved-criteria.ts)) is
+**200**, a ceiling, and `begin` ([`src/store/pg-referee-criteria.ts`](../../src/store/pg-referee-criteria.ts))
+refuses the add that would pass it: a 409 before any stream opens, nothing written, nothing deleted.
+It counts **every criterion on the article** — running, failed, with comments or without — because
+pending and failed rows still hold the reader's words. Current database constraints make every
+config readable; rows outside that contract count too but are hidden by the loader. A commented
+criterion must have its placements cleared before a delete succeeds. The count and insert are one
+transaction under the article lock, so two adds at 199 make 200. A retry with the same id and words,
+while its saved row is still failed, resets that row before the ceiling check. The browser keeps a
+ceiling refusal as a failed row with Retry and the sentence; it is never shown as added.
+[`criterion-refusal-drafts.ts`](../../src/web/criterion-refusal-drafts.ts) keeps the refused words
+and configuration through mode changes and reloads in this tab, keyed by reader and article, until
+a `begin` confirms storage or the reader deletes the draft. If browser storage is unavailable, only
+the mounted hook keeps those words.
+
+**A criterion with comments on it cannot be deleted by hand, and says so.** A placement points at its
+criterion, and `comments_criterion_fk` refuses to leave it pointing at nothing
+([database.md § `restrict` and `no action`](database.md#restrict-and-no-action-are-the-same-rule-at-two-different-moments)).
+Until 2026-10-07 nothing turned that refusal into words, so it reached the referee as a 500
+`[db-failed]`. It is now a refusal with a sentence; no comment is detached and the key is what it
+was. Whether Delete should instead detach the comments was question 3b, and the answer relayed on
+2026-10-07 was to keep refusing.
+
+| The referee | Gets | Sentence |
+|---|---|---|
+| adds a criterion to an article that already has 200 (or more, inherited from the old trim) | 409, before any stream opens | `criteriaAtCeiling(n)` — the real count, and how many to delete |
+| deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
+| places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
+
+The ceiling sentence is in [`src/saved-criteria.ts`](../../src/saved-criteria.ts); the other
+sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts). The two
+foreign-key refusals are matched **by name**, before the store guard drops the name, with
+`violatesForeignKey` ([`src/store/db-errors.ts`](../../src/store/db-errors.ts)). They are caught
+rather than checked for in advance: a read for comments followed by the delete can be raced by a
+placement, and the key cannot. The delete is optimistic in the browser, so `useCriteria` § `forget`
+restores the row on a 409 and on nothing else — a 500 does not say whether the row went.
+
+**Mirror still sends at most 24 criteria** (its own `MAX_CRITERIA` in
+[`src/referee-mirror.ts`](../../src/referee-mirror.ts), a prompt-size bound and a different number),
+and says how many it left out. A list past twenty-four was nearly impossible under the old cap and is
+ordinary now.
+
+The plans: [refused, not failed](../plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md)
+and [never dropped, a ceiling of 200](../plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+
 ### 2. Claims — where the paper addresses its own claims
 
 Pulls the claims the paper makes up front and, for each, lists the passages that address it, by
@@ -346,9 +551,11 @@ of them are properties of the code and the third is only a prompt rule, and the 
   for it that could not be found in the paper, so *the model named none* and *the model named some
   and none of them were there* print different sentences. That distinction is the one that went wrong
   in Criteria and needed a second review to catch (finding 4); it is built in here rather than
-  retrofitted. The same split exists for a whole run: `CLAIMS_UNUSABLE` is a **failed** run with a
-  Try again, not an empty one.
-- **Linkage, never adequacy** is asked for in the prompt, said in words at the top of the panel, and
+  retrofitted. The same split exists for a whole run: an answer where every claim was thrown away
+  is a **failed** run with a Try again, not an empty one. Its sentence is `ANSWER_UNUSABLE` in
+  `src/messages.ts`, the one Criteria throws for the same thing.
+- **Linkage, never adequacy** is asked for in the prompt, said in words behind the panel's *How to
+  read this* button (at the top of the panel until 2026-10-03), and
   since 2026-09-01 also **backed by a fail-safe in code**. The eval is
   [`evals/referee-claims.ts`](../../evals/referee-claims.ts) — five papers written to pull the model
   over the line, a red-first control that runs one of them again with the refusals cut out of the
@@ -370,15 +577,17 @@ the same omissions, on a repeat run — with the dropped claim's words swallowed
 claim's quote. Every rule above is about the rows that came back, and a claim that never gets a row
 is invisible: the zero-passage row and its honest sentence cannot fire when there is no row.
 
-So the panel now prints, under the list, **what the claims did not account for**: for each block a
-claim was taken from, the sentences and clauses no claim above is anchored in
-(`unaccountedSentences`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim accounts
-for the clause its quote *begins* in rather than every clause it covers, which is what makes a
-three-claim sentence quoted whole under one claim show its other two.
+So the panel now prints, under the list, **the other text inside the quoted passages** (heading
+`OTHER_TEXT_HEADING`): the sentences and clauses of the passages the claims quote that no claim above
+begins in (`otherTextInQuotes`, [`src/referee-claims.ts`](../../src/referee-claims.ts)). A claim
+accounts for the clause its quote *begins* in rather than every clause it covers, which is what makes
+a three-claim sentence quoted whole under one claim show its other two. (It listed every clause of
+every block a claim came from, under the heading "Not accounted for", until GPT Sol's review on
+2026-09-01 narrowed it to the quotes.)
 
-**The wording is the whole value of it**, and it is a checked constant rather than a string in the
-panel. It says *what was not accounted for* and never *the claims you missed*: a block a claim came
-from carries background, citation and setup as well as claims, so calling these missed claims would
+**The wording is the whole value of it**, and it is a checked constant (`OTHER_TEXT_NOTE`) rather
+than a string in the panel. It says what the list *is* — a fact about the list above — and never
+*the claims you missed*: a block a claim came from carries background, citation and setup as well as claims, so calling these missed claims would
 be the judgement this sub-mode refuses, made in reverse and on worse evidence.
 [`tests/referee-copy-is-about-the-model.test.ts`](../../tests/referee-copy-is-about-the-model.test.ts)
 holds it there, and no number appears beside them for the same reason no number appears on a claim.
@@ -424,8 +633,11 @@ Built, as of 2026-09-01, and here is the whole of it:
   because the browser draws them and nothing under `src/web/` may import a module that reaches
   `node:crypto` (`tests/client-imports.test.ts`).
 - **The route** — `POST /api/referee/mirror/:slug`, no body, SSE out. It reads the article, the
-  comments and the criteria before a header goes out, and nothing is stored. A `delta` frame carries
-  **a character count, not characters**: what streams is one raw JSON object whose pointers the
+  comments and the criteria before a header goes out, and nothing is stored. Leaving cancels the
+  model call (`runMirror` in [`src/routes.ts`](../../src/routes.ts)); the decision is in
+  [261005i](../plans/261005i-mirror-stops-its-model-call-when-the-referee-leaves.md).
+  A `delta` frame carries **a character count, not characters**: what streams is one raw JSON
+  object whose pointers the
   validator has not checked yet, so there is nothing in it a panel could honestly show — the count
   buys the one thing streaming buys here, which is the referee being able to tell *waiting* from
   *being answered*.
@@ -456,8 +668,8 @@ cut —
 >
 > — Greg, 2026-09-01
 
-**It is Chat with a third personality, not a panel of its own.** `candidates` is a third
-`ThreadKind` beside `chat` and `remember` ([`src/types.ts`](../../src/types.ts)), so it inherits
+**It is Chat with a third personality, not a panel of its own.** `candidates` was the third
+`ThreadKind`, after `chat` and `learn` (there are five now: [`src/types.ts`](../../src/types.ts)), so it inherits
 streaming, the tools, OpenRouter's server-side web search, citation collection, thread persistence
 and retry for nothing. What had to change was small and known: the `chat_threads_kind` CHECK
 (`drizzle/0050_candidates_thread_kind.sql` — the *widening* direction, which needs no data movement
@@ -627,6 +839,13 @@ asserts there is no digit on a candidate row that is not a block id.
 co-authorship COI checks and that is the obvious next step. It is also a different project, and
 Greg's own framing was *"see how far we can get in a stage or two"*.
 
+### 5. Hidden text — the check of the document's own source
+
+Not a model and not a question: the deterministic scan for text a reader would not see and a model
+would read, which has already run by the time the band opens. It became a sub-mode on 2026-10-07
+(§ The scan has its own chip); what it does, its five rules and where each is enforced are rule 5
+under § The rules the whole mode obeys.
+
 ## Every control says what it does
 
 > The new Referee mode is very confusing. Add lots of explanatory tooltips to buttons etc.
@@ -645,12 +864,12 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the four sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
+| the five sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts; Hidden text calls no model and does not check PDFs |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
 | the colour swatch, and *Automatic* | on a for/against criterion it colours the paragraph bar and the rail and **not** the marks; automatic is a hash of the criterion's id, and there are eight |
-| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine. Since 2026-09-06 the chip starts it too, so this card is no longer the *first* warning: `REFEREE_CANDIDATES_REACHES_SEARCH` is, above the chips and never behind the collapse |
+| Candidates' *Build the reviewer brief* button | an AI turn starts, it may take several provider requests, and it **may** run a web search — the only place in the mode that reaches a search engine. The chip opens the panel; the button starts the turn, with `REFEREE_CANDIDATES_REACHES_SEARCH` beside it |
 | Claims' tick, and *other text in quotes* | the passages are the model's pick and not a verified linkage; marks are off until asked for; and that list is **not** the claims the model missed |
 | Mirror's coverage row | it has nowhere to send you, which is the whole of what it is saying |
 | Mirror's jump button | the passage is where **you** anchored the comment — Mirror chose the remark and never the passage, and is not given the paper to pick one from |
@@ -723,10 +942,11 @@ cut-off answer and asserts the exact sentence and code each one ends with. Testi
 proved only that it branches: removing `"editable"` from Search's one call site, or adding it to a
 Referee caller, left the whole suite green until 2026-09-02.
 
-**What the cards are not.** They are not where a rule lives. Everything load-bearing is still visible
-text on the panel — `LINKAGE_NOT_ADEQUACY`, `WHAT_THE_TICK_DOES`, `DOCUMENT_ORDER_NOTE`, the
-evidence badge on every Mirror row, `COI_NOT_CHECKED` — and the cards sit on top of those rather than
-in place of them. [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
+**What the cards are not.** They are not where a rule lives. What is load-bearing beside results is
+still visible text on the panel — `DOCUMENT_ORDER_NOTE`, the evidence badge on every Mirror row,
+`COI_NOT_CHECKED` — and the cards sit on top of those rather than in place of them.
+(`LINKAGE_NOT_ADEQUACY` and `WHAT_THE_TICK_DOES` were on that list until 2026-10-03; they are
+behind *How to read this* now, on Greg's answer — § How to read a panel.) [`tests/referee-tooltips.test.tsx`](../../tests/referee-tooltips.test.tsx) pins
 that each control has a card, that the card is that control's, that a `title` attribute has not crept
 back, and the changed labels as literals.
 
@@ -759,57 +979,31 @@ that cannot be reached is not an explanation.
   and the Space alike.
 - **The rank numeral's card was hover-only and could not be otherwise.** The numeral is a `<span>`
   inside the jump button, so it takes no focus, and a `tabIndex` there would put a tab stop inside a
-  button. So the fact itself is now a **visible line above the list** — *the number is the model's
-  ordering of its own answers for that criterion, not a score* — printed once a run has returned
-  something, beside `WHAT_THE_TICK_DOES`. **And the card is gone**, 2026-09-02: once the line
-  existed the card said the same thing again to the one group that could already read it.
+  button. Its explanation and `WHAT_THE_TICK_DOES` are behind **How to read this**
+  (§ How to read a panel), a button that takes focus and a tap. The numeral carries no second
+  card: it would repeat the explanation for the one group that could already reach it.
 
 [`tests/referee-criteria-explained.test.tsx`](../../tests/referee-criteria-explained.test.tsx) holds
 both, including the part jsdom cannot demonstrate: it dispatches events to `disabled` elements
 happily, so the old spelling passed a "the card opens" test here and failed it in every browser.
 
-## The card that says what the mode is for
+## What the mode is for: the (i) in the corner
 
 The cards above answer *what does this control do*. They cannot answer *what is this mode*, because a
-card only opens on a control you already suspected. So there is one **"How Referee mode works"** card,
-under the sub-mode chips at the top of the panel:
-[`src/web/RefereeCard.tsx`](../../src/web/RefereeCard.tsx).
+card only opens on a control you already suspected. That answer is the band's (i), in the top-right
+corner like every other mode's: the mode's own two sentences from `MODE_CATALOG` — no accept or
+reject, no score, no grade — and then *What the colours mean*, stated as the *shape* of the rule
+rather than as red and green, since `?refscale=br` paints the same two directions blue and red
+(`RefereeAbout` in [`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)).
 
-**Two short paragraphs.** The refusal — *you are the referee; nothing here scores the paper or drafts
-your review* — and what the colours mean, which is stated as the *shape* of the rule rather than as
-red and green, since `?refscale=br` paints the same two directions blue and red.
-
-**It had a third part and it was cut**, 2026-09-02. A line each on the four sub-modes sat between
-those two, and it was an artefact of the order the work landed in: stage 2 had already put a
-`ControlTip` on each of the four chips directly above this card, so every one of those lines had a
-second copy that opens on the chip it is about. The card is kept short deliberately — *a card longer
-on screen than the panel underneath it has failed at the thing it is for* — and it was breaking its
-own rule. Measured in Chrome at 1280×900 on an article with no criteria: **409.5px** before,
-**203.1px** after, against a 269.9px empty-state Criteria composer underneath it.
-
-**It is in `.ref-panel`, not `.ref-brief`.** That matters more than it looks. `.ref-brief` holds the
-confidentiality notice and the injection scan, and neither of those may ever be dismissed — a
-closable card sitting beside a non-closable one invites closing the wrong one, and teaches a referee
-that the box above ought to close too. The card is in the scroller with the sub-mode, where
-everything is transient by construction.
-
-**Shut it and it stays shut; the header's *How this works* button brings it back.** One bit, in
-`localStorage`, and reopening clears it rather than opening the card for one mount — otherwise the
-button works once and the card is gone again on the next paper, which reads as the button not having
-worked. [`src/web/referee-card.ts`](../../src/web/referee-card.ts) is the store and the whole argument
-for it; [`tests/referee-how-card.test.tsx`](../../tests/referee-how-card.test.tsx) pins both
-directions and the case where the browser refuses to keep anything.
-
-**Why `localStorage` at all**, when `RefereeBand`'s own docstring used to say it was banned outright
-citing [url-state.md](url-state.md): that was the flat version of a real rule rather than the rule.
-View state — *how you are looking at an article* — goes in the URL because it has to survive a reload
-and travel when the address is pasted to somebody else. A per-device *"I have read this"* bit is
-neither: it is not about this article, and pasting it at somebody else would be pasting your own
-reading history at them. The install hint is the same kind of per-browser state. The alternative
-considered and dropped was a reader-profile column, which is a migration for a checkbox.
-
-**What the card is not** is a way to dismiss the confidentiality notice. That notice collapses, is
-never dismissed, remembers nothing, and starts shut on every visit — see § Confidentiality below.
+**It was a card inside the band from 2026-09-02 to 2026-10-03**, open by default above the first
+control until shut, with one bit in `localStorage` and a *How this works* button in the header to
+bring it back. It went when Greg met the mode as burying its actions (§ What the band looks like):
+at 1280 × 800 it was 237px of the 607px above the criterion box. Two things it taught are worth
+keeping. A line each on the four sub-modes was cut from it on 2026-09-02 because each repeated the
+chip's own hover card directly above — *a card longer on screen than the panel underneath it has
+failed at the thing it is for*. And what a referee is told to do first is now one line at the top
+of the panel, from that same hover card's first sentence, so there is still exactly one copy.
 
 ## The rules the whole mode obeys
 
@@ -856,13 +1050,18 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
    [`src/source-scan.ts`](../../src/source-scan.ts) → `scanRawSource`, over the document `loadSource`
    hands back — the **raw source**, never the extracted blocks, because extraction throws hidden
    text away with everything else it does not keep. The panel is
-   [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn by
-   [`RefereeBand`](../../src/web/modes/referee/RefereeMode.tsx) above the sub-mode chips rather than
-   as a fifth chip: rule
-   5 says *before anything else*, and a chip is one more thing a referee can fail to press. The band
+   [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), drawn as the **Hidden
+   text** sub-mode since 2026-10-07. Until then it was drawn above the sub-mode chips rather than
+   as a fifth chip, because rule 5 says *before anything else* and a chip is one more thing a
+   referee can fail to press; Greg asked for the chip, and the mark on it is what is left of
+   *before anything else* (§ The scan has its own chip). The band
    opens at once and the answer lands when it lands ([`useSourceScan`](../../src/web/useSourceScan.ts)),
    because a scan is hundreds of milliseconds on a short paper and about nine seconds on a 1.3 MB
-   one.
+   one. **The wait has an end**: after `SOURCE_SCAN_DEADLINE_MS` (a minute) the read is given up on
+   and aborted, and the notice says the check did not finish and that reloading runs it again —
+   `[rd-scan-timeout]`, `SCAN_TIMED_OUT` in [`src/messages.ts`](../../src/messages.ts). Until
+   2026-10-04 a request that never answered said *Checking…* for ever. There is still no retry in
+   place, for the reason the hook's header gives. `tests/source-scan-read-has-a-deadline.test.tsx`.
 
    **Five rules, and each is code rather than an intention.** A PDF says *not checked* and can never
    say *nothing found* — the `switch` on `examined` is exhaustive and that arm has no `findings` to
@@ -914,7 +1113,7 @@ Each is meant to be a test rather than an intention, whichever sub-mode eventual
 ## Confidentiality: exact, and unflinching about the tense
 
 By the time a reader reaches Referee mode, the article's text has already gone to a third-party
-model provider — `DEFAULT_INGEST_STEPS` runs extraction, structure and gists at ingest
+model provider — `DEFAULT_INGEST_STEPS` runs extraction and structure at ingest
 ([`src/pipeline.ts`](../../src/pipeline.ts)), and a PDF is read by a model before it is anything
 else. The first draft of this plan put a notice about that fact *inside* Referee mode, phrased as
 something still to decide. The cross-family review called that the single most serious finding in
@@ -943,12 +1142,14 @@ So there are three sentences, in three places, and the **tense is the whole poin
 - **Past tense, inside Referee mode itself** — `REFEREE_TEXT_ALREADY_SENT`
   (`src/messages.ts`), shown by `RefereeBand`
   ([`src/web/modes/referee/RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx)), and
-  **collapsed since 2026-09-02** at Greg's asking. The *fact* is the label on the control —
-  `REFEREE_TEXT_ALREADY_SENT_SHORT`, which is the long sentence's own opening clause — so shutting
-  the box hides the venues and the audience, never that the text has gone; and `noticeOpen` is a
-  `useState` that remembers nothing, so every visit starts shut. That is the difference between a
-  collapse and a dismissal, and it is why the storage objection below does not apply: there is
-  nothing to store. It does
+  **behind the band's Notices button since 2026-10-03** (§ What the band looks like). From
+  2026-09-02 until then it was a collapse of its own whose label was the fact itself, so that
+  shutting the box hid the venues and the audience and never that the text had gone; that
+  one-line fact is no longer on screen while Notices is shut, which is an open question for Greg
+  in [261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md).
+  What survives is that nothing is remembered, so every visit starts the same way. That is the
+  difference between a collapse and a dismissal, and it is why the storage objection below does
+  not apply: there is nothing to store. It does
   not pretend a choice is still open: this article's text has already been sent, that happened when
   it was added, and here is what NIH, NSF, Elsevier, Springer Nature, Wiley, NeurIPS and ICLR all say
   about that as a confidentiality breach in itself, separate from who writes the review. It names
@@ -974,23 +1175,19 @@ chips started below the fold, `.ref-panel` was **0px tall with 321px of content 
 nothing clipped — Criteria, Claims, Mirror and Candidates were all simply unreachable, on any window
 shorter than about 1400px. Every test was green throughout, because jsdom has no layout engine.
 
-The fix is a `.ref-brief` wrapper around the notice and the scan, capped at 40% of the band with its
-own scroll, and a `min-height` floor under `.ref-panel` so it is no longer the one child flexbox is
-willing to squeeze — [`src/web/styles/referee.css`](../../src/web/styles/referee.css) § *referee mode* carries the
-measurements and the two fixes that were passed over. A referee still meets the whole
-confidentiality notice without scrolling at 1280 × 720; below the notice, the scan is one scroll
-away behind a trailing fade, and the panel keeps 294px. Verified across four sub-modes at seven
-viewport sizes from 1280 × 1400 down to 390 × 560 and 900 × 337.
+The original fix was a `.ref-brief` wrapper around the notice and scan, capped at 40% of the band
+with its own scroll, and a `min-height` floor under `.ref-panel`. Since 2026-10-07 `.ref-brief`
+contains only the confidentiality notice and the scan uses the panel's own scroller. The cap and
+floor remain the pair that keeps an opened notice from squeezing the selected panel away —
+[`src/web/styles/referee.css`](../../src/web/styles/referee.css) § *referee mode*.
 
 [`tests/referee-band-fits.test.ts`](../../tests/referee-band-fits.test.ts) holds the half a test can
 reach: the rules exist and say the right thing, and the markup they are aimed at still puts the
-notice and the scan inside the wrapper and the chips and the panel outside it. It is explicit that
+notice inside the wrapper, the scan outside it, and the chips and panel outside it. It is explicit that
 it cannot measure anything, and why a test that tried would have passed before the fix.
 
-**Both boxes collapse now** — 2026-09-02, and it is a product change rather than a second layout
-fix. The ordinary first screen of the preamble is two lines, so the cap and its trailing fade are
-what hold the *open* case rather than the every-visit one; the measurements above are of that open
-case and are still the ones to design against.
+**Both disclosures collapse**: Notices only on a press, Hidden text open by default only for a
+finding. That is a product choice rather than the layout fix above.
 
 ## What the evidence actually says, and where the plan overstated it
 
@@ -1080,7 +1277,7 @@ referee copy has to be written around:
 
 **The line between this and the general page.** A referee is a deep reader with a deadline and a
 form to fill in. Everything on the general page is true for them; what the referee page adds is the
-four sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
+five sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
 for you.
 
 ## See also
@@ -1094,7 +1291,7 @@ for you.
 - [260831e-helping-peer-reviewers/](../research/260831e-helping-peer-reviewers/README.md) — the
   research behind both: what journals and funders will let AI touch, the prior art and its cognitive
   offloading evidence, and the editor's side of the desk.
-- [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the four sub-modes, named once.
+- [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the five sub-modes, named once.
 - [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
   [`src/referee-claims.ts`](../../src/referee-claims.ts),
   [`src/referee-candidates.ts`](../../src/referee-candidates.ts) — the four model-facing modules.
@@ -1106,7 +1303,7 @@ for you.
 - [`src/messages.ts`](../../src/messages.ts) § *referee* — the confidentiality copy, in full, with
   the reasoning for the tense written beside it.
 - [search.md](search.md) — the machinery Criteria is built on.
-- [remember-mode.md](remember-mode.md) — the other reader-authored mode, and the reason this one is
+- [learn-mode.md](learn-mode.md) — the other reader-authored mode, and the reason this one is
   not named after it.
 - [colour-scales.md](colour-scales.md) — the diverging scales Criteria's valence uses.
 - [block-ids.md](block-ids.md) — the anchoring contract every row in every sub-mode is required to

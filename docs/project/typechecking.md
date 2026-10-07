@@ -2,6 +2,17 @@
 
 Up: [code-quality-overview.md](code-quality-overview.md)
 
+## In this doc
+
+- [§ Why this file exists](#why-this-file-exists) — the typecheck that exited 0 over zero files
+- [§ The layout: one base of options, four projects](#the-layout-one-base-of-options-four-projects) — which tsconfig owns which directory, and why `tsc -p tsconfig.json` is not "the typecheck"
+- [§ A guard you rely on, that only this gate can enforce](#a-guard-you-rely-on-that-only-this-gate-can-enforce) — type-level guards, `@ts-expect-error`, and why `npm test` cannot see them
+- [§ The `@/` alias, and where it may live](#the-alias-and-where-it-may-live) — adding an alias or a shadcn component
+- [§ The flags, and why](#the-flags-and-why) — what each strict flag is for, and the one left off
+- [§ The two guards in `npm run typecheck`](#the-two-guards-in-npm-run-typecheck) — empty-project and unowned-file checks
+- [§ Four ways to report it clean while it is red](#four-ways-to-report-it-clean-while-it-is-red) — piped output, edits after the run, other agents' files, a narrower `tsc`
+- [§ Where this fits](#where-this-fits) — neighbouring docs
+
 ```bash
 npm run typecheck             # every project, plus the checks that the checking happened
 npm run typecheck:committed   # ...but against what is in git, which is what the build reads
@@ -32,14 +43,15 @@ not:
 That is [silent-success](../reusable/silent-success.md) aimed squarely at the tool we use to decide
 whether the code is right. Everything below is built so it cannot happen again quietly.
 
-## The layout: one base of options, three projects
+## The layout: one base of options, four projects
 
 | File | What it is |
 |---|---|
 | [`tsconfig.base.json`](../../tsconfig.base.json) | compiler options, and **nothing else** |
-| [`tsconfig.json`](../../tsconfig.json) | the node side: `src/` minus `src/web`, plus `scripts/` and the two vite configs |
+| [`tsconfig.json`](../../tsconfig.json) | the node side: `src/` minus `src/web`, plus `scripts/`, `api/`, `evals/`, `tools/` (minus the fleet client) and the vite configs |
 | [`src/web/tsconfig.json`](../../src/web/tsconfig.json) | the browser client — see [web-client.md](web-client.md) |
-| [`tests/tsconfig.json`](../../tests/tsconfig.json) | the tests, which reach into both of the others |
+| [`tools/fleet/web/tsconfig.json`](../../tools/fleet/web/tsconfig.json) | the fleet dashboard's browser client — the same shape as the one above, split out because the node project rejected it on sight |
+| [`tests/tsconfig.json`](../../tests/tsconfig.json) | the tests, which reach into the others |
 
 The base carries no `include`, `exclude` or `files`, and must never grow one. That is the whole
 lesson of `fde38bb`: those three keys are inherited through `extends`, so a file list written for
@@ -51,15 +63,15 @@ which is belt-and-braces — it neutralises an inherited exclusion if one ever r
 
 **So `npx tsc --noEmit -p tsconfig.json` is not "the typecheck", and reaching for it is a trap with
 no error message.** That project is the node side only: a test file is not in it, and neither is
-`src/web`. Run `npm run typecheck`, which runs all three and then checks that every `.ts`/`.tsx` in
+`src/web`. Run `npm run typecheck`, which runs every project and then checks that every `.ts`/`.tsx` in
 the repo was resolved by one of them. The way this bites is a **type-level assertion in a test** —
 a `Record<Derived, …>` written to make a missing case fail the build. Mutate the code it guards,
 run the wrong project, get a clean exit, and conclude the assertion does not work. It does; you did
 not run it. 2026-08-30, on `tests/messages.test.ts`.
 
-### Why three, and not one
+### Why several, and not one
 
-They genuinely differ, and the differences are the kind that catch bugs:
+(The fleet client is the browser client's twin, so the three differences are the whole story.) They genuinely differ, and the differences are the kind that catch bugs:
 
 - **The node side uses `nodenext` module resolution**, because that is literally how those files run
   — `tsx`, node ESM. Under the `Bundler` resolution it had before, `import { x } from "./ids"` with
@@ -183,6 +195,17 @@ thing it is guarding, not a copy of it.* An assertion whose premise is written i
 test seam whose default is a stub, are the same failure — an instrument disconnected from its
 subject.
 
+**Measured on one guard, 2026-09-08: GPT Sol broke it three review rounds running, seven bypasses in
+all, and every one was a single edit that moved the guard's subject and its definition of "correct"
+together.** "The type mentions `EXPECTED` somewhere" passed a `string |` member. "The `satisfies`
+target is spelled `readonly Expected[]`" passed once the interface was widened instead. "This one
+literal is not assignable" passed once the alias in between was widened. `string extends keyof T`
+missed a `` `w${string}` `` pattern index, which is narrower. Two degenerate cases sit under all of
+them: `any` compares equal to everything, and a widened source widens both halves of a comparison
+derived from it. Asking the compiler was not, by itself, the stronger question: a sampled literal
+and an enumerated mechanism were both checks on a spelling. And a false `as` assertion cannot be
+disproved from inside the type system at all, while it is trivially found as text.
+
 ### The `@/` alias, and where it may live
 
 shadcn generates its imports as `@/lib/utils`, so the alias had to exist before any component landed
@@ -299,7 +322,7 @@ with no `node_modules` at all, and one whose `tsc` was present but unexecutable.
 All four happened. None is a flaw in the gate — the gate said the right thing every time.
 
 **Filtering the summary away from the names.** `npm run typecheck 2>&1 | grep -E "^✓|^✗"` looks like
-a reasonable way to see the three results at a glance. It is not: the per-error lines are **indented**
+a reasonable way to see the results at a glance. It is not: the per-error lines are **indented**
 under the `✗`, so that filter prints `✗ tests/tsconfig.json (607 files, 2 errors)` and drops every
 file name beneath it. A count is not a diagnosis, and "2 errors, and I know which ones" is a sentence
 that gets shorter as you say it. Read the whole output, or grep for `error TS` **as well** as the
@@ -384,7 +407,7 @@ different things went wrong.
 **It was a four-step manual recipe here until 2026-08-31, and that was not enough.** The recipe was
 right, it was written down, it had a worked example — and `HEAD` broke again the same way, because at
 midnight the four-step check is the one you skip and `npm run typecheck` is one word. It is in
-`npm run check` now, as an advisory until `HEAD` is green.
+`npm run check` now, as a gate (since 2026-09-03; `scripts/check.ts` has `committed` as `gate: true`).
 
 Expect to iterate: on `1ace072` the first round of fixes surfaced three more errors in test files that
 also had to come along. And the inverse is worth knowing before you panic — a **red** suite in this

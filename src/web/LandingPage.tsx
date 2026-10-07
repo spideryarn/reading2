@@ -77,6 +77,7 @@
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { WebsitePlans } from "./PlanCards.js";
 import { PublicShowcase } from "./PublicShowcase.js";
 import { FEATURES_HREF, PRICING_HREF, loginHref } from "./router.js";
@@ -96,6 +97,8 @@ import {
 
 export function LandingPage() {
   useDocumentTitle(pageTitle({ kind: "landing" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
   /* **The address this page is standing on**, which is not always `/`: App.tsx
      draws it for an unshared `/read/<slug>`, `/add/…`, `/profile` and the rest,
      and that is where the reader should land after signing in. `loginHref`
@@ -142,7 +145,7 @@ export function LandingPage() {
 
           {/* The one picture above the fold. It arrives tilted and straightens
               as you scroll into it — a screenshot of a reading product held at
-              an angle is arguing against itself (styles.css § the tilt). */}
+              an angle is arguing against itself (site.css § the tilt). */}
           <div className="site-tilt-stage tw:mt-14 tw:sm:mt-16">
             <div className="site-tilt">
               <Frame shot={SHOTS.structure} hero />
@@ -254,14 +257,14 @@ export function LandingPage() {
               of up to MAX_QUESTIONS = 20 that build on one another (src/quiz.ts,
               Greg 2026-09-29) rather than a dozen sorted easy-first,
               central-first; only that sentence changed. */}
-          <Tile name="Find out what you kept." mode="remember">
+          <Tile name="Find out what you kept." mode="learn">
             Say what you took from the piece and hear, plainly and concisely, where it diverges from
             the text. Or take up to twenty short questions, each building on the one before.
           </Tile>
           {/* Greg, 2026-08-26, the summary request; 2026-09-30, the plain-words
               levels; 2026-10-01, the outline removed (plan 261001p). */}
           <Tile name="Summary." mode="summary">
-            The piece in plain words — brief, simple or a little fuller — each paragraph linked to the
+            The piece in plain words — brief or a little fuller — each paragraph linked to the
             passages it rests on, beside the prose, never instead of it.
           </Tile>
           {/* Greg, 2026-08-31, the timeline request; docs/project/timeline.md. */}

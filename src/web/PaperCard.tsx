@@ -29,14 +29,29 @@
  */
 import type { LibraryEntry } from "../types.js";
 import { exactly } from "./relative-time.js";
-import { SHARING_MARK_ON_ARCHIVED, SHARING_ON } from "../messages.js";
+import { PRIVATE_LINK_HEADING, SHARING_MARK_ON_ARCHIVED, SHARING_OFF_WITH_LINK, SHARING_ON } from "../messages.js";
 import { NOT_PROCESSED_MARK } from "./ShelfEntry.js";
 import { TopicDot } from "./ShelfTermChip.js";
+import { type Voice, voiceClass } from "./voice.js";
 
 /** A shelf topic as the card names it: its words, and its hue-ring stop. */
 export interface PaperTopic {
+  /** The topic's set-unique URL key. Older callers may omit it. */
+  key?: string;
   label: string;
   slot: number;
+  /**
+   * Whose words the label is, when they are not ours: `"ai"` for a topic a
+   * model named (plan 261003f). Absent for a phrase the articles use, which
+   * is nobody's sentence and stays in the UI face (fonts.md).
+   */
+  voice?: Voice;
+  /**
+   * A topic inside a broader subject (`granularity > 0`). The pills on a shelf
+   * card mark it with the Topics row's `›` (ShelfRowTopics.tsx); this card's
+   * list does not.
+   */
+  finer?: boolean;
 }
 
 /** How many topics the card names before it says how many more. */
@@ -90,6 +105,8 @@ export function paperCardFacts(entry: LibraryEntry, topics: readonly PaperTopic[
       label: "Shared",
       value: entry.archivedAt ? SHARING_MARK_ON_ARCHIVED : SHARING_ON,
     });
+  } else if (entry.privateLinkOn === true) {
+    facts.push({ label: PRIVATE_LINK_HEADING, value: SHARING_OFF_WITH_LINK });
   }
 
   const byline = [entry.byline, entry.siteName].filter((s): s is string => Boolean(s?.trim())).join(" · ");
@@ -154,10 +171,11 @@ export function PaperCard({
             <dt>Topics</dt>
             <dd>
               <ul className="tip-topics">
-                {card.topics.map((t) => (
-                  <li key={t.label}>
+                {card.topics.map((t, i) => (
+                  /* Parallel branches may deliberately have the same label. */
+                  <li key={t.key ?? `${t.label}-${i}`}>
                     <TopicDot slot={t.slot} className="tw:size-1.5" />
-                    {t.label}
+                    {t.voice ? <span className={voiceClass(t.voice)}>{t.label}</span> : t.label}
                   </li>
                 ))}
                 {card.moreTopics > 0 && <li className="tip-more">+{card.moreTopics} more</li>}

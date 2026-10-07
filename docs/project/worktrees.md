@@ -13,6 +13,24 @@ The design, the measurements and everything that was considered and rejected are
 [260828r-worktrees.md](../plans/260828r-worktrees.md). **This doc is the operational half**: what is
 true today, what was decided, and the two runbooks — both now run.
 
+## In this doc
+
+- [§ Where this stands](#where-this-stands) — which script or hook does what; what is still unbuilt
+- [§ Starting one](#starting-one) — the four commands; where the tree lands on the box; resuming a named tree; why a subagent loses its shell
+- [§ Why a worktree branches from HEAD, then merges the remote](#why-a-worktree-branches-from-head-and-then-merges-the-remote) — what `worktree:setup` merges, and why not `baseRef: "fresh"`
+- [§ What a worktree costs](#what-a-worktree-costs-measured-rather-than-assumed) — setup time, disk, and which test files are red on a fresh tree
+- [§ What Greg decided, 2026-09-01](#what-greg-decided-2026-09-01) — push straight to `dev`, shared Supabase, design for more than ten
+- [§ The workflow](#the-workflow) — merge `origin/dev`, push `HEAD:dev`, three-dot diffs
+- [§ Removing one](#removing-one) — `npm run worktree:remove`, what it proves, what it cannot
+- [§ Before you remove one](#before-you-remove-one) — `worktree:check`, each blocker, the `.gitignore` rule, `.env.local — DIFFERS`
+- [§ `ExitWorktree` refuses](#exitworktree-refuses-for-two-reasons-that-are-not-about-your-work) — the two scary-looking refusals
+- [§ Sweeping them up](#sweeping-them-up) — `worktree:sweep` from the primary; ghosts
+- [§ The database: one stack, and a lease](#the-database-one-stack-and-a-lease) — the unbuilt lease; why not a stack or a schema per worktree; the `busy` job-cap trap
+- [§ Ports and the ceiling](#ports-and-the-ceiling) — the 5273–5303 range, the port warning, "whose server is this?"
+- [§ Runbook A](#runbook-a-flip-the-trunk-to-dev-done-2026-09-02) — flipping the trunk to `dev`, and what `deploy` refuses (history)
+- [§ Runbook B](#runbook-b-the-mac-done-2026-09-01) — the Mac move out of Dropbox (history)
+- [§ Traps](#traps) — empty `data/`, two-dot diffs, scanners walking into worktrees, timing numbers
+
 ## Where this stands
 
 **`claude --worktree <name>` plus `npm run worktree:setup` works end to end**, including sign-in.
@@ -35,12 +53,16 @@ What is built:
 | [`vite.config.ts`](../../vite.config.ts) | `server.watch.ignored` gains `**/.claude/worktrees/**`, so a peer's keystrokes do not reload your page. Plus a startup warning when the port is not allow-listed — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts) | The range, `PRIMARY_PORT`, `portInRange`, `parseDevPortEnv` and `allowListedPorts`. **No allocator**: Greg redirected the design to dynamic allocation on 2026-09-01, and the reservation, its tests and an export added to `lockfile.ts` for it were deleted — see [Ports and the ceiling](#ports-and-the-ceiling). |
 | [`supabase/config.toml`](../../supabase/config.toml) | `additional_redirect_urls` covers **5273–5303**, matching `DEV_PORT_RANGE` exactly, so sign-in works on whichever port a worktree lands on. GoTrue bakes the list in at start, so editing it needs a Supabase restart. |
-| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-setup.ts`](../../scripts/worktree-setup.ts) | `npm run worktree:setup`, run **inside** a worktree. Merges `origin/dev`, installs dependencies, materialises the corpus, builds what the test suite reads ([`worktree-builds.ts`](../../scripts/worktree-builds.ts)), and says what is still missing. **Refuses in the primary**, because it runs `npm ci` — see below. |
+| [`scripts/worktree-setup-bootstrap.mjs`](../../scripts/worktree-setup-bootstrap.mjs) | Where `npm run worktree:setup` actually starts, and **plain Node on purpose**: the script above needs `tsx` and a package, and a new tree on `/var/tmp` has no `node_modules` of its own nor an ancestor's to borrow, so until 2026-10-05 the command that installs dependencies failed with `tsx: not found` for want of them. With no finished install it runs `npm ci` first — **only in a linked worktree, never the primary** — then hands over, and [`worktree-deps.ts`](../../scripts/worktree-deps.ts) lets setup skip its own install when the merge did not move the lockfile. Do not import a package into it. |
 | [`scripts/worktree-freshen.ts`](../../scripts/worktree-freshen.ts) | The merge, on its own: fetch `origin/dev` and merge it into the worktree's branch, refusing over modified tracked files and stopping on a conflict. Why the merge rather than a different `baseRef` is [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
 | [`scripts/corpus-materialise.ts`](../../scripts/corpus-materialise.ts) | The corpus copy, extracted from `deploy.ts` so the gate and the setup script share one implementation rather than two that drift. |
-| [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
+| [`scripts/worktree-check.ts`](../../scripts/worktree-check.ts) | `npm run worktree:check`, run **inside** a worktree — or from the primary as `npm run worktree:check -- --root <tree>`, which refuses anything but the top of one of this repository's work trees: **is it safe to delete this directory?** Reads only. Fails closed on every unknown, and the part no other signal covers is the gitignored one — it compares `data/` and `output/` against the committed fixture corpus file by file, so a pipeline run nobody committed shows up as a blocker rather than as silence. See [Before you remove one](#before-you-remove-one). |
 | [`.claude/hooks/primary-checkout-notice.sh`](../../.claude/hooks/primary-checkout-notice.sh) | `SessionStart` hook: in the primary it prints one line telling the agent to call `EnterWorktree` before editing code; in a worktree it says nothing. A nudge, not a refusal — Greg, 2026-09-02: a SessionStart print, "but not a hard refusal". |
 | [`.claude/settings.json`](../../.claude/settings.json) | `worktree.baseRef: "head"` — worktrees branch from the primary's local `HEAD`, not from the remote, and `worktree:setup` then merges `origin/dev` on top. See [below](#why-a-worktree-branches-from-head-and-then-merges-the-remote). |
+
+The tests for all of it are `tests/worktree-*.test.ts` (admin, builds, check, freshen, inuse, port,
+remove, roots, setup-bootstrap, sweep).
 
 Still to build: an identity endpoint —
 [the plan's work list](../plans/260828r-worktrees.md#what-is-left-to-do). The auth allow-list is
@@ -75,11 +97,95 @@ schema; the advisory lock serialises the writers and cannot do anything about th
 ## Starting one
 
 ```bash
-claude --worktree my-thing      # creates .claude/worktrees/my-thing, branch worktree-my-thing
-npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store
+claude --worktree my-thing      # creates the worktree (on the box: /var/tmp/spideryarn-worktrees/my-thing), branch worktree-my-thing
+npm run worktree:setup         # inside it: merge origin/dev, dependencies, the article store, the builds the tests read
 npm test                        # expect a handful red, about what the primary has at the same moment
 npm run dev                     # walks up from 5273; warns if the port is not allow-listed
 ```
+
+### Where a worktree's bytes live
+
+**On the box a new worktree is at `/var/tmp/spideryarn-worktrees/<name>`, not under
+`.claude/worktrees/`.** `EnterWorktree({name})` and `claude --worktree <name>` both put it there, with
+no question asked. Nothing else about a worktree changes — the branch is still `worktree-<name>`, and
+setup, check and remove are the same commands. On Greg's Mac, where that directory does not exist, a
+worktree is in `.claude/worktrees/<name>` as it always was.
+
+Why: `/home` on the box is a separate 49 GB disk and a worktree is about 1.2 GB, most of it
+`node_modules`. It filled to 100% on 2026-10-05, which broke peers' commits, while `/` had 70 GB free.
+A tree made by hand on `/` works, but `EnterWorktree({path})` then stops to ask about a
+"model-supplied worktree outside .claude/worktrees/", and Claude Code's documentation says no
+permission rule silences that. Greg, 2026-10-05:
+
+> Yes, worktrees are allowed to enter outside .claude/worktrees/ - don't ask me, please allow that
+> path for me.
+
+How: two hooks in [`.claude/settings.json`](../../.claude/settings.json).
+
+- **[`worktree-create.sh`](../../.claude/hooks/worktree-create.sh)**, on `WorktreeCreate`. A path
+  that comes from this hook is not model-supplied, so Claude Code enters it without asking. The hook
+  *replaces* Claude Code's own creation, so it does everything the default did: the branch from the
+  primary's `HEAD`, the `.worktreeinclude` copy, and the `claude session <name> (pid … start …)` lock
+  that `worktree-inuse.ts` reads (on the box; with no `/proc`, as on the Mac, there is no lock). A
+  name that already has a tree — in `.claude/worktrees/` first,
+  then on `/` — is resumed, not recreated, exactly as before.
+- **[`worktree-remove.sh`](../../.claude/hooks/worktree-remove.sh)**, on `WorktreeRemove`. With a
+  create hook in place Claude Code leaves removal to this one, and it hands the tree to
+  `npm run worktree:remove`. So `ExitWorktree({action: "remove"})` now passes through every guard in
+  [Removing one](#removing-one), `discard_changes: true` included; when the guards refuse, the tool
+  says "could not remove it — kept at …" and the tree is intact. Claude Code cannot inspect a tree it
+  did not make, so the first call always answers *"Could not verify worktree state … Re-invoke with
+  discard_changes: true"*; the second call is the one that reaches the guards, and here that flag
+  discards nothing they would keep. (On the Mac, where
+  `worktree:remove` refuses every tree that exists for want of `/proc`, the hook falls back to git's
+  own unforced remove.)
+
+Four things worth knowing before you change any of it, each measured on 2026-10-05 against
+Claude Code 2.1.289:
+
+- **A symlink at `.claude/worktrees/<name>` pointing at the real tree does not work.** It was the
+  first design. Claude Code refuses it by name: *"… is a symlink. A repository-committed symlink
+  below the checkout root could redirect the worktree outside the repository. Remove the symlink (or
+  emit a path outside the repository) and retry."* The bracket in that message is the design here.
+- **`.worktreeinclude` is read by the hook now, not by Claude Code**, and the hook understands only
+  plain root-level names — `.env.local`, `.env`. A pattern with a `/` or a glob makes every
+  `EnterWorktree` fail with a message naming the line, rather than making trees with no environment.
+- **`/var/tmp`, not `/tmp`.** `/tmp` is aged out after 30 days on the box and would delete the
+  unread half of a live tree's `node_modules`; `/var/tmp` has no such rule.
+- **It is the disposable disk.** A rebuilt server has an empty `/var/tmp`, and
+  [`provision.sh`](../../infra/hetzner/provision.sh) makes the directory again. Unpushed work in a
+  worktree does not survive a rebuild — which was already the rule for work that matters.
+
+`EnterWorktree({path})` on a tree outside `.claude/worktrees/` still asks; use the name. The six
+trees made by hand under `/var/tmp/spideryarn-worktrees/` that afternoon are reachable that way.
+`SPIDERYARN_WORKTREE_ROOT` moves the directory, and exists for the hook's own tests.
+
+**One list of where a worktree may be: [`scripts/worktree-roots.ts`](../../scripts/worktree-roots.ts).**
+The move left six pieces of code each still recognising a worktree by `.claude/worktrees/` in its
+path, and each wrong in its own quiet way about a tree on `/`: the fleet dashboard refused to remove
+it, the recovery view called its directory "not recorded", its row showed no worktree name, the
+readiness scan never read its logs, and `claude-accounts` took it for the primary. All were fixed on
+2026-10-05 ([the plan](../plans/261005l-worktree-tooling-learns-the-var-tmp-root.md)). **Anything
+new that asks "is this a worktree, and which?" asks that file** — or asks git, which is what tells
+you *whose* worktree it is: a path under the external root has the right shape whatever repository
+it belongs to. That is why the dashboard's removal plan now begins with `git worktree list`, and
+why a third location is one edit there and one in the hook (a test holds the two defaults level).
+
+**The dashboard's removal runs the primary's copy of both scripts.** Its third step was
+`npm run worktree:check` inside the tree, which needs the tree's own dependencies; a tree on `/`
+that was never set up has none and nothing to borrow, so the plan stopped there with
+`tsx: not found`. It is now the primary's `tsx` running the primary's
+`scripts/worktree-check.ts --root <tree>`, the shape the fourth step already had
+([the plan](../plans/261005n-worktree-check-takes-a-root-and-the-readiness-runner-follows-the-var-tmp-root.md);
+measured 2026-10-05 on a real tree under `/var/tmp` with no `node_modules`).
+
+**Not followed: the readiness loop's runner.** `scripts/readiness-loop.ts` still makes its own
+worktree under `.claude/worktrees/`, on `/home`. One tree, and nothing is wrong with it but the disk
+it is on. **Changing the constant is not the fix**, and the plan above says why in full: the tree
+that exists has the `readiness-checks` branch checked out, so a second one at a new path cannot be
+added; the loop sets a new tree up with `npx tsx scripts/worktree-setup.ts`, which is the command
+that fails in a tree with no `node_modules` above it; and the loop reuses whatever is at its path
+without asking which branch it is on. Move it deliberately, with the loop stopped.
 
 ### Two things about `EnterWorktree` that have each cost an agent an hour
 
@@ -89,6 +195,12 @@ session's uncommitted work. So a task briefed as unstarted may be most of the wa
 branch may already be several commits along. **Look before you begin**: `git log --oneline
 origin/dev..HEAD` and `git status` in the tree, not `git log origin/dev`, which is where somebody
 checks, sees nothing, and starts again from scratch on top of a half-finished job.
+If there is work there, neither trust it nor throw it away: read it and check its claims
+yourself, by breaking each fix and watching its test go red. On 2026-09-05 that took twenty
+minutes for three inherited stages, and they were sound. And look before you enter, too: "I
+grepped `dev` and it isn't done" does not mean nobody has done it, because uncommitted work in a
+worktree is invisible to `origin/dev` and to the primary. With a dozen agents in their own trees,
+check `git worktree list` for one on the topic before assuming a clean start.
 
 **A subagent spawned before `EnterWorktree` loses its shell.** Bash inside a worktree-isolated
 session refuses any command it cannot statically prove stays inside the tree — a pipeline whose
@@ -208,9 +320,22 @@ and `tests/pdf-bundle-trace.test.ts` both say out loud rather than skipping. The
 re-measured, so the 95 above is still the 2026-09-01 figure and the two numbers are no longer a pair.
 **And a second cause since** (seen 2026-09-29, not counted): the fleet tests that read the built
 dashboard client — `fleet-composed-access`, `fleet-decisions-route`, `fleet-reports-route` — are red
-until `npm run build:fleet` runs, and say so. `worktree:setup` now names both builds rather than a
-count, and the deploy gate runs the ordinary `build` plus the extra `build:fleet` entry in
-`GATE_TOOLING_BUILDS` (`scripts/deploy-checks.ts`).
+until `npm run build:fleet` runs, and say so.
+**Since 2026-10-06 `worktree:setup` runs both builds itself**, so successful builds remove the
+missing-output failures from those five files. Every session had been reporting the same five, and
+noise that size hides a real red. It costs
+about 19 s and 16 MB (measured at load 17: `build` 16.5 s, `build:fleet` 2.7 s). The list is
+`SUITE_BUILDS` (`scripts/deploy-checks.ts`): `build` followed by `GATE_TOOLING_BUILDS`, the extra
+builds the deploy gate and `npm run check` also run. A build that fails is printed as `FAIL` and
+setup carries on, so a broken trunk still gives you a tree
+to fix it in. **The output is only as new as that build**: a bare `npm test` does not rebuild, and
+`npm run check` does. The five files still fail with no build —
+[the plan](../plans/261006g-fresh-worktree-builds-once-so-five-reds-stop.md) has the run that shows it.
+The line vitest reports for the fleet ones is `process.exit unexpectedly called with "2"`, with a
+stack into `tools/fleet/server.ts`, which reads as a wiring failure; the sentence naming the build
+is on stderr above it (2026-09-09, in a docs-only diff). A third red in a loaded full run is no
+missing build at all: `tests/fetch.test.ts` holds a wall-clock budget of 400 ms, measured at about
+478 ms under load ~40 on 2026-09-08, and passes alone.
 The suite has grown 477 → 786 files in six days, which is why a bare count ages badly; what did not
 change is that `worktree:setup` is the difference between a suite that runs and one that cannot
 collect.
@@ -263,13 +388,41 @@ landed, not against the file.
 ```bash
 # from a worktree, when a piece of work is done
 git fetch origin dev
-git merge origin/dev           # NOT rebase — see below
+git merge origin/dev           # NOT rebase — see below. Commit your own edits first
 npm test && npm run typecheck
 git push origin HEAD:dev       # commits land on dev; no worktree-* ref on origin
 
 # and to see just your own branch's changes — for a review, or a scoped diff:
 git diff origin/dev...HEAD     # THREE dots. Two is a trap; see below.
 ```
+
+**Merge `origin/dev` when you wake up as well, not only when the work is done.** A session resuming
+from a cron, a long wait, a compaction or a `--resume` fetches and merges before it does anything
+else.
+
+> when you wake up, pull the latest changes to avoid a big merge conflict at the
+> end
+>
+> — Greg, 2026-09-06
+
+That day a change sat in a worktree for about two hours, and `dev` moved three times during the
+push sequence itself: the merges brought in 64, then 11, then 84 files, each one after the tests
+had run, and each forcing another run. Merged early, the same changes are an ordinary integration,
+and a conflict arrives while there is still time to think about it. Run the affected tests again
+after the merge.
+
+In the shared primary, look first: if `git rev-list --left-right --count HEAD...origin/dev` shows
+nothing local-only, `git merge --ff-only origin/dev` moves the branch without a merge commit and
+without touching what other agents have uncommitted there.
+
+**In your own worktree, commit before every merge.** A merge refused over modified tracked files
+has once left them at `HEAD`. The shared primary is the exception just described: commit your own
+files there, never a peer's unfinished ones, and take the fast-forward — [version-control.md § Always merge, never rebase](version-control.md#always-merge-never-rebase).
+
+**Do not wait for a green full suite on a busy trunk.** Each merge of `dev` can bring a different
+session's breakage: three merges in one afternoon on 2026-09-08 met three unrelated reds, each
+fixed upstream within the hour by the session that caused it. Show that your own files are
+disjoint from the failing ones, show that your own tests pass, and push.
 
 **Type the three dots.** `git diff origin/dev..HEAD` — two — is a live comparison against wherever
 `origin/dev` has got to, and it renders commits *other agents landed* as deletions your branch makes.
@@ -555,17 +708,16 @@ knowing because both read as alarming and neither means what it appears to.
   you resumed was locked by the session that made it, so its lock names a pid that is gone: the lock
   reads as stale, and you need what anybody needs — which, since 2026-09-12, involves no waiting.)
 
-And what `ExitWorktree` will not tell you: it removes gitignored files without a prompt, and it counts
+And what `ExitWorktree` would not tell you, until 2026-10-05: it removed gitignored files without a prompt, and it counted
 untracked ones in a single line ("Discarded 854 commits and 44 uncommitted files"). Those 44 were once
 somebody's *paid* eval results.
 
 **So `ExitWorktree` is for leaving a worktree, not for removing one** — `action: "keep"` to leave,
 and `npm run worktree:remove` to remove, before or after.
 
-`discard_changes: true` is the one path in this repo that bypasses every guard described here.
-Nothing can intercept it: it is Claude Code's own tool, and a wrapper that half-worked would be a
-guard whose failure looks like success. If you find yourself reaching for it, run
-`npm run worktree:remove` instead and read what it says.
+Since 2026-10-05 `discard_changes: true` no longer bypasses the guards: a WorktreeRemove hook hands
+the removal to `npm run worktree:remove`, which refuses as it always did. `npm run worktree:remove`
+is still the one to run, because it prints its reasons where you will read them.
 
 ### Sweeping them up
 
@@ -637,7 +789,9 @@ success is the absence of something.
 
 ## The database: one stack, and a lease
 
-The lease is one file lock, on [`scripts/lockfile.ts`](../../scripts/lockfile.ts), around the three
+**The lease below is the design, and is not built** (see "half built" at the top: only the migrator's
+advisory lock exists, and `db:reset` takes nothing). The lease would be one file lock, on
+[`scripts/lockfile.ts`](../../scripts/lockfile.ts), around the three
 things that write schema: `db:migrate`, `db:reset`, and any database-backed test run. Held for the
 whole run, not per statement. It isolates nothing — it only means two of those never overlap, so one
 agent's migration cannot land in the middle of another's suite.
@@ -646,9 +800,8 @@ agent's migration cannot land in the middle of another's suite.
 something each worktree holds alone, and you delete it once you trust that. The thing that varies is
 one `DATABASE_URL` either way.
 
-Two more pieces belong with it, and the plan is emphatic that policy alone is too quiet here: a
-`test:db` that **fails when the database is absent** (about a dozen Postgres suites currently skip
-themselves silently, so a misconfigured worktree reports green while testing nothing), and an
+Two more pieces belong with it (there is no `test:db` script; the migration-prefix guard is built in `scripts/db-generate.ts`), and the plan is
+emphatic that policy alone is too quiet here: a `test:db` that **fails when the database is absent** (the suite now refuses a missing database through its preflight and `pgReady`, rather than skipping silently), and an
 automated refusal on duplicate migration numbers — a lease stops two migrations running at once and
 does nothing about two branches independently minting `0044_`.
 
@@ -838,7 +991,9 @@ Half of this is worse than none, because each half hides the other's failure:
    *is this my tree*. `ss -ltnp | grep 527` names the owning pid, and `pgrep -af vite` shows which
    worktree's `node_modules` it was launched from. Worth doing at the start of any browser pass and
    again after anything heavy has run.
-2. ~~An **atomic port lease**~~ — **done as a persistent reservation, and nothing reads it yet.**
+2. ~~An **atomic port lease**~~ — **built, then deleted on 2026-09-01 (see the redesign above: there is
+   no allocator in `worktree-port.ts` now); what follows is the record of why it was not a lock.**
+   It was **done as a persistent reservation, and nothing read it.**
    [`scripts/worktree-port.ts`](../../scripts/worktree-port.ts), 27 tests. Not a hash: at ten worktrees
    in a 30-wide range that collides ~99.96% of the time. Not a scan-then-pick, whose failure is subtler
    (two setups starting together both see 5274 free and both take it) — the claim *is* the test, via
@@ -1074,7 +1229,14 @@ moment that flipped. Either spelling lands on `dev` today.
   over *when*: `refs/remotes/` lives in the common directory, so a **peer's** fetch moves `origin/dev`
   between two of your own commands while you sit still — and since 2026-09-02 every
   `npm run worktree:setup` fetches, so this now happens whenever anyone starts a worktree.
-- **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP` in
+- **A diff from a remembered fork point stops being yours once you merge the trunk.**
+  `git diff --name-only <fork-point> HEAD` then lists your changes plus everything the merge
+  brought in. On 2026-09-08 a session ran it to show a failing `tools/fleet` test could not be its
+  own and got fifty fleet files back, which reads as the opposite answer. Three dots against
+  `origin/dev` still works after a merge; for one commit,
+  `git show --name-only --format="" <commit>`. Whether a red is yours is whether the failing file,
+  or anything it imports, is in your commits.
+- **Every repo scanner walks into `.claude/worktrees/`** unless told not to — `SKIP_PATHS` in
   `scripts/typecheck.ts`, `watch.ignored` in `vite.config.ts`, then `check.ts`, knip, biome, jscpd.
   Without this the primary typechecks ten peers' half-finished trees.
 - **A `git worktree lock` held by a running session is not proof of activity.** A `SIGKILL`ed session

@@ -13,7 +13,7 @@ in the note,
 say"` becomes a `Tooltip` on the select (not the label: `Tooltip` describes its own child, and the
 select is what a screen reader lands on — review finding 4), listing the four stances in a line each. The wording comes
 from the prompt itself (`src/converse.ts` § RESPOND / SOCRATIC / SIGNPOSTS / BALANCED) and the table
-in [remember-mode.md § One adaptive voice, which replaced the four stances](../project/remember-mode.md#one-adaptive-voice), plus the one
+in [remember-mode.md § One adaptive voice, which replaced the four stances](../project/learn-mode.md#one-adaptive-voice), plus the one
 rule a reader could not guess: their own words beat the stance ("just tell me" is honoured on
 Socratic).
 

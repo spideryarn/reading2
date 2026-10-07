@@ -28,7 +28,8 @@
  */
 import { useEffect } from "react";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
-import { forgetSummaries } from "./link-facts.js";
+import { useMadeFor } from "./lib/made-for.js";
+import { profileSaved } from "./profile-saved.js";
 import { type AutosavedText, useAutosavedText } from "./useAutosavedText.js";
 
 const HEADERS = { "Content-Type": "application/json" };
@@ -39,18 +40,29 @@ const bodyFor = (text: string) => JSON.stringify({ profile: text === "" ? null :
  * profile panel (ProfilePanel.tsx), which edits the same string in place —
  * shared rather than copied, because a copy is a second place to forget
  * `forgetSummaries`.
+ *
+ * `madeFor` is the reader whose words these are (`useMadeFor`). **This write
+ * needs no shared slug to land on somebody else**: `/api/reader` is whoever
+ * the token says, so sent as another reader it replaces their description
+ * with this one. Named, it is not sent and this rejects (`NotThisReader` in
+ * lib/api.ts; docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2).
  */
-export async function saveProfile(text: string): Promise<string> {
+export async function saveProfile(text: string, madeFor: string | null = null): Promise<string> {
   const body = await readJson<{ profile: string | null }>(
-    await apiFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) }),
+    await apiFetch(
+      "/api/reader",
+      { method: "PATCH", headers: HEADERS, body: bodyFor(text) },
+      madeFor,
+    ),
   );
   /* **The link cards' summaries were written from this.** They are cached per
      tab in front of a server that compares a profile hash and would have
      noticed (src/web/link-facts.ts § `forgetSummaries`) — so without this, a
      reader who rewrites their description and goes back to an article gets the
      answers written for the old one, on a card where nothing looks wrong. GPT
-     Sol, 2026-09-05. */
-  forgetSummaries();
+     Sol, 2026-09-05. `profileSaved` forgets them, and tells the command bar
+     its list from why you are reading is old (src/web/profile-saved.ts). */
+  profileSaved();
   return body.profile ?? "";
 }
 
@@ -59,15 +71,40 @@ export async function saveProfile(text: string): Promise<string> {
    be killed inside that await — no error, no request in the network tab, just a
    lost sentence. `leavingFetch` uses the token the SDK already holds and starts
    at once; a token that expired in the last few seconds is refused, which is
-   strictly better than not sending. GPT Sol, 2026-08-26. */
-export function leaveProfile(text: string): void {
-  leavingFetch("/api/reader", { method: "PATCH", headers: HEADERS, body: bodyFor(text) });
+   strictly better than not sending. GPT Sol, 2026-08-26.
+
+   **And it forgets the link summaries, twice** (2026-10-04). This fires on
+   unmount as well as `pagehide`, so the page is usually still here afterwards
+   — and a `pagehide` can be a bfcache suspend that brings it back, cache and
+   all. Once as the write leaves, so the old answers stop being shown; and again
+   when it settles, which is the one that counts: a summary asked for in between
+   was written from the profile the server still had, and the second call
+   throws that away too. `saveProfile` needs only the one because it calls
+   after the response. tests/link-summary-forget.test.tsx.
+
+   **`madeFor` as `saveProfile` has it**, and here it matters most: the unmount
+   that fires this is the one a change of reader causes, so the token in hand
+   is already the next reader's. Nothing is sent unless it is `madeFor`'s. */
+export function leaveProfile(text: string, madeFor: string | null = null): void {
+  profileSaved();
+  void leavingFetch(
+    "/api/reader",
+    { method: "PATCH", headers: HEADERS, body: bodyFor(text) },
+    madeFor,
+  ).then(profileSaved);
 }
 
 export type UseProfile = AutosavedText;
 
 export function useProfile(): UseProfile {
-  const text = useAutosavedText({ save: saveProfile, leave: leaveProfile });
+  /* The reader the page was mounted for: `/profile` is not under the article's
+     gate, so it stays mounted across a change of reader with their words in
+     the box. */
+  const madeFor = useMadeFor();
+  const text = useAutosavedText({
+    save: (words) => saveProfile(words, madeFor),
+    leave: (words) => leaveProfile(words, madeFor),
+  });
   const { seed, fail } = text;
 
   useEffect(() => {

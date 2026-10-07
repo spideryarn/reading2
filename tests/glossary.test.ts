@@ -27,6 +27,7 @@ import {
   normaliseTerm,
   richness,
   safeUrl,
+  appendableVersion,
   existingFor,
   idsByTerm,
   noGlossaryScoreDrops,
@@ -377,6 +378,42 @@ describe("buildGlossary", () => {
     // model error into a plausible number nobody could question.
     expect(g.entries.find((e) => e.name === "Qualia")?.kind).toBe("other");
     expect(g.entries.find((e) => e.name === "Qualia")?.difficulty).toBeUndefined();
+  });
+
+  it("drops an entry that is a citation, and an alias that is one", () => {
+    // Greg, 2026-10-03 (spya-zn97q5): "Saha et al." was listed as a term. Cited
+    // works belong to Citations. The reported "Name et al" shape is a citation,
+    // so the code drops it whatever the prompt managed; plan 261003o.
+    const g = buildGlossary(
+      {
+        entries: [
+          { name: "Saha et al.", kind: "work", background: "A paper on protein folding." },
+          { name: "Hill et al. (2008)", kind: "event", background: "A triggered-lightning experiment." },
+          { name: "Smith ET AL", kind: "person", background: "Authors of a survey." },
+          { name: "Patel et. al.,", kind: "person", background: "Authors of a malformed citation." },
+          {
+            name: "Camp Blanding experiment",
+            kind: "event",
+            aliases: ["Hill et al. 2008 experiment", "Chen et\u00a0al", "Camp Blanding"],
+            background: "A triggered-lightning experiment.",
+          },
+          { name: "Georg Wilhelm Richmann", kind: "person", aliases: ["Richmann"], background: "A physicist killed by lightning." },
+          // The letters alone are not the mark: only the two words are.
+          { name: "Metal alloy", kind: "term", aliases: ["et alia"], background: "A mixture of metals." },
+          { name: "Étalon", kind: "term", background: "A pair of mirrors used to pick out one colour." },
+          // The abbreviation on its own: with no preceding text, it is a term.
+          { name: "et al.", kind: "term", background: "Latin for 'and others', used to shorten a list of authors." },
+          { name: "et. al.", kind: "term", background: "A common misspelling of the abbreviation." },
+        ],
+      },
+      opts,
+    );
+    expect(g.entries.map((e) => e.name).sort()).toEqual(
+      ["Camp Blanding experiment", "Georg Wilhelm Richmann", "Metal alloy", "Étalon", "et al.", "et. al."].sort(),
+    );
+    expect(g.entries.find((e) => e.name === "Camp Blanding experiment")?.aliases).toEqual(["Camp Blanding"]);
+    expect(g.entries.find((e) => e.name === "Georg Wilhelm Richmann")?.aliases).toEqual(["Richmann"]);
+    expect(g.entries.find((e) => e.name === "Metal alloy")?.aliases).toEqual(["et alia"]);
   });
 
   it("fills in the occurrences itself", () => {
@@ -1324,14 +1361,13 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
     elapsedMs: 1,
   };
 
-  it("refuses to append across a prompt-version boundary", () => {
-    /* Both halves of `existingFor` matter, and the second was argued about
-       twice. A moved article makes the old entries claims about a piece that no
-       longer exists. An older prompt makes them answers to a different
-       question, and appending would hand the model a FORBIDDEN list naming
-       every one of them — so it never rewrites them, and the result is stamped
-       with the current version while the old weak entries survive under labels
-       that do not describe them. */
+  it("refuses to append to a glossary/1 list, whose entries are another shape", () => {
+    /* A moved article makes the old entries claims about a piece that no
+       longer exists. A `glossary/1` list makes them one blended field no
+       current label describes, and appending would hand the model a FORBIDDEN
+       list naming every one of them — so it never rewrites them, and they
+       survive under labels that do not describe them. An appendable older
+       prompt is appended to since plan 261004f — the next describe. */
     expect(existingFor(v1, "deadbeefdeadbeef")).toBeNull();
     expect(existingFor({ ...v1, version: PROMPT_VERSION }, "deadbeefdeadbeef")).not.toBeNull();
     expect(existingFor({ ...v1, version: PROMPT_VERSION }, "a-different-hash")).toBeNull();
@@ -1424,3 +1460,99 @@ describe("replacing a glossary/1 list, and keeping its ids", () => {
   });
 });
 
+describe("Find more on an appendable list an older prompt wrote (plan 261004f)", () => {
+  /* Greg, 2026-10-04 (spya-try2v7): *"I want a find more button that finds a
+     bunch more."* His list was `glossary/4` against `glossary/9`, so the one
+     run button replaced the list instead. Version 4 is the first one guaranteed
+     to have both today's entry shape and source hash, so the forced run appends,
+     stamps the latest pass current, and records the older prompt separately. */
+  const opts = { slug: "a-slug", blocks: BLOCKS, sourceHash: "deadbeefdeadbeef", elapsedMs: 1, power: "standard" as const };
+
+  const v4: Glossary = {
+    version: "glossary/4",
+    generator: CAPABLE_MODEL,
+    slug: "a-slug",
+    sourceHash: "deadbeefdeadbeef",
+    profileHash: null,
+    entries: [entry({ name: "Seth", background: "Written by glossary/4." })],
+    passes: 2,
+    generatedAt: "2026-09-20T12:00:00.000Z",
+    elapsedMs: 1,
+  };
+
+  it("appends to an appendable list from an older prompt, on the same article and profile", () => {
+    expect(existingFor(v4, "deadbeefdeadbeef")).toBe(v4);
+    expect(existingFor({ ...v4, version: "glossary/8" }, "deadbeefdeadbeef")).not.toBeNull();
+    // The other two refusals are untouched by the version.
+    expect(existingFor(v4, "a-different-hash")).toBeNull();
+    expect(existingFor(v4, "deadbeefdeadbeef", "0123456789abcdef")).toBeNull();
+  });
+
+  it("says which versions those are in one place", () => {
+    expect(appendableVersion("glossary/4")).toBe(true);
+    expect(appendableVersion(PROMPT_VERSION)).toBe(true);
+    /* Another entry shape (1), or a `sourceHash` that was blocks-only (2 and
+       early 3) — a fabricated matching hash must not make those appendable. */
+    expect(appendableVersion("glossary/1")).toBe(false);
+    expect(appendableVersion("glossary/2")).toBe(false);
+    expect(appendableVersion("glossary/3")).toBe(false);
+    expect(existingFor({ ...v4, version: "glossary/3" }, "deadbeefdeadbeef")).toBeNull();
+    // Unreadable is not vouched for.
+    expect(appendableVersion("ideas/4")).toBe(false);
+    expect(appendableVersion("")).toBe(false);
+    /* A rollback meets a list a newer prompt wrote: an older writer does not
+       add to it, which is what it did before this change too. */
+    expect(appendableVersion("glossary/999")).toBe(false);
+    expect(existingFor({ ...v4, version: "glossary/999" }, "deadbeefdeadbeef")).toBeNull();
+  });
+
+  it("keeps every old entry and its id, adds the new ones, and records the older prompt", () => {
+    const g = buildGlossary(
+      { entries: [{ name: "Qualia", background: "Found by today's prompt." }] },
+      { ...opts, existing: existingFor(v4, "deadbeefdeadbeef") },
+    );
+    expect(g.entries.map((e) => e.name).sort()).toEqual(["Qualia", "Seth"]);
+    const seth = g.entries.find((e) => e.name === "Seth");
+    expect(seth?.id).toBe(v4.entries[0]!.id);
+    expect(seth?.background).toBe("Written by glossary/4.");
+    expect(g.passes).toBe(3);
+    expect(g.lastAdded).toBe(1);
+    /* The stamp is the latest pass's, which is what the store checks a write
+       against; the older entries' provenance is kept beside it, not lost. */
+    expect(g.version).toBe(PROMPT_VERSION);
+    expect(g.oldestVersion).toBe("glossary/4");
+
+    /* And it is carried through the next pass, when `version` no longer says. */
+    const again = buildGlossary(
+      { entries: [{ name: "Lamport", background: "A third pass." }] },
+      { ...opts, existing: existingFor(g, "deadbeefdeadbeef") },
+    );
+    expect(again.oldestVersion).toBe("glossary/4");
+    expect(again.entries).toHaveLength(3);
+  });
+
+  it("says a pass that found nothing added nothing", () => {
+    const g = buildGlossary({ entries: [] }, { ...opts, existing: existingFor(v4, "deadbeefdeadbeef") });
+    expect(g.lastAdded).toBe(0);
+    expect(g.entries).toHaveLength(1);
+    // A synonym the old entry absorbs is not an addition either.
+    const dup = buildGlossary(
+      { entries: [{ name: "Seth", background: "Again." }] },
+      { ...opts, existing: existingFor(v4, "deadbeefdeadbeef") },
+    );
+    expect(dup.lastAdded).toBe(0);
+  });
+
+  it("leaves oldestVersion off a list one prompt wrote, and off a rewrite", () => {
+    const first = buildGlossary({ entries: [{ name: "Qualia", background: "New." }] }, opts);
+    expect(first.version).toBe(PROMPT_VERSION);
+    expect("oldestVersion" in first).toBe(false);
+    expect(first.lastAdded).toBe(1);
+    const rewrite = buildGlossary(
+      { entries: [{ name: "Seth", background: "New." }] },
+      { ...opts, existing: null, inherit: idsByTerm(v4) },
+    );
+    expect(rewrite.version).toBe(PROMPT_VERSION);
+    expect("oldestVersion" in rewrite).toBe(false);
+  });
+});

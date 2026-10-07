@@ -1,5 +1,7 @@
 # Controls: one height, one radius, one hover
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 > **Split out of [design-css-overview.md](design-css-overview.md) on 2026-09-07**, verbatim apart
 > from the heading levels and a couple of "see above" links that had to become cross-doc ones. That
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
@@ -103,6 +105,24 @@ anything else. And **an HTML attribute that also sets CSS is a rule you did not 
 `width`/`height` on an image are the common one, and the moment a utility sets only one of the pair,
 they stop being about aspect ratio and start being about size.
 
+## And a fourth: a phone held sideways
+
+Found 2026-10-06, from Greg's report `spya-ar65p3`: *"Why are the fonts in this different? Probably
+the ones in the Skim mode are too big?"* On an iPhone in landscape, Skim's quote (`0.84rem`, 13.4px)
+measured 20.5px in his screenshot, beside an article at its own 17px.
+
+Preflight sets `-webkit-text-size-adjust: 100%` on `html`, and we had set nothing. Without it Safari
+on an iPhone in landscape enlarges text block by block and holds back on short text, so the sizes in
+one band stop agreeing with each other and with the stylesheet. The rule is now in the same
+`@layer base` substitute. That reading of the screenshot is a strong inference rather than
+something reproduced. **Nothing on the box can show it**: Chrome has no such autosizing, so this
+one is checked on a real phone
+([phone-and-touch.md § Checking it](phone-and-touch.md#checking-it)).
+
+The checklist had looked only at `button`, so a property preflight sets on `html` was outside it. It
+now holds a decision for each of those too. The measurement is in
+[261006k](../plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md).
+
 ## Two hover languages, and the orange one won
 
 `--accent` is a raised dark grey **surface**, not the orange; both `styles/tokens.css` and
@@ -138,6 +158,7 @@ list page now agree, and agreeing is the whole of it:
 | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
 | every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |
 | the shelf card's action icons, for a finger on a card ≥ 28rem; the "⋯" | 40px (`size-10`) | `rounded-md` |
+| any other small control a finger has to hit, **`.tap-target`** (Greg: *"yes to all as you see fit"*, 2026-10-07): Quotes' ⓘ, a bare passage id, /profile's and Metadata's section headings, "Forgot your password?", "back to sign in" | drawn its own size; under `any-pointer: coarse` an invisible `::after` at least 40 × 40, centred. **A passage id is bounded** to its own width and 1.3rem tall, because ids sit 3px apart; where two 40px targets would overlap, **the row grows instead** (Quotes stacks its ⓘ over its id) | the control's own |
 
 **`--control-h` is the first of these with a token behind it**, added 2026-09-12 in
 [`styles/tokens.css`](../../styles/tokens.css) when Greg asked for Send to be bigger
@@ -151,6 +172,16 @@ component's own rule wins on everything *but* size — and so those rules must n
 height or a padding, which [`tests/close-cross.test.ts`](../../tests/close-cross.test.ts) checks
 for each of the seven. In px, because the app supports a 12px root.
 ([261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md))
+
+**`.tap-target` is the same idea for a control of any size**:
+[`styles/tap-target.css`](../../src/web/styles/tap-target.css), imported straight after
+`close.css`. It changes nothing for a mouse, and owes its caller room: the target reaches
+`(40 − size) / 2` past the control, and whatever is inside that loses its taps to whichever of the
+two comes later in the page. So a control with a close neighbour either makes room under the same
+query or sets `--tap-w` / `--tap-h` to bound it, and the measurements behind each are in
+[261007h § F5a](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md).
+Not on an inline element that can wrap: its `::after` would span from its first line to its last.
+[`tests/tap-target.test.tsx`](../../tests/tap-target.test.tsx).
 
 The chip is stated as a **height**, not as padding, in `chipClass` in
 [`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) — that is what lets an icon-only control in

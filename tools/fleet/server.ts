@@ -33,16 +33,20 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { collect, COLLECT_DEADLINE_MS, type FleetSnapshot } from "./collect.js";
-import { probeOwner } from "./child.js";
+import { processProbeOwner } from "./child.js";
 import { makeAdmission } from "./admission-wiring.js";
 import { makeSchedule } from "./schedule-wiring.js";
 import { makeOccurrences } from "./occurrences-wiring.js";
 import { parseBinds } from "./config.js";
 import { collectHealthAsync, type HealthReport } from "./health.js";
-import { type HealthTurn } from "./health-history.js";
+import type { HealthTurn } from "./health-history.js";
 import { makeDeploys } from "./deploys-wiring.js";
 import { makeHealthRetention } from "./health-wiring.js";
-import { makeReadinessRetention, WINDOW_HOURS as READINESS_WINDOW_HOURS } from "./readiness-wiring.js";
+import {
+  latchedReadinessRefresh,
+  makeReadinessRetention,
+  WINDOW_HOURS as READINESS_WINDOW_HOURS,
+} from "./readiness-wiring.js";
 import { readinessRoute } from "./routes-readiness.js";
 import { usageHistoryRoute } from "./routes-usage-history.js";
 import { defaultUsageHistoryDir, openUsageHistoryForRead } from "./usage-history.js";
@@ -58,7 +62,12 @@ import { openFleetActionStores } from "./action-stores.js";
 import { drainSharedQueues, enqueueSharedMessage, handleActionRequest } from "./routes-actions.js";
 import { handleBroadcastRequest } from "./routes-broadcast.js";
 import { nextWaitMs, refreshOnce, singleFlightCollect } from "./refresh.js";
-import { configureNewSessionNotifier, newSessionRoutes } from "./routes-new.js";
+import {
+  configureNewSessionHealth,
+  configureNewSessionNotifier,
+  newSessionHealthLevel,
+  newSessionRoutes,
+} from "./routes-new.js";
 import { makeDecisionsRoute } from "./routes-decisions.js";
 import { makeRecoveryRoute } from "./routes-recovery.js";
 import { makeRecoveryResumeRoute } from "./routes-recovery-resume.js";
@@ -184,7 +193,7 @@ let health: HealthReport | null = null;
  * and start it a new sibling, which is the multiplication the owned-child
  * registry exists to prevent. Health and tmux use disjoint probe-key prefixes.
  */
-const fleetProbeOwner = probeOwner();
+const fleetProbeOwner = processProbeOwner();
 
 /**
  * When the loop last STARTED a collection — see `attemptedAt` in state.ts.
@@ -285,15 +294,20 @@ let readinessSnapshot: import("./readiness-wiring.js").ReadinessSnapshot | null 
  * A readiness collection that failed must leave the PREVIOUS snapshot in place
  * — the page shows how old it is, so a stale answer is legible, where a blank
  * one is a lie that looks like an empty box. Same rule as `health` above.
+ *
+ * The collection awaits its tmux and git children, so this is latched: a turn
+ * that arrives while one is still out starts nothing, and only a finished
+ * snapshot is published. It never rejects and is NOT awaited by its callers —
+ * a slow git must not delay a fleet refresh. `latchedReadinessRefresh`.
  */
-function refreshReadiness(): void {
-  try {
-    readinessSnapshot = readiness.collect();
-  } catch (err) {
-    console.error(`readiness collection failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-refreshReadiness();
+const refreshReadiness = latchedReadinessRefresh({
+  collect: () => readiness.collect(),
+  publish: (collected) => {
+    readinessSnapshot = collected;
+  },
+  onError: (why) => console.error(`readiness collection failed: ${why}`),
+});
+void refreshReadiness();
 
 /** How often readiness is recomputed. See the loop for why it is not REFRESH_MS. */
 const READINESS_REFRESH_MS = Number(process.env["FLEET_READINESS_REFRESH_MS"] ?? 120_000);
@@ -444,6 +458,19 @@ function tellOverseer(input: {
 }
 
 configureNewSessionNotifier(tellOverseer);
+/* New-session admission reads the report `refreshHealth` last stored instead of
+   running its own survey inside the request. A report that is missing or too
+   old is `unknown`, which that gate refuses. The trade-off: the gate sees the
+   last reading rather than a fresh one — a minute old in the ordinary case,
+   and up to the limit below while collections are failing.
+
+   "Too old" is the longest gap the loop itself can leave, plus two intervals
+   for the collection and the survey to run: after a FAILED collection the loop
+   backs off (`nextWaitMs`), and health is read on that same loop. A flat three
+   intervals would have refused every launch for the last two minutes of each
+   backed-off wait, for no reason but our own schedule. */
+const HEALTH_TOO_OLD_MS = nextWaitMs(REFRESH_MS, true) + 2 * REFRESH_MS;
+configureNewSessionHealth(() => newSessionHealthLevel(health, Date.now(), HEALTH_TOO_OLD_MS));
 
 function statePayload(): string {
   /* **THE COMPOSITION ITSELF IS IN state.ts, and only the wiring is here.**
@@ -731,7 +758,8 @@ async function refreshLoop(): Promise<void> {
        against it — changes on the scale of minutes, not seconds. */
     if (Date.now() - lastReadinessMs >= READINESS_REFRESH_MS) {
       lastReadinessMs = Date.now();
-      refreshReadiness();
+      // Started, not awaited: see `refreshReadiness`.
+      void refreshReadiness();
     }
     /* `nextWaitMs` in refresh.ts, not the expression that used to be here: the
        same number is recorded in every health sample as what the next reading

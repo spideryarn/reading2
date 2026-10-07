@@ -26,8 +26,7 @@
 import { describe, expect, it } from "vitest";
 
 import { MODES, type Mode } from "../src/modes.js";
-import { OWNER_MODE_NOTE } from "../src/messages.js";
-import { MODE_LABEL } from "../src/title-text.js";
+import { SHARED_THREAD } from "../src/messages.js";
 import type { Glossary, PublicArtefacts, SimpleSummary } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { sharedInventory, type InventoryItem } from "../src/web/shared-inventory.js";
@@ -157,23 +156,33 @@ describe("the sweep over the modes", () => {
   });
 
   /**
-   * **The thread is one row, and it is the mode's.**
+   * **The thread is one row of its own, and it follows the thread.**
    *
-   * It was hand-added beside the sweep while it was a page. Once Tweets became
-   * a mode on 2026-09-29 the sweep reached it through `POLICY.tweets` too, and
-   * a hand-added row would have listed it twice under one key — which the
-   * partition above catches as a duplicate, and this names: exactly one row,
-   * labelled and described the way every other mode row is (plan 260929f).
+   * Hand-added beside the sweep while it was a page; the sweep's own row while
+   * Tweets was a mode (2026-09-29 to 2026-10-03, through `POLICY.tweets`); and
+   * hand-added again now that the thread is Summary's Thread view. Summary is
+   * `available` whatever is stored, so its row is in *shared* either way and
+   * cannot say whether a thread goes out — this row can (GPT Sol's closing
+   * note on plan 261003l). Exactly one, under the wire key.
    */
   it.each([
-    ["nothing built", NOTHING],
-    ["everything built", EVERYTHING],
-  ])("lists Tweets once, as a mode row, with %s", (_name, available) => {
-    const { shared, ifBuilt, withheld } = sharedInventory(available);
+    ["nothing built", NOTHING, "ifBuilt"],
+    ["everything built", EVERYTHING, "shared"],
+  ] as const)("lists the thread once, with %s, under %s — and Summary as shared either way", (_name, available, where) => {
+    const inventory = sharedInventory(available);
+    const { shared, ifBuilt, withheld } = inventory;
     const rows = [...shared, ...ifBuilt, ...withheld].filter((i) => i.key === "tweets");
-    expect(rows).toEqual([
-      { key: "tweets", label: MODE_LABEL.tweets, detail: OWNER_MODE_NOTE.tweets },
-    ]);
+    expect(rows).toEqual([SHARED_THREAD]);
+    expect(keys(inventory[where])).toContain("tweets");
+    expect(keys(shared)).toContain("summary");
+  });
+
+  it("names the thread to the owner only once a thread is stored", () => {
+    /* The make-public dialog's *goes out now* list. */
+    const withThread = sharedInventory({ ...NOTHING, tweets: true });
+    const without = sharedInventory({ ...NOTHING, simpleSummary: true });
+    expect(withThread.shared.map((i) => i.label)).toContain(SHARED_THREAD.label);
+    expect(without.shared.map((i) => i.label)).not.toContain(SHARED_THREAD.label);
   });
 
   /**
@@ -200,7 +209,7 @@ describe("the sweep over the modes", () => {
      shared link should carry them, and search crossed because *reading* a
      saved run costs nothing — the model call is in creating one, which is
      still the owner's alone. */
-  const OWNERS_ONLY: Mode[] = ["chat", "remember", "referee"];
+  const OWNERS_ONLY: Mode[] = ["chat", "learn", "referee"];
   it.each(OWNERS_ONLY)("keeps %s with the owner whatever exists", (mode) => {
     expect(keys(sharedInventory(NOTHING).withheld)).toContain(mode);
     expect(keys(sharedInventory(EVERYTHING).withheld)).toContain(mode);
@@ -296,6 +305,17 @@ describe("the sweep over the modes", () => {
     expect(keys(ifBuilt)).not.toContain("search");
   });
 
+  /* `PublicMeta` gained the journal and the publication date on 2026-10-04
+     (plan 261004h). The owner is told before they share, in the row that
+     covers `meta`. */
+  it("tells the owner the journal and the publication date go out", () => {
+    const row = sharedInventory(EVERYTHING).shared.find((r) => r.key === "provenance");
+    expect(row?.detail).toMatch(/journal/);
+    expect(row?.detail).toMatch(/when it was published/);
+    /* And not what stays: a DOI is not sent. */
+    expect(row?.detail).not.toMatch(/DOI/i);
+  });
+
   /* Every row says something, and nothing says the same thing twice. A label
      with no tooltip is a row the owner cannot act on; two rows with one
      sentence is the copy having been pasted. */
@@ -322,6 +342,11 @@ describe("the sweep over the modes", () => {
  * below checks they exist — so a renamed row is caught too.
  */
 const WIRE_ROW = {
+  /* Not content: which way this visitor was let in, public or by a private
+     link's key (plan 261005e). It is here so the notice can say so. The text's
+     row, because what it qualifies is that the text is being shown at all; it
+     says nothing a row of its own could list as going out. */
+  sharedBy: "text",
   meta: "provenance",
   /* A shared upload's found source guess — the same row's *link back to the
      original*, for a file (plan 261002g). */
@@ -556,10 +581,6 @@ describe("what counts as shareable", () => {
           brief: [
             { text: "What it is.", ids: ["spya-k3m9qt"] },
             { text: "Why it matters.", ids: ["spya-p7w2dn"] },
-          ],
-          simple: [
-            { text: "What the piece is about.", ids: ["spya-k3m9qt"] },
-            { text: "Why its argument matters.", ids: ["spya-p7w2dn"] },
           ],
           fuller: [
             { text: "What the piece is about, in more detail.", ids: ["spya-k3m9qt"] },

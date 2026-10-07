@@ -1,5 +1,7 @@
 # Content extraction (readability)
 
+Up: [architecture.md](architecture.md)
+
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
@@ -23,6 +25,24 @@ Strips a rich HTML page (article/blog post) down to the main content — drops n
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
 For background on why Readability was chosen over alternatives (trafilatura, defuddle, Diffbot, Jina Reader, LLM-based extraction, etc.), see the research discussion earlier in this project's chat history — no separate write-up exists yet.
+
+## In this doc
+
+- [§ The fetch above it](#the-fetch-above-it) — what stage 1 hands this stage
+- [§ Two extractors, one artefact](#two-extractors-one-artefact) — the PDF extractor beside Readability
+- [§ A LaTeXML page: arXiv's HTML](#a-latexml-page-arxivs-html) — arXiv/ar5iv pages
+- [§ Stage 2 and the document with no address](#stage-2-and-the-document-with-no-address) — uploaded files
+- [§ The three ways this stage refuses](#the-three-ways-this-stage-refuses) — a page rejected as no article, too short, or a bot check; adding a bot-check provider
+- [§ The one thing this pipeline deletes](#the-one-thing-this-pipeline-deletes) — what is removed on purpose
+- [§ The one thing this pipeline protects](#the-one-thing-this-pipeline-protects) — what must survive extraction
+- [§ The publisher's furniture, and the title it stole](#the-publishers-furniture-and-the-title-it-stole) — site chrome and wrong titles
+- [§ The byline, and the authors Readability drops](#the-byline-and-the-authors-readability-drops) — author extraction
+- [§ The journal and the publication day, from a registry](#the-journal-and-the-publication-day-from-a-registry) — venue and date; includes the backfill
+- [§ A title from outside is plain text](#a-title-from-outside-is-plain-text) — sanitising titles
+- [§ A title in capitals is tidied, and the original kept](#a-title-in-capitals-is-tidied-and-the-original-kept) — ALL-CAPS titles
+- [§ What it gets wrong, and how we know](#what-it-gets-wrong-and-how-we-know) — known failures and the eval corpus
+- [§ Where this sits](#where-this-sits) — neighbouring docs and code
+- [§ Prior art](#prior-art) — alternatives considered
 
 ## The fetch above it
 
@@ -100,9 +120,8 @@ The differences that matter to a reader:
   the pages before an upload is promoted to its canonical name or a fetched document is stored, so
   the reader hears it in seconds instead of after a job card has been running. `pass0`'s own guard
   stays as the backstop for anything ingested before that, or re-extracted after the cap moves
-  again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
-  at all: the queue stores whatever it fetched, and `npm run eval:pdf-read` keeps the original before
-  `runPdfExtract` counts anything. Neither can reach a reader's job.
+  again; `npm run eval:pdf-read` keeps the original before `runPdfExtract` counts anything.
+  The stage CLIs now drive the queue through `scripts/stage.ts`, and an ingest runs stage 1's guard.
 - **Maths comes out as TeX, and the checks read it as what it prints.** Since 2026-09-24
   (`PROMPT_VERSION` `pdf-v4`) the prompt asks for inline maths between `\(…\)` and displayed
   equations between `\[…\]`, never `$`, which the reading view draws as maths ([maths.md](maths.md)).
@@ -166,10 +185,20 @@ The differences that matter to a reader:
   this attempt rather than truncating a wait the provider actually asked for.
 - **A chunk is bounded by bytes as well as by words.** Words alone let a run of image-heavy pages
   through, so `MAX_CHUNK_BYTES` (3 MB) is a *planning* bound on the encoded page images — distinct
-  from `MAX_ENCODED_BYTES` (30 MB), the hard request ceiling. Both are in
-  [`src/pdf-read.ts`](../../src/pdf-read.ts), and the planning bound **cannot split a page**: a
+  from the hard request ceiling, which is the reader model's own: `READER_REQUEST_BYTES`, 40 MB
+  encoded for today's reader, and 30 MB for a model nobody has listed. It is keyed on the model, so
+  changing `PDF_READER_MODEL` fails the typecheck until the new model's limit is written down. Both
+  are in [`src/pdf-read.ts`](../../src/pdf-read.ts), and the planning bound **cannot split a page**: a
   single page heavier than it still goes out over the limit, which is the honest edge rather than an
   oversight.
+- **A chunk that is over the request ceiling only because of its context page goes without it.** Every
+  chunk after the first carries the page before it, whole, so the model can finish a sentence that
+  runs across the page break; a 20 MB page is therefore sent twice. When that context page is what
+  takes a chunk over the ceiling, `runPdfExtract` cuts the chunk again without it, says so in the
+  result's `notes` and in the log, and stores the reading under the key of the chunk it actually
+  sent. The price is that a paragraph running across that one page break comes out as two. A page
+  that is over the ceiling by itself is still refused (`[pdf-chunk-big]`): the options for that are
+  C and D of [260928b](../plans/260928b-pdf-chunk-too-big-for-one-request.md), not built.
 - **A long PDF is expected to need two lease windows, and that is what the checkpoints are for.**
   Measured in a browser on 2026-09-04: a 144-page paper spent nearly all of the first window in
   `extract`, and `hierarchy` was cut off. The second window is a press of Retry rather than an
@@ -225,6 +254,12 @@ The differences that matter to a reader:
   not by the prompt, so no import pays for it; a note whose marker it cannot pin down is listed
   unlinked, and an uncited note on page 1 (an affiliation, mostly) is left out —
   [260930k](../plans/260930k-pdf-footnotes-shown-and-linked.md).
+  **A page of endnotes the model typed as paragraphs is given back to the notes** (2026-10-04,
+  `endnotesTypedAsProse`): inside a `Notes` or `Endnotes` section, following an adjacent notes page
+  with no body prose. Every paragraph, quote and list item must carry the next note number or
+  continue the preceding note; other content leaves the page alone. A fresh import had fifteen notes come out
+  as body paragraphs with their markers bare —
+  [261004d](../investigations/261004d-glued-footnote-and-citation-digits-census-across-production-articles.md).
 - **A table shows its cells.** Since 2026-10-01 `renderHtml` writes the `tabledata` records
   as a `<table>` inside the table's `<figure>`, after its caption. Until then every PDF
   table was a caption over nothing, though the cells were transcribed and scored all
@@ -247,6 +282,47 @@ and Readability is the only caller that ever wanted it: not as something to fetc
 for relative links, which a PDF has not got. Asking for it up here made a missing URL the first
 thing an upload hit, three stages after the last thing that could have supplied one. The upload path
 is [ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf).
+
+## A LaTeXML page: arXiv's HTML
+
+arXiv renders most papers as HTML with LaTeXML, and since 2026-10-06 that rendering is what an
+arXiv link imports ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)).
+LaTeXML has shapes of its own that Readability and stage 3 misread, so
+[`src/latexml.ts`](../../src/latexml.ts) § `prepareLatexml` puts them into shapes the pipeline
+already reads. It runs in `prepareDocument`, before `canonicaliseMaths` and before Readability, and
+everything it makes is sanitised afterwards like the rest of the page.
+
+| LaTeXML writes | It arrived as | Now |
+|---|---|---|
+| an aligned equation as a table, one inline formula per cell | a fragment per cell, the number in the middle | one `\[\begin{aligned}…\end{aligned}\]`, its number beside it |
+| a plot as `<object type="image/svg+xml">` | a caption over nothing | an `<img>`. SVG is still not hosted: [article-images.md](article-images.md) leaves it linked to arXiv |
+| a code listing as a `<div>` per line | a paragraph per line | one `<pre>` |
+| a boxed passage as an SVG frame round a `foreignObject` | an empty block | the passage's own blocks |
+| authors in the title block, none in the metadata | Readability's guess: a cited author, or "and" | the paper's authors, names only, through `metaAuthors` ([`src/meta-authors.ts`](../../src/meta-authors.ts)); right on 12 of 19 live pages and refused on the rest, 2026-10-07 ([261007d](../plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md) § Stage 2 says why affiliations are not read) |
+
+**Every rewrite is narrow, and declines rather than guesses.** It applies only on a page fetched
+from arXiv's or ar5iv's `/html/` and beneath `article.ltx_document`: a stranger's page cannot opt
+in by borrowing the class names. It requires an exact shape of children and leaves the page as it
+was otherwise. It keeps the container's id and every id a link in the page points at, because
+stage 3 repoints cross-references by those. What it declines today, measured on five papers: an
+equation group in which several rows carry their own numbers, or with four formula cells; a cell
+with a row or column break at its top level; a listing whose lines hold maths (an algorithm); a
+boxed passage holding anything that fetches or runs.
+
+**A table standing in the middle of a list item was being thrown away by our own safety check**,
+not by Readability. The existing rule already rescued it; then `proseRetention`
+([`src/protect.ts`](../../src/protect.ts)) compared the item's prose with and without the rescue,
+found *"words before, words after"* missing from *"words before, the table's cells, words
+after"*, called the prose lost and withdrew the rescue. It now reads a missing run a second time
+with the tables taken out of the one prose element that holds them.
+
+**The line under the title names the people `meta.byline` names**, for every web page, since the
+same day: stage 2's page was being built from Readability's byline rather than the one chosen.
+
+What it still gets wrong is in
+[261005e § The re-run](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md#the-re-run-after-the-fixes-2026-10-06):
+the five declined equation groups read as fragments, an author block that is one long paragraph,
+and whatever arXiv's converter itself dropped, which nothing in the HTML reveals.
 
 ## Stage 2 and the document with no address
 
@@ -297,13 +373,13 @@ address from `<link rel="canonical">` would cover more saved pages and is **deli
 done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
 fetching, which is a security question worth answering on its own rather than as a rider.
 
-One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
-after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
-relative links resolve against the wrong origin.
+For a fetched page, since 2026-10-05, the base is the URL stage 1 *ended up* at after redirects
+(`manifest.url`, which `fetchDocument` reports), not the one that was typed; the job's own address
+is used only where the manifest has none (the `extract` step in [`src/pipeline.ts`](../../src/pipeline.ts)).
 
-## The two ways this stage refuses
+## The three ways this stage refuses
 
-Neither of them publishes anything, and both end the job `error` — which **releases** the reader's
+None of them publishes anything, and all three end the job `error` — which **releases** the reader's
 slot rather than spending it, since only `done` charges
 ([`src/store/pg-session.ts`](../../src/store/pg-session.ts), [billing.md](billing.md)).
 
@@ -316,6 +392,24 @@ slot rather than spending it, since only `done` charges
   `medium_about.html` became an article titled *"Medium"* with 185 characters in it, and it spent a
   paying reader's slot. The floor is us **not overriding the library's own verdict**; the reader gets
   `documentHadTooLittleText`, `[jb-too-little-text]`, with the count in the sentence.
+- **`ChallengePage`** — the document is a site's **bot check**, not the page behind it, since
+  2026-10-06. The first two ask whether there is an article and how much of one; this asks what the
+  page *is*, and it is answered only by markup the check's own software wrote for its own script:
+  a registry in [`src/challenge-page.ts`](../../src/challenge-page.ts), with one entry, Anubis.
+  hal.science's check explains itself in 1,034 characters of prose, twice the floor, and was
+  published as an article titled *"Making sure you're not a bot!"*. **The entry reads two shapes of
+  that page**, since the same day: the challenge written into the page (the element
+  `anubis_challenge`), and an older version's, which fetches its challenge afterwards and so
+  carries only its version element and the module script that solves the check. bugs.winehq.org
+  serves the older one, and it was missed until it was captured
+  ([postmortem](../postmortems/261006j-a-recogniser-fitted-to-one-sample-of-a-versioned-page.md)).
+  Cloudflare's, reCAPTCHA's and the *"enable JavaScript"* pages have no entry because none was seen
+  clearing the floor
+  ([the measurement](../investigations/261006c-which-bot-check-walls-clear-the-floor-through-our-fetcher.md)).
+  **It wins over the other two**:
+  a bot check that is also short, or that Readability declines, is reported as a bot check, because
+  that is the sentence with a move in it. The reader gets `documentIsABotCheck`, `[jb-bot-check]`:
+  open the page in your own browser, save it, upload the file.
 
 **Each of those refusals is two sentences, chosen by where the document came from**, since
 2026-09-08. Both were written for a fetched page, and both told a reader who had *uploaded* a file
@@ -327,6 +421,7 @@ upload gets its own wording and its own code, because two different sentences ma
 |---|---|---|
 | `ReadabilityRefused` | `[jb-no-article]` | `[jb-file-no-article]` |
 | `TooLittleTextToRead` | `[jb-too-little-text]` | `[jb-file-too-little-text]` |
+| `ChallengePage` | `[jb-bot-check]` | `[jb-file-bot-check]` |
 | `NoBlocksProduced` — **stage 3, not this stage** | `[jb-no-text]` | `[jb-file-no-text]` |
 
 The origin comes from `cameFromAnUpload` ([`src/fetch.ts`](../../src/fetch.ts)), the same evidence
@@ -334,18 +429,52 @@ the masthead uses, and the split arrived with the stage-1 rewrite that sends far
 in the first place —
 [260908a](../plans/260908a-match-the-documents-leading-tokens-instead-of-searching-for-markup.md).
 
-**The third row is stage 3's**, listed here because it is the same defect and was missed by the sweep
+**The last row is stage 3's**, listed here because it is the same defect and was missed by the sweep
 that fixed the first two: an article *was* extracted and had no prose in it. It is reachable from an
 uploaded **scan** — a PDF whose only text is a publisher record, which `renderHtml`
 ([`src/pdf-read.ts`](../../src/pdf-read.ts)) withholds on purpose — so its uploaded sentence names a
 picture of a page rather than a login wall. Found by GPT Sol reviewing the fix for the other two.
 
-**It decides nothing about what the page is** — no markup is read and no wall is diagnosed, so it
-fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot wall by
-its own markup is a separate registry that has not been built yet
-([260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md)).
+**The floor decides nothing about what the page is** — no markup is read and no wall is diagnosed,
+so it fires on a genuinely tiny real page too, and the message says *usually*. Recognising a bot
+check by its own markup is the registry's job, and the two are kept apart on purpose: for a month
+the floor stood in for the registry because every wall we had seen was short
+([the postmortem](../postmortems/261006c-a-size-floor-stood-in-for-a-recogniser-of-kind.md)).
 
-**It is prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
+**The registry reads markup, never wording, and gets an entry only with a captured page.** Visible
+text is not evidence: `acx.html`, a real essay, says *"just a moment"* twice. Cloudflare's check,
+reCAPTCHA's and the *"enable JavaScript"* shells are all refused by the floor today, so none has an
+entry; one is added when a page of that kind is seen to clear the floor, with its fixture
+([261006c](../plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md), and
+[260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md) for the design).
+It does not get past the check either: the address still cannot be imported, and the reader is told
+what works instead.
+
+### Adding a provider (a bot check from a new vendor)
+
+Fetching that hands you the page is [fetching.md](fetching.md); everything below is stage 2. Each
+place was checked against the code on 2026-10-07.
+
+- Capture the page the way [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
+  says (plain GET, no JavaScript, hashed, committed; the Anubis section there is the worked case).
+  `scripts/probes/261006f-bot-wall-probe.ts` finds candidate pages.
+- [`src/challenge-page.ts`](../../src/challenge-page.ts): the `ChallengeProvider` union, a recogniser
+  function, and its line in `RECOGNISERS` (a `Record` over the union, so the compiler lists what is missing).
+- [`evals/extraction/fixtures/`](../../evals/extraction/fixtures/): the `.html`, its `hashes.json` entry,
+  and a `<name>.manifest.json` with `"notAnArticle": true`.
+- [`evals/extraction/corpus.mts`](../../evals/extraction/corpus.mts): a row in `EXTRA_FIXTURES`.
+- [`evals/extraction/score.mts`](../../evals/extraction/score.mts): `MANIFESTS_EXPECTED`.
+- [`tests/extract-challenge-page.test.ts`](../../tests/extract-challenge-page.test.ts): the rungs and
+  negative controls; [`tests/extract-protect.test.ts`](../../tests/extract-protect.test.ts): `CHALLENGES`
+  and the corpus-size count; [`tests/extraction-visible-text.test.ts`](../../tests/extraction-visible-text.test.ts):
+  `NOT_ARTICLES`.
+- Nothing to add for the reader's sentence or the pipeline: `documentIsABotCheck` in
+  [`src/messages.ts`](../../src/messages.ts) and the `ChallengePage` branch in
+  [`src/pipeline.ts`](../../src/pipeline.ts) do not name the provider.
+- Current inventory counts in [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
+  are prose and need updating by hand; keep dated measurement counts as recorded.
+
+**Both rules are prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
 stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is
 finished from the artefacts, and an unforced job skips a step that has one. So an article published
 from a short page before 2026-09-06 stays published and stays readable, its slot stays spent, and a
@@ -359,7 +488,8 @@ change and is not this one. GPT Sol, reviewing C1a.
 **The floor lives in a helper both read paths call** (`capabilityFloor` in
 [`src/extract.ts`](../../src/extract.ts)), because `readArticle` and `readArticleWithProvenance` are
 separate entry points and the eval harness uses the second one directly. In `runExtract`'s catch it
-would have been correct in production and permanently invisible to the corpus.
+would have been correct in production and permanently invisible to the corpus. The bot check is
+decided the same way, one helper up (`refusalFor`), on the document before anything rewrites it.
 
 ## The one thing this pipeline deletes
 
@@ -653,6 +783,97 @@ Metadata page show it one name at a time (`src/web/AuthorNames.tsx`); a page wit
 keeps its byline as one string. The reasoning, and what a visitor does not get yet, are in
 [../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md](../plans/260929d-authors-and-affiliations-at-import-shown-and-linked.md).
 
+## The journal and the publication day, from a registry
+
+> It would be great if the metadata page also somehow figured out and listed the publication date.
+> And perhaps journal etc
+>
+> — Greg, 2026-10-03 (report `spya-pcz6a3`)
+
+Since 2026-10-04 the `extract` step, and the `metadata` step for a minimal paper, ask Crossref or
+DataCite about **the article's own identifier**, after the extractor and outside any model call
+([`src/article-registry.ts`](../../src/article-registry.ts)). It is the lookup Citations uses
+(`lookupWork`), with its cache and its politeness.
+
+- **The candidates are found without a model.** A PDF: every DOI and `arXiv:` stamp printed on its
+  first two pages, in any record, the hidden DOI strip included. A web page: `citation_doi`, then
+  its own address. A minimal paper: the DOI its `metadata` step read. Three at most.
+- **A record is the article's only when two things agree**: the complete title (the same words
+  and maths operators in order), and an author. A free-text byline must contain a registry
+  author's family name with the same given name or initial beside it; a surname alone is
+  sufficient only in a structured author name. A shared title prefix or an ordinary byline
+  word can belong to a cited work. With no author evidence, nothing is kept.
+- **What is kept**: `Meta.doi`; `Meta.journal`, from Crossref's `container-title` (and `arXiv` for
+  an arXiv id; a DataCite repository's name is not a journal); and `Meta.publishedAt`, only when
+  the page stated none and the registry states a whole day.
+- **A year alone goes in its own field**, `Meta.publishedYear` (`article_revisions.published_year`),
+  since 2026-10-04. Older print papers and DataCite records often state only a year, or a year
+  and a month, which is kept as the year. It is never put in `publishedAt`: every reader of that
+  field wants a calendar day, and a made-up `-01-01` would be a date nobody stated. An article has
+  a day or a year, never both, and the table refuses a row with both. The page prints
+  `Published 2011`. Read the pair with [`publishedOf`](../../src/web/relative-time.ts). Timeline
+  does not read the year: it is too coarse a frame for "last March".
+- **It never fails an import.** No candidate, a miss, a disagreement and an unreachable registry
+  all leave `meta` as the extractor made it. The step logs the outcome and counts.
+- **Read this keeps a minimal paper's confirmed facts** when the registry is unavailable: it
+  re-reads the same bytes. An ordinary re-extraction keeps the DOI, as it always did, and asks
+  afresh for the rest, so a date a publisher removed is not carried forward.
+- **A PDF now has a publication date**, so Timeline has a year to read a year-less date against,
+  and the Shelf's Published sort has something to sort.
+- **An article imported before this has the facts only once its owner reads it again, or once the
+  backfill below has been run** against the database it lives in.
+
+### The backfill, for articles imported earlier
+
+[`scripts/backfill-registry-facts.ts`](../../scripts/backfill-registry-facts.ts) fills `doi`,
+`journal` and `published_at` or `published_year` on the current revision of articles that lack
+them. The logic is [`src/backfill-registry-facts.ts`](../../src/backfill-registry-facts.ts).
+
+```
+npx tsx scripts/backfill-registry-facts.ts                      # dry run, local
+npx tsx scripts/backfill-registry-facts.ts --prod               # dry run, production, read-only
+npx tsx scripts/backfill-registry-facts.ts --prod --apply <plan.json>
+```
+
+- **The dry run is the default and cannot write.** It runs inside `BEGIN READ ONLY` and never
+  commits. It finds each article's candidates without a model: a PDF's first two pages through
+  `frontPagesWithStamps` ([`src/pdf.ts`](../../src/pdf.ts)), which keeps arXiv's sideways margin
+  stamp where `firstPagesText` drops it; a web page's stored HTML through `ownIdsOfDocument`; and
+  the article's own address. It asks the registries through `lookupWork` with an in-memory store,
+  so the spacing and the cooldown are the shipped ones and the registry cache table is neither
+  read nor written. `withRegistryFacts` decides, unchanged. It prints a table and saves a plan
+  file with one row per article. A fatal idle connection error while the registries are being asked
+  is handled, so it does not discard that in-memory plan; the rollback can fail on a dead session
+  without losing the plan. The transaction pins a pooler backend until it ends.
+- **A missing document is its own outcome.** `no-source` (the revision references none) and
+  `source-unreadable` (it references one that is missing, corrupt or not a PDF pdf.js can open)
+  are reported apart from `no-candidate`.
+- **Apply writes the plan file and asks no registry**, so what was read is what is written. It
+  refuses a plan made against another database, and a plan that fills a year on a database with
+  no `published_year` column. In one transaction, it first locks the articles by their actual
+  database slugs in the app's `C` order, then per article refuses if the plan's revision is no longer
+  current, refuses if the article has an unfinished
+  draft (the draft would publish later without the facts), and fills only empty columns. A day or
+  a year is written only when both date columns are empty. Each row is `written`, `already`, or
+  `refused` with a reason; a refused row is left exactly as it was. It exits non-zero when nothing
+  was written and nothing was already there.
+- **Which database.** With no flag, the local one in `.env.local`, and a `DATABASE_URL` in the
+  shell is not read. `--prod` is the only way to production: it takes the database and the
+  bucket's credentials together from `.env.prod`. The plan identifies host, port, database and
+  username: the username distinguishes projects sharing a Supabase pooler. All four must be explicit
+  in the database URL; plans without a username must be regenerated. Read the `Target:` line
+  ([database.md](database.md#database_url-npm-run-dbmigrate-does-not-do-what-it-looks-like)).
+- **Nothing else needs refreshing.** The Shelf reads the publication date from the revision row.
+  An article that gains a `published_at` and has a Timeline shows that Timeline as out of date
+  until its owner regenerates it; the dry run counts these. A year causes none.
+
+The Metadata page prints both under the title, for the owner and, since 2026-10-04, for a visitor
+to a shared article: the journal and the publication date cross the public boundary, the DOI does
+not ([security-map.md](security-map.md#the-allowlist-has-two-failure-directions-and-only-one-of-them-is-loud)).
+The plans are
+[261004a](../plans/261004a-metadata-page-shows-publication-date-and-journal-from-crossref-at-import.md)
+and [261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md).
+
 ## A title from outside is plain text
 
 A page's `<title>`, a PDF's `Info.Title`, an `og:title` and a web-search result's title can all
@@ -660,13 +881,63 @@ carry inline markup (`<i>Drosophila</i>`, `H<sub>2</sub>O`, `<jats:italic>`, Mat
 Every surface draws a title as text, so any of that shows literally. **The rule: an outside title
 is made plain where it is constructed, by `plainTitle` in [`src/html.ts`](../../src/html.ts), and
 stored plain.** This stage applies it in `runExtract` and `runPdfExtract` before the title branches
-into `meta.title`, the page's `<h1>` and the job's title, and `metaColumns` repeats it as a backstop.
+into `meta.title`, the stored page's `<title>` and the job's title, and `metaColumns` repeats it as
+a backstop. (Until 2026-10-07 a web page's title also went into an `<h1>` of ours at the top of the
+stored page's body, which stage 3 made the article's first block. `debugPage` no longer writes that
+`<h1>` or the byline line under it, for new extractions only: [../plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md](../plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md),
+reader report spya-t6cdve. The articles that already have those two blocks keep them in the data,
+and the reading view does not draw them: `mastheadEcho` in
+[`src/web/masthead-echo.ts`](../../src/web/masthead-echo.ts), which also leaves out a first heading
+that says exactly what the masthead says, as a PDF's usually does.)
 The other roads in — search results, link previews, cited works and Referee Criteria — are listed
 in the plan, [../plans/260929e-outside-titles-become-plain-text-at-ingest.md](../plans/260929e-outside-titles-become-plain-text-at-ingest.md).
 `tests/plain-title.test.ts` feeds one marked-up title through every one of them. **A new road for a
 title belongs in that test.** `plainTitle` is not a sanitiser: its output is text, and it is
 escaped like any other text wherever it becomes markup. The class is in
 [../postmortems/260929b-outside-titles-stored-with-their-markup.md](../postmortems/260929b-outside-titles-stored-with-their-markup.md).
+
+## A title in capitals is tidied, and the original kept
+
+> As part of the import process, could we apply very light editing to the article title (e.g. this
+> one is in all caps) to make them more consistent and readable. Ideally follow the author's intent
+> and don't change the contents substantively
+>
+> — Greg, 2026-10-04, report `spya-fyj3m4`
+
+After `plainTitle`, the title is tidied by a `TitleTidier`. **At import that is a small model**
+(Greg, 2026-10-05: *"yes, a small model (e.g. GPT Luna or DeepSeek)"*): one call as job `title-tidy`
+in [`src/title-tidy-model.ts`](../../src/title-tidy-model.ts), shown the title, the site's name and
+the declared language and none of the body. It may fix a title printed wholly in capitals, take the
+site's name, `Microsoft Word - ` or a file extension off an end, and tidy spacing. Code then checks
+the answer did only that (`isLightEdit`): the only thing cut at a separator is exactly the site's
+name the page declared, capitals changed only where there was no lower-case letter, every other
+character the same. So a title already in mixed case is never recased, and a page that declares no
+site's name keeps whatever follows its dash.
+
+**The rule is the fallback**, and what a seam handed no tidier uses: `tidiedTitle` in
+[`src/title-tidy.ts`](../../src/title-tidy.ts), which makes a title **wholly** in capitals title
+case and takes trailing footnote markers (`*`, `†`, `‡`) off. It has no model; a word stays in
+capitals when the article's own body writes it that way. A failed call, a slow one (8 seconds) or
+an answer that fails the check all get the rule's title, so the tidy cannot fail an import.
+
+**A re-extraction keeps the title it tidied last time** when the title arriving is the same
+(`stepTitleTidier`, src/pipeline.ts): a model does not answer identically every time, and `title` is
+in every generated mode's fingerprint. The plan and what was measured:
+[../plans/261005j-a-small-model-tidies-an-imported-title.md](../plans/261005j-a-small-model-tidies-an-imported-title.md),
+[../investigations/261005b-title-tidying-rule-against-a-small-model.md](../investigations/261005b-title-tidying-rule-against-a-small-model.md).
+
+Only `meta.title` is tidied. The stored page's `<title>` keeps the author's capitals, and so does
+any heading the article itself opens with, which is prose. (An article extracted before 2026-10-07
+also has the untidied title as its first block, from the `<h1>` stage 2 used to write: see
+[§ A title from outside is plain text](#a-title-from-outside-is-plain-text).) When tidying changed
+the title, the original goes in `Meta.titleOriginal`
+(`article_revisions.title_original`), and the Metadata page shows it with a button that puts it back
+as the reader's own title. Articles imported before 2026-10-05 are not touched.
+
+The rule's details, what it leaves out and why, and Greg's answer on a backfill (none) are in
+[../plans/261005g-tidy-an-imported-title-and-keep-the-original.md](../plans/261005g-tidy-an-imported-title-and-keep-the-original.md);
+the style guides behind them are in
+[../research/261005c-title-capitalisation-and-light-tidying-at-import.md](../research/261005c-title-capitalisation-and-light-tidying-at-import.md).
 
 ## What it gets wrong, and how we know
 
@@ -856,16 +1127,16 @@ Ids are preserved by matching on the `spya-` attribute already in the document, 
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
 The standalone styled HTML output doubles as a debug view; the durable artefacts are the same two
-things this stage returns, and where they land is the store's decision — `output/<slug>.html` plus
-`data/<slug>/meta.json` on a filesystem, columns on `article_revisions` in Postgres.
+things this stage returns, and where they land is the store's decision — columns on `article_revisions` in Postgres
+(`output/<slug>.html` plus `data/<slug>/meta.json` until the filesystem store went, 2026-09-05).
 
 The metadata landed on 2026-08-25, when the library needed something to put on a card: title,
 byline, site, language, source URL, fetch date and Readability's excerpt. **It is the only place the
 source URL and the byline survive past this script**, and it is rebuilt on every run, because
 re-extracting is how you refresh a page and the fetch date should follow. One subtlety worth reading
-before touching it — the **command line** derives the slug from the *output filename* rather than
-from the URL, because that is what stages 3 and 4 will name the data directory after; `runExtract`
-itself now takes the slug as an argument, since the queue has always known it. Both are in
+before touching it — the command line used to derive the slug from the *output filename* rather than
+from the URL (`slugForOutFile`, gone 2026-09-05); `runExtract` takes the slug as an argument, since
+the queue has always known it. The slug's story is in
 [library.md § meta.json](library.md#metajson-and-the-articles-identity).
 
 Why any of this exists at all: [vision.md](vision.md).

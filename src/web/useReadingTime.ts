@@ -47,15 +47,30 @@
  *
  * ## What re-renders
  *
- * Seconds live in plain variables inside the effect. React state is only the
- * level map, set only when some block crosses a step, so `Reader` re-renders a
- * few times a minute while you read rather than once a second.
+ * Seconds live in plain variables inside the effect. React state is two maps:
+ * `levels`, set only when some block crosses one of the four steps, and
+ * `reach`, the spine's own measure (reading-time.ts § `readReach`), set when
+ * one crosses a sixteenth. **Each keeps its identity when only the other
+ * moved**, so the gutter's style sheet and the quiz, which read `levels`, are
+ * not woken by a reach step. `Reader` itself re-renders on either — more often
+ * than it did before 2026-10-03, and at log-spaced intervals rather than a
+ * fixed one — which is why nothing it hands `memo(TableView)` may depend on
+ * the capability object.
+ * docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md, F2.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BlockId } from "../types.js";
 import { apiFetch, leavingFetch, readJson } from "./lib/api.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { rowCache, rowsOnScreen } from "./on-screen.js";
-import { expectedSeconds, type ReadLevel, readLevel, shareVisible } from "./reading-time.js";
+import {
+  expectedSeconds,
+  type ReadLevel,
+  type ReadReach,
+  readLevel,
+  readReach,
+  shareVisible,
+} from "./reading-time.js";
 import { stickyOffset } from "./scroll.js";
 
 /** No input for this long and the reader is taken to have walked away. Fable, 2026-09-16. */
@@ -80,13 +95,14 @@ const ACTIVITY_EVENTS = ["scroll", "wheel", "keydown", "pointerdown", "pointermo
  */
 const writesInFlight = new Map<string, Set<Promise<void>>>();
 
-function sendReadingTime(path: string, init: RequestInit): void {
+function sendReadingTime(path: string, init: RequestInit, madeFor: string | null): void {
   let writes = writesInFlight.get(path);
   if (!writes) {
     writes = new Set();
     writesInFlight.set(path, writes);
   }
-  const request = apiFetch(path, init).then(
+  /* Both arms swallow, a refusal for another reader (`NotThisReader`) included. */
+  const request = apiFetch(path, init, madeFor).then(
     () => undefined,
     () => undefined,
   );
@@ -111,9 +127,10 @@ async function waitForReadingTimeWrites(path: string): Promise<void> {
  * Whether `levels` can be believed yet — which is not the same as whether it
  * is empty.
  *
- * `off`: not recording for this reader at all. `loading`: the opening read has
- * not answered for *this* run of the effect (a slug, or the switch turned off
- * and on again, is a new run). `failed`: it never will, so the levels hold only
+ * `off`: not recording for this reader at all — a visitor, since 2026-10-05,
+ * and nobody else until there is a setting to turn it off. `loading`: the
+ * opening read has not answered for *this* run of the effect (a slug, or
+ * `enabled` going off and on again, is a new run). `failed`: it never will, so the levels hold only
  * what this page has credited since. Only `loaded` means an empty map is "read
  * nothing". GPT Sol's findings 1 and 3 on
  * docs/plans/260930e-quiz-only-asks-about-what-you-have-read.md, which is what
@@ -138,6 +155,12 @@ export type ReadingTimeFor = (id: BlockId) => BlockReadingTime | null;
 export interface ReadingTime {
   /** Blocks with a level above zero. Stable identity until one changes. */
   levels: ReadonlyMap<BlockId, ReadLevel>;
+  /**
+   * The same blocks, by how far across the spine's rail each reaches, in
+   * sixteenths. Stable identity until one changes — and a change here that
+   * stays inside a level leaves `levels` the map it was.
+   */
+  reach: ReadonlyMap<BlockId, ReadReach>;
   status: ReadingTimeStatus;
   timeFor: ReadingTimeFor;
   /** `Reader`'s gate: is the prose on screen right now. Off until it says so. */
@@ -145,6 +168,25 @@ export interface ReadingTime {
 }
 
 const NO_LEVELS: ReadonlyMap<BlockId, ReadLevel> = new Map();
+const NO_REACH: ReadonlyMap<BlockId, ReadReach> = new Map();
+
+/**
+ * `next` with `id` at `value`, copying `shown` only the first time something
+ * differs — so a pass in which nothing moved hands back the `null` it was
+ * given, and the caller sets no state. Zero is "not in the map".
+ */
+function withValue<V extends number>(
+  shown: ReadonlyMap<BlockId, V>,
+  next: Map<BlockId, V> | null,
+  id: BlockId,
+  value: V,
+): Map<BlockId, V> | null {
+  if ((next ?? shown).get(id) === value || (value === 0 && !(next ?? shown).has(id))) return next;
+  const out = next ?? new Map(shown);
+  if (value === 0) out.delete(id);
+  else out.set(id, value);
+  return out;
+}
 
 export function readingTimePath(slug: string): string {
   return `/api/reading-time/${encodeURIComponent(slug)}`;
@@ -153,6 +195,12 @@ export function readingTimePath(slug: string): string {
 /**
  * Records while `enabled`, and draws from what the server had plus what this
  * page has credited since.
+ *
+ * **Its one caller passes `true`** since 2026-10-05: every owner is recorded,
+ * whatever the experimental switch says (docs/project/reading-time.md § Who
+ * gets it). The parameter stays because a reader's own off switch, which is
+ * not built, would arrive through it, and the tests of turning it off are the
+ * tests that switch will need.
  *
  * `words` is each block's word count, which is what a level is measured
  * against; a block missing from it is measured as having none.
@@ -163,6 +211,7 @@ export function useReadingTime(
   enabled: boolean,
 ): ReadingTime {
   const [levels, setLevels] = useState<ReadonlyMap<BlockId, ReadLevel>>(NO_LEVELS);
+  const [reach, setReach] = useState<ReadonlyMap<BlockId, ReadReach>>(NO_REACH);
   /* Keyed to the slug it answers for, so a render between a slug change and
      this effect's reset cannot report the previous article's `loaded`. */
   const [opened, setOpened] = useState<{ slug: string; status: "loading" | "loaded" | "failed" }>({
@@ -181,9 +230,16 @@ export function useReadingTime(
      after the switch went off, however long a card stays open. */
   const lookup = useRef<ReadingTimeFor | null>(null);
   const timeFor = useCallback<ReadingTimeFor>((id) => lookup.current?.(id) ?? null, []);
+  /* The reader these seconds are for (lib/made-for.ts). Both flushes that
+     matter are made late: the cleanup's runs as the view unmounts, which a
+     change of reader causes, and `pagehide`'s uses whatever token the tab
+     holds. Unnamed, one reader's seconds were counted for the next.
+     docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+  const madeFor = useMadeFor();
 
   useEffect(() => {
     setLevels(NO_LEVELS);
+    setReach(NO_REACH);
     setOpened({ slug, status: "loading" });
     lookup.current = null;
     if (!enabled) return;
@@ -195,6 +251,7 @@ export function useReadingTime(
     const local = new Map<BlockId, number>();
     let pending = new Map<BlockId, number>();
     let shown = new Map<BlockId, ReadLevel>();
+    let shownReach = new Map<BlockId, ReadReach>();
     const ownLookup: ReadingTimeFor = (id) => ({
       seconds: (server.get(id) ?? 0) + (local.get(id) ?? 0),
       expected: expectedSeconds(wordsRef.current.get(id) ?? 0),
@@ -212,16 +269,23 @@ export function useReadingTime(
 
     const recompute = (ids: Iterable<BlockId>) => {
       let next: Map<BlockId, ReadLevel> | null = null;
+      let nextReach: Map<BlockId, ReadReach> | null = null;
       for (const id of ids) {
-        const level = readLevel((server.get(id) ?? 0) + (local.get(id) ?? 0), wordsRef.current.get(id) ?? 0);
-        if ((shown.get(id) ?? 0) === level) continue;
-        next ??= new Map(shown);
-        if (level === 0) next.delete(id);
-        else next.set(id, level);
+        const seconds = (server.get(id) ?? 0) + (local.get(id) ?? 0);
+        const words = wordsRef.current.get(id) ?? 0;
+        /* Two independent comparisons, and no early `continue` on an equal
+           level: either scale can move while the other stays put. */
+        next = withValue(shown, next, id, readLevel(seconds, words));
+        nextReach = withValue(shownReach, nextReach, id, readReach(seconds, words));
       }
-      if (next && !gone) {
+      if (gone) return;
+      if (next) {
         shown = next;
         setLevels(next);
+      }
+      if (nextReach) {
+        shownReach = nextReach;
+        setReach(nextReach);
       }
     };
 
@@ -272,13 +336,14 @@ export function useReadingTime(
         body: JSON.stringify({ seconds }),
       };
       if (leaving) {
-        leavingFetch(path, init);
+        // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
+        void leavingFetch(path, init, madeFor);
         return;
       }
       /* Dropped on failure, never re-queued — see the file header. `apiFetch`
          records the failure in the client log buffer, which is what a bug
          report carries. */
-      sendReadingTime(path, init);
+      sendReadingTime(path, init, madeFor);
     };
 
     const active = () => {
@@ -349,8 +414,14 @@ export function useReadingTime(
          ordinary request. */
       flush(false);
     };
-  }, [slug, enabled]);
+  }, [slug, enabled, madeFor]);
 
   const status: ReadingTimeStatus = !enabled ? "off" : opened.slug === slug ? opened.status : "loading";
-  return { levels: enabled ? levels : NO_LEVELS, status, setCounting, timeFor };
+  return {
+    levels: enabled ? levels : NO_LEVELS,
+    reach: enabled ? reach : NO_REACH,
+    status,
+    setCounting,
+    timeFor,
+  };
 }

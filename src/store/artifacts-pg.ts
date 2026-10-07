@@ -59,6 +59,7 @@ import type { SQL } from "drizzle-orm";
 
 import { decodeAuthors } from "../authors.js";
 import type { Db } from "../db/client.js";
+import { inBatches } from "../db/insert-batches.js";
 import {
   articleRevisions,
   articles,
@@ -67,13 +68,15 @@ import {
   revisionBlocks,
   revisionStepRuns,
 } from "../db/schema.js";
+import { blockOf } from "./block-rows.js";
 import { siteFor } from "./artifact-storage.js";
 import { CONTENT_TYPE } from "./blobs.js";
 import type { DocumentKind, RawManifest } from "../fetch.js";
 import { plainTitle } from "../html.js";
 import { log } from "../log.js";
 import { structureHash } from "../source-hash.js";
-import type { Block, Meta, NavLabelStatus, StepName } from "../types.js";
+import { isDifficultyLevel } from "../reading-time.js";
+import type { Block, Meta, NavLabelStatus, StepName, StoredReadingDifficulty } from "../types.js";
 import {
   StepRunNotHeld,
   beginStepRun,
@@ -85,6 +88,7 @@ import {
   PIPELINE_RUN,
   STAMP_SOURCE,
   assertStampAgrees,
+  isStoredReadingDifficulty,
   metaRawSha256,
   stampOf,
   whyUnusable,
@@ -210,6 +214,7 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
   return compact({
     slug: ref.slug,
     title: row.title,
+    titleOriginal: row.titleOriginal,
     byline: row.byline,
     authors: decodeAuthors(row.authors),
     siteName: row.siteName,
@@ -221,6 +226,8 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     note: row.note,
     abstract: row.abstract,
     doi: row.doi,
+    journal: row.journal,
+    publishedYear: row.publishedYear,
     /* **The reader's own name for a file they uploaded**, and it is here so that
        the two `Meta`s agree. `metaFrom` in src/store/pg.ts — the owner-facing
        read — surfaces `raw_filename` as `Meta.filename`, and this rebuild did
@@ -241,6 +248,75 @@ function readMeta(ref: JobDraftRef, row: RevisionRow): Meta | null {
     recall: row.recall,
     pagesChecked: row.pagesChecked,
   } as Meta);
+}
+
+/**
+ * The difficulty rating, rebuilt from its five columns.
+ *
+ * **Blocks with no rating read as `{ rated: false }`, not as absent.** There
+ * is no sixth column saying "the step looked and found nothing", so null
+ * columns have to mean one thing, and it is "not rated": the state of every
+ * revision from before the rating existed and of any whose rating call
+ * failed. Reading them as absent would make `has` answer false for the
+ * `blocks` step of every article already imported, and each would re-split on
+ * its next job. **Absent only when the revision has no blocks either**, which
+ * is a `blocks` step that has not produced anything.
+ *
+ * The CHECK holds the five together, so one non-null level means all five.
+ * The others are still tested, for the type and for a row some future
+ * migration loosens.
+ */
+async function readReadingDifficulty(
+  exec: Executor,
+  row: RevisionRow,
+): Promise<StoredReadingDifficulty | null> {
+  if (
+    isDifficultyLevel(row.readingLanguage) &&
+    isDifficultyLevel(row.readingIdeas) &&
+    row.readingDifficultyReason !== null &&
+    row.readingDifficultyModel !== null &&
+    row.readingDifficultyRatedAt !== null
+  ) {
+    return {
+      rated: true,
+      language: row.readingLanguage,
+      ideas: row.readingIdeas,
+      reason: row.readingDifficultyReason,
+      model: row.readingDifficultyModel,
+      ratedAt: row.readingDifficultyRatedAt.toISOString(),
+    };
+  }
+  const [block] = await exec
+    .select({ id: revisionBlocks.blockId })
+    .from(revisionBlocks)
+    .where(eq(revisionBlocks.revisionId, row.id))
+    .limit(1);
+  return block ? { rated: false } : null;
+}
+
+/**
+ * The columns `readingDifficulty` owns — the inverse of `readReadingDifficulty`.
+ * Unrated writes five nulls, so a re-split piece never keeps a rating of the
+ * text it replaced.
+ */
+function readingDifficultyColumns(
+  value: StoredReadingDifficulty,
+): Partial<typeof articleRevisions.$inferInsert> {
+  return value.rated
+    ? {
+        readingLanguage: value.language,
+        readingIdeas: value.ideas,
+        readingDifficultyReason: value.reason,
+        readingDifficultyModel: value.model,
+        readingDifficultyRatedAt: new Date(value.ratedAt),
+      }
+    : {
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
+        readingDifficultyModel: null,
+        readingDifficultyRatedAt: null,
+      };
 }
 
 /**
@@ -377,23 +453,7 @@ async function readBlocks(
 
   if (rows.length === 0) return null;
   return {
-    blocks: rows.map((row) => ({
-      id: row.id,
-      tag: row.tag,
-      kind: row.kind as Block["kind"],
-      ...(row.level === null ? {} : { level: row.level }),
-      text: row.text,
-      words: row.words,
-      html: row.html,
-      gistable: row.gistable,
-      ...(row.note === null ? {} : { note: row.note }),
-      ...(row.role === null ? {} : { role: row.role as NonNullable<Block["role"]> }),
-      ...(row.treatment === null ? {} : { treatment: row.treatment as NonNullable<Block["treatment"]> }),
-      ...(row.noteId === null ? {} : { noteId: row.noteId }),
-      ...(row.contextId === null || row.contextType === null
-        ? {}
-        : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-    })),
+    blocks: rows.map((row) => blockOf(row.id, row)),
   };
 }
 
@@ -501,6 +561,7 @@ export async function readArtefactOutcome<K extends ArtifactKind>(
     if (!row) return null;
     if (site.at === "column") return row[site.column];
     if (site.of === "meta") return readMeta(ref, row);
+    if (site.of === "readingDifficulty") return readReadingDifficulty(exec, row);
     return readRaw(row, await sourceRowFor(exec, row));
   })();
 
@@ -806,6 +867,7 @@ export async function stampForStep(
  */
 const META_COLUMNS = [
   "title",
+  "titleOriginal",
   "byline",
   "authors",
   "siteName",
@@ -815,6 +877,8 @@ const META_COLUMNS = [
   "note",
   "abstract",
   "doi",
+  "journal",
+  "publishedYear",
   "source",
   "extractMethod",
   "pages",
@@ -822,6 +886,12 @@ const META_COLUMNS = [
   "recall",
   "pagesChecked",
 ] as const;
+
+function storedOriginal(meta: Meta): string | null {
+  if (typeof meta.titleOriginal !== "string" || typeof meta.title !== "string") return null;
+  const original = plainTitle(meta.titleOriginal);
+  return original && original !== plainTitle(meta.title) ? original : null;
+}
 
 /** `meta.json` taken apart into the columns it owns — the inverse of `readMeta`. */
 export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferInsert> {
@@ -833,6 +903,12 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
     /* The extractors already made it plain; this is the guard for the next
        producer that forgets. docs/plans/260929e-outside-titles-become-plain-text-at-ingest.md. */
     title: typeof meta.title === "string" ? plainTitle(meta.title) : null,
+    /* Null when absent, so a re-extraction whose title needed no tidying clears
+       the last one's original rather than leaving it beside a title it is not
+       the original of. And through the same `plainTitle` as the title, so the
+       pair cannot differ in anything but the tidying — the Metadata page offers
+       this string back as a title. Plan 261005g. */
+    titleOriginal: storedOriginal(meta),
     byline: meta.byline ?? null,
     /* `?? null` like its neighbours, so a re-extraction that finds no declared
        authors clears the list rather than leaving the last one beside a new
@@ -859,6 +935,11 @@ export function metaColumns(meta: Meta): Partial<typeof articleRevisions.$inferI
        re-extraction that clears them has decided to. */
     abstract: meta.abstract ?? null,
     doi: meta.doi ?? null,
+    journal: meta.journal ?? null,
+    /* `?? null` matters here as it does for `publishedAt`: an extraction that
+       finds a whole day has no year, and a year left in the column beside the
+       new day is a row the table refuses (`…_published_day_or_year`). */
+    publishedYear: meta.publishedYear ?? null,
     source: meta.source ?? null,
     extractMethod: meta.method ?? null,
     pages: meta.pages ?? null,
@@ -1119,7 +1200,7 @@ async function writeRawSource(
 /**
  * Replace this revision's blocks, wholesale.
  *
- * Three statements, and the order and the conditions are all load-bearing:
+ * Three steps, and the order and the conditions are all load-bearing:
  *
  * 1. **Identities upsert, first and never deleted.** `revision_blocks` has a
  *    foreign key onto `block_identities`, so a block whose identity was never
@@ -1137,41 +1218,50 @@ async function writeRawSource(
  * 3. **Insert only when there is something to insert**, because an empty
  *    `INSERT … VALUES` is a syntax error rather than a no-op.
  *
- * `ordinal` is written from the array index. Block ids are random and carry no
- * position, so if this is wrong there is nothing left to recover the order from.
+ * **Steps 1 and 3 are each as many statements as the article needs**, because
+ * one statement can bind 65,535 parameters and a block row binds 17: until
+ * 2026-10-04 each was a single insert, which took 3,855 blocks and answered the
+ * 3,856th with a protocol error the reader was told to retry
+ * (src/db/insert-batches.ts). They are still one write — every statement runs
+ * in the caller's transaction, so a failure in a later batch takes the earlier
+ * ones with it. tests/store-artefacts-pg.test.ts § "writes an article of 4,000
+ * blocks" is the check.
+ *
+ * `ordinal` is written from the array index — **the index in the whole array,
+ * taken before the rows are cut into batches**. Block ids are random and carry
+ * no position, so if this is wrong there is nothing left to recover the order
+ * from.
  */
 async function writeBlocks(ref: JobDraftRef, tx: Tx, blocks: readonly Block[]): Promise<void> {
-  if (blocks.length) {
-    await tx
-      .insert(blockIdentities)
-      .values(blocks.map((b) => ({ articleId: ref.articleId, blockId: b.id })))
-      .onConflictDoNothing();
+  const identities = blocks.map((b) => ({ articleId: ref.articleId, blockId: b.id }));
+  for (const batch of inBatches(blockIdentities, identities)) {
+    await tx.insert(blockIdentities).values(batch).onConflictDoNothing();
   }
 
   await tx.delete(revisionBlocks).where(eq(revisionBlocks.revisionId, ref.revisionId));
 
-  if (blocks.length) {
-    await tx.insert(revisionBlocks).values(
-      blocks.map((b, index) => ({
-        articleId: ref.articleId,
-        revisionId: ref.revisionId,
-        blockId: b.id,
-        ordinal: index,
-        tag: b.tag,
-        kind: b.kind,
-        level: b.level ?? null,
-        text: b.text,
-        words: b.words,
-        html: b.html,
-        gistable: b.gistable,
-        note: b.note ?? null,
-        role: b.role ?? null,
-        treatment: b.treatment ?? null,
-        noteId: b.noteId ?? null,
-        contextId: b.context?.id ?? null,
-        contextType: b.context?.type ?? null,
-      })),
-    );
+  const rows = blocks.map((b, index) => ({
+    articleId: ref.articleId,
+    revisionId: ref.revisionId,
+    blockId: b.id,
+    ordinal: index,
+    tag: b.tag,
+    kind: b.kind,
+    level: b.level ?? null,
+    text: b.text,
+    words: b.words,
+    html: b.html,
+    gistable: b.gistable,
+    note: b.note ?? null,
+    role: b.role ?? null,
+    treatment: b.treatment ?? null,
+    noteId: b.noteId ?? null,
+    contextId: b.context?.id ?? null,
+    contextType: b.context?.type ?? null,
+  }));
+  /* No rows, no batches: an empty array is never handed to `values`. */
+  for (const batch of inBatches(revisionBlocks, rows)) {
+    await tx.insert(revisionBlocks).values(batch);
   }
 }
 
@@ -1235,6 +1325,15 @@ export async function writeArtefacts(
   for (const [kind, value] of entries) {
     if (value === undefined) continue;
     assertStampAgrees(slug, step, kind, value, stamp);
+    /* Refused here, with the stamps, so a part-made rating never reaches the
+       table's own all-or-none CHECK half way through the step's write. */
+    if (kind === "readingDifficulty" && !isStoredReadingDifficulty(value)) {
+      throw new Error(
+        `${step} for "${slug}": the reading-difficulty rating is not a whole one. It is either ` +
+          `{ rated: false } or both levels from 1 to 5, a sentence, a model and a time. ` +
+          `Nothing has been written.`,
+      );
+    }
   }
 
   /**
@@ -1344,6 +1443,8 @@ export async function writeArtefacts(
       await writeBlocks(ref, tx, (value as ArtifactMap["blocks"]).blocks);
     } else if (site.of === "meta") {
       columns = { ...columns, ...metaColumns(value as Meta) };
+    } else if (site.of === "readingDifficulty") {
+      columns = { ...columns, ...readingDifficultyColumns(value as StoredReadingDifficulty) };
     } else {
       columns = { ...columns, ...(await writeRawSource(tx, slug, value as RawManifest)) };
     }
@@ -1549,8 +1650,7 @@ export function readOnlyPgArtifacts(ref: JobDraftRef, exec: Executor): ReadOnlyA
  *
  * **`readBaseline` is a method, not an arrow property**, and so is `read` inside
  * the view this spreads. Both are generic over `ArtifactKind`, and the arrow
- * form loses the type parameter and hands every caller back `unknown` — the
- * mistake `readsOf` in src/store/session.ts already wrote down.
+ * form loses the type parameter and hands every caller back `unknown`.
  *
  * `Db` is fine here for the same reason it is fine for the read-only view: a
  * read that sees a slightly older snapshot than the write that follows it is the

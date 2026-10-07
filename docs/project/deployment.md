@@ -2,6 +2,21 @@
 
 Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 
+## In this doc
+
+- [§ Where it is](#where-it-is) — the project, region, Node version and URLs, at a glance
+- [§ The domain](#the-domain) — how `spideryarn.com` moved projects, the 308, and rollback (history)
+- [§ Deploying](#deploying) — `npm run deploy`, its flags, the gates, the build stamp, the two ways in, the build
+- [§ Who can reach it](#who-can-reach-it) — the `.vercel.app` trap, `robots.txt`, `noindex`, the preview bots
+- [§ Environment variables](#environment-variables) — what is set on Vercel and what each one breaks
+- [§ `/api/health`, and why to look at it first](#apihealth-and-why-to-look-at-it-first) — what the endpoint checks and how it once lied
+- [§ The five that fail quietly](#the-five-that-fail-quietly) — failures that reported success: TypeScript, routing, `require(ESM)`, the certificate, the body, the bucket
+- [§ What does not work in production yet](#what-does-not-work-in-production-yet) — the filesystem wall and its four wrong diagnoses (history)
+- [§ What the reader sees when the server fails](#what-the-reader-sees-when-the-server-fails) — why an outage showed as a JSON parse error
+- [§ Still to do before this is a real deployment](#still-to-do-before-this-is-a-real-deployment) — the first-deploy checklist, all done (history)
+- [§ It is up, and here is the reading of it](#it-is-up-and-here-is-the-reading-of-it) — the first healthy `/api/health`, and what it does not prove (history)
+- [§ See also](#see-also) — the tutorial, the plan, and the neighbouring docs
+
 Spideryarn on Vercel: how it gets there, what is live, and the five things that
 break without saying so.
 
@@ -153,6 +168,9 @@ project. Deferred by Greg, not forgotten.
 
 ## Deploying
 
+**Only the Overseer runs this** (Greg, 2026-09-29); any other session asks it to —
+[overseer.md § Deploying](overseer.md#deploying).
+
 ```
 npm run deploy
 ```
@@ -291,9 +309,10 @@ Two honesty limits remain, and they are limits rather than bugs:
 - **`.env.local` is still linked from the laptop.** It is the only personal state
   the gate now depends on.
 - **A bare `npm test` in an unprepared checkout is still not hermetic.** Only the
-  gate materialises the corpus; the ~76 test files that compute their own
-  `ROOT/data` path are deliberately left until stage 4 of the store migration
-  gives them a durable target, rather than migrated twice.
+  gate and `npm run worktree:setup` materialise the corpus; the test files that
+  compute their own `ROOT/data` path (~76 when this was written) still read the
+  copied files. Stage 4 of the store migration deleted the filesystem store on
+  2026-09-05 and did not move them.
 
 One consequence of the old arrangement outlived it: `doc-links` will accept a
 link into gitignored `output/`, which nobody else can follow.
@@ -586,27 +605,110 @@ rather than as a rule. A path returning 200 is the worst way to be missing.
 Both are fixed. [`public/robots.txt`](../../public/robots.txt) is a real file, so
 Vercel's filesystem check answers it before the rewrite ever runs, and
 [`vercel.json`](../../vercel.json) adds `X-Robots-Tag: noindex, nofollow` to
-every response. **Read the header as the backstop, not as reinforcement** — a
+every response that is not one of our own pages (every response at all, until
+2026-10-05; see below). **Read the header as the backstop, not as reinforcement** — a
 crawler that honours the `Disallow` never fetches a page and so never sees the
 header. They cover different crawlers rather than the same one twice, and the
 comment at the top of `robots.txt` says what to do if a URL ever needs
 *de-listing* rather than merely not crawling.
 
-### The one hole: two preview bots
+### Our own pages may be listed; nothing a reader put here may
+
+That was the whole site until 2026-10-05. Greg, asked whether search engines should list
+Spideryarn's own pages: *"yes definitely we want those to be visible"*. Asked whether a shared
+article ever should be: *"no"*. The plan is
+[261005f § Stage 2](../plans/261005f-link-previews-and-seo-for-shared-links.md#stage-2-what-gregs-five-answers-build).
+
+**The allow list is [`src/site-pages.ts`](../../src/site-pages.ts)**: nine pages, each with its
+path, its tab title and a sentence of description. Everything else follows it:
+
+| What | Where | How it follows the list |
+|---|---|---|
+| who may crawl | `public/robots.txt` | by hand, two `Allow:` lines a page; `tests/site-pages.test.ts` holds it |
+| the `noindex` header | `vercel.json` | one rule, on every path **not** listed; the same test holds the pattern |
+| each page's own head | `dist/_pages/<name>.html`, and `dist/index.html` for `/` | written by [`scripts/build-site-pages.ts`](../../scripts/build-site-pages.ts) after `vite build` |
+| the sitemap | `dist/sitemap.xml` | the same script |
+| the default shell | `dist/shell.html` | the file Vite built, under a new name |
+
+**`dist/index.html` is no longer "the shell".** It is the homepage's head, because `/` is answered
+from the file system before any rewrite is looked at. The shell with the default head, which says
+`noindex`, is `dist/shell.html`: the catch-all rewrite sends every app path there, the function that
+answers `/read/<slug>` compiles it in ([`scripts/client-shell.ts`](../../scripts/client-shell.ts),
+which refuses a head without `noindex`), and the deploy check hashes it.
+
+**A new address is `noindex` until somebody lists it.** The header rule is a negative lookahead, so
+it fails closed, and a page added to the list and nowhere else is a red test. Adding one: a line in
+`src/site-pages.ts`, two `Allow:` lines in each group of `robots.txt`, a rewrite in `vercel.json` and
+the regenerated header pattern there.
+
+**`robots.txt` lets every crawler fetch `/read/`, and that is how a shared article stays out.** A
+`Disallow` stops a fetch and not a listing: a search engine lists a linked address it may not fetch,
+as a bare URL, and our own pages link to shared articles. The `noindex` on every `/read/` response
+is what keeps one out, and a crawler has to be let in to read it. What it is sent is the title, the
+gist and the canonical; the text comes from `/api/public/`, which stays shut. The list of shared
+articles at `/read/public` is under the same line and carries the same `noindex`. Taking that
+`Allow:` out is the way back, and it trades this for the bare listing.
+
+**`/login` is let in for the same reason**, since every one of our pages links to it
+(`CRAWLABLE_NOINDEX_ROBOTS_ALLOWS` in `src/site-pages.ts`). It is not a listed page: it is served
+the default shell and carries the header.
+
+**The exclusion is weaker on addresses robots cannot fetch.** `/profile`, admin and API paths, and
+direct requests for the generated HTML files carry the exclusion header but are disallowed in
+`robots.txt`. An obeying crawler cannot read their `noindex`, so one of those addresses, **if a
+page a crawler can reach ever linked to it**, could appear as a bare URL. None does today. The
+nine-page list is our permission to index; what a search engine does with it is its own decision.
+GPT Sol's code review raised this; opening those paths to crawlers so that they can be refused
+is a trade nobody has asked for.
+
+**What cannot be tested before a deploy**, and so is asked of one by
+`scripts/check-public-shell.ts`: that Vercel reads the lookahead as we do (its own converter,
+`@vercel/routing-utils`, does: the plan has the probe), that each rewrite reaches its file, and that
+`/` is the homepage's head.
+
+Run it with `--public-slug <slug>` for a real shared article; the checker refuses without that
+fixture. Optional `--private-slug` and `--private-title` also check a known private article and
+its title. It checks admin and API paths and every generated HTML file for the exclusion header.
+
+**One of its checks runs in every deploy, since 2026-10-06**: `npm run deploy` judges the
+`/robots.txt` it was served with that script's `judgeRobotsTxt`, group by group, through
+`judgeServedRobots` in `scripts/deploy-checks.ts`. Before that the deploy looked only for a
+`Disallow: /` line anywhere in the file, which a file restricting one named bot beside an
+unrestricted `User-agent: *` satisfied. So a change to `robots.txt` that the judge does not expect
+fails the deploy's verification: change `PREVIEW_ALLOWS` or its neighbours in the same commit. The
+rest of the script, the `X-Robots-Tag` header included, is still run by hand.
+
+**A limit**: the body of every page is drawn by React, and what a page fetches from `/api/` (the
+changelog's entries, the shared articles on the homepage) is behind `Disallow`. A crawler that runs
+JavaScript sees the page without those parts; one that does not sees the head.
+
+### The preview bots
 
 Greg, 2026-08-30, on shared reading links: *"let's name those two preview bots"*.
 `facebookexternalhit` and `Twitterbot` now have `Allow: /read/` groups of their
 own. Without them a link pasted into WhatsApp, Messenger, Facebook or Instagram
 shows a bare URL — those services fetch the page like any other crawler and were
-obeying the blanket `Disallow`. Slack was already unfurling, because Slackbot
-honours only rules that name it.
+obeying the blanket `Disallow`. Slack was already unfurling:
+[its fetchers ignore `robots.txt`](https://api.slack.com/robots).
 
-**A bot obeys exactly one group and inherits nothing from `*`**, so each named
+**Since 2026-10-05 it is seven robots and three paths**, in one group
+([261005f](../plans/261005f-link-previews-and-seo-for-shared-links.md); Greg, 2026-10-04: *"If I
+share a Spideryarn link (e.g. on X/Twitter, WhatsApp, Facebook, etc etc), make sure it looks
+nice"*). LinkedIn's, WhatsApp's, Telegram's, Discord's and Slack's fetchers are named beside the
+first two, and each may fetch `/read/` and `/og-card.png` (the picture a card carries when it has no
+other, which a robot shut out by `Disallow: /` could not fetch). Later the same day Greg let them in
+to our own pages (*"yes, allow them"*), so the group carries the same page lines as `*`, and
+`/api/public/asset/`, for a shared article's own first picture
+([page-titles.md](page-titles.md)). Adding a path is a line here, in `PREVIEW_ALLOWS` in
+`scripts/check-public-shell.ts`, and in the sentence on `/features/public-readable-sharing` that
+names the fetchers to authors.
+
+**A bot obeys exactly one group and inherits nothing from `*`**, so the named
 group carries its own `Disallow: /` as well. A named group without one is not a
 narrow hole, it is an open door, and in a diff it looks like the tidier version
-of the file. `tests/public-read-rewrite.test.ts` pins both lines for both bots;
-what it deliberately does not do is model how a crawler resolves them, because
-the only honest check for that is pasting a link after a deploy and looking.
+of the file. `tests/site-pages.test.ts` pins every line of both groups, and resolves
+`Allow` against `Disallow` the way Google documents it; the only honest check of what a
+given robot does is pasting a link after a deploy and looking.
 
 **This is permission to fetch, not permission to index.** `X-Robots-Tag` and the
 `<meta name="robots">` are untouched and still say `noindex, nofollow` on
@@ -648,7 +750,8 @@ branch, and it will track `main` from now on.
 
 Set on the project, for `production` and `preview`. None of them lives in a file
 here; [`.env.prod`](../../.env.example) is a record of what production needs and
-is read by nothing.
+is read by no deployment — only by `npm run deploy` and the `--prod` scripts, on
+the machine that runs them.
 
 | | |
 |---|---|
@@ -789,8 +892,9 @@ Two further things it changed, both about what a check can honestly claim:
   module load without them — a blank reading view while every server-side line stays green — so they
   are worth checking. But they are compiled into the client bundle at *build* time, and what this
   endpoint sees is the current project setting. Add them and never redeploy, and it goes green over a
-  blank page. Absent is conclusive; present is not. A build-stamped sentinel is the real answer and
-  is not built.
+  blank page. Absent is conclusive; present is not. A build on Vercel now fails when either is
+  missing (`missingClientEnv`, run from `vite.config.ts`), which closes the new-build half; the
+  never-redeployed half is still invisible here.
 
 The whole thing is written up in
 [260827b-health-check-green-while-uploads-dead.md](../postmortems/260827b-health-check-green-while-uploads-dead.md) —
@@ -1025,11 +1129,12 @@ writes to a local filesystem, which a serverless host does not have:
   transaction that finishes the job** — because until then a job could go `done`
   having published nothing at all, which nothing in this file had noticed.
 
-  **What is still broken, stated plainly:** re-running one step against an
-  existing article. A `{steps:["arc"]}` job gets its own job id and therefore its
-  own empty scratch, and cannot see what the ingest wrote — so opening an article
-  that has no arc fails with the same `ENOENT` one directory deeper. The article
-  reads fine without it.
+  **What was still broken on 2026-08-30, stated plainly** (gone with the scratch
+  directory itself on 2026-09-05, `src/jobs.ts`): re-running one step against an
+  existing article. A `{steps:["arc"]}` job got its own job id and therefore its
+  own empty scratch, and could not see what the ingest wrote — so opening an article
+  that had no arc failed with the same `ENOENT` one directory deeper. The article
+  read fine without it.
 
   The rest of this entry is kept because the diagnosis took four wrong answers to
   reach, and each wrong answer is written below in the order it was believed.
@@ -1069,6 +1174,7 @@ writes to a local filesystem, which a serverless host does not have:
   `urlForSlug` read `data/<slug>/meta.json`
   ([`pipeline.ts`](../../src/pipeline.ts)) on the live enqueue path, so once
   ingest works, a Postgres article with no local file reads as a free slug.
+  (Fixed: both read Postgres now; the filesystem branch went on 2026-09-05.)
 
   **How to find this class of failure yourself** — the route answers `200` and
   Vercel's error dashboard stays empty, so the recipe matters:

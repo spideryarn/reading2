@@ -197,6 +197,13 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* Quick search — the same reader waiting on the same box, scored by Jev on
      the Decisions wire. src/quick-search.ts, plan 261002e. */
   "search-quick": "interactive request work",
+  /* The command bar's sentence — a reader who pressed Enter and is watching
+     the bar. Both of its calls. src/command-pick-call.ts, plan 261003k. */
+  "command-pick": "interactive request work",
+  "command-pick-words": "interactive request work",
+  /* The bar's short list from why you are reading — a reader who pressed the
+     row and is watching the bar. src/command-suggest-call.ts, plan 261005k. */
+  "command-suggest": "interactive request work",
   /* **The fix this table was written for.** Hover a link in the article and this
      says how it stands to the piece being read — docs/project/links.md. It is
      request-scope, reader-triggered, and was in no category at all. */
@@ -211,6 +218,8 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   "citation-investigate": "interactive request work",
   /* The paper's passages, inside the same *Investigate* press. */
   "citation-paper-passages": "interactive request work",
+  /* The work's influence from the search's pages, inside the same press. */
+  "citation-influence": "interactive request work",
   /* *Dig deeper*'s forced search, before the answer a reader pressed for —
      src/dig-deeper.ts. Request scope, reader-triggered. */
   "dig-deeper-search": "interactive request work",
@@ -250,6 +259,12 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* A batch-added paper's title, authors and abstract, read inside the bulk
      import's `metadata` step. src/paper-metadata.ts. */
   "paper-metadata": "step-driven",
+  /* How hard the piece is to read, rated inside the `blocks` step.
+     src/reading-difficulty.ts. */
+  "reading-difficulty": "step-driven",
+  /* An imported title, tidied inside `extract` or the bulk import's
+     `metadata` step. src/title-tidy-model.ts. */
+  "title-tidy": "step-driven",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and
      awaited before the handler returns — request scope, owner-attributed,
      triggered by a reader opening their shelf. Nobody waits on it, but it is

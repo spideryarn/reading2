@@ -82,7 +82,7 @@ import { isMain } from "../../src/is-main.js";
 import { modelFor } from "../../src/models.js";
 import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
 import { fallbackHeadTitle } from "../../src/source-hash.js";
-import type { Block, Meta } from "../../src/types.js";
+import { type Block, identificationLevel, type Meta } from "../../src/types.js";
 import { costOf, formatRunCost, type RunCost } from "./cost.js";
 import { JournalFile, readJournal } from "./journal-file.js";
 import { type ReplayedAttempt, replayJournal, replayLines } from "./replay.js";
@@ -119,10 +119,12 @@ interface Options {
   run: string | null;
   /** `verify` only: the synthetic web instead of the real one. No network at all. */
   dryRun: boolean;
+  /** `replay` only: also list each kept row — its identification level, or the claim it answers. */
+  rows: boolean;
 }
 
 function parseOptions(argv: readonly string[]): Options {
-  const o: Options = { command: argv[0] ?? "check", slug: null, run: null, dryRun: false };
+  const o: Options = { command: argv[0] ?? "check", slug: null, run: null, dryRun: false, rows: false };
   for (let i = 1; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = argv[i + 1];
@@ -139,6 +141,9 @@ function parseOptions(argv: readonly string[]): Options {
         break;
       case "--dry-run":
         o.dryRun = true;
+        break;
+      case "--rows":
+        o.rows = true;
         break;
       default:
         throw new Error(`unknown flag "${String(flag)}"`);
@@ -402,6 +407,30 @@ async function commandPlan(o: Options): Promise<void> {
 
 /* ----------------------------------------------------------------- replay ---- */
 
+/**
+ * **Each kept row, one line** — `replay --rows`. A reception row says how the
+ * page identifies the piece (`named`, `quoted`, `linked`), which is what
+ * Reception groups its rows by; a claims row says which claim it
+ * answers. Added for investigation 261003g, which needed to count the rows a
+ * default bar hides and how a run's rows spread over claims. Hosts and the
+ * article's own words only, never a page's text.
+ */
+function keptRowLines(replayed: readonly ReplayedAttempt[]): string[] {
+  const lines: string[] = ["", "  kept rows:"];
+  for (const attempt of replayed) {
+    if (!attempt.ok) continue;
+    for (const row of attempt.group.rows) {
+      const host = new URL(row.url).host;
+      const about =
+        "claimQuote" in row
+          ? `${row.blockId} "${row.claimQuote.slice(0, 60)}"`
+          : `identifies: ${identificationLevel(row)}`;
+      lines.push(`    ${attempt.pass.padEnd(6)} ${host.padEnd(28)} ${row.relation.padEnd(12)} ${row.lean.padEnd(13)} ${about}`);
+    }
+  }
+  return lines;
+}
+
 async function commandReplay(o: Options): Promise<void> {
   const dir = o.run;
   if (!dir) throw new Error("replay needs --run <run-directory>");
@@ -420,9 +449,11 @@ async function commandReplay(o: Options): Promise<void> {
   console.log(`Journal: ${path.join(dir, "journal.jsonl")}${slug ? ` — ${slug}` : ""}\n`);
   for (const line of reconciliationLines(reconciliation)) console.log(line);
   console.log("");
-  for (const line of replayLines(replayJournal(contents.events, blockText ? { blockText } : {}))) {
+  const replayed = replayJournal(contents.events, blockText ? { blockText } : {});
+  for (const line of replayLines(replayed)) {
     console.log(line);
   }
+  if (o.rows) for (const line of keptRowLines(replayed)) console.log(line);
   if (!reconciliation.complete) process.exitCode = 1;
 }
 

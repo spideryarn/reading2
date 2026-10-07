@@ -12,7 +12,7 @@
  * 2026-09-01 (docs/project/ingest-queue.md § The pipeline is a list, not a function;
  * docs/plans/260831b-finish-the-database-move.md § sub-stage I).
  *
- * Remember mode today is free recall — the reader says what they took from the
+ * Learn mode today is free recall — the reader says what they took from the
  * article and the model shows them where that comes apart. This is the other
  * half of it, where the questions come from the article instead. Full design,
  * the cross-family review that rewrote most of it, and the spike that measured
@@ -20,7 +20,7 @@
  *
  * **Stage 2 wired it up.** It is a `StepName`, a `PipelineStep` in
  * src/pipeline.ts, a `quiz` jsonb column (drizzle/0046_quiz.sql),
- * `GET /api/quiz/:slug`, and a band behind `?mode=remember&remember=quiz`. Stage 1
+ * `GET /api/quiz/:slug`, and a band behind `?mode=learn&learn=quiz`. Stage 1
  * was this file, src/quiz-mark.ts and evals/quiz.ts and nothing else —
  * deliberately, because in this feature the prompt *is* the product and
  * everything else is plumbing around a page of instructions. The registration
@@ -139,8 +139,8 @@ import { mintUniqueId } from "./ids.js";
    near-duplicate of it here would drift. */
 import { normaliseName } from "./ideas.js";
 import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED, QUIZ_NOTHING_ANCHORED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { QUIZ_NOTHING_ANCHORED } from "./messages.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
@@ -156,7 +156,7 @@ import {
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
 import { hashProfile } from "./profile.js";
@@ -581,7 +581,7 @@ export interface QuizRun {
 /**
  * **The generation prompt.**
  *
- * House style is `REMEMBER_SYSTEM`'s in src/converse.ts: shouted section
+ * House style is `LEARN_SYSTEM`'s in src/converse.ts: shouted section
  * headings, rules stated as prohibitions with the reason attached, the failure
  * named rather than gestured at. Several rules here are the fix for something
  * the spike actually produced on `data/noema-mythology-of-conscious-ai`, and
@@ -1162,26 +1162,8 @@ export async function generateQuiz(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    /* `stop_details` is neither thrown nor logged — it is the provider's own
-       words about a request that carried the whole article. src/messages.ts. */
-    throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  }
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("quiz", maxTokens, ANSWER_TOKENS, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "quiz", maxTokens, ANSWER_TOKENS);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   const dropped = emptyDropped();
   const quiz: Quiz = {

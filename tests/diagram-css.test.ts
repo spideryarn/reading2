@@ -35,6 +35,19 @@ import {
    which since 2026-09-06 is the list of `@import`s and holds no rule. */
 const CSS = readerCss();
 
+it("Diagram's read failures keep the quiet colour of its job failures", () => {
+  const bare = CSS.replace(/\/\*[\s\S]*?\*\//g, "");
+  const colour = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rule = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(bare)?.[1];
+    return /(?:^|;)\s*color:\s*([^;]+);/.exec(rule ?? "")?.[1];
+  };
+  expect(colour(".sk-failed")).toBe("var(--ink-faint)");
+  expect(colour(".ill-busy, .ill-failed")).toBe(colour(".sk-failed"));
+  expect(colour(".mode-band.diag .read-error .gloss-error")).toBe(colour(".sk-failed"));
+  expect(readFileSync("src/web/ReadError.tsx", "utf8")).toContain('className="gloss-error"');
+});
+
 /** The `font-size` a selector declares, in px, or null if it declares none. */
 function fontSizeOf(selector: string): number | null {
   // One rule per line is the house style for these; a multi-line rule is caught

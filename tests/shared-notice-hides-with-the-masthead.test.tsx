@@ -49,8 +49,8 @@ const CSS = readerCss();
  *
  * **`.band-covers` since 2026-09-03.** These two rules used to sit inside
  * `@media (max-width: 843px)`, a width the stylesheet could not get right in
- * both spine states; `App.tsx` writes the fact as a class on `.reader` now and
- * these key off that (styles.css § a band with no room). Nothing about the
+ * both spine states; `Reader.tsx` writes the fact as a class on `.reader` now and
+ * these key off that (narrow-window.css § a band with no room). Nothing about the
  * pairing changed, which is what this file is really about.
  */
 const HIDES_MASTHEAD = ".reader.band-covers:has(.mode-band) .masthead { display: none; }";
@@ -62,7 +62,7 @@ describe("a visitor's notice, in the strip the band takes over", () => {
        unconfirmed arm adds a second paragraph inside this same box, so it is
        covered by the same rule and needs no assertion of its own here.
        src/web/PublicChrome.tsx § SharedNotice. */
-    const html = renderToStaticMarkup(<SharedNotice signedIn={false} sessionUnconfirmed={false} />);
+    const html = renderToStaticMarkup(<SharedNotice signedIn={false} sessionUnconfirmed={false} sharedBy="public" />);
     /* The class, not a substring of some Tailwind utility: `shared-notice`
        appears in `tw:` names nowhere, but asserting the attribute boundary is
        what stops that from becoming true later. */

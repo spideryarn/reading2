@@ -81,10 +81,12 @@ import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES, type Mode } from "../src/modes.js";
 import type { AutoRunTarget } from "../src/web/auto-run-targets.js";
 import { commandId, modeCommand } from "../src/web/command-match.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type {
   Article,
   BlockId,
@@ -113,7 +115,7 @@ import type { SavedCriterion } from "../src/saved-criteria.js";
 const OWNER = { id: "owner-1", email: "owner@example.com" };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: OWNER, loading: false }),
+  useSession: () => ({ session: null, user: OWNER, loading: false, known: true }),
 }));
 
 const authListeners: ((event: string, session: unknown) => void)[] = [];
@@ -291,8 +293,8 @@ const SEARCH_CRITERION = "wherever the piece leans on an unnamed source";
 const CRITERION_TEXT = "every claim that rests on a single study";
 const CHAT_TITLE = "Why the instrument comes first";
 const CHAT_ANSWER = "Because the measurement is doing the arguing.";
-const REMEMBER_TITLE = "What I took from the middle section";
-const REMEMBER_ANSWER = "You held on to the calibration and lost the caveat.";
+const LEARN_TITLE = "What I took from the middle section";
+const LEARN_ANSWER = "You held on to the calibration and lost the caveat.";
 
 const GLOSSARY: Glossary = {
   version: "test",
@@ -416,7 +418,6 @@ const CITATIONS: Citations = {
  * different strings, so the row proves the band opened on `brief`.
  */
 const BRIEF_PARA = "A short one about the rig.";
-const SIMPLE_PARA = "The piece says the instrument was built before anyone knew what it measured.";
 
 const SIMPLE: SimpleSummary = {
   version: "simple/2",
@@ -430,10 +431,6 @@ const SIMPLE: SimpleSummary = {
     brief: [
       { text: BRIEF_PARA, ids: ["spya-bbbbbb" as BlockId] },
       { text: "And why it matters.", ids: ["spya-cccccc" as BlockId] },
-    ],
-    simple: [
-      { text: SIMPLE_PARA, ids: ["spya-bbbbbb" as BlockId] },
-      { text: "It matters because the theory came later.", ids: ["spya-cccccc" as BlockId] },
     ],
     fuller: [
       { text: "The fuller one names the rig.", ids: ["spya-bbbbbb" as BlockId] },
@@ -650,12 +647,12 @@ const CHAT_THREAD: Seeded = {
   ],
 };
 
-const REMEMBER_THREAD: Seeded = {
+const LEARN_THREAD: Seeded = {
   id: "spya-thr235",
-  title: REMEMBER_TITLE,
+  title: LEARN_TITLE,
   createdAt: "2026-09-04T11:00:00.000Z",
   updatedAt: "2026-09-04T11:01:00.000Z",
-  kind: "remember",
+  kind: "learn",
   turns: 1,
   messages: [
     {
@@ -668,7 +665,7 @@ const REMEMBER_THREAD: Seeded = {
     {
       id: "spya-msg237",
       role: "assistant",
-      text: REMEMBER_ANSWER,
+      text: LEARN_ANSWER,
       createdAt: "2026-09-04T11:01:00.000Z",
       status: "done",
     },
@@ -686,7 +683,7 @@ let fixtures: Fixtures;
 /**
  * **Whether the populated artefacts were written for a profile** — off
  * everywhere but the corner-badge sweep below, which turns it on to make the
- * owner's *written for you* badge draw (every hook reads `profileHash != null`).
+ * owner's profile icon draw (every hook reads `profileHash != null`).
  * Plan 261002e.
  */
 let profiled = false;
@@ -864,7 +861,7 @@ function reply(url: string, method: string, body: string | null): Response {
   if (url === "/api/jobs") return json({ jobs: [] });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/"))
-    return json({ threads: fixtures === "populated" ? [CHAT_THREAD, REMEMBER_THREAD] : [] });
+    return json({ threads: fixtures === "populated" ? [CHAT_THREAD, LEARN_THREAD] : [] });
   if (url.startsWith("/api/search/"))
     return json({ runs: fixtures === "populated" ? SEARCHES : [] });
   if (url.startsWith("/api/referee/criteria/"))
@@ -988,17 +985,17 @@ async function modeAfterPress(before: string): Promise<string> {
   return modeInUrl();
 }
 
-/** The real bar button, found the way a screen reader would find it. */
-function modeButton(mode: Mode): HTMLButtonElement {
+/**
+ * The real control a reader presses for this mode, found the way a screen
+ * reader would find it: a radio, Marginalia's toggle after them (261001i), or
+ * — for the five gathered there since 2026-10-07 (plan 261007c) — the mode's
+ * item under More, which `modeDoor` opens to find.
+ */
+function modeButton(mode: Mode): HTMLElement {
   const label = MODE_LABEL[mode];
-  /* The radios, and Marginalia's toggle after them (261001i). */
-  const found = [
-    ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
-  ].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 async function press(mode: Mode): Promise<void> {
@@ -1199,14 +1196,29 @@ const SPENDS: Record<Mode, Spend> = {
   plain: { kind: "none", why: "the article and nothing else — there is nothing to generate" },
   /* The same tree again, in linked columns or one nested list. */
   structure: { kind: "none", why: "the columns and the list are that same tree; no model call" },
-  /* The three plain-words levels, which one job writes. Until 2026-10-02 the
-     press armed nothing and the band waited on "Write it"; Greg asked that
-     opening it start the run (7T, docs/plans/261002a-summary-generates-on-open.md). */
-  summary: { kind: "posts", steps: ["simple"] },
+  /* The plain-words levels, which one job writes. Until 2026-10-02 the press
+     armed nothing and the band waited on "Write it"; Greg asked that opening it
+     start the run (7T, docs/plans/261002a-summary-generates-on-open.md).
+
+     **Three presses since 2026-10-03**, when the thread became Summary's third
+     view (plan 261003l): Summary opens on whichever view `?summary=` names, as
+     Diagram does on its picture. On the thread the press arms nothing and the
+     band writes the thread on *arrival*, by Greg's 2026-09-12 word (useTweets.ts
+     § `useAutoRunOnArrival`) — one `tweets` job either way, and no `simple`
+     token left for a later Back to spend, which `stillPending` below watches. */
+  summary: {
+    kind: "delegated",
+    presses: [
+      { search: "", steps: ["simple"], spends: [] },
+      { search: "?summary=fuller", steps: ["simple"], spends: [] },
+      { search: "?summary=thread", steps: ["tweets"], spends: [] },
+    ],
+  },
   /* The tree's questions, the arc and other modes' lists are read, never
      generated: a press that started the Ideas job here would be the bug. Its
-     own relation words are the one thing the press that turns it on asks for
-     (docs/plans/261003f-marginalia-relation-words-and-timeline-events.md). */
+     own relation words are the one thing it asks for, when the column is
+     shown — which a press does, so the post is seen here; the press itself
+     arms nothing (tests/marginalia-relations-on-open.test.tsx). */
   marginalia: { kind: "posts", steps: ["relations"] },
   /* The five artefact modes, each arming its own name. */
   glossary: { kind: "posts", steps: ["glossary"] },
@@ -1215,19 +1227,15 @@ const SPENDS: Record<Mode, Spend> = {
   timeline: { kind: "posts", steps: ["timeline"] },
   /* The dearest press in the app — two calls out to the open web. */
   debate: { kind: "posts", steps: ["debate"] },
-  /* One model pass over the article, like the timeline. */
+  /* One model call over the article, like the timeline. */
   citations: { kind: "posts", steps: ["citations"] },
-  /* One model pass over the article, like Ideas. */
+  /* One model call over the article, like Ideas. */
   faq: { kind: "posts", steps: ["faq"] },
   /* **Three steps, and the first two are the point**: with no Quotes the
      route has nothing to order, and since stage 6 of plan 260928a it plans
      around the Ideas, so the one press asks for both first in the same job
      (`precededBy`, src/web/useSkim.ts). Phase A serves neither. */
   skim: { kind: "posts", steps: ["quotes", "ideas", "skim"] },
-  /* One model pass over the article — and the one mode that writes on
-     *arrival* as well as on a press, by Greg's 2026-09-12 word (useTweets.ts §
-     `useAutoRunOnArrival`). What a press must post is the same one step. */
-  tweets: { kind: "posts", steps: ["tweets"] },
   /* **The one mode where the button and the target are not the same word**,
      and the one row where "what it costs" and "what it arms" are two questions.
 
@@ -1264,7 +1272,7 @@ const SPENDS: Record<Mode, Spend> = {
     kind: "none",
     why: "opens on Criteria, which has nothing to run until the referee has written one",
   },
-  remember: {
+  learn: {
     kind: "none",
     why: "opens on Recall, which waits on the reader's own words before there is anything to say",
   },
@@ -1502,10 +1510,6 @@ const DRAWS: Record<Mode, Draws> = {
   citations: { kind: "band", where: ".mode-band.citations", says: CITATION_TITLE, about: "corner" },
   faq: { kind: "band", where: ".mode-band.faq", says: FAQ_QUESTION, about: "corner" },
   skim: { kind: "band", where: ".mode-band.skim", says: SKIM_ROLE, about: "corner" },
-  /* A post's own words, off the thread in the payload. `.tweets` and not
-     `.gloss`: the panel's feature string is `"gloss tweets"`, so `.gloss` alone
-     would also match Glossary's band. */
-  tweets: { kind: "band", where: ".mode-band.tweets", says: TWEET_POST, about: "corner" },
   /* A node **inside** the drawing, not the drawing's title: a title is drawn
      from the artefact's header and survives a scene that painted nothing. */
   diagram: { kind: "band", where: ".mode-band.diag", says: SKETCH_NODE, about: "corner" },
@@ -1514,17 +1518,17 @@ const DRAWS: Record<Mode, Draws> = {
   search: { kind: "band", where: ".mode-band.srch", says: SEARCH_CRITERION, about: "corner" },
   /* The referee's own criterion, off the saved list — and the band opens on
      Criteria, so this is the sub-mode a press actually lands on. */
-  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT, about: { exempt: "its how-this-works card opens inside the band; too long for a tooltip, and already its (i)" } },
+  referee: { kind: "band", where: ".mode-band.referee", says: CRITERION_TEXT, about: "corner" },
   /* **The two conversation bands share a component and a class**, so the
-     negation is what keeps these two rows apart: Remember's band carries
-     `remember` as well as `chat`, and without `:not()` a Remember panel drawn
+     negation is what keeps these two rows apart: Learn's band carries
+     `learn` as well as `chat`, and without `:not()` a Learn panel drawn
      in Chat's place would satisfy this row. */
-  chat: { kind: "band", where: ".mode-band.chat:not(.remember)", says: CHAT_TITLE, about: "corner" },
-  /* Recall, which is the half Remember opens on — and since plan 261001m it
-     opens the reader's one Remember conversation rather than a list, under a
-     header that says "Remember", so the thing to find is the answer in it
+  chat: { kind: "band", where: ".mode-band.chat:not(.learn)", says: CHAT_TITLE, about: "corner" },
+  /* Recall, which is the half Learn opens on — and since plan 261001m it
+     opens the reader's one Learn conversation rather than a list, under a
+     header that says "Learn", so the thing to find is the answer in it
      rather than the thread's title. */
-  remember: { kind: "band", where: ".mode-band.remember", says: REMEMBER_ANSWER, about: "corner" },
+  learn: { kind: "band", where: ".mode-band.learn", says: LEARN_ANSWER, about: "corner" },
 };
 
 describe("phase B — what each mode's real controller drew", () => {
@@ -1597,8 +1601,58 @@ describe("phase B — what each mode's real controller drew", () => {
 
 });
 
+/* **Summary's second band.** The thread was a row of `DRAWS` while it was a
+   mode (2026-09-29 to 2026-10-03); it is Summary's Thread view now, behind
+   `?summary=thread`, and `DRAWS.summary` above can name only one body. So the
+   same checks, on the other one. `.tweets` and not `.gloss`: the panel's
+   feature string is `"summ gloss tweets"`, and `.gloss` alone would also match
+   Glossary's band. */
+const THREAD_VIEW = { search: "?mode=summary&summary=thread", where: ".mode-band.summ.tweets" } as const;
+
+describe("phase B — Summary's Thread view", () => {
+  it(
+    "draws the thread's own body, under Summary's control row, with one (i) in the corner",
+    async () => {
+      fixtures = "populated";
+      await open(THREAD_VIEW.search);
+
+      const band = host.querySelector(THREAD_VIEW.where);
+      expect(band, `no ${THREAD_VIEW.where} on the page`).not.toBeNull();
+      /* A post's own words, off the thread in the payload. */
+      expect(readable(band as Element), "the band drew no thread").toContain(TWEET_POST);
+      expect(readable(band as Element), "the paragraphs were drawn too").not.toContain(BRIEF_PARA);
+      expect(host.querySelectorAll(".mode-band"), "one band").toHaveLength(1);
+      expect(readable(band as Element), "provenance on the band").not.toMatch(/Written by /);
+
+      const corner = (band as Element).querySelectorAll(":scope > .band-about");
+      expect(corner.length, "no (i) in the band's corner").toBe(1);
+      expect(corner[0], "the (i) is not the band's first child").toBe((band as Element).firstElementChild);
+      expect((band as Element).querySelectorAll(".band-about").length, "a second (i)").toBe(1);
+      expect((band as Element).querySelectorAll(".prof-badge").length, "a badge on an unprofiled band").toBe(0);
+
+      /* The control, in the row the paragraphs' view has it in. */
+      const row = corner[0]?.nextElementSibling;
+      expect(row?.className, "the control row is not the band's first row").toBe("summ-controls");
+      expect(
+        [...(row?.querySelectorAll('[role="radio"]') ?? [])].map((b) => [b.textContent, b.getAttribute("aria-checked")]),
+      ).toEqual([
+        ["Brief", "false"],
+        ["Fuller", "false"],
+        ["Thread", "true"],
+      ]);
+
+      /* The card opens with Summary's words and goes on to the thread's own. */
+      await act(async () => (corner[0] as HTMLButtonElement).click());
+      const card = document.querySelector(".band-about-card")?.textContent ?? "";
+      expect(card).toContain(MODE_CATALOG.summary.how);
+      expect(card, "the thread's counts left the (i)").toMatch(/\d+ posts?/);
+    },
+    PHASE_MS,
+  );
+});
+
 /* ================================================= the badge in the corner ==
-   **The owner's *written for you* badge sits beside the (i), in every mode
+   **The owner's profile icon sits beside the (i), in every mode
    that draws one** — `ModeSurface`'s `profile`, since 2026-10-02. Greg
    (spya-hf4svm): *"their position/sizing/alignment looks a bit off … make this
    reusable/template as part of creating new modes"*. Each mode used to put it
@@ -1608,18 +1662,27 @@ describe("phase B — what each mode's real controller drew", () => {
    whose artefact can be written for the reader's profile and that show it in
    the band. Sketch is the named exception — its badge is in its picture's own
    toolbar, plan 261002e § Deferred. */
-const PROFILED = ["summary", "glossary", "ideas", "quotes", "tweets"] as const satisfies readonly Mode[];
+const PROFILED = ["summary", "glossary", "ideas", "quotes"] as const satisfies readonly Mode[];
 
-describe("the written-for-you badge sits in the band's corner", () => {
-  for (const mode of PROFILED) {
+/** Each profiled band: a mode's, by its `DRAWS` row — and Summary's thread, which has no row. */
+const PROFILED_BANDS: readonly { name: string; search: string; where: string; says: string }[] = [
+  ...PROFILED.map((mode) => {
+    const row = DRAWS[mode];
+    if (row.kind !== "band") throw new Error(`${mode} draws no band`);
+    return { name: mode, search: `?mode=${mode}`, where: row.where, says: row.says };
+  }),
+  { name: "summary's thread", search: THREAD_VIEW.search, where: THREAD_VIEW.where, says: TWEET_POST },
+];
+
+describe("the profile icon sits in the band's corner", () => {
+  for (const { name: mode, search, where, says } of PROFILED_BANDS) {
     it(
       `${mode}: one badge, a direct child of the band, right after the (i)`,
       async () => {
         fixtures = "populated";
         profiled = true;
-        await open(`?mode=${mode}`);
-        const row = DRAWS[mode];
-        if (row.kind !== "band") throw new Error(`${mode} draws no band`);
+        await open(search);
+        const row = { where, says };
         const band = host.querySelector(row.where);
         expect(band, `${mode}: no ${row.where} on the page`).not.toBeNull();
         expect(readable(band as Element), `${mode}: the band drew no body`).toContain(row.says);
@@ -1672,6 +1735,29 @@ describe("the notes beside a band", () => {
     expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
     expect(notes()).toBe(0);
     expect(line()).toContain("swap them in for the panel");
+  }, PHASE_MS);
+
+  /* The line can be dismissed and goes by itself (spya-u264yb, 261006i; its
+     clock is in tests/marginalia-narrow-notice.test.tsx). What only the page
+     can show is that it is drawn afresh, so shown again, when a band that
+     covered the window is closed: under a covering band there is no line at
+     all. 590px is under the 612 the notes need alone (GPT Sol's F2). */
+  it("shows the line again, with its Dismiss, when a covering band is closed", async () => {
+    await atWidth(590, "?margin=1");
+    const dismiss = host.querySelector<HTMLButtonElement>(".marg-narrow button[aria-label='Dismiss']");
+    expect(dismiss, "the line has no way to be dismissed").not.toBeNull();
+    await act(async () => dismiss?.click());
+    expect(host.querySelector(".marg-narrow.is-gone"), "Dismiss did nothing").not.toBeNull();
+
+    await press("glossary");
+    expect(host.querySelector(".mode-band"), "no band").not.toBeNull();
+    expect(line(), "a line was drawn over a covering band").toBeNull();
+
+    /* A second press closes the band. Not Plain, which closes the notes too. */
+    await press("glossary");
+    expect(host.querySelector(".mode-band")).toBeNull();
+    expect(line()).toContain("they sit to the right of the text");
+    expect(host.querySelector(".marg-narrow.is-gone"), "the line came back already gone").toBeNull();
   }, PHASE_MS);
 
   /* Greg, 7P: *"whichever has been activated most recently trumps/swaps out
@@ -1777,4 +1863,98 @@ describe("the notes beside a band", () => {
     expect(host.querySelector(".mode-band")).toBeNull();
     expect(notes()).toBeGreaterThan(0);
   }, PHASE_MS);
+});
+
+/** Review 261003l: exercise the real Reader callback and Dock prop, including
+ * nuqs's frame before the URL flush. A band-only harness cannot catch a
+ * missing prop or a second arming path in Reader. */
+describe("Summary Thread through the real Reader", () => {
+  function chooseSegment(label: string): void {
+    const button = [...host.querySelectorAll<HTMLButtonElement>('.summ-views [role="radio"]')]
+      .find((b) => b.textContent === label);
+    expect(button).toBeDefined();
+    act(() => button!.click());
+  }
+
+  function takeCommand(query: string, kind: string): void {
+    const opener = host.querySelector<HTMLButtonElement>(".dock-commands");
+    expect(opener).not.toBeNull();
+    act(() => opener!.click());
+    const input = host.querySelector<HTMLInputElement>("dialog.cmdbar input.cmdbar-input");
+    expect(input).not.toBeNull();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter!.call(input, query);
+      input!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelector<HTMLElement>('dialog.cmdbar [role="option"]')?.dataset.kind).toBe(kind);
+    act(() => input!.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "Enter", bubbles: true, cancelable: true,
+    })));
+  }
+
+  async function waitFor(check: () => boolean): Promise<void> {
+    for (let i = 0; i < 100 && !check(); i++) {
+      await act(async () => { await new Promise((go) => setTimeout(go, 10)); });
+    }
+    expect(check()).toBe(true);
+    await settle();
+  }
+
+  it("a Summary command immediately after Thread leaves no token for Back (F1)", async () => {
+    await open("?mode=summary");
+    expect(posts).toEqual([]);
+    expect(host.querySelector(".simple-scroll")).not.toBeNull();
+    chooseSegment("Thread");
+    expect(host.querySelector(".mode-band.tweets")).not.toBeNull();
+    expect(new URLSearchParams(location.search).get("summary")).toBeNull();
+    takeCommand("summary", "mode");
+    await settle();
+    expect(stillPending()).toEqual([]);
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    await waitFor(() => new URLSearchParams(location.search).get("summary") === "thread");
+    act(() => history.back());
+    await waitFor(() => host.querySelector(".simple-scroll") !== null);
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    expect(stillPending()).toEqual([]);
+    chooseSegment("Brief");
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"], ["simple"]]);
+  });
+
+  it("tweets plus Enter replaces Fuller with Thread and never arms simple", async () => {
+    await open("?mode=summary&summary=fuller");
+    expect(posts).toEqual([]);
+    takeCommand("tweets", "submode");
+    await waitFor(() => new URLSearchParams(location.search).get("summary") === "thread");
+    expect(host.querySelector(".mode-band.tweets")).not.toBeNull();
+    expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
+    expect(stillPending()).toEqual([]);
+  });
+
+  /* The same frame, for the older sub-mode: F8 of the same review, and
+     docs/postmortems/261003f-activation-targets-read-from-delayed-urls-can-outlive-their-presses.md.
+     Force is mounted, the address still says Sketch, and a Diagram press armed
+     from the address leaves a `sketch` token nothing claims until Back mounts
+     the Sketch and buys a drawing nobody pressed for. The token and the job
+     are asserted apart: the first is the hazard, the second the charge. */
+  it("a Diagram command immediately after Force leaves no sketch token for Back (F8)", async () => {
+    await open("?mode=diagram");
+    expect(posts).toEqual([]);
+    const force = [...host.querySelectorAll<HTMLButtonElement>('.diag-kinds [role="radio"]')]
+      .find((b) => b.textContent?.includes("Force"));
+    expect(force, "the fixture has the experimental switch on, so Force is drawn").toBeDefined();
+    act(() => force!.click());
+    expect(force!.getAttribute("aria-checked")).toBe("true");
+    expect(new URLSearchParams(location.search).get("diagram")).toBeNull();
+    takeCommand("diagram", "mode");
+    expect(stillPending()).toEqual([]);
+    await waitFor(() => new URLSearchParams(location.search).get("diagram") === "force");
+    expect(stillPending()).toEqual([]);
+    act(() => history.back());
+    await waitFor(() => new URLSearchParams(location.search).get("diagram") === null);
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([]);
+    expect(stillPending()).toEqual([]);
+  });
 });

@@ -116,7 +116,6 @@ const PAID: Entitlement = {
 };
 
 async function givenPaidPeriod(): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.billing_accounts
        (owner_id, stripe_customer_id, stripe_subscription_id, price_id, status,
@@ -140,7 +139,6 @@ async function givenArticle(
   visibility: "private" | "public" = "private",
   owner: OwnerId = OWNER,
 ): Promise<string> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query<{ id: string }>(
     `insert into spideryarn.articles (owner_id, slug, visibility, public_at)
      values ($1, $2, $3, case when $3 = 'public' then now() end)
@@ -157,7 +155,6 @@ async function givenCharged(
   at?: Date,
   owner: OwnerId = OWNER,
 ): Promise<string> {
-  if (!pool) throw new Error("no pool");
   const { rows } = await pool.query<{ id: string }>(
     `insert into spideryarn.ingest_events (owner_id, kind, reserved_at, succeeded_at, article_id)
      values ($1, $2, coalesce($4::timestamptz, now()), coalesce($4::timestamptz, now()), $3)
@@ -169,7 +166,6 @@ async function givenCharged(
 
 /** `n` charged minimal papers with no article — cheap padding to put `used` anywhere even. */
 async function givenMinimalPadding(n: number): Promise<void> {
-  if (!pool) return;
   await pool.query(
     `insert into spideryarn.ingest_events (owner_id, kind, reserved_at, succeeded_at)
      select $1, 'minimal', now(), now() from generate_series(1, $2::int)`,
@@ -191,7 +187,6 @@ async function settleUpgrade(ingestEventId: string, articleId: string): Promise<
 
 /** A failed job carrying `ingestEventId`, whose reservation is then released. */
 async function givenFailedJob(ingestEventId: string): Promise<string> {
-  if (!pool) throw new Error("no pool");
   const id = mintId();
   await getDb().insert(jobs).values({
     id,
@@ -210,7 +205,6 @@ async function givenFailedJob(ingestEventId: string): Promise<string> {
 }
 
 async function clear(): Promise<void> {
-  if (!pool) return;
   for (const owner of [OWNER, STRANGER]) {
     await pool.query("delete from spideryarn.jobs where owner_id = $1", [owner]);
     /* One statement for the whole ledger, so a row and the row that superseded
@@ -225,7 +219,6 @@ async function clear(): Promise<void> {
 }
 
 beforeEach(async () => {
-  if (!pool) return;
   for (const id of [OWNER, STRANGER]) {
     await seedAuthUser(pool, { id, email: `minimal-${id}@spideryarn.local`, onConflictDoNothing: true });
   }
@@ -233,7 +226,6 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await clear();
   await pool.query("delete from auth.users where id = any($1::uuid[])", [[OWNER, STRANGER]]).catch(() => {});
   await pool.end();
@@ -314,7 +306,6 @@ describe("a minimal paper must fit whole", () => {
 
 describe("a minimal row is never priced by visibility", () => {
   it("costs 2 on a public article, and 2 after that article is deleted", async () => {
-    if (!pool) return;
     const shared = await givenArticle("public-paper", "public");
     await givenCharged("minimal", shared);
     let usage = await usageFor(OWNER, FREE);
@@ -408,7 +399,6 @@ describe("Read this is the ingest wall, credited the paper's own 2 points", () =
   });
 
   it("is not found for somebody else's article, and writes nothing", async () => {
-    if (!pool) return;
     const theirs = await givenArticle("theirs", "private", STRANGER);
     expect(await reserveUpgrade(OWNER, theirs)).toEqual({ kind: "not-found" });
     const { rows } = await pool.query("select 1 from spideryarn.billing_accounts where owner_id = $1", [OWNER]);
@@ -421,7 +411,6 @@ describe("Read this is the ingest wall, credited the paper's own 2 points", () =
   });
 
   it("binds the reservation to its article from birth, and settles onto no other", async () => {
-    if (!pool) return;
     const paper = await givenArticle("bound");
     await givenCharged("minimal", paper);
     const admitted = await reserveUpgrade(OWNER, paper);
@@ -462,7 +451,6 @@ describe("supersession makes a paper exactly one ingest", () => {
   }
 
   it("totals 200 once read, and still 200 after the paper is deleted", async () => {
-    if (!pool) return;
     const { paper } = await readPaper("read-then-deleted");
     const usage = await usageFor(OWNER, FREE);
     expect(usage).toMatchObject({ chargedFullPrice: 1, minimalCharged: 0, inFlightIngest: 0 });
@@ -501,7 +489,6 @@ describe("supersession makes a paper exactly one ingest", () => {
   });
 
   it("is refused when the payer is another owner's or another article's ingest", async () => {
-    if (!pool) return;
     const paper = await givenArticle("misattributed");
     await givenCharged("minimal", paper);
     const elsewhere = await givenCharged("ingest", await givenArticle("elsewhere"));
@@ -561,7 +548,6 @@ describe("a retry reserves the same kind again", () => {
   });
 
   it("re-reserves Read this bound to the same paper", async () => {
-    if (!pool) return;
     const paper = await givenArticle("retried-read");
     await givenCharged("minimal", paper);
     const first = await reserveUpgrade(OWNER, paper);

@@ -25,7 +25,7 @@
  */
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { ViewportProbe } = await import("../src/web/ViewportProbe.js");
 
@@ -383,6 +383,183 @@ describe("what it survives", () => {
       "head",
       "hint",
     ]);
+  });
+
+  /**
+   * **No clipboard is a refusal the probe says, not a press that does nothing.**
+   * `navigator.clipboard` is undefined in every insecure context — which is
+   * how the probe is most often reached: a phone at `http://192.168.1.x:5273`.
+   * Until 2026-10-04 the write was `navigator.clipboard?.writeText(t).then(…)`,
+   * and an optional chain short-circuits the whole chain, `.catch` included, so
+   * *copy* filled the box and said nothing at all. jsdom has no clipboard, so
+   * the first case is the phone's; watched fail against the optional chain.
+   */
+  describe("copy", () => {
+    const clipboard = (value: unknown) =>
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value });
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, "clipboard");
+    });
+
+    it("says the copy was refused when there is no clipboard, and still fills the box", () => {
+      address("?probe=1");
+      show();
+      expand();
+      expect("clipboard" in navigator && navigator.clipboard, "jsdom should have no clipboard").toBeFalsy();
+
+      press("copy");
+      expect(host.textContent).toContain("copy refused — select the box");
+      expect(JSON.parse(host.querySelector("textarea")?.value || "{}").head?.probe).toBe("spideryarn viewport probe");
+    });
+
+    it("says copied when the clipboard takes it, with the trace it was given", async () => {
+      const written: string[] = [];
+      clipboard({ writeText: async (t: string) => void written.push(t) });
+      address("?probe=1");
+      show();
+      expand();
+
+      press("copy");
+      await act(async () => {});
+      expect(host.textContent).toContain("copied");
+      expect(host.textContent).not.toContain("refused");
+      expect(written).toEqual([host.querySelector("textarea")?.value]);
+    });
+
+    it("says refused when the clipboard rejects", async () => {
+      clipboard({ writeText: async () => Promise.reject(new Error("no permission")) });
+      address("?probe=1");
+      show();
+      expand();
+
+      press("copy");
+      await act(async () => {});
+      expect(host.textContent).toContain("copy refused — select the box");
+    });
+
+    /**
+     * **The line above the box is about the newest press, and Show and Clear
+     * both wipe it.** A write still out when either is pressed used to settle
+     * afterwards and say "copied" over a cleared or refreshed trace; and the
+     * older of two presses, settling last, used to have the last word. Red against the
+     * hand-written handler, 2026-10-04; `useCopy` now (src/web/useCopy.ts).
+     */
+    describe("with a write still out", () => {
+      type Write = { resolve(): void; reject(reason: unknown): void };
+      function held(): Write[] {
+        const writes: Write[] = [];
+        clipboard({
+          writeText: () =>
+            new Promise<void>((resolve, reject) => {
+              writes.push({ resolve, reject });
+            }),
+        });
+        return writes;
+      }
+      /** Exactly what the line above the box says. */
+      const said = () => host.querySelector("textarea")?.previousElementSibling?.textContent;
+      async function settle(how: () => void): Promise<void> {
+        await act(async () => {
+          how();
+          await Promise.resolve();
+          await Promise.resolve();
+        });
+      }
+      function open(): Write[] {
+        const writes = held();
+        address("?probe=1");
+        show();
+        expand();
+        expect(said()).toBe("");
+        return writes;
+      }
+
+      it.each(["copied", "refused"] as const)("keeps %s feedback without timing out", async (outcome) => {
+        const writes = open();
+        vi.useFakeTimers();
+        try {
+          press("copy");
+          expect(writes).toHaveLength(1);
+          await settle(() => outcome === "copied" ? writes[0]?.resolve() : writes[0]?.reject(new Error("denied")));
+          const message = outcome === "copied" ? "copied" : "copy refused — select the box";
+          expect(said()).toBe(message);
+
+          /* The trace and its copy outcome remain available until Show,
+             Clear or another copy changes them. A short tick duration
+             copied from another caller would erase this message. */
+          act(() => vi.advanceTimersByTime(60_000));
+          expect(said()).toBe(message);
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("says nothing when the trace was cleared before the write settled", async () => {
+        const writes = open();
+        press("copy");
+        press("clear");
+        await settle(() => writes[0]?.resolve());
+        expect(said()).toBe("");
+      });
+
+      it("says nothing when Show was pressed before the write settled", async () => {
+        const writes = open();
+        press("copy");
+        press("show");
+        await settle(() => writes[0]?.resolve());
+        expect(said()).toBe("");
+      });
+
+      it("says nothing when a refusal arrives after Clear", async () => {
+        const writes = open();
+        press("copy");
+        press("clear");
+        await settle(() => writes[0]?.reject(new Error("no permission")));
+        expect(said()).toBe("");
+      });
+
+      it("reports the newer press when the older one settles last", async () => {
+        const writes = open();
+        press("copy");
+        press("copy");
+        await settle(() => writes[1]?.resolve());
+        await settle(() => writes[0]?.reject(new Error("no permission")));
+        expect(said()).toBe("copied");
+      });
+
+      /* Characterisation: green before the move and after it. A message that
+         is derived from the hook's state rather than set by hand is one a
+         forgotten `reset()` would leave on screen. */
+      it("clears a settled copied, on Clear and on Show", async () => {
+        const writes = open();
+        press("copy");
+        await settle(() => writes[0]?.resolve());
+        expect(said()).toBe("copied");
+        press("clear");
+        expect(said()).toBe("");
+
+        press("copy");
+        await settle(() => writes[1]?.resolve());
+        expect(said()).toBe("copied");
+        press("show");
+        expect(said()).toBe("");
+      });
+
+      it("clears a settled refusal, on Clear and on Show", async () => {
+        const writes = open();
+        press("copy");
+        await settle(() => writes[0]?.reject(new Error("no permission")));
+        expect(said()).toBe("copy refused — select the box");
+        press("clear");
+        expect(said()).toBe("");
+
+        press("copy");
+        await settle(() => writes[1]?.reject(new Error("no permission")));
+        expect(said()).toBe("copy refused — select the box");
+        press("show");
+        expect(said()).toBe("");
+      });
+    });
   });
 
   /**

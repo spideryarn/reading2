@@ -1,6 +1,7 @@
-/* summary.css — the Summary band: the piece in plain words, a slider over three
-   levels and the chosen level's paragraphs. SummaryMode.tsx, SimplePanel.tsx,
-   docs/project/summaries.md.
+/* summary.css — the Summary band: one row with a three-way control, Brief |
+   Fuller | Thread, and under it the chosen length's paragraphs or the thread.
+   SummaryMode.tsx, SimplePanel.tsx, docs/project/summaries.md. The thread's own
+   rules are glossary.css § tweets; only the control row is shared with it.
 
    It also drew the tree's gists as a nested outline, at Parts or Sections,
    until 2026-10-01; that outline and its rules went then
@@ -10,11 +11,13 @@
    In the mode band. The shell is `.mode-band`; everything here is what goes
    inside it. The title row is `.band-head`, § mode band — Summary draws none. */
 
-/* ---- the one row: the slider and the badge (plan 261001b) ----
+/* ---- the one row: the three-way control ----
    Greg, 2026-09-30: *"avoid wasting vertical space"* (SPIDERYARN-READING2-7A).
-   The group is a `<fieldset>` whose legend only a screen reader hears.
+   **The same row in both views**: Summary's own surface draws it over the
+   paragraphs and the thread's panel draws it over the thread (Tweets.tsx §
+   `controls`), so the control does not move when the view changes.
    **Wrapping rather than scrolling** at the band's narrowest (18rem, MODE_MIN
-   in layout.ts): the badge drops to a second line before anything hides. */
+   in layout.ts). */
 .summ-controls {
   flex: none;
   display: flex;
@@ -26,64 +29,13 @@
 }
 /* The band's top row, so it clears the (i) in the corner: mode-band.css § `.mode-band > .band-about`. */
 .mode-band.has-about > .summ-controls { padding-right: calc(0.6rem + var(--band-about-room)); }
-.summ-seg {
-  /* A `<fieldset>`, so the reset comes first — the UA gives it a groove
-     border, side padding and a margin nobody asked for, and a min-content
-     width that refuses to shrink. */
-  margin: 0;
-  padding: 0;
-  border: 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-}
+/* Under the control row the thread's *Copy the thread* row is no longer the
+   top one, so it gives the corner's room back. */
+.mode-band.has-about > .summ-controls ~ .band-head { padding-right: 0.7rem; }
 
-/* **The plain-words slider** (SPIDERYARN-READING2-7J): three stops, shorter
-   and plainer to the left. Always live since the outline went. */
-.summ-slider { gap: 0.3rem; }
-.summ-slider-track {
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-}
-.summ-slider input[type="range"] {
-  width: 4.6rem;
-  min-height: 1.75rem;
-  margin: 0;
-  accent-color: var(--highlight-text);
-  cursor: pointer;
-}
-/* **An icon at each end instead of the level's name** — Greg, 2026-10-01:
-   *"get rid of the "Simple" text - perhaps replace with an icon"*
-   (SPIDERYARN-READING2-7R). Short lines at the Brief end, a full block at the
-   Fuller end. Muted, because they label the scale rather than compete with
-   the thumb; a press on one goes to that end. */
-.summ-slider-end {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--ink-faint);
-  cursor: pointer;
-  transition: color 0.12s;
-}
-.summ-slider-end:hover { color: var(--ink); }
-.summ-slider-end:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-/* A finger gets the house's large target, while the glyph stays quiet. The
-   slider gets the same height so the whole scale is one touch surface. */
-@media (any-pointer: coarse) {
-  .summ-slider-end { width: var(--control-h-lg); height: var(--control-h-lg); }
-  .summ-slider input[type="range"] { min-height: var(--control-h-lg); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .summ-slider-end { transition: none; }
-}
+/* **Brief | Fuller | Thread** is the part-switcher, `.summ-views` /
+   `.summ-view-btn` — Greg's joined bar of 2026-10-03, which every mode's
+   part-switcher now shares. Its rules are mode-band.css § the part-switcher. */
 
 
 /* ---- the paragraphs' scroller ---- */
@@ -112,8 +64,7 @@
    drop their own. */
 .simple-scroll .gloss-empty { padding: 0.4rem 0.2rem; }
 .simple-scroll .gloss-stale { margin: 0 0 0.8rem; }
-.simple-read-error { margin: 0 0 0.8rem; }
-.simple-read-error .gloss-error { margin: 0 0 0.5rem; }
+.simple-scroll .read-error { margin: 0 0 0.8rem; }
 
 .simple-para + .simple-para { margin-top: 0.9rem; }
 /* Prose, so it reads at the band's own size and leading rather than as a
@@ -151,6 +102,24 @@
   text-decoration-color: var(--highlight);
   text-underline-offset: 2px;
 }
+/* **A key phrase** (plan 261004b): the few words of a sentence a skimming
+   reader should catch. 700 because the model's face, IBM Plex Mono, is static
+   and ships 400 and 700 only (fonts.md); anything between is drawn as one of
+   them, or faked. Ink and face are the sentence's, linked or not. */
+.simple-text strong { font-weight: 700; }
+/* **A paragraph that is a list**: the lead-in is a `.simple-text` paragraph and
+   this is the `<ul>` after it, which wears `.simple-text` too for the face and
+   the sentence rules above. The indent is small because the band can be 18rem
+   on a phone: just room for the bullet, which hangs outside the text so a
+   wrapped line starts under the first. A bullet is a sentence, so the gap
+   between two is a line's worth of air and no more. */
+.simple-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  list-style: disc outside;
+}
+.simple-list > li + li { margin-top: 0.25rem; }
+.simple-list > li::marker { color: var(--ink-faint); }
 /* The doors, in the key the gists' ranges wear. */
 .simple-refs {
   display: flex;
@@ -158,5 +127,37 @@
   gap: 0.2rem 0.5rem;
   margin-top: 0.3rem;
   font-size: 0.81rem;
+  /* The ask button is taller than the doors' text; keep them on one line. */
+  align-items: center;
+}
+/* **Ask about this paragraph in chat** (SimplePanel.tsx § `Paragraph`, plan
+   261004a): the owner's button at the end of the doors row. It is the shared
+   ghost icon button — the Thread's per-post Copy is the same one — so its box,
+   radius, hover wash and focus ring are that component's, and only three
+   things are set here.
+
+   - **Pushed to the right**, so it sits in the same place under every
+     paragraph whatever the number of doors.
+   - **It does not make the row taller.** The button is 24px and the doors'
+     line about 16; the negative block margin gives the difference back, since
+     Greg's standing ask for this band is not to spend vertical space
+     (SPIDERYARN-READING2-7A).
+   - **Quiet until wanted.** Quieter than the prose that is the point of the band,
+     full strength when the pointer is on its paragraph or the keyboard is on
+     the button. Where nothing can hover there is no "until", so it is drawn
+     at a strength a finger can find. Its size on a coarse pointer is at the
+     call site (`tw:pointer-coarse:size-10`), where the utilities layer wins. */
+.simple-ask {
+  margin-left: auto;
+  margin-block: -0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.simple-ask:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  .simple-para:hover .simple-ask { opacity: 1; }
+}
+@media (hover: none) {
+  .simple-ask { opacity: 0.8; }
 }
 .simple-job { margin-top: 0.7rem; }

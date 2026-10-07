@@ -101,6 +101,11 @@ const ARTICLE: Article = {
 let sharing: unknown;
 /** Whether that request fails outright. The page's `provenance` then stays null. */
 let metadataFails = false;
+/** How many more reads fail before one succeeds; `metadataFails` is "all of them". */
+let metadataFailsFirst = 0;
+/** Set, and every metadata read waits on it: the request that is still out. */
+let metadataHeld: Promise<void> | null = null;
+let metadataCalls = 0;
 
 /**
  * **Typed as the wire rather than as `ArticleMetadata`**, and that is the point
@@ -132,10 +137,15 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   sharing = undefined;
   metadataFails = false;
-  vi.stubGlobal("fetch", (input: RequestInfo | URL) => {
+  metadataFailsFirst = 0;
+  metadataHeld = null;
+  metadataCalls = 0;
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url.startsWith("/api/metadata/")) {
-      if (metadataFails) {
+      metadataCalls++;
+      if (metadataHeld) await metadataHeld;
+      if (metadataFails || metadataFailsFirst-- > 0) {
         return Promise.resolve(
           new Response(JSON.stringify({ error: "the database went away" }), { status: 500 }),
         );
@@ -147,6 +157,15 @@ beforeEach(() => {
         }),
       );
     }
+    /* The card's first control reads its private link on its own route
+       (src/web/PrivateLink.tsx). No link, so the public switch below it may
+       say *"Only you can read this"*; an unreadable `{}` here would make it
+       say only *"This is not public"*, which is right and is not this test. */
+    if (url.endsWith("/share-link")) {
+      return Promise.resolve(
+        new Response('{"on":false}', { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    }
     return Promise.resolve(new Response("{}", { status: 200 }));
   });
   host = document.createElement("div");
@@ -155,13 +174,51 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
 });
 
 /** The metadata page, settled, with nothing pressed. */
-async function open(): Promise<void> {
+/** A few turns of the event loop, for a response released after `open()`. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 5; i++) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 0));
+    });
+  }
+}
+
+/** Move the faked clock on, and let whatever it fired land. */
+async function advance(ms: number): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+}
+
+/** `open()` waits on real timers; this is the same render under `vi.useFakeTimers()`. */
+async function openOnFakeTimers(slug = SLUG, keyed = false): Promise<void> {
+  history.replaceState(null, "", `/read/${slug}/metadata`);
+  await act(async () => {
+    root.render(
+      createElement(
+        NuqsAdapter,
+        null,
+        createElement(Metadata, {
+          ...(keyed ? { key: slug } : {}),
+          slug,
+          article: { ...ARTICLE, meta: { ...ARTICLE.meta, slug } },
+          onRenamed: () => {},
+          onVisibility: () => {},
+        }),
+      ),
+    );
+  });
+  await advance(10);
+}
+
+async function open(onPrivateLink?: (slug: string, on: boolean | null) => void): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}/metadata`);
   await act(async () => {
     root.render(
@@ -173,6 +230,7 @@ async function open(): Promise<void> {
           article: ARTICLE,
           onRenamed: () => {},
           onVisibility: () => {},
+          ...(onPrivateLink ? { onPrivateLink } : {}),
         }),
       ),
     );
@@ -316,23 +374,25 @@ describe("the sharing card, on the page that owns it", () => {
     };
 
     expect(under("Anyone who opens it gets these")).toEqual(
-      expect.arrayContaining(["Glossary", "Tweets"]),
+      expect.arrayContaining(["Glossary", "The thread"]),
     );
-    /* **Once.** Tweets was a hand-added row while it was a page, and since it
-       became a mode on 2026-09-29 the mode sweep lists it too — a second chip
-       with the same name is what that looked like in this dialog (plan 260929f). */
-    expect(under("Anyone who opens it gets these").filter((l) => l === "Tweets")).toHaveLength(1);
+    /* **Once.** The thread was a hand-added row while it was a page, the mode
+       sweep's row while it was a mode, and is a hand-added row again now that
+       it is Summary's Thread view (plan 261003l) — a second chip with the same
+       name is what listing it both ways looked like in this dialog. */
+    expect(under("Anyone who opens it gets these").filter((l) => l === "The thread")).toHaveLength(1);
+    expect(under("Anyone who opens it gets these")).not.toContain("Tweets");
     expect(under("Not built yet")).toEqual(
       expect.arrayContaining(["Ideas", "Quotes", "The arc"]),
     );
     expect(under("Anyone who opens it gets these")).not.toContain("The arc");
     /* **`Search` moved out of this column on 2026-09-04**, so `Chat` and
-       `Remember` are what is left of the modes that cost a model call. The
+       `Learn` are what is left of the modes that cost a model call. The
        assertion is kept at two names rather than one for the reason it had two
        to begin with: a single label could be satisfied by a column drawing one
        chip and losing the rest.
        docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
-    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Remember"]));
+    expect(under("These stay with you")).toEqual(expect.arrayContaining(["Chat", "Learn"]));
     expect(under("Anyone who opens it gets these")).toContain("Search");
   });
 
@@ -459,6 +519,161 @@ describe("the sharing card, on the page that owns it", () => {
   });
 
   /**
+   * **Still asking is not the same as having failed to find out.**
+   *
+   * `provenance` is null both before the request lands and after it fails, and
+   * the card had one state for both — so every load drew *"We could not
+   * check"* for as long as the request was out (qi-jpqg6r3b, 2026-10-06).
+   */
+  it("says it is checking while the request is out, not that it could not check", async () => {
+    sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
+    let release = (): void => {};
+    metadataHeld = new Promise((go) => {
+      release = go;
+    });
+
+    await open();
+
+    expect(host.textContent).toContain("Checking who can read this");
+    expect(host.textContent).not.toContain("could not check");
+    expect(host.textContent).not.toContain("Only you can read this");
+    expect(host.textContent).not.toContain(SHARING_INVENTORY_UNKNOWN);
+    expect(host.textContent).not.toContain("Share with anyone");
+    expect(host.textContent).not.toContain("Create a link");
+
+    release();
+    await settle();
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(host.textContent).toContain("Only you can read this");
+    expect(host.textContent).toContain("Share with anyone");
+    expect(host.textContent).toContain("Create a link");
+  });
+
+  /**
+   * **One failed read used to be final.** `reload()` ran when the slug changed
+   * and never again, so a single 404 or dropped connection — easy to get in the
+   * seconds an import is still writing — left the sentence up until the reader
+   * reloaded (qi-kynm6gzc, 2026-10-06).
+   */
+  it("asks again after a failed read, and draws the switch when one lands", async () => {
+    sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
+    metadataFailsFirst = 1;
+    vi.useFakeTimers();
+
+    await openOnFakeTimers();
+    expect(host.textContent).toContain("could not check");
+    expect(metadataCalls).toBe(1);
+
+    let release = (): void => {};
+    metadataHeld = new Promise((go) => { release = go; });
+    await advance(2_000);
+    expect(metadataCalls).toBe(2);
+    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).not.toContain("Checking who can read this");
+    expect(host.textContent).not.toContain("Share with anyone");
+    release();
+    await advance(0);
+    expect(host.textContent).not.toContain("could not check");
+    expect(host.textContent).toContain("Only you can read this");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.includes("Share with anyone"))).toBe(true);
+
+    // And having found out, it stops asking.
+    await advance(120_000);
+    expect(metadataCalls).toBe(2);
+  });
+
+  /**
+   * A wait armed for one article must not fire a read for the next: the timer
+   * holds that article's `reload`. GPT Sol's plan review, 2026-10-06.
+   */
+  it("drops the wait when the page is taken down", async () => {
+    metadataFails = true;
+    vi.useFakeTimers();
+
+    await openOnFakeTimers();
+    expect(metadataCalls).toBe(1);
+    await act(async () => root.render(null));
+    await advance(10 * 60_000);
+
+    expect(metadataCalls).toBe(1);
+  });
+
+  it("gives up asking after four more tries, and goes on saying it could not check", async () => {
+    metadataFails = true;
+    vi.useFakeTimers();
+
+    await openOnFakeTimers();
+    /* One wait at a time: the next timer is set by an effect, which runs when
+       `act` returns, so one long advance would only ever fire the first. */
+    for (const wait of [2_000, 5_000, 15_000, 30_000]) {
+      await advance(wait);
+    }
+    expect(metadataCalls).toBe(5);
+    await advance(10 * 60_000);
+
+    expect(metadataCalls).toBe(5);
+    expect(host.textContent).toContain("could not check");
+    expect(host.textContent).not.toContain("Checking who can read this");
+  });
+
+  it("drops the old article's wait and gives the new article its own retry budget", async () => {
+    metadataFails = true;
+    vi.useFakeTimers();
+    const requests: string[] = [];
+    const originalFetch = fetch;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).startsWith("/api/metadata/")) requests.push(String(input));
+      return originalFetch(input, init);
+    });
+
+    await openOnFakeTimers(SLUG, true);
+    await advance(2_000);
+    expect(requests).toHaveLength(2);
+
+    let release = (): void => {};
+    metadataHeld = new Promise((go) => { release = go; });
+    await openOnFakeTimers("another-piece", true);
+    expect(host.textContent).toContain("Checking who can read this");
+    expect(host.textContent).not.toContain("could not check");
+    release();
+    await advance(0);
+    metadataHeld = null;
+    for (const wait of [2_000, 5_000, 15_000, 30_000]) await advance(wait);
+    await advance(120_000);
+
+    expect(requests).toEqual([
+      `/api/metadata/${SLUG}`, `/api/metadata/${SLUG}`,
+      ...Array<string>(5).fill("/api/metadata/another-piece"),
+    ]);
+  });
+
+  it("does not count a late failure from the previous slug against the new slug", async () => {
+    vi.useFakeTimers();
+    let release = (): void => {};
+    const oldRead = new Promise<void>((go) => { release = go; });
+    const originalFetch = fetch;
+    let newReads = 0;
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (!url.startsWith("/api/metadata/")) return originalFetch(input, init);
+      if (url === `/api/metadata/${SLUG}`) await oldRead;
+      else newReads++;
+      return new Response('{"error":"read failed"}', { status: 500 });
+    });
+
+    // Keep the instance here to exercise current(), even though the app keys it.
+    await openOnFakeTimers();
+    await openOnFakeTimers("another-piece");
+    expect(newReads).toBe(1);
+    release();
+    await advance(0);
+    await advance(2_000);
+    expect(newReads).toBe(2);
+    await advance(5_000);
+    expect(newReads).toBe(3);
+  });
+
+  /**
    * **The section sits in a box, like every other section on this page.**
    *
    * Greg, 2026-09-04: *"the section should be inside a box like the other
@@ -519,4 +734,30 @@ describe("the sharing card, on the page that owns it", () => {
     // And the switch is inside it, rather than the box being an empty sibling.
     expect(box?.textContent).toContain("Only you can read this");
   });
+});
+
+it("reports private-link reads and writes to the owner article, including an uncertain write", async () => {
+  sharing = { visibility: "private", publicAt: null, personalised: [], available: ALL_BUILT };
+  const updates: Array<[string, boolean | null]> = [];
+  const originalFetch = globalThis.fetch;
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/share-link") && init?.method === "POST") {
+      return Promise.resolve(new Response(JSON.stringify({ on: true, key: "a".repeat(22), since: "2026-10-05T12:00:00Z" }), {
+        status: 200, headers: { "content-type": "application/json" },
+      }));
+    }
+    if (String(input).endsWith("/share-link") && init?.method === "DELETE") return Promise.reject(new Error("lost reply"));
+    return originalFetch(input, init);
+  });
+  await open((slug, on) => updates.push([slug, on]));
+  expect(updates.at(-1)).toEqual([SLUG, false]);
+  const press = async (text: string) => {
+    await act(async () => [...host.querySelectorAll("button")].find((b) => b.textContent?.trim() === text)?.click());
+  };
+  await press("Create a link");
+  await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+  await press("Create the link");
+  expect(updates.at(-1)).toEqual([SLUG, true]);
+  await press("Turn off");
+  expect(updates.at(-1)).toEqual([SLUG, null]);
 });

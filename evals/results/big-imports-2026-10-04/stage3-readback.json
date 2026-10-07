@@ -1,0 +1,71 @@
+{
+ "s3-gdl-45mb-spya-cc9kr8": {
+  "loadMs": 6225,
+  "blocks": 1025,
+  "kinds": {
+   "heading": 119,
+   "text": 842,
+   "quote": 4,
+   "media": 60
+  },
+  "headings": 119,
+  "treeKeys": [
+   "slug",
+   "nodes",
+   "rootId",
+   "version",
+   "generator"
+  ],
+  "treeNodes": 1077,
+  "treeMaxDepth": 3,
+  "leaves": 1025,
+  "leavesWithNavLabel": 0,
+  "navLabelStatus": "pending",
+  "responseBytes": 962763,
+  "responseMB": 0.963,
+  "gzipBytes": 181442,
+  "gzipMB": 0.181,
+  "overVercel4_5MB": false,
+  "fractionOf4_5MB": 0.214,
+  "topLevelKeyBytes": {
+   "meta": 812,
+   "titleOverridden": 5,
+   "blocks": 806943,
+   "tree": 143903,
+   "assets": 10954,
+   "navLabelStatus": 9,
+   "visibility": 9,
+   "archivedAt": 4,
+   "sourceGuess": 0,
+   "highPowerSince": 4
+  },
+  "metaKeys": [
+   "slug",
+   "title",
+   "byline",
+   "fetchedAt",
+   "journal",
+   "filename",
+   "source",
+   "method",
+   "pages",
+   "rawSha256",
+   "recall",
+   "pagesChecked",
+   "authors"
+  ],
+  "qualityNotes": "not on the loaded article",
+  "assetsShape": [
+   "entries",
+   "version",
+   "fetchedAt",
+   "pdfFigures",
+   "sourceHash"
+  ]
+ },
+ "s3-doctorow-250p-spya-sw2jbz": {
+  "error": "Error",
+  "status": 404,
+  "message": "No article artefacts for \"s3-doctorow-250p-spya-sw2jbz\"."
+ }
+}

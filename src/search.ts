@@ -65,7 +65,6 @@
  * selection: it is what somebody was looking for.
  */
 import type { Block, Meta, SearchHit } from "./types.js";
-import { loadEnvLocal } from "./env.js";
 import { findQuote } from "./quote-match.js";
 import { type ModelPower, modelFor } from "./models.js";
 import { errorFields, log, since } from "./log.js";
@@ -76,6 +75,7 @@ import {
   providerFailedMidAnswer,
   stoppedByReader,
 } from "./openrouter-stream.js";
+import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import { hitExtractor } from "./search-hits-stream.js";
 import { plainWords } from "./plain-words.js";
@@ -84,7 +84,6 @@ import {
   ANSWER_OVERFLOWED,
   ANSWER_OVERFLOWED_FIXED_ASK,
   ENDED_UNFINISHED,
-  NOT_CONFIGURED,
   PROVIDER_UNREADABLE,
   saidNothing,
 } from "./messages.js";
@@ -555,16 +554,6 @@ export async function* findPassagesStream({
 }: SearchRequest): AsyncGenerator<SearchEvent> {
   const line = log("model");
 
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // Two audiences, two sentences — see NOT_CONFIGURED in src/messages.ts.
-    // This one is for whoever runs the server; the thrown message is for the
-    // reader, and does not name an environment variable or a dotfile.
-    line.error("OPENROUTER_API_KEY is not set — every search will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
-
   const messages = buildSearchMessages(meta, blocks, criterion);
 
   /* Whether the article is even long enough to cache. Logged, never thrown: a
@@ -582,7 +571,7 @@ export async function* findPassagesStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   /* Our own clock rather than anything the provider reports — see explain.ts

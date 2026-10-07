@@ -163,6 +163,36 @@ describe("the cards' words", () => {
     expect(tip.how).toMatch(/AI|you|person who shared/);
   });
 
+  /* spya-xf6m2u: "the tooltip says to 'press it' but I don't see anything to
+     press." The line is the button, so the card names it. */
+  it.each(Object.entries(MARG_TIPS))("%s: a card that says to press says what to press", (_key, tip) => {
+    expect(tip.what).not.toMatch(/press it\b/i);
+    if (/\bpress\b/i.test(tip.what)) expect(tip.what).toMatch(/Press this line/);
+  });
+
+  it("promises of a cited work only what the open line shows", () => {
+    /* The by-line and the article's reference entry, never the model's reason
+       (plan 261003j) — MarginaliaColumn.tsx § CitationNote. */
+    expect(`${MARG_TIPS.citation.what} ${MARG_TIPS.citation.how}`).not.toMatch(/why it is cited|reason it is cited/i);
+  });
+
+  it("explains an assumed Timeline year instead of promising dates are never guessed", () => {
+    const event: TimelineEvent = {
+      id: "e", label: "The launch", order: 1, modality: "happened", occurrences: [],
+      dating: {
+        kind: "dated",
+        when: {
+          earliest: "2026-05-12", latest: "2026-05-12", phrase: "12 May", yearFrom: "piece",
+          extent: "instant", yearFilled: true, at: { blockId: "spya-aaaaaa", start: 18, end: 24 },
+        },
+      },
+    };
+    paint([{ kind: "timeline", items: [{ event, quote: "The launch was on 12 May." }] }]);
+    expect(host.querySelector(".marg-stamp")?.textContent).toContain("year assumed");
+    expect(MARG_TIPS.timeline.how).not.toContain("never guessed");
+    expect(MARG_TIPS.timeline.how).toMatch(/year.*assum|assum.*year/i);
+  });
+
   it("says when Debate's displayed headline can be AI's reading rather than the page's title", () => {
     expect(MARG_TIPS.debate.how).toMatch(/AI wrote the headline/i);
   });
@@ -186,6 +216,14 @@ describe("whose words a shut line is (fonts.md)", () => {
     expect(host.querySelector(".marg-stamp")?.classList.contains("voice-ui")).toBe(true);
   });
 
+  it("a Timeline date with no year is the article's own phrase, quoted, in the author's face", () => {
+    const dating: TimelineEvent["dating"] = { kind: "rejected", reason: "noYearFrame", phrase: "On July 7" };
+    const event = { id: "e", label: "The launch", dating, order: 1, modality: "happened", occurrences: [] } as TimelineEvent;
+    paint([{ kind: "timeline", items: [{ event, quote: "q" }] }]);
+    expect(host.querySelector(".marg-stamp")?.textContent).toBe("“On July 7”");
+    expect(host.querySelector(".marg-stamp")?.classList.contains("voice-author")).toBe(true);
+  });
+
   it("a relation word is a button a keyboard can reach, in the AI's face, and says what it means", () => {
     paint([{ kind: "relation", relation: "contrast" }]);
     const word = host.querySelector<HTMLButtonElement>("button.marg-relation");
@@ -202,5 +240,56 @@ describe("whose words a shut line is (fonts.md)", () => {
   it("a count is ours", () => {
     paint([{ kind: "citation", items: [work, { ...work, id: "w2" } as CitedWork] }]);
     expect(host.querySelector(".marg-shut-line")?.classList.contains("voice-ui")).toBe(true);
+  });
+});
+
+/* A relation or a provenance a newer server sends to a copy built before it.
+   Each stamp and each tip sentence is a table read by that value. The slot's
+   boundary catches a throw, so the failure is a block whose notes silently are
+   not there. docs/plans/261005h, Stage A. */
+describe("a value this copy of the app was built before", () => {
+  const UNKNOWN = ["a-newer-value", "__proto__", "constructor", "toString"];
+  const words = (value: string) => value.replaceAll("-", " ");
+  const idea = (provenance: string) =>
+    ({ kind: "idea", ideaId: "i1", name: "Locality", statement: "Causes act nearby.", provenance }) as unknown as MarginaliaNote;
+  const stamps = () => [...host.querySelectorAll(".marg-stamp")].map((el) => el.textContent);
+  const openIdea = () => act(async () => host.querySelector<HTMLButtonElement>("button.marg-idea")?.click());
+  const cardLines = () => [...document.querySelectorAll(".tip-soon-how")].map((el) => el.textContent);
+
+  beforeEach(() => {
+    /* React logs what the slot's boundary caught; the assertions report it. */
+    vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("stamps the values it knows (the control)", async () => {
+    paint([{ kind: "debate", items: [claim] }, idea("assumed")]);
+    expect(stamps()).toEqual(["disputes", "assumes"]);
+    await openIdea();
+    expect(cardLines()).toHaveLength(2);
+    expect(cardLines()[0]).toBe("The piece takes this for granted rather than arguing for it.");
+  });
+
+  it.each(UNKNOWN)("stamps a lone Debate page's relation %s as the server's own word", (relation) => {
+    paint([{ kind: "debate", items: [{ ...claim, relation } as unknown as MarginClaim] }]);
+    expect(stamps()).toEqual([words(relation)]);
+  });
+
+  it.each(UNKNOWN)("stamps relation %s on one of several Debate pages", (relation) => {
+    const other = { ...claim, id: "d2", relation } as unknown as MarginClaim;
+    paint([{ kind: "debate", items: [claim, other] }]);
+    /* Each page's own stamp is inside the note, which is shut until pressed. */
+    act(() => host.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    expect(stamps()).toEqual(["Debate", "disputes", words(relation)]);
+  });
+
+  it.each(UNKNOWN)("stamps an idea's provenance %s, and its card says only what it knows", async (provenance) => {
+    paint([idea(provenance)]);
+    expect(stamps()).toEqual([words(provenance)]);
+    await openIdea();
+    expect(document.body.textContent).toContain("Causes act nearby.");
+    expect(cardLines()).toHaveLength(1);
   });
 });

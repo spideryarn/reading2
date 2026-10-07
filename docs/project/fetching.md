@@ -1,5 +1,7 @@
 # Fetching — stage 1, and the things other people's servers do
 
+Up: [architecture.md](architecture.md)
+
 Getting the bytes, and knowing what they are. One module,
 [`src/fetch.ts`](../../src/fetch.ts), reached one way: the [ingest queue](ingest-queue.md), whether
 an article is being added from a browser or from `npm run ingest -- <url>`
@@ -22,6 +24,20 @@ Where it sits: **stage 1** of [the pipeline](architecture.md#pipeline), feeding
 [content extraction](content-extraction.md). It is not runnable on its own — see
 [below](#npm-run-fetch-is-gone-and-what-went-with-it) for why a fetch-only job is a thing the queue
 cannot express. `npm run ingest -- <url>` runs it, and everything after it.
+
+## In this doc
+
+- [§ What it does that a bare `fetch` doesn't](#what-it-does-that-a-bare-fetch-doesnt) — the list of protections
+- [§ The shape](#the-shape) — the entry points and typed failures
+- [§ The evidence](#the-evidence) — size, encoding, document kind, certificates, redirects, timeouts, retries: why each rule exists
+- [§ What stage 1 leaves behind](#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk) — the stored object and manifest; `npm run fetch` is gone
+- [§ A paper source](#a-paper-source-one-paper-several-addresses) — a DOI or landing page leading to the paper
+- [§ Not everything gets fetched](#not-everything-gets-fetched-rawmanifest-has-an-origin) — uploads and `RawManifest.origin`
+- [§ The user-agent question](#the-user-agent-question) — why we send what we send
+- [§ Addresses we won't dial](#addresses-we-wont-dial) — SSRF and private addresses
+- [§ Dependencies, and the ones we didn't take](#dependencies-and-the-ones-we-didnt-take) — library choices
+- [§ What's still loose](#whats-still-loose) — known gaps
+- A bot-check page is stage 2's refusal, not this stage's: [content-extraction.md § Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor)
 
 ## What it does that a bare `fetch` doesn't
 
@@ -52,13 +68,21 @@ doc.bytes     // always present, whatever the kind
 
 **`doc.url` is the URL to keep, not the one you asked for.** It is what relative links resolve
 against, and a `doi.org` or `t.co` address is not what anyone means by "where this article lives".
-Stage 2 currently passes the *requested* URL to Readability as its base — see
-[what's still loose](#whats-still-loose).
+Stage 2 resolves against it since 2026-10-05.
 
 A failure carries a `code` you can switch on, a message written for a person, `status` where there
 was one, and `retryable`. The codes are `invalid-url`, `unsupported-scheme`, `blocked-address`,
 `dns`, `connection`, `certificate`, `timeout`, `too-many-redirects`, `unauthorized`, `forbidden`,
 `not-found`, `rate-limited`, `server-error`, `http-error`, `too-large`, `unsupported-type`, `empty`.
+
+**That message is not what the job card shows.** It can name the host, and a stored failure is not a
+place for a reading history ([logging.md](logging.md)). When the pipeline's fetch step fails, each
+code is given a sentence and a kind of its own by `fetchFailed` in
+[`src/messages.ts`](../../src/messages.ts), and the kind decides whether Retry is offered:
+[ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under).
+The diagnostic that reaches the log is rewritten at the same place, from the code and the status
+alone. The other callers (link previews, figures, the bibliographic lookups) classify a failure
+their own way and are unchanged.
 
 **Everything it touches from outside is injectable** — the fetch, the clock, the sleep, the DNS
 lookup, the jitter. That is not ceremony. It is the only reason
@@ -86,10 +110,40 @@ compressing incompressible input can add overhead rather than remove it, and mor
 server that simply overstates would have had a real article refused, with a confident figure in the
 error message and no way to tell from outside that the figure was invented. It was also quietly at
 odds with this very section — the header is a claim by the same server we have just finished saying
-lies about it. What it bought was skipping a download the cap already bounds at 32 MB. **The cap is
+lies about it. What it bought was skipping a download the cap already bounds. **The cap is
 now enforced in exactly one place: bytes that actually arrived.**
 
-**The cap is 32 MB, and the number has a source.** The previous version used 4 MB
+**The cap is 50 MiB, and it is the upload's number, not a second one.** `DEFAULTS.maxBytes` in
+`src/fetch.ts` is `MAX_UPLOAD_BYTES` from `src/uploads.ts`, the constant the upload dialog reads
+when it says "up to 50 MB", so a file chosen and an address pasted stop at the same size and cannot
+drift. Until 2026-10-04 it was a second literal, 32 MiB, and a document fetched by address was
+refused at a size the dialog had just called fine.
+
+> make them consistent (and perhaps reuse the same protection-machinery)
+>
+> — Greg, 2026-10-04
+
+The machinery is shared too. The streaming counter is `readStreamCapped` in `src/read-capped.ts`,
+and both the fetch (`readCapped`) and the store's own read (`get` in `src/store/blobs-supabase.ts`)
+go through it; omitted Storage caps default to `MAX_UPLOAD_BYTES`, while explicit limits can
+name the size of stored UTF-8 HTML. The store used to read the whole body and check its length
+afterwards. It is still a
+defence ([security-map.md](security-map.md)): a hard stop on bytes that arrived. What a body at the cap
+holds in the fetch itself is the chunks plus one joined copy, up from about 64 MiB to about
+100 MiB; past that point an upload at 50 MiB already sends the same bytes down the same pipeline.
+**That is a bounded increase, not a measured capacity**: nobody has confirmed Vercel's memory
+ceiling for a 50 MiB import, by either route (`src/pdf-read.ts` says the same of its own numbers).
+Only the pipeline's own document fetch uses the default: link
+previews, paper text, figures and the bibliographic lookups each pass a tighter cap of their own.
+
+**What the reader is told.** Over the cap, the job card shows `FETCH_TOO_BIG` (`[fetch-big]` in
+`src/messages.ts`), which names the limit and is `blocked`, so no Retry is offered for the same
+over-limit document. The content at an address can change;
+this refusal does not predict its future size. The plan is
+[261004k](../plans/261004k-one-size-limit-for-an-upload-and-an-address.md). It was the first fetch
+failure to have a sentence of its own; every other code has one now, through `fetchFailed`.
+
+**The number also has a floor with a source.** The previous version used 4 MB
 ([original-version/extraction.md](original-version/extraction.md#the-fetch-and-one-hard-won-fix)),
 and Greg's own example — `sas.upenn.edu/~cavitch/pdf-library/Nagel_Bat.pdf`, Nagel's *What Is It
 Like to Be a Bat?* — is **4,930,377 bytes**. Their cap would have refused it. A limit picked without
@@ -204,7 +258,11 @@ label loses to document markup:
 - Academic publishers serve real PDFs as `application/octet-stream` and `text/plain`. A `%PDF-`
   magic number is still a PDF.
 - A Cloudflare challenge page served from a `.pdf` URL is still HTML. `doi.org/10.1145/1629575.1629587`
-  redirects cleanly to `dl.acm.org` and is then met with *"Just a moment…"*.
+  redirects cleanly to `dl.acm.org` and is then met with *"Just a moment…"*. **Stage 1 does not
+  recognise a bot check; stage 2 does** — the typed refusal, the registry in
+  [`src/challenge-page.ts`](../../src/challenge-page.ts) and how to add a vendor are in
+  [content-extraction.md § The three ways this stage refuses](content-extraction.md#the-three-ways-this-stage-refuses)
+  and [§ Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor).
 - `httpbin.org/status/401` sends **no `Content-Type` header at all**, so "the header is absent" is a
   case, not an edge case.
 
@@ -291,13 +349,14 @@ deadline is doing its job, the document is just genuinely big and the server gen
 Two to three attempts, because a person is waiting. 429 (honouring `Retry-After`, capped), 502, 503,
 504 and the transient socket errors are retried; 401, 403, 404 and our own refusals are not — they
 will fail identically. Backoff uses **full jitter**, a delay drawn uniformly from zero to the
-ceiling.
+ceiling. A `Retry-After` that is not a positive wait (`0`, a date already past) counts as none, so
+the backoff applies (`src/retry-after.ts`).
 
 ## What stage 1 leaves behind, since 2026-08-31: nothing on disk
 
 **`writeRaw` writes no files.** It used to write `data/<slug>/raw.html` (or `raw.pdf`) and a
 `raw.json` manifest beside it; it now returns the manifest and the *store* decides where that goes —
-`raw.json` on the filesystem, columns on `article_revisions` in Postgres. The bytes go where they
+columns on `article_revisions` in Postgres (`raw.json` on the filesystem, until that store went). The bytes go where they
 were already going: the content-addressed `sources` bucket, under `canonicalKey(storedSha256, kind)`,
 through [`src/store/blobs.ts`](../../src/store/blobs.ts), which is itself selected (`blobs-fs.ts`
 locally, `blobs-supabase.ts` deployed).
@@ -374,6 +433,216 @@ them.
 [`tests/stage2c-raw-bytes.test.ts`](../../tests/stage2c-raw-bytes.test.ts), which is still the only
 thing comparing what it writes against what `PATHS.fetch.raw` reads. It dies with the filesystem
 store.
+
+## A paper source: one paper, several addresses
+
+> If I include a link like this, the right move is to grab either the html or the pdf, rather than
+> reading in this exact link.
+>
+> — Greg, 2026-10-05, of an `arxiv.org/abs/…` link with tracking parameters on it
+
+Until 2026-10-05 that link imported arXiv's abstract page: 304 words under the paper's title, and
+nothing to say it was not the paper. Now the fetch step asks
+[`src/paper-sources.ts`](../../src/paper-sources.ts) first.
+
+`resolvePaperSource(url)` is pure string work. For an address a source recognises it answers with
+the paper's id, one key and one slug for every shape of its link, and **candidates**: the
+addresses to try, in order, each saying what kind of document it must be. For anything else it
+answers `null`, and the step makes the one request it always made.
+
+```
+ candidates = resolvePaperSource(url)?.candidates ?? [{ url }]
+ for each, in order:   doc = fetchDocument(candidate.url)        ← unchanged
+     the kind it promised (and, for HTML, carrying its marker)   → this is the document
+     a 404 or a 410, or the wrong kind, and another candidate    → try the next
+     anything else                                               → fail, as a pasted address does
+```
+
+Four things about it that are deliberate:
+
+- **`fetchDocument` is called exactly as before, once per candidate.** Every defence below runs on
+  every one, and a candidate's address is a fixed string built from the matched id, never text
+  copied from what was pasted.
+- **Only absence moves on.** A timeout, a rate limit, a blocked address or an oversized body is the
+  step's failure. Falling back past those would hide the cause and could quietly spend money on a
+  costlier rendering.
+- **The last candidate must be what it promised too.** A PDF address that serves an HTML error page
+  stores nothing and fails with `[fetch-incomplete]`, which offers Retry.
+- **It resolves in the step, from the job's own address**, so a retry and a refresh fetch the paper
+  too.
+
+**arXiv's candidates are its HTML rendering, then its PDF.** It recognises `abs`, `pdf`
+(with or without `.pdf`), `html` and `format` paths on `arxiv.org`, `www.`, `export.` and
+`browse.`, old-style ids, a version (kept: `v1` is a different article from the latest), and
+arXiv's own DOI at `doi.org/10.48550/arXiv.<id>`. It matches an origin, so a non-default port or
+credentials in the address is not arXiv.
+
+> run evals to figure out whether html or pdf is better. Then even if someone gives us a link like
+> this, automatically download the actual paper (either html or pdf as you decide).
+>
+> — Greg, 2026-10-05
+
+The HTML goes first because reading it is free and takes seconds, where a model reading the PDF
+costs about ten cents and two minutes, and because on the five papers compared it was the better
+article once stage 2 knew LaTeXML's shapes
+([content-extraction.md](content-extraction.md#a-latexml-page-arxivs-html), and
+[261005e](../investigations/261005e-arxiv-html-rendering-against-its-pdf-through-our-pipeline.md)
+for the comparison). arXiv has no HTML for a paper its converter could not handle and answers 404,
+which is what sends the step on to the PDF: 4 of 36 recent papers probed. The HTML candidate's
+marker is `ltx_document`, LaTeXML's own class, so an error page served with a 200 is not taken for
+the paper. **A `pdf/` link gets the HTML too**: the choice is about the paper, not about which
+button on arXiv's page the link was copied from.
+
+**Adding a source is adding one object to `SOURCES`**, when the paper and its candidates can be
+read off the pasted address. A link that names its paper only once it has been followed (a short
+link, a `doi.org` link that redirects to a publisher) is not a source and needs no object:
+[§ A link that leads to a paper](#a-link-that-leads-to-a-paper).
+
+**And a sample of its longest candidate list to `tests/jobs-lease-budget.test.ts`**. Its `fetch`
+case checks samples against the exported `SOURCES` registry, so adding a source without a sample
+fails. It derives a floor for `STEP_BUDGET_MS.fetch` in [`src/jobs.ts`](../../src/jobs.ts) from
+the request clocks and sampled candidate counts; this remains a sample of address shapes,
+not proof of a hard elapsed-time ceiling. See
+[261007g](../plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md).
+
+### The sources
+
+Since 2026-10-06 there are seven, and two sites that are shapes of the first. Every one was chosen
+because its landing page imported as a stub of a few hundred words under the paper's title
+([261005e](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md)
+has the measurement and the ranking, and
+[the plan](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) says
+which sources were left out and why). NBER came a few hours after the other five, in
+[261006i § Stage 3](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md#stage-3-nber-and-osf-decided-by-the-probe),
+which also decided against OSF.
+
+**OSF Preprints, PsyArXiv and SocArXiv are not a source, and `asked_url` did not change that.** The
+landing page (`osf.io/preprints/<server>/<id>`) is an empty shell that JavaScript fills, and the PDF
+at `osf.io/download/<id>/` redirects through `files.osf.io` to
+`storage.googleapis.com/…/<content hash>` with a signed query that differed between two requests
+ten seconds apart
+([the probe](../plans/261006i-evidence/probe-nber-osf-redirects.txt), section B;
+[261005e § Address grammar](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md#address-grammar-for-the-sources-worth-code-now)).
+That signed address would be the article's `final_url`, which the source link and Refresh both read
+(`urlForSlug` in [`src/pipeline.ts`](../../src/pipeline.ts), asked by `enqueue` in
+[`src/jobs.ts`](../../src/jobs.ts)). `articles.asked_url` (`slugForUrlKey`,
+[`src/store/find-article.ts`](../../src/store/find-article.ts)) makes a paper findable by the pasted
+link only when its `final_url` or revision's `requested_url` resolves to a registered paper source;
+OSF is not registered. Adding an OSF source would enable that lookup but fix neither the source
+link nor Refresh. The plan names the two ways out and builds
+neither: the paper's `canonicalUrl` (`ResolvedPaper`,
+[`src/paper-sources.ts`](../../src/paper-sources.ts)) stored as the article's address, or Refresh
+sent through `asked_url`. Not established: how long a signed address keeps answering (the probe
+repeated once, after ten seconds), and which of the two ways is wanted.
+
+| Source | What it recognises | What it fetches, in order |
+|---|---|---|
+| `arxiv` | arXiv's own addresses, above. Also the pages *about* an arXiv paper: `huggingface.co/papers/<id>`, and `alphaxiv.org/abs/<id>` and `/overview/<id>` with or without `www.` | `arxiv.org/html/<id>`, then `arxiv.org/pdf/<id>` |
+| `acl` | `aclanthology.org/<id>`, with a trailing slash or `.pdf`; `doi.org/10.18653/v1/<id>` | `aclanthology.org/<id>.pdf` |
+| `pmlr` | `proceedings.mlr.press/v<N>/<name>.html`, `/v<N>/<name>.pdf`, `/v<N>/<name>/<name>.pdf` | `/v<N>/<name>/<name>.pdf`, then `/v<N>/<name>.pdf` |
+| `neurips` | `proceedings.neurips.cc` and `papers.nips.cc`: `/paper/<year>/hash/<hash>-Abstract[-<track>].html` and `/file/<hash>-Paper[-<track>].pdf`, with or without `/paper_files` in front | `proceedings.neurips.cc/paper_files/paper/<year>/file/<hash>-Paper[-<track>].pdf` |
+| `cvf` | `openaccess.thecvf.com/<collection>/html/<name>.html` and `/<collection>/papers/<name>.pdf`, the collection written `content_cvpr_2016` or `content/ICCV2021` | `/<collection>/papers/<name>.pdf` |
+| `jmlr` | `jmlr.org/papers/v<N>/<name>.html` and `/papers/volume<N>/<name>/<name>.pdf`, with or without `www.` | `jmlr.org/papers/volume<N>/<name>/<name>.pdf` |
+| `nber` | `nber.org/papers/w<N>`, with a trailing slash or `.pdf`, and `/system/files/working_papers/w<N>/w<N>.pdf`, with or without `www.`; `doi.org/10.3386/w<N>` | `www.nber.org/system/files/working_papers/w<N>/w<N>.pdf` |
+
+**A Hugging Face or alphaXiv page is the arXiv paper**, not a source of its own: it resolves to
+exactly what the arXiv link resolves to, so it is the same article, and its source link afterwards
+opens arXiv. The three other places that ask "is this an arXiv paper?" ask the registry's
+`arxivIdOf` too (`identityOf` in `src/cited-in-spideryarn.ts`, `keysOf` in `src/citations.ts`,
+`arxivPdfUrl` in `src/paper-text.ts`), so a work an article cites by its Hugging Face page matches
+the arXiv article on the shelf and is read from arXiv's PDF.
+
+The rules every source follows, each held by `tests/paper-sources.test.ts` for every source:
+
+- **It matches an origin**: `http` or `https`, the named host exactly, no port, no credentials.
+- **A candidate is a fixed `https://` address on the source's own host**, built only from pieces
+  that a closed character class matched. No pattern lets through a dot segment, a percent sign, a
+  backslash or a doubled slash.
+- **The landing page, the PDF's own address and every candidate resolve to one paper.** The
+  article's address afterwards is the PDF's, and "do we already have this?" asks that address. A
+  source whose PDF ended somewhere its own pattern does not know would not be found by the
+  paper's other addresses. The original pasted address can still find it through `asked_url`
+  when the published revision's `requested_url` identifies the paper source.
+  `evals/paper-sources/resolve-live.ts` checks this on real fetches; its last whole
+  run is [`261005m-evidence/resolve-live.txt`](../plans/261005m-evidence/resolve-live.txt), and
+  NBER's is [`261006i-evidence/resolve-live.txt`](../plans/261006i-evidence/resolve-live.txt).
+- **Every candidate is the paper, as a PDF. The landing page is never one.** A stub stored under
+  the paper's key could not be replaced by pasting the PDF.
+- **The key holds the whole id and the slug is cut to 60 characters.** A CVF file name runs to 90.
+  The key is what `urlKey` gave the landing page before the source existed, so it has no `www.`
+  (`nber.org/papers/w30000`) even where the site's own address does.
+- **A name keeps the case it was pasted in**, because these servers are case-sensitive. ACL's ids
+  are the exception: a DOI is case-insensitive, so `n19-1423` is spelled `N19-1423`. NBER's
+  numbers are the other, for the same reason: `W30000` is spelled `w30000`.
+- **NeurIPS's ending is read off the link, never guessed.** The file is `-Paper.pdf` in some years
+  and `-Paper-Conference.pdf` or `-Paper-Datasets_and_Benchmarks.pdf` in others, and the abstract
+  page's own name carries the same ending.
+
+**What that costs.** Each of these serves the paper as a PDF only, and a PDF is read by a model:
+about ten US cents and one to three minutes, where the landing page took seconds and nothing. That
+is the price of the paper rather than its announcement, and the same as pasting the PDF's address.
+
+### A link that leads to a paper
+
+A short link (`bit.ly`, `t.co`) or a DOI no source knows by its pattern names no paper until it
+has been followed. Until 2026-10-06 such a link imported whatever page it ended on, which for an
+arXiv paper was the abstract page. Now `fetchByAddress` in
+[`src/pipeline.ts`](../../src/pipeline.ts) looks once more, after the fetch:
+
+```
+ paper = resolvePaperSource(url)
+ if a paper                → its candidates, as above
+ doc = fetchDocument(url)                                  ← as it always was
+ if doc.url is where we asked (ignoring a fragment)        → keep doc
+ paper = resolvePaperSource(doc.url)
+ if none                   → keep doc, one request, as it always was
+ else                      → that paper's candidates, as above, with doc in hand
+```
+
+- **Only the address the fetch ended on is asked about**, never a hop on the way, and only when
+  it is not the address that was asked for.
+- **The document already fetched is not fetched twice.** When a candidate's address is the one
+  the document ended on, the document stands in for that request, and is held to the candidate's
+  promise like any other answer. "The same address" is `sameTarget` (`src/urls.ts`): one request,
+  differing at most by a fragment. So a short link to `arxiv.org/pdf/<id>` asks for arXiv's HTML
+  first and, when there is none, uses the PDF it holds. A link to a landing page fetches the
+  candidates, since a landing page is never one.
+- **Nothing new is trusted.** The redirect only says which paper, by the same patterns a pasted
+  address goes through. What is fetched are the registry's own fixed addresses.
+  [security-map.md](security-map.md).
+- **From there on it is that source's fetch**: its name on the job card (`312 KB, ACL Anthology
+  PDF`), and its failure and `warn` line, below.
+
+The article's address afterwards is the paper's, not the short link's, so the shelf finds it by
+the link through `articles.asked_url`:
+[ingest-queue.md](ingest-queue.md). The reasoning, and what the review changed, is
+[the plan](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md#stage-2-the-redirect-look);
+four real redirecting links are in
+[`261006i-evidence/resolve-live.txt`](../plans/261006i-evidence/resolve-live.txt).
+
+### A paper that is not where the rule says
+
+The grammars were learned from a few papers per site. When the last candidate answers 404 or 410,
+the import fails, where before 2026-10-06 it would have imported the abstract page. The card shows
+`FETCH_PAPER_MISSING` (`[fetch-paper-missing]`, `blocked`, no Retry): the site did not have the
+paper where it usually keeps it, so check the link, or download the PDF and upload it. It is not
+`[fetch-not-found]`, which says there is no page at the reader's address, because for these
+sources their address is usually fine and the missing one is ours. Nothing
+is charged: the fetch is the first step and a failed import releases its slot.
+
+Any other failure of a paper source keeps the sentence that failure always had. Either way
+`fetchFromPaperSource` in [`src/pipeline.ts`](../../src/pipeline.ts) writes one `warn` line: the
+source's name, how many candidates were asked, and the failure's bracketed code. A rule that keeps
+missing shows up as one source's name repeating. No address is logged. An address no source
+recognises fails exactly as it did, with no such line.
+
+**The article's address is the one its text came from.** `doc.url` of the candidate that was used
+is what the store keeps (`final_url`), so an arXiv article's source link opens arXiv's HTML (or
+its PDF, when that is what was read), not the abstract page. Keeping the abstract page's address
+as well would need a second address column, which is a question for Greg in
+[the plan](../plans/261005l-an-arxiv-link-of-any-shape-imports-the-paper-and-a-source-resolver-other-sources-can-join.md). What makes that address and a freshly pasted `abs` link one article is `urlKey`,
+which answers with the source's key for every shape
+([ingest-queue.md § Two URLs, one article](ingest-queue.md#two-urls-one-article)).
 
 ## Not everything gets fetched: `RawManifest` has an origin
 
@@ -458,8 +727,8 @@ purpose rather than reproducing by default.
 
 ## Dependencies, and the ones we didn't take
 
-Two were added, both already present in the tree as jsdom's transitive dependencies, so neither cost
-an install:
+Two were added for decoding, both already present in the tree as jsdom's transitive dependencies,
+so neither cost an install:
 
 - **`html-encoding-sniffer`** — the spec's charset sniffing, as jsdom implements it.
 - **`@exodus/bytes`** — a WHATWG-conformant `TextDecoder`. Taken because Node's got windows-1252
@@ -469,10 +738,11 @@ an install:
 
 Deliberately not taken, each considered and rejected:
 
-- **`undici`** as a direct dependency, for `headersTimeout`/`bodyTimeout` stall detection and custom
-  TLS options. One whole-request deadline via `AbortSignal.timeout` is simpler to reason about, and
-  a stall is bounded by it anyway. Add it if per-hop stall detection or AIA repair ever becomes
-  worth building.
+- **`undici`'s `headersTimeout`/`bodyTimeout` stall detection and custom TLS options.** (`undici`
+  itself *is* a direct dependency since 2026-08-29, for the DNS-pinned connection above.) One
+  whole-request deadline via `AbortSignal.timeout` is simpler to reason about, and a stall is
+  bounded by it anyway. Use them if per-hop stall detection or AIA repair ever becomes worth
+  building.
 - **`iconv-lite` / `chardet`** — Node has shipped full ICU since v13, so the decoding table is
   there; the gap was conformance and detection, not coverage. `chardet` guesses statistically, and
   we always have headers and markup, so the deterministic algorithm is strictly better.
@@ -489,16 +759,13 @@ prefer long-lived, heavily-documented libraries, then write the decision down.
 
 Honest list, none of it blocking:
 
-1. **Stage 2 still uses the requested URL as Readability's base**, not `doc.url`. After a redirect
-   that resolves every relative link and image against the wrong origin.
-
-   This page first called that a one-line fix in someone else's stage, and that was wrong. The
-   convenience wrapper `fetchHtml` returns a string, so the final URL is **thrown away between step
-   1 and step 2** and there is nowhere for stage 2 to read it from. Fixing it means deciding where
-   the resolved URL is written down — the queue calling `fetchDocument` and passing `doc.url` on to
-   `runExtract` is the obvious answer, and it touches two stages this one doesn't own
-   ([ingest-queue.md](ingest-queue.md), [content-extraction.md](content-extraction.md)). Worth doing
-   deliberately rather than quietly.
+1. ~~**Stage 2 still uses the requested URL as Readability's base**, not `doc.url`.~~ **Closed,
+   2026-10-05.** The `extract` step hands `runExtract` the manifest's final URL, which the store
+   keeps as `final_url`, and falls back to the job's address only for a manifest with none. It
+   became necessary rather than tidy when a paper source arrived: the job's address is whatever
+   was pasted, and arXiv's HTML names its figures relative to the address it is served from. It
+   changes an existing article only when it is refreshed, and then only one that was redirected
+   and uses relative links, where the old answer was wrong.
 2. ~~**The queue writes `raw.html` as a UTF-8 string** rather than the bytes, and has no PDF path.~~
    **Closed, 2026-08-26.** The queue calls `fetchDocument` and `writeRaw`, which stores the bytes for
    a PDF and the decoded string for HTML, and returns the manifest recording `kind`, the requested

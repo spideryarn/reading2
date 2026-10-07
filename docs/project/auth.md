@@ -2,6 +2,21 @@
 
 Up: [security-map.md](security-map.md)
 
+## In this doc
+
+- [§ Where the pieces are](#where-the-pieces-are) — which file does what, before editing the gate
+- [§ Locally, signing in needs no Google at all](#locally-signing-in-needs-no-google-at-all) — the dev-admin password account
+- [§ The four things worth knowing](#the-four-things-worth-knowing-before-you-touch-any-of-it) — 401 vs 503, the gate's place in `handleApi`
+- [§ A request made for one reader is never sent as another](#a-request-made-for-one-reader-is-never-sent-as-another) — two accounts in one browser
+- [§ The signed-out page is the landing page](#the-signed-out-page-is-the-landing-page) — what a visitor sees instead of a form
+- [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet) — Google sign-in in production (history)
+- [§ Email](#email) — who sends auth mail
+- [§ What auth is for here](#what-auth-is-for-here) — the open proxy and the open wallet
+- [§ Whose data is it](#whose-data-is-it) — owner scoping from the gate to the store
+- [§ Why Supabase Auth](#why-supabase-auth) — the options weighed (history)
+- [§ The one test that has to exist](#the-one-test-that-has-to-exist) — the no-session refusal
+- [§ What is not done](#what-is-not-done) and [§ Still open](#still-open) — the gaps
+
 **Decided 2026-08-25: Supabase Auth.** The working that produced that is in
 [docs/research/260825a-auth-options.md](../research/260825a-auth-options.md) — this file is the decision and where
 its pieces live.
@@ -45,7 +60,7 @@ network call and no extra crypto library; and `flowType` in `createClient` **def
 | [`src/auth.ts`](../../src/auth.ts) | **the gate.** `requireUser(req, verify?)`, called once at the top of `handleApi`'s `try` |
 | [`src/routes.ts`](../../src/routes.ts) | that one call, and the comment saying why it is *inside* the `try` |
 | [`src/web/lib/supabase.ts`](../../src/web/lib/supabase.ts) | the browser client. One of them, module scope, `flowType: "pkce"` |
-| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for all 31 call sites — and `leavingFetch` for `pagehide` |
+| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — the token goes on here, for every call site — and `leavingFetch` for `pagehide`. Both can be told which reader a request is for: [§ below](#a-request-made-for-one-reader-is-never-sent-as-another) |
 | [`src/web/useSession.ts`](../../src/web/useSession.ts) | who is signed in, as state |
 | [`src/web/LandingPage.tsx`](../../src/web/LandingPage.tsx) | **what being signed out looks like** — the pitch, the screenshots, and links to `/login` carrying where you were |
 | [`src/web/SignInControls.tsx`](../../src/web/SignInControls.tsx) | the Sign in / Create account switch, the Google button and the email form, and every line of auth logic in them. One page renders it |
@@ -91,6 +106,97 @@ step agreeing with every other one.
 4. **`/auth/callback` is exempt from every rewrite in `main.tsx`.** `canonicalAddHref` folds
    `location.search` into an article's address — its whole job — so a return landing on `/add/…`
    would put our one-time auth code in a stranger's access log.
+
+## A request made for one reader is never sent as another
+
+Another tab can sign in as somebody else while this one is open, and the token is looked up when a
+request is sent, not when it was asked for. So a write that waits (a debounce, a retry, a flush as
+the page leaves, a call still waiting for its token) could go out as the next reader. Since
+2026-10-06 ([261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md),
+[261006f](../plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md)):
+
+- **The tab holds one session, in [`lib/session.ts`](../../src/web/lib/session.ts)**, which makes
+  the only identity subscription to the SDK. `useSession` draws the screen from it and `apiFetch`
+  binds requests to it, so the two cannot hold different readers. They could when each subscribed
+  for itself: the SDK sends every new subscriber a first answer of its own, read from storage as
+  it arrives.
+- **Every `apiFetch` is bound to the reader the tab held when the call was made.** That reader is
+  read synchronously, before the token lookup, from that held session. If the token
+  that comes back is known to be another reader's, nothing is sent and the caller gets
+  `NotThisReader`, which has no HTTP status; the refusal is written to the log buffer as
+  `not-sent`. It refuses only when both readers are known and differ, so a call made while nobody
+  is signed in is unfenced.
+- **A caller can name its reader instead**: `apiFetch(input, init, madeFor)`, and the same third
+  argument on `apiFetchOwned` and `leavingFetch`. The name is believed over the tab.
+- **The retry after a 401 is never sent as a different reader**, for every caller. A refresh that
+  comes back as somebody else is a change of account, and the first 401 is the answer.
+- **A refusal moves the tab on.** When a token lookup answers as a different known reader from the
+  one held, the held session is replaced by that one and every subscriber is told, as an SDK event
+  would. The request that noticed is still refused; the screen redraws for the reader the token
+  belongs to, so their requests go. A lookup never signs the tab out. A session revision, captured
+  before the lookup, prevents an answer overtaken by any adopted session from replacing it,
+  including a sign-out and sign-in of the same reader. `INITIAL_SESSION` only fills an unheard
+  tab; its asynchronous storage read cannot replace a newer event.
+
+**What the binding cannot see is a request made late.** A timer, a retry loop, a flush as the page
+unmounts, a module-level service: each *makes* its call after the reader's gesture, possibly after
+the reader has changed, and the tab's reader at that moment is the new one. Those pass `madeFor`,
+with the reader taken when the work was begun: `heldReader()` from `lib/session.ts`, read
+synchronously, for a sender that is not a component (`appendSpoken` in `chat/effects.ts`, whose
+retries follow a gap). `leavingFetch` is always one of these, because it is
+called as the page goes. And anything that holds a reader's words is keyed on the reader, not on
+the address or the slug. The other places this class has turned up are in
+[the postmortem](../postmortems/261006g-work-made-for-one-reader-outlives-a-change-of-reader.md).
+
+**The commonest late request is an effect cleanup**, because a change of reader is itself what
+unmounts the page: the held session changes first, so the cleanup runs with the next reader's
+token already in place. Two small modules carry the rule for everything under the
+signed-in `App`:
+
+- **[`lib/made-for.ts`](../../src/web/lib/made-for.ts) § `useMadeFor`** answers with the reader a
+  component was *mounted* for, read once and never again. A component or hook that writes late
+  passes it as `madeFor`. `null` for a visitor, which is unfenced.
+- **[`lib/reader-change.ts`](../../src/web/lib/reader-change.ts) § `forgetOnReaderChange`** is for
+  a module-level store keyed by slug (unsent chat words, search words, what the link cards know).
+  The store registers a function that empties it; `lib/session.ts` runs them when a known reader
+  is replaced by anybody else, sign-out included, before it tells any subscriber, so they are
+  empty before React draws the next page.
+
+The Feedback dialog is the one thing above every page: `FeedbackHost` takes the reader and gives
+its draft up when the reader changes. A page that holds a reader's words and is not under
+the article's gate is keyed on the reader in `App.tsx`: the shelf, the add page and `/profile`.
+
+The dictation boxes use `useReaderTranscriber` from `dictation-upload.ts`, which captures their
+mounted reader before recording; audio conversion and retries retain that reader. Both live
+engines retain `apiWiringFor(madeFor)` from `live/wiring.ts`, so device detection, offer creation,
+provider tool callbacks and meter retirement cannot send as a later reader.
+
+### Browser storage that is a reader's is keyed by that reader
+
+Two readers can use one browser profile, and `localStorage` outlives a sign-out. So a record there
+that holds a reader's words or their place says whose it is, and is read back only for them
+([261006h](../plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md)).
+Signing out clears neither store: the reader may come back, and clearing would not cover the case
+above, where the reader changes in another tab with no sign-out in this one.
+[`lib/storage-reader.ts`](../../src/web/lib/storage-reader.ts) is the one spelling of "whose",
+with `signed-out` for nobody. Two stores follow it:
+
+- **Where you were in an article** ([`last-view.ts`](../../src/web/last-view.ts)): the key is
+  `spya.lastViewFor.<reader>.<slug>`. `App` supplies the current session's reader, rather than
+  the frozen `useMadeFor`. The hook lives above the auth branches so its arrival identity survives
+  sign-out and sign-in, which remount `ArticlePage` while this tab keeps its address.
+  When that happens with an article on screen, the address is the previous reader's view, so the
+  article's parameters are taken off it and the new reader arrives as at a bare address. An old
+  `spya.lastView.<slug>` key is adopted once, by the first signed-in reader with no entry of their
+  own, and removed.
+- **The search pairs a reload tidies** ([`stored-pairs.ts`](../../src/web/modes/search/stored-pairs.ts)):
+  the record carries `readerId`, and every verb of `storedPairsFor(reader)` reads, writes and
+  removes that reader's records only. An old record with no reader is removed when read. Another
+  reader's words do stay in storage until they come back; nothing running as anybody else is
+  handed them.
+
+Keys that are the browser's rather than a reader's (the install hint, which microphone) stay as
+they are.
 
 ## The signed-out page is the landing page
 
@@ -181,6 +287,9 @@ the portraits avoid filling the column.
 
 ## The button on the live site does not work yet
 
+**Resolved: this section is history.** Google sign-in works in production — Greg, 2026-10-07:
+*"yes it does"*.
+
 **2026-08-27.** Greg pressed *Continue with Google* on `spideryarn.com` and got a page of JSON on
 `supabase.co`:
 
@@ -245,7 +354,7 @@ The full statement of the problem and Greg's answer in his own words are in
   no. A gate that opens when it is confused is not a gate. The one refinement: "Supabase unreachable"
   answers **503**, not 401, because telling a good session it is bad sends the reader round a refresh
   loop that cannot succeed.
-- **403 and the beta message**, never 200 and an empty shelf.
+- **401 for missing or invalid credentials, 503 when verification is unavailable**, never 200 and an empty shelf; there is no beta allowlist or 403 path in `requireUser`.
 
 ### The bit this page used to get wrong
 
@@ -255,9 +364,10 @@ existed and they contradicted each other; GPT Sol's review of the built code nam
 on 2026-08-27. What is actually true:
 
 **There is no allowlist.** Greg's call, twice — *"We can get rid of the allowlist once we've added
-authentication. I'll accept the risk."* `isAllowed()` in [`src/auth.ts`](../../src/auth.ts) returns
-`true` for anybody Supabase will vouch for, and it is a function rather than an inline `true` so that
-narrowing it later is an edit in one place.
+authentication. I'll accept the risk."* `requireUser` in [`src/auth.ts`](../../src/auth.ts) admits
+anybody Supabase will vouch for, and a comment there marks the one place a narrower check would go.
+(Until 2026-10-04 that place held an `isAllowed()` that returned `true`, in front of a 403 nothing
+could reach.)
 
 **And every reader gets their own shelf**, which is the part that had not been built when that
 decision was made. The gate proved a person existed and then dropped the identity on the floor, so
@@ -294,12 +404,14 @@ it.
 - **Reading before the gate throws**, rather than falling back to the environment. The tempting
   fallback is a real person's data, and the request would have succeeded and returned it.
 - **Every path from a slug to an article carries an owner filter**, through one predicate —
-  `ownedSlug()` in [`src/store/pg.ts`](../../src/store/pg.ts). That is the whole of the isolation:
+  `ownedSlug()` in [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts) (re-exported from
+  `pg.ts`). That is the whole of the isolation:
   comments, chat threads, searches and glossary lookups are reached only through an `articleId` that
   came from one of those paths. There were five near-identical `articleIdFor` helpers across the pg
   modules and no way to tell by looking whether all five had been done, so
   [`tests/owner-isolation.test.ts`](../../tests/owner-isolation.test.ts) asserts that **no file under
-  `src/store/` writes `eq(articles.slug, …)` outside `pg.ts`**.
+  `src/store/` writes `eq(articles.slug, …)` outside the four one-function files it names**
+  (`ownedSlug` and the three deliberately ownerless ones).
 - **A slug you do not own is 404, not 403.** "There is no such article" is all a stranger should learn
   about it; a 403 confirms it exists. It falls out of the design rather than being a second decision —
   the row simply does not match the `where`.
@@ -336,12 +448,11 @@ And Sol put them together, which is the part worth remembering:
 > take its slug, then download its source.
 
 Jobs now carry an `ownerId`, stamped at `enqueue` and filtered on every read and
-every mutation. The predicate is `mine()` in [`src/jobs.ts`](../../src/jobs.ts),
-and it asks **"is there a reader to answer to"** rather than "who is it": inside
-a request there is, and they see their own; outside one — the housekeeping sweep,
-the CLI, the pipeline — there is not, and it sees everything. A sweep that could
-only tidy its own jobs would leave every real user's finished job on disk for
-ever, and would do it silently.
+every mutation. The filter is now the owner argument of the
+store ([`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts) § `list` and `get`, which both take the owner),
+which `src/jobs.ts` passes from `currentOwnerId()`; the old `mine()` predicate, which let a
+housekeeping sweep see everything, is gone, and retention now runs on the finished job's own
+owner rather than sweeping everybody.
 
 Two more things came out of the same review and are fixed:
 
@@ -453,9 +564,10 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet)
   just below, which is the current state and the two things that fix it. The `VITE_*` half of this
   bullet is done: both variables are on the Vercel project, Production only, and the site renders.
-- **A spend limit**, which is the control that is actually missing and always was.
-- **Email in production** needs SMTP: `mailer_autoconfirm` is false there, so a sign-up sends a
-  confirmation and Supabase's built-in mailer is not for production use. Google works without it.
+- **No general per-reader dollar spend limit**, deliberately: [ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not) records the global OpenRouter cap and Greg's decision; [billing.md](billing.md) covers the ingest allowance already enforced.
+- ~~**Email in production** needs SMTP~~ — **done 2026-09-29**: sign-up confirmations go through
+  Resend ([§ Email](#email)). `mailer_autoconfirm` is still false there, so a sign-up sends a
+  confirmation.
 
 ## Still open
 
@@ -472,7 +584,7 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
   reader who does get in from reading your
   library; nothing stops them making an account and spending your model budget on their own. A spend
   limit is the control for that, and it is the next bullet. If it turns out to be needed sooner,
-  `isAllowed()` in [`src/auth.ts`](../../src/auth.ts) is the one line to change.
+  `requireUser` in [`src/auth.ts`](../../src/auth.ts) is the one place to add the check.
 - **Whether to put Cloudflare Access in front** as an outer, code-free gate. Free to 50 users, and it
   cannot be opened by a bug in a route handler. Optional, not required; the trade is a second piece of
   infrastructure. See

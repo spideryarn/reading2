@@ -138,7 +138,7 @@ export function PublicLibraryPage({
 
   return (
     /* **`className="site"` is required, not decorative.** The `--site-*` custom
-       properties are declared on `.site` (styles.css § the site), so without it
+       properties are declared on `.site` (site.css § the site), so without it
        `SiteNav`'s bar and the glow below draw against nothing — a page that looks
        unstyled rather than broken, which is the version nobody reports. Copied
        from PricingPage.tsx, which found that out the hard way. */
@@ -332,9 +332,15 @@ export function PublicCard({ entry }: { entry: PublicLibraryEntry }) {
       {facts.length > 0 && (
         <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
           {facts.map((f, i) => (
-            <span key={f}>
-              {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
+            /* The dot follows its fact, so a wrapped line starts with a fact:
+               ShelfEntry.tsx § `ShelfCard`, where the spacing is worked out.
+               Keyed by position as well as text, as there: an author and a
+               site of the same name are two facts (GPT Sol, F8 on plan
+               261005h). */
+            // biome-ignore lint/suspicious/noArrayIndexKey: the line is rebuilt whole and never reorders
+            <span key={`${i}:${f}`} data-shelf-fact="">
               {f}
+              {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
             </span>
           ))}
         </p>

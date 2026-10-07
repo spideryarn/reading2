@@ -1,0 +1,181 @@
+{
+ "slug": "s3-doctorow-250p-spya-jg872v",
+ "power": "standard",
+ "slices": [
+  {
+   "i": 0,
+   "lo": 0,
+   "hi": 804,
+   "size": 805,
+   "maxTokens": 82525,
+   "ms": 42468,
+   "inputTokens": 72006,
+   "outputTokens": 3920,
+   "stopReason": "end_turn",
+   "parsedAndBuiltFirstTime": true,
+   "depth1": 6,
+   "depth2": 34,
+   "repairs": 5,
+   "repairedKinds": [
+    "root > child 2 > child 1:gap:1",
+    "root > child 3 > child 1:gap:5",
+    "root > child 4 > child 1:gap:1",
+    "root > child 5 > child 1:gap:1",
+    "root > child 6 > child 1:gap:2"
+   ],
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "leafDepths": {
+    "3": 805
+   },
+   "dollars": 0.183212
+  },
+  {
+   "i": 1,
+   "lo": 805,
+   "hi": 1520,
+   "size": 716,
+   "maxTokens": 80425,
+   "ms": 38473,
+   "inputTokens": 69068,
+   "outputTokens": 3187,
+   "stopReason": "end_turn",
+   "parsedAndBuiltFirstTime": true,
+   "depth1": 6,
+   "depth2": 23,
+   "repairs": 0,
+   "repairedKinds": [],
+   "droppedChildren": 1,
+   "droppedHeadings": 2,
+   "leafDepths": {
+    "2": 12,
+    "3": 704
+   },
+   "dollars": 0.170006
+  },
+  {
+   "i": 2,
+   "lo": 1521,
+   "hi": 2148,
+   "size": 628,
+   "maxTokens": 80425,
+   "ms": 96455,
+   "inputTokens": 48891,
+   "outputTokens": 9176,
+   "stopReason": "end_turn",
+   "parsedAndBuiltFirstTime": true,
+   "depth1": 7,
+   "depth2": 28,
+   "repairs": 1,
+   "repairedKinds": [
+    "root > child 5 > child 2:gap:1"
+   ],
+   "droppedChildren": 1,
+   "droppedHeadings": 1,
+   "leafDepths": {
+    "2": 183,
+    "3": 445
+   },
+   "dollars": 0.189542
+  },
+  {
+   "i": 3,
+   "lo": 2149,
+   "hi": 3052,
+   "size": 904,
+   "maxTokens": 84800,
+   "ms": 93744,
+   "inputTokens": 86227,
+   "outputTokens": 8807,
+   "stopReason": "end_turn",
+   "parsedAndBuiltFirstTime": true,
+   "depth1": 8,
+   "depth2": 33,
+   "repairs": 0,
+   "repairedKinds": [],
+   "droppedChildren": 0,
+   "droppedHeadings": 0,
+   "leafDepths": {
+    "2": 8,
+    "3": 896
+   },
+   "dollars": 0.260524
+  }
+ ],
+ "slicesWallMs": 96492,
+ "root": {
+  "gist": "A short-story collection by Cory Doctorow where new technology — networks, surveillance, life-extension, AI — keeps forcing people to choose what they'll give up to belong.",
+  "question": "technology in these stories — what does each character trade away to keep living with it? (9 stories and afterwords)"
+ },
+ "rootMs": 3377,
+ "rootUsage": {
+  "inputTokens": 3310,
+  "outputTokens": 102
+ },
+ "totalWallMs": 99874,
+ "totalDollars": 0.810924,
+ "unpriced": 0,
+ "calls": [
+  {
+   "job": "structure",
+   "model": "anthropic/claude-sonnet-5",
+   "answeredBy": "anthropic/claude-sonnet-5",
+   "ms": 38472,
+   "inputTokens": 69068,
+   "outputTokens": 3187,
+   "reasoningTokens": 0,
+   "outcome": "ok",
+   "dollars": 0.170006,
+   "costSource": "provider"
+  },
+  {
+   "job": "structure",
+   "model": "anthropic/claude-sonnet-5",
+   "answeredBy": "anthropic/claude-sonnet-5",
+   "ms": 42465,
+   "inputTokens": 72006,
+   "outputTokens": 3920,
+   "reasoningTokens": 184,
+   "outcome": "ok",
+   "dollars": 0.183212,
+   "costSource": "provider"
+  },
+  {
+   "job": "structure",
+   "model": "anthropic/claude-sonnet-5",
+   "answeredBy": "anthropic/claude-sonnet-5",
+   "ms": 93743,
+   "inputTokens": 86227,
+   "outputTokens": 8807,
+   "reasoningTokens": 4371,
+   "outcome": "ok",
+   "dollars": 0.260524,
+   "costSource": "provider"
+  },
+  {
+   "job": "structure",
+   "model": "anthropic/claude-sonnet-5",
+   "answeredBy": "anthropic/claude-sonnet-5",
+   "ms": 96454,
+   "inputTokens": 48891,
+   "outputTokens": 9176,
+   "reasoningTokens": 5521,
+   "outcome": "ok",
+   "dollars": 0.189542,
+   "costSource": "provider"
+  },
+  {
+   "job": "structure",
+   "model": "anthropic/claude-sonnet-5",
+   "answeredBy": "anthropic/claude-sonnet-5",
+   "ms": 3376,
+   "inputTokens": 3310,
+   "outputTokens": 102,
+   "reasoningTokens": 0,
+   "outcome": "ok",
+   "dollars": 0.00764,
+   "costSource": "provider"
+  }
+ ],
+ "ledgerRowsNotWrittenToDatabase": 5
+}

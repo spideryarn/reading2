@@ -80,11 +80,13 @@ import type {
   Citation,
   ChatMessage,
   ChatThread,
-  RememberStance,
+  LearnStance,
   ToolRun,
 } from "../types.js";
-import { isThreadKind } from "../types.js";
-import { MissingAttempt, type ChatStore, type SweepOptions } from "./contracts.js";
+import { storedThreadKind } from "../types.js";
+import { originColumns, originFromColumns } from "../thread-origin.js";
+import { splitHint } from "../recall-hint.js";
+import { MissingAttempt, type ChatStore, type HintOpened, type SweepOptions } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned, lockArticleRow } from "./pg.js";
@@ -142,11 +144,14 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     /* Absent, never `stance: undefined` — the filesystem store simply has no
        key on a chat answer, and tests/store-roundtrip.test.ts compares the two
        byte for byte. Same rule as every field above it. */
-    ...(row.stance === null ? {} : { stance: row.stance as RememberStance }),
+    ...(row.stance === null ? {} : { stance: row.stance as LearnStance }),
     /* `true` or nothing at all, exactly like `stopped` and `interrupted` above —
        the filesystem store has no key on an ordinary question and
        tests/store-roundtrip.test.ts compares the two byte for byte. */
     ...(row.help ? { help: true as const } : {}),
+    /* The reader's press on Hint. Named here or it does not exist on the way
+       out — the rule the note above `passages` gives. */
+    ...(row.hintOpenedAt === null ? {} : { hintOpenedAt: row.hintOpenedAt.toISOString() }),
   };
 }
 
@@ -195,7 +200,10 @@ function startOf(anchor: ChatAnchor | undefined): number | null {
   return anchor && "start" in anchor ? anchor.start : null;
 }
 
-async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
+/* Exported for tests/unknown-stored-thread-kind.test.ts, which has to hand it a
+   transaction it will roll back. Unguarded: everything else reaches it through
+   `pgChatStore` below. */
+export async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<ChatThread[]> {
   const [threadRows, messageRows] = await Promise.all([
     db
       .select()
@@ -222,19 +230,24 @@ async function threadsFor(articleId: string, db: Db | Tx = getDb()): Promise<Cha
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
     ...anchorOf(t),
-    /* Normalised here, the twin of `normaliseKind` in src/chat.ts. The column
-       is `not null default 'chat'` so in practice this only widens the string
-       to the union — but the default lives in exactly two places on purpose,
-       and this is the second. `ChatThread.kind` is required so that nothing
-       downstream has to remember a fallback.
+    /* Where it was started from. Named here or it does not exist on the way
+       out; `upsertThread` is the write half. src/thread-origin.ts. */
+    ...originFromColumns(t),
+    /* The column is `not null default 'chat'` with a CHECK listing the kinds,
+       so this only narrows the string to the union. `ChatThread.kind` is
+       required so that nothing downstream has to remember a fallback.
 
-       **The list of kinds is `isThreadKind`'s, not this line's**, and it used to
-       be a ternary naming `"remember"` here. The union grew a third member on
-       2026-09-01 and a ternary would have quietly turned every Candidates thread
-       into a chat on its next read from Postgres — the same conversation
-       answered with a different prompt, and nothing anywhere saying so.
-       src/types.ts § THREAD_KINDS. */
-    kind: isThreadKind(t.kind) ? t.kind : "chat",
+       **A kind this code does not know throws; it is not a chat** (2026-10-06).
+       Until then this line fell back to `"chat"`, which during a deploy that
+       renames a kind is the same conversation answered with a different prompt
+       and stored, and nothing anywhere saying so. One unknown row fails the
+       read of every thread of its article, which is deliberate: the route picks
+       a thread out of this list, and a list that left one out would let a
+       single-thread kind be begun a second time.
+       src/types.ts § storedThreadKind, and
+       docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
+       stage 0. */
+    kind: storedThreadKind(t.kind),
     messages: byThread.get(t.id) ?? [],
   }));
 }
@@ -287,7 +300,17 @@ function messageRow(
        press loses its metadata between the route and the database. Same class of
        silent loss as `tools`, which is how that column came to exist. */
     help: message.help ?? false,
+    /* The write half of the mapping. Every path that builds a message for
+       insert builds a fresh one, so this writes null there; it is named so a
+       message that does carry the time is not silently stripped of it. */
+    hintOpenedAt: message.hintOpenedAt ? new Date(message.hintOpenedAt) : null,
     createdAt: new Date(message.createdAt),
+    /* **One rule for every insert: a row that is not `pending` was finished
+       when it was written.** That is the reader's question, and both halves of
+       a spoken exchange, which arrive whole. Only a reply still waiting for its
+       model is null, and `finish` or the sweep stamps it.
+       src/db/schema.ts § `chatMessages.finishedAt`. */
+    finishedAt: message.status === "pending" ? null : new Date(message.createdAt),
     ...(attempt === undefined ? {} : { attemptId: attempt, attemptStartedAt: DB_NOW }),
   };
 }
@@ -307,10 +330,15 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
       anchorQuote: quoteOf(thread.anchor),
       anchorStart: startOf(thread.anchor),
       kind: thread.kind,
+      /* The write half of the origin; `threadsFor` is the read half. On
+         insert only, like the anchor: the conflict clause below does not name
+         these four. */
+      ...originColumns(thread.origin),
     })
     .onConflictDoUpdate({
       target: [chatThreads.articleId, chatThreads.id],
       /* `created_at` is deliberately absent: a thread is created once. So are
+         the four origin columns, and so are
          the three anchor columns, and for the stronger version of the same
          reason — a conversation is about what it started as, and every later
          turn of an anchored thread comes through here. Naming them in `set`
@@ -318,7 +346,7 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          disappearing from the prose rather than an error anybody sees.
 
          **So is `kind`, and it is the sharpest case of the three.** Every later
-         turn of a Remember thread comes through here. Naming `kind` in `set`
+         turn of a Learn thread comes through here. Naming `kind` in `set`
          would let a stale tab's `kind: "chat"` turn one into a chat on its
          second question — the system prompt changes, the list tag changes, a
          new cache prefix appears, and the transcript reads as one conversation
@@ -401,7 +429,7 @@ const rawPgChatStore: ChatStore = {
           messageRow(articleId, thread.id, user, base),
           messageRow(articleId, thread.id, reply, base + 1),
         ]);
-      return { thread, user, reply, attempt: undefined };
+      return { thread, user, reply };
     }, READ_COMMITTED);
 
     logger.info(
@@ -417,7 +445,17 @@ const rawPgChatStore: ChatStore = {
     return out;
   },
 
-  async finish(slug, threadId, messageId, patch, opts = {}): Promise<void> {
+  async finish(
+    slug,
+    threadId,
+    messageId,
+    patch,
+    /* Looser than `ChatStore.finish`, which requires both the options and the
+       attempt: the default and the `?` are for a caller the compiler did not
+       see, so that it reaches `MissingAttempt` below and not a `TypeError` on
+       `undefined.now`. */
+    opts: { attempt?: string; now?: (() => string) | undefined } = {},
+  ): Promise<void> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = new Date((opts.now ?? (() => new Date().toISOString()))());
@@ -426,7 +464,7 @@ const rawPgChatStore: ChatStore = {
 
        A retry keeps the message id — that is what makes it a retry — so
        identity cannot say which model call is reporting. Accepting `undefined`
-       here would mean a caller that simply forgot to carry the token got the
+       here would mean a caller that dropped the token got the
        old race back in full, with nothing anywhere saying so. That is the
        failure mode this whole migration keeps meeting, so it is an error. */
     const attempt = opts.attempt;
@@ -438,11 +476,9 @@ const rawPgChatStore: ChatStore = {
       await lockArticleRow(tx, articleId);
       /* **The thread's clock moves whether or not the message matched.**
 
-         The filesystem does this unconditionally — its `map` rebuilds the
-         thread object with a new `updatedAt` even when no message inside it has
-         the given id — and the panel sorts threads by `updatedAt`. An
-         `if (rowCount)` guard around this would look like an optimisation and
-         would be a real divergence in what the reader sees. */
+         The panel sorts threads by `updatedAt`, and a finish has always moved
+         that clock even when no message matches. Guarding this on the message
+         update's row count would change the order the reader sees. */
       await tx
         .update(chatThreads)
         .set({ updatedAt: at })
@@ -466,6 +502,12 @@ const rawPgChatStore: ChatStore = {
           // The attempt is over. Both columns or neither — the CHECK says so.
           attemptId: null,
           attemptStartedAt: null,
+          /* **When the reply stopped being pending**, inside the fenced
+             statement so a superseded attempt stamps nothing. `status` is
+             optional on this patch and nothing here refuses a patch without
+             one, so the time is written only when the patch really ends the
+             reply: a row left `pending` has not finished. */
+          ...(patch.status === undefined || patch.status === "pending" ? {} : { finishedAt: DB_NOW }),
         })
         .where(
           and(
@@ -531,10 +573,15 @@ const rawPgChatStore: ChatStore = {
              carried over would label an answer nobody has interrupted yet. */
           passages: null,
           interrupted: false,
+          /* The reader opened the LAST answer's hint. The row is about to hold
+             a different answer with a different hint, and that one is closed. */
+          hintOpenedAt: null,
           // A new attempt on the same row. This is what stops the previous
           // one's late answer landing here.
           attemptId: attempt,
           attemptStartedAt: DB_NOW,
+          // A new attempt has not finished; the last one's time goes with its text.
+          finishedAt: null,
         })
         .where(
           and(
@@ -641,15 +688,23 @@ const rawPgChatStore: ChatStore = {
        not racing with itself — it is racing with `begin`, which reads the title
        under the lock and upserts what it read. Without this, a rename that
        lands in the middle of a turn is written back to the old name. */
-    await db.transaction(async (tx) => {
+    /* **The list is read back inside the transaction, not after it.** That read
+       can refuse (an unknown stored kind, `storedThreadKind`), and a refusal
+       that arrives after the commit tells the reader the rename failed while
+       the new title stays. Thrown in here, it rolls the write back.
+       tests/unknown-thread-kind-refuses-cleanly.test.ts. */
+    const threads = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       await tx
         .update(chatThreads)
-        .set({ title: titleFrom(title) })
+        /* `renamed_at` is where the rename's time goes instead — its own
+           column, so the reader's act is kept and the sort is not disturbed. */
+        .set({ title: titleFrom(title), renamedAt: DB_NOW })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      return threadsFor(articleId, tx);
     }, READ_COMMITTED);
     logger.info({ slug, threadId }, "chat thread renamed");
-    return threadsFor(articleId);
+    return threads;
   },
 
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {
@@ -658,15 +713,68 @@ const rawPgChatStore: ChatStore = {
     // Messages go with it: `chat_messages_thread_fk` is `on delete cascade`.
     // Under the lock for the same reason as `rename`: a `begin` in flight would
     // otherwise re-create the thread it just read.
-    await db.transaction(async (tx) => {
+    // The list is read back inside the transaction, for `rename`'s reason: a
+    // refused read must take the delete with it.
+    const remaining = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       await tx
         .delete(chatThreads)
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
+      return threadsFor(articleId, tx);
     }, READ_COMMITTED);
-    const remaining = await threadsFor(articleId);
     logger.info({ slug, threadId, remaining: remaining.length }, "chat thread deleted");
     return remaining;
+  },
+
+  /**
+   * The reader's first press on Hint, kept.
+   *
+   * **Checked and written under the article lock, in one transaction**, like
+   * every other write here: `retry` takes the same lock, so the answer read
+   * below cannot be replaced between the check and the stamp.
+   *
+   * **The hint's text is the fence.** A retry keeps the message id, so identity
+   * cannot say which answer a late press belongs to; the stored answer's own
+   * hint can. A retried row is empty, or says something else.
+   *
+   * `coalesce` makes it set-once, and `clock_timestamp()` is the moment of the
+   * write (see `DB_NOW`).
+   */
+  async markHintOpened(slug, threadId, messageId, hint): Promise<HintOpened> {
+    const db = getDb();
+    const articleId = await articleIdForOwned(slug);
+    const thisMessage = and(
+      eq(chatMessages.articleId, articleId),
+      eq(chatMessages.threadId, threadId),
+      eq(chatMessages.id, messageId),
+    );
+
+    const out = await db.transaction(async (tx): Promise<HintOpened> => {
+      await lockArticleRow(tx, articleId);
+      const [row] = await tx
+        .select({ role: chatMessages.role, text: chatMessages.text, kind: chatThreads.kind })
+        .from(chatMessages)
+        .innerJoin(
+          chatThreads,
+          and(eq(chatThreads.articleId, chatMessages.articleId), eq(chatThreads.id, chatMessages.threadId)),
+        )
+        .where(thisMessage);
+      if (!row) return { ok: false, reason: "no-such-message" };
+      if (row.kind !== "learn" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
+      if (splitHint(row.text).hint !== hint) return { ok: false, reason: "hint-changed" };
+
+      const [stamped] = await tx
+        .update(chatMessages)
+        .set({ hintOpenedAt: sql`coalesce(${chatMessages.hintOpenedAt}, clock_timestamp())` })
+        .where(thisMessage)
+        .returning({ hintOpenedAt: chatMessages.hintOpenedAt });
+      if (!stamped?.hintOpenedAt) return { ok: false, reason: "no-such-message" };
+      return { ok: true, hintOpenedAt: stamped.hintOpenedAt.toISOString() };
+    }, READ_COMMITTED);
+
+    // Ids and the outcome only. Never the hint's text.
+    logger.info({ slug, threadId, messageId, ok: out.ok }, "recall hint opened");
+    return out;
   },
 
   async sweepPending(slug: string, opts: SweepOptions): Promise<ChatThread[]> {
@@ -685,7 +793,15 @@ const rawPgChatStore: ChatStore = {
       // The attempt is declared dead, so its fence goes with it — otherwise the
       // row keeps a lease nobody holds and the CHECK's "both or neither" turns
       // into "a buried message still names a live attempt".
-      .set({ status: "error", error: CHAT_SWEPT, attemptId: null, attemptStartedAt: null })
+      // `finished_at` is when the sweep ended the attempt, which is the only
+      // ending it had.
+      .set({
+        status: "error",
+        error: CHAT_SWEPT,
+        attemptId: null,
+        attemptStartedAt: null,
+        finishedAt: DB_NOW,
+      })
       .where(
         and(
           eq(chatMessages.articleId, articleId),

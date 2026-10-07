@@ -39,6 +39,7 @@ import {
   runCriterion,
   runCriterionStream,
 } from "../src/referee-criteria-run.js";
+import { ANSWER_UNUSABLE } from "../src/messages.js";
 import type { CriterionOutcome, CriterionRequest } from "../src/referee-criteria-run.js";
 import { MAX_RESULTS, type RefereeCriterionConfig, type RefereeResult } from "../src/referee-criteria.js";
 import { MODEL_MAX_TOKENS } from "../src/token-budget.js";
@@ -417,6 +418,27 @@ describe("reading the answer back", () => {
         ]),
       );
       await expect(drain(runCriterionStream(req(DIVERGING)))).rejects.toThrow(/\[ai-unusable\]/);
+    });
+
+    it("throws the one sentence both Referee runners share, whole, for each way a row is lost", async () => {
+      /* The three discard paths the sentence has to be true of: a row with no
+         valence on a diverging criterion, a block id this paper does not have,
+         and rows with no anchor at all. "Nothing it returned could be used" is
+         true of all three; the wording it replaced on 2026-10-04 said "pointed
+         at passages", which the third never did. Compared with the constant in
+         src/messages.ts, not with a literal: the copy stays rewritable there. */
+      const answers: [RefereeCriterionConfig, unknown[]][] = [
+        [DIVERGING, [{ blockId: "spya-k3m9qt", quote: "no negative control", confidence: 90, reasoning: "x" }]],
+        [SINGLE, [{ blockId: "spya-zzzzzz", quote: "invented", confidence: 90, reasoning: "x" }]],
+        [SINGLE, [{ confidence: 90 }, { quote: "no blockId" }]],
+      ];
+      for (const [config, rows] of answers) {
+        fetchMock.mockResolvedValue(reply(rows));
+        const err = await drain(runCriterionStream(req(config))).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(Error);
+        expect((err as Error).message).toBe(ANSWER_UNUSABLE.message);
+        expect((err as Error).cause).toBe("every-row-discarded");
+      }
     });
 
     it("fails when every row named a block this paper does not have", async () => {

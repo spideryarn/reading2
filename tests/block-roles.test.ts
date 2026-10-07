@@ -143,12 +143,17 @@ const classified = (blocks: Block[]): Block[] =>
  * headings were never reaching the reader at all**. They do now: 19 `[edit]`
  * paragraphs out, 28 headings in. The note counts are untouched, which is what
  * this file is really about.
+ *
+ * **Every total fell by two on 2026-10-07**, and by exactly two: stage 2's page
+ * stopped opening with a title `<h1>` and a byline line of ours, which had been
+ * blocks 0 and 1 of every web article (src/extract.ts § `debugPage`, plan
+ * 261007b). The note and supplement counts are untouched.
  */
 const FIXTURE_TABLE = [
-  { fixture: "gwern", notes: 34, supplement: 41, total: 186 },
-  { fixture: "wiki_transformer", notes: 121, supplement: 121, total: 367 },
-  { fixture: "acx_footnotes", notes: 18, supplement: 18, total: 98 },
-  { fixture: "tufte", notes: 5, supplement: 5, total: 70 },
+  { fixture: "gwern", notes: 34, supplement: 41, total: 184 },
+  { fixture: "wiki_transformer", notes: 121, supplement: 121, total: 365 },
+  { fixture: "acx_footnotes", notes: 18, supplement: 18, total: 96 },
+  { fixture: "tufte", notes: 5, supplement: 5, total: 68 },
 ] as const;
 
 /**
@@ -443,12 +448,19 @@ describe("all five roles", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: "Roles",
       finalUrl: null,
       blocks: SYNTHETIC,
       tree,
       arc: null,
       navLabelStatus: "ready" as const,
+      sharedBy: "public",
       sourceGuess: null,
       assets: null,
       /* The four artefacts a synthetic article has never generated. Spelled out

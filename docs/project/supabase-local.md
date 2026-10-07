@@ -6,11 +6,28 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 `supabase link`, no remote credentials — the CLI mints its own keys and the database is a container.
 Set up 2026-08-25.
 
-The reading app still reads and writes JSON files under `data/`; this is the database the storage
-layer is being built against, and what [`npm run db:migrate`](../../scripts/db-migrate.ts) points
-at while the schema is being worked out. What goes *in* the database is
-[260825f-postgres-migration.md](../plans/260825f-postgres-migration.md); where the data lives today is
-[database.md](database.md).
+**Anything this local database needs, an agent may do without asking** — repair the migration
+ledger, drop a stray column, reset it — because nothing in it is a reader's. Greg, 2026-10-06:
+
+> if it's just a local test database, you have my approval to do anything needed to that in future.
+> It's only production data where we need to be more careful.
+
+Production is the opposite case; [AGENTS.md § Real data belongs to the reader](../../AGENTS.md)
+still governs it. Say what you ran, and read its `Target:` line to be sure it was this one.
+
+The reading app's relational store is this database — the filesystem store is gone
+(2026-09-05) — and [`npm run db:migrate`](../../scripts/db-migrate.ts) points at it by default. What
+goes *in* the database is [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md);
+where the data lives today is [database.md](database.md).
+
+## In this doc
+
+- [§ Running it](#running-it) — the `db:` commands, signing in as the seeded account, moving rows to one owner, and seeding a shelf
+- [§ The ports, and the Postgres version](#the-ports-and-the-postgres-version) — a port clash with the old app, or changing `major_version`
+- [§ The ways this goes wrong quietly](#the-ways-this-goes-wrong-quietly) — the stack looks fine and the data is wrong or gone
+- [§ The `sources` bucket, and the one thing about it that is local-only](#the-sources-bucket-and-the-one-thing-about-it-that-is-local-only) — uploads work here and not on the remote
+- [§ What is deliberately not set up](#what-is-deliberately-not-set-up) — no link, no `supabase/migrations/`, no `seed.sql`, and why
+- [§ See also](#see-also) — the neighbouring docs
 
 ## Running it
 
@@ -146,9 +163,23 @@ Playwright, types it into the real form, and does not return until `GET /api/lib
 [browser-testing-playwright.md § Signing in](browser-testing-playwright.md#signing-in) is where to
 read about it.
 
+**There is a second reader to sign in as, since 2026-10-06**: `dev-reader-b@spideryarn.local`, at
+a fixed id that is not in `ADMIN_USER_IDS`, with the same per-machine password. The same seed
+creates it and proves it signs in. It is for a check that needs somebody who is not the
+administrator, or two readers in one browser profile
+([261006h](../plans/261006h-browser-storage-keyed-by-reader-and-the-feedback-switch-test.md)):
+
+```
+npx tsx scripts/browser-sign-in.ts --as second
+```
+
+It owns no articles, so its shelf is empty and what it can open is whatever is public.
+`npm run db:admin-password` still prints the administrator's address; only the administrator's is
+recorded for it.
+
 ### One shelf, and how to get there
 
-Rows written **outside** a request — the CLI, the pipeline, `db:import` — belong to whoever
+Rows written **outside** a request — the CLI, the pipeline — belong to whoever
 `SPIDERYARN_OWNER_ID` names, and unset that is `DEV_OWNER_ID`, which nobody signs in as. So the
 library you see after signing in is empty however much has been ingested, and nothing looks wrong:
 the ingest succeeds and the article really is in the database.
@@ -463,8 +494,11 @@ a bucket declared in [`supabase/config.toml`](../../supabase/config.toml):
 [storage.buckets.sources]
 public = false
 file_size_limit = "50MiB"
-allowed_mime_types = ["application/pdf"]
+allowed_mime_types = ["application/pdf", "text/html", "image/png", "image/jpeg", "image/gif"]
 ```
+
+(`text/html` since 2026-08-27, when stage 1 began storing fetched pages here too, and the images
+since; `supabase/config.toml` is the list.)
 
 `npm run db:start` creates it, so nobody has to remember a dashboard click and nobody has to be told
 about it. `sources` and not `pdfs`, because it holds *the document an article was made from*, which
@@ -488,7 +522,7 @@ was measured against these containers rather than read in a doc is in
 - **Not linked to any cloud project.** Greg's call, 2026-08-25: local first, nothing from the cloud.
   `supabase link` has never been run here, so every command in this file acts on the containers and
   nothing else.
-- **`supabase/migrations/` is empty, and stays empty.** That is not a gap — **the Supabase CLI is not
+- **`supabase/migrations/` does not exist, and stays that way.** That is not a gap — **the Supabase CLI is not
   our migration tool.** The schema lives in [`src/db/schema.ts`](../../src/db/schema.ts), the SQL is
   generated into [`drizzle/`](../../drizzle), and [`npm run db:migrate`](../../scripts/db-migrate.ts)
   applies it against `DATABASE_URL`. Note that it is **not** `drizzle-kit migrate`: drizzle-kit takes
@@ -509,6 +543,6 @@ is about.
 
 - [database.md](database.md) — where the data lives today, and the shape it is moving into
 - [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) — the schema, the order of work, the traps
-- [auth.md](auth.md) — the one-email beta gate this local auth server will host
+- [auth.md](auth.md) — the sign-in gate this local auth server hosts (the one-email allowlist it was first written for is gone)
 - [setup-dev.md](setup-dev.md) — the rest of the dev commands
 - [original-version/](original-version/overview.md) — the other repo on this laptop, and its stack

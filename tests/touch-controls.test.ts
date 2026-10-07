@@ -34,9 +34,9 @@
  *
  * Nor can it see the whole cascade. It compares specificity between selectors
  * it can find in the sheets this helper walks. Source order, `@layer`
- * (the Tailwind utilities layer outranks all of this, which is why four
- * `tw:`-styled fields carry `tw:any-pointer-coarse:text-base` at their own call
- * sites), inline styles and `font` shorthands are all outside it.
+ * (the Tailwind utilities layer outranks all of this, which is why the
+ * `tw:`-styled fields carry an `any-pointer-coarse` font-size floor at their
+ * own call sites), inline styles and `font` shorthands are all outside it.
  */
 import { describe, expect, it } from "vitest";
 import { readerCssNoComments, readerSheets, stripComments } from "./helpers/stylesheets.js";
@@ -162,12 +162,16 @@ function beats(a: [number, number], b: [number, number]): boolean {
 /* ------------------------------------------------------------------------- */
 
 describe("a control a finger has to hit", () => {
-  /* The two order rows are one control written twice — `.gloss-sort-btn` in
-     glossary.css and `.quotes-rank-btn` in quotes.css carry the same
-     declarations, character for character. Whatever floor they get, they get
-     together, or the next report is about the other one. */
-  const BARS = [".gloss-sort-btn", ".quotes-rank-btn"] as const;
-  const FLOOR_REM = 2.5; // 40px — these two rows' retained floor.
+  /* Every band's order buttons but Search's are `.gloss-sort-btn`
+     (glossary.css). Quotes' were `.quotes-rank-btn`, the same declarations
+     written a second time in quotes.css, until plan 261007a § K5 left one.
+
+     **And Search's order buttons, which are their own class** (they are not an
+     `OrderGroup`: plan 261007a § K4, the review's U16). They had a bare
+     `:hover`, no `:active` and no floor until 2026-10-07; their rules are in
+     search.css, under their own class, and the same checks hold them. */
+  const BARS = [".gloss-sort-btn", ".srch-sort-btn"] as const;
+  const FLOOR_REM = 2.5; // 40px — these rows' retained floor.
 
   it("keeps the dock's raised 44px coarse-pointer width floor", () => {
     const rule = rules(coarseBlocks(readerCssNoComments())).find((candidate) =>
@@ -219,6 +223,14 @@ describe("a control a finger has to hit", () => {
         `${cls} has no :active, so a finger gets no feedback that a press landed`,
       ).toBe(true);
     });
+
+    it(`${cls} draws its own focus mark for a keyboard`, () => {
+      const rule = rules(readerCssNoComments()).find((r) =>
+        selectors(r.selector).includes(`${cls}:focus-visible`),
+      );
+      expect(rule, `${cls} has no :focus-visible rule`).toBeDefined();
+      expect(rule?.decls ?? "").toMatch(/outline:\s*2px solid var\(--highlight-text\)/);
+    });
   }
 
   /* **The band's corner is its own floor, 2rem, not the order rows' 2.5rem.**
@@ -262,7 +274,7 @@ describe("a text field iOS must not zoom into", () => {
   const floorRule = () =>
     rules(coarseBlocks(readerCssNoComments())).find((r) => r.selector.includes("textarea"));
 
-  it("one rule raises every field to 1rem on a coarse pointer", () => {
+  it("one rule raises every field to 1rem, and never under 16px, on a coarse pointer", () => {
     const rule = floorRule();
     expect(rule, "no rule names `textarea` inside a coarse-pointer block").toBeDefined();
     const parts = selectors(rule?.selector ?? "");
@@ -272,7 +284,11 @@ describe("a text field iOS must not zoom into", () => {
        the keyboard, and a `<select>` takes focus — the composer's stance picker
        was still 13.28px after the first two halves shipped. */
     expect(parts.some((p) => p.includes("select")), "and a `select` half").toBe(true);
-    expect(rule?.decls ?? "").toMatch(/font-size:\s*1rem/);
+    /* `max(1rem, 16px)`, not `1rem`: iOS's threshold is 16 CSS pixels, and a
+       reader whose root size is 12px gets a 12px field from `1rem` alone
+       (measured, 2026-10-07). Never a bare `16px`, which would shrink the
+       field for a reader who has made their type larger. */
+    expect(rule?.decls ?? "").toMatch(/font-size:\s*max\(\s*1rem\s*,\s*16px\s*\)/);
   });
 
   /**
@@ -287,7 +303,7 @@ describe("a text field iOS must not zoom into", () => {
    * this file was green, because the rule really was written.
    *
    * Then its replacement only claimed to beat *one* class — and
-   * `.remember .chat-input` in mode-band.css is (0,2,0), so Remember mode was
+   * `.learn .chat-input` in mode-band.css is (0,2,0), so Learn mode was
    * still 15.68px and every test here still passed. GPT Sol's F1, 2026-09-08.
    * Naming the competitors is what closes it: a floor is worth exactly what it
    * out-weighs, so the test has to know who it is racing.
@@ -360,8 +376,8 @@ describe("a text field iOS must not zoom into", () => {
        test, and a search that stopped finding it would go green over nothing. */
     expect(
       worstTextarea.sel,
-      "`.remember .chat-input` should still be the heaviest textarea rule the search finds",
-    ).toBe(".remember .chat-input");
+      "`.learn .chat-input` should still be the heaviest textarea rule the search finds",
+    ).toBe(".learn .chat-input");
   });
 
   /* **A file picker is not a field, and the floor must not reach it.** It did:
@@ -425,7 +441,7 @@ describe("an order row on a touch screen", () => {
      only**, the floor's own query, since `coarseBlocks` also takes
      `any-pointer`. The other half of the decision, *touch only*, is that no
      rule outside a coarse block says `nowrap`. */
-  const ROWS = [".gloss-sort", ".quotes-rank", ".gloss-sort-group"] as const;
+  const ROWS = [".gloss-sort", ".gloss-sort-group"] as const;
 
   /** `[start, end)` of every block opened by `query`, in `css`. */
   function spans(css: string, query: RegExp): [number, number][] {

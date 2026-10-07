@@ -41,15 +41,16 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBody } from "./block-policy.js";
+import { doiIsEncodable, doiOfUrl, doiUrl } from "./doi-url.js";
 import { plainTitle } from "./html.js";
 import { mintUniqueId } from "./ids.js";
+import { findMathSpans } from "./maths-tex.js";
 import type { Article } from "./article-input.js";
-import { stageFailure } from "./job-failure.js";
 import { jsdom } from "./jsdom-lazy.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
-import { type Effort, generatorFor, type ModelPower } from "./models.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
+import { type Effort, generatorFor, type ModelPower, pipelineEffortOverride } from "./models.js";
 import { REF_ATTR } from "./notes.js";
+import { arxivIdOf } from "./paper-sources.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
   assertNoBlockIdEnums,
@@ -66,8 +67,9 @@ import {
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
 import type { ArtifactStore } from "./store/artifacts.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import { plainWords } from "./plain-words.js";
+import { firstAuthor, scholarUrl } from "./scholar-search.js";
 import {
   type Block,
   type BlockId,
@@ -96,8 +98,14 @@ export type { CitedWork, CitationDrops, CitationPlace, Citations, CitationScoreD
 /* `citations/4`, 2026-09-30: a PDF's reference list is read from its text layer and sent after the article, with an `entry` field per work, and `authors` asked for as surnames (plan 260930i, SPIDERYARN-READING2-6K).
  *
  * `citations/5`, 2026-10-02: the request gained `CITATIONS_OUTPUT_SCHEMA`;
- * the prompt text is unchanged. */
-export const PROMPT_VERSION = "citations/5";
+ * the prompt text is unchanged.
+ *
+ * `citations/6`, 2026-10-03: `influence` is a number only when the model is
+ * confident it knows the work, and null otherwise; the schema makes it
+ * required and nullable. Greg: *"Maybe if the model is confident (e.g. because
+ * it's well-known), but if in doubt default to Unknown."*
+ * docs/plans/261003m-citations-influence-unknown-unless-confident-and-dig-deeper-fills-it-in.md. */
+export const PROMPT_VERSION = "citations/6";
 
 /** Mentions kept per work. The first-cited jump needs one; three is room for the shorthand and the note. */
 export const MAX_MENTIONS = 3;
@@ -117,7 +125,8 @@ export { ENTRY_CAP } from "./citation-entry.js";
  * the stages in that table. Medium because this is careful extraction rather
  * than argument — the judgement it does make, relevance, is a reading of the
  * whole piece and not a chain of inference. `SPIDERYARN_PIPELINE_EFFORT` still
- * overrides it, as it does for every stage `effortFor` serves.
+ * overrides it, as it does for every stage `effortFor` serves, through the same
+ * checked reader (src/models.ts § `pipelineEffortOverride`).
  */
 const EFFORT: Effort = "medium";
 
@@ -192,7 +201,7 @@ export function emptyDrops(): CitationDrops {
 }
 
 export function noScoreDrops(): CitationScoreDrops {
-  return { relevanceAbsent: 0, relevanceRejected: 0, influenceAbsent: 0, influenceRejected: 0 };
+  return { relevanceAbsent: 0, relevanceRejected: 0, influenceAbsent: 0, influenceRejected: 0, influenceUnknown: 0 };
 }
 
 /* ---------------------------------------------------------- reading raw -- */
@@ -222,6 +231,21 @@ function scoreCounting(
   const kept = score(value);
   if (kept === undefined) scores[rejected]++;
   return kept;
+}
+
+/**
+ * **`null` is the model declining to score the work's standing**, which the prompt
+ * asks for whenever it is in doubt (plan 261003m). It becomes an absent
+ * `influence`, the shape an unscored row already has, and is counted on its
+ * own: an honest unknown is not a rejected score. Only influence has this
+ * reading; a null relevance is still rejected.
+ */
+function influenceCounting(value: unknown, scores: CitationScoreDrops): number | undefined {
+  if (value === null) {
+    scores.influenceUnknown++;
+    return undefined;
+  }
+  return scoreCounting(value, scores, "influenceAbsent", "influenceRejected");
 }
 
 /** Shorten to `cap` characters at a word boundary, and say so. */
@@ -315,6 +339,8 @@ export function verifyPlace(
 
 /** A work as read and verified, before its link, its key and its id. */
 export interface Draft {
+  /** Pre-guard metadata key, only for folding; never stored or used as a displayed fact. */
+  foldKey?: string;
   title: string;
   authors?: string;
   year?: string;
@@ -340,13 +366,31 @@ export interface Draft {
  * one the work's own verified mentions cite: `[8]`, `[7,8]`, `[6–9]`. That is
  * the pairing error a model makes and code can see: entry 9 offered for a work
  * the text cites as `[8]` carries the neighbour's authors, title and venue.
- * A work whose mentions carry no bracketed number gets no entry at all.
+ * A work whose mentions carry no citation number gets no entry at all.
+ *
+ * **`glued` is whether a number stuck to the text may count as one** —
+ * `studies15`, `mortality.¹` — which is how a biomedical or Nature-style paper
+ * cites, and without which every entry of such a paper was a mismatch (27 of
+ * 27 and 69 of 69:
+ * docs/plans/261004j-footnote-digits-census-root-cause-and-re-import-measurement.md).
+ * The caller says yes only for an article with no recognised notes (`hasNotes`): a
+ * footnote marker and a reference number are the same glyphs, and pairing by a
+ * note's number would give a work its neighbour's authors (GPT Sol's review of
+ * that plan). Brackets are read either way.
+ *
+ * **And then the marker is read from the block as well as from the quote**
+ * (`markersInBlock`), which is what `byId` is for. The model's quote usually
+ * stops just before the superscript — *reduced mortality*, not *reduced
+ * mortality.¹* — so the quote alone kept nothing on the paper this was built
+ * for: 1 mention in about 30 ended with its marker.
  */
 export function verifyEntry(
   raw: unknown,
   list: NumberedReferenceList,
   mentions: readonly CitationPlace[],
   drops: CitationDrops,
+  glued: boolean,
+  byId: ReadonlyMap<string, Block>,
 ): string | null {
   const n = typeof raw === "number" ? raw : typeof raw === "string" && /^\s*\d{1,4}\s*$/.test(raw) ? Number(raw) : NaN;
   if (!Number.isInteger(n)) return null;
@@ -355,7 +399,10 @@ export function verifyEntry(
     drops.entryUnfound++;
     return null;
   }
-  if (!markerNumbers(mentions.map((m) => m.quote)).has(n)) {
+  const cited =
+    markerNumbers(mentions.map((m) => m.quote)).has(n) ||
+    (glued && mentions.some((m) => markersInBlock(m, byId.get(m.blockId)).includes(n)));
+  if (!cited) {
     drops.entryMismatch++;
     return null;
   }
@@ -389,11 +436,18 @@ function withIdentifierEntry(draft: Draft, identifierEntry: string | undefined):
 /**
  * **Every number a bracketed cite names** — `[8]`, `[1,2]`, `[3–5]`,
  * `(e.g., [16,17])`. A range is expanded when it is short enough to be one.
+ *
+ * With `glued`, a quote that has no bracketed cite is also read for numbers
+ * stuck to the text (`gluedNumbers`). A quote with a bracketed cite is read by
+ * the bracket rule only: a paper that brackets its cites does not also glue
+ * them. `verifyEntry` says when `glued` may be asked for.
  */
-export function markerNumbers(quotes: readonly string[]): Set<number> {
+export function markerNumbers(quotes: readonly string[], glued = false): Set<number> {
   const out = new Set<number>();
   for (const quote of quotes) {
+    let bracketed = false;
     for (const m of quote.matchAll(/\[(\d[^\]]*)\]/g)) {
+      bracketed = true;
       const parts = (m[1] ?? "").split(/[,;]/);
       const found = parts.flatMap(numbersIn);
       /* A bracketed four-digit number is overwhelmingly a year, not a
@@ -405,8 +459,93 @@ export function markerNumbers(quotes: readonly string[]): Set<number> {
         out.add(n);
       }
     }
+    if (glued && !bracketed) for (const n of gluedNumbers(quote)) out.add(n);
   }
   return out;
+}
+
+const SUPERSCRIPTS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/**
+ * A number, and the list or range after it, **where a superscript cite sits**:
+ * straight after a lower-case word of three letters or more (`studies15`,
+ * `(from23)`), after `.` `,` `:` that do not follow a digit (`mortality.¹`,
+ * `et al.18`), or after `;` or a closing bracket or quote. That is what keeps
+ * out `p38` (one letter), `CO2` and `BRCA1` (capitals), `cm²`, `3.5`, `3:1`,
+ * and `1,000 cells` and `in 2020.` (glued to nothing).
+ */
+const GLUED =
+  /(?:(?<=(?<![\p{L}\p{N}])\p{Ll}{3,})|(?<=[^\s\d][.,:])|(?<=\S[;)\]"”’»']))\d+(?:(?:,\s?|\s?[–—‐‑-]\s?)\d+)*/gu;
+
+/** `Fig.3`, `Eq.2`: a label's number, which the bracket rule also refuses (`[Fig. 3]`). */
+const LABEL_BEFORE = /(?<![\p{L}\p{N}])(?:figs?|eqs?|eqns?|refs?|nos?|vols?|pp?|chs?|sect?|tabs?)\.$/iu;
+
+/** What follows a quantity rather than a cite: more of the number, a letter, a unit. */
+const QUANTITY_AFTER =
+  /^(?:[\p{L}\p{N}%°]|\.\d|[–—‐‑-][\p{L}\p{N}]|\s?(?:%|°|(?:[kmcnµμ]?(?:g|l|L|m|M|s|Hz|V)|h|min|d|fold)(?:[23])?(?![\p{L}\p{N}])))/u;
+
+/** One to three digits, as the list's splitter accepts, or a range of them: never a year or `000`. */
+const ENTRY_PART = /^\s*[1-9]\d{0,2}(?:\s*[–—‐‑-]\s*[1-9]\d{0,2})?\s*$/;
+
+/**
+ * **The numbers a glued or superscript cite names** — `pattern5,51`,
+ * `disease.³⁻⁵`, `before17, 19–21` (plan 261004j). Superscript digits are read
+ * as digits, so both spellings a PDF transcription stores take one rule.
+ *
+ * A candidate that turns out to be a quantity is dropped whole — a letter, a
+ * `%`, a decimal or a unit after it, or a part that is not an entry number.
+ * The one exception is a last part that follows a comma and a space
+ * (`studies15, 20 patients`): that comma may be the sentence's, so the part
+ * goes and the cite before it stays.
+ */
+function gluedNumbers(quote: string, from?: number, through = from): number[] {
+  const maths = findMathSpans(quote);
+  const text = quote.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, (c) => (c === "⁻" ? "-" : String(SUPERSCRIPTS.indexOf(c))));
+  const out: number[] = [];
+  for (const m of text.matchAll(GLUED)) {
+    if (maths.some((span) => m.index >= span.start && m.index < span.end)) continue;
+    /* With a quote span, read markers inside it and immediately after it.
+       Keep the block's suffix: a quote ending `dose5` in `dose5mg` is no cite. */
+    if (from !== undefined && through !== undefined) {
+      if (m.index < from) continue;
+      if (m.index >= through && !/^["”’»')\]]?[.,;:]?$/.test(text.slice(through, m.index))) continue;
+    }
+    if (LABEL_BEFORE.test(text.slice(0, m.index))) continue;
+    let candidate = m[0];
+    const after = text.slice(m.index + candidate.length);
+    const quantity = QUANTITY_AFTER.test(after);
+    const proseComma = candidate.lastIndexOf(", ");
+    const proseTail = proseComma >= 0 && candidate.lastIndexOf(",") === proseComma;
+    if (proseTail && (quantity || /^\s+\p{Ll}/u.test(after))) candidate = candidate.slice(0, proseComma);
+    else if (quantity) continue;
+    const parts = candidate.split(",");
+    if (!parts.every((part) => ENTRY_PART.test(part))) continue;
+    out.push(...parts.flatMap(numbersIn));
+  }
+  return out;
+}
+
+/**
+ * **Glued cites inside or straight after a mention's words, in its block**
+ * — `reduced mortality` then `.¹`. Read over the block's own text, even for a
+ * marker inside the quote: a quote can end halfway through `studies15` or
+ * `dose5mg`. Only markers starting in the quote or immediately after it count;
+ * a number further along the sentence belongs to other words.
+ *
+ * `start` is a disambiguator, not an anchor (`CitationPlace`): trusted only if
+ * the quote is there, else the quote's one occurrence in the block is used, and
+ * with several nothing is read. A quote with a bracketed cite is left to the
+ * bracket rule, as in `markerNumbers`.
+ */
+function markersInBlock(mention: CitationPlace, block: Block | undefined): number[] {
+  const { quote } = mention;
+  if (!block || !quote || /\[\d[^\]]*\]/.test(quote)) return [];
+  let at = mention.start;
+  if (block.text.slice(at, at + quote.length) !== quote) {
+    at = block.text.indexOf(quote);
+    if (at < 0 || block.text.indexOf(quote, at + 1) >= 0) return [];
+  }
+  return gluedNumbers(block.text, at, at + quote.length);
 }
 
 /** `8` → [8]; `3–5` → [3, 4, 5] when the range is short enough to be one; else nothing. */
@@ -466,6 +605,76 @@ function locateInEntry(
   };
 }
 
+/**
+ * A PDF's reference list is the article's own text too, though not among its
+ * blocks: a work whose entry number did not check out still took its authors
+ * from there. Strip possessives before closing apostrophes inside names, so
+ * both *Tulving's* and *O'Brien's* give the name. Built once per `toDrafts`
+ * run, rather than cached by a map that does not identify the PDF list.
+ */
+function articleTextOf(
+  byId: ReadonlyMap<string, Block>,
+  list: NumberedReferenceList | null,
+): { words: Set<string>; text: string; dateText: string } {
+  const text = [...[...byId.values()].map((b) => b.text), ...(list ? list.entries.values() : [])].join("\n");
+  const words = new Set(keyWords(text.replace(/[‘’'`]s(?=$|[^\p{L}\p{N}\p{M}])/giu, "")).split(" "));
+  return { words, text, dateText: ` ${keyWords(text)} ` };
+}
+
+/**
+ * **Authors and a year the article never gives are dropped** — the same rule
+ * `locateInEntry` holds a PDF entry to, for a work with no entry to check
+ * against. Greg, 2026-10-03 (spya-zmdb7y, plan 261003j): a row says *"nothing
+ * about a paper beyond what's available in the bibliography"*. The prompt asks
+ * for both "as the article gives them" and the model mostly obeys; measured,
+ * one stored row had an author from its memory (*The Bitter Lesson · Sutton*).
+ * A right author from memory looks exactly like a wrong one, so neither is kept.
+ *
+ * **It asks only whether the article says the name at all**, anywhere — not
+ * whether it says it of this work, which code cannot know. So it catches
+ * memory, not a mix-up between two works the article does cite. It also drops
+ * a name the model corrected (the article's *Dojolonga* for Djolonga): the
+ * title still carries what the article wrote.
+ *
+ * The year is looked for as characters, not as a word: an ingested page can
+ * glue text to it (`196363ya`).
+ */
+export function locateInArticle(
+  fields: { title: string; authors?: string; year?: string },
+  byId: ReadonlyMap<string, Block>,
+  list: NumberedReferenceList | null,
+  drops: CitationDrops,
+): { title: string; authors?: string; year?: string } {
+  return locateArticleFields(fields, articleTextOf(byId, list), drops);
+}
+
+function locateArticleFields(
+  fields: { title: string; authors?: string; year?: string },
+  article: ReturnType<typeof articleTextOf>,
+  drops: CitationDrops,
+): { title: string; authors?: string; year?: string } {
+  const names = keyWords((fields.authors ?? "").replace(/\bet al\.?\s*$/i, "").replace(/\band\b/gi, " "))
+    .split(" ")
+    .filter(Boolean);
+  const authorsHere = names.length > 0 && names.every((w) => article.words.has(w));
+  if (fields.authors && !authorsHere) drops.authorsUnfound++;
+  /* A bare four-digit year still tolerates the ingest's glued `196363ya`.
+     A suffix, era or date phrase must occur together, not as scattered words
+     or merely the same four digits (`2017b` is not `2017a`). */
+  const yearWords = keyWords(fields.year ?? "");
+  const yearHere = yearWords !== "" && (
+    /^\d{4}$/.test(fields.year ?? "")
+      ? article.text.includes(fields.year!)
+      : article.dateText.includes(` ${yearWords} `)
+  );
+  if (fields.year && !yearHere) drops.yearUnfound++;
+  return {
+    title: fields.title,
+    ...(authorsHere && fields.authors ? { authors: fields.authors } : {}),
+    ...(yearHere && fields.year ? { year: fields.year } : {}),
+  };
+}
+
 /** A reference block's text as its `entry`: whitespace collapsed, capped. */
 function entryOfBlock(block: Block | undefined): string | undefined {
   return block === undefined ? undefined : entryOfText(block.text);
@@ -484,9 +693,15 @@ export function toDrafts(
   list: NumberedReferenceList | null = null,
 ): Draft[] {
   const byId = new Map(blocks.map((b) => [b.id as string, b]));
+  const article = articleTextOf(byId, list);
+  /* Recognised notes prohibit glued pairing. The blocks cannot establish
+     absence of notes omitted or unrecognised by extraction (`hasNotes`), so
+     the licence also needs evidence from the whole article
+     (`citesMostOfListGlued`). */
+  const glued = !hasNotes(blocks) && list !== null && citesMostOfListGlued(blocks, list);
   const out: Draft[] = [];
   for (const item of Array.isArray(raw) ? raw : []) {
-    const draft = readDraft(item, byId, drops, scores, list);
+    const draft = readDraft(item, byId, drops, scores, list, article, glued);
     if (draft) out.push(draft);
   }
   /* **No cut here.** The cap counts works, and these are still rows — the
@@ -541,6 +756,8 @@ function readDraft(
   drops: CitationDrops,
   scores: CitationScoreDrops,
   list: NumberedReferenceList | null,
+  article: ReturnType<typeof articleTextOf>,
+  glued: boolean,
 ): Draft | null {
   if (!item || typeof item !== "object") {
     drops.malformed++;
@@ -567,7 +784,7 @@ function readDraft(
   /* A PDF list's entry, when the model named one that checks out; a
      bibliography block's text is attached later, in `buildCitations`, once it
      is known how many works claim that block (Sol F4). */
-  const listed = list && w.entry !== undefined ? verifyEntry(w.entry, list, mentions, drops) : null;
+  const listed = list && w.entry !== undefined ? verifyEntry(w.entry, list, mentions, drops, glued, byId) : null;
   const said = saidFields(w, title);
   const located = listed === null ? null : locateInEntry(said, listed, drops);
   /* Identity follows only an entry that survived the title check. A rejected
@@ -578,12 +795,24 @@ function readDraft(
      entry; capped where the row is written (`buildCitations`). */
   const entry = located === null ? undefined : listed!;
   const identifierEntry = identifierEntryFor(list, entryNumber, entry);
-  const fields = located ?? said;
+  const fields = located ?? locateArticleFields(said, article, drops);
+  /* Guarding displayed metadata must not split a shorthand from its entry,
+     or collapse different works whose unsupported by-lines both disappeared.
+     Preserve the existing fold identity, separately from the stored fields. */
+  const foldFields = located ?? said;
+  const foldKey = keysOf({
+    title: clip(foldFields.title, TITLE_CAP, emptyDrops()),
+    authors: clip(foldFields.authors ?? "", AUTHORS_CAP, emptyDrops()),
+    year: ((foldFields.year?.length ?? 0) <= 16 ? foldFields.year : "") ?? "",
+    url: "",
+    linkFrom: "search",
+  }).workKey;
   const authors = fields.authors ?? "";
   const year = fields.year ?? "";
   const relevance = scoreCounting(w.relevance, scores, "relevanceAbsent", "relevanceRejected");
-  const influence = scoreCounting(w.influence, scores, "influenceAbsent", "influenceRejected");
+  const influence = influenceCounting(w.influence, scores);
   return withIdentifierEntry({
+    foldKey,
     title: clip(fields.title, TITLE_CAP, drops),
     ...(authors ? { authors: clip(authors, AUTHORS_CAP, drops) } : {}),
     ...(year && year.length <= 16 ? { year } : {}),
@@ -630,6 +859,58 @@ export function isBodyBlock(block: Block): boolean {
 }
 
 const MARKER = new RegExp(`${REF_ATTR}="([^"]+)"`, "g");
+
+/**
+ * Whether the blocks carry a recognised footnote or endnote: a note block, or
+ * a marker stamped for one. Notes omitted or unrecognised by extraction are
+ * invisible here; false does not prove that the source has no notes. Any block
+ * counts, body or not — this is the licence for reading a glued number as a
+ * citation (`verifyEntry`), so it errs towards
+ * yes.
+ */
+export function hasNotes(blocks: readonly Block[]): boolean {
+  return blocks.some((b) => Boolean(b.noteId) || b.role === "footnote" || b.html.includes(REF_ATTR));
+}
+
+/**
+ * **Whether the body cites at least half of the numbered list by glued
+ * numbers** — the positive half of the licence `hasNotes` is the negative half
+ * of. `hasNotes` cannot see a note the extraction left out or did not
+ * recognise, and such a note's marker reads exactly like a reference number
+ * (GPT Sol's C5, review of plan 261004j;
+ * docs/postmortems/261004m-local-evidence-cannot-prove-an-article-wide-classification.md).
+ * One place cannot tell them apart; the whole article narrows it. A paper that
+ * cites by superscript does so for most of its list — glued numbers matched 69
+ * of 69 and 26 of 27 list numbers on the two measured — while a stray footnote
+ * or two match one or two numbers of a list of dozens.
+ *
+ * **It counts glued numbers that are also list numbers, not citations, and it
+ * narrows the gap without closing it.** Still open, both shown by GPT Sol's
+ * second review: a paper that really cites by superscript *and* has an
+ * unrecognised numbered footnote, whose marker is then one more glued number
+ * (C7); and labels that are not citations opening the gate, `sample1–20` (C8).
+ * Either needs the model to name that entry with that entry's own title, and
+ * the row it yields is a work the bibliography does list, first cited at the
+ * wrong sentence. Kept on those terms after arbitration; what would close it
+ * is extraction recording whether the source had notes at all (postmortem
+ * 261004m, countermeasure 4), which is not built.
+ *
+ * Half, not most: the transcription drops some superscripts. Below half the
+ * licence is refused for the whole article and the bracket rule stands.
+ */
+export function citesMostOfListGlued(blocks: readonly Block[], list: NumberedReferenceList): boolean {
+  return list.entries.size > 0 && entriesCitedGlued(blocks, list) * 2 >= list.entries.size;
+}
+
+/** How many of the list's entries some body block cites by a glued number. */
+export function entriesCitedGlued(blocks: readonly Block[], list: NumberedReferenceList): number {
+  const cited = new Set<number>();
+  for (const block of blocks) {
+    if (!isBodyBlock(block)) continue;
+    for (const n of gluedNumbers(block.text)) if (list.entries.has(n)) cited.add(n);
+  }
+  return cited.size;
+}
 
 /**
  * Every body block carrying a marker for each note, in document order.
@@ -698,6 +979,7 @@ const ARXIV_TEXT = /\barxiv:\s?(\d{4}\.\d{4,5}|[a-z-]+(?:\.[a-z]{2})?\/\d{7})(?:
 
 /** Trim the punctuation a sentence puts after a DOI, keeping a bracket the DOI opened. */
 function trimDoi(raw: string): string {
+  if (!doiIsEncodable(raw)) return "";
   let doi = raw.replace(/[.,;:]+$/, "");
   for (const [open, close] of [
     ["(", ")"],
@@ -985,27 +1267,15 @@ function normal(value: string): string {
     .trim();
 }
 
-/** The link for one DOI / arXiv id. */
-function doiUrl(doi: string): string {
-  return `https://doi.org/${doi}`;
-}
+/** The link for one arXiv id; a DOI's is `doiUrl` (src/doi-url.ts), which encodes it. */
 function arxivUrl(id: string): string {
   return `https://arxiv.org/abs/${id}`;
 }
 
-/** A search for the work, never its address. */
-export function scholarUrl(title: string, authors?: string): string {
-  const surname = firstAuthor(authors);
-  const q = `"${title}"${surname ? ` ${surname}` : ""}`;
-  return `https://scholar.google.com/scholar?q=${encodeURIComponent(q)}`;
-}
-
-/** The first author's name as the article gives it — "Sapede, D.; Seydel, T." → "Sapede". */
-export function firstAuthor(authors?: string): string {
-  if (!authors) return "";
-  const first = authors.split(/;|,|\s&\s|\band\b/)[0] ?? "";
-  return first.replace(/\bet al\.?/i, "").trim();
-}
+/* `scholarUrl` and `firstAuthor` moved to src/scholar-search.ts on 2026-10-03,
+   so Debate's panel can build the same search in the browser — this module is
+   server code. Re-exported, because the server's callers still reach them here. */
+export { firstAuthor, scholarUrl };
 
 /**
  * An anchor's own identifier, when it carries exactly one — gwern links the
@@ -1167,9 +1437,27 @@ export function keysOf(work: Pick<CitedWork, "title" | "authors" | "year" | "url
   workKey: string;
 } {
   let idKey: string | null = null;
-  if (work.linkFrom === "doi") idKey = `doi:${work.url.slice("https://doi.org/".length).toLowerCase()}`;
-  else if (work.linkFrom === "arxiv") idKey = `arxiv:${work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
-  else if (work.linkFrom === "article") idKey = `url:${canonicalUrl(work.url)}`;
+  /* The decoded DOI, not its spelling in the link. Legacy percent links are
+     ambiguous (doiOfUrl); idsByKey still inherits by the stored c.key. */
+  if (work.linkFrom === "doi") idKey = `doi:${(doiOfUrl(work.url) ?? work.url).toLowerCase()}`;
+  /* **Which arXiv paper is the registry's answer** (src/paper-sources.ts §
+     `arxivIdOf`), never a version. The slice is what this did before, kept for
+     a stored link the registry would not read.
+
+     An address the article itself gave is asked the same question, so a work
+     linked to a page *about* an arXiv paper (Hugging Face's, alphaXiv's) has
+     the key the arXiv link gets and is one work with it
+     (docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+     § The arXiv mirrors are arXiv). The link itself is not rewritten. A row
+     stored under its old `url:` key keeps its id through `idsByKey`'s unique
+     migration alias, even if its model-written metadata changes at the same
+     time. */
+  else if (work.linkFrom === "arxiv") {
+    idKey = `arxiv:${arxivIdOf(work.url)?.workId ?? work.url.slice("https://arxiv.org/abs/".length).toLowerCase()}`;
+  } else if (work.linkFrom === "article") {
+    const arxiv = arxivIdOf(work.url);
+    idKey = arxiv === null ? `url:${canonicalUrl(work.url)}` : `arxiv:${arxiv.workId}`;
+  }
   const workKey = `work:${keyWords(work.title)}|${keyWords(firstAuthor(work.authors))}|${keyWords(work.year ?? "")}`;
   return { idKey, workKey };
 }
@@ -1228,6 +1516,7 @@ function mergeInto(a: Draft, b: Draft, drops: CitationDrops): Draft {
   const influence = maxOf(a.influence, b.influence);
   return {
     title: a.title,
+    ...(a.foldKey ? { foldKey: a.foldKey } : {}),
     why: a.why,
     ...(authors ? { authors } : {}),
     ...(year ? { year } : {}),
@@ -1278,16 +1567,40 @@ function mergeBy<T extends { draft: Draft }>(
  * title, author and year: the latter's primary key hides the collision, but it
  * still means a later identifier row cannot tell which old work it is.
  */
-export function idsByKey(onDisk: Citations | null): Map<string, string> {
+export function idsByKey(
+  onDisk: Citations | null,
+  grounding?: { blocks: readonly Block[]; referenceList: NumberedReferenceList | null },
+): Map<string, string> {
+  /* Old search keys contain authors/year the new guard may now remove. Apply
+     the same guard before counting owners, so a unique row keeps its id while
+     two old rows reduced to the same metadata inherit nothing. */
+  const article = grounding
+    ? articleTextOf(new Map(grounding.blocks.map((b) => [b.id as string, b])), grounding.referenceList)
+    : null;
   const seen = new Map<string, string>();
   const ambiguous = new Set<string>();
   const workClaims = new Map<string, number>();
   const workOwners = new Map<string, string>();
+  const claim = (key: string, id: string) => {
+    if (seen.has(key)) ambiguous.add(key);
+    else seen.set(key, id);
+  };
   for (const c of onDisk?.citations ?? []) {
     if (!c || typeof c.id !== "string" || typeof c.key !== "string") continue;
-    if (seen.has(c.key)) ambiguous.add(c.key);
-    else seen.set(c.key, c.id);
-    const { workKey } = keysOf(c);
+    const fields = article ? locateArticleFields(c, article, emptyDrops()) : c;
+    const { idKey, workKey } = keysOf({ ...fields, url: c.url, linkFrom: c.linkFrom });
+    const key = article && idKey === null ? workKey : c.key;
+    claim(key, c.id);
+    /* Before plan 261005m, a Hugging Face or alphaXiv link supplied by the
+       article was an ordinary `url:` key. It is an `arxiv:` key now. Record
+       that newly recognised identifier as an alias for the old row, so the
+       row keeps its id even if the model also changes its metadata on this
+       re-run. The collision pass below still removes the alias when two old
+       rows claim it (including one already stored under the arXiv key), rather
+       than moving either row's Find/Investigate state onto the other. */
+    if (c.key.startsWith("url:") && idKey?.startsWith("arxiv:") && idKey !== key) {
+      claim(idKey, c.id);
+    }
     workClaims.set(workKey, (workClaims.get(workKey) ?? 0) + 1);
     if (!workOwners.has(workKey)) workOwners.set(workKey, c.id);
   }
@@ -1369,7 +1682,7 @@ export function buildCitations(
     (a, b) => ({ draft: mergeInto(a.draft, b.draft, drops) }),
   );
   const workKeyOf = (draft: Draft) =>
-    keysOf({ ...draft, url: "", linkFrom: "search" }).workKey;
+    draft.foldKey ?? keysOf({ ...draft, url: "", linkFrom: "search" }).workKey;
   const numberedByWork = new Map<string, number>();
   for (const { draft } of byEntry) {
     if (draft.entryNumber === undefined) continue;
@@ -1479,7 +1792,7 @@ export function buildCitations(
 
   const citations: CitedWork[] = keyed.map((w) => {
     const old = inheritedBy(w);
-    const { entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
+    const { foldKey: _foldKey, entryNumber: _entryNumber, identifierEntry: _identifierEntry, entry, ...draft } = w.draft;
     return {
       id: old ?? mintUniqueId(taken),
       key: w.key,
@@ -1665,11 +1978,14 @@ against. Not a summary of the work. Do not begin "The article", "The author" or
 "relevance" 0-1 — how much THIS piece's argument leans on the work. 1: the piece
 is built on it. 0.5: it carries one step of the argument. 0.1: a passing mention
 or further reading.
-"influence" 0-1 — how influential the work is in its own field, from what you
-know. 1: a landmark nearly everyone in the field knows. 0.5: well known to
-specialists. 0.1: obscure, or you do not know it. When you do not know the work,
-say so with a low number rather than guessing high.
-Both scores are required on every row.
+"influence" — a number 0-1, or null. How influential the work is in its own
+field, from what you know. Give a number ONLY when you actually know this work
+and are confident of its standing, for example because it is well known. 1: a
+landmark nearly everyone in the field knows. 0.5: well known to specialists.
+0.1: a work you know, and know to be minor. A low number never means "I do not
+know this work": that is null. If you are in doubt, write null.
+Every row has both: "relevance" is always a number, and "influence" is a number
+or null.
 
 HOW MANY
 
@@ -1690,7 +2006,7 @@ JSON only, no prose, no code fence:
     "year": "...",
     "why": "...",
     "relevance": 0.0,
-    "influence": 0.0,
+    "influence": null,
     "reference": {"block": "spya-k3m9qt", "quote": "..."},
     "mentions": [{"block": "spya-a1b2c3", "quote": "..."}],
     "entry": 8
@@ -1758,7 +2074,11 @@ export const CITATIONS_OUTPUT_SCHEMA = {
           year: citationStringSchema,
           why: citationStringSchema,
           relevance: { type: "number" },
-          influence: { type: "number" },
+          /* Required and nullable: null is "not confident enough to score" (plan
+             261003m). The house shape for a required-nullable field
+             (src/timeline.ts, src/paper-metadata.ts), which both providers'
+             strict subsets accept. */
+          influence: { type: ["number", "null"] },
           reference: citationPlaceSchema,
           mentions: { type: "array", items: citationPlaceSchema },
           entry: { type: "integer" },
@@ -1822,12 +2142,12 @@ export async function generateCitations(opts: {
      article stale for ever. */
   const meta: Meta = realMeta ?? ({ title: fallbackHeadTitle(tree) } as Meta);
   const sourceHash = inputFingerprint(blocks, tree, realMeta);
-  const inherit = opts.previous ? idsByKey(opts.previous) : null;
+  const inherit = opts.previous ? idsByKey(opts.previous, { blocks, referenceList: opts.referenceList }) : null;
   const started = Date.now();
 
   const answerTokens = answerEstimate();
   const maxTokens = budgetFor("citations", answerTokens);
-  const effort = (process.env.SPIDERYARN_PIPELINE_EFFORT as Effort | undefined) ?? EFFORT;
+  const effort = pipelineEffortOverride() ?? EFFORT;
 
   let message: Anthropic.Message;
   try {
@@ -1872,19 +2192,7 @@ export async function generateCitations(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) {
-    throw stageFailure(MODEL_REFUSED, { authored: "the model answered with stop_reason: refusal" });
-  }
-  const answerText = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("citations", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: answerText.length,
-    });
-  }
+  const answerText = finishedText(message, "citations", maxTokens, answerTokens);
 
   const drops = emptyDrops();
   const scores = noScoreDrops();

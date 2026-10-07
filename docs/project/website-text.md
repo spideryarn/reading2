@@ -5,6 +5,19 @@ the features page, the privacy policy, the footer row that joins them, and the o
 writes to. Part of
 [reading-view-overview.md](reading-view-overview.md).
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ The contact address](#the-contact-address) — the one address, `CONTACT_EMAIL`
+- [§ The footer](#the-footer) — adding a link to the row; why `/read/*` has none
+- [§ The contact page](#the-contact-page) — `/contact`, and why the Feedback button comes first
+- [§ The open-source page](#the-open-source-page) — `/opensource`, and why `GitHubMark` is ours
+- [§ The privacy policy](#the-privacy-policy) — a pointer to privacy.md
+- [§ The landing page](#the-landing-page) — whose words, beta copy, sign-in moved to `/login`
+- [§ The features page](#the-features-page) — every mode has a tile; the Experimental tag
+- [§ The pricing page](#the-pricing-page) — plans copy versus `billing_tiers`, the FAQ, buying from here, the current-plan line
+
 Its sibling is [copy.md](copy.md), and the split between them is worth stating once: **copy.md is
 what a reader is told when something goes wrong**, in the middle of doing something. This is what a
 reader is told when they come looking — a stranger deciding whether to sign in, or somebody who
@@ -32,7 +45,8 @@ Anything that needs it imports it. That includes the browser —
 `site-text.js` is on the shared-import allowlist in `tests/client-imports.test.ts`, which it
 qualifies for by importing nothing at all. The alternative is a second copy of the address that
 survives a domain move, which is exactly the trap
-[CLAUDE.md § One source of truth](../../CLAUDE.md) describes.
+[signposting-and-single-source-of-truth.md](../reusable/signposting-and-single-source-of-truth.md)
+describes.
 
 ## The footer
 
@@ -109,18 +123,24 @@ also carries which passages were on screen, the requests the page made and the i
 under ([feedback.md](feedback.md)). An email carries none of that.
 
 **The sentence about the button is hedged, and the hedges were bought at review.** It says *"if you
-are signed in"*, because `FeedbackButton` is in the signed-in chrome and this page renders bare to a
-stranger; and it says the report *carries that page's address* rather than *"so we can see what you
+are signed in"*, because `FeedbackButton` is in the signed-in chrome and this page renders without it
+to a stranger; and it says the report *carries that page's address* rather than *"so we can see what you
 saw"*, because pressing Feedback here sends `/contact`, and no screenshot goes unless the reader
 attaches one. GPT Sol established both as a P1 against the first draft — the page that tells people
 how to reach us is the worst place in the app to overclaim.
 
-**Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry `SiteNav`,
-a hero and the `--site-*` token scope, which exist to sell something over a long scroll; this is four
-sentences, so it takes the policy page's Home link, `h1` and `SiteFooter`. (That link said
-*Back* until 2026-09-08 — it goes to `/` rather than `history.back()`, and most people who open this
-page were sent to it. Since 2026-09-29 it is a house icon with a "Home" tooltip rather than the words
-— [260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md).)
+**Shaped like `/privacy`, not like the marketing pages.** The three marketing pages carry a hero
+and the `--site-*` token scope over the whole page, which exist to sell something over a long
+scroll; this is four sentences, so it takes the policy page's `h1` and `SiteFooter`. **The top bar
+is shared since 2026-10-07**: signed out, this page and `/privacy`, `/changelog`, `/opensource` and
+`/help` draw `SiteNav` above a narrow document column, with their 24px titles unchanged; signed in
+they draw nothing of their own, because the corner logo beside the page is the way home —
+[`DocumentPage.tsx`](../../src/web/DocumentPage.tsx), plan
+[261007h](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)
+F4b. (Before that a signed-out reader got a lone house icon to `/`, which said *Back* until
+2026-09-08 and was words until 2026-09-29 —
+[260929c](../plans/260929c-back-links-become-icons-with-tooltips-and-one-animated-wordmark-reused.md),
+[261005a](../plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md).)
 
 **Linked from one place**: `LINKS` in [`SiteFooter.tsx`](../../src/web/SiteFooter.tsx), which is
 what that array is for. That puts it on every page that carries the row and nowhere under

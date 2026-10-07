@@ -53,6 +53,7 @@ import { Search, Shield, Undo2, User, X } from "lucide-react";
 import { isAdmin } from "../admin.js";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
+import { isImeComposing } from "./key-chord.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
 /* The shelf's own Feedback control, in the masthead row below — the same
    trigger the corner and the dock draw, in a third shape. FeedbackButton.tsx §
@@ -80,9 +81,11 @@ import {
   sortDirParam,
 } from "./params.js";
 import { chosenTopics, isArchived, narrowShelf, tagFacets, topicCountsForVisible, topicMembers } from "./shelf-narrow.js";
-import { ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
+import { ArticleTopicsContext, ShelfRowTopics, TopicsExpectedContext } from "./ShelfRowTopics.js";
+import { mightHaveTopics, ShelfTerms, ShelfTermsLoading } from "./ShelfTerms.js";
 import { ShelfTagFilter } from "./ShelfTagFilter.js";
-import { shelfKeyOf, useShelfTopics } from "./useShelfTerms.js";
+import { articleTopics } from "./article-topics.js";
+import { shelfKeyOf, topicsExpected, useShelfTopics } from "./useShelfTerms.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { ADMIN_HREF, PROFILE_HREF } from "./router.js";
 import { media } from "./media.js";
@@ -214,7 +217,12 @@ export function Library({
      prints a relative date — see useNow.ts for both halves of why. */
   const now = useNow();
 
-  const columns = useMemo(() => libraryColumns(shelf, now, archivedOn), [shelf, now, archivedOn]);
+  /* `ShelfRowTopics` is one stable component, reading its topics from context,
+     so the topics answer landing does not rebuild these (plan 261005a). */
+  const columns = useMemo(
+    () => libraryColumns(shelf, now, archivedOn, ShelfRowTopics),
+    [shelf, now, archivedOn],
+  );
   const natural = useMemo(() => naturalDirections(columns), [columns]);
   /* `DEFAULT_BY` as the fallback: a URL naming nothing we recognise lands on
      the ordinary shelf rather than on an unsorted list with no chip pressed.
@@ -248,6 +256,10 @@ export function Library({
     drop: dropTopics,
   });
   const { terms, inArchive, topics, members } = shelfTopics;
+  /* Each topic's hue and each article's topics, once per answer, for the
+     Topics row and for the pills on every card and table row
+     (article-topics.ts). */
+  const topicsOfArticles = useMemo(() => articleTopics(terms.data?.terms ?? []), [terms.data?.terms]);
 
   /* **The scope: one list.** The active shelf, and — with the Archived chip on
      and the archive loaded — the archived articles in the same array, each
@@ -465,25 +477,36 @@ export function Library({
      what survives the narrowing. The archived share of each is named in the
      "n of m" line when the archive is in scope. */
   const total = scope?.length ?? 0;
+  /* Whether each card and row holds a line for its topic pills, so the pills
+     landing does not move the shelf (plan 261005h § C). Over `total`, the
+     count the placeholder Topics row is given below. */
+  const expectTopics = topicsExpected(terms, mightHaveTopics(total));
   const showing = rows?.length ?? 0;
   const archivedShowing = useMemo(() => (rows ?? []).filter(isArchived).length, [rows]);
   // Said only when something is actually being hidden. "12 of 12" is noise.
   const narrowed =
     (searching || show === "unread" || topics.length > 0 || tagsChosen.length > 0) && showing !== total;
 
-  /* The slugs the Unread chip lets through, whatever the search box says — the
-     passages are the answer to the search, so narrowing them by the search
-     twice would be wrong. `null` when the chip is off, which is "do not narrow"
-     rather than "narrow to nothing". */
+  /* The slugs the Unread chip and the chosen topics and tags let through,
+     whatever the search box says — the passages are the answer to the search,
+     so narrowing them by the search twice would be wrong. That is why this is
+     `narrowShelf` with an empty query and not the slugs of `rows`: `rows` has
+     the card's title, author and blurb match applied, and would hide the
+     passage of an article whose body matches and whose card does not (plan
+     261007a § K3; until then only Unread reached the passages, and a chosen
+     topic listed passages from articles outside it). `null` when nothing is
+     narrowing, which is "do not narrow" rather than "narrow to nothing". */
   /* Over `scope`, not the active shelf alone: with Include archived on, an
      archived article nobody has opened is as unread as any other, and its
      passages must not vanish when the cards keep it (plan 260930d). */
-  const unread = useMemo(
+  const passagesIn = useMemo(
     () =>
-      show === "unread" && scope
-        ? new Set(scope.filter((a) => a.opens === 0).map((a) => a.slug))
+      scope && (show === "unread" || chosenSets.length > 0)
+        ? new Set(
+            narrowShelf(scope, { query: "", unread: show === "unread", topics: chosenSets }).map((a) => a.slug),
+          )
         : null,
-    [scope, show],
+    [scope, show, chosenSets],
   );
 
   /* Whichever column is sorted first decides what a card says about itself. */
@@ -521,8 +544,8 @@ export function Library({
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans">
       <header className="tw:mb-8">
         {/* The masthead links are deliberately the quietest thing on the page —
-            same faint-until-hovered treatment as the back-link in Masthead.tsx,
-            so the two read as one convention. This paragraph used to argue that
+            the faint-until-hovered treatment `BackLink` has (BackLink.tsx), so
+            the two read as one convention. This paragraph used to argue that
             the design reference in particular should not be stepped over by a
             reader arriving at their shelf; it is on /admin since 2026-09-05,
             which is that argument taken to its conclusion. */}
@@ -790,6 +813,7 @@ export function Library({
           entryOf={shelfTopics.entryOf}
           inScope={shelfTopics.inScope}
           archived={archivedOn}
+          articleTopics={topicsOfArticles}
         />
       )}
 
@@ -857,7 +881,8 @@ export function Library({
           nothing else, so a capped view without its button is not a shape this
           JSX can take. */}
       {sorted.length > 0 && (
-        <>
+        <ArticleTopicsContext.Provider value={topicsOfArticles}>
+        <TopicsExpectedContext.Provider value={expectTopics}>
           {view === "table" ? (
             /* **One `TooltipGroup` for the whole table**, so running the pointer
                down the titles opens each row card instantly after the first,
@@ -877,6 +902,7 @@ export function Library({
                     shelf={shelf}
                     note={note(row.original, now)}
                     archivedShown={archivedOn}
+                    topics={<ShelfRowTopics slug={row.original.slug} className="tw:mt-1.5" />}
                     readThis={
                       row.original.processing === "minimal" ? (
                         <ReadThisButton slug={row.original.slug} />
@@ -896,16 +922,27 @@ export function Library({
           {capped.revealTotal !== null && (
             <ShowAllRows total={capped.revealTotal} onShowAll={() => setExpanded(true)} />
           )}
-        </>
+        </TopicsExpectedContext.Provider>
+        </ArticleTopicsContext.Provider>
       )}
 
-      {/* The passages obey the Unread chip too. Without that, turning Unread on
-          and searching for something only an opened article contains printed
-          "No unopened article matches …" and then listed passages from that
-          very article — two answers to one question, on one screen. The hidden
-          ones are counted rather than silently dropped, because "it is in
-          something you have already read" is the useful half of that answer. */}
-      {searching && <Passages state={passages} query={query} only={unread} archived={archivedOn} />}
+      {/* The passages obey the Unread chip, the topics and the tags too.
+          Without that, turning Unread on and searching for something only an
+          opened article contains printed "No unopened article matches …" and
+          then listed passages from that very article — two answers to one
+          question, on one screen. The hidden ones are counted rather than
+          silently dropped, because "it is in something you have already read"
+          is the useful half of that answer. */}
+      {searching && (
+        <Passages
+          state={passages}
+          query={query}
+          only={passagesIn}
+          chosen={chosenSets.length > 0}
+          archived={archivedOn}
+          archiveUnavailable={archivedOn && archivedList === null}
+        />
+      )}
 
       {/* **Right after the search's answer: what it left out, how much, and the
           button.** Greg, spya-s9fhmw. ShelfSearchAlso.tsx; plan 261002b § Part D. */}
@@ -1181,6 +1218,12 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
     const el = input.current;
     if (el && takesFocusOnArrival(el, arrivingQuery.current)) el.focus({ preventScroll: true });
   }, []);
+  /* **Was the cross pressed with a finger or pen?** Read at the `pointerdown`,
+     never off the click: since iOS 18.2 a finger's click can say `mouse`
+     (docs/project/touch.md § The spine). The click still tells us when no
+     pointer made it, so an abandoned touch cannot poison a later keyboard,
+     voice or assistive-technology activation. */
+  const fingerOrPenOnCross = useRef(false);
   return (
     <div className="tw:mb-4">
       <div className="tw:relative">
@@ -1199,9 +1242,24 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              with nothing behind it. */
           enterKeyHint="search"
           onKeyDown={(e) => {
+            if (e.key === "Escape" && value !== "") e.stopPropagation();
+            /* A key an input method is using is not ours: its Enter accepts a
+               candidate and its Escape dismisses the list. A `type="search"`
+               box is also emptied by the browser itself on Escape (measured in
+               Chrome, 2026-10-07), so that default is cancelled. */
+            if (isImeComposing(e)) {
+              if (e.key === "Escape") e.preventDefault();
+              return;
+            }
             if (e.key === "Enter") {
               e.preventDefault();
               e.currentTarget.blur();
+            } else if (e.key === "Escape" && value !== "") {
+              /* Only when there is something to clear, so an Escape in an empty
+                 box still reaches whatever else on the page listens for it —
+                 the same rule as PageContents.tsx's box. */
+              e.preventDefault();
+              onChange("");
             }
           }}
           placeholder="Search titles, authors, and article text"
@@ -1212,16 +1270,44 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              tabbed into — and this input suppresses the browser's own ring
              with `outline-none`, so nothing else was drawing one. Same
              treatment on the URL box in AddArticle.tsx. */
-          className="voice-reader tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-9 tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
+          /* `own-clear` hides the browser's cross (styles/close.css): ours is
+             below, and two were being drawn whenever the box had the focus.
+             The right padding is fixed in px, like the cross: `pr-11` would
+             shrink to 33px at the supported 12px root and let text under its
+             40px finger target. */
+          className="own-clear voice-reader tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-card tw:py-2 tw:pl-9 tw:pr-[44px] tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:transition-colors tw:outline-none tw:placeholder:text-muted-foreground tw:focus:border-highlight-text tw:focus:ring-2 tw:focus:ring-highlight-text/25"
         />
         {value && (
+          /* **The house cross** — its size is styles/close.css § .close-x, so
+             **no `tw:size-*` here**: the utilities layer comes after the app's
+             CSS and would win, quietly putting back the 28px box and 14px grey
+             glyph this change replaces (GPT Sol, plan review).
+             docs/plans/261004f-shelf-search-clear-cross-that-can-be-seen.md. */
           <button
             type="button"
-            onClick={() => onChange("")}
+            onPointerDown={(e) => {
+              fingerOrPenOnCross.current = e.pointerType === "touch" || e.pointerType === "pen";
+            }}
+            onPointerCancel={() => {
+              fingerOrPenOnCross.current = false;
+            }}
+            onClick={(e) => {
+              onChange("");
+              /* The cursor goes back in the box, ready for the next search —
+                 but not after a finger or pen, where it could throw the
+                 on-screen keyboard up over the shelf the reader has just
+                 asked to see. */
+              const clickPointer = (e.nativeEvent as Partial<PointerEvent>).pointerType;
+              const noPointer = clickPointer === "" || (clickPointer === undefined && e.detail < 1);
+              if (noPointer || !fingerOrPenOnCross.current) {
+                input.current?.focus({ preventScroll: true });
+              }
+              fingerOrPenOnCross.current = false;
+            }}
             aria-label="Clear the search"
-            className="tw:absolute tw:right-2 tw:top-1/2 tw:inline-flex tw:size-7 tw:-translate-y-1/2 tw:items-center tw:justify-center tw:rounded-md tw:text-muted-foreground tw:transition-colors tw:hover:bg-highlight/10 tw:hover:text-foreground"
+            className="close-x tw:absolute tw:right-[6px] tw:top-1/2 tw:-translate-y-1/2 tw:text-foreground tw:transition-colors tw:hover:bg-highlight/10"
           >
-            <X size={14} />
+            <X size={18} />
           </button>
         )}
       </div>
@@ -1240,14 +1326,19 @@ function Passages({
   state,
   query,
   only,
+  chosen,
   archived,
+  archiveUnavailable,
 }: {
   state: ReturnType<typeof useLibrarySearch>;
   query: string;
   /** The Include archived chip — what the search was asked, and what "nothing" means. */
   archived: boolean;
+  /** Search can return archived hits before their shelf details arrive. */
+  archiveUnavailable: boolean;
   /**
-   * The slugs the Unread chip is letting through, or `null` for "everything".
+   * The slugs the Unread chip and the chosen topics and tags are letting
+   * through, or `null` for "everything".
    *
    * Narrowing happens **here rather than in the request**, and that has a cost
    * worth stating: the server caps the list before we see it, so a query whose
@@ -1259,6 +1350,12 @@ function Passages({
    * were hidden — a caller reporting "found nothing" cannot do either.
    */
   only: Set<string> | null;
+  /**
+   * Whether a topic or a tag is among what narrowed `only`. With Unread alone
+   * the passages left out are "in articles you have already opened"; with a
+   * topic or a tag chosen that would be false of some of them.
+   */
+  chosen: boolean;
 }) {
   if (state.error) {
     return (
@@ -1292,25 +1389,40 @@ function Passages({
   /* Counted here rather than read from `state.articles`, which is the server's
      count over the hits it sent (`new Set(hits.map(h => h.slug)).size` in
      routes.ts — the same expression). It has to be the count of what is *shown*
-     once the Unread chip can remove some, and the two agree exactly when
-     nothing is removed. */
+     once a filter can remove some, and the two agree exactly when nothing is
+     removed. */
   const articles = new Set(hits.map((h) => h.slug)).size;
 
   /* Counted, never silently dropped: "it is in something you have already read"
      is the useful half of the answer, and a list that just came up empty with
-     no explanation reads as a broken search. */
+     no explanation reads as a broken search. "Everything chosen above" is
+     `nothingLeft`'s phrase for the same filters. */
   const alsoIn = hidden > 0 && (
     <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-      {hidden} more {hidden === 1 ? "passage is" : "passages are"} in articles you have already
-      opened.
+      {archiveUnavailable ? (
+        <>{hidden} more {hidden === 1 ? "passage found is" : "passages found are"} not shown.</>
+      ) : (
+        <>
+          {hidden} more {hidden === 1 ? "passage is" : "passages are"} in articles{" "}
+          {chosen ? "that do not match everything chosen above" : "you have already opened"}.
+        </>
+      )}
     </p>
   );
 
   if (hits.length === 0) {
     return (
       <section className="tw:mt-8">
+        {/* About the passages found, not about the articles: the server
+            caps the list before the filters see it, so "nothing in an
+            unopened article matches" is more than this can know. */}
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          Nothing in an unopened article's text matches “{query.trim()}”.
+          None of the passages found for “{query.trim()}” is{" "}
+          {archiveUnavailable
+            ? "shown"
+            : chosen
+              ? "in an article that matches everything chosen above"
+              : "in an unopened article"}.
         </p>
         {alsoIn}
       </section>

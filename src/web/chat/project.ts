@@ -179,6 +179,9 @@ function draw(threads: readonly ChatThread[], op: Operation): readonly ChatThrea
        and stay off while it is out, which is not something a projection over
        `base` could express. */
     case "intent":
+    /* A hint press draws nothing: the panel opens the hint from its own state,
+       and the time goes into `base` when the server answers with it. */
+    case "hint":
       return threads;
   }
 }

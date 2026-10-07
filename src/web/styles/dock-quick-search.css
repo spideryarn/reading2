@@ -10,15 +10,20 @@
      rung 0           a 14rem box
      rungs 1 and 2    a 9rem box
      rung 3           a 7rem box, no `/` hint — every label has gone first
-     rung 4           the ⚡ button (added 2026-10-02: an owner's reading view
-                      is on rung 3 at 1440×900, and while rung 3 drew the ⚡ a
-                      laptop never saw a search bar at all)
-     under 732px      the ⚡ button (narrow-window.css's width)
-     pointer: coarse  the ⚡ button, at any width — a text box in a fixed bar
-                      at the foot of an iPad is where the on-screen keyboard
+     rung 4           nothing (added 2026-10-02 so that rung 3 could keep
+                      a box: an owner's reading view is on rung 3 at
+                      1440×900. It drew the ⚡ alone until 2026-10-05)
+     under 732px      nothing (narrow-window.css's width)
+     pointer: coarse  nothing, at any width — a text box in a fixed bar at
+                      the foot of an iPad is where the on-screen keyboard
                       misbehaves (Opus, plan review)
      .dock-qs--bolt   the ⚡ button: Search mode is open and the box does not
-                      have focus, so there is one box to type in, not two
+                      have focus, so there is one box to type in, not two.
+                      Only where one of the rows above has not already drawn
+                      nothing
+
+   "Nothing" because the Search button is in the same bar (Greg, 2026-10-05,
+   plan 261005h — § at the foot of this file). `/` works on every row.
 
    Loaded straight after dock-fit.css, whose `.dock.dock-fit-3`/`-4` rules it
    extends, and before narrow-window.css, which does not touch these classes. */
@@ -58,7 +63,7 @@
 .dock-qs-input:focus,
 .dock-qs-input:focus-visible { outline: none; }
 .dock-qs-input::placeholder { color: var(--ink-faint); }
-/* Ours is Escape — the same reason as `.srch-input` in search.css. */
+/* Ours is Escape and `.dock-qs-clear` below — the browser's would be a second cross. */
 .dock-qs-input::-webkit-search-cancel-button { display: none; }
 
 .dock-qs-icon { flex: none; }
@@ -75,6 +80,53 @@
   color: var(--ink-faint);
 }
 
+/* **The cross that empties the box** (plan 261004g), there only while the box
+   has words in it. Out of the flow, over the input's right-hand end, so that
+   typing the first letter does not widen the row the fit ladder has just
+   measured; the input gives the space up from its own width instead
+   (`border-box`, and px like the cross, for the 12px root).
+
+   Not `.close-x` (styles/close.css): that is a 32px box, and this field is
+   about 24px tall inside a bar that must not grow. The declared finger target
+   is 40px, made the same invisible way and on the same `any-pointer` query —
+   an iPad with a trackpad reports `pointer: fine`, so it draws this box, and
+   its reader still taps the glass. It reaches left over the input rather than
+   right, so it takes no taps from the button beside the field. The dock's
+   overflow-y clips that target vertically (at most 29px at a 12px root,
+   39px at 16px); the declared target does not enlarge the bar. */
+.dock-qs-field { position: relative; }
+.dock-qs-input { box-sizing: border-box; }
+.dock-qs-field--filled .dock-qs-input { padding-right: 20px; }
+.dock-qs-clear {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.dock-qs-clear:hover { color: var(--ink); }
+.dock-qs-clear:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: -1px;
+}
+@media (any-pointer: coarse) {
+  .dock-qs-clear::after {
+    content: "";
+    position: absolute;
+    inset: -10px -3px -10px -17px;
+  }
+}
+
 .dock-qs-bolt { display: none; }
 
 .dock.dock-fit-1 .dock-qs-input,
@@ -88,12 +140,38 @@
 .dock.dock-fit-3 .dock-qs-key,
 .dock.dock-fit-4 .dock-qs-key { display: none; }
 
-.dock.dock-fit-4 .dock-qs-field,
+/* Search mode is open and the bar's box is not focused: the ⚡ stands in for
+   it, so there is one box to type in. Only where the width has a box at all —
+   the rules below outrank this one by specificity. */
 .dock-qs--bolt .dock-qs-field { display: none; }
-.dock.dock-fit-4 .dock-qs-bolt,
 .dock-qs--bolt .dock-qs-bolt { display: inline-flex; }
 
+/* **Where there is no room for the box, or a finger would be typing in it,
+   nothing is drawn** (plan 261005h). Until 2026-10-05 these three cases drew
+   the ⚡ alone. Greg, `spya-n8pgy2`:
+
+   > if there isn't much room, don't bother showing the quick search icon alone
+   > without the input text bar, because the quick search icon does just the
+   > same thing as clicking the search icon, which we are already also showing
+
+   (Not quite the same: the ⚡ opened Search on quick, and the Search button
+   opens it on whichever kind the URL names — search.md § the box in the bottom
+   bar.) `/` still opens Search on quick from here; that is the component's,
+   not the button's.
+
+   **The field and the ⚡ are hidden by name, as well as the wrapper.**
+   DockQuickSearch.tsx asks for the field's own computed `display` to decide
+   what `/` does and whether a focused box has just been hidden, and a child of
+   a `display: none` parent still reports its own value. The wrapper goes too
+   so that an empty flex item leaves no double gap in the row. Three classes in
+   each child selector, to beat `.dock-qs--bolt .dock-qs-bolt` above wherever
+   these sit in the file. */
+.dock.dock-fit-4 .dock-qs,
+.dock.dock-fit-4 .dock-qs-field,
+.dock.dock-fit-4 .dock-qs-bolt { display: none; }
+
 @media (max-width: 731px), (pointer: coarse) {
-  .dock .dock-qs-field { display: none; }
-  .dock .dock-qs-bolt { display: inline-flex; }
+  .dock .dock-qs,
+  .dock .dock-qs .dock-qs-field,
+  .dock .dock-qs .dock-qs-bolt { display: none; }
 }

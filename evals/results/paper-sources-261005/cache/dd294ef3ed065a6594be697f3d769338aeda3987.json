@@ -1,0 +1,1 @@
+{"source":"pmlr","label":"BatchNorm","role":"fulltext","expect":"pdf","requestedUrl":"http://proceedings.mlr.press/v37/ioffe15.pdf","outcome":"ok","finalUrl":"http://proceedings.mlr.press/v37/ioffe15.pdf","chainHosts":["proceedings.mlr.press"],"status":200,"kind":"pdf","bytes":318669,"elapsedMs":240,"pdfPages":9}

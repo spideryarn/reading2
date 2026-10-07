@@ -41,8 +41,7 @@
  * themselves — src/similar.ts is the current example, and says so.
  */
 import type { EmbeddingReason } from "./types.js";
-import { loadEnvLocal } from "./env.js";
-import { type JsonCall, ProviderRefused, openRouterJson } from "./ai-call.js";
+import { type JsonCall, ProviderRefused, openRouterJson, worthAskingAgain } from "./ai-call.js";
 
 /**
  * The measured winner. See the file header — this is a conclusion, not a
@@ -109,7 +108,7 @@ function backoffMs(retryAfterMs: number | null, attempt: number): number {
      us.
 
      **Clamped here since 2026-09-04**, and it is the same clamp: it used to live
-     in `retryAfterMs` (src/ai-call.ts), where it also hid a long wait from the
+     in the gateway's own parser (now src/retry-after.ts), where it also hid a long wait from the
      one caller that wanted to decide about one. This behaviour is unchanged —
      what moved is who owns the number, which is whoever has the deadline. */
   if (retryAfterMs !== null) return Math.min(retryAfterMs, 30_000);
@@ -258,7 +257,10 @@ export async function embedBatch(
     call = await openRouterJson(
       "embeddings",
       inputType ? { model, input, input_type: inputType } : { model, input },
-      { signal: deadline ? AbortSignal.any([deadline, ownDeadline]) : ownDeadline, apiKey },
+      /* `retryTransport: false`: the loop below is this call's retry, five goes
+         honouring `Retry-After`. With the gateway's as well, a batch on a bad
+         minute would be fifteen requests. */
+      { signal: deadline ? AbortSignal.any([deadline, ownDeadline]) : ownDeadline, apiKey, retryTransport: false },
     );
   } catch (err) {
     /* **A connection that never opened is a provider failure too**, and until
@@ -270,6 +272,16 @@ export async function embedBatch(
        `TOTAL_TIMEOUT_MS`), and giving up on a slow provider is a provider
        failure by any honest reading. ⟨Sol⟩ */
     if (!(err instanceof ProviderRefused)) {
+      /* **A dropped connection is asked again, like a 5xx** (2026-10-05; until
+         then it failed the batch at once). `worthAskingAgain` and not
+         `instanceof TypeError`: a `200` whose body broke is a `TypeError` too,
+         and only the gateway knows which this is. A deadline of ours that has
+         fired is not asked again. */
+      if (worthAskingAgain(err) && attempt < MAX_ATTEMPTS && !ownDeadline.aborted && !deadline?.aborted) {
+        await sleep(backoffMs(null, attempt), deadline);
+        if (deadline?.aborted) throw providerFailed(`embeddings ${model}: gave up waiting`);
+        return embedBatch(model, input, apiKey, inputType, deadline, attempt + 1);
+      }
       throw providerFailed(`embeddings ${model}: ${(err as Error).name ?? "the call failed"}`, {
         cause: err,
       });
@@ -316,7 +328,9 @@ export async function embedBatch(
     /* 429 and 5xx are the provider being busy, not the request being wrong, and
        they are common enough on a run of a few hundred blocks that failing on
        one would waste every batch already paid for. Back off and try again. */
-    const retryable = err.status === 429 || err.status >= 500;
+    /* **Not a 5xx that was priced**: the gateway saw a cost in its body, so it
+       was billed, and asking again buys it twice. A 429 is a queue either way. */
+    const retryable = err.status === 429 || (err.status >= 500 && !err.priced);
     if (retryable && attempt < MAX_ATTEMPTS) {
       const wait = backoffMs(err.retryAfterMs, attempt);
       /* **The sleep is abortable.** A deadline that only gets looked at between
@@ -503,13 +517,22 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * The key, the way every other OpenRouter caller in this repo gets it —
- * `loadEnvLocal()` first, because `.env.local` beats what the shell exported
- * and the two are different accounts (src/env.ts, and the 404 clause above is
- * what it looks like when the wrong one is used).
+ * The key, read from the environment as it stands.
+ *
+ * Read here rather than left to the gateway because this module uses it: the
+ * key is passed to the gateway as an explicit override, and its prefix goes in
+ * the "no endpoints available" message (the 404 clause above), which is the
+ * fastest way to tell two OpenRouter accounts apart.
+ *
+ * **`.env.local` is not loaded here.** It was until 2026-10-04, with a comment
+ * saying that was how every other caller got the key. It is not: the file is
+ * loaded at the program's edge (src/db/client.ts at import for the server, a
+ * CLI's own `main` otherwise), and a library function that re-reads it hands
+ * back a key a test deleted on purpose (src/ai-call.ts § `apiKey`). That the
+ * file beats the shell, and that the two can be different accounts, is still
+ * true and is src/env.ts's business.
  */
 function apiKeyFromEnv(): string {
-  loadEnvLocal();
   const key = process.env.OPENROUTER_API_KEY;
   /* `config`, the same reason an account that may not use the model is: both
      are somebody having to change a setting, both are permanent until they do,

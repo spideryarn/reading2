@@ -43,9 +43,10 @@
  */
 import { uploadProblem } from "../uploads.js";
 import type { Job } from "../types.js";
-import { jobEngine, send, type TerminalOutcome } from "./jobEngine.js";
-import { apiFetch, detailsOf, statusOf } from "./lib/api.js";
+import { jobEngine, type TerminalOutcome } from "./jobEngine.js";
+import { apiFetch, detailsOf, readJson, statusOf } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
+import { warnBeforeUnload } from "./unload-guard.js";
 import { type Grant, type UploadProgress, putFile, requestGrant, sha256Hex } from "./upload.js";
 
 /** How many files are in flight at once. In flight lasts until the job has ended. */
@@ -133,8 +134,8 @@ export interface BatchUploadDeps {
   queue(uploadId: string): Promise<Job | AlreadyAnArticle>;
   /** `POST /api/jobs/:id/retry` — the replacement job. */
   retryJob(jobId: string): Promise<Job>;
-  /** `DELETE /api/uploads/:id`. Fire and forget. */
-  cancelUpload(uploadId: string): Promise<void>;
+  /** `DELETE /api/uploads/:id`, for the reader whose operation minted it. */
+  cancelUpload(uploadId: string, madeFor: string | null): Promise<void>;
   /** The job engine's action seam and its terminal seam. */
   jobs: {
     epoch(): number;
@@ -151,6 +152,8 @@ export interface BatchUploadDeps {
 export interface BatchUpload {
   /** Bind to a reader. Idempotent for the same key; a different one tears down first. */
   start(readerId: string): void;
+  /** The reader it is bound to right now, or `null`. For the live requests below. */
+  reader(): string | null;
   /** Sign-out: fence everything, abort every transfer, and forget the batch. */
   stop(): void;
   subscribe(onChange: () => void): () => void;
@@ -400,6 +403,8 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
     epoch: number,
     live: () => boolean,
   ): Promise<string | null> => {
+    // Cleanup can outlive this binding: retain the reader whose grant this is.
+    const madeFor = readerId;
     if (it.sha === null) {
       setRow(id, { kind: "hashing" });
       let sha: string;
@@ -452,7 +457,7 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
     }
     if (!live()) {
       /* Stopped while the grant was out: give it straight back. */
-      void deps.cancelUpload(grant.uploadId).catch(() => {});
+      void deps.cancelUpload(grant.uploadId, madeFor).catch(() => {});
       return null;
     }
     it.uploadId = grant.uploadId;
@@ -497,7 +502,7 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
 
       if (step.from === "start") {
         const uploadId = await sendIt(id, it, epoch, live);
-        if (uploadId === null) return;
+        if (!live() || uploadId === null) return;
         step = { from: "queue", uploadId };
       }
 
@@ -567,6 +572,8 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
       notify();
     },
 
+    reader: () => readerId,
+
     stop() {
       clear();
       readerId = null;
@@ -628,7 +635,7 @@ export function createBatchUpload(deps: BatchUploadDeps): BatchUpload {
           it.attempt += 1;
           it.controller?.abort();
           it.controller = null;
-          if (it.uploadId) void deps.cancelUpload(it.uploadId).catch(() => {});
+          if (it.uploadId) void deps.cancelUpload(it.uploadId, readerId).catch(() => {});
         }
         active.delete(r.id);
         pending.delete(r.id);
@@ -684,24 +691,53 @@ const COULD_NOT_READ = "This file could not be read. Trying again sometimes work
 const COULD_NOT_READ_FILE =
   "This browser could not read that file off your disk. Choosing it again usually works.";
 
-const post = <T>(url: string, body: unknown) =>
-  send<T>(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+/**
+ * As the reader the batch is bound to, or not at all. Not `send` from
+ * jobEngine.ts, which names the *job* engine's reader: the three are bound
+ * and unbound together (`useJobSession`), one after another, and a request
+ * should name the engine that made it.
+ */
+const post = async <T>(url: string, body: unknown): Promise<T> =>
+  readJson<T>(
+    await apiFetch(
+      url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      batchUpload.reader(),
+    ),
+  );
 
-/** The live one. */
+/**
+ * The live one.
+ *
+ * **Every request names the reader the batch is bound to**, read when the
+ * call is made, as uploadEngine.ts § the live one says and for its reason
+ * (docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 2).
+ */
 export const batchUpload: BatchUpload = createBatchUpload({
   /* Arrows rather than the functions themselves, so this module can be
      imported where upload.ts is mocked without the mock naming all three. */
   hash: (file) => sha256Hex(file),
-  requestGrant: (file, signal, claim) => requestGrant(file, signal, claim),
+  requestGrant: (file, signal, claim) => requestGrant(file, signal, claim, batchUpload.reader()),
   putFile: (grant, file, options) => putFile(grant, file, options),
   queue: (uploadId) => post<Job | AlreadyAnArticle>("/api/jobs", { uploadId, level: "minimal" }),
-  retryJob: (jobId) => send<Job>(`/api/jobs/${encodeURIComponent(jobId)}/retry`, { method: "POST" }),
-  cancelUpload: async (uploadId) => {
-    await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
+  retryJob: async (jobId) =>
+    readJson<Job>(
+      await apiFetch(
+        `/api/jobs/${encodeURIComponent(jobId)}/retry`,
+        { method: "POST" },
+        batchUpload.reader(),
+      ),
+    ),
+  cancelUpload: async (uploadId, madeFor) => {
+    await apiFetch(
+      `/api/uploads/${encodeURIComponent(uploadId)}`,
+      { method: "DELETE" },
+      madeFor,
+    );
   },
   jobs: {
     epoch: () => jobEngine.epoch(),
@@ -710,12 +746,7 @@ export const batchUpload: BatchUpload = createBatchUpload({
     actionFailed: (message, status, epoch) => jobEngine.actionFailed(message, status, epoch),
     watchTerminal: (jobId, onEnd) => jobEngine.watchTerminal(jobId, onEnd),
   },
-  guardUnload() {
-    const warn = (e: BeforeUnloadEvent): void => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  },
+  /* The same warning uploadEngine.ts raises, and the fact safe-to-reload.ts
+     reads — unload-guard.ts. */
+  guardUnload: () => warnBeforeUnload("upload"),
 });

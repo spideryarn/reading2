@@ -57,6 +57,7 @@
  */
 import { posix } from "node:path";
 
+import { externalWorktreeRoot, isPlainAbsolutePath, worktreePlace } from "../../scripts/worktree-roots.js";
 import { descendsFrom } from "./steer.js";
 /* The vocabulary's own shapes live in wire.ts, because the browser renders the
    buttons from what this file describes and cannot import a module that reaches
@@ -377,7 +378,7 @@ const ENACTED: readonly EnactedAction[] = [
     summary: "Delete this agent's working tree, after the check that git cannot do.",
     needsConfirm: true,
     gate:
-      "npm run worktree:check must exit 0 inside the tree first. git status is not that check: data/ and .env.local are gitignored, so a clean status reports 'safe' over the top of work nothing else has a copy of, and git worktree remove refuses over modified and untracked files but not over ignored ones.",
+      "worktree:check must exit 0 for the tree first. git status is not that check: data/ and .env.local are gitignored, so a clean status reports 'safe' over the top of work nothing else has a copy of, and git worktree remove refuses over modified and untracked files but not over ignored ones.",
   },
   {
     effect: "enacted",
@@ -616,11 +617,13 @@ export function describeAction(action: Action): string {
  *  - `exit-zero` — the ordinary gate. A non-zero exit stops the plan.
  *  - `stdout-has-line` — the output must contain this line, trimmed, exactly.
  *    Used to bind a name to a handle before acting on the name.
+ *  - `stdout-has-record` — an exact NUL-terminated record, without trimming.
+ *    Used for git's -z porcelain, where whitespace belongs to the path.
  *  - `best-effort` — a failure is recorded and the plan continues. Only for
  *    kills, where "that pid is already gone" is the ordinary case and not an
  *    error.
  */
-export type StepPass = { kind: "exit-zero" } | { kind: "stdout-has-line"; line: string } | { kind: "best-effort" };
+export type StepPass = { kind: "exit-zero" } | { kind: "stdout-has-line"; line: string } | { kind: "stdout-has-record"; record: string } | { kind: "best-effort" };
 
 export type Step = {
   argv: readonly string[];
@@ -657,6 +660,8 @@ function planNo(rule: PlanRefusalRule, why: string): PlanResult {
   return { ok: false, rule, why };
 }
 
+type WorktreeEnv = Readonly<Record<string, string | undefined>>;
+
 function isAbsolutePosix(p: string): boolean {
   return p.startsWith("/") && !p.includes("\0");
 }
@@ -667,21 +672,22 @@ function normalizeDir(p: string): string {
 }
 
 /**
- * Is this path inside the place worktrees live?
+ * Is this path inside one of the places worktrees live?
  *
- * `claude --worktree` and `npm run worktree:setup` both put a tree at
- * `<primary>/.claude/worktrees/<name>`, so requiring those two segments is a
- * cheap structural guard against a plan pointed at a home directory or a
- * checkout. **A worktree created somewhere else is refused rather than
- * removed**, which is the safe direction to be wrong in: the cost of a false
- * "no" is that somebody removes it by hand.
+ * The places are scripts/worktree-roots.ts's, and there are two since
+ * 2026-10-05: `<primary>/.claude/worktrees/<name>` and, on the box,
+ * `/var/tmp/spideryarn-worktrees/<name>`. Until that file existed this function
+ * knew only the first, and the dashboard could not remove a new tree.
+ *
+ * A cheap structural guard against a plan pointed at a home directory or a
+ * checkout, and no more than that: **the shape of a path says nothing about
+ * whose worktree it is**, which is what the plan's first step asks git. A
+ * worktree created somewhere else is refused rather than removed, which is the
+ * safe direction to be wrong in: the cost of a false "no" is that somebody
+ * removes it by hand.
  */
-export function isUnderWorktreesDir(dir: string): boolean {
-  const parts = normalizeDir(dir).split("/");
-  for (let i = 0; i + 2 < parts.length; i++) {
-    if (parts[i] === ".claude" && parts[i + 1] === "worktrees" && (parts[i + 2] ?? "") !== "") return true;
-  }
-  return false;
+export function isUnderWorktreesDir(dir: string, env: WorktreeEnv = process.env): boolean {
+  return worktreePlace(dir, env) !== null;
 }
 
 /** A git ref name we are willing to put on a command line. */
@@ -690,37 +696,71 @@ function looksLikeBranch(branch: string): boolean {
 }
 
 /**
- * Remove a worktree: check first, then sweep.
+ * Remove a worktree: prove whose it is, check, then remove that directory.
  *
- * **Step 1 is the whole reason this is an enacted action and not a sentence.**
+ * **Steps 1 and 2 make three independent claims into one.** The page sends a
+ * directory and a branch. Step 1 asks this repository's git whether the
+ * directory is one of its registered worktrees — by the tree's root, exactly as
+ * git spells it — and step 2 asks which branch that tree is on. Without step 1
+ * a tree of some OTHER repository that happened to be on a branch of the same
+ * name would have its data checked, and ours removed. That could not arise while
+ * the route insisted on `<primary>/.claude/worktrees/`; the external root is
+ * shared by shape alone, so git is asked instead (GPT Sol, plan review of
+ * 261005l). A spelling git does not use — a symlinked path — fails step 1, which
+ * is a refusal and the safe direction.
+ *
+ * **Step 3 is the whole reason this is an enacted action and not a sentence.**
  * `npm run worktree:check` exists because `data/` and `.env.local` are
  * gitignored, so a clean `git status` reports "safe" over the top of a pipeline
  * run that cost money — and `git worktree remove` refuses over modified and
  * untracked files but NOT over ignored ones, so for the case that matters most
  * nothing else is looking. It exits 0 for safe, 1 for blocked, 2 for "could not
  * even look", and all three are handled by `exit-zero`: an unknown is a
- * blocker, which is the check's own rule.
+ * blocker, which is the check's own rule. **It is the primary's copy, run with
+ * `--root <tree>`** since 2026-10-05 (qi-k2jjejb2): `npm run worktree:check`
+ * standing in the tree needed the tree's own `tsx`, and a tree under the
+ * external root that was never set up has none, so the plan stopped here and
+ * the page could not remove it. `--root` refuses anything that is not the top
+ * of one of this repository's work trees, and step 1 has already asked git.
  *
- * Step 2 is `worktree:sweep -- remove`, which re-runs every guard including a
- * fresh fetch, so a verdict from ten minutes ago cannot cascade. Two of its
+ * Step 4 is `scripts/worktree-remove.ts` standing in that directory, with no
+ * branch selector: two registrations can share a branch, and a branch can move
+ * after step 2 (GPT Sol, code review of 261005l; until then it was
+ * `worktree:sweep -- remove --branch`, a thin forward to the same function).
+ * **It is the PRIMARY's copy of the script, run by the primary's `tsx`**, which
+ * is what `.claude/hooks/worktree-remove.sh` does and for its reasons: the
+ * tree's own copy is as old as its branch and is the code being deleted, and a
+ * tree under the external root that was never set up has no `tsx` at all. It
+ * re-runs every guard including a fresh fetch, so a verdict from ten minutes
+ * ago cannot cascade. Two of its
  * refusals are worth knowing before somebody reports them as bugs: it will not
  * remove a worktree whose session is still alive, that a process is running in,
  * or whose liveness could not be checked, however merged it looks; and it will
  * not remove one whose branch is not an ancestor of `origin/dev`.
- * **A refusal from either step is the system working**, not a failure to route
+ * **A refusal from any step is the system working**, not a failure to route
  * around.
  */
-export function planRemoveWorktree(action: EnactedAction, input: { dir: string; branch: string; primaryDir: string }): PlanResult {
+export function planRemoveWorktree(
+  action: EnactedAction,
+  input: { dir: string; branch: string; primaryDir: string },
+  env: WorktreeEnv = process.env,
+): PlanResult {
   if (action.id !== "remove-worktree") return planNo("bad-input", `planRemoveWorktree was given the '${action.id}' action`);
   const dir = normalizeDir(input.dir);
   const primaryDir = normalizeDir(input.primaryDir);
   if (!isAbsolutePosix(dir)) return planNo("bad-input", `'${input.dir}' is not an absolute path`);
-  if (!isAbsolutePosix(primaryDir)) return planNo("bad-input", `'${input.primaryDir}' is not an absolute path`);
+  if (!isPlainAbsolutePath(primaryDir)) return planNo("bad-input", `'${input.primaryDir}' is not a plain absolute path`);
   if (dir === primaryDir) return planNo("never-the-primary-checkout", "that directory is the primary checkout, not a worktree");
-  if (!isUnderWorktreesDir(dir)) {
-    return planNo("not-a-worktree", `'${dir}' is not under a .claude/worktrees/ directory, so this refuses to remove it`);
+  const place = worktreePlace(dir, env);
+  if (place === null) {
+    return planNo(
+      "not-a-worktree",
+      `'${dir}' is not a plain path under a .claude/worktrees/ directory or under ${externalWorktreeRoot(env)}/, so this refuses to remove it`,
+    );
   }
   if (!looksLikeBranch(input.branch)) return planNo("bad-input", `'${input.branch}' is not a branch name this will put on a command line`);
+  // Every step is about the TREE, whichever directory inside it the row was in.
+  const tree = place.root;
 
   return {
     ok: true,
@@ -728,21 +768,27 @@ export function planRemoveWorktree(action: EnactedAction, input: { dir: string; 
       action,
       steps: [
         {
-          argv: ["git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD"],
+          argv: ["git", "worktree", "list", "--porcelain", "-z"],
+          cwd: primaryDir,
+          why: "Is that directory a registered worktree of THIS repository? Its path only looks like one, and removal will run in that directory.",
+          pass: { kind: "stdout-has-record", record: `worktree ${tree}` },
+        },
+        {
+          argv: ["git", "-C", tree, "rev-parse", "--abbrev-ref", "HEAD"],
           cwd: primaryDir,
           why: "Is that branch the one actually checked out in that directory? dir and branch arrive from the page as two independent claims, and only this makes them one.",
           pass: { kind: "stdout-has-line", line: input.branch },
         },
         {
-          argv: ["npm", "run", "worktree:check"],
-          cwd: dir,
-          why: "Is anything in here that exists nowhere else? git status cannot answer this: data/ and .env.local are gitignored, and an unknown counts as a blocker.",
+          argv: [`${primaryDir}/node_modules/.bin/tsx`, `${primaryDir}/scripts/worktree-check.ts`, "--root", tree],
+          cwd: primaryDir,
+          why: "Is anything in there that exists nowhere else? git status cannot answer this: data/ and .env.local are gitignored, and an unknown counts as a blocker. It is the primary checkout's copy of worktree:check, told which tree: one that was never set up has no dependencies to run its own.",
           pass: { kind: "exit-zero" },
         },
         {
-          argv: ["npm", "run", "worktree:sweep", "--", "remove", "--branch", input.branch],
-          cwd: primaryDir,
-          why: "The guarded removal, which re-runs its own classification and a fresh fetch rather than trusting the verdict above.",
+          argv: [`${primaryDir}/node_modules/.bin/tsx`, `${primaryDir}/scripts/worktree-remove.ts`],
+          cwd: tree,
+          why: "The guarded removal of this directory, which re-runs its own classification and a fresh fetch. It is the primary checkout's copy of the remover, standing in the tree: selecting by branch could remove a different tree if the branch moved after the pairing check, and the tree's own copy is the code being deleted.",
           pass: { kind: "exit-zero" },
         },
       ],

@@ -29,6 +29,7 @@ import {
   MAX_FIGURES,
 } from "../src/collect-pdf-figures.js";
 import { sniffImage, type Assets } from "../src/assets.js";
+import { CallDeadlineReached, abortClass } from "../src/call-failure.js";
 import type { Block } from "../src/types.js";
 import { encodeFigurePng, MAX_FIGURE_EDGE } from "../src/pdf-figures.js";
 import { RawDocumentUnavailable } from "../src/fetch.js";
@@ -742,6 +743,7 @@ async function captionOnlyPdf(caption: string): Promise<Uint8Array> {
 const CTX = {
   slug: "a",
   report: () => {},
+  preview: () => {},
   signal: new AbortController().signal,
   cacheArticle: false,
   power: "standard" as const,
@@ -1007,7 +1009,11 @@ describe("a figure the page could not place, located", () => {
 
   it("keeps the refusal it had, not out-of-time, when the clock runs out mid-question", async () => {
     const misfiled = marker(2);
-    const hung: FigureLocator = () => new Promise(() => {});
+    let asked: AbortSignal | undefined;
+    const hung: FigureLocator = (_request, signal) => {
+      asked = signal;
+      return new Promise(() => {});
+    };
     const without = await collectPdfFigures({
       locate: null,
       captions: new Map([[misfiled.ref, PRINTED_ON_HARDER.get(3)!]]),
@@ -1026,6 +1032,13 @@ describe("a figure the page could not place, located", () => {
     expect(run.entries).toEqual([
       expect.objectContaining({ status: "failed", reason: (without.entries[0] as { reason: string }).reason }),
     ]);
+    /* The signal the locator's model call is made on says it was our clock
+       that stopped it, which is what its `ai_calls` row is classed from
+       (plan 261006d, F15). The message is the one it always had. */
+    expect(asked?.aborted).toBe(true);
+    expect(asked?.reason).toBeInstanceOf(CallDeadlineReached);
+    expect(abortClass(asked?.reason)).toBe("deadline");
+    expect((asked?.reason as Error | undefined)?.message).toBe("pdf figures budget spent");
   }, 120_000);
 });
 

@@ -7,8 +7,11 @@ import {
   expectedSeconds,
   firstOnScreen,
   gutterCss,
+  READ_REACH_FROM,
+  READ_REACH_FULL,
   type ReadLevel,
   readLevel,
+  readReach,
   shareVisible,
   spentWords,
 } from "../src/web/reading-time.js";
@@ -55,6 +58,124 @@ describe("readLevel", () => {
   ];
   it.each(cases)("%s seconds on %s words is level %s", (seconds, words, level) => {
     expect(readLevel(seconds, words)).toBe(level);
+  });
+});
+
+/**
+ * `readReach` — how far across the rail a block's reading time reaches, in
+ * sixteenths. docs/plans/261004j-spine-reading-chart-fainter-and-rarely-full.md.
+ */
+describe("readReach", () => {
+  /** The representable doubles either side of `x`. */
+  const f64 = new Float64Array(1);
+  const u64 = new BigUint64Array(f64.buffer);
+  const below = (x: number) => {
+    f64[0] = x;
+    u64[0] = u64[0]! - 1n;
+    return f64[0]!;
+  };
+  const above = (x: number) => {
+    f64[0] = x;
+    u64[0] = u64[0]! + 1n;
+    return f64[0]!;
+  };
+
+  it("draws nothing for nothing, a glance, or a number that is not one", () => {
+    for (const s of [0, -1, Number.NaN, 0.1, 0.349]) expect(readReach(s, 0)).toBe(0);
+  });
+
+  /* Zero words is one expected second, so seconds *is* the ratio. */
+  it("starts a quarter of the way across at the glance threshold, where the gutter's line starts", () => {
+    expect(READ_REACH_FROM).toBe(0.35);
+    expect(readReach(below(READ_REACH_FROM), 0)).toBe(0);
+    expect(readReach(READ_REACH_FROM, 0)).toBe(4);
+    expect(readReach(above(READ_REACH_FROM), 0)).toBe(4);
+  });
+
+  it("fills the rail only at 128 times the glance threshold — about 45 times the reading time", () => {
+    expect(READ_REACH_FULL).toBe(44.8);
+    expect(READ_REACH_FULL).toBe(READ_REACH_FROM * 128);
+    expect(readReach(below(READ_REACH_FULL), 0)).toBe(15);
+    expect(readReach(READ_REACH_FULL, 0)).toBe(16);
+    expect(readReach(above(READ_REACH_FULL), 0)).toBe(16);
+    expect(readReach(1e9, 0)).toBe(16);
+  });
+
+  it("is rarely full: what filled the rail until 2026-10-04 is now a little over half of it", () => {
+    /* Greg: "make it a bit logarithmic so it's rarer that the reading-time
+       fills up completely all the way to the right". 2.8 of the reading time
+       was full width; on his own reading 43% of the drawn passages reached it. */
+    expect(readReach(1, 0)).toBe(6);
+    expect(readReach(2.8, 0)).toBe(9);
+    expect(readReach(10, 0)).toBe(12);
+    expect(readReach(40, 0)).toBe(15);
+  });
+
+  it("holds the same scale against a real word count", () => {
+    /* 230 words take 60 s: drawn from 21 s, full at 2688 s. */
+    expect(readReach(below(21), 230)).toBe(0);
+    expect(readReach(21, 230)).toBe(4);
+    expect(readReach(60, 230)).toBe(6);
+    expect(readReach(2687, 230)).toBe(15);
+    expect(readReach(2688, 230)).toBe(16);
+  });
+
+  it("steps through every sixteenth, each the same share of a doubling", () => {
+    /* Twelve steps over seven doublings, probed mid-step so the test is about
+       the steps and not about how a power rounds. */
+    for (let k = 0; k < 12; k++) {
+      expect(readReach(READ_REACH_FROM * 2 ** ((7 * (k + 0.5)) / 12), 0), `step ${k}`).toBe(4 + k);
+    }
+  });
+
+  it("crosses each interior boundary at its double, never one double early or late", () => {
+    /* Literal boundary values pin the chosen scale independently of the
+       production constants and table-building expression. Zero words makes
+       seconds the ratio; each neighbour differs by exactly one double. */
+    const thresholds = [
+      0.5244074769068385,
+      0.7857234338165611,
+      1.1772549813552002,
+      1.763889469852822,
+      2.642848075508742,
+      3.9597979746446663,
+      5.932993328412055,
+      8.889445891021914,
+      13.319119688030474,
+      19.956131286343602,
+      29.900412733408764,
+    ];
+    thresholds.forEach((ratio, i) => {
+      expect(readReach(below(ratio), 0), `below boundary ${i + 1}`).toBe(4 + i);
+      expect(readReach(ratio, 0), `at boundary ${i + 1}`).toBe(5 + i);
+      expect(readReach(above(ratio), 0), `above boundary ${i + 1}`).toBe(5 + i);
+    });
+  });
+
+  it("never goes back as time passes, and draws exactly when the gutter's line does", () => {
+    for (const words of [0, 1, 7, 230, 300, 1234]) {
+      let last = 0;
+      for (let i = 0; i <= 6000; i++) {
+        const seconds = (i / 100) * expectedSeconds(words);
+        const reach = readReach(seconds, words);
+        if (!Number.isInteger(reach) || !(reach === 0 || (reach >= 4 && reach <= 16)) || reach < last) {
+          throw new Error(`${seconds} s on ${words} words: reach ${reach} after ${last}`);
+        }
+        /* The two scales share only their start (the plan § What it gives up). */
+        expect(reach > 0).toBe(readLevel(seconds, words) > 0);
+        last = reach;
+      }
+      expect(last).toBe(16);
+      /* The doubles either side of the start: a bare logarithm could disagree with `readLevel` there. */
+      let lo = READ_REACH_FROM * expectedSeconds(words);
+      let hi = lo;
+      for (let n = 0; n < 50; n++) {
+        expect(readReach(lo, words) > 0).toBe(readLevel(lo, words) > 0);
+        expect(readReach(hi, words) > 0).toBe(readLevel(hi, words) > 0);
+        lo = below(lo);
+        hi = above(hi);
+      }
+    }
   });
 });
 

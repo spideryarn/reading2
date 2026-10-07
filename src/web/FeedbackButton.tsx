@@ -98,7 +98,9 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 import type { Placement } from "@floating-ui/react";
 import { MessageSquareWarning } from "lucide-react";
 
+import { isAdmin } from "../admin.js";
 import { FeedbackDialog, type FeedbackPrefill } from "./FeedbackDialog.js";
+import { withoutShareKey } from "../share-key.js";
 import { useRoute } from "./router.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
@@ -174,14 +176,33 @@ export function useFeedbackOpen(): ((request?: FeedbackPrefill) => void) | null 
  * so a navigation inside the app — including the reading view's article →
  * metadata → tweets loop, which unmounts the `Dock` — leaves the dialog and its
  * draft exactly where they were.
+ *
+ * **Until the reader changes** (`readerId`). Another tab signing in as
+ * somebody else changes this tab's session without replacing the page, and
+ * this host is above everything that unmounts for it, so a half-written
+ * report stayed in the box, open or closed, for the next reader to read and
+ * to send as themselves. The box is closed, a pending prefill is dropped,
+ * and the dialog is keyed on the reader so its draft goes with it. **The
+ * dialog and not the host**: the host wraps every page, and keying it would
+ * remount all of them. Required, so the compiler asks whoever mounts a host.
+ * docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2.
  */
-export function FeedbackHost({ children }: { children: ReactNode }) {
+export function FeedbackHost({ children, readerId }: { children: ReactNode; readerId: string }) {
   const route = useRoute();
   const [open, setOpen] = useState(false);
   /* **The last request, kept rather than cleared.** The dialog applies each id
      once (FeedbackDialog.tsx § `applied`), so holding it costs nothing and
      clearing it would be a second state change to keep in step with this one. */
   const [prefill, setPrefill] = useState<FeedbackPrefill | null>(null);
+  /* Reset during render and not in an effect, so the render that first sees
+     the next reader already draws the box shut: an effect would run after
+     the last reader's words had been on screen once. */
+  const [heldFor, setHeldFor] = useState(readerId);
+  if (heldFor !== readerId) {
+    setHeldFor(readerId);
+    setOpen(false);
+    setPrefill(null);
+  }
   /* **Stable**, so that opening the box does not re-render the bar and every
      button in it. Both setters are themselves stable, so an empty dependency
      list is honest rather than a lie the linter happens to accept. */
@@ -219,15 +240,26 @@ export function FeedbackHost({ children }: { children: ReactNode }) {
           (`isWebUrl`), and docs/project/privacy.md § What a bug report carries
           tells the reader this happens.
 
+          **With one parameter taken off: a private link's `key`.** On
+          `/read/<slug>?key=…` the address is the credential, and a report's
+          address goes to our table, a Sentry tag and the admin email. So it
+          is removed here, before anything is sent; the server removes it
+          again for an older client (src/share-key.ts § `withoutShareKey`,
+          plan 261005e).
+
           **Computed here and not in a trigger**, since the split: the host
           reads `useRoute()` once, so two triggers on one page cannot disagree
           about which article a report is against. */}
       <FeedbackDialog
+        key={readerId}
         open={open}
         prefill={prefill}
+        /* Cosmetic, as everywhere in the client: it picks which list the
+           Earlier tab asks for, and the server decides who is answered. */
+        admin={isAdmin(readerId)}
         onClose={() => setOpen(false)}
         where={{
-          url: location.href,
+          url: withoutShareKey(location.href),
           /* **The slug stays, beside the URL rather than inside it.** It is
              validated, it is the join onto an article, and "how many reports
              mention this piece" should be a `WHERE` rather than a `LIKE` over
@@ -543,7 +575,7 @@ export function FeedbackTrigger({ variant }: { variant: FeedbackVariant }) {
           </span>
         )}
         {/* Given up when the space runs out, the way the wordmark gives up its
-            word — styles.css § feedback for the corner, § the bar's fit ladder
+            word — feedback.css § feedback for the corner, dock-fit.css § the bar's fit ladder
             for the bar. The icon and the `aria-label` carry it from there.
 
             **The masthead shape keeps it at every width**, so its `word` class

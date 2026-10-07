@@ -534,3 +534,74 @@ describe("the documented path back to a tailnet bind", () => {
     expect(restart).toBeGreaterThan(write);
   });
 });
+
+describe("the box tidy service and timer", () => {
+  // Beside the watchdog rather than in `UNITS`, for the watchdog's reason: a
+  // oneshot run by its timer, not a daemon that restarts.
+  const service = unitFromRepo("box-tidy.service");
+  const timer = unitFromRepo("box-tidy.timer");
+
+  it("service and timer are byte-for-byte what provision.sh will install", () => {
+    expect(heredocBody(PROVISION, "BOX_TIDY_SERVICE_UNIT")).toBe(service);
+    expect(heredocBody(PROVISION, "BOX_TIDY_TIMER_UNIT")).toBe(timer);
+  });
+
+  it("service is a oneshot system unit with no [Install], run only by its timer", () => {
+    const lines = section(service, "Service");
+    expect(lines).toContain("User=@USER@");
+    expect(lines).toContain("Type=oneshot");
+    expect(lines.some((l) => l.startsWith("Restart="))).toBe(false);
+    expect(section(service, "Install")).toEqual([]);
+    expect(section(timer, "Timer")).toContain("Unit=box-tidy.service");
+    expect(section(timer, "Install")).toContain("WantedBy=timers.target");
+  });
+
+  it("does NOT run out of the checkout, because a full disk is when the checkout is broken", () => {
+    // The opposite of every other unit here, on purpose. A tidy that needs
+    // node_modules, or a tree that is not mid-merge, cannot run on the day it
+    // is for. docs/plans/261006m-…, GPT Sol's plan review, finding 6.
+    const execStart = section(service, "Service").filter((l) => l.startsWith("ExecStart="));
+    expect(execStart).toEqual(["ExecStart=/usr/bin/node /usr/local/lib/spideryarn/box-tidy.mjs"]);
+    expect(PROVISION).toContain('install -o root -g root -m 0644 "$box_tidy_tmp" /usr/local/lib/spideryarn/box-tidy.mjs');
+  });
+
+  it("requests the capabilities needed to observe other processes", () => {
+    // Without both, the script meets a process it cannot read (`systemd --user`
+    // without the first, pid 1's descriptors without the second) and deletes
+    // nothing, every hour, with a green timer. Both failures were seen on the
+    // box before the unit was installed.
+    const lines = section(service, "Service");
+    expect(lines.filter((l) => l.startsWith("AmbientCapabilities="))).toEqual([
+      "AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH",
+    ]);
+  });
+
+  it("provision.sh enables AND starts the timer", () => {
+    expect(PROVISION).toContain("systemctl enable --now box-tidy.timer");
+  });
+
+  it("the timer and service parse as systemd reads them", () => {
+    const analyze = spawnSync("systemd-analyze", ["--version"], { encoding: "utf8" });
+    if (analyze.status !== 0) return; // not installed here (a Mac); the byte comparison above still ran
+    const dir = mkdtempSync(path.join(tmpdir(), "systemd-units-verify-"));
+    writeFileSync(path.join(dir, "box-tidy.timer"), timer.replaceAll("@USER@", "greg"));
+    writeFileSync(path.join(dir, "box-tidy.service"), service.replaceAll("@USER@", "greg"));
+    const verify = spawnSync("systemd-analyze", ["verify", path.join(dir, "box-tidy.timer")], { encoding: "utf8" });
+    const complaints = `${verify.stdout}${verify.stderr}`
+      .split("\n")
+      .filter((line) => line.trim() !== "")
+      .filter((line) => !/Unit .* not found|command not found|is not a valid user|Failed to (resolve|create)|Unknown user|is not executable/i.test(line));
+    expect(complaints).toEqual([]);
+  });
+});
+
+
+describe("box-tidy test overrides", () => {
+  it("unsets every destructive test override in the real service", () => {
+    const lines = section(unitFromRepo("box-tidy.service"), "Service");
+    const unset = lines.filter((l) => l.startsWith("UnsetEnvironment=")).flatMap((l) => l.slice("UnsetEnvironment=".length).split(/\s+/));
+    for (const name of ["HOME", "TMP", "CHECKOUT", "PROC", "NPM", "HOME_MOUNT", "NOW_MS", "TIGHT_PERCENT"]) {
+      expect(unset).toContain(`BOX_TIDY_${name}`);
+    }
+  });
+});

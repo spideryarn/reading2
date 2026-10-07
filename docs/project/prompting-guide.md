@@ -1,5 +1,7 @@
 # Prompting guide — the words a prompt puts in front of a reader
 
+Up: [architecture.md](architecture.md)
+
 Every prompt in this app that writes words for a reader carries **one shared plain-words rule**.
 This is what the rule is, how it trades plain words against the paper's own wording, where it
 lives, and how to measure a prompt change before calling it an improvement. Part of
@@ -86,7 +88,7 @@ ${PROFILE_RULES}`;
   exactly are all the prompt's business. Do not delete a field rule to make room for this one.
 - **Delete the prompt's old plain-words bullet** when it gains the section, so it gives one rule, not
   two.
-- **Watch for the rule fighting one already there.** Chat and Remember may bring in what they
+- **Watch for the rule fighting one already there.** Chat and Learn may bring in what they
   found on the web, so neither may be told to use "no term the piece did not use"; that clause was
   written once and cut for exactly this reason.
 - **Block ids and numbers are not words for a reader either, and that rule lives with the ids.**
@@ -221,5 +223,5 @@ differently. This is the method that worked, in `evals/plain-words/`:
 8. **Read the outputs anyway.** Two regressions the numbers could not see were found by reading:
    outside knowledge filed under the article's own label, and people dropped from a glossary.
 
-Keep each paid run to a few dollars. The cost of a tree is in [open-questions.md](open-questions.md)
-§ Q7.
+Keep each paid run to a few dollars. What an article costs to arrive, tree included, is in
+[ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs).

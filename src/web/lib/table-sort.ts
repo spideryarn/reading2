@@ -153,7 +153,8 @@ export function sortingFromUrl(
      is two contradictory instructions about one column, and TanStack would
      apply the first and silently ignore the second. */
   by.forEach((id, i) => {
-    if (!(id in natural) || seen.has(id)) return;
+    /* Own keys only: `in` also answers yes to `constructor` and `toString`. */
+    if (!Object.hasOwn(natural, id) || seen.has(id)) return;
     seen.add(id);
     out.push({ id, desc: (dir?.[i] ?? natural[id]) === "desc" });
   });

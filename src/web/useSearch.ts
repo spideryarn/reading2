@@ -38,6 +38,7 @@ import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
 import { apiFetch, failure, fetchOk } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
+import { useMadeFor } from "./lib/made-for.js";
 
 /**
  * A saved run, plus the one thing about it that is not on the run.
@@ -105,6 +106,8 @@ export interface SearchApi {
    * saved ones had not loaded. Plan 260908f § A.
    */
   loadError: string | null;
+  /** The opening list was served from a saved offline copy; automatic tidy must wait. */
+  loadFromCopy: boolean;
   /**
    * Run a new search of this kind — `quick` or `meaning`. Returns the id it
    * minted, so `?runs=` can name it.
@@ -113,8 +116,13 @@ export interface SearchApi {
    * *thorough* uses to hand a quick row's colour to the meaning row that
    * replaces it (plan 261003i B2). It is this tab's choice like any other
    * (`chosen`), and it is stored once `begin` has said which row to write.
+   *
+   * `quiet` is for a search the reader did not press for: the thorough search
+   * a settled quick answer starts by itself (plan 261004l, review F7). Its
+   * start does not clear the shared `error` line and its transport failure
+   * does not set it. The failure is still on the row, as `status: "error"`.
    */
-  ask(criterion: string, kind: SearchKind, colour?: number): string;
+  ask(criterion: string, kind: SearchKind, colour?: number, options?: { quiet?: boolean }): string;
   /** The same criterion again, and the same kind — for a run whose model call failed. */
   retry(id: string): void;
   /**
@@ -145,7 +153,11 @@ export interface SearchApi {
    * (plan 261002e, review F5).
    */
   isRunning(criterion: string, kind: SearchKind): boolean;
-  remove(id: string): void;
+  /**
+   * `quiet`: a failed DELETE says nothing either. For throwing away a row the
+   * reader never saw (plan 261004l, review F7).
+   */
+  remove(id: string, options?: { quiet?: boolean }): void;
   /** Pin a saved search to a palette slot — `null` puts it back on the hash. */
   recolour(id: string, colour: number | null): void;
   /**
@@ -180,6 +192,8 @@ export function useSearch(
     onRenamed?: (from: string, to: string) => void;
   } = {},
 ): SearchApi {
+  // Queued colours, revisions and stream re-deletes retain this screen's reader.
+  const madeFor = useMadeFor();
   const renamed = useRef(onRenamed);
   renamed.current = onRenamed;
   const [runs, setRuns] = useState<SearchRun[]>([]);
@@ -210,6 +224,7 @@ export function useSearch(
     [],
   );
   const [loaded, setLoaded] = useState(false);
+  const [loadFromCopy, setLoadFromCopy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -269,7 +284,7 @@ export function useSearch(
    * Colours this tab has chosen, by run id — the reader's word on the subject.
    *
    * It exists for one race, and the race is easy to hit because a meaning
-   * search takes half a minute and the row is on screen the whole time.
+   * search takes about ten seconds, sometimes twenty or more, and the row is on screen the whole time.
    * Recolour a run that is still streaming, and the `done` frame that lands a
    * moment later is a snapshot of the row **as the server finished writing
    * it** — which may predate the PATCH. `put` would then paint the run back to
@@ -349,6 +364,7 @@ export function useSearch(
        back to not-knowing, and leaving this true would show the *previous*
        article's emptiness as though it were this one's. */
     setLoaded(false);
+    setLoadFromCopy(false);
     setLoadError(null);
     setFingerprint(null);
     /* With a deadline, because `loaded` is what lets the reader press Find —
@@ -359,6 +375,7 @@ export function useSearch(
     read.body
       .then((body) => {
         if (!live) return;
+        setLoadFromCopy(read.fromCopy);
         /* A body with an `error` in it is a failed load as much as a thrown one
            is — there are no runs in it, and "nothing searched for yet" read off
            it is the same false claim. */
@@ -420,7 +437,7 @@ export function useSearch(
   }, []);
 
   const forget = useCallback(
-    async (id: string) => {
+    async (id: string, quiet = false) => {
       try {
         // A DELETE that 500s used to remove the row from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
@@ -428,12 +445,13 @@ export function useSearch(
         // `fetchOk` in both because the omission happened twice.
         await fetchOk(`/api/search/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           { method: "DELETE" },
+          madeFor,
         );
       } catch (e) {
-        setError(describeFetchFailure(e as Error));
+        if (!quiet) setError(describeFetchFailure(e as Error));
       }
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -474,6 +492,7 @@ export function useSearch(
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ colour }),
             },
+            madeFor,
           );
         } catch (e) {
           setError(describeFetchFailure(e as Error));
@@ -497,7 +516,7 @@ export function useSearch(
       patching.current.set(id, next);
       void next;
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -517,7 +536,7 @@ export function useSearch(
       criterion: string,
       kind: SearchKind,
       createdAt: string,
-      { revises = false }: { revises?: boolean } = {},
+      { revises = false, quiet = false }: { revises?: boolean; quiet?: boolean } = {},
     ) => {
       // Drop whatever the previous attempt left behind, so a retry shows a
       // spinner rather than the old error with a spinner under it. `kind` on
@@ -546,7 +565,10 @@ export function useSearch(
         // a typing session never brings back a row the reader deleted.
         deleted.current.delete(id);
       }
-      setError(null);
+      /* A quiet request is one the reader did not press for (plan 261004l,
+         review F7): it neither clears a foreground failure's line here nor
+         writes its own below. */
+      if (!quiet) setError(null);
 
       /* This row's lane — see `lanes`. Any request it already had out is
          superseded; `revise` only gets here once that request has begun. */
@@ -629,7 +651,7 @@ export function useSearch(
               revises ? { id, criterion, kind, revises: true } : { id, criterion, kind },
             ),
             signal: me.abort.signal,
-          });
+          }, madeFor);
           if (!belongsHere() || me.superseded) return;
           /* A failure before the stream opens is ordinary JSON — the server
              validates before it writes a header. A failure after it opens is
@@ -742,7 +764,7 @@ export function useSearch(
           if (!belongsHere() || me.superseded) return;
           if (deleted.current.has(liveId)) return;
           const message = describeFetchFailure(e as Error);
-          setError(message);
+          if (!quiet) setError(message);
           me.failed = !me.begun;
           put(
             { id: liveId, criterion: me.queued ?? criterion, kind, createdAt, status: "error", hits: [], error: message },
@@ -759,7 +781,7 @@ export function useSearch(
         }
       })();
     },
-    [slug, put, forget, flown, recolour, articleToken],
+    [slug, put, forget, flown, recolour, articleToken, madeFor],
   );
 
   const revise = useCallback(
@@ -786,14 +808,14 @@ export function useSearch(
   reviseRef.current = revise;
 
   const ask = useCallback(
-    (criterion: string, kind: SearchKind, colour?: number) => {
+    (criterion: string, kind: SearchKind, colour?: number, { quiet = false }: { quiet?: boolean } = {}) => {
       const id = mintId();
       // Before `send`, so the pending row is painted in it — `put` reads `chosen`.
       if (colour !== undefined) {
         chosen.current.set(id, colour);
         pendingColours.current.add(id);
       }
-      send(id, criterion.trim(), kind, new Date().toISOString());
+      send(id, criterion.trim(), kind, new Date().toISOString(), { quiet });
       return id;
     },
     [send],
@@ -819,7 +841,7 @@ export function useSearch(
   );
 
   const remove = useCallback(
-    (id: string) => {
+    (id: string, { quiet = false }: { quiet?: boolean } = {}) => {
       deleted.current.add(id);
       pendingColours.current.delete(id);
       setRuns((prev) => prev.filter((r) => r.id !== id));
@@ -829,7 +851,7 @@ export function useSearch(
       // If a POST is still out, its `.then` re-sends the DELETE once the write
       // it is racing has definitely landed. Doing it only here would let the
       // POST write the row back after we deleted it.
-      void forget(id);
+      void forget(id, quiet);
     },
     [forget, flown],
   );
@@ -860,6 +882,7 @@ export function useSearch(
     loaded,
     loadFailed: loadError !== null,
     loadError,
+    loadFromCopy,
     ask,
     retry,
     revise,

@@ -1,0 +1,24 @@
+/* Compact print of replay-floors*.json, and the size of the pool a judge would need. */
+import { readFileSync } from "node:fs";
+import { entries, FIXTURES, verdict } from "./replay-floors.mjs";
+const f = process.argv[2] ?? "data/qeval/replay-floors.json";
+const rows = JSON.parse(readFileSync(f, "utf8"));
+for (const g of ["working", "bare", "request", "absent"]) {
+  console.log(`\n${g}: main fb | show/searches (as fb) | shown per | right wrong unj %right | <0.7 | top y/n/u | allwrong`);
+  for (const r of rows.filter((x) => x.group === g)) console.log(`${r.main} ${r.fallback} | ${r["show something"]}/${r.searches} (${r["as fallback"]}) | ${r.shown} ${r["per search"]} | ${r.right} ${r.wrong} ${r.unjudged} ${r["% right of judged"]}% | ${r["shown under 0.7"]} | ${r["top right/wrong/unj"]} | ${r["lists all wrong"]}`);
+}
+/* Pool: unjudged (slug, key, block) pairs that some rule in the grid could show. */
+for (const [lo, fb] of [[0.5, 0.35], [0.5, 0.4], [0.55, 0.4], [0.6, 0.45]]) {
+  const pool = new Map();
+  for (const e of entries) {
+    if (e.group === "absent") continue;
+    for (const r of e.reps) {
+      const top = Math.max(...Object.values(r.scores));
+      for (const [id, p] of Object.entries(r.scores)) if ((p >= lo || (top < lo && p >= fb)) && verdict(e, id) === "u") {
+        const k = `${e.k}`; if (!pool.has(k)) pool.set(k, { slug: e.slug, ids: new Set() }); pool.get(k).ids.add(id);
+      }
+    }
+  }
+  let all = 0, fx = 0; for (const v of pool.values()) { all += v.ids.size; if (FIXTURES.includes(v.slug)) fx += v.ids.size; }
+  console.log(`pool main>=${lo} fallback>=${fb}: ${all} unjudged (query, block) pairs over ${pool.size} keys; ${fx} on the three fixtures`);
+}

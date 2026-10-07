@@ -23,7 +23,7 @@
  * no measurement here.
  *
  * The measurement is a browser one and it lives in two places: the numbers
- * above and after, written into src/web/styles.css § referee mode beside the
+ * above and after, written into src/web/styles/referee.css § referee mode beside the
  * rules they justify, and docs/project/referee-mode.md § the band has to fit.
  *
  * ## What it can do, and why it is worth having anyway
@@ -33,8 +33,9 @@
  *
  * - a rule capping `.ref-brief` and giving it its own scrollbar, plus a floor
  *   under `.ref-panel` so it is no longer the child that gives way;
- * - markup that actually puts the notice and the scan inside a `.ref-brief`,
- *   and leaves the chips and the panel outside it.
+ * - markup that actually puts the notice inside a `.ref-brief`, and leaves the
+ *   chips and the panel outside it. The scan moved into that panel on
+ *   2026-10-07, so it no longer contributes to the preamble's height at all.
  *
  * Delete the wrapper from the band and the CSS matches nothing; every other test
  * still passes and the mode is unusable again. So this file pins the pairing,
@@ -52,11 +53,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { readerCssNoComments } from "./helpers/stylesheets.js";
-
-import {
-  REFEREE_TEXT_ALREADY_SENT,
-  REFEREE_TEXT_ALREADY_SENT_SHORT,
-} from "../src/messages.js";
 
 /* The reading-view sheets as a set rather than one path — `src/web/styles.css`
    has held nothing but `@import`s since 2026-09-06.
@@ -101,121 +97,88 @@ describe("the stylesheet caps the preamble and floors the panel", () => {
   });
 });
 
+describe("the Hidden text mark is visible in either state", () => {
+  it("gives the ring a size and border, and fills an unexplained finding", () => {
+    const ring = bodyOf(".ref-view-dot");
+    expect(ring).not.toBeNull();
+    expect(ring).toMatch(/width:\s*(?!0(?:\D|$))[^;]+;/);
+    expect(ring).toMatch(/height:\s*(?!0(?:\D|$))[^;]+;/);
+    expect(ring).toMatch(/border:\s*[^;]+;/);
+    expect(bodyOf(".ref-view-dot.found")).toMatch(/background:\s*[^;]+;/);
+  });
+});
+
+describe("five chips at phone width", () => {
+  it("wraps the row rather than wrapping a multi-word chip", () => {
+    expect(bodyOf(".ref-top")).toMatch(/flex-wrap:\s*wrap/);
+    /* The chips are the shared part-switcher's buttons since 2026-10-07 (plan
+       261007h § F2), so their `nowrap` is that rule's (mode-band.css). */
+    expect(BAND_SOURCE).toMatch(/ref-view-btn summ-view-btn/);
+    expect(bodyOf(".summ-view-btn")).toMatch(/white-space:\s*nowrap/);
+  });
+});
+
 describe("the markup the rules above are aimed at", () => {
   /**
-   * The band, from `feature="gloss referee"` to the end of its `<ModeSurface>`.
+   * The frame, from `feature="gloss referee"` to the end of its `<ModeSurface>`.
    * Crude, and deliberately so: a missing band is a failure here rather than a
    * vacuous pass, which is the trap a regex test falls into when it stops
    * matching anything.
    *
-   * **It used to read `className="mode-band gloss referee"` … `</aside>`, and
-   * this is the crudeness working rather than failing.** Referee's band went
-   * through `src/web/ModeSurface.tsx` on 2026-09-07 along with the other eleven
-   * (item A5;
-   * docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen.md),
-   * so the hand-written `<aside>` and its class string are gone while the band
-   * and all five of its parts are exactly where they were. A regex over source
-   * cannot tell those two apart, which is precisely why this file asserts the
-   * match is defined before it asserts anything about the contents.
+   * **Since 2026-10-03 the brief is rendered only while Notices is open, and
+   * the chips are above it** (plan 261003k). The pairing this file pins is
+   * unchanged: when the brief *is* open it is the capped, scrolling box, the
+   * notice is inside it, and the panel is outside it — so an opened Notices
+   * box still cannot push the panel off a band that clips nothing.
+   * tests/referee-notices.test.tsx holds when it is open.
+   *
+   * **Since 2026-10-07 the scan is not in the frame at all**: it is the Hidden
+   * text sub-mode's panel (plan 261007h), drawn as the panel's child, and the
+   * last test here holds that it did not drift back into the brief.
    */
   const band = BAND_SOURCE.match(/feature="gloss referee"[\s\S]*?<\/ModeSurface>/)?.[0];
 
-  /* The five **tags**, not the five words. `.ref-panel` is named in the prose of
-     the comment above the scan ("outside `.ref-panel`"), so an `indexOf` on the
-     bare class name finds the comment and reports an order that is not the
-     markup's — the first version of this test failed for exactly that reason,
-     which is the cheapest possible reminder that a regex over source is reading
-     text and not a tree. */
+  /* The four **tags**, not the four words: a class name also appears in the
+     prose of comments, and an `indexOf` on the bare name finds the comment. */
   const TAGS = {
+    chips: "<RefereeViews",
     brief: 'className="ref-brief"',
     notice: 'className="ref-notice"',
-    scan: "<SourceScanNotice",
-    chips: "<RefereeViews",
     panel: 'className="ref-panel"',
   } as const;
 
-  it(`the Referee band is still in ${BAND_FILE} and still has all five parts`, () => {
+  it(`the Referee band is still in ${BAND_FILE} and still has all four parts`, () => {
     expect(band, `no \`gloss referee\` ModeSurface in ${BAND_FILE}`).toBeDefined();
     for (const [name, tag] of Object.entries(TAGS)) {
       expect(band, `the ${name} (\`${tag}\`) is not in the band`).toContain(tag);
     }
   });
 
-  it("the notice and the scan are inside `.ref-brief`, and the chips and the panel are not", () => {
+  it("the notice is inside `.ref-brief`, and the chips and the panel are not", () => {
     const at = (needle: string) => band?.indexOf(needle) ?? -1;
-    /* The wrapper opens before both of the things it is supposed to cap, and
-       closes before the chips. Positions rather than a parse: the point is the
-       order of the five, and the order is the whole of the fix. */
+    /* Positions rather than a parse: the point is the order of the four. */
+    expect(at(TAGS.chips)).toBeLessThan(at(TAGS.brief));
     expect(at(TAGS.brief)).toBeLessThan(at(TAGS.notice));
-    expect(at(TAGS.notice)).toBeLessThan(at(TAGS.scan));
-    expect(at(TAGS.scan)).toBeLessThan(at(TAGS.chips));
-    expect(at(TAGS.chips)).toBeLessThan(at(TAGS.panel));
+    expect(at(TAGS.notice)).toBeLessThan(at(TAGS.panel));
 
-    /* And the wrapper really closes between the scan and the chips, rather than
-       swallowing them: exactly one `</div>` sits in that gap. Without this the
-       four assertions above are satisfied by a `.ref-brief` that wraps the
-       whole band, which would cap and scroll the chips and the panel too. */
-    const gap = band?.slice(at(TAGS.scan), at(TAGS.chips)) ?? "";
-    expect(gap.match(/<\/div>/g)?.length, "`.ref-brief` does not close before the chips").toBe(1);
-  });
-});
-
-/**
- * **Both boxes are collapsed by default now, and that is a second answer to the
- * same problem this file is about.**
- *
- * The cap above is what makes the band survive a referee who has opened both;
- * the collapse is what means they usually have not. Greg asked for it on
- * 2026-09-02 — the scan first, *"default-collapsed unless something has been
- * found"*, and then the confidentiality notice with it.
- *
- * What a test can hold here is the part that would rot silently: a collapse
- * that took the *fact* away with the paragraph. The label on the control has to
- * be the sentence itself, and it has to still say what the long one says.
- * src/web/SourceScanNotice.tsx's own tests hold the scan half, where there is a
- * component to render.
- */
-describe("the preamble is shut until a referee asks for it", () => {
-  /* The same slice as the describe above takes, and taken again rather than
-     shared: a `band` that stopped matching would then fail in one place instead
-     of quietly emptying two.
-
-     Both copies stopped matching on 2026-09-07, when Referee's band moved onto
-     `ModeSurface`, and both were updated. **An earlier version of this comment
-     claimed the duplication is what stops a shared, stale slice passing
-     vacuously here. That is wrong** — `toContain` on an `undefined` match
-     throws, so a shared slice would have failed this describe too. What
-     actually provides the protection is that every assertion below names
-     something and none of them is satisfied by absence; the duplication only
-     makes the failure local. GPT Sol F33, 2026-09-07. */
-  const band = BAND_SOURCE.match(/feature="gloss referee"[\s\S]*?<\/ModeSurface>/)?.[0];
-
-  it("the notice's label is the long sentence's own opening clause", () => {
-    /* Values, not source text: two strings that drift apart are the failure —
-       a label reading "Confidentiality" over a paragraph that says the text has
-       already gone would pass any test written about the markup. */
-    expect(REFEREE_TEXT_ALREADY_SENT_SHORT).toMatch(/\.$/);
-    const clause = REFEREE_TEXT_ALREADY_SENT_SHORT.replace(/\.$/, "");
-    expect(
-      REFEREE_TEXT_ALREADY_SENT.startsWith(clause),
-      `the notice's label is no longer what the notice says:\n  ${clause}\n  ${REFEREE_TEXT_ALREADY_SENT}`,
-    ).toBe(true);
+    /* And the wrapper really closes before the panel, rather than swallowing
+       it: the notice's own `</div>` and the brief's are the only two in that
+       gap. Without this the assertions above are satisfied by a `.ref-brief`
+       that wraps the panel, which would cap and scroll it too. */
+    const gap = band?.slice(at(TAGS.notice), at(TAGS.panel)) ?? "";
+    expect(gap.match(/<\/div>/g)?.length, "`.ref-brief` does not close before the panel").toBe(2);
   });
 
-  it("the band shows that label outside the collapse, and the paragraph inside it", () => {
-    expect(band, "the shut notice says nothing at all").toContain(
-      "REFEREE_TEXT_ALREADY_SENT_SHORT",
-    );
-    expect(band).toContain("aria-expanded={noticeOpen}");
-    /* The long sentence and the disclosure line are the two things behind the
-       chevron, and `noticeOpen &&` is the whole of what puts them there. */
-    expect(band).toMatch(/\{noticeOpen && \(/);
-  });
-
-  it("starts shut on every visit, and remembers nothing between them", () => {
+  it("is shut on every visit, and remembers nothing", () => {
     /* A collapse is only allowed here because it is not a dismissal —
-       RefereeMode.tsx § RefereeBand. `useState(false)` is that, in one line: no
-       storage, no column, and the same first screen every time. */
-    expect(BAND_SOURCE).toContain("const [noticeOpen, setNoticeOpen] = useState(false);");
+       RefereeMode.tsx § RefereeBand. No storage, no column: a press lasts as
+       long as the mount. */
+    expect(BAND_SOURCE).toContain("const [noticesOpen, setNoticesOpen] = useState(false);");
+    expect(BAND_SOURCE).not.toMatch(/window\.localStorage|sessionStorage/);
+  });
+
+  it("draws the scan as the Hidden text panel, not inside the frame", () => {
+    expect(band).not.toContain("<SourceScanNotice");
+    expect(BAND_SOURCE).toMatch(/case "hidden":[\s\S]*?return <SourceScanNotice state=\{scan\} \/>;/);
   });
 });

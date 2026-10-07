@@ -61,10 +61,12 @@ Three ideas, in increasing order of cleverness:
 
 ### What this means for ours
 
-[`src/reading-time.ts`](../../../src/reading-time.ts) currently uses a flat **230 wpm**, described as
-"the middling end of the usual 200–250 range". That is a reasonable folk number; **238 is a cited
-one**, and the citation is the whole difference. Worth adopting the figure and the reference — the
-module already exists precisely so there is one place to change it.
+[`src/reading-time.ts`](../../../src/reading-time.ts) used a flat **230 wpm** until 2026-10-05,
+described as "the middling end of the usual 200–250 range". That was a reasonable folk number; **238
+is a cited one**, and the citation is the whole difference. Ours is 238 now, with the reference, and
+the card behind the number says the range and that it is blind to difficulty
+([library.md](../library.md), plan
+[261005c](../../plans/261005c-reading-time-estimate-says-its-rate-its-range-and-what-it-does-not-know.md)).
 
 The multiplier is a later question and depends on having a difficulty signal at all. If one ever
 arrives, take the confidence damping with it; a slowdown applied at full strength on a shaky judgment
@@ -84,3 +86,7 @@ Two things ours already does better, worth not losing:
 - [../open-questions.md#q6](../open-questions.md#q6) — how we'd know any of this is working
 - [glossary.md](glossary.md) — the other place they scored things on the reader's behalf
 - [typography.md](typography.md) — the rest of what they learned about long-form reading
+
+---
+
+Up: [overview.md](overview.md)

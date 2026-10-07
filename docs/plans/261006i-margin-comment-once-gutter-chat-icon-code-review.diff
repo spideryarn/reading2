@@ -1,0 +1,539 @@
+diff --git a/docs/project/comments.md b/docs/project/comments.md
+index a85931725..d0bde7de3 100644
+--- a/docs/project/comments.md
++++ b/docs/project/comments.md
+@@ -284,7 +284,7 @@ bookmark. Greg, SPIDERYARN-READING2-9C:
+ 
+ It was possible — press the mark afterwards and type — and nobody found it. Now the dialog is the
+ invitation: its box says *"It's yours: the AI doesn't reply"*, the follow-up box under it says *"Ask
+-the AI about this…"*, and the gutter's speech bubble says *Chat with the AI*. Closing the dialog
++the AI about this…"*, and the gutter's chat button says *Chat with the AI*. Closing the dialog
+ leaves a bare bookmark, so one press still bookmarks. The mark itself is drawn **filled** and at full
+ strength, the one filled glyph in the column.
+ [261002j](../plans/261002j-visible-bookmark-comment-without-ai-and-comment-kinds-in-the-margin.md).
+diff --git a/docs/project/icons.md b/docs/project/icons.md
+index 529d0c422..2f09708cd 100644
+--- a/docs/project/icons.md
++++ b/docs/project/icons.md
+@@ -243,6 +243,28 @@ Going forwards, then:
+ [design-css-overview.md](design-css-overview.md) carries it as a one-line pointer, approved by Greg
+ on 2026-09-29 (`1a44cb57`).
+ 
++## A chat is two bubbles
++
++> In the vertical gutter next to blocks, change the comment icon to a chat icon (because that's
++> really what it is)
++>
++> — Greg, 2026-10-06 (`spya-vj7wv0`)
++
++**A conversation with the AI wears `MessagesSquare`, Chat mode's own icon, wherever it is drawn**:
++the gutter's chat button, the head of the card it opens (`ChatDialog.tsx`), the marks that reopen a
++chat started from a Glossary entry, a cited work or a Debate claim or angle (`OriginChat.tsx`,
++`DebatePanel.tsx`), and *Ask about this paragraph in chat* (`SimplePanel.tsx`).
++
++**One square bubble is the comment family**: `MessageSquareText` on the bar's Comments button,
++`MessageSquarePlus` on the comment box. Until 2026-10-06 the bare one bubble also meant "a
++conversation opened beside the mode, not in Chat's band", a split that was written down nowhere and
++that the gutter's button showed did not read. What tells a control that reopens one conversation
++from one that starts a new one is what sits beside the glyph: a count, the answer's first words, or
++a label. [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)
++has the narrower option that was passed over. Two places still cross the families and were left:
++Chat's *New conversation* wears `MessageSquarePlus`, and the Metadata page's Debate row wears
++`MessagesSquare` while Debate's mode icon is `Globe`.
++
+ ## Where they're used
+ 
+ - [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) — `ChevronDown`, rotated by `.chevron.up` for
+diff --git a/docs/project/marginalia.md b/docs/project/marginalia.md
+index 423eff866..3089583e9 100644
+--- a/docs/project/marginalia.md
++++ b/docs/project/marginalia.md
+@@ -52,8 +52,11 @@ one would otherwise be missed; it would not be, so it is not
+   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
+   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
+   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
+-  reference entry for a citation (not the model's reason, since 261003j), or the comment and the
+-  first lines of its AI answer. **The line is the button**, so its card says "Press this line" and
++  reference entry for a citation (not the model's reason, since 261003j), or, for a comment, the
++  first lines of its AI answer. A lone comment's own words are its line and are not said again
++  underneath: pressing a comment with no answer only lets a long line wrap (Greg, `spya-a0wpv4`;
++  [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)).
++  **The line is the button**, so its card says "Press this line" and
+   its words are underlined under a pointer or keyboard focus (Greg, `spya-xf6m2u`: *"the tooltip
+   says to 'press it' but I don't see anything to press"*;
+   [261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md)). This was
+diff --git a/src/web/BlockGutter.tsx b/src/web/BlockGutter.tsx
+index b0985f511..1fae676f2 100644
+--- a/src/web/BlockGutter.tsx
++++ b/src/web/BlockGutter.tsx
+@@ -135,7 +135,7 @@ import {
+   CircleHelp,
+   Ellipsis,
+   Link2,
+-  MessageSquare,
++  MessagesSquare,
+   TriangleAlert,
+   X,
+ } from "lucide-react";
+@@ -551,10 +551,11 @@ export function BlockGutter({
+ 
+           A `Bookmark` rather than the flag or speech bubble Greg offered,
+           because comments.md is explicit that a comment *is* a bookmark — the
+-          words and the AI answer are both optional — and because a second
+-          message-square a slot away from the chat button would read as a second
+-          chat. Its colour is `--highlight`, which is exactly what `mark.cmt`
+-          uses in the prose, so the gutter and the passage read as one thing.
++          words and the AI answer are both optional — and because the one-bubble
++          family now means comments while the two-bubble button below means
++          chat (docs/project/icons.md). Its colour is `--highlight`, which is
++          exactly what `mark.cmt` uses in the prose, so the gutter and the
++          passage read as one thing.
+ 
+           **It is the head of the column**, which is what a mark has to be: a
+           mark that is not beside its own words is not a mark, and the foot of a
+@@ -661,7 +662,13 @@ export function BlockGutter({
+              singular, so the count on screen was the one thing a screen reader
+              could not hear. Nothing about the count is decoration.
+ 
+-             With no conversation on the block, both are unchanged. */
++             With no conversation on the block, both are unchanged.
++
++             **The glyph is Chat's own two bubbles**, since 2026-10-06. It was
++             one bubble, which reads as a comment and is the family the bar's
++             Comments button wears. Greg, spya-vj7wv0: "change the comment icon
++             to a chat icon (because that's really what it is)". The words
++             already said chat. docs/project/icons.md § A chat is two bubbles. */
+           data-tip={
+             chatCount
+               ? `Open a conversation with the AI about this paragraph (${chatCount} total)`
+@@ -673,7 +680,7 @@ export function BlockGutter({
+               : "Chat with the AI about this paragraph"
+           }
+         >
+-          <MessageSquare size={GLYPH} aria-hidden="true" />
++          <MessagesSquare size={GLYPH} aria-hidden="true" />
+           {/* Every conversation anchored to this block, selections included —
+               counting only the whole-block ones would make the number disagree
+               with the marks sitting beside it. */}
+diff --git a/src/web/ChatDialog.tsx b/src/web/ChatDialog.tsx
+index 08f20f58c..53900976d 100644
+--- a/src/web/ChatDialog.tsx
++++ b/src/web/ChatDialog.tsx
+@@ -59,7 +59,7 @@ import {
+   useState,
+ } from "react";
+ import { createPortal } from "react-dom";
+-import { ChevronDown, ChevronUp, LoaderCircle, MessageSquare, Square, X } from "lucide-react";
++import { ChevronDown, ChevronUp, LoaderCircle, MessagesSquare, Square, X } from "lucide-react";
+ 
+ import type { BlockId, ChatAnchor, ChatThread, ThreadSummary } from "../types.js";
+ import { Composer, Conversation } from "./ChatPanel.js";
+@@ -1126,7 +1126,7 @@ export function ChatDialog({
+           onClick={() => setShut(null)}
+         >
+           <span className="chat-card-head">
+-            <MessageSquare size={12} aria-hidden="true" />
++            <MessagesSquare size={12} aria-hidden="true" />
+             <span className="chat-dialog-title">{thread.title}</span>
+             <ChevronDown size={14} aria-hidden="true" />
+           </span>
+@@ -1146,7 +1146,7 @@ export function ChatDialog({
+       )}
+       <header hidden={collapsed}>
+         <span className="chat-dialog-label">
+-          <MessageSquare size={12} aria-hidden="true" />
++          <MessagesSquare size={12} aria-hidden="true" />
+           {target.kind === "draft" ? (
+             <>Ask about {shortBlockId(target.anchor.blockId)}</>
+           ) : (
+diff --git a/src/web/DebatePanel.tsx b/src/web/DebatePanel.tsx
+index 4a070045a..554f8b58a 100644
+--- a/src/web/DebatePanel.tsx
++++ b/src/web/DebatePanel.tsx
+@@ -137,7 +137,6 @@ import {
+   ExternalLink,
+   Globe,
+   LoaderCircle,
+-  MessageSquare,
+   MessagesSquare,
+   type LucideIcon,
+   RotateCcw,
+@@ -1443,7 +1442,7 @@ function Angles({ chats }: { chats: DebateClaimChats }) {
+                   title={angleChatTip(chat.turns)}
+                   onClick={() => chats.onOpen(chat.id)}
+                 >
+-                  <MessageSquare size={12} aria-hidden="true" />
++                  <MessagesSquare size={12} aria-hidden="true" />
+                   {/* What the reader typed, so in the reader's face
+                       (docs/project/fonts.md). The quotation marks are ours. */}
+                   <span className="dbt-angle-quoted">
+diff --git a/src/web/OriginChat.tsx b/src/web/OriginChat.tsx
+index d549d9fef..82ca235c8 100644
+--- a/src/web/OriginChat.tsx
++++ b/src/web/OriginChat.tsx
+@@ -20,7 +20,7 @@
+  *
+  * Styles: styles/origin-chat.css. A caller's own sheet adds placement only.
+  */
+-import { MessageSquare, MessagesSquare } from "lucide-react";
++import { MessagesSquare } from "lucide-react";
+ 
+ import type { CitedWork, GlossaryEntry, ThreadSummary } from "../types.js";
+ import { TipNote, Tooltip } from "./Tooltip.js";
+@@ -70,8 +70,11 @@ export function originChatTip(label: string, turns: number, answered: boolean):
+  * (docs/project/fonts.md, `voice-ai`). Absent while the newest question is
+  * unanswered.
+  *
+- * Wears the floating chat's icon, because a press opens the conversation
+- * beside the mode and not Chat's band (docs/project/icons.md).
++ * Wears Chat's two bubbles, as every chat does wherever it opens
++ * (docs/project/icons.md § A chat is two bubbles). Until 2026-10-06 it wore
++ * one, for a conversation opened beside the mode; Greg read the one bubble
++ * as a comment (spya-vj7wv0, plan 261006i). The count and the answer's
++ * first words are what tell it from *Ask in chat* below.
+  *
+  * `preventDefault` on the press: in Debate the mark sits in a `<summary>`,
+  * and the press must not also fold the claim. It costs nothing elsewhere.
+@@ -103,7 +106,7 @@ export function OriginChatMark({
+           onOpen(chat.id);
+         }}
+       >
+-        <MessageSquare size={12} aria-hidden="true" />
++        <MessagesSquare size={12} aria-hidden="true" />
+         <span className="origin-chat-count">{chat.turns}</span>
+         {chat.lastLine ? (
+           <span className="origin-chat-line voice-ai">{chat.lastLine}</span>
+diff --git a/src/web/SimplePanel.tsx b/src/web/SimplePanel.tsx
+index 1b6bbcead..2244db8aa 100644
+--- a/src/web/SimplePanel.tsx
++++ b/src/web/SimplePanel.tsx
+@@ -29,7 +29,7 @@
+  * docs/project/mode.md has the rule.
+  */
+ import { Fragment, type ReactNode } from "react";
+-import { MessageSquare, TriangleAlert, Sprout } from "lucide-react";
++import { MessagesSquare, TriangleAlert, Sprout } from "lucide-react";
+ import { Button } from "@/components/ui/button";
+ import {
+   type BlockId,
+@@ -346,7 +346,7 @@ function Paragraph({
+               aria-label={SIMPLE_ASK_CHAT}
+               onClick={() => onAskChat(paragraph.text)}
+             >
+-              <MessageSquare size={12} aria-hidden="true" />
++              <MessagesSquare size={12} aria-hidden="true" />
+             </Button>
+           </Tooltip>
+         )}
+diff --git a/src/web/help/help-modes.tsx b/src/web/help/help-modes.tsx
+index eeba76efb..4b3865ec6 100644
+--- a/src/web/help/help-modes.tsx
++++ b/src/web/help/help-modes.tsx
+@@ -419,8 +419,9 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
+           actually wrote.
+         </p>
+         <p>
+-          On your own article, the small speech bubble at the end of a paragraph opens a new chat with
+-          that paragraph quoted, ready for your question. Nothing is sent until you press Send.
++          On your own article, the small chat icon (two speech bubbles) beside a paragraph opens a new
++          chat with that paragraph quoted, ready for your question. Nothing is sent until you press
++          Send.
+         </p>
+         <p>
+           If you have filled in your <HelpRef to="reader-profile">reader profile</HelpRef>, the
+diff --git a/src/web/marginalia/MarginaliaColumn.tsx b/src/web/marginalia/MarginaliaColumn.tsx
+index be0144f59..e88aa71a0 100644
+--- a/src/web/marginalia/MarginaliaColumn.tsx
++++ b/src/web/marginalia/MarginaliaColumn.tsx
+@@ -242,6 +242,7 @@ function ShutNote({
+   line,
+   lineVoice,
+   children,
++  lineOnly = false,
+ }: {
+   kind: string;
+   stamp: string;
+@@ -256,6 +257,13 @@ function ShutNote({
+   lineVoice: Voice;
+   /** The open half; null when there is nothing more to show than the line. */
+   children: ReactNode | null;
++  /** **The line is the whole of it, and may be cut**: a press only lets it
++      wrap. A button with no panel, so there is no empty box to hide and
++      nothing for `aria-controls` or `aria-expanded` to describe. Assistive
++      technology already receives the full, unclipped line; this state is
++      visual only. A lone comment that is only its words (report spya-a0wpv4,
++      plan 261006i). `children` is not read. */
++  lineOnly?: boolean;
+ }) {
+   const [open, setOpen] = useState(false);
+   const panel = useId();
+@@ -265,6 +273,21 @@ function ShutNote({
+       <span className={withVoice("marg-shut-line", lineVoice)}>{line}</span>
+     </span>
+   );
++  if (lineOnly) {
++    return (
++      <div className="marg-shut" data-kind={kind} data-open={open ? "" : undefined}>
++        <button
++          type="button"
++          className="marg-shut-button"
++          data-marg-tip={tip}
++          onClick={() => setOpen((was) => !was)}
++        >
++          <ChevronRight className="marg-chevron" size={12} aria-hidden="true" />
++          {label}
++        </button>
++      </div>
++    );
++  }
+   if (children === null) {
+     return (
+       <p className="marg-shut" data-kind={kind} data-marg-tip={tip}>
+@@ -458,6 +481,14 @@ function CommentNote({
+   ]
+     .filter(Boolean)
+     .join(" · ");
++  /* **A lone comment's words are its line**, and the line un-truncates when
++     it opens (marginalia.css), so the open half must not print them again:
++     report spya-a0wpv4, the comment's half of the class spya-f6dpj5 named for
++     a question. What is left decides the shape. An answer: a panel holding
++     it. Only words: no panel, and the press just lets the line wrap. Neither
++     (a wordless *Ask AI*): nothing to open, so plain text. Plan 261006i. */
++  const lone = only && only.as !== "question" ? only.comment : undefined;
++  const loneShape = lone === undefined || lone.answer ? "panel" : lone.body ? "line" : "text";
+   return (
+     <ShutNote
+       kind="comment"
+@@ -465,8 +496,9 @@ function CommentNote({
+       tip={viewer === "owner" ? "comment-own" : "comment-owner"}
+       line={only ? entryLine(only) : count}
+       lineVoice={only ? entryVoice(only) : "ui"}
++      lineOnly={loneShape === "line"}
+     >
+-      {items.map((e) =>
++      {loneShape === "text" ? null : items.map((e) =>
+         e.as === "question" ? (
+           <div key={`q:${e.asked.id}`} className="marg-open-item">
+             {/* **Only among several**, as a comment's head is: that is how
+@@ -497,7 +529,7 @@ function CommentNote({
+                 <span className="marg-stamp">{MARK_KIND_LABEL[e.as]}</span>
+               </p>
+             )}
+-            {e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
++            {!only && e.comment.body && <p className="marg-cmt-body">{e.comment.body}</p>}
+             {e.comment.answer && <p className="marg-open-answer">{e.comment.answer}</p>}
+           </div>
+         ),
+diff --git a/src/web/styles/marginalia.css b/src/web/styles/marginalia.css
+index 14026ed6f..05b10a097 100644
+--- a/src/web/styles/marginalia.css
++++ b/src/web/styles/marginalia.css
+@@ -236,6 +236,11 @@ p.marg-shut {
+   color: var(--ink-soft);
+   overflow-wrap: anywhere;
+ }
++/* `display: grid` above outranks the browser's own `[hidden]` rule, so a shut
++   panel kept its padding. Said here so that shut means gone. Plan 261006i. */
++.marg-open[hidden] {
++  display: none;
++}
+ .marg-open-item {
+   display: grid;
+   gap: 0.125rem;
+diff --git a/tests/block-gutter.test.tsx b/tests/block-gutter.test.tsx
+index 384e2fd4e..ba18dd2ab 100644
+--- a/tests/block-gutter.test.tsx
++++ b/tests/block-gutter.test.tsx
+@@ -20,7 +20,9 @@ import { readFileSync } from "node:fs";
+ import { act } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { MessagesSquare } from "lucide-react";
+ import { BlockGutter } from "../src/web/BlockGutter.js";
++import { MODE_ICON } from "../src/web/mode-icons.js";
+ import type { BlockId, Comment } from "../src/types.js";
+ 
+ const ID = "spya-k3m9qt" as BlockId;
+@@ -345,6 +347,16 @@ describe("the chat button", () => {
+     expect(host.querySelector(".block-chat")?.classList.contains("has")).toBe(false);
+   });
+ 
++  /* Greg, spya-vj7wv0: "change the comment icon to a chat icon (because
++     that's really what it is)". The name and the tooltip already said chat;
++     the one bubble was the part that said comment. Plan 261006i. */
++  it("wears Chat's own two bubbles, not the one that reads as a comment", () => {
++    paint();
++    const glyph = host.querySelector(".block-chat svg")?.getAttribute("class") ?? "";
++    expect(glyph).toContain("lucide-messages-square");
++    expect(MODE_ICON.chat).toBe(MessagesSquare);
++  });
++
+   it("offers to open one of them, rather than promising a new one", () => {
+     /* **This assertion has been red once on purpose**, the way the "?" copy
+        below was. Until 2026-09-05 the chip said *"Chat with the AI about this paragraph (2
+diff --git a/tests/marginalia-shut-notes.test.tsx b/tests/marginalia-shut-notes.test.tsx
+index fb8cb5f04..7dcded090 100644
+--- a/tests/marginalia-shut-notes.test.tsx
++++ b/tests/marginalia-shut-notes.test.tsx
+@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
+ import { act } from "react";
+ import { createRoot, type Root } from "react-dom/client";
+ import { afterEach, describe, expect, it, vi } from "vitest";
+-import type { CitedWork, FaqQuestion } from "../src/types.js";
++import type { PublicComment } from "../src/public-types.js";
++import type { BlockId, CitedWork, FaqQuestion } from "../src/types.js";
+ import { MarginNotesSlot, useMarginLayout } from "../src/web/marginalia/MarginaliaColumn.js";
+ import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
+ 
+@@ -131,14 +132,112 @@ describe("a shut line", () => {
+     expect(item?.textContent).toBe("A bare work");
+   });
+ 
+-  it("opens a reader's comment to the whole of it, its line cut at one", () => {
++  /* Report spya-a0wpv4, plan 261006i: the shut line un-truncates when it opens
++     (marginalia.css), so it is already the whole comment, and the open half
++     printing the body under it said the comment twice. The question's half of
++     this class is spya-f6dpj5, below. */
++  it("says a lone comment's words once when it is opened: the line is the whole of it", () => {
+     const body = "Not sure I buy this claim, and here is a long reason why that will not fit on one line.";
+     const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body, status: "none" } as unknown as MarginComment;
+     const el = draw([{ kind: "comment", items: [{ as: "comment", comment }] }]);
+     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+     expect(button?.querySelector(".marg-stamp")?.textContent).toBe("Comment");
+     act(() => button?.click());
+-    expect(el.querySelector(".marg-open")?.textContent).toContain(body);
++    /* The full comment is already in the accessibility tree; this press only
++       changes its visual wrapping. It is not an ARIA disclosure with a
++       controlled region. Code review of plan 261006i. */
++    expect(button?.hasAttribute("aria-expanded")).toBe(false);
++    expect(el.querySelector(".marg-shut")?.hasAttribute("data-open")).toBe(true);
++    expect((el.textContent ?? "").split(body).length - 1).toBe(1);
++    expect(button?.textContent).toContain(body);
++    /* Nothing is left for an open half, so there is none: no empty box, and
++       no `aria-controls` naming one (GPT Sol, F1 on the plan). */
++    expect(el.querySelector(".marg-open")).toBeNull();
++    expect(button?.hasAttribute("aria-controls")).toBe(false);
++    act(() => button?.click());
++    expect(button?.hasAttribute("aria-expanded")).toBe(false);
++    expect(el.querySelector(".marg-shut")?.hasAttribute("data-open")).toBe(false);
++  });
++
++  /* The owner's comment as a visitor is sent it (src/public-types.ts §
++     `PublicComment`): the same words, no status and no thread. */
++  it("says a visitor's copy of a lone comment once too", () => {
++    const comment: PublicComment = { id: "c", blockId: "spya-aaaaa1" as BlockId, createdAt: "t", body: "the owner's thought" };
++    const el = document.createElement("div");
++    host = el;
++    document.body.append(el);
++    const nextRoot = createRoot(el);
++    root = nextRoot;
++    act(() => nextRoot.render(<MarginNotesSlot viewer="visitor" notes={[{ kind: "comment", items: [{ as: "comment", comment }] }]} />));
++    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
++    expect((el.textContent ?? "").split("the owner's thought").length - 1).toBe(1);
++    expect(el.querySelector(".marg-open")).toBeNull();
++  });
++
++  /* *Ask AI* with no words of the reader's: the line is our stand-in and
++     there is nothing behind it, so it is not a button that opens to nothing. */
++  it("draws a lone wordless Ask AI as plain text, with nothing to press", () => {
++    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", status: "none", threadId: "t9" } as unknown as MarginComment;
++    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
++    expect(el.querySelector(".marg-shut-button")).toBeNull();
++    expect(el.querySelector("p.marg-shut")?.textContent).toBe("Comment + AI Asked the AI about this passage");
++  });
++
++  it("takes a shut panel out of the layout despite the panel's grid display", () => {
++    const css = readFileSync("src/web/styles/marginalia.css", "utf8");
++    expect(css).toMatch(/\.marg-open\[hidden\]\s*\{[^}]*display:\s*none/);
++    const style = document.createElement("style");
++    style.textContent = css;
++    const panel = document.createElement("div");
++    panel.className = "marg-open";
++    panel.hidden = true;
++    document.head.append(style);
++    document.body.append(panel);
++    expect(getComputedStyle(panel).display).toBe("none");
++    panel.hidden = false;
++    expect(getComputedStyle(panel).display).toBe("grid");
++    panel.remove();
++    style.remove();
++  });
++
++  it("keeps a lone comment's AI answer in the open half, under words said once", () => {
++    const body = "Check this claim.";
++    const answer = "The article answers it in the next paragraph.";
++    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", status: "done", body, answer } as unknown as MarginComment;
++    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
++    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
++    expect((el.textContent ?? "").split(body).length - 1).toBe(1);
++    expect(el.querySelector(".marg-open .marg-open-answer")?.textContent).toBe(answer);
++  });
++
++  it("keeps a lone answer with no reader words in a non-empty open half", () => {
++    const answer = "The next paragraph supplies the missing evidence.";
++    const comment = {
++      id: "c",
++      blockId: "spya-aaaaa1",
++      createdAt: "t",
++      status: "done",
++      answer,
++    } as unknown as MarginComment;
++    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
++    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
++    expect(button?.textContent).toContain("AI answer");
++    expect(button?.hasAttribute("aria-controls")).toBe(true);
++    act(() => button?.click());
++    expect(el.querySelector(".marg-open-item")?.textContent).toBe(answer);
++  });
++
++  /* The other side of the guard: among several, the line is a count, so each
++     comment's words are only in the open half and must stay there. */
++  it("still shows each comment's words in the open half when a block has several", () => {
++    const one = { id: "c1", blockId: "spya-aaaaa1", createdAt: "t", body: "first thought", status: "none" } as unknown as MarginComment;
++    const two = { id: "c2", blockId: "spya-aaaaa1", createdAt: "t", body: "second thought", status: "none" } as unknown as MarginComment;
++    const el = draw([{ kind: "comment", items: [{ as: "comment", comment: one }, { as: "comment", comment: two }] }]);
++    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
++    expect(button?.textContent).toContain("2 comments");
++    act(() => button?.click());
++    const bodies = [...el.querySelectorAll(".marg-open .marg-cmt-body")].map((p) => p.textContent);
++    expect(bodies).toEqual(["first thought", "second thought"]);
+   });
+ 
+   /* SPIDERYARN-READING2-9H, plan 261002j: the stamp is the kind. */
+diff --git a/tests/mode-icons.test.ts b/tests/mode-icons.test.ts
+index 8494ecaf9..71d6bc823 100644
+--- a/tests/mode-icons.test.ts
++++ b/tests/mode-icons.test.ts
+@@ -47,6 +47,32 @@ describe("the icon each mode wears", () => {
+     expect(rows).not.toMatch(/^\s+icon:/m);
+   });
+ 
++  /* Greg, spya-vj7wv0: the gutter's chat button wore one bubble, which reads
++     as a comment, "change the comment icon to a chat icon (because that's
++     really what it is)". A chat is Chat's two bubbles wherever it is drawn
++     (docs/project/icons.md § A chat is two bubbles): the gutter's button,
++     both heads of the card it opens, and the marks that reopen a chat from a
++     mode. Each assertion is scoped to that control: merely having a different
++     two-bubble control elsewhere in the same file is not evidence. The
++     gutter's is also asked of the DOM, in block-gutter.test.tsx. Plan 261006i. */
++  it.each([
++    ["BlockGutter.tsx", 'className={`block-chat', "</button>"],
++    ["ChatDialog.tsx", 'className="chat-card-head"', "</span>"],
++    ["ChatDialog.tsx", 'className="chat-dialog-label"', "</span>"],
++    ["OriginChat.tsx", "export function OriginChatMark", "export function AskInChatButton"],
++    ["DebatePanel.tsx", 'className="dbt-angle"', "</button>"],
++    ["SimplePanel.tsx", 'className="simple-ask', "</Button>"],
++  ])("draws the chat at %s / %s as two bubbles", (file, start, end) => {
++    const source = read(file);
++    const from = source.indexOf(start);
++    const to = source.indexOf(end, from);
++    expect(from, `${file}: missing ${start}`).toBeGreaterThanOrEqual(0);
++    expect(to, `${file}: missing ${end} after ${start}`).toBeGreaterThan(from);
++    const site = source.slice(from, to);
++    expect(site).toMatch(/<MessagesSquare\b/);
++    expect(site).not.toMatch(/<MessageSquare\b/);
++  });
++
+   it("is read by Chat's panel without importing the Dock", () => {
+     const panel = read("ChatPanel.tsx");
+     expect(panel).toContain('from "./mode-icons.js"');

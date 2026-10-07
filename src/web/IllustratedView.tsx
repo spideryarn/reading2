@@ -48,6 +48,7 @@
  * looking for — and the brief itself is one press away, because a prompt can be
  * read against the article where a picture cannot.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
@@ -62,7 +63,7 @@ import type { Block, BlockId } from "../types.js";
 import { Button } from "@/components/ui/button";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
 import { JobProgress } from "./JobProgress.js";
 import { apiFetch } from "./lib/api.js";
 /* The Sketch's own wait, imported rather than restated — see
@@ -73,6 +74,8 @@ import { apiFetch } from "./lib/api.js";
    keep quiet about. */
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
@@ -121,9 +124,11 @@ export const ILLUSTRATED_WAIT = "four to seven minutes";
  * anyway. **The objection was to the hiding, not to the chain**, so the chain
  * lands and the second step — and its wait — is named before the press.
  */
-export const SKETCH_THEN_PAINT =
+const SKETCH_THEN_PAINT_WORK =
   `The Sketch first: one model call, taking ${SKETCH_WAIT}. Then the painting: ` +
-  `${ILLUSTRATED_WORK}, taking ${ILLUSTRATED_WAIT}. Two steps for one press — Stop takes ` +
+  `${ILLUSTRATED_WORK}, taking ${ILLUSTRATED_WAIT}.`;
+export const SKETCH_THEN_PAINT =
+  `${SKETCH_THEN_PAINT_WORK} Two steps for one press — Stop takes ` +
   `effect after the step that is running, so stopping during the Sketch leaves the painting unstarted.`;
 
 /**
@@ -271,9 +276,11 @@ function Plate({
   if (error) return <p className="ill-plate-out">{error}</p>;
   if (!url) {
     return (
-      <p className="ill-plate-out" role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Fetching the picture…
-      </p>
+      /* The dashed plate is there at once, so the page does not jump; the
+         words join it only if the fetch is slow. BandWaiting.tsx. */
+      <BandWaiting key={`${slug}\u0000${plate.image.sha256}\u0000${plate.image.ext}`} className="ill-plate-out">
+        Fetching the picture…
+      </BandWaiting>
     );
   }
   return (
@@ -345,12 +352,13 @@ function useSteerNote(slug: string, painted: string | undefined): SteerNote {
     setNote(next);
   }, []);
   const box = useRef<HTMLTextAreaElement | null>(null);
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value: note,
     onChange: change,
     box,
     context: { kind: "article", slug },
-    transcribe: sendForTranscription,
+    transcribe,
     keep: keepDictation(`illustrated:${slug}`),
   });
   const tooLong = note.trim().length > MAX_ILLUSTRATION_NOTE_CHARS;
@@ -360,7 +368,7 @@ function useSteerNote(slug: string, painted: string | undefined): SteerNote {
     box,
     dictate,
     tooLong,
-    blocked: tooLong || dictate.readOnly || dictate.dictation.armed,
+    blocked: tooLong || dictate.busy,
   };
 }
 
@@ -416,11 +424,16 @@ function YourNote({ note }: { note: string | undefined }) {
  * **Paint again, beside a picture that is there** — with whatever is in the box.
  * Forced, because an unforced run would skip a current picture with the same
  * note while the reader watched a job change nothing.
+ *
+ * **Held from the press until the new painting has been read** (`rewriting`,
+ * rewrite-hold.ts): the job leaving the list is not the painting arriving, and
+ * a press in between is a second run of the dearest job there is.
  */
 function PaintAgain({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
-  const busy = view.job !== null || view.starting;
+  const busy = view.job !== null || view.starting || view.rewriting;
   return (
     <div className="ill-run">
+      {view.profileChanged && <p className="ill-empty-why">{SKETCH_THEN_PAINT_WORK}</p>}
       <Button
         type="button"
         variant="outline"
@@ -429,7 +442,7 @@ function PaintAgain({ view, steer }: { view: UseIllustrated; steer: SteerNote })
         onClick={() => void view.regenerate(steer.note)}
       >
         <Brush size={13} />
-        Paint again
+        {view.profileChanged ? "Draw the Sketch, then paint again" : "Paint again"}
       </Button>
     </div>
   );
@@ -512,16 +525,30 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
 
   if (view.status === "loading") {
     return (
-      <div className="ill-wait" role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Looking for a painting…
-      </div>
+      <BandWaiting as="div" className="ill-wait">
+        Looking for a painting…
+      </BandWaiting>
     );
   }
 
   if (view.status === "none" || view.status === "error") {
+    /* **A failure over "none yet" keeps the empty state under it** — the
+       server has said nobody painted one, and a read failing since does not
+       unsay it (Greg, 2026-10-07; docs/project/mode.md § The artefact, if the
+       mode shows one). Until then a failure here drew the sentence alone, in
+       either status, so the paint button went with any failed read. A failed
+       *opening* read (`error`) still draws the sentence alone: nothing was
+       ever answered. */
     return (
       <div className="ill-empty">
-        <Empty view={view} steer={steer} />
+        {view.error && (
+          <ReadError
+            error={view.error}
+            onRetry={view.retryRead}
+            className={view.status === "none" ? "tw:m-0 tw:mb-2" : "tw:m-0"}
+          />
+        )}
+        {view.status === "none" && <Empty view={view} steer={steer} />}
       </div>
     );
   }
@@ -538,7 +565,7 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
   if (lost > 0) {
     notes.push(`${lost} of the passages it drew from are no longer in this article, so their rows are gone.`);
   }
-  if (view.profileChanged) notes.push("It was painted from a Sketch drawn for a reader profile you have since changed.");
+  if (view.profileChanged) notes.push("It was painted from a Sketch drawn before your profile said what it says now.");
 
   /**
    * **One body, rendered in whichever container is open** — not two instances,
@@ -654,6 +681,15 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
       {/* And the spinner going away is not the same as the work succeeding. The
           server's own words, per copy.md. */}
       {!view.job && view.failed && <p className="ill-failed">{view.failed.message}</p>}
+      {/* A re-read that failed, beside the painting it could not replace —
+          SketchView.tsx § OwnerSketch has the same line and the reason. */}
+      {view.error && <ReadError error={view.error} onRetry={view.retryRead} />}
+      {/* A repaint finished and its painting is not here yet — the read, never
+          a second paid repaint. SketchView.tsx § `progress` has the same line,
+          in the same words, for the same reason. */}
+      {view.rewriting && !view.job && !view.starting && !view.failed && !view.error && (
+        <RewriteWaiting line="The new picture hasn't loaded yet." onRead={view.refresh} />
+      )}
 
       {notes.length > 0 && <p className="ill-note">{notes.join(" ")}</p>}
 
@@ -887,10 +923,6 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
 function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
   const { sketch } = view;
 
-  if (view.status === "error") {
-    return <p>{view.error ?? "Could not ask for this painting."}</p>;
-  }
-
   /* **Before every other branch.** `JobProgress` draws the spinner, the step's
      own label and Stop when there is a job, so this is the whole of what a
      reader needs while one runs — and the four sentences below are all about a
@@ -916,10 +948,10 @@ function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
 
   if (sketch.kind === "checking") {
     return (
-      <p role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Nobody has painted this
-        one yet.
-      </p>
+      <>
+        <p>Nobody has painted this one yet.</p>
+        <BandWaiting>Looking for the Sketch…</BandWaiting>
+      </>
     );
   }
 
@@ -927,7 +959,7 @@ function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
     const why = {
       absent: "There is no Sketch of this article yet, and the painting is made from the Sketch rather than from the article.",
       stale: "The Sketch of this article is out of date — the article has moved underneath it — so a painting made from it would be out of date the moment it landed.",
-      "profile-changed": "The Sketch of this article was drawn for a reader profile you have since changed, and a painting inherits whose it was.",
+      "profile-changed": "The Sketch of this article was drawn before your profile said what it says now, and a painting inherits whose it was.",
     }[sketch.kind];
     return (
       <>

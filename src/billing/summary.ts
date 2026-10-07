@@ -154,9 +154,9 @@ export function standingFor(
  *
  * **There was a fourth, and it was first**: with no Postgres the answer was
  * `off`, because there was no ledger to count. There is one store since
- * 2026-09-05, so that state cannot arise and `off` is now reachable only from
- * `BILLING_OFF` — src/billing/config.ts, which is the deliberate switch rather
- * than the absent database.
+ * 2026-09-05, so that state cannot arise; nothing built it after that day, and
+ * the arm left `ReaderPlan` on 2026-10-06. There is no switch that turns
+ * billing off.
  */
 export async function readBillingSummary(ownerId: OwnerId): Promise<BillingSummary> {
   /* Cached for thirty seconds, which is right here for the same reason it is

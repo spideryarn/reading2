@@ -42,7 +42,7 @@ import { useEffect } from "react";
 
 import { TAKEDOWN_HEADING } from "../messages.js";
 import { CONTACT_EMAIL } from "../site-text.js";
-import { BackLink } from "./BackLink.js";
+import { DocumentPage } from "./DocumentPage.js";
 import { Link } from "./Link.js";
 import { PUBLIC_SHARING_HREF, TAKEDOWN_SECTION_ID } from "./router.js";
 import { SiteFooter } from "./SiteFooter.js";
@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "2 October 2026";
+const LAST_UPDATED = "7 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -136,15 +136,12 @@ export function PrivacyPage() {
   useTakedownFragment();
 
   return (
-    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      {/* **"Home", not "Back", since 2026-09-08.** It goes to `/` rather than
-          `history.back()`, and most people who open this page were *sent* to it
-          — from an email, from the footer of another page, from a link in an
-          article — so there was often no "back" for it to mean. It is also the
-          label the footer uses for the same destination, and one page should not
-          call one address two things. */}
-      <BackLink href="/" label="Home" icon="home" className="tw:mb-6" />
-
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx. */
+    <DocumentPage
+      here="privacy"
+      floor
+      className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
+    >
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Privacy
       </h1>
@@ -194,11 +191,19 @@ export function PrivacyPage() {
             <strong className="tw:text-foreground">The articles you add</strong> — we fetch the page
             you point us at and store its text and images. A PDF you upload is stored as a file.
           </li>
+          {/* **Quiz answers are on this list since 2026-10-05**, and until then
+              the bullet ended "Quiz answers are the exception: they go to a
+              model to be marked and are not stored" — true at the time. Greg
+              asked for the answers to be kept so they are still there when a
+              reader comes back (report spya-e8ujxn), and `quiz_attempts` now
+              holds each answer and the reply it was given. What is still not
+              kept is whether an answer was judged right or wrong.
+              docs/project/privacy.md § Quiz answers. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What you write</strong> — notes, comments,
-            highlights, chat and voice conversations, saved searches, and the “about you” profile
-            you can fill in, which is there to be given to the model. Quiz answers are the exception:
-            they go to a model to be marked and are not stored.
+            highlights, chat and voice conversations, saved searches, your answers to quiz
+            questions, with what the AI wrote back about each, and the “about you” profile you can
+            fill in, which is there to be given to the model.
           </li>
           {/* **Reading time, and three words in it that were chosen against
               the obvious ones.** "Passage", not "paragraph": headings, figures
@@ -208,10 +213,14 @@ export function PrivacyPage() {
               — GPT Sol, 2026-09-16. And "anybody reading an article you have
               shared" rather than "anybody else": the operator can read stored
               data, which this page says in its own paragraph above.
+              **For every article of the reader's own, since 2026-10-05**: until
+              then the bullet said "with experimental features on", which was
+              when it was kept. There is no control yet to turn it off or erase
+              it, and the bullet promises none.
               docs/project/privacy.md § Reading time. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">How long you have spent on each part of your
-            articles</strong> — with experimental features on, a running total of the seconds each
+            articles</strong> — a running total of the seconds each
             passage has been on your screen. Some of Spideryarn’s features use it — to show you
             where you have been, for example. We keep the totals, not a history of your reading (our
             ordinary server logs do show when an update arrived). It is not shown to anybody reading
@@ -283,7 +292,9 @@ export function PrivacyPage() {
               their address (docs/plans/261001p); since 2026-10-02 the one to an
               existing reader carries their own remaining allowance
               (docs/plans/261002a), hence its second clause; and since the same day
-              it may carry a note from whoever gave it (docs/plans/261002b). The
+              it may carry a note from whoever gave it (docs/plans/261002b),
+              and since 2026-10-07 the recipient's name as that person typed it
+              (docs/plans/261007f). The
               copy of each reader's feedback mailed to us is docs/plans/261002j. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
@@ -292,7 +303,8 @@ export function PrivacyPage() {
             for a plan, which ones), so we know who has joined. That note goes through Resend, then
             our domain’s mail forwarding at Namecheap, to our own inbox. An administrator can also give
             a gift of free articles to an email address, and that address is sent one email saying
-            so, with a short note from whoever gave it, if they wrote one — if it is already your account’s, the email also says how many articles you had left
+            so, with a short note from whoever gave it, if they wrote one, and the recipient’s name as that person
+            gave it, if they gave one — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
             it. When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you
             were on, and your email address — the same way. If you send us feedback through the Feedback button and we
@@ -346,6 +358,50 @@ export function PrivacyPage() {
             and Stripe’s customer and subscription references.
           </Third>
         </ul>
+        {/* **Three indexes of published work, and why they are a paragraph and
+            not three more entries in the list above.** That list is who is sent
+            something of the reader's. These are sent the identifier of a
+            published work and nothing else: src/fetch.ts § `BIBLIOGRAPHIC_HOSTS`
+            is the whole list of hosts, and the request is built in
+            src/bibliographic.ts and src/citation-index.ts. Crossref and DataCite
+            have been asked since 2026-10-01 and were missing from this page
+            until OpenAlex arrived on 2026-10-04
+            (docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md).
+            tests/privacy-page.test.ts reads the host list, so a fourth index
+            turns it red until it is named here. */}
+        <p>
+          Three public indexes of published work are asked about papers:{" "}
+          <a
+            href="https://www.crossref.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            Crossref
+          </a>{" "}
+          and{" "}
+          <a
+            href="https://datacite.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            DataCite
+          </a>
+          , when you add an article, for its journal and date, and when you look up the works it cites; and{" "}
+          <a
+            href="https://openalex.org/"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="tw:text-highlight-text tw:no-underline tw:hover:underline"
+          >
+            OpenAlex
+          </a>
+          , when you open Reception in Debate on an article of yours, for the list of papers that cite it. Our
+          server sends each one the identifier of a published work — for your article, its DOI —
+          and our own contact address; never the article’s text, and nothing about who you are.
+          They learn that somebody using Spideryarn asked about that work, not who.
+        </p>
         <p>
           {/* **The honest version of the training question.** Everything here
               is checkable in the code, and until 2026-09-07 the checkable fact
@@ -426,22 +482,56 @@ export function PrivacyPage() {
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
           aids, chat and search, and Opus or a similar frontier model in its place on an article
-          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs;{" "}
-          <code>gpt-6-luna</code> to choose the topics above your shelf, for which it is shown your
-          articles’ titles and one-line summaries, the candidate topics, and your profile if you wrote
-          one;{" "}
+          switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
+          and, when you ask the command bar to suggest what to do with an article, to write that short
+          list, for which it is shown your profile and your reason for reading the article, with our
+          list of commands;{" "}
+          <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
+          for which it is shown your articles’ titles and one-line summaries (a paper’s abstract, when
+          it has no summary yet) and your profile if you wrote one;{" "}
           <code>voyage-4</code> to turn passages into the numbers that make search-by-meaning work;{" "}
           <code>jev-1.13</code>, TypeSafe’s, through OpenRouter, for quick search, for which it is
-          shown the article’s passages and the words you searched for;{" "}
+          shown the article’s passages and the words you searched for, and to work out which command
+          you meant when you type or say a sentence into the command bar, for which it is shown that
+          sentence and our list of commands (when the command needs words from your sentence, such
+          as what to search for, <code>gpt-5.6-luna</code> is shown the sentence too, to pick them
+          out);{" "}
           <code>gpt-transcribe</code> for dictation;{" "}
           <code>deepseek-v4.1-flash</code> to read the title, authors, abstract and DOI off the first
-          two pages of a PDF you add in a batch, for which it is shown the text of those two pages;{" "}
+          two pages of a PDF you add in a batch, for which it is shown the text of those two pages,
+          and to tidy the title of anything you add (its capitals, a site’s name stuck on the end),
+          for which it is shown the title, the site’s name and the language the page declares, and
+          none of the text, and to judge how hard an article is to read so that its reading time can
+          allow for it, for which it is shown passages from the article, about 3,000 words at
+          most;{" "}
           <code>gemini-3-flash-preview</code> to find a figure in a PDF when the page alone
           cannot say which picture belongs to which caption, for which it is shown images of those
           pages; <code>gemini-3.1-flash-image</code> to paint the Illustrated diagram, for which it
           is shown a written description of the scene and any figures the article came with; and{" "}
           <code>gpt-realtime-2.1</code> with <code>gpt-live-transcribe</code> for the live voice
           mode.
+        </p>
+        {/* **What follows from the command bar's suggestions** (plan 261005k,
+            GPT Sol's F5): saying which model is shown the profile is true and
+            is only the first transfer. The words it writes are made from the
+            profile, and a suggestion the reader presses travels on like any
+            search or chat question they typed.
+
+            **No promise that personal details are kept out, and do not add
+            one.** The model is asked to leave them out
+            (src/command-suggest-call.ts § `SUGGEST_SYSTEM`); nothing checks
+            that it did. docs/project/reader-profile.md § The command bar's
+            suggestions. tests/privacy-page.test.ts holds this paragraph. */}
+        <p>
+          <strong className="tw:text-foreground">
+            The searches and the question the command bar suggests are worded from what you wrote
+          </strong>{" "}
+          in your profile and your reason for reading. Nothing is done with a suggestion until you
+          press it. A search you press is sent and kept like one you typed, so a search is seen by
+          visitors if you share the article. The chat question waits in Chat’s box until you press Send.
+          Once sent, it is kept like a question you typed and can be searched for on the web.
+          We ask the model to leave out anything about you as a person,
+          and we cannot promise that it always does, so read a suggestion before you press it.
         </p>
       </Section>
 
@@ -467,7 +557,7 @@ export function PrivacyPage() {
             thing is how one of them goes stale. This says the shape of it and
             points at the card. */}
         <p>
-          Two exceptions, and both are worth knowing. If you mark an article{" "}
+          Three exceptions, and all are worth knowing. If you mark an article{" "}
           <strong className="tw:text-foreground">public</strong>, anyone can read it without signing
           in, and it is listed publicly where somebody who was never sent the link can find it —
           that is what the setting is for. They get the article, its outline, summaries (the plain-words
@@ -482,7 +572,14 @@ export function PrivacyPage() {
           asked, and the questions you put to the piece along with the passages they found. They can
           read all of that and add none of it. Your chat conversations are not shared, and neither
           is your profile. The
-          sharing card lists exactly what will go out before you turn it on. And{" "}
+          sharing card lists exactly what will go out before you turn it on. If you make a{" "}
+          <strong className="tw:text-foreground">private link</strong> to an article, anyone who has
+          the link can read the article without signing in, and can pass it on. An article shared
+          only this way is not listed anywhere, and they get the same things a public reader gets, your comments and searches
+          included. We cannot tell you who has read it. The link’s key is part of its address, so
+          it stays in the browser history of whoever opens it. Turning the link off refuses the
+          next request made with it; it cannot take back what somebody has already read or copied.
+          And{" "}
           <strong className="tw:text-foreground">we can see what is in the app</strong>: there is an
           administrator’s view across all accounts, and we may read your articles and what you have
           written in order to fix a bug or make the thing better. We won’t sell it, publish it, or
@@ -540,7 +637,8 @@ export function PrivacyPage() {
           The Feedback button sends us what you write, your email address, the build you were
           running and the address of the page you were on — the whole address, including anything
           after the <code>?</code>, so if you were searching for something, that search text comes
-          with it. It goes to our database, to Sentry and, as an email, to our own inbox, and the
+          with it. One thing is taken off first: a report sent from a page you opened by a private
+          link records the address without the link’s key. It goes to our database, to Sentry and, as an email, to our own inbox, and the
           point of saying so here is that
           you can leave the box until you are on a page you don’t mind us seeing.
         </p>
@@ -586,6 +684,9 @@ export function PrivacyPage() {
           but the link you gave out still opens it. Archiving is about your shelf; sharing is about
           the link. To close the link, use{" "}
           <strong className="tw:text-foreground">Stop sharing</strong> on the article’s own page.
+          A private link is the same: archiving leaves it working, and{" "}
+          <strong className="tw:text-foreground">Turn off</strong> on the article’s own page closes
+          it.
         </p>
         <p>
           Same for the account. There is no “delete my account” button yet; email us and we delete
@@ -598,7 +699,8 @@ export function PrivacyPage() {
           which is how we know what running this costs — it holds the job, the model and the price,
           not what was said. We keep a
           <strong className="tw:text-foreground"> thin audit trail</strong>: that an article existed
-          under a given name, when it was shared publicly, that a voice session happened. And we
+          under a given name, when it was shared publicly, when a private link to it was made or
+          turned off (never the link itself), that a voice session happened. And we
           keep the <strong className="tw:text-foreground">original downloaded file</strong>, stored
           under a fingerprint of its own contents rather than under your name, so that if somebody
           else added the same document it is the same file and deleting your copy cannot take
@@ -736,7 +838,9 @@ export function PrivacyPage() {
         <p>
           When somebody adds an article to Spideryarn we fetch it and keep a copy of the text so
           that they can read it here. If they turn sharing on, that copy becomes readable by anyone
-          and is listed on our public shelf. We ask them to confirm they have the right to share it
+          and is listed on our public shelf. They can also make a private link, which lets anyone
+          who has the link read that copy without it being listed. Either way we ask them to
+          confirm they have the right to share it
           — that is a promise they make, not a check we run, because we have no way of knowing who
           owns a page we fetched.
         </p>
@@ -752,8 +856,9 @@ export function PrivacyPage() {
           originally published, and a line about your connection to it. The first of those is the
           one we cannot work without: if a message doesn’t say which page it is about, all we can
           do is write back and ask. We will take a fair complaint at face value rather
-          than asking you to prove anything first: we make the article private, which takes it off
-          the public shelf and stops the shared link opening it, and then we come back to you.
+          than asking you to prove anything first: we make the article private and turn off any
+          private link to it, which takes it off
+          the public shelf and stops a shared link opening it, and then we come back to you.
         </p>
         <p>
           The limits are worth saying plainly. One person reads that mailbox and does this by hand,
@@ -797,6 +902,6 @@ export function PrivacyPage() {
       <div className="tw:flex-1" />
 
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }

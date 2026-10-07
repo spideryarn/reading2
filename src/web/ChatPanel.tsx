@@ -53,7 +53,7 @@
  * ordered list's `start`, which is a number; and a heading's element name,
  * clamped to h4–h6.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   BookOpen,
@@ -66,16 +66,22 @@ import {
   Library,
   Link2,
   LoaderCircle,
+  type LucideIcon,
   MessageSquarePlus,
   Pencil,
+  Pilcrow,
   RotateCcw,
   Search,
   SendHorizontal,
   Square,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
+import { withoutCommandLines } from "../citable.js";
 import { worthRetrying } from "../messages.js";
+import { splitHint } from "../recall-hint.js";
+import { MODE_LABEL } from "../title-text.js";
 import type {
   BlockId,
   ChatMessage,
@@ -86,7 +92,12 @@ import type {
 } from "../types.js";
 import { isSingleThreadKind } from "../types.js";
 import { CitedMarkdown } from "./Cited.js";
+import { Button } from "./components/ui/button.js";
+import { useChatCommands } from "./CommandChip.js";
+import { chipFor } from "./chat-commands.js";
+import { holdTarget, roomNeeded } from "./chat-hold.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { LearnSubModesAbout } from "./LearnAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
@@ -95,20 +106,64 @@ import { LiveTail } from "./live/LiveTail.js";
 import { liveSize } from "./live/tail.js";
 import type { LiveApi } from "./live/useLiveConversation.js";
 import { keepDictation } from "./dictation-keep.js";
-import { sendForTranscription } from "./dictation-upload.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
+import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
-import { isSendEnter } from "./key-chord.js";
-import { ControlTip, Tooltip } from "./Tooltip.js";
+import { isHeldSendEnter, isImeComposing, isSendEnter } from "./key-chord.js";
+import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
+import {
+  CHAT_FROM_LABEL,
+  type LearnConversationView,
+  narrowed,
+  sourcesIn,
+  type ThreadSource,
+  threadSource,
+} from "./thread-source.js";
+import { MODE_ICON } from "./mode-icons.js";
+import type { ChatFrom } from "./params.js";
+import { LEARN_SUB_MODES } from "./sub-modes.js";
+import { usePressToggle } from "./usePressToggle.js";
+import { withVoice } from "./voice.js";
 import { hostOf, isWebUrl } from "../urls.js";
 import { exactly, timeAgo } from "./relative-time.js";
 import { useNow } from "./useNow.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { putKeyboardAway } from "./useVisualViewport.js";
 import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
+import { chatDraftsFor } from "./chat-draft.js";
+import { rowTitle } from "./chat-list-row.js";
 
 interface Props {
+  /**
+   * **The conversations this panel may open.** `threadId` is resolved among
+   * these and nowhere else. In Learn it is the one conversation; in Chat
+   * it is the `chat`-kind ones, which since 2026-10-05 is fewer than the list
+   * draws (`listed` below).
+   */
   threads: ChatThread[];
+  /**
+   * **What Chat's list draws**: every conversation about the article but
+   * Referee's Candidates, since 2026-10-05 (report `spya-hyfqkq`; plan
+   * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+   * D5). Absent in Learn, which draws no list, and then the list is
+   * `threads`.
+   *
+   * **A second set, and never merged into `threads`** (the plan review's F3).
+   * A Recall conversation in `threads` would be opened here by a `?thread=`
+   * carried over from Learn, under a composer that sends the blocks on
+   * screen, which the server refuses on any kind but `chat`.
+   */
+  listed?: ChatThread[] | undefined;
+  /** Which source the list is narrowed to (`?chatfrom=`); null or absent is All. */
+  from?: ChatFrom | null | undefined;
+  onFrom?: ((next: ChatFrom | null) => void) | undefined;
+  /**
+   * A press on a Learn row: go to that part of Learn, with its
+   * conversation named. The band does it in one navigation. Without it a
+   * Learn row is drawn and cannot be pressed.
+   */
+  onOpenLearn?: ((view: LearnConversationView, id: string) => void) | undefined;
   /**
    * The live conversation, owned above this component.
    *
@@ -179,7 +234,7 @@ interface Props {
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
   /**
-   * **May Remember offer Start over now?** Only when its one conversation is
+   * **May Learn offer Start over now?** Only when its one conversation is
    * stored, named by the server and has nothing of this tab's in flight — see
    * `settled` in useChat.ts. Chat's delete ignores it.
    */
@@ -190,6 +245,13 @@ interface Props {
   onEdit(messageId: string, question: string): void;
   /** Stop an answer that is still arriving. What has appeared is kept. */
   onStop(messageId: string): void;
+  /**
+   * **The reader opened a Recall answer's hint for the first time.** The band
+   * records it (`openHint` in useChat.ts) so the hint is still open after a
+   * reload. Optional: the hint opens on screen whether or not this is given,
+   * and only Recall has hints.
+   */
+  onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   /** Jump to a block, exactly as a gist cell does. */
   onJump(id: BlockId): void;
   /**
@@ -218,7 +280,7 @@ interface Props {
   /** A transport failure. Model failures live on the message that failed. */
   error: string | null;
   /**
-   * Which mode this panel is being shown in — chat, or Remember.
+   * Which mode this panel is being shown in — chat, or Learn.
    *
    * **One panel with a kind, not two panels.** Everything under here is the
    * same in both: the transcript, the scroll-follow, the citation chips, the
@@ -228,31 +290,23 @@ interface Props {
    * order to vary the second — which is the duplication GPT Sol's review of
    * docs/plans/260827ah-review-mode.md (finding 9) said not to build.
    *
-   * The list of conversations is **shared**: Greg's call, 2026-08-27. Both
-   * modes show every thread for this article, and a Remember thread carries a tag.
+   * Only chat draws a list of conversations. It shows every one about the
+   * article, Learn's included (`listed` above); Learn shows its own
+   * one and no list.
    */
   kind: ThreadKind;
   /**
-   * **The Recall | Tutorial | Quiz control**, when this panel is one of
-   * Remember's conversation views. Absent in chat mode.
+   * **The Recall | Tutorial | Explore | Quiz control**, when this panel is one of
+   * Learn's conversation views. Absent in chat mode.
    *
    * A slot rather than a `subMode` value with a callback, because the control
-   * belongs to `RememberBand` (src/web/App.tsx): the navigation rules behind it —
+   * belongs to `LearnBand` (src/web/App.tsx): the navigation rules behind it —
    * clearing `?thread=` in one step, Quiz winning a pasted collision — are
    * about two parameters this panel knows nothing about. Handing down a rendered
    * node keeps that knowledge where it is, and keeps `ChatPanel` unaware there
    * is a second sub-mode at all.
    */
   subMode?: React.ReactNode;
-  /**
-   * **An unsent question for one conversation**, handed over from another mode
-   * — today, the glossary's *Ask in chat*. Used as that keyed composer's initial
-   * draft, so it is exactly what the reader would have had if they had typed it:
-   * in the box, editable, cleared by Escape, and enough to stop `leave`
-   * discarding the conversation. Sent only by Send.
-   * `ChatHandoff` in src/web/modes/conversation/ConversationModes.tsx.
-   */
-  seed?: { threadId: string; text: string } | null | undefined;
 }
 
 /**
@@ -333,6 +387,10 @@ export function ChatPanel({
   loaded,
   loadFailed,
   threads,
+  listed,
+  from,
+  onFrom,
+  onOpenLearn,
   threadId,
   onThread,
   onSend,
@@ -345,6 +403,7 @@ export function ChatPanel({
   onRetry,
   onEdit,
   onStop,
+  onHintOpened,
   onJump,
   recovering,
   blocks,
@@ -354,15 +413,18 @@ export function ChatPanel({
   subMode,
   live,
   onStartLive,
-  seed,
 }: Props) {
   useRenderCount("ChatPanel");
-  /* **Remember's layout, for both of its conversations** — Recall and
-     Tutorial are each one thread per article, dictated into a tall box, with
-     no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
+  /* **Learn's layout, for all three of its conversations** — Recall,
+     Tutorial and Explore are each one thread per article, dictated into a tall
+     box, with no list (`SINGLE_THREAD_KINDS`, src/types.ts). What differs between them
      is words, decided per kind below. */
-  const remember = isSingleThreadKind(kind);
+  const learn = isSingleThreadKind(kind);
+  /* Among `threads`, never among `listed`: what the list draws and what may
+     be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
+  /** What the list draws. */
+  const rows = listed ?? threads;
   // A stopped session retains recovery text. It must never appear in a different thread.
   const shownLive: LiveApi | undefined = live && (live.threadId === open?.id || !live.threadId)
     ? live
@@ -372,44 +434,57 @@ export function ChatPanel({
       measuringInput: false, quietInput: false, stall: null } : undefined;
 
   /**
-   * What the reader has typed and not sent yet, per conversation.
+   * What the reader has typed and not sent yet: per conversation in chat, per
+   * kind in Learn, and one more for the box under chat's list.
    *
-   * Here rather than in the composer because two different things need it, and
-   * neither is the composer. Switching conversation used to carry the half-typed
-   * question across into the next one, because the composer kept it in its own
-   * state and nothing remounted it; and closing an empty conversation has to
-   * know whether there was anything in the box before it throws the
-   * conversation away.
+   * Above the composer because two different things need it, and neither is
+   * the composer. Switching conversation used to carry the half-typed question
+   * across into the next one, because the composer kept it in its own state
+   * and nothing remounted it; and closing an empty conversation has to know
+   * whether there was anything in the box before it throws the conversation
+   * away.
    *
-   * A ref rather than state: nothing above the composer renders from it, and
-   * putting it in state would repaint the whole transcript on every keystroke.
-   * The composer is keyed by thread id, so it reads this once on mount and owns
-   * the value from then on.
+   * **And not in this panel either, since 2026-10-04.** It was a ref here, and
+   * a ref goes when the reader switches mode, so a question typed and not sent
+   * was gone on the way back with nothing said. It is the article's store now
+   * (src/web/chat-draft.ts), which lives as long as the page —
+   * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
+   * Still not state: nothing above the composer renders from it, and state
+   * would repaint the whole transcript on every keystroke. The composer is
+   * keyed by thread id, so it reads this once on mount and owns the value from
+   * then on.
    *
-   * Two limits worth knowing rather than discovering. It lives as long as this
-   * panel does, so a draft does not survive switching to another mode and back
-   * — chat mode is unmounted, and the empty conversation it belonged to goes
-   * with it. And it is keyed by thread id, so on the rare occasion the server
-   * overrules an optimistic thread id (`begin` in useChat.ts — a collision, or
-   * an id somebody typed into the URL) the composer remounts under the new id
-   * and the draft, the scroll position and the caret are lost with it.
+   * Two limits worth knowing rather than discovering. It is memory and nothing
+   * else, so a reload or a closed tab takes it. And chat's is keyed by thread
+   * id, so on the rare occasion the server overrules an optimistic thread id
+   * (`begin` in useChat.ts — a collision, or an id somebody typed into the
+   * URL) the composer remounts under the new id and the draft, the scroll
+   * position and the caret are lost with it.
    */
-  const drafts = useRef(new Map<string, string>());
+  const drafts = chatDraftsFor(slug);
 
   /**
    * The draft a keyed composer should adopt on mount.
    *
-   * A lookup during render rather than a write: React may abandon a render, so
-   * mutating `drafts` here would let an uncommitted tree change the committed
-   * panel. The composer owns the returned value from mount onwards and writes
-   * every reader edit into `drafts`, including Escape's empty string — which is
-   * why this asks `has` rather than for a truthy value: a question the reader
-   * cleared must not come back as the seed.
+   * A lookup during render and never a write: React may abandon a render, so
+   * mutating the store here would let an uncommitted tree change what the
+   * committed panel reads. The composer owns the returned value from mount
+   * onwards and writes every reader edit back, including Escape's empty string
+   * — so a question handed over from another mode, which the band writes into
+   * the store once (`ChatHandoff` in ConversationModes.tsx), does not come
+   * back after the reader has cleared it.
+   *
+   * **Learn's is by kind, not by id.** Recall, Tutorial and Explore are each
+   * one conversation per article and the band decides which conversation that
+   * is — it can be a different one on the way back, when a stored one has
+   * arrived or Start over has begun another — so the words go to whichever it
+   * picked. GPT Sol's review of the plan above, F4.
    */
-  const draftFor = (id: string): string => {
-    if (drafts.current.has(id)) return drafts.current.get(id) ?? "";
-    if (seed?.threadId !== id) return "";
-    return seed.text;
+  const draftFor = (id: string): string =>
+    isSingleThreadKind(kind) ? drafts.learn(kind) : (drafts.thread(id) ?? "");
+  const setDraftFor = (id: string, text: string): void => {
+    if (isSingleThreadKind(kind)) drafts.setLearn(kind, text);
+    else drafts.setThread(id, text);
   };
 
   /**
@@ -433,15 +508,14 @@ export function ChatPanel({
   /**
    * The same two things again, for the box under the thread list.
    *
-   * Separate from `drafts` and `focused` above rather than sharing them, and
-   * each for its own reason. The draft belongs to no conversation — that is the
-   * whole point of the box — so there is no id to key it by; a question typed
-   * there and abandoned for a row in the list is still there when you come
-   * back. And the nonce counter has to be a *different* counter, because
+   * Its draft is the store's `list`, apart from the per-conversation ones: it
+   * belongs to no conversation — that is the whole point of the box — so there
+   * is no id to key it by; a question typed there and abandoned for a row in
+   * the list, or for another mode, is still there when you come back. And the
+   * nonce counter has to be a *different* counter from `focused`, because
    * spending the panel's one here would leave the real composer unfocused the
    * next time a new conversation was started.
    */
-  const listDraft = useRef("");
   const listFocused = useRef(0);
 
   /**
@@ -454,9 +528,12 @@ export function ChatPanel({
    * enough to keep it, because the draft lives under the conversation's id and
    * throwing the conversation away would take the reader's unsent words off the
    * screen with it — which is the one outcome worse than a stray "New chat" in
-   * the list. Only off the screen, and only for as long as chat mode stays
-   * open: an unsent draft is not stored anywhere, so it does not survive
-   * switching modes or reloading. See `drafts` above.
+   * the list. The words outlive a mode change but not a reload, and a kept
+   * conversation outlives a mode change only if it is the one the reader was
+   * in when they left: one closed here with words in it, and then left for
+   * another conversation or for the list, goes with the band and takes its
+   * words with it. See `drafts` above, and § Deliberately not built in
+   * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
    */
   const leave = async () => {
     // A new spoken thread has no chat rows until its first exchange is flushed.
@@ -465,7 +542,7 @@ export function ChatPanel({
     }
     const unsavedSpeech = live?.threadId === open?.id && (live?.lines.length ?? 0) > 0;
     if (open && !unsavedSpeech && open.messages.length === 0 && draftFor(open.id).trim() === "") {
-      drafts.current.delete(open.id);
+      drafts.dropThread(open.id);
       onDiscard(open.id);
     }
     onThread(null);
@@ -476,25 +553,39 @@ export function ChatPanel({
        shared with the glossary. `chat` is a hook for anything only this panel
        wants; see § mode band in styles.css. */
     <ModeSurface
-      feature={`chat${remember ? " remember" : ""}`}
-      /* Remember's Recall half is this same panel, so its (i) says Remember's words. */
-      mode={remember ? "remember" : "chat"}
+      feature={`chat${learn ? " learn" : ""}`}
+      /* Learn's Recall half is this same panel, so its (i) says Learn's words. */
+      mode={learn ? "learn" : "chat"}
+      /* …and then its visible parts, a line each (spya-usyhwy). */
+      about={
+        learn ? (
+          <LearnSubModesAbout
+            current={kind === "tutorial" ? "tutorial" : kind === "explore" ? "explore" : "recall"}
+          />
+        ) : undefined
+      }
       label={
         kind === "tutorial"
           ? "A tutorial on this article"
-          : remember
-            ? "Remember what you took from this article"
+          : kind === "explore"
+            ? "Explore what you think about this article"
+            : learn
+            ? "Recall what you took from this article"
             : "Chat about this article"
       }
       head={
         <>
-          {/* **Remember's header says Remember**, never the thread's title: there
-              is one Remember conversation per article, so the title names
+          {/* **The header says the mode's name** (Learn; Remember until 2026-10-05), never the thread's title: there
+              is one Learn conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
               sixty characters, often "Um, so…". Plan 261001m § 4. */}
-          <h2>
-            {remember ? (
-              "Remember"
+          {/* **Read out, not drawn, beside the sub-mode chips.** Four chips left
+              the word one letter wide in a narrow band (the browser pass on
+              261003l), and the Dock already says which mode this is — the
+              reason Quiz's own row dropped its name on 2026-09-05. */}
+          <h2 className={learn && subMode ? "sr-only" : undefined}>
+            {learn ? (
+              MODE_LABEL.learn
             ) : open ? (
               /* The title is the reader's first question, or their rename. */
               <span className="chat-head-title">{open.title}</span>
@@ -503,9 +594,9 @@ export function ChatPanel({
             )}
           </h2>
           {subMode}
-          {remember ? (
+          {learn ? (
             /* **Start over, and nothing else.** No close, because there is no
-               list to go back to; no new, because there is one Remember
+               list to go back to; no new, because there is one Learn
                conversation; no rename, which only the list offered. The same
                two-press delete chat has, relabelled for what it does here —
                the band first finishes Live, then begins the fresh conversation
@@ -568,29 +659,32 @@ export function ChatPanel({
           recovering={recovering}
           blocks={blocks}
           onSend={onSend}
+          onSubmitStarted={open.kind === "chat" ? () => drafts.submitted(open.id) : undefined}
           onRetry={onRetry}
           onEdit={onEdit}
           onStop={onStop}
+          onHintOpened={onHintOpened}
           focusNonce={focusNonce}
           focused={focused}
           draft={draftFor(open.id)}
-          onDraft={(text) => drafts.current.set(open.id, text)}
-          /* The OPEN conversation's kind, not the mode's. Each mode now lists only
-             its own kind (plan 261001m), so the two agree on every path the band
-             takes; reading the thread is still the honest source. */
+          onDraft={(text) => setDraftFor(open.id, text)}
+          /* The OPEN conversation's kind, not the mode's. Each mode opens only
+             its own kind (plan 261001m; Chat lists the others since 2026-10-05
+             and still does not open them), so the two agree on every path the
+             band takes; reading the thread is still the honest source. */
           kind={open.kind}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
         />
-      ) : remember ? (
-        /* **Remember never draws a list, not even for a frame.** The band
+      ) : learn ? (
+        /* **Learn never draws a list, not even for a frame.** The band
            derives its one conversation during render (ConversationBand), so
            this is reached only before the first fetch lands, in the beat before
            an empty band begins its conversation, and while Start over's DELETE
            is out — and in none of them is there anywhere for a question to go.
            Plan 261001m, F1 and F6. */
-        <ChatListLoading what="your Remember conversation" />
-      ) : threads.length === 0 && !loaded ? (
+        <ChatListLoading what={`your ${MODE_LABEL.learn} conversation`} />
+      ) : rows.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
            the panel used to say "Nothing asked yet." to a reader who knew
@@ -611,7 +705,7 @@ export function ChatPanel({
            useSlow.ts, and docs/project/web-client.md § Empty is not the same as
            not asked yet. */
         <ChatListLoading />
-      ) : threads.length === 0 && loadFailed ? (
+      ) : rows.length === 0 && loadFailed ? (
         /* And the state one beat later. `loaded` means "we have asked", so a
            request that gave up used to drop out of the spinner and into
            "Nothing asked yet." — the identical false claim, arrived at from the
@@ -631,8 +725,11 @@ export function ChatPanel({
       ) : (
         <>
           <ThreadList
-            threads={threads}
+            threads={rows}
+            from={from ?? null}
+            onFrom={onFrom}
             onOpen={onThread}
+            onOpenLearn={onOpenLearn}
             onNew={onNew}
             onRename={onRename}
             onDelete={onDelete}
@@ -676,18 +773,16 @@ export function ChatPanel({
               busy={false}
               focusNonce={0}
               focused={listFocused}
-              draft={listDraft.current}
-              onDraft={(text) => {
-                listDraft.current = text;
-              }}
+              draft={drafts.list()}
+              onDraft={(text) => drafts.setList(text)}
               placeholder="Ask something new…"
               kind={kind}
               live={kind === "chat" ? shownLive : undefined}
               onStartLive={kind === "chat" && onStartLive ? () => {
                 const id = onStartLive(null);
                 if (id) {
-                  drafts.current.set(id, listDraft.current);
-                  listDraft.current = "";
+                  drafts.setThread(id, drafts.list());
+                  drafts.setList("");
                 }
               } : undefined}
             />
@@ -722,7 +817,7 @@ function ArmedDelete({
   armedTitle = "Press again to delete this conversation",
 }: {
   onDelete(): void;
-  /** What the button says at rest, and once armed. Remember calls it Start over. */
+  /** What the button says at rest, and once armed. Learn calls it Start over. */
   title?: string;
   armedTitle?: string;
 }) {
@@ -745,24 +840,24 @@ function ArmedDelete({
   );
 }
 
-/** Where Remember's composer turns compact — see `short` in `Composer`. */
+/** Where Learn's composer turns compact — see `short` in `Composer`. */
 const SHORT_VIEWPORT = "(max-height: 500px)";
 
 /**
  * **The composer's floor and roof**: the rows it rests at, and the height in
  * px it may grow to with what is typed or dictated.
  *
- * Chat is one row growing to 160px — a question is a sentence. Remember is six
- * rows growing to 360px: a spoken Remember turn is a paragraph or three, and a
+ * Chat is one row growing to 160px — a question is a sentence. Learn is six
+ * rows growing to 360px: a spoken Learn turn is a paragraph or three, and a
  * box that stops at 160px turns the reader's own words into a four-line
  * scrolling window they cannot read back before sending. On a short viewport
- * Remember rests at two rows and grows to 30% of the viewport, so the
+ * Learn rests at two rows and grows to 30% of the viewport, so the
  * transcript stays in view. 45% was the first figure, and at 844×390 a
  * six-line answer left one clipped line of transcript above the box (browser
  * check, 2026-10-01). Plan 261001m § 5.
  */
-function boxSize(remember: boolean, short: boolean): { rows: number; roof: () => number } {
-  if (!remember) return { rows: 1, roof: () => 160 };
+function boxSize(learn: boolean, short: boolean): { rows: number; roof: () => number } {
+  if (!learn) return { rows: 1, roof: () => 160 };
   if (!short) return { rows: 6, roof: () => 360 };
   return { rows: 2, roof: () => Math.round(window.innerHeight * 0.3) };
 }
@@ -783,25 +878,24 @@ const DISARM_MS = 4000;
  * the panel does not change height when the spinner appears.
  */
 function ChatListLoading({ what = "your conversations" }: { what?: string }) {
-  const slow = useSlow(true);
-  /* `role="status"`, because the words arrive 600ms after the panel does and a
-     line that simply appears is silent to a screen reader. Polite by
-     definition, so the reader is told when they next pause rather than
-     interrupted. GPT Sol, 2026-08-27. */
+  /* The shared wait line, which began as this component: BandWaiting.tsx. */
   return (
-    <div className="chat-loading" role="status">
-      {slow && (
-        <>
-          <LoaderCircle className="cmt-spinner" size={13} />
-          <span>Fetching {what}…</span>
-        </>
-      )}
-    </div>
+    <BandWaiting as="div" className="chat-loading">
+      Fetching {what}…
+    </BandWaiting>
   );
 }
 
 /**
  * Every conversation about this article, most recently used first.
+ *
+ * **Every one, since 2026-10-05**: Recall's, Tutorial's and Explore's as well
+ * as the chats, each with an icon at its head for where it came from, and a
+ * filter above them when they came from more than one place. It showed only
+ * chats from 2026-10-01 (plan 261001m) until report `spya-hyfqkq` asked for
+ * all of them; plan
+ * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+ * D5. Referee's Candidates thread is never here.
  *
  * By `updatedAt`, not `createdAt`: coming back to an article you were arguing
  * with yesterday, the thread you want is the one you were last in, and it may
@@ -823,13 +917,19 @@ function ChatListLoading({ what = "your conversations" }: { what?: string }) {
  */
 function ThreadList({
   threads,
+  from,
+  onFrom,
   onOpen,
+  onOpenLearn,
   onNew,
   onRename,
   onDelete,
 }: {
   threads: ChatThread[];
+  from: ChatFrom | null;
+  onFrom?: ((next: ChatFrom | null) => void) | undefined;
   onOpen(id: string): void;
+  onOpenLearn?: ((view: LearnConversationView, id: string) => void) | undefined;
   onNew(): void;
   onRename(id: string, title: string): void;
   onDelete(id: string): void;
@@ -838,9 +938,8 @@ function ThreadList({
   /* Read once here and passed to every row, so two rows a minute apart in the
      same paint cannot disagree about what "now" is. useNow.ts § why. */
   const now = useNow();
-  const sorted = [...threads].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  if (sorted.length === 0) {
+  if (threads.length === 0) {
     return (
       <div className="chat-empty">
         <p>Nothing asked yet.</p>
@@ -854,83 +953,189 @@ function ThreadList({
     );
   }
 
+  /* **The filter**, drawn only when there is something to choose between. A
+     choice this list has no conversation from reads as All, so a stale
+     `?chatfrom=` can never leave an empty list with no control on screen to
+     explain it; the band replaces the parameter too (`ConversationBand`). */
+  const sources = sourcesIn(threads);
+  const chosen = from !== null && sources.includes(from) ? from : null;
+  const sorted = narrowed(threads, chosen).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  /* One slot at the head of every row when any row has an icon, so the titles
+     of the rows without one still start on the same line down the list. */
+  const anySource = threads.some((t) => threadSource(t) !== null);
+
   return (
-    <ol className="chat-threads">
-      {sorted.map((t) => {
-        const last = lastSaid(t);
-        return (
-          <li key={t.id}>
-            {renaming === t.id ? (
-              <RenameRow
-                initial={t.title}
-                onDone={(title) => {
-                  if (title.trim() !== "") onRename(t.id, title.trim());
-                  setRenaming(null);
-                }}
-                onCancel={() => setRenaming(null)}
-              />
-            ) : (
-              <div className="chat-thread">
-                <button
-                  type="button"
-                  className="chat-thread-open"
-                  /* The title in full and the timestamps exactly — not the
-                     preview line, which is a hint rather than something to read
-                     here, and which the row has already cut. A `title` attribute
-                     rather than the Tooltip component, because this one is plain
-                     text over several lines and wants the browser's own delay:
-                     a tooltip that appears the instant the pointer crosses a
-                     list is a list you cannot read. */
-                  title={describe(t)}
-                  onClick={() => onOpen(t.id)}
-                >
-                  <span className="chat-thread-title">{t.title}</span>
-                  {/* Usually the model's reply, but the reader's question when
-                      that was the last thing said — so the row says whose. */}
-                  {last && (
-                    <span
-                      className={
-                        last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"
-                      }
-                    >
-                      {last.text}
+    <>
+      {sources.length > 1 && onFrom && (
+        /* No `role="group"`, as Learn's chips have none (QuizPanel.tsx §
+           `LearnSubModeToggle`): each button says what it is and whether
+           it is pressed. Words, so no card. */
+        <div className="chat-from">
+          {([null, ...sources] as const).map((word) => (
+            <button
+              key={word ?? "all"}
+              type="button"
+              className={`chat-from-btn${chosen === word ? " on" : ""}`}
+              aria-pressed={chosen === word}
+              onClick={() => onFrom(word)}
+            >
+              {word === null ? "All" : CHAT_FROM_LABEL[word]}
+            </button>
+          ))}
+        </div>
+      )}
+      <ol className="chat-threads">
+        {sorted.map((t) => {
+          const last = lastSaid(t);
+          const source = threadSource(t);
+          /* **A Learn row is a way back to Learn, not a conversation of
+             this band's.** It is named for its part of Learn (its stored
+             title is the first sixty characters said, often "Um, so…"), a
+             press goes there, and it has no rename and no delete: Learn
+             has one conversation per part and its delete is *Start over*,
+             which lives there. Plan 261005i, D5. */
+          const view = source?.learn;
+          return (
+            <li key={t.id}>
+              {renaming === t.id ? (
+                <RenameRow
+                  initial={t.title}
+                  onDone={(title) => {
+                    if (title.trim() !== "") onRename(t.id, title.trim());
+                    setRenaming(null);
+                  }}
+                  onCancel={() => setRenaming(null)}
+                />
+              ) : (
+                <div className="chat-thread" data-thread={t.id}>
+                  {anySource && (
+                    <span className="chat-thread-lead">
+                      {source && <ThreadSourceMark source={source} />}
                     </span>
                   )}
-                  <span className="chat-thread-meta">
-                    {/* No kind tag: until 2026-10-01 the list was shared with
-                        Remember and tagged its rows; now only chat lists, and
-                        only its own kind (plan 261001m). */}
-                    <span className="chat-thread-count">{turns(t)}</span>
-                    {/* Recency, because the question a list of conversations
-                        answers is "which was I in?". The exact time is in the
-                        tooltip above. */}
-                    <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
-                  </span>
-                </button>
-                <div className="chat-thread-actions">
                   <button
                     type="button"
-                    className="chat-icon"
-                    title="Rename this conversation"
-                    onClick={() => setRenaming(t.id)}
+                    className="chat-thread-open"
+                    /* The title in full and the timestamps exactly — not the
+                       preview line, which is a hint rather than something to read
+                       here, and which the row has already cut. A `title` attribute
+                       rather than the Tooltip component, because this one is plain
+                       text over several lines and wants the browser's own delay:
+                       a tooltip that appears the instant the pointer crosses a
+                       list is a list you cannot read. A Learn row says first
+                       where the press goes, since it leaves Chat. */
+                    title={
+                      view
+                        ? `Open in ${MODE_LABEL.learn} › ${LEARN_SUB_MODES[view].label}\n${describe(t)}`
+                        : describe(t)
+                    }
+                    onClick={() => (view ? onOpenLearn?.(view, t.id) : onOpen(t.id))}
                   >
-                    <Pencil size={12} />
+                    {/* The first question in full where the stored title is only its
+                        first sixty characters — chat-list-row.ts. */}
+                    <span className="chat-thread-title">
+                      {view ? LEARN_SUB_MODES[view].label : rowTitle(t)}
+                    </span>
+                    {/* Usually the model's reply, but the reader's question when
+                        that was the last thing said — so the row says whose. */}
+                    {last && (
+                      <span
+                        className={
+                          last.role === "assistant" ? "chat-thread-last model" : "chat-thread-last you"
+                        }
+                      >
+                        {last.text}
+                      </span>
+                    )}
+                    <span className="chat-thread-meta">
+                      {/* No kind tag in words: where a row came from is the icon
+                          at its head (`ThreadSourceMark`). The list showed only
+                          chats from 2026-10-01 (plan 261001m) until 2026-10-05,
+                          when report spya-hyfqkq asked for every conversation
+                          here, marked (plan 261005i, D5). */}
+                      <span className="chat-thread-count">{turns(t)}</span>
+                      {/* Recency, because the question a list of conversations
+                          answers is "which was I in?". The exact time is in the
+                          tooltip above. */}
+                      <span className="chat-thread-when">{timeAgo(t.updatedAt, now) ?? "at some point"}</span>
+                    </span>
                   </button>
-                  <button
-                    type="button"
-                    className="chat-icon danger"
-                    title="Delete this conversation"
-                    onClick={() => onDelete(t.id)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                  {!view && (
+                    <div className="chat-thread-actions">
+                      <button
+                        type="button"
+                        className="chat-icon"
+                        title="Rename this conversation"
+                        onClick={() => setRenaming(t.id)}
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        className="chat-icon danger"
+                        title="Delete this conversation"
+                        onClick={() => onDelete(t.id)}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </li>
-        );
-      })}
-    </ol>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </>
+  );
+}
+
+/**
+ * **Where a row's conversation came from**: the source mode's own icon from
+ * the bar (mode-icons.ts; docs/project/icons.md), with a card saying so and,
+ * where the source has words, quoting them (`threadSource`,
+ * src/web/thread-source.ts). Not drawn for a plain chat. Plan 261005i, D5.
+ *
+ * **It leads the row**, in a slot every row has when any row has an icon
+ * (`chat-thread-lead`), so titles line up. Stage one drew it after the title,
+ * when one row in many had one.
+ *
+ * A button, and the card is controlled (`usePressToggle`, as every band's (i)
+ * is), so a finger's tap opens it and the keyboard can reach it; hover and
+ * focus open it too. A sibling of the row's own button and not inside it, so
+ * pressing the icon never opens the row, and the card and the row's `title`
+ * are never both on screen. The quote takes the face of whoever wrote it:
+ * the author's for the article's words, the reader's for an angle they typed
+ * (`ThreadSource.voice`).
+ */
+function ThreadSourceMark({ source }: { source: ThreadSource }) {
+  const { open, onOpenChange, trigger } = usePressToggle();
+  /* A passage is not a mode and has no icon on the bar. */
+  const Icon: LucideIcon = source.mode === null ? Pilcrow : MODE_ICON[source.mode];
+  return (
+    <Tooltip
+      placement="top"
+      open={open}
+      onOpenChange={onOpenChange}
+      content={
+        <TipNote>
+          {source.label}
+          {source.quote !== undefined && (
+            <span className={withVoice("chat-thread-source-quote", source.voice ?? "author")}>“{source.quote}”</span>
+          )}
+        </TipNote>
+      }
+    >
+      <button
+        type="button"
+        className="chat-thread-source"
+        aria-label={source.label}
+        aria-expanded={open}
+        {...trigger}
+      >
+        <Icon size={12} aria-hidden="true" />
+      </button>
+    </Tooltip>
   );
 }
 
@@ -978,7 +1183,7 @@ function lastSaid(t: ChatThread): { text: string; role: ChatMessage["role"] } | 
  * keeps the answer they occasionally need instead.
  */
 function describe(t: ChatThread): string {
-  const lines = [t.title, "", `Started ${exactly(t.createdAt) ?? "at some point"}`];
+  const lines = [rowTitle(t), "", `Started ${exactly(t.createdAt) ?? "at some point"}`];
   /* Only worth a line of its own once the two differ. A conversation with one
      question in it would otherwise print the same timestamp twice. */
   if (t.updatedAt !== t.createdAt) lines.push(`Last message ${exactly(t.updatedAt) ?? "unknown"}`);
@@ -1012,6 +1217,10 @@ function RenameRow({
           // capture-phase listener otherwise (Dock.tsx), and Enter would
           // reach nothing but is worth being explicit about.
           e.stopPropagation();
+          // After the stop, so a composing key is still contained: Enter that
+          // accepts an input method's candidate is not a save, and its Escape
+          // is not a cancel (key-chord.ts § isImeComposing).
+          if (isImeComposing(e)) return;
           if (e.key === "Enter") onDone(value);
           if (e.key === "Escape") onCancel();
         }}
@@ -1033,25 +1242,33 @@ export function Conversation({
   recovering,
   blocks,
   onSend,
+  onSubmitStarted,
   onRetry,
   onEdit,
   onStop,
+  onHintOpened,
   focusNonce,
   focused,
   draft,
   onDraft,
   kind,
+  visible = true,
+  sized = "fixed",
   live,
   onStartLive,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
   thread: ChatThread;
+  /** See `onHintOpened` in Props. Absent where nothing records the press. */
+  onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   onJump(id: BlockId): void;
   /** See `recovering` in Props. */
   recovering: Set<string>;
   blocks: Map<string, string>;
   onSend(question: string): void;
+  /** See Composer: submission begins before the awaited Live hang-up. */
+  onSubmitStarted?: (() => void) | undefined;
   onRetry(messageId: string): void;
   onEdit(messageId: string, question: string): void;
   onStop(messageId: string): void;
@@ -1068,6 +1285,16 @@ export function Conversation({
    * is rather than silently getting a chat.
    */
   kind: ThreadKind;
+  /** A collapsed dialog keeps its conversation mounted, but hidden geometry
+   * must not change whether the reader is following the latest answer. */
+  visible?: boolean | undefined;
+  /**
+   * Whether the transcript's height is the panel's (`fixed`: the band, the
+   * floating and docked dialog) or its own content's up to a cap (`content`:
+   * the card in the Marginalia column). It decides whether a held answer may
+   * be given room — § A streamed answer stays where it starts, below.
+   */
+  sized?: "fixed" | "content" | undefined;
   /** The live session bound to this conversation, if the panel offers one. */
   live?: LiveApi | undefined;
   onStartLive?: (() => void) | undefined;
@@ -1088,10 +1315,12 @@ export function Conversation({
   const [away, setAway] = useState(false);
 
   /**
-   * Follow the answer down as it arrives — but only if the reader is already at
-   * the bottom.
+   * Follow new content down — but only if the reader is already at the bottom,
+   * and **never a typed answer as it streams**: that is the hold, below. What
+   * is left to follow is a Live conversation's spoken lines and their saved
+   * turns.
    *
-   * Scrolling up to re-read an earlier turn while the next one streams in is an
+   * Scrolling up to re-read an earlier turn while the next one arrives is an
    * ordinary thing to do, and yanking the view back to the bottom every few
    * words would make it impossible. The 60px slack is for the fact that "at the
    * bottom" is never exact once a line is half-rendered.
@@ -1131,10 +1360,193 @@ export function Conversation({
   const liveLines = live?.lines ?? [];
   const liveChars = liveSize(liveLines);
   const empty = thread.messages.length === 0 && liveLines.length === 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads a ref, and these are what say "new text has been painted, scroll if we were following"
-  useEffect(() => {
+  const toolsNow = (last?.tools ?? []).map((run) => run.status).join() + (last?.searches ?? "");
+  /**
+   * ## A streamed answer stays where it starts
+   *
+   * Greg, 2026-10-05: *"it immediately starts scrolling down so I can't read
+   * from the beginning of the response. What I would prefer is if it streams
+   * in, but stays in position."* So when an answer starts, the question is put
+   * at the top of the panel **once**, and from then on nothing the stream does
+   * moves the transcript. The reader starts at the first sentence, and it is
+   * still there when they finish it. "Latest" appears when the answer outgrows
+   * the panel, and one press of it jumps; it does not start following.
+   *
+   * - **Room.** A scroller cannot put its last item at the top unless a
+   *   panel's height of content follows it, so `.chat-room` after the last
+   *   turn is exactly that tall and shrinks as the answer grows into it.
+   * - **The hold starts on a rising edge**: the last message *becoming*
+   *   pending, or a different number of turns under a pending one. Not on the
+   *   message's id: Retry keeps the id, and the server's `begin` frame changes
+   *   it in the middle of an answer.
+   * - **Live ends it.** Spoken lines are heard rather than read from the top,
+   *   and they arrive after the saved turns without changing the last message,
+   *   so the first one retires the hold and its room in the same pass.
+   * - **A card gets room only at its cap** (`sized`). Below it the card's
+   *   height is its content's, and room would inflate it by most of a screen.
+   *   A transcript that overflows is a card at its cap, where room is free.
+   * - **Held on screen, not only left alone.** Not moving `scrollTop` is not
+   *   enough: a tool row drawn above text already being read pushes it down a
+   *   row, and a panel that grows taller (the "Latest" pill leaving, a
+   *   shrinking composer) makes the browser clamp `scrollTop`. So the hold
+   *   remembers where its anchor is **on screen** — the answer's words once
+   *   there are any, the question until then — and puts it back. A reader's
+   *   own scroll is told apart by its scroll event, which re-records.
+   *
+   * The arithmetic is chat-hold.ts; the plan, the measurement and GPT Sol's
+   * review are docs/plans/261005f-a-streamed-answer-stays-where-it-starts.md.
+   */
+  const room = useRef<HTMLDivElement>(null);
+  const hold = useRef<{
+    /** How many turns there were when it started. */
+    count: number;
+    /** False until the question has been put in place, and again after the
+     * panel was hidden, which loses a scroll position. */
+    placed: boolean;
+    /** The `scrollTop` it was placed at. */
+    target: number;
+    /** Whether the anchor is the answer's words, or still the question. */
+    words: boolean;
+    /** Where the anchor was on screen, from the scroller's top edge. */
+    seenAt: number;
+    /** The scroll position `settle` or the reader most recently chose. A later
+     * scroll event at this same position came from our own write, not them. */
+    top: number;
+    /** The largest reachable `scrollTop` when `top` was recorded. A clamp is
+     * only possible if this maximum has since fallen. */
+    max: number;
+  } | null>(null);
+  /**
+   * What a hold keeps still: the answer's first words once there are any, and
+   * until then the question (or the waiting answer, when nothing was asked).
+   */
+  const anchorIn = (el: HTMLElement) => {
+    const turns = el.querySelectorAll<HTMLElement>(":scope > [data-turn]");
+    const answer = turns[turns.length - 1];
+    if (!answer) return null;
+    const before = turns[turns.length - 2];
+    const question = before?.dataset.turn === "user" ? before : null;
+    /* Explicit rather than "the first element after the tool strip": an
+       unsupported CommonMark block is deliberately rendered as a bare text
+       node, in which case querySelector would find the cursor at the END of
+       the answer and hold that instead of its first line. */
+    const first = answer.querySelector<HTMLElement>(":scope > .chat-answer-anchor");
+    const words = first !== null;
+    return { answer, question, words, node: first ?? question ?? answer };
+  };
+  /** Record where a held answer's anchor is now: the view was moved on purpose. */
+  const noteAnchor = (el: HTMLElement) => {
+    const h = hold.current;
+    const at = h?.placed ? anchorIn(el) : null;
+    if (!h || !at) return;
+    h.words = at.words;
+    h.seenAt = at.node.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    h.top = el.scrollTop;
+    h.max = Math.max(0, el.scrollHeight - el.clientHeight);
+  };
+  const wasBusy = useRef(false);
+  const sizedNow = useRef(sized);
+  sizedNow.current = sized;
+  /**
+   * Size the room, place or compensate, and say whether there is more below.
+   * Every read is before the first write, so a streamed word costs the one
+   * layout it already did. Called by the effect and by the resize observer.
+   */
+  const settle = () => {
+    const el = scroller.current;
+    const gap = room.current;
+    const h = hold.current;
+    if (!el || !gap || !h) return;
+    const at = anchorIn(el);
+    if (!at) return;
+    const edge = el.getBoundingClientRect().top;
+    const was = el.scrollTop;
+    const onScreen = (n: Element) => n.getBoundingClientRect().top - edge;
+    const seen = onScreen(at.node);
+    const client = el.clientHeight;
+    const roomNow = gap.offsetHeight;
+    const natural = el.scrollHeight - roomNow;
+    const placing = !h.placed;
+    let top = was;
+    if (placing) {
+      h.target = holdTarget({
+        questionTop: at.question ? onScreen(at.question) + was : null,
+        answerTop: onScreen(at.answer) + was,
+        clientHeight: client,
+        pad: Number.parseFloat(getComputedStyle(el).paddingTop) || 0,
+      });
+      top = h.target;
+    } else if (h.words === at.words && h.seenAt < client) {
+      /* Put the anchor back where it was. Only when it was on screen or above
+         it: content arriving below what the reader is looking at is no reason
+         to move them. */
+      top = was + (seen - h.seenAt);
+    }
+    const roomy = sizedNow.current === "fixed" || natural > client + 1;
+    /* Room for the placement, and for wherever the view is now: shrinking it
+       must never clamp a reader who scrolled down into it. */
+    const roomFor = (to: number) =>
+      roomy ? roomNeeded({ target: to, clientHeight: client, naturalHeight: natural }) : 0;
+    let want = roomFor(Math.max(h.target, top));
+    /* Where it actually lands. A card below its cap has nowhere to scroll to,
+       and a target it never reached must not ask for room later. */
+    top = Math.max(0, Math.min(top, natural + want - client));
+    if (placing) {
+      h.target = top;
+      h.placed = true;
+      want = roomFor(top);
+    }
+    h.words = at.words;
+    h.seenAt = seen + was - top;
+    h.top = top;
+    h.max = Math.max(0, natural + want - client);
+    if (want !== roomNow) gap.style.height = `${want}px`;
+    if (was !== top) el.scrollTop = top;
+    /* Nobody scrolled, so no scroll event will say the answer has grown past
+       the fold. Guarded, because a same-value set is not free: see `awayNow`. */
+    const atBottom = natural + want - top - client < 60;
+    if (awayNow.current !== !atBottom) setAway(!atBottom);
+  };
+  const settleNow = useRef(settle);
+  settleNow.current = settle;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads refs, and these are what say "something has been painted"
+  useLayoutEffect(() => {
     const el = scroller.current;
     if (!el) return;
+    const count = thread.messages.length;
+    const speaking = liveLines.length > 0;
+    const h = hold.current;
+    if (speaking || (h && !busy && h.count !== count)) {
+      hold.current = null;
+      if (room.current) room.current.style.height = "0px";
+    } else if (busy && (!wasBusy.current || !h || h.count !== count)) {
+      hold.current = {
+        count,
+        placed: false,
+        target: 0,
+        words: false,
+        seenAt: 0,
+        top: el.scrollTop,
+        max: Math.max(0, el.scrollHeight - el.clientHeight),
+      };
+      /* A new typed attempt deliberately places the reader at the new latest
+         turn. Its growing away from the bottom must not erase that follow
+         intent: if Live speaks next, it still follows unless the reader has
+         actually scrolled in the meantime. */
+      stick.current = true;
+    }
+    wasBusy.current = busy;
+    if (!visible) {
+      /* A hidden panel has no scroll position to keep; place again when it
+         comes back. */
+      if (hold.current) hold.current.placed = false;
+      return;
+    }
+    if (hold.current) {
+      settle();
+      return;
+    }
     /* **An empty conversation reads from the top.** There is no latest turn to
        follow, and what is in the scroller is the opening hint and the
        suggestions, read top down. Following "the bottom" here scrolled a
@@ -1154,18 +1566,26 @@ export function Conversation({
       stick.current = true;
       if (awayNow.current) setAway(false);
     }
-    /* `last?.status` is in here for a reason that is easy to leave out and was.
-       The frame that ends an answer usually changes neither of the other two —
-       `done` carries the same text the deltas already built, and adds no row —
-       while adding the action row and, if the model searched, the whole list of
-       sources. So the one commit that reliably grows the transcript by more
-       than the 60px slack was the one commit this effect did not run on: the
-       reader was pinned to the bottom, the answer finished, and they were left
-       above the sources with no Latest button either, because `away` is only
-       ever cleared in here. That is the *same* bug the note above describes,
-       surviving its own fix in the dependency array. Found by a GPT-5.6 review,
-       2026-08-26. */
-  }, [chars, thread.messages.length, last?.status, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase]);
+    /* `last?.status` is in here for a reason that is easy to leave out and was:
+       the frame that ends an answer usually changes neither the text nor the
+       row count, while adding the action row and, if the model searched, the
+       whole list of sources. Found by a GPT-5.6 review, 2026-08-26. `toolsNow`
+       is the same kind of thing: a tool row starting or finishing changes the
+       turn's height and none of the others. */
+  }, [chars, thread.messages.length, last?.status, toolsNow, liveChars, liveLines.length, live?.hasUnsavedLines, live?.phase, visible, sized]);
+
+  /* **The panel changing size is not a streamed word**, and the room depends
+     on the panel's height: the "Latest" pill, a growing composer, a keyboard.
+     jsdom has no `ResizeObserver`. */
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !visible || typeof ResizeObserver === "undefined") return;
+    const seen = new ResizeObserver(() => {
+      if (hold.current?.placed) settleNow.current();
+    });
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [visible]);
 
   const toBottom = () => {
     const el = scroller.current;
@@ -1173,19 +1593,22 @@ export function Conversation({
     stick.current = true;
     setAway(false);
     el.scrollTop = el.scrollHeight;
+    /* Now, not when the scroll event arrives: a streamed word can land first,
+       and would put a held answer back where it was. */
+    noteAnchor(el);
   };
 
   return (
     <>
       <div
-        className="chat-scroll"
+        className={`chat-scroll${busy ? " streaming" : ""}`}
         ref={scroller}
-        /* The one place `stick` is decided — see the note above. Fired by the
-           reader's own scrolling and by the effect's `scrollTop = scrollHeight`
-           alike, and both mean the same thing here: this is where the view is
-           now. `away` is set beside it rather than derived later, so a button
-           and a ref cannot end up disagreeing about where the reader is. */
+        /* The one event that can say the reader changed `stick` — see the note
+           above. The browser fires it for our own scroll writes too, so a hold
+           records its last chosen position and those events are ignored for
+           follow intent. `away` still describes the geometry either way. */
         onScroll={(e) => {
+          if (!visible) return;
           const el = e.currentTarget;
           /* An empty conversation counts as following, wherever the reader
              has scrolled the suggestions to: there is no latest turn to be
@@ -1193,15 +1616,48 @@ export function Conversation({
              halfway down them must still be followed by its answer. */
           const atBottom =
             empty || el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-          stick.current = atBottom;
-          setAway(!atBottom);
+          const h = hold.current;
+          /* **A clamp is not the reader.** When the panel grows taller under a
+             hold (the "Latest" pill leaving as a question is sent, the composer
+             shrinking back to one row) the room is briefly too short and the
+             browser pulls `scrollTop` down to the new maximum. If anything
+             forced a layout first, this event arrives *before* the resize
+             observer, and recording it as the reader's choice left a follow-up
+             question 36px low (the second browser pass of plan 261005f). Its
+             signature is a maximum that has actually fallen since the hold
+             was recorded, with the view clamped to that new end. Comparing the
+             maxima matters: a high-DPI wheel can move a reader 0.6px from the
+             ordinary bottom, which is both more than the movement tolerance
+             and less than the end tolerance. A Latest press records both its
+             position and maximum synchronously before this event arrives. */
+          const max = Math.max(0, el.scrollHeight - el.clientHeight);
+          if (
+            h?.placed &&
+            max < h.max &&
+            el.scrollTop < h.top - 0.5 &&
+            max - el.scrollTop < 1
+          ) {
+            settle();
+            return;
+          }
+          /* `settle` writes scrollTop to place or compensate a hold, and the
+             browser reports that write through this same event. Only a
+             different position is evidence that the reader moved. */
+          if (!h || Math.abs(el.scrollTop - h.top) > 0.5) stick.current = atBottom;
+          if (awayNow.current !== !atBottom) setAway(!atBottom);
+          /* The reader moved, so this is where a held answer's anchor now is.
+             Our own writes and a browser's clamp fire this too, after `settle`
+             has already put things back, and record what it left. */
+          noteAnchor(el);
         }}
       >
         {empty &&
           (kind === "tutorial" ? (
             <TutorialInvitation />
-          ) : kind === "remember" ? (
-            <RememberInvitation />
+          ) : kind === "explore" ? (
+            <ExploreInvitation onAsk={(q) => onSend(q)} />
+          ) : kind === "learn" ? (
+            <LearnInvitation />
           ) : (
             <Suggestions onAsk={(q) => onSend(q)} />
           ))}
@@ -1209,6 +1665,8 @@ export function Conversation({
           <Turn
             key={m.id}
             message={m}
+            kind={kind}
+            onHintOpened={onHintOpened}
             onJump={onJump}
             recovering={recovering.has(m.id)}
             blocks={blocks}
@@ -1239,6 +1697,9 @@ export function Conversation({
         {/* The spoken words still on their way to being saved, as the end of
             this same conversation. ./live/LiveTail.tsx. */}
         {live && <LiveTail live={live} />}
+        {/* What lets a held question reach the top: § A streamed answer stays
+            where it starts. Sized by `settle`, and zero outside a hold. */}
+        <div className="chat-room" ref={room} aria-hidden="true" />
       </div>
       {/* The jump button sits *outside* the scroller so it does not scroll with
           it, and only exists while the reader is somewhere else — a permanent
@@ -1275,6 +1736,7 @@ export function Conversation({
       <Composer
         slug={slug}
         onSend={onSend}
+        onSubmitStarted={onSubmitStarted}
         busy={busy}
         onStop={busy && last ? () => onStop(last.id) : undefined}
         focusNonce={focusNonce}
@@ -1293,7 +1755,7 @@ export function Conversation({
 }
 
 /**
- * The opening state of a **Remember thread**, which is not a list of suggestions and
+ * The opening state of a **Learn thread**, which is not a list of suggestions and
  * must not become one.
  *
  * Chat's `Suggestions` are complete questions that send on click, and that
@@ -1306,7 +1768,7 @@ export function Conversation({
  * is a genuinely hard instruction to obey from a standing start, and naming
  * three ways in is the cheapest help that does not contaminate the answer.
  */
-function RememberInvitation() {
+function LearnInvitation() {
   return (
     <div className="chat-suggest">
       <p className="chat-empty-hint">
@@ -1353,6 +1815,66 @@ function TutorialInvitation() {
 }
 
 /**
+ * **The ways into Explore the empty state offers**, each sent as the reader's
+ * first message exactly as written — so what they pressed is what they see in
+ * the transcript, and what `EXPLORE_SYSTEM` (src/converse.ts) answers.
+ *
+ * One per thing Greg asked Explore to do (2026-10-03, quoted in
+ * docs/project/learn-mode.md § Explore): start from *"my comments, my
+ * highlights, my chat threads"*; *"apply to interesting cases of my own"*; and
+ * *"situate the article in terms of the wider world"*. Exported for
+ * tests/learn-panel.test.tsx.
+ */
+export const EXPLORE_STARTERS: readonly string[] = [
+  "Start from what I've marked and discussed",
+  "Help me apply this to my own work",
+  "Where does this sit in the wider world?",
+  /* The fourth, 2026-10-05. Greg (spya-mvmpks): Explore is *"also about
+     exploring potential problems and criticisms and concerns"*. A request,
+     like the other three: it puts no view of the piece in the reader's mouth.
+     evals/learn-explore.ts sends these same words as its critic's turn 1. */
+  "Where might this piece be wrong, or missing something?",
+];
+
+/**
+ * **Explore's empty state says what it is for and offers four ways in.**
+ *
+ * Buttons, where Recall's invitation above refuses them — and the difference
+ * is what the button would say. A Recall starter would be the reader's account
+ * of the piece, written by us. These are requests: each asks the model to make
+ * a move and puts no view in the reader's mouth, so Chat's `Suggestions` shape
+ * fits. The reader may also just type or talk; the box below says so.
+ *
+ * The words here are the app's, so they are set in the app's face. Nothing the
+ * reader marked is drawn here — the notes go to the model, not onto this
+ * screen — so there is nothing to set in the reader's
+ * (docs/project/fonts.md).
+ */
+function ExploreInvitation({ onAsk }: { onAsk(question: string): void }) {
+  return (
+    <div className="chat-suggest">
+      <p className="chat-empty-hint">
+        What do you think about this piece? Explore starts from what you've highlighted, noted and
+        talked about here, and helps you take your own ideas further.
+      </p>
+      <p className="chat-empty-hint">
+        It can try the piece on cases of your own, look at where it may be weak, and look up what
+        others have said about it.
+      </p>
+      <ul>
+        {EXPLORE_STARTERS.map((starter) => (
+          <li key={starter}>
+            <button type="button" className="chat-suggest-btn" onClick={() => onAsk(starter)}>
+              {starter}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
  * The opening state of a conversation: a line about what this is for, and five
  * things worth asking.
  *
@@ -1380,19 +1902,33 @@ function Suggestions({ onAsk }: { onAsk(question: string): void }) {
   );
 }
 
-function Turn({
+/** Exported for tests/chat-turn-waiting-spinner.test.tsx, which renders one
+    turn in each of its waiting states; nothing else imports it. */
+export function Turn({
   message,
+  kind,
   onJump,
   recovering,
   blocks,
   onRetry,
   onEdit,
+  onHintOpened,
   canEdit,
   editing,
   onEditing,
   discards,
 }: {
   message: ChatMessage;
+  /**
+   * The conversation's kind. Only Recall (`learn`) keeps an answer's last
+   * `Hint:` paragraph behind a button; every other kind draws it as written.
+   */
+  kind: ThreadKind;
+  /**
+   * The reader opened this answer's hint for the first time. The hint opens
+   * from local state whatever this does; it is how the press gets recorded.
+   */
+  onHintOpened?: ((messageId: string, hint: string) => void) | undefined;
   onJump(id: BlockId): void;
   /** This answer's stream is lost and the client is asking the server about it. */
   recovering: boolean;
@@ -1426,10 +1962,46 @@ function Turn({
    */
   const pencil = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(editing);
+  const commands = useChatCommands() ?? undefined;
   useEffect(() => {
     if (wasEditing.current && !editing) pencil.current?.focus();
     wasEditing.current = editing;
   }, [editing]);
+
+  /* **Recall's hint.** The model writes it as the answer's last paragraph and
+     `splitHint` says which part it is; anything that is not exactly that shape
+     comes back whole and is drawn as written. Split here, not inside `Answer`,
+     so that what is drawn and what is copied are one `{ body, hint }`.
+
+     Open is the reader's last press here, or else the stored first press — read
+     on every render, because the stored time can arrive after this turn is
+     drawn (stream recovery, or the write's own answer). The press is keyed to
+     the attempt: a retry puts a new answer in the same row, and its hint starts
+     closed. src/recall-hint.ts; docs/project/learn-mode.md. */
+  const { body, hint } =
+    kind === "learn" && message.role === "assistant"
+      ? splitHint(message.text)
+      : { body: message.text, hint: null };
+  /* `createdAt` moves on retry, which is what makes it the attempt. */
+  const attempt = message.createdAt;
+  const [pressed, setPressed] = useState<{ attempt: string; open: boolean } | null>(null);
+  /* **Nothing to press, and nothing drawn, until the answer has settled.** A
+     press is therefore always on the final hint, and is reported the moment it
+     happens: no press is ever held here waiting for the answer to land, where
+     leaving the conversation would lose it. The hint is the last paragraph, so
+     the button is about a second later than it could be. */
+  const hintOffered = hint !== null && message.status !== "pending";
+  const hintOpen = hintOffered && (pressed?.attempt === attempt ? pressed.open : message.hintOpenedAt !== undefined);
+  const hintId = useId();
+  const toggleHint = () => {
+    if (hint === null || !hintOffered) return;
+    const opening = !hintOpen;
+    setPressed({ attempt, open: opening });
+    /* Every opening press asks until the stored time comes back, so a write
+       that failed is tried again; the controller drops a request that is
+       already out or already answered (`startHint` in chat/reduce.ts). */
+    if (opening && message.hintOpenedAt === undefined) onHintOpened?.(message.id, hint);
+  };
 
   if (message.role === "user") {
     if (editing) {
@@ -1457,7 +2029,7 @@ function Turn({
       );
     }
     return (
-      <div className="chat-turn you">
+      <div className="chat-turn you" data-turn="user">
         {message.text}
         {message.editedAt && (
           /* The only trace that this conversation once went elsewhere. Without
@@ -1466,6 +2038,19 @@ function Turn({
           <span className="chat-edited" title="You rewrote this question">
             edited
           </span>
+        )}
+        {/* **The row keeps its height while an answer arrives**, with nothing in
+            it to press. It used to be withdrawn whole, so every question in the
+            transcript grew a row the moment an answer finished, and the answer
+            being read moved down by one (seen in the browser check of plan
+            261005f). The pencil itself is still absent, which is what the focus
+            fallback above relies on. */}
+        {!canEdit && (
+          <div className="chat-actions held" aria-hidden="true">
+            <span className="chat-icon">
+              <Pencil size={12} />
+            </span>
+          </div>
         )}
         {canEdit && (
           <div className="chat-actions">
@@ -1483,32 +2068,81 @@ function Turn({
       </div>
     );
   }
-  /* "thinking…" only while nothing at all is happening. Once a tool is running
-     the strip below says what, which is a better answer to the same question —
-     and both at once reads as two spinners for one wait. */
-  const thinking =
+  /* **The waiting line: whenever no word has arrived and nothing else on the
+     turn is spinning.**
+
+     Not while a tool is running: the strip below says what, which is a better
+     answer to the same question — and both at once reads as two spinners for
+     one wait.
+
+     It used to stop there, at "no tool row at all", and that left a state with
+     nothing spinning anywhere: every tool row finished and no text yet. The
+     model has its results and is writing its first word, which on a question
+     that reaches for the web is seconds long. So the test is "is a row
+     *running*", not "is there a row".
+
+     Not gated on `useSlow`: the reader has already sent a question, and the
+     turn is drawn empty, so this acknowledges the send immediately.
+     docs/project/loading-spinner.md. */
+  const tools = message.tools ?? [];
+  /* A streamed chunk can be only a leading newline. It is not the first word
+     yet, so the waiting line and cursor must agree about visible text. */
+  const hasText = body.trim() !== "";
+  const waiting =
     message.status === "pending" &&
-    message.text === "" &&
-    (message.tools?.length ?? 0) === 0 &&
-    !recovering;
+    !hasText &&
+    !recovering &&
+    !tools.some((run) => run.status === "running");
+  /* The word stays "thinking…" after a tool has finished too. A finished tool
+     does not mean the answer is being written: the model may ask for another
+     (src/converse.ts runs rounds), so a line that named the next step would be
+     guessing. GPT Sol, plan 261003p F5. */
   return (
-    <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`}>
+    <div className={`chat-turn model${message.status === "error" ? " failed" : ""}`} data-turn="assistant">
       <ToolStrip tools={message.tools} searches={message.searches} />
-      {thinking ? (
+      {/* The stable top of prose, including prose CitedMarkdown renders as a
+          bare text node. Conversation holds this point, not the streaming
+          cursor at the other end of the answer. */}
+      {hasText && <span className="chat-answer-anchor" aria-hidden="true" />}
+      {waiting ? (
         <span className="chat-thinking">
-          <LoaderCircle className="cmt-spinner" size={13} /> thinking…
+          <LoaderCircle className="cmt-spinner" size={16} /> thinking…
         </span>
-      ) : message.text === "" ? /* Stopped before a word arrived, or failed
+      ) : !hasText ? /* Stopped before a word arrived, or failed
           before one did. `Answer` splits on blank lines and would render one
           empty paragraph, which is a stray gap above the line that explains
           it. */ null : (
         <Answer
-          text={message.text}
+          text={body}
           onJump={onJump}
           blocks={blocks}
           /* Tooltips only once the answer has landed — see Cited.tsx. */
           live={message.status === "pending"}
         />
+      )}
+      {hint !== null && hintOffered && (
+        /* Offered once the answer has settled; while it arrives the hint is
+           simply not drawn (`hintOffered` above). The label is ours; the hint
+           under it is the model's words, drawn by the same `Answer` so its
+           block ids are chips. */
+        <div className="chat-hint">
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="chat-hint-btn"
+            aria-expanded={hintOpen}
+            {...(hintOpen ? { "aria-controls": hintId } : {})}
+            onClick={toggleHint}
+          >
+            Hint
+          </Button>
+          {hintOpen && (
+            <div id={hintId} className="chat-hint-text">
+              <Answer text={hint} onJump={onJump} blocks={blocks} live={false} />
+            </div>
+          )}
+        </div>
       )}
       {/* Where the blinking cursor would be, and instead of it — because a cursor
           says "more is coming here in a moment", which is the one thing that is
@@ -1524,7 +2158,7 @@ function Turn({
           answer finished…
         </span>
       ) : (
-        message.status === "pending" && message.text !== "" && <span className="chat-cursor" />
+        message.status === "pending" && hasText && <span className="chat-cursor" />
       )}
       {message.status === "error" && <p className="chat-failed">{message.error}</p>}
       {message.truncated && (
@@ -1561,7 +2195,15 @@ function Turn({
       <WebSources citations={message.citations} />
       {message.status !== "pending" && (
         <div className="chat-actions">
-          {message.text !== "" && <CopyAnswer text={message.text} />}
+          {message.text !== "" && (
+            <CopyAnswer
+              /* What is on screen: the hint goes with it only while it is open. */
+              text={withoutCommandLines(
+                hintOpen ? message.text : body,
+                (raw) => commands !== undefined && chipFor(raw, commands, blocks) !== null,
+              )}
+            />
+          )}
           {/* "Answer again" is a regenerate, not only a retry — it is offered on
               a perfectly good answer too. So the extra condition is narrow: it
               disappears only when this turn *failed*, and failed in a way that
@@ -1678,6 +2320,8 @@ function ToolIcon({ name }: { name: string }) {
     case "article_links":
       return <Link2 size={12} aria-hidden />;
     case "article_glossary":
+    /* The reader's own notes: a page of writing, like the glossary's. */
+    case "reader_notes":
       return <FileText size={12} aria-hidden />;
     case "article_citations":
       return <BookMarked size={12} aria-hidden />;
@@ -1729,31 +2373,19 @@ export function WebSources({ citations }: { citations: Citation[] | undefined })
  * claim vision.md names as an anti-goal. Stripping them would make the pasted
  * version *less* checkable than the one on screen.
  *
- * The tick is not decoration either. `navigator.clipboard` is a promise that
+ * The tick is not decoration either. A clipboard write returns a promise that
  * can reject — no permission, a browser that will not do it from this event —
  * and a copy button that has visibly done nothing is the silent-success shape
  * (docs/reusable/silent-success.md). So the state has three values, not two,
  * and a refusal says so.
  *
- * **The guard is a statement rather than `navigator.clipboard?.writeText(…)`,
- * and that is not style.** Optional chaining short-circuits the *whole* chain,
- * `.catch` included: where there is no clipboard object the expression is
- * `undefined`, nothing throws, nothing rejects, and `state` stays `"idle"` —
- * a copy button that quietly does nothing, inside the very component whose
- * comment claims that cannot happen. And "no clipboard object" is not exotic:
- * `navigator.clipboard` is undefined in every insecure context, which includes
- * reaching this app at `http://192.168.1.x:5273` from a phone. Written the
- * careless way first, caught in review, 2026-08-26.
+ * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
+ * the newest-press-wins token and the timer that takes the tick away again are
+ * explained once, in useCopy.ts.
  */
 function CopyAnswer({ text }: { text: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  // Cleared on a timer, and the timer is cleaned up: a reader who leaves the
-  // thread mid-tick would otherwise get a setState on an unmounted component.
-  useEffect(() => {
-    if (state === "idle") return;
-    const timer = setTimeout(() => setState("idle"), 1600);
-    return () => clearTimeout(timer);
-  }, [state]);
+  /* 1.6 seconds for a tick and for a refusal alike. */
+  const { state, copy } = useCopy({ copiedMs: 1600, failedMs: 1600 });
   /* The outcome is announced as well as drawn.
 
      A tick replacing a clipboard is the whole feedback this button gives, and a
@@ -1772,21 +2404,12 @@ function CopyAnswer({ text }: { text: string }) {
           ? "Your browser would not allow the copy — an insecure connection is the usual reason"
           : "Copy this answer"
       }
-      onClick={() => {
-        if (!navigator.clipboard) {
-          setState("failed");
-          return;
-        }
-        navigator.clipboard
-          .writeText(text)
-          .then(() => setState("copied"))
-          .catch(() => setState("failed"));
-      }}
+      onClick={() => copy(text)}
     >
       {state === "copied" ? (
         <ClipboardCheck size={12} />
       ) : state === "failed" ? (
-        <X size={12} />
+        <TriangleAlert size={12} />
       ) : (
         <Copy size={12} />
       )}
@@ -1857,7 +2480,7 @@ function EditQuestion({
     el.setSelectionRange(el.value.length, el.value.length);
   }, []);
   return (
-    <div className="chat-turn you editing">
+    <div className="chat-turn you editing" data-turn="user">
       <textarea
         ref={box}
         className="chat-edit-box"
@@ -1868,11 +2491,14 @@ function EditQuestion({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === "Escape") onCancel();
+          /* Not the Escape that dismisses an input method's candidates, which
+             would throw the rewrite away. After the stop, as in the composer. */
+          if (e.key === "Escape" && !isImeComposing(e)) onCancel();
           if (isSendEnter(e)) {
             e.preventDefault();
             ask();
           }
+          if (isHeldSendEnter(e)) e.preventDefault();
         }}
       />
       {held && !canAsk && (
@@ -1948,6 +2574,10 @@ function Answer({
      is the one every block link shares (BlockLinkCard.tsx), which also moves
      from chip to chip without a second wait — what a `TooltipGroup` here used
      to do. */
+  /* The executor a command chip presses through, where the reading view put
+     one round this panel — chat and the chat dialog, never Learn. `null`
+     everywhere else, and a `[cmd:…]` is then plain text. CommandChip.tsx. */
+  const commands = useChatCommands() ?? undefined;
   return (
     <CitedMarkdown
       text={text}
@@ -1964,6 +2594,7 @@ function Answer({
          for plain sentences and has neither. Cited.tsx § links,
          Cited.tsx § CitedMarkdown. */
       links
+      commands={commands}
     />
   );
 }
@@ -1979,6 +2610,7 @@ function Answer({
 export function Composer({
   slug,
   onSend,
+  onSubmitStarted,
   busy,
   onStop,
   focusNonce,
@@ -1995,6 +2627,8 @@ export function Composer({
 }: {
   slug: string;
   onSend(question: string): void;
+  /** The reader has submitted, even if Live must finish before `onSend`. */
+  onSubmitStarted?: (() => void) | undefined;
   busy: boolean;
   /** Present only while an answer is arriving. */
   onStop?: (() => void) | undefined;
@@ -2009,12 +2643,12 @@ export function Composer({
    */
   placeholder?: string;
   /**
-   * Chat or Remember. **Everything that makes this box work is shared** — the
+   * Chat or Learn. **Everything that makes this box work is shared** — the
    * draft, the focus nonce, the auto-resize, Enter to send, the Escape ladder,
    * the key-propagation stop that keeps the article's ↑/↓ out of the caret, the
    * `readOnly` gate while a transcript is arriving, the dictation button and
    * strip. Those are the parts that are subtle and the parts where a second
-   * copy would drift; a Remember box that reimplemented the Escape ladder would
+   * copy would drift; a Learn box that reimplemented the Escape ladder would
    * be a bug nobody found for a month.
    *
    * What the kind changes is layout: a box six rows tall instead of one, and
@@ -2032,22 +2666,23 @@ export function Composer({
   blocks?: ReadonlyMap<string, string> | undefined;
   onJump?: ((id: BlockId) => void) | undefined;
 }) {
-  /* Seeded from the draft and owned here from then on. The panel keeps the map
-     because it outlives this component; this keeps the value because typing
-     into it must not repaint the transcript above. */
+  /* Seeded from the draft and owned here from then on. The words are kept
+     above (`drafts` in ChatPanel) because they have to outlive this component;
+     this keeps the value because typing into it must not repaint the
+     transcript above. */
   const [value, setValue] = useState(draft);
-  /* Recall's and Tutorial's box alike: tall, microphone first. */
-  const remember = isSingleThreadKind(kind);
+  /* Recall's, Tutorial's and Explore's box alike: tall, microphone first. */
+  const learn = isSingleThreadKind(kind);
   /**
    * **A short band gets a short box.** On a landscape phone the band is about
    * 338px tall, and six rows at rest took 280 of it — the transcript the reader
    * is answering had 58px. So below 500px of viewport height (a landscape
-   * phone; no laptop window is that short) Remember's box rests at two rows and
+   * phone; no laptop window is that short) Learn's box rests at two rows and
    * grows to 30% of the viewport, still following what is typed or dictated.
    * Plan 261001m § 5. Chat's one-row box is unchanged.
    */
   const short = useMedia(SHORT_VIEWPORT);
-  const size = useMemo(() => boxSize(remember, short), [remember, short]);
+  const size = useMemo(() => boxSize(learn, short), [learn, short]);
   const box = useRef<HTMLTextAreaElement>(null);
 
   /**
@@ -2062,7 +2697,7 @@ export function Composer({
    *
    * **The caret goes to the end.** A new conversation's box is usually empty,
    * where that changes nothing; when it was started with a question handed over
-   * (`seed` in `ChatPanel`), `focus()` alone left the caret before the first
+   * (`ChatHandoff` in ConversationModes.tsx), `focus()` alone left the caret before the first
    * word — measured in Chrome — so the reader's first keystroke landed in front
    * of the question rather than after it.
    */
@@ -2072,6 +2707,11 @@ export function Composer({
       const el = box.current;
       el?.focus();
       el?.setSelectionRange(el.value.length, el.value.length);
+      /* And the box shows it. A handed-over summary paragraph is taller than
+         the box's roof, and Chrome left it scrolled to the top: the reader saw
+         the start of the quote and not the line they were to type on
+         (browser check, plan 261004a). */
+      if (el) el.scrollTop = el.scrollHeight;
     }
   }, [focusNonce, focused]);
 
@@ -2099,6 +2739,7 @@ export function Composer({
    * the words, not about where they sit;
    * docs/plans/260907c-dictation-onto-an-openai-transcriber.md.)
    */
+  const transcribe = useReaderTranscriber();
   const dictate = useDictationField({
     value,
     onChange: (next) => {
@@ -2107,8 +2748,10 @@ export function Composer({
     },
     box,
     context: { kind: "article", slug },
-    transcribe: sendForTranscription,
+    transcribe,
     keep: keepDictation(`chat:${slug}`),
+    /* A double press on Stop also sends (dictation.md § A double press). */
+    onDone: () => void submit(),
   });
 
   // A Live ticket can still be pending before Live claims the microphone.
@@ -2151,11 +2794,14 @@ export function Composer({
        at all — and the microphone keeps running afterwards. GPT Sol's plan
        review item 3, then its code review of 2026-09-04 for the half that was
        missing. docs/project/dictation.md § Adding it to a box. */
-    if (dictate.readOnly || dictate.dictation.armed) return;
+    if (dictate.busy) return;
     const question = value.trim();
     if (question === "" || busy) return;
     const submittedBox = box.current;
     const handoff = live && live.phase !== "idle" && live.phase !== "failed";
+    // Revoke never-submitted recovery before the wait: another draft can be
+    // typed and the mode left while this question is already on its way.
+    onSubmitStarted?.();
     setValue("");
     onDraft("");
     if (handoff) await live.stop();
@@ -2171,7 +2817,7 @@ export function Composer({
     ) putKeyboardAway(submittedBox);
   };
   /** Every state `submit` refuses, so the Send button can say so before a press. */
-  const unavailable = busy || dictate.readOnly || dictate.dictation.armed || value.trim() === "";
+  const unavailable = busy || dictate.busy || value.trim() === "";
 
   return (
     <form
@@ -2200,14 +2846,16 @@ export function Composer({
             ? "Waiting for the answer…"
             : kind === "tutorial"
               ? "What do you remember about it? It's fine if you haven't read it yet."
-              : remember
+              : kind === "explore"
+                ? "What do you make of it? Say what's on your mind, or where you'd like to take it."
+                : learn
                 ? "Tell me what you took from this, in your own words. Ramble — it doesn't need to be tidy."
                 : (placeholder ?? "Ask about this article…")
         }
         onChange={(e) => {
           setValue(e.target.value);
-          // The panel keeps the draft so it survives this component; see
-          // `drafts` in ChatPanel.
+          // Kept above this component so the words survive it; see `drafts`
+          // in ChatPanel.
           onDraft(e.target.value);
         }}
         onKeyDown={(e) => {
@@ -2231,6 +2879,9 @@ export function Composer({
             e.preventDefault();
             void submit();
           }
+          /* A handoff puts the caret here with the question already written.
+             The Enter that made it, still held, neither sends nor adds lines. */
+          if (isHeldSendEnter(e)) e.preventDefault();
           /* Escape, in three steps, most-urgent first.
 
              It has to be a ladder rather than one action because the composer
@@ -2240,8 +2891,14 @@ export function Composer({
              I was typing, give me the reading keys back. Doing them in that
              order means the destructive one is never reached by accident: you
              cannot clear a draft you have not typed, and you cannot blur while
-             there is anything else Escape could still be for. */
-          if (e.key === "Escape") {
+             there is anything else Escape could still be for.
+
+             **None of them for an Escape that belongs to an input method.** A
+             reader typing Japanese or Chinese presses it to dismiss the
+             candidate list, and the second rung emptied their question. The
+             test sits here, after the `stopPropagation` above, so a composing
+             key is still contained like every other. */
+          if (e.key === "Escape" && !isImeComposing(e)) {
             if (onStop) onStop();
             else if (value !== "") {
               setValue("");
@@ -2291,7 +2948,7 @@ export function Composer({
         </Tooltip>
       )}
       {dictate.dictation.supported &&
-        (remember ? (
+        (learn ? (
           /* **Labelled, and first in the row.** Greg asked for the microphone to
              be emphasised here because talking a paragraph is so much less
              annoying than typing one — and an unlabelled icon among three other
@@ -2301,13 +2958,13 @@ export function Composer({
              phases, the disabled-while-transcribing rule and the article's own
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
-            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} />
+            <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
             <span className="chat-talk-label" aria-hidden="true">
               {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
             </span>
           </span>
         ) : (
-          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} />
+          <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
         ))}
       {/* **Beside the microphone, not instead of it.** They are different
           things: one turns speech into text in this box, the other holds a
@@ -2321,11 +2978,11 @@ export function Composer({
           live={live}
           onStart={onStartLive}
           disabled={busy || dictate.readOnly}
-          labelled={remember}
+          labelled={learn}
           continues={continuesLive}
         />
       )}
-      <DictationStrip dictation={dictate.dictation} />
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
       {live && onStartLive && <LiveStatus
         live={live}
         onRestart={onStartLive}

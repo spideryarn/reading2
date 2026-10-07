@@ -1,0 +1,28 @@
+I fixed all blocking findings. One wider P2 remains for you to decide.
+
+1. **P1 — Fixed:** An eagerly opened stream could produce an unhandled rejection if `finalMessage()` was never called. The installed SDK deliberately does this when no error listener exists. Added private `error` and `abort` listeners while preserving rejection through `finalMessage()` and the visible pending spend row. [src/messages-stream.ts:594](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/src/messages-stream.ts:594)
+
+2. **P1 — Fixed:** An already-aborted signal previously created one pending/spend record and reported one attempt despite sending no network request. It now reports zero attempts, creates no spend row, and rejects with `APIUserAbortError`. [src/messages-stream.ts:527](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/src/messages-stream.ts:527)
+
+3. **P1 — Fixed:** Successful Simple and Labels test doubles lacked the new `attempts()` method, causing 74 failures in the affected test group. Updated those mocks and the meta-fallback integration mock. [tests/simple-summary.test.ts:99](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/tests/simple-summary.test.ts:99), [tests/labels-shortfall.test.ts:78](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/tests/labels-shortfall.test.ts:78), [tests/meta-fallback-fingerprint.test.ts:101](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/tests/meta-fallback-fingerprint.test.ts:101)
+
+4. **P2 — Fixed:** The tests did not directly prove that Simple and Labels publish physical network-attempt counts. Added cases where one logical call reports two attempts; Simple now must report six across its three levels, and Labels must report two for one batch. [tests/simple-summary.test.ts:672](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/tests/simple-summary.test.ts:672), [tests/labels-shortfall.test.ts:246](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/tests/labels-shortfall.test.ts:246)
+
+5. **P2 — Fixed:** Changed comments still described “one record, one call” and a four-function return value. The invariant is now one record per network attempt, and `MeteredCall` exposes five functions. [src/messages-stream.ts:143](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/src/messages-stream.ts:143), [src/messages-stream.ts:391](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/src/messages-stream.ts:391)
+
+6. **P2 — Not fixed; wider:** Structure’s existing comments now conflate logical answer draws with physical sends. One whole-document draw may make three transport attempts; its validation redraw can therefore reach six physical requests. Structure deepening’s three-attempt 429 loop can reach nine only in a mixed sequence where each outer send first suffers retryable transport failures. The ledger remains exact, while `wholeDocumentCalls` and `EXPANSION_ATTEMPTS` remain semantic/429-loop counters. The claims that transport failures are “never asked again,” that `EXPANSION_ATTEMPTS` is how often a call is “sent,” and that “two calls is the worst case” are no longer literally true. [src/structure.ts:2729](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/src/structure.ts:2729), [src/structure-deepen.ts:665](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/src/structure-deepen.ts:665), [docs/project/structure-step.md:229](/home/greg/code/spideryarn2/.claude/worktrees/fbx4zut6-import-failed-at-arc/docs/project/structure-step.md:229)
+
+The remaining audit was clean:
+
+- Each opened network attempt gets exactly one `beginSpend` and one terminal record. Retry success, exhaustion, stream abort, and abort during backoff leave no pending entries. A deliberately abandoned eager call remains pending as the diagnostic trace.
+- `recordFailure(current)` is safe because the single memoised runner does not replace `current` until after the preceding failure is recorded and its wait completes.
+- In SDK v0.120.0, SSE `body.error.type` is passed to `APIError.type`. Aborts are rejected before classification; missing-key failures happen before a stream exists.
+- All 18 production callers were inspected. No caller has a dangerously short deadline; the active job signal is 740 seconds.
+- No code reads `.status === 503` or depends on “status 503” for status-less Anthropic failures. The new diagnostic contains only locally authored text.
+- The retry-success tests fail without retrying, and the `message_start`-without-text case catches moving the boundary to first text. The abort-during-wait timing is safe because the stub fails in a microtask and the abort timer precedes the minimum 375 ms backoff.
+- No other test uses a failing real Messages transport that will unexpectedly make three requests and wait through the backoff.
+- The changed gateway documentation and postmortem agree with the implementation.
+
+Checks: requested tests 53/53 passed; expanded affected set 199/199 passed; two additional prompt-contract files 33/33 passed; lint and `git diff --check` passed. `npm run typecheck` was blocked by the sandbox denying `tsx`’s IPC socket, but all four underlying TypeScript projects passed when run directly with `tsc --noEmit`.
+
+VERDICT: land — the P1 defects are fixed and verified; the remaining P2 is wider terminology/documentation, not incorrect retry or spend accounting.

@@ -1,0 +1,308 @@
+{
+  "arm": "high-none-len0a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fh-spya-s3fq0d",
+  "version": "simple-prompt/8",
+  "sourceSha256": "66be976446617e13d2279aeba6a93b31043ecd5d6ca2c46c5be9371dd979ac1b",
+  "at": "2026-10-05T02:19:22.236Z",
+  "bodyWords": 1398,
+  "bodyBlocks": 33,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "4b35a8d10d2d93b3",
+  "systemsSha256": "0653f3492fc8d1c8f3923508144fe511bf8a0cd83882b7297c1416f2dcd44327",
+  "power": "high",
+  "guard": true,
+  "wallMs": 41083,
+  "costUsd": 0.1382484,
+  "tokens": {
+    "input": 9595,
+    "output": 4950,
+    "reasoning": 2427
+  },
+  "briefReadyMs": 11704,
+  "fullerReadyMs": 41077,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 553,
+  "briefWords": 98,
+  "fuller": [
+    {
+      "text": "This is a short essay by Paul Graham, from January 2020, about \"haters\": people who become fixated on disliking someone famous. He wrote it for startup founders, who are often surprised by the attention they get as their companies grow, but says it fits anyone who becomes famous. It matters, he says, because haters are a worse side effect of fame than over-keen fans, and they puzzled him for years. His case rests on his own long observation and reasoning, not on any study.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-j02p09",
+        "spya-zecn6c"
+      ],
+      "sentences": [
+        {
+          "text": "This is a short essay by Paul Graham, from January 2020, about \"haters\": people who become fixated on disliking someone famous.",
+          "id": null
+        },
+        {
+          "text": "He wrote it for startup founders, who are often surprised by the attention they get as their companies grow, but says it fits anyone who becomes famous.",
+          "id": "spya-kkfuss"
+        },
+        {
+          "text": "It matters, he says, because haters are a worse side effect of fame than over-keen fans, and they puzzled him for years.",
+          "id": "spya-zecn6c"
+        },
+        {
+          "text": "His case rests on his own long observation and reasoning, not on any study.",
+          "id": null
+        }
+      ]
+    },
+    {
+      "text": "Graham starts with \"fanboys\": fans who like a famous person too much. A fanboy is obsessive and uncritical, meaning they never judge the person's work fairly. Liking you becomes part of who they are, they picture you as far better than you really are, and they want everyone to know it. Even bad things you do get turned into good ones in their eyes.",
+      "ids": [
+        "spya-fgn6m7",
+        "spya-vnhntv"
+      ],
+      "sentences": [
+        {
+          "text": "Graham starts with \"fanboys\": fans who like a famous person too much.",
+          "id": "spya-fgn6m7",
+          "key": "fanboys"
+        },
+        {
+          "text": "A fanboy is obsessive and uncritical, meaning they never judge the person's work fairly.",
+          "id": "spya-vnhntv"
+        },
+        {
+          "text": "Liking you becomes part of who they are, they picture you as far better than you really are, and they want everyone to know it.",
+          "id": "spya-vnhntv"
+        },
+        {
+          "text": "Even bad things you do get turned into good ones in their eyes.",
+          "id": "spya-vnhntv"
+        }
+      ]
+    },
+    {
+      "text": "He then describes haters in a paragraph that copies the fanboy one word for word, with \"good\" swapped for \"bad\". This leads to his central idea: haters are just fanboys with the sign switched, like flipping a plus to a minus. To a hater, everything you do is bad because you did it, and good deeds get twisted into bad ones. He separates haters from trolls, who insult you once and move on; haters keep at it over a long period.",
+      "ids": [
+        "spya-jbw53x",
+        "spya-j02p09",
+        "spya-ynrwzr"
+      ],
+      "sentences": [
+        {
+          "text": "He then describes haters in a paragraph that copies the fanboy one word for word, with \"good\" swapped for \"bad\".",
+          "id": "spya-jbw53x"
+        },
+        {
+          "text": "This leads to his central idea: haters are just fanboys with the sign switched, like flipping a plus to a minus.",
+          "id": "spya-j02p09",
+          "key": "haters are just fanboys with the sign switched"
+        },
+        {
+          "text": "To a hater, everything you do is bad because you did it, and good deeds get twisted into bad ones.",
+          "id": "spya-jbw53x"
+        },
+        {
+          "text": "He separates haters from trolls, who insult you once and move on; haters keep at it over a long period.",
+          "id": "spya-ynrwzr"
+        }
+      ]
+    },
+    {
+      "text": "Like fans, haters seem to come automatically with fame, and fame feeds them. His example is someone who mildly dislikes a pop singer's song but keeps hearing her name, and grows angrier each time. The hater's telltale mark is calling the famous person a \"fraud\". They blow up both her fame and her lack of talent in their minds, and the only way to fit those together is to decide she tricked everyone. Graham admits some people really are frauds; to tell, look at what neutral, thoughtful people think, since they are rarely fooled.",
+      "ids": [
+        "spya-nf2q02",
+        "spya-j6y6p4",
+        "spya-xjaj8b"
+      ],
+      "sentences": [
+        {
+          "text": "Like fans, haters seem to come automatically with fame, and fame feeds them.",
+          "id": "spya-nf2q02"
+        },
+        {
+          "text": "His example is someone who mildly dislikes a pop singer's song but keeps hearing her name, and grows angrier each time.",
+          "id": "spya-nf2q02"
+        },
+        {
+          "text": "The hater's telltale mark is calling the famous person a \"fraud\".",
+          "id": "spya-j6y6p4",
+          "key": "fraud"
+        },
+        {
+          "text": "They blow up both her fame and her lack of talent in their minds, and the only way to fit those together is to decide she tricked everyone.",
+          "id": "spya-j6y6p4"
+        },
+        {
+          "text": "Graham admits some people really are frauds; to tell, look at what neutral, thoughtful people think, since they are rarely fooled.",
+          "id": "spya-xjaj8b"
+        }
+      ]
+    },
+    {
+      "text": "On who becomes a hater, Graham says he is not sure, but he offers some patterns. Haters have generally achieved little, though some have talent, and famous people rarely call others frauds because they know how random fame is. He suspects frustrated talent drives some of them: it seems unfair that so-and-so is famous, and not them. He believes the pattern runs both ways: people who do great work never become haters, and haters never do great work.",
+      "ids": [
+        "spya-hwxfgs",
+        "spya-d0h9te",
+        "spya-men8kv"
+      ],
+      "sentences": [
+        {
+          "text": "On who becomes a hater, Graham says he is not sure, but he offers some patterns.",
+          "id": "spya-hwxfgs"
+        },
+        {
+          "text": "Haters have generally achieved little, though some have talent, and famous people rarely call others frauds because they know how random fame is.",
+          "id": "spya-hwxfgs"
+        },
+        {
+          "text": "He suspects frustrated talent drives some of them: it seems unfair that so-and-so is famous, and not them.",
+          "id": "spya-d0h9te",
+          "key": "frustrated talent"
+        },
+        {
+          "text": "He believes the pattern runs both ways: people who do great work never become haters, and haters never do great work.",
+          "id": "spya-men8kv"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Seeing haters as flipped fans makes them easier to handle, since the same approach works for both. The main rule is simply not to think much about them. Newly famous people often wonder what they did to set the hater off and whether they can fix it. Graham calls this a mistake, because it treats the hater like someone you have a real dispute with. You don't wonder why obsessive fans love you; you just think some people are kind of crazy.",
+      "ids": [
+        "spya-wwfm44",
+        "spya-e2mkup",
+        "spya-au77ew"
+      ],
+      "sentences": [
+        {
+          "text": "Seeing haters as flipped fans makes them easier to handle, since the same approach works for both.",
+          "id": "spya-wwfm44"
+        },
+        {
+          "text": "The main rule is simply not to think much about them.",
+          "id": "spya-e2mkup",
+          "key": "not to think much about them"
+        },
+        {
+          "text": "Newly famous people often wonder what they did to set the hater off and whether they can fix it.",
+          "id": "spya-e2mkup"
+        },
+        {
+          "text": "Graham calls this a mistake, because it treats the hater like someone you have a real dispute with.",
+          "id": "spya-au77ew"
+        },
+        {
+          "text": "You don't wonder why obsessive fans love you; you just think some people are kind of crazy.",
+          "id": "spya-au77ew"
+        }
+      ]
+    },
+    {
+      "text": "His conclusion is that something may have set the hater off, but it would not have set off a normal person, so it is not worth thinking about. In his words: it's not you, it's them. A skilled hater may also try to turn crowds against you. You may sometimes want to answer their false claims, but he advises leaning towards not, since it probably won't matter in the end.",
+      "ids": [
+        "spya-ry7vzc",
+        "spya-nqwhav"
+      ],
+      "sentences": [
+        {
+          "text": "His conclusion is that something may have set the hater off, but it would not have set off a normal person, so it is not worth thinking about.",
+          "id": "spya-ry7vzc"
+        },
+        {
+          "text": "In his words: it's not you, it's them.",
+          "id": "spya-ry7vzc",
+          "key": "it's not you, it's them"
+        },
+        {
+          "text": "A skilled hater may also try to turn crowds against you.",
+          "id": "spya-nqwhav"
+        },
+        {
+          "text": "You may sometimes want to answer their false claims, but he advises leaning towards not, since it probably won't matter in the end.",
+          "id": "spya-nqwhav"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This essay by Paul Graham asks a puzzling question: why do some people hate famous people so much? He means \"haters\": people who make disliking someone part of who they are, for a long time. His answer is that haters are just over-the-top fans with the feeling flipped.",
+      "ids": [
+        "spya-kkfuss",
+        "spya-jbw53x",
+        "spya-j02p09"
+      ],
+      "sentences": [
+        {
+          "text": "This essay by Paul Graham asks a puzzling question: why do some people hate famous people so much?",
+          "id": null
+        },
+        {
+          "text": "He means \"haters\": people who make disliking someone part of who they are, for a long time.",
+          "id": "spya-jbw53x",
+          "key": "haters"
+        },
+        {
+          "text": "His answer is that haters are just over-the-top fans with the feeling flipped.",
+          "id": "spya-j02p09",
+          "key": "over-the-top fans with the feeling flipped"
+        }
+      ]
+    },
+    {
+      "text": "Haters often call their target a fraud, meaning someone who tricked everyone into thinking they are good. Graham says this matters because famous people waste time trying to understand and fix haters. His conclusion: treat haters like crazy fans and don't think much about them. It's not you, it's them.",
+      "ids": [
+        "spya-h30306",
+        "spya-au77ew",
+        "spya-ry7vzc"
+      ],
+      "sentences": [
+        {
+          "text": "Haters often call their target a fraud, meaning someone who tricked everyone into thinking they are good.",
+          "id": "spya-h30306"
+        },
+        {
+          "text": "Graham says this matters because famous people waste time trying to understand and fix haters.",
+          "id": "spya-au77ew"
+        },
+        {
+          "text": "His conclusion: treat haters like crazy fans and don't think much about them.",
+          "id": "spya-ry7vzc",
+          "key": "don't think much about them"
+        },
+        {
+          "text": "It's not you, it's them.",
+          "id": "spya-ry7vzc"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

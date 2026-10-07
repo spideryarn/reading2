@@ -66,6 +66,15 @@ function subscribe(notify: () => void): () => void {
 const snapshot = () => state;
 
 /**
+ * Whether requests are getting through, for code that is not a component —
+ * safe-to-reload.ts asks before a page reloads itself. The same fact
+ * `useOffline().connected` is.
+ */
+export function isConnected(): boolean {
+  return state.connected;
+}
+
+/**
  * The current offline state, for a component that wants to say something about
  * it.
  *

@@ -35,9 +35,7 @@ import { anthropicCallFailed } from "./anthropic-call.js";
 import type { Article } from "./article-input.js";
 import { articleWithIds } from "./article-prompt.js";
 import { isBodyEvidence } from "./block-policy.js";
-import { stageFailure } from "./job-failure.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { effortFor, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer, readJsonOrNull } from "./parse-json.js";
 import {
@@ -65,7 +63,7 @@ import {
   fallbackHeadTitle,
   type MetaFingerprintWithUrl,
 } from "./source-hash.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type { Meta, Tree, TreeNode } from "./types.js";
 
 /**
@@ -91,6 +89,17 @@ export const PROMPT_VERSION = SKETCH_VERSION;
  */
 export const OVERVIEW_MIN = 6;
 export const OVERVIEW_MAX = 16;
+
+/**
+ * The answer the Sketch asks room for. A scene is a few thousand tokens of
+ * coordinates, and there may be four of them. Generous rather than tight:
+ * undersizing does not degrade here, it throws `truncationFailure` and loses
+ * the whole pass, and half a scene is not half a picture. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate in
+ * `STEP_BUDGET_MS.sketch` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
+ */
+export const SKETCH_ANSWER_TOKENS = 12_000;
 
 /**
  * **The blocks, the section boundaries and the head this was drawn against, all
@@ -650,11 +659,7 @@ export async function generateSketch(opts: {
   const profile = opts.profile ?? null;
   const started = Date.now();
 
-  /* A scene is a few thousand tokens of coordinates, and there may be four of
-     them. Generous rather than tight: undersizing does not degrade here, it
-     throws `truncationFailure` and loses the whole pass, and half a scene is
-     not half a picture. */
-  const answerTokens = 12_000;
+  const answerTokens = SKETCH_ANSWER_TOKENS;
   const maxTokens = budgetFor("sketch", answerTokens);
 
   let message: Anthropic.Message;
@@ -697,22 +702,8 @@ export async function generateSketch(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) throw stageFailure(MODEL_REFUSED, {
-      authored: "the model answered with stop_reason: refusal",
-    });
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("sketch", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  const raw = finishedText(message, "sketch", maxTokens, answerTokens);
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   /* **The blocks the article really has, in document order** — both halves
      matter. The set is what an invented `block` is caught by; the order is what
@@ -760,11 +751,10 @@ export async function generateSketch(opts: {
     );
   }
 
-  /* **Nothing is written here**, and that is what makes `sketch` the first
-     *converted* step in this pipeline (src/pipeline.ts § LEGACY_UNCONVERTED_STEPS).
-     The other nine stages write their own file inside `run`, which works on a
-     laptop and cannot work through a store that puts the artefact in a Postgres
-     column. This one hands the sketch back and lets its two callers decide:
+  /* **Nothing is written here**, and that is what made `sketch` the first
+     *converted* step in this pipeline. The other stages wrote their own file
+     inside `run` until 2026-08-31, which worked on a laptop and cannot work
+     through a store that puts the artefact in a Postgres column. This one hands the sketch back and lets its callers decide:
      the pipeline returns it as `parts`, and `evals/sketch/run.ts` writes it into
      a results directory. A generator
      that wrote the file *and* returned it would give the pipeline two writes,

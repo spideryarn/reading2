@@ -102,6 +102,7 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => {
         onText: () => undefined,
         onStart: () => undefined,
         aborted: () => false,
+        attempts: () => 1,
         finalMessage: () => Promise.resolve(message),
       };
     },
@@ -414,7 +415,7 @@ describe("an article with no metadata", () => {
 
     const run = await generateSimpleSummary({ power: "standard", article: withoutMeta, profile: null, guard: false });
 
-    expect(run.simpleSummary.levels.simple).toHaveLength(3);
+    expect(run.simpleSummary.levels.fuller).toHaveLength(3);
     expect(run.simpleSummary.sourceHash).toBe(
       inputFingerprint(withoutMeta.blocks, withoutMeta.tree, null),
     );

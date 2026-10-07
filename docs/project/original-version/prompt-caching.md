@@ -40,8 +40,9 @@ Our shape is the worst case for uncached prompting and the best case for cached 
 - The instructions are the short part and they differ per call.
 
 That is precisely the layout caching is designed for: a long stable prefix, a short varying suffix.
-[Q7](../open-questions.md#q7) — "which model, and how much does a tree cost" — is unanswered, and
-this is most of the answer.
+Q7 — "which model, and how much does a tree cost" — is now answered in
+[ai-gateway.md § What an article costs to arrive](../ai-gateway.md#what-an-article-costs), and
+this was most of the answer.
 
 ## The design, as they specified it
 
@@ -143,8 +144,8 @@ $42/month against $150 uncached.
    written** on every call. A cache that silently stops hitting looks exactly like a cache that is
    working, which is [silent-success.md](../../reusable/silent-success.md) again — the only
    defence is reporting the cache-read token count and noticing when it goes to zero.
-5. **Measure before and after on the Noema article**, and write the number into
-   [Q7](../open-questions.md#q7). A cost claim nobody checked is worth nothing; that is already the
+5. **Measure before and after on the Noema article**, and write the number down
+   (ours is in [ai-gateway.md](../ai-gateway.md#what-an-article-costs); was Q7). A cost claim nobody checked is worth nothing; that is already the
    standard [comments.md](../comments.md#decision-web-research) holds itself to.
 
 ## The alternative they took instead
@@ -163,5 +164,9 @@ it has the side benefit of letting sibling gists distinguish themselves from one
 - [overview.md](overview.md) — the map to that codebase
 - [llm-plumbing.md](llm-plumbing.md) — the call layer this would sit inside, and what to log
 - [summaries.md](summaries.md) — the batching alternative, and its all-or-nothing failure mode
-- [../open-questions.md#q7](../open-questions.md#q7) — what a tree costs, still unanswered
+- [../ai-gateway.md § What an article costs to arrive](../ai-gateway.md#what-an-article-costs) — what a tree costs (was Q7, closed 2026-09-07)
 - [../architecture.md](../architecture.md) — stages, artefacts, and caching on a content hash
+
+---
+
+Up: [overview.md](overview.md)

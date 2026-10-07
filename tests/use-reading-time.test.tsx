@@ -334,6 +334,69 @@ describe("useReadingTime", () => {
     expect(latest.levels.get(A)).toBe(2);
   });
 
+  /* The spine's area chart — reach in sixteenths, on a scale of its own (reading-time.ts § `readReach`).
+     docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md, F4. */
+  it("moves reach inside an unchanged level, and levels keeps its identity while it does", async () => {
+    mountRows([[A, 0, 800]]);
+    /* 230 words is 60 expected seconds. 43 s is level 2, reach 5; 51 s is
+       still level 2 and reach 6 (60 × 0.35 × 2^(14/12) ≈ 47.1). */
+    serverSeconds = { [A]: 43 };
+    await render();
+    expect(latest.levels.get(A)).toBe(2);
+    expect(latest.reach.get(A)).toBe(5);
+
+    latest.setCounting(true);
+    const levels = latest.levels;
+    const reach = latest.reach;
+    await seconds(1);
+    /* 44 s: neither moved, so neither map is a new one. */
+    expect(latest.reach).toBe(reach);
+    expect(latest.levels).toBe(levels);
+
+    await seconds(7);
+    expect(latest.reach.get(A)).toBe(6);
+    expect(latest.reach).not.toBe(reach);
+    expect(latest.levels, "a reach step inside a level must not wake the gutter or the quiz").toBe(levels);
+    expect(latest.levels.get(A)).toBe(2);
+  });
+
+  it("combines the opening GET with what this page credited before it answered, in reach too", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 44, [C]: 170 };
+    holdGet = true;
+    await render();
+    latest.setCounting(true);
+    await seconds(4);
+    /* 4 local seconds alone are under 0.35 of 60. */
+    expect(latest.reach.size).toBe(0);
+    releaseGet?.();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    /* 44 + 4 = 48 s: reach 6. Neither total alone reaches 47.1; 44 s is reach 5. */
+    expect(latest.reach.get(A)).toBe(6);
+    expect(latest.reach.get(C)).toBe(9);
+    expect(latest.reach.has(B)).toBe(false);
+  });
+
+  it("clears reach when switched off and for a new article", async () => {
+    mountRows([[A, 0, 800]]);
+    serverSeconds = { [A]: 100 };
+    await render();
+    expect(latest.reach.get(A)).toBe(7);
+
+    serverSeconds = {};
+    await render(true, undefined, "another-article");
+    expect(latest.reach.size).toBe(0);
+
+    serverSeconds = { [A]: 100 };
+    await render(true, undefined, "my-article");
+    expect(latest.reach.get(A)).toBe(7);
+    await render(false);
+    expect(latest.reach.size).toBe(0);
+  });
+
   it("does nothing at all when switched off", async () => {
     mountRows([[A, 0, 800]]);
     serverSeconds = { [A]: 1000 };
@@ -343,6 +406,7 @@ describe("useReadingTime", () => {
     window.dispatchEvent(new Event("pagehide"));
     expect(posts).toHaveLength(0);
     expect(latest.levels.size).toBe(0);
+    expect(latest.reach.size).toBe(0);
   });
 });
 

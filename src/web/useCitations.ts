@@ -11,7 +11,7 @@
  * (docs/project/ingest-queue.md). The ordering of reads is
  * src/web/useOrderedRead.ts's, the job is src/web/useStepJob.ts's, and pressing
  * the mode with nothing there starts it through src/web/useAutoRun.ts — so this
- * file is only the parse, the 404 branch and the verbs.
+ * file is only the parse, the "none yet" branch and the verbs.
  *
  * The third verb is **`investigate`** (plan 260930a): one streamed, billed
  * press about one work, `POST /api/citations/:slug/:id/investigate`, SSE — the
@@ -46,6 +46,7 @@ import type {
   CitationInvestigation,
   Citations,
   CitationsResponse,
+  CitationWebInfluence,
   CitedWork,
   FindCitationResponse,
   InvestigatedPaper,
@@ -53,12 +54,15 @@ import type {
   Job,
   PaperPassage,
 } from "../types.js";
-import { wentQuiet } from "../messages.js";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
-import { readAnswerStream, StreamStalled } from "./lib/sse.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
+import { readAnswerStream } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
 
@@ -100,7 +104,34 @@ export interface InvestigateFailure {
   lookupKept: boolean;
 }
 
-export interface UseCitations {
+/**
+ * ***Dig deeper*'s state and its one verb** — on the read since 2026-10-04, so
+ * the prose's hover card can start one in any mode and say when one is running
+ * (report `spya-c2qmbg`, plan 261004b). `useGlossaryRead` carries `look` for
+ * the same reason (plan 261002c). The band's hook passes all six through.
+ */
+export interface CitationDig {
+  /** What the last press's lookup said when it found no page — and on which row. */
+  findNote: FindNote | null;
+  /** The work whose *Investigate* is running, or null. One at a time. */
+  investigating: string | null;
+  /** Which step that press is on: `finding` the work, then `reading`. Null before the first frame. */
+  investigateStage: InvestigateStage | null;
+  /** The words so far. **Never on the row**: only `done`, sent after the save, puts one there. */
+  investigateDraft: InvestigateDraft | null;
+  /** The last *Investigate* that did not end in a stored answer. */
+  investigateFailed: InvestigateFailure | null;
+  /**
+   * ***Investigate*** — plan 260930a, and *Look it up* as its first step since
+   * plan 260930d. The lookup's answer is patched onto the row as `/find`'s was
+   * (its link fields, only on a searched row, then a re-read attaches the
+   * lookup); the streamed answer is kept per row by the server and attached at
+   * read time while its context still matches. src/citation-investigate.ts.
+   */
+  investigate(id: string): Promise<void>;
+}
+
+export interface UseCitations extends CitationDig {
   status: CitationsStatus;
   citations: Citations | null;
   /** The article moved under this list — blocks, sections or the cited head. */
@@ -132,25 +163,16 @@ export interface UseCitations {
    * does not sweep in the steps before it.
    */
   regenerate(): Promise<void>;
-  cancel(id: string): void;
-  /** What the last press's lookup said when it found no page — and on which row. */
-  findNote: FindNote | null;
-  /** The work whose *Investigate* is running, or null. One at a time. */
-  investigating: string | null;
-  /** Which step that press is on: `finding` the work, then `reading`. Null before the first frame. */
-  investigateStage: InvestigateStage | null;
-  /** The words so far. **Never on the row**: only `done`, sent after the save, puts one there. */
-  investigateDraft: InvestigateDraft | null;
-  /** The last *Investigate* that did not end in a stored answer. */
-  investigateFailed: InvestigateFailure | null;
   /**
-   * ***Investigate*** — plan 260930a, and *Look it up* as its first step since
-   * plan 260930d. The lookup's answer is patched onto the row as `/find`'s was
-   * (its link fields, only on a searched row, then a re-read attaches the
-   * lookup); the streamed answer is kept per row by the server and attached at
-   * read time while its context still matches. src/citation-investigate.ts.
+   * The forced run was pressed on the list still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
    */
-  investigate(id: string): Promise<void>;
+  rewriting: boolean;
+  /** Read again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
+  cancel(id: string): void;
 }
 
 /**
@@ -214,22 +236,28 @@ export interface UseCitations {
  * read the same `CitationsRead`, so they are stale together and can never show
  * different lists.
  */
-export interface CitationsRead {
+export interface CitationsRead extends CitationDig {
   status: CitationsStatus;
   citations: Citations | null;
   stale: boolean;
   outdated: boolean;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /** Fetch again **only if nothing is already fetching** — the band's mount. */
   reload(): Promise<void>;
   /** Fetch again **because the list on the server has just changed** — a job finished. */
   refresh(): Promise<void>;
+  /** This read's bookkeeping for the forced verb's hold — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
   /**
    * **The one write that crosses this seam**, and it exists because `find`
    * cannot.
    *
-   * *Find it on the web* POSTs, so it stays in the band with the poller and the
-   * auto-run. But its answer patches the list, and the list now lives up here.
+   * *Find it on the web* POSTed (`POST …/find`, a route deleted on 2026-10-04;
+   * since plan 260930d the same answer arrives as Investigate's `lookup`
+   * frame), so it stayed in the band with the poller and the auto-run. But
+   * its answer patches the list, and the list now lives up here.
    * The alternative GPT Sol offered — `refresh()` after every successful find —
    * was refused for two reasons: it is a whole extra `GET` after a call the
    * reader is already waiting on, and the F14 condition below would then live
@@ -284,6 +312,16 @@ export function useCitationsRead(slug: string): CitationsRead {
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * The read itself. `current()` after every `await`, before any state is set:
@@ -292,36 +330,55 @@ export function useCitationsRead(slug: string): CitationsRead {
    */
   const load = useCallback(
     async (current: () => boolean) => {
+      const started = begin();
       try {
-        const res = await apiFetch(`/api/citations/${encodeURIComponent(slug)}`);
+        /* The header asks for "no list yet" as `200 null` rather than a 404,
+           which a browser prints in red on every ordinary page load
+           (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404 is still read the
+           same way, for a server that has not heard of the header — the
+           minutes of a deploy. */
+        const res = await apiFetch(`/api/citations/${encodeURIComponent(slug)}`, {
+          headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+        });
         if (!current()) return;
-        if (res.status === 404) {
+        const loaded = res.status === 404 ? null : await readJson<CitationsResponse | null>(res);
+        if (!current()) return;
+        if (loaded === null) {
           /* The ordinary case, not a fault: nobody has asked for this
              article's citations yet, and the panel's button is for that. */
           setCitations(null);
           setStale(false);
           setOutdated(false);
+          landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
-        const loaded = await readJson<CitationsResponse>(res);
-        if (!current()) return;
+        /* Only an explicit null means none yet. Validate before publishing so
+           a broken revalidation leaves the list already on screen intact. */
+        if (!loaded?.citations || !Array.isArray(loaded.citations.citations)) {
+          /* A `MalformedReply`, so the reader gets `PAGE_FAULT`, as for every
+             other malformed artefact (tests/read-error-matrix.test.tsx). */
+          throw new MalformedReply("the citations reply has no list");
+        }
         setCitations(loaded.citations);
+        landed(started, res, loaded.citations.generatedAt);
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
-        setError((err as Error).message);
+        setError(describeFetchFailure(err as Error));
         /* **A failed revalidation must not take the list away** — `load` runs
            again every time a job finishes, and only the opening read has
            nothing to fall back on. Same guard as useTimeline.ts. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
@@ -330,6 +387,15 @@ export function useCitationsRead(slug: string): CitationsRead {
   /* A run that finishes after the reader left the band still reaches the prose
      and the margin — § An always-mounted read is not an always-fresh read. */
   useStepFinished(slug, "citations", refresh);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Works already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (citations === null) setStatus("loading");
+    await reload();
+  }, [citations, reload]);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `CitationsBand`'s own mount
@@ -378,54 +444,7 @@ export function useCitationsRead(slug: string): CitationsRead {
     );
   }, []);
 
-  return { status, citations, stale, outdated, error, reload, refresh, applyFound, detachDerived, applyInvestigation };
-}
-
-/** Safe link fields now; derived attachments only after the fresh server read. */
-function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
-  const { lookup: _lookup, investigation: _investigation, ...unattached } = w;
-  /* A link the article gave always wins; only our own rows move. */
-  const relink = (w.linkFrom === "search" || w.linkFrom === "web") && link.linkFrom === "web";
-  if (!relink) return unattached;
-  return { ...unattached, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) };
-}
-
-/**
- * The band's half: the jobs, the verbs, and *Find it on the web*.
- *
- * `read` comes from `useCitationsRead` in `OwnedReader` — see its docstring for
- * why the fetch moved up there, and what this hook still has to do on mount.
- */
-export function useCitations(slug: string, read: CitationsRead): UseCitations {
-  const { status, citations, stale, outdated, error, reload, refresh, applyFound, detachDerived, applyInvestigation } =
-    read;
   const [findNote, setFindNote] = useState<FindNote | null>(null);
-  /**
-   * Revalidate on mount, behind whatever is on screen.
-   *
-   * **Not a refetch for its own sake.** `useStepJob` treats its first poll as a
-   * baseline and does not announce a job that had already finished, so a list
-   * written **in another tab while this band was closed** has nothing else to
-   * bring it in. `reload` joins a request already in flight, so opening the band
-   * while `OwnedReader`'s opening GET is outstanding costs nothing, and it never
-   * returns `status` to `loading`. `useQuotes` and `useGlossary` do the same
-   * three lines the same way, for the same reason.
-   */
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  /* `refresh`, not `reload`: a finished job has just written a new list, and a
-     request already in flight read the old one. */
-  const queue = useStepJob(slug, "citations", refresh, "watches-queue");
-
-  /* Two verbs, split on `force`. useIdeas.ts has why. */
-  const ensure = useCallback(async () => {
-    await queue.start({});
-  }, [queue]);
-  const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
 
   /**
    * ***Investigate*** one work — plan 260930a, and the glossary's *Check the
@@ -439,12 +458,12 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
    *   the list again, while this run still holds admission, and the panel
    *   draws a stored answer newer than the one at the press instead of the
    *   failure (CitationInvestigation.tsx § investigationViewOf).
-   * - **Leaving stops the reading, not the investigation.** The server does
-   *   not pass the socket's close to the model call, so it finishes and
-   *   stores anyway. The band going, or another article, only aborts this
-   *   fetch; nothing is re-read then, because the answer is not stored yet at
-   *   that moment — the band's mount `reload` brings it in when it is opened
-   *   again, as it does for a list written while the band was closed.
+   * - **Leaving the article stops the reading, not the investigation.** The
+   *   server does not pass the socket's close to the model call, so it
+   *   finishes and stores anyway. Another article only aborts this fetch.
+   *   **Leaving the band stops nothing**, since 2026-10-04: this state lives on
+   *   the read, which outlives the band, so the row has the draft or the
+   *   answer when the reader comes back (plan 261004b).
    * - **One at a time**, across the list: each is a paid call, and the
    *   server's allowance runs one per reader at once anyway.
    * - **The `lookup` frame is applied as `/find`'s answer was** (plan 260930d
@@ -461,6 +480,18 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
   const [investigateStage, setInvestigateStage] = useState<InvestigateStage | null>(null);
   const [investigateDraft, setInvestigateDraft] = useState<InvestigateDraft | null>(null);
   const [investigateFailed, setInvestigateFailed] = useState<InvestigateFailure | null>(null);
+  /* A regeneration keeps work ids, but those ids must not carry a completed
+     press's local failure or no-match into the replacement list. Ordinary
+     revalidation keeps the generation and therefore keeps these results.
+     Let a live press finish before clearing its notes; never stop its stream. */
+  const resultGeneration = useRef(citations?.generatedAt);
+  const generation = citations?.generatedAt;
+  useEffect(() => {
+    if (investigating || resultGeneration.current === generation) return;
+    resultGeneration.current = generation;
+    setInvestigateFailed(null);
+    setFindNote(null);
+  }, [generation, investigating]);
   /* What is stored on each row at the moment of a press, read without making
      `investigate` change identity every time the list does. */
   const citationsNow = useRef(citations);
@@ -518,7 +549,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
              stream opens, so they are JSON and `readJson` throws their
              sentence. Nothing was stored. */
           await readJson(res);
-          throw new Error(`The server replied ${res.status}.`);
+          throw new ReaderFacingError(`The server replied ${res.status}.`);
         }
         opened = true;
         const investigation = await readAnswerStream(res.body, {
@@ -548,7 +579,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
         setInvestigateDraft(null);
         setInvestigateFailed({
           id,
-          message: err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+          message: describeFetchFailure(err as Error),
           previousAt,
           previousLookupAt,
           lookupKept,
@@ -565,7 +596,7 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     [slug, applyFound, detachDerived, applyInvestigation, refresh],
   );
 
-  /* Another article, or the band going, stops reading — useGlossary.ts's
+  /* Another article stops reading — useGlossary.ts's
      cleanup for `look`, for the same reason: the old stream's `done` must not
      land on the next article's list, whose ids are the same shape. */
   // biome-ignore lint/correctness/useExhaustiveDependencies: `slug` is the trigger — the cleanup must run when it changes
@@ -582,6 +613,100 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     [slug],
   );
 
+  return {
+    status,
+    citations,
+    stale,
+    outdated,
+    error,
+    retryRead,
+    reload,
+    refresh,
+    fresh,
+    applyFound,
+    detachDerived,
+    applyInvestigation,
+    findNote,
+    investigating,
+    investigateStage,
+    investigateDraft,
+    investigateFailed,
+    investigate,
+  };
+}
+
+/** Safe link fields now; derived attachments only after the fresh server read. */
+function patchFound(w: CitedWork, { link }: FoundPatch): CitedWork {
+  const { lookup: _lookup, investigation: _investigation, ...unattached } = w;
+  /* A link the article gave always wins; only our own rows move. */
+  const relink = (w.linkFrom === "search" || w.linkFrom === "web") && link.linkFrom === "web";
+  if (!relink) return unattached;
+  return { ...unattached, url: link.url, linkFrom: link.linkFrom, ...(link.found ? { found: link.found } : {}) };
+}
+
+/**
+ * The band's half: the jobs, the verbs, and *Find it on the web*.
+ *
+ * `read` comes from `useCitationsRead` in `OwnedReader` — see its docstring for
+ * why the fetch moved up there, and what this hook still has to do on mount.
+ */
+export function useCitations(slug: string, read: CitationsRead): UseCitations {
+  const {
+    status,
+    citations,
+    stale,
+    outdated,
+    error,
+    reload,
+    refresh,
+    findNote,
+    investigating,
+    investigateStage,
+    investigateDraft,
+    investigateFailed,
+    investigate,
+  } = read;
+  /**
+   * Revalidate on mount, behind whatever is on screen.
+   *
+   * **Not a refetch for its own sake.** `useStepJob` treats its first poll as a
+   * baseline and does not announce a job that had already finished, so a list
+   * written **in another tab while this band was closed** has nothing else to
+   * bring it in. `reload` joins a request already in flight, so opening the band
+   * while `OwnedReader`'s opening GET is outstanding costs nothing, and it never
+   * returns `status` to `loading`. `useQuotes` and `useGlossary` do the same
+   * three lines the same way, for the same reason.
+   */
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  /* `refresh`, not `reload`: a finished job has just written a new list, and a
+     request already in flight read the old one. */
+  const queue = useStepJob(slug, "citations", refresh, "watches-queue");
+
+  /* Two verbs, split on `force`. useIdeas.ts has why. */
+  const ensure = useCallback(async () => {
+    await queue.start({});
+  }, [queue]);
+  /* **The forced verb holds the list it was pressed on** (rewrite-hold.ts), as
+     useIdeas.ts § `regenerate` does. The list's clock is its identity, and it
+     is the server's: a *Look it up* answer patched onto a row here leaves it
+     alone, so only a run that rewrote the list reads as a replacement. */
+  const hold = useRewriteHold({
+    slug,
+    step: "citations",
+    identity: citations?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
+  const regenerate = useCallback(async () => {
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
+
+
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read
      is not an answer. */
   const auto = useAutoRun(slug, "citations", status, ensure, reload);
@@ -594,10 +719,13 @@ export function useCitations(slug: string, read: CitationsRead): UseCitations {
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    rewriting: hold.rewriting,
+    refresh,
+    retryRead: read.retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,
@@ -628,7 +756,32 @@ function isInvestigation(data: unknown): data is CitationInvestigation {
     (i.matchedHost === null || typeof i.matchedHost === "string") &&
     typeof i.at === "string" &&
     /* Absent on an answer from before plan 261001a stage 3; when present, whole. */
-    (i.paper === undefined || isInvestigatedPaper(i.paper))
+    (i.paper === undefined || isInvestigatedPaper(i.paper)) &&
+    /* Absent when the press kept no influence (plan 261003m stage 2); when present, whole. */
+    (i.influence === undefined || isWebInfluence(i.influence))
+  );
+}
+
+/**
+ * **A web influence, whole or not at all** — a number within 0–1, the page's
+ * words, an http(s) address and a version. It feeds the bar, the threshold and
+ * the order, so a malformed one fails the frame rather than drawing a bar from
+ * a string or a link to anything but a web page.
+ */
+function isWebInfluence(data: unknown): data is CitationWebInfluence {
+  const w = data as Record<string, unknown> | null | undefined;
+  return (
+    !!w &&
+    typeof w === "object" &&
+    typeof w.value === "number" &&
+    Number.isFinite(w.value) &&
+    w.value >= 0 &&
+    w.value <= 1 &&
+    isText(w.quote) &&
+    isText(w.sourceUrl) &&
+    /^https?:\/\//i.test(w.sourceUrl) &&
+    (w.sourceTitle === undefined || typeof w.sourceTitle === "string") &&
+    isText(w.version)
   );
 }
 

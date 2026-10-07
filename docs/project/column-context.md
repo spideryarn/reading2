@@ -6,6 +6,14 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 > which was removed that day ([260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md)). Only the focus sampling (`useColumnContext`) and the
 > `Tier` type survive, for Structure. Read the rest as history.
 
+## In this doc
+
+- [§ The problem](#the-problem) — why the coarse columns were 80% blank, in Greg's words
+- [§ What the research said](#what-the-research-said) — the fisheye / degree-of-interest evidence (history)
+- [§ What a gist column shows now](#what-a-gist-column-shows-now) — the always-centred panel that won (history; removed 2026-09-29)
+- [§ How to decide](#how-to-decide) — the three tasks the four toggles were judged on
+- [§ See also](#see-also) — neighbours, and `follow.ts` for a scrollable list
+
 How the coarse columns became scannable. Four treatments were built side by side as pills you could
 toggle, compared, and cut down to the one described here — there is no control and no URL state
 left, and the pills and their tooltips are gone with them. The plan they were built from, and GPT's
@@ -102,8 +110,8 @@ level of five parts left most of a twelve-hundred-pixel panel blank: the same co
 was built to answer, one level up.
 
 So a landmark's line budget is worked out from **how many entries the level has and how tall the
-panel is** — [`landmarkLines`](../../src/web/context.ts), tested in
-`tests/context.test.ts`. A level of five gets several lines each, so
+panel is** — `landmarkLines` in `src/web/context.ts`, tested in
+`tests/context.test.ts` (both deleted with the panels). A level of five gets several lines each, so
 it reads as five sentences with the one you are in set large and unclamped; forty sections under six
 part headings get none and stay the title-only list they already were. In between it steps down, and
 where it lands depends on the window as much as the count. A title column shows its gist under its
@@ -181,7 +189,7 @@ latched attribute is the lag above, permanently.
 this said it could not. Measured in a browser, 2026-09-07: `scrollTo(0, 400)` from the top hides the
 bar on the same frame the panel is still measured at its unsettled position, so it glides the whole
 244px instead of snapping to 44 and sliding 44 → 0. A scrollbar drag or a hard fling can do it, an
-ordinary scroll cannot, and `markOurScroll` already covers every jump the app itself starts. Left
+ordinary scroll cannot, and `ourScrollY` in `scroll.ts` already covers every jump the app itself starts. Left
 alone: the panel arrives in the right place either way, the overshoot is bounded by the masthead's
 height, and closing it would mean teaching `scroll.ts` whether another module's measurement had
 settled.
@@ -253,12 +261,14 @@ cut as the one remaining pill and went the same afternoon:
 Worth keeping as a finding rather than a footnote: a thing that moves every scroll frame in the
 corner of the eye is a cost even when it is two pixels tall.
 
-Where things live: [`context.ts`](../../src/web/context.ts) decides what the level lists and is
-tested in `tests/context.test.ts`;
+Where things lived — **only `useColumnContext.ts` and the `Tier` type in `context.ts` are still
+there**: [`context.ts`](../../src/web/context.ts) decided what the level listed (its `landmarkLines`
+and `tests/context.test.ts` are deleted);
 [`useColumnContext.ts`](../../src/web/useColumnContext.ts) is the live half — which item is under
-the focus line and where the columns are; `src/web/ContextList.tsx`
-draws the list and the landmarks' tooltips; `src/web/ContextPanel.tsx` is
-the panel; the cells under the panel are in [`TableView.tsx`](../../src/web/TableView.tsx); the styles are
+the focus line and where the columns are, and is Structure's "you are here" still;
+`src/web/ContextList.tsx` drew the list and the landmarks' tooltips and `src/web/ContextPanel.tsx`
+was the panel (both deleted); the cells under the panel were in
+[`TableView.tsx`](../../src/web/TableView.tsx); the styles were
 `styles/column-context.css` (`src/web/styles/column-context.css`, deleted) § column context.
 
 ### What the panel replaced, and what it cost

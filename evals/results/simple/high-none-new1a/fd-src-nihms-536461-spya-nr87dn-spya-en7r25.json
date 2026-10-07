@@ -1,0 +1,297 @@
+{
+  "arm": "high-none-new1a",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "fd-src-nihms-536461-spya-nr87dn-spya-en7r25",
+  "version": "simple-prompt/10",
+  "sourceSha256": "4d23cf8fd17f57a5b744472cdebd65080987d37d4009e78461ff218845d039f2",
+  "at": "2026-10-05T16:35:28.321Z",
+  "bodyWords": 11146,
+  "band": "standard",
+  "bodyBlocks": 82,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "80e9cc368d8204bc",
+  "systemsSha256": "2ef1eb6f9587e70ad75b41b03c3a2b9600243e5c2829707206ef6b5575490d64",
+  "power": "high",
+  "guard": true,
+  "wallMs": 35271,
+  "costUsd": 0.1039196,
+  "tokens": {
+    "input": 15037,
+    "output": 3659,
+    "reasoning": 1152
+  },
+  "briefReadyMs": 17760,
+  "fullerReadyMs": 35267,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 508,
+  "briefWords": 115,
+  "fuller": [
+    {
+      "text": "This is a review paper that gathers past research and proposes a new idea about cognitive control: the brain's ability to steer thinking and action toward a goal. Much of this ability depends on the prefrontal cortex, the front part of the brain. The authors picture it as a filter that keeps useful information and weakens or discards the rest. Their idea is called the Matched Filter Hypothesis: performance is best when the amount of filtering matches what the task needs.",
+      "ids": [
+        "spya-vxet4b",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This is a review paper that gathers past research and proposes a new idea about cognitive control: the brain's ability to steer thinking and action toward a goal.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "Much of this ability depends on the prefrontal cortex, the front part of the brain.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "The authors picture it as a filter that keeps useful information and weakens or discards the rest.",
+          "id": "spya-tvhpk0"
+        },
+        {
+          "text": "Their idea is called the Matched Filter Hypothesis: performance is best when the amount of filtering matches what the task needs.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "The common view treats more control as better, but the authors say a growing body of research shows that not every kind of thinking benefits from it. Take a guessing game where one choice pays off 75% of the time. Adults pick it 75% of the time and win about 62.5% of rounds; children pick it every time and win 75%. Since adults' habit may involve control, here control seems to hurt.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-egkn3d"
+      ],
+      "sentences": [
+        {
+          "text": "The common view treats more control as better, but the authors say a growing body of research shows that not every kind of thinking benefits from it.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "Take a guessing game where one choice pays off 75% of the time.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Adults pick it 75% of the time and win about 62.5% of rounds; children pick it every time and win 75%.",
+          "id": "spya-egkn3d",
+          "key": "win about 62.5% of rounds"
+        },
+        {
+          "text": "Since adults' habit may involve control, here control seems to hurt.",
+          "id": "spya-egkn3d"
+        }
+      ]
+    },
+    {
+      "text": "The hypothesis says high control suits tasks that are explicit, rule-based, verbal or abstract, and that fit within working memory, the small amount we can hold in mind at once. Low control suits tasks that are implicit, driven by rewards, intuitive, or too complex for working memory. The authors call reduced prefrontal activity \"hypofrontality\" and argue it helps such tasks by letting more raw information through. How well a person matches control to a task may depend on age, genes, brain damage, a second task, or brain stimulation.",
+      "ids": [
+        "spya-vxet4b",
+        "spya-kyvz4a"
+      ],
+      "sentences": [
+        {
+          "text": "The hypothesis says high control suits tasks that are explicit, rule-based, verbal or abstract, and that fit within working memory, the small amount we can hold in mind at once.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "Low control suits tasks that are implicit, driven by rewards, intuitive, or too complex for working memory.",
+          "id": "spya-vxet4b"
+        },
+        {
+          "text": "The authors call reduced prefrontal activity \"hypofrontality\" and argue it helps such tasks by letting more raw information through.",
+          "id": "spya-kyvz4a",
+          "key": "hypofrontality"
+        },
+        {
+          "text": "How well a person matches control to a task may depend on age, genes, brain damage, a second task, or brain stimulation.",
+          "id": "spya-kyvz4a"
+        }
+      ]
+    },
+    {
+      "text": "For learning, the authors gather several lines of evidence. Doing a second task at the same time, or briefly dampening part of the prefrontal cortex with magnetic pulses, helped adults learn some hard-to-put-into-words rules and movements. In \"blocking\", an early-learned cue stops people learning a later one; 3-year-olds show less blocking than 4-year-olds, fitting the idea that control speeds learning but distorts it. Learning a made-up language from messy input, adults copied the mess, while children used only the most frequent form and did better.",
+      "ids": [
+        "spya-whdqvc",
+        "spya-wx0kxu",
+        "spya-pttrqz"
+      ],
+      "sentences": [
+        {
+          "text": "For learning, the authors gather several lines of evidence.",
+          "id": null
+        },
+        {
+          "text": "Doing a second task at the same time, or briefly dampening part of the prefrontal cortex with magnetic pulses, helped adults learn some hard-to-put-into-words rules and movements.",
+          "id": "spya-whdqvc"
+        },
+        {
+          "text": "In \"blocking\", an early-learned cue stops people learning a later one; 3-year-olds show less blocking than 4-year-olds, fitting the idea that control speeds learning but distorts it.",
+          "id": "spya-wx0kxu",
+          "key": "3-year-olds show less blocking"
+        },
+        {
+          "text": "Learning a made-up language from messy input, adults copied the mess, while children used only the most frequent form and did better.",
+          "id": "spya-pttrqz"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Creativity shows a similar pattern when ideas must come from raw features like shape or material. People inventing unusual uses for objects showed lower prefrontal activity and more activity in visual areas. A weak electrical current that dampened the left prefrontal cortex made people produce creative uses faster and in greater number. Children also get stuck less than adults on an object's usual purpose, though no study has tied this to brain development. Judging whether an idea actually works, however, likely needs control again.",
+      "ids": [
+        "spya-peqnf8",
+        "spya-gfuefq",
+        "spya-xmgzpp"
+      ],
+      "sentences": [
+        {
+          "text": "Creativity shows a similar pattern when ideas must come from raw features like shape or material.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "People inventing unusual uses for objects showed lower prefrontal activity and more activity in visual areas.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "A weak electrical current that dampened the left prefrontal cortex made people produce creative uses faster and in greater number.",
+          "id": "spya-peqnf8",
+          "key": "faster and in greater number"
+        },
+        {
+          "text": "Children also get stuck less than adults on an object's usual purpose, though no study has tied this to brain development.",
+          "id": "spya-gfuefq"
+        },
+        {
+          "text": "Judging whether an idea actually works, however, likely needs control again.",
+          "id": "spya-xmgzpp"
+        }
+      ]
+    },
+    {
+      "text": "The authors name clear limits. Children's learning advantages cannot be blamed on weaker prefrontal function alone, since children also differ in knowledge and strategies. Some prefrontal function is essential, so less is not always better, and the brain mechanisms behind the matching remain unknown. Studies on creativity are few, and direct evidence in adults is sparse.",
+      "ids": [
+        "spya-s0bmee",
+        "spya-uxhggj",
+        "spya-t9zbas"
+      ],
+      "sentences": [
+        {
+          "text": "The authors name clear limits.",
+          "id": null
+        },
+        {
+          "text": "Children's learning advantages cannot be blamed on weaker prefrontal function alone, since children also differ in knowledge and strategies.",
+          "id": "spya-s0bmee"
+        },
+        {
+          "text": "Some prefrontal function is essential, so less is not always better, and the brain mechanisms behind the matching remain unknown.",
+          "id": "spya-uxhggj"
+        },
+        {
+          "text": "Studies on creativity are few, and direct evidence in adults is sparse.",
+          "id": "spya-t9zbas"
+        }
+      ]
+    },
+    {
+      "text": "The core lesson is that filtering input always has a cost: it can help in one situation and harm in another. The authors conclude that cognitive control is a tool suited to some common challenges, not an all-purpose system for every problem.",
+      "ids": [
+        "spya-e5g0a5",
+        "spya-xbrswq"
+      ],
+      "sentences": [
+        {
+          "text": "The core lesson is that filtering input always has a cost: it can help in one situation and harm in another.",
+          "id": "spya-xbrswq"
+        },
+        {
+          "text": "The authors conclude that cognitive control is a tool suited to some common challenges, not an all-purpose system for every problem.",
+          "id": "spya-e5g0a5",
+          "key": "a tool suited to some common challenges"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This review asks when the brain's front part, which keeps us focused and on task, actually helps. The authors call this focusing \"cognitive control.\" It works like a filter that throws away information that seems useless. They propose the Matched Filter Hypothesis: we do best when the amount of filtering fits the task.",
+      "ids": [
+        "spya-ez5mym",
+        "spya-tvhpk0"
+      ],
+      "sentences": [
+        {
+          "text": "This review asks when the brain's front part, which keeps us focused and on task, actually helps.",
+          "id": "spya-ez5mym"
+        },
+        {
+          "text": "The authors call this focusing \"cognitive control.\" It works like a filter that throws away information that seems useless.",
+          "id": "spya-tvhpk0",
+          "key": "cognitive control"
+        },
+        {
+          "text": "They propose the Matched Filter Hypothesis: we do best when the amount of filtering fits the task.",
+          "id": "spya-tvhpk0",
+          "key": "Matched Filter Hypothesis"
+        }
+      ]
+    },
+    {
+      "text": "Strong control suits clear, rule-based tasks. But some learning and creative tasks may go better with less of it. Children, whose control is still developing, sometimes beat adults at certain guessing games. Adults came up with new uses for objects faster when the brain's front was briefly quieted. So control is a tool for some jobs, not a fix for every problem.",
+      "ids": [
+        "spya-egkn3d",
+        "spya-peqnf8",
+        "spya-e5g0a5"
+      ],
+      "sentences": [
+        {
+          "text": "Strong control suits clear, rule-based tasks.",
+          "id": null
+        },
+        {
+          "text": "But some learning and creative tasks may go better with less of it.",
+          "id": null
+        },
+        {
+          "text": "Children, whose control is still developing, sometimes beat adults at certain guessing games.",
+          "id": "spya-egkn3d"
+        },
+        {
+          "text": "Adults came up with new uses for objects faster when the brain's front was briefly quieted.",
+          "id": "spya-peqnf8"
+        },
+        {
+          "text": "So control is a tool for some jobs, not a fix for every problem.",
+          "id": "spya-e5g0a5"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

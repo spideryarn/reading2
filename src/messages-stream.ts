@@ -63,15 +63,26 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
   providerCost,
-  type SpendRecord,
   beginSpend,
   keyFingerprint,
   recordSpend,
 } from "./ai-spend.js";
+import {
+  type AbortClass,
+  type CallFailure,
+  abortClass,
+  networkClass,
+  providerEventClass,
+  stoppedByOurClock,
+  thrownClass,
+} from "./call-failure.js";
+import { stageFailure } from "./job-failure.js";
 import { log } from "./log.js";
-import { NOT_CONFIGURED } from "./messages.js";
+import { MODEL_REFUSED, NOT_CONFIGURED } from "./messages.js";
 import { isHighPowerModel, type ModelPower, type Task, modelFor } from "./models.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
+import { truncationFailure } from "./token-budget.js";
+import { TRANSIENT_STATUSES, TRANSPORT_ATTEMPTS, backoffMs, waitOrStop } from "./transport-retry.js";
 
 /** Where the Anthropic Messages protocol is served from. Not `api.anthropic.com`. */
 /* Not exported — see `OPENROUTER_BASE` in ai-call.ts for the same reasoning:
@@ -143,20 +154,24 @@ export function messagesClient(): Anthropic {
     /* **`0`, not the SDK's default of `2`, and this is an accounting decision
        rather than a reliability one.**
 
-       `streamMessage` opens exactly one meter around one SDK operation, and the
-       whole design rests on *one record, one call*. With the default the SDK
-       retries a failed request up to twice inside that operation, so a single
-       `SpendRecord` could quietly cover three HTTP attempts — and a retry after
-       a 5xx that arrived *post-generation* is an attempt that was billed. The
-       row would then be a third of the truth, with nothing to say so, which is
-       the exact shape of understatement this whole module exists to prevent.
-       Found by a GPT Sol review of the code.
+       `streamMessage` opens a fresh meter around each SDK operation, and the
+       whole design rests on *one record, one network attempt*. With the default
+       the SDK retries a failed request up to twice inside that operation, so a
+       single `SpendRecord` could quietly cover three HTTP attempts — and a
+       retry after a 5xx that arrived *post-generation* is an attempt that was
+       billed. The row would then be a third of the truth, with nothing to say
+       so, which is the exact shape of understatement this whole module exists
+       to prevent. Found by a GPT Sol review of the code.
 
-       What it costs: a transport blip that the SDK used to paper over now
-       surfaces as a failed step. That is the honest trade — the pipeline
-       already retries at the step level, where a retry is visible on the job,
-       and [`src/pdf-read.ts`](pdf-read.ts) shows what a deliberate,
-       *countable* transport retry looks like when one is wanted. */
+       What it would cost on its own: a transport blip that the SDK used to
+       paper over surfaces as a failed step. **For five weeks it did.** This
+       comment said "the pipeline already retries at the step level", and the
+       only step-level retry is a reader pressing Retry, so one dropped
+       connection failed an import (report spya-x4zut6, plan 261003m). The
+       replacement is `streamMessage`'s own loop, below: a *countable*
+       transport retry, every attempt its own record, and only before the
+       response has begun. [`src/pdf-read.ts`](pdf-read.ts) §
+       `withTransportRetries` is the older one of the same shape. */
     maxRetries: 0,
   });
 }
@@ -357,6 +372,74 @@ export function wasRefused(message: Anthropic.Message): boolean {
 }
 
 /**
+ * Every text block of an answer, joined in order. A thinking block is not text.
+ *
+ * For the three stages whose ending is their own (`simple-summary`, `labels`,
+ * `structure-deepen`). Everything else wants `finishedText`.
+ */
+export function messageText(message: Anthropic.Message): string {
+  return message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
+}
+
+/**
+ * **The ordinary ending of a stage's call: a refusal throws, a truncation
+ * throws, and otherwise this is the answer's text.**
+ *
+ * Until 2026-10-04 each stage wrote these three steps out itself, copied from a
+ * neighbour: 32 copies of the text-block filter in 18 files. The copies drifted
+ * the way copies do. `src/illustrated.ts` threw its refusal as a plain `Error`
+ * for a month, so the reader got the generic sentence rather than the refusal
+ * one, while two comments said every site was declared. With one copy there is
+ * nowhere to write that. docs/plans/261004d-fifth-sweep-cluster-19-one-helper-for-reading-a-messages-result.md.
+ *
+ * **The refusal is judged first**, as every copy did. The other order would tag
+ * a refused answer that also ran out of room as `bug` and tell the reader a
+ * setting of ours is wrong.
+ *
+ * **`stop_details` is neither thrown nor logged.** It is the provider's own
+ * words about a request that carried the whole article, and this error is
+ * copied onto the job and shown on the progress card. See `MODEL_REFUSED` in
+ * src/messages.ts and `wasRefused` above.
+ *
+ * `stage`, `maxTokens`, `answerTokens` and `headroom` are `truncationFailure`'s
+ * own arguments, and exist only for its sentence. Pass `headroom` where the
+ * call was sized with something other than the default (src/structure.ts), or
+ * the sentence quotes a number the call was never sized with.
+ *
+ * Not for a stage that answers a truncation itself rather than failing on it.
+ * `src/labels.ts` retries the batch and `src/structure-deepen.ts` shrinks it;
+ * `src/simple-summary.ts` returns its failures with the call's usage. Those
+ * three keep their own checks and take `messageText`.
+ */
+export function finishedText(
+  message: Anthropic.Message,
+  stage: string,
+  maxTokens: number,
+  answerTokens: number,
+  headroom?: number,
+): string {
+  if (wasRefused(message)) {
+    throw stageFailure(MODEL_REFUSED, {
+      authored: "the model answered with stop_reason: refusal",
+    });
+  }
+  const text = messageText(message);
+  if (message.stop_reason === "max_tokens") {
+    throw truncationFailure(
+      stage,
+      maxTokens,
+      answerTokens,
+      { outputTokens: message.usage.output_tokens, answerChars: text.length },
+      headroom,
+    );
+  }
+  return text;
+}
+
+/**
  * The body a stage passes, plus the fields Anthropic's own types do not know.
  *
  * `MessageStreamParams`, not `MessageCreateParamsStreaming`: the latter requires
@@ -387,7 +470,7 @@ export type MessagesBody = Omit<Anthropic.MessageStreamParams, "model"> & {
 /**
  * What `streamMessage` hands back.
  *
- * **Four functions, and deliberately not the stream.** A stage used to get the
+ * **Five functions, and deliberately not the stream.** A stage used to get the
  * SDK's own `MessageStream`, which has its own `finalMessage()` on it — so the
  * ordinary-looking `await call.stream.finalMessage()` was a working call that
  * recorded nothing, and nothing counted it. That was fine while the numbers only
@@ -407,8 +490,20 @@ export interface MeteredCall {
   onStart: (listener: () => void) => void;
   /** `stream.finalMessage()`, plus the spend record. The only way to get the answer. */
   finalMessage: () => Promise<Anthropic.Message>;
-  /** Whether the stream ended because somebody aborted it. */
+  /**
+   * Whether **this call** ended because somebody aborted it — its last stream,
+   * or the wait between two attempts, where there is no stream to ask.
+   */
   readonly aborted: () => boolean;
+  /**
+   * **How many network requests this call has made so far** — zero when the
+   * signal was already aborted, otherwise one unless a transport retry happened
+   * (see `streamMessage`). Read it after `finalMessage()` settles. For the
+   * callers that publish a request count of their own (`SimpleRun.calls`,
+   * `LabelBatchRecord.requests`), so that their figure and the ledger's cannot
+   * disagree about a retried call.
+   */
+  readonly attempts: () => number;
 }
 
 /**
@@ -430,14 +525,24 @@ export interface MeteredCall {
  * was a weaker guarantee than the other wire's and was written down as one.
  *
  * It is closed. The stream, the meter and `meterStream` are private; what comes
- * back is four functions. GPT Sol asked for it before the numbers became
+ * back is five functions. GPT Sol asked for it before the numbers became
  * database rows, on the grounds that a documented bypass under a ledger is a
  * ledger that looks complete.
  *
  * The test is still there, and still worth having:
  * [`tests/messages-stream.test.ts`](../tests/messages-stream.test.ts) drives this
- * function against a stubbed transport and asserts that one finished call
+ * function against a stubbed transport and asserts that one network attempt
  * produces exactly one `SpendRecord`. Delete the recording and it goes red.
+ *
+ * **One attempt, one record — and since 2026-10-03 a call may be up to three
+ * attempts.** An attempt that fails *before `message_start`* on a transient
+ * failure is made again, after a short wait, as a new stream with its own
+ * pending call and its own row (plan 261003m). `message_start` is the boundary
+ * because it is the first thing a listener can hear: before it, nothing has
+ * been shown to anybody. **It is not proof that nothing was billed.** A
+ * connection can drop after the provider accepted the work, so the failed
+ * attempt's row has an unknown cost, not a zero one, and a retry knowingly
+ * accepts that it may pay twice for the first second of a call.
  *
  * `provider` is injected for the same reason: a stage that forgets it does not
  * fail, it just quietly stops hitting the cache. A caller may still pass its
@@ -498,19 +603,115 @@ export function streamMessage(
      decides the model, and a stage that has not asked does not compile. */
   options: { power: ModelPower; signal?: AbortSignal },
 ): MeteredCall {
+  /* **No request, no row.** The SDK refuses an already-aborted signal before
+     calling `fetch`; opening a meter first would therefore write an `aborted`
+     row for a network attempt that never happened. This also has to precede
+     `messagesClient()`: a cancelled call has no need to discover whether a key
+     was configured. */
+  if (options.signal?.aborted) {
+    let rejection: Promise<Anthropic.Message> | null = null;
+    return {
+      onText: () => {},
+      onStart: () => {},
+      finalMessage: () => {
+        rejection ??= Promise.reject(new Anthropic.APIUserAbortError());
+        return rejection;
+      },
+      aborted: () => true,
+      attempts: () => 0,
+    };
+  }
+
   const client = messagesClient();
-  const startedAt = Date.now();
   const wire = messagesWireBody(task, body, options.power);
   const model = wire.model;
-  /* Registered before the stream opens, so a call that never comes back leaves a
-     trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
-  const callId = beginSpend(task, model);
-  const stream = client.messages.stream(wire, options.signal ? { signal: options.signal } : undefined);
-  const meter = meterStream(stream);
-  /* Off the client rather than out of the environment a second time: the key the
-     call actually went out with is the one the reconciliation has to ask about,
-     and a second read of `process.env` is a second chance to disagree. */
-  meter.credentialFingerprint = keyFingerprint(client.apiKey ?? "");
+
+  /* The caller's listeners, kept here rather than on a stream, because a
+     transport retry (below) opens a second stream and they have to follow it. A
+     retry happens only before `message_start`, so neither list ever hears two
+     attempts. */
+  const textListeners: ((delta: string) => void)[] = [];
+  const startListeners: (() => void)[] = [];
+
+  /**
+   * One network attempt: its own stream, its own meter, its own pending call.
+   * *One record, one attempt* is the rule `messagesClient` § `maxRetries`
+   * protects, and it is why a retry is a second one of these rather than a loop
+   * inside the first.
+   */
+  const open = (n: number) => {
+    const startedAt = Date.now();
+    /* Registered before the stream opens, so a call that never comes back leaves a
+       trace rather than simply not appearing. See `PendingCall` in ai-spend.ts. */
+    const callId = beginSpend(task, model);
+    const stream = client.messages.stream(wire, options.signal ? { signal: options.signal } : undefined);
+    const meter = meterStream(stream);
+    /* Off the client rather than out of the environment a second time: the key the
+       call actually went out with is the one the reconciliation has to ask about,
+       and a second read of `process.env` is a second chance to disagree. */
+    meter.credentialFingerprint = keyFingerprint(client.apiKey ?? "");
+    /* `n` is which go this is, and is what the attempt's row carries: a row
+       with `attempt > 1` is a retry that really started. `begun` is this
+       wire's acceptance boundary, `message_start`: a failure before it is
+       `before_answer`, one after it `mid_answer`. */
+    const attempt = {
+      stream,
+      meter,
+      callId,
+      startedAt,
+      begun: false,
+      n,
+      /** Who stopped this stream, captured as its controller aborts. */
+      stoppedBy: null as AbortClass | null,
+    };
+    stream.on("streamEvent", (event) => {
+      if (attempt.begun || event.type !== "message_start") return;
+      attempt.begun = true;
+      for (const listener of startListeners) {
+        /* The SDK calls raw-event listeners inline while it is assembling the
+           message. A callback exception therefore becomes a stream failure
+           unless it stops here. `onStart` is a notification seam, not part of
+           parsing the provider's answer; log a safe, content-free line and let
+           the stream continue. */
+        try {
+          listener();
+        } catch {
+          log("model").warn("a message-stream start listener threw; the model stream was left running");
+        }
+      }
+    });
+    stream.on("text", (delta) => {
+      for (const listener of textListeners) listener(delta);
+    });
+    /* The SDK deliberately creates an unhandled rejection when a stream fails
+       before its caller invokes a promise-returning method and no error listener
+       exists. `MeteredCall` does not expose the SDK stream, so its caller cannot
+       install one; keep the failure on `finalMessage()` (and the pending row if
+       that method is never called) without also leaking a process-level
+       rejection. The abort event follows the same SDK rule. */
+    stream.on("error", () => {});
+    /* The controller aborts synchronously; the SDK's `abort` event follows
+       asynchronously after the transport settles. Capture at the controller
+       so a later external clock cannot claim an independent SDK abort, even
+       when both happen in the same turn. The SDK forwards external cancellation
+       to this controller, after the external signal has its reason. */
+    stream.controller.signal.addEventListener("abort", () => {
+      attempt.stoppedBy = abortClass(options.signal?.aborted ? options.signal.reason : undefined);
+    }, { once: true });
+    /* An SDK abort error can also arrive without its controller firing. */
+    stream.on("abort", () => {
+      attempt.stoppedBy ??= "abort";
+    });
+    return attempt;
+  };
+  /* Opened here, not on the first `finalMessage()`: the request has always gone
+     out when `streamMessage` is called, and a caller may attach listeners and
+     await later. */
+  let current = open(1);
+  let attempts = 1;
+  /* A Stop that landed in the wait between two attempts. No stream was open to
+     be aborted, so no stream can say so. */
+  let stoppedWhileWaiting = false;
 
   /* **Memoised, because `finalMessage()` may be awaited more than once.** The
      SDK's own is idempotent — it resolves the same message every time — so a
@@ -522,87 +723,203 @@ export function streamMessage(
 
   const finalMessage = (): Promise<Anthropic.Message> => {
     settled ??= (async () => {
-      try {
-        const message = await stream.finalMessage();
-        record(
-          task,
-          model,
-          meter,
-          message.usage,
-          startedAt,
-          "ok",
-          callId,
-          message.model,
-        );
-        return message;
-      } catch (err) {
-        /* **An aborted or failed call has usually still cost money.** Recording
-           it with a non-`ok` outcome is the honest answer: a row saying "this
-           happened, and here is what we know about what it cost" is something a
-           report can surface, where no row at all is a hole in the bill that
-           nothing points at.
-
-           The cost is whatever the meter caught, **not forced to null**. If the
-           terminal `message_delta` arrived and the stream then failed, that
-           figure is real and keeping it is strictly better. Where nothing
-           arrived it stays null, which reads as *unknown* rather than as free.
-           So the number on a non-`ok` row is a **lower bound**, and anything
-           reporting it should say so.
-
-           `stream.aborted`, not `options.signal.aborted`: the SDK exposes how
-           *this stream* ended, where the external signal answers a different
-           question and gets two cases wrong — `stream.abort()` with no signal
-           reads as an error, and a provider failure racing a later signal abort
-           reads as a cancel. Both found by a GPT Sol review.
-
-           **And then it OR-ed the signal back in anyway**, one line under the
-           paragraph explaining why that is wrong, which a second Sol review
-           caught. What is left is causal on both halves: either the stream says
-           it was aborted, or the error *is* the abort — the signal's own reason,
-           or an `AbortError` where none was given. "The signal happens to be
-           aborted now" is not one of the two. */
-        const aborted = stream.aborted || isAbort(err, options.signal);
-        record(
-          task,
-          model,
-          meter,
-          null,
-          startedAt,
-          aborted ? "aborted" : "error",
-          callId,
-          null,
-        );
-        throw err;
+      for (let attempt = 1; ; attempt++) {
+        const { stream, meter, startedAt, callId } = current;
+        try {
+          const message = await stream.finalMessage();
+          record(task, model, meter, message.usage, startedAt, { outcome: "ok" }, callId, message.model, attempt);
+          return message;
+        } catch (err) {
+          const end = recordFailure(err);
+          /* **Asked of the outcome, not of whether there are failure fields**:
+             an abort has them too, and is still never asked again. */
+          const aborted = end.outcome === "aborted";
+          /* **The transport retry `messagesClient` § `maxRetries` promised and
+             nothing built until 2026-10-03** (plan 261003m, report spya-x4zut6:
+             one dropped connection, 595 ms in, failed an import). The attempt
+             that failed has its own record, just written; the next has its own
+             too. */
+          if (aborted || current.begun || attempt >= TRANSPORT_ATTEMPTS || !worthAnotherAttempt(err)) {
+            throw err;
+          }
+          try {
+            await waitOrStop(backoffMs(attempt), options.signal);
+            /* A Stop can land after the wait resolves. Checked again here, so
+               it cannot open an attempt, and a row, for a request never sent. */
+            options.signal?.throwIfAborted();
+          } catch {
+            stoppedWhileWaiting = true;
+            throw new Anthropic.APIUserAbortError();
+          }
+          /* Logged as the retry starts, not when the failure was seen: a Stop
+             in the wait above means there is no retry, and this line has to
+             agree with the ledger, where a retry is a row with `attempt > 1`. */
+          log("model").warn(failureFields(task, model, attempt + 1, end.failure), "ai transport retry");
+          current = open(attempt + 1);
+          attempts += 1;
+        }
       }
     })();
     return settled;
   };
 
+  /**
+   * Write the row of an attempt that did not answer, and hand back how it
+   * ended: an `error`, or an `aborted` that says who stopped it. Both carry
+   * failure fields, so the caller tells them apart by the outcome.
+   */
+  const recordFailure = (err: unknown): UnansweredEnd => {
+    const { stream, meter, startedAt, callId, begun, n, stoppedBy } = current;
+    /* **An aborted or failed call has usually still cost money.** Recording
+       it with a non-`ok` outcome is the honest answer: a row saying "this
+       happened, and here is what we know about what it cost" is something a
+       report can surface, where no row at all is a hole in the bill that
+       nothing points at.
+
+       The cost is whatever the meter caught, **not forced to null**. If the
+       terminal `message_delta` arrived and the stream then failed, that
+       figure is real and keeping it is strictly better. Where nothing
+       arrived it stays null, which reads as *unknown* rather than as free.
+       So the number on a non-`ok` row is a **lower bound**, and anything
+       reporting it should say so.
+
+       `stream.aborted`, not `options.signal.aborted`: the SDK exposes how
+       *this stream* ended, where the external signal answers a different
+       question and gets two cases wrong — `stream.abort()` with no signal
+       reads as an error, and a provider failure racing a later signal abort
+       reads as a cancel. Both found by a GPT Sol review.
+
+       **And then it OR-ed the signal back in anyway**, one line under the
+       paragraph explaining why that is wrong, which a second Sol review
+       caught. What is left is causal on both halves: either the stream says
+       it was aborted, or the error *is* the abort — the signal's own reason,
+       or an `AbortError` where none was given. "The signal happens to be
+       aborted now" is not one of the two. */
+    const aborted = stream.aborted || isAbort(err, options.signal);
+    /* The status off the stream's own response, when one arrived: an error
+       that came in-band, or a body that broke, carries none itself. */
+    const status = stream.response?.status ?? null;
+    const end: UnansweredEnd = aborted
+      ? {
+          outcome: "aborted",
+          failure: {
+            /* The same boundary an error is placed by. */
+            phase: begun ? "mid_answer" : "before_answer",
+            /* What the controller or SDK abort listener saw. Where the SDK reported no abort
+               the error is itself the signal's abort, seen here for the first
+               time, so the reason is read now. */
+            class: stoppedBy ?? abortClass(isAbort(err, options.signal) ? options.signal?.reason : undefined),
+            status,
+          },
+        }
+      : { outcome: "error", failure: failureOf(err, begun, status) };
+    /* **One line for a call that died after its answer began** — the failure
+       the retry above does not cover, and the one plan 261006b exists to
+       count. An error only: a call somebody stopped part-way did not die. */
+    if (end.outcome === "error" && end.failure.phase === "mid_answer") {
+      log("model").warn(failureFields(task, model, n, end.failure), "ai call died part-way");
+    }
+    /* **And one for a call our own clock stopped**, at either phase. Not for
+       `abort`: a reader pressing Stop is not news. Plan 261006d. */
+    if (end.outcome === "aborted" && stoppedByOurClock(end.failure)) {
+      log("model").warn(failureFields(task, model, n, end.failure), "ai call stopped by our clock");
+    }
+    record(task, model, meter, null, startedAt, end, callId, null, n);
+    return end;
+  };
+
   return {
     onText: (listener) => {
-      stream.on("text", listener);
+      textListeners.push(listener);
     },
     onStart: (listener) => {
-      let fired = false;
-      stream.on("streamEvent", (event) => {
-        if (fired || event.type !== "message_start") return;
-        fired = true;
-        /* The SDK calls raw-event listeners inline while it is assembling the
-           message. A callback exception therefore becomes a stream failure
-           unless it stops here. `onStart` is a notification seam, not part of
-           parsing the provider's answer; log a safe, content-free line and let
-           the stream continue. */
-        try {
-          listener();
-        } catch {
-          log("model").warn("a message-stream start listener threw; the model stream was left running");
-        }
-      });
+      startListeners.push(listener);
     },
     finalMessage,
-    aborted: () => stream.aborted,
+    aborted: () => stoppedWhileWaiting || current.stream.aborted,
+    attempts: () => attempts,
   };
 }
+
+/**
+ * The `error` events a `200` stream can open with that are worth asking again.
+ * The SDK keeps the event's `type` on the error it throws (core/streaming.js),
+ * and the rest of that closed set — authentication, permission, billing,
+ * invalid request, not found, too large, rate limit — are verdicts or queues.
+ */
+const TRANSIENT_EVENT_TYPES: ReadonlySet<string> = new Set(["timeout_error", "overloaded_error", "api_error"]);
+
+/**
+ * **Could the identical request come out differently a second later?**
+ *
+ * Asked only of an attempt that failed before `message_start`, so no listener
+ * has heard anything. Three shapes reach here, and each has its own answer:
+ *
+ * - **A server sent a status.** Yes only for `TRANSIENT_STATUSES`; any other is
+ *   a verdict on the request (malformed, unauthorised, out of credit, too big)
+ *   and repeating it buys the same verdict.
+ * - **A `200` whose stream opened with an `error` event** — an `APIError` with
+ *   no status that is not a connection error. Yes for `TRANSIENT_EVENT_TYPES`.
+ *   **And yes when the event named no type at all**: that is not one of
+ *   Anthropic's verdicts, it is OpenRouter or an upstream failing in a shape
+ *   nobody documented, and the cost of being wrong is two short extra requests.
+ * - **The transport itself**: no connection, a timeout (`APIConnectionError`
+ *   and its subclass), or a body that broke before its first frame, which the
+ *   SDK wraps in a plain `AnthropicError`. Yes.
+ *
+ * A missing key is not among them — `messagesClient` throws that before any
+ * stream exists. An abort never gets this far; the caller checks it first.
+ */
+function worthAnotherAttempt(err: unknown): boolean {
+  if (!(err instanceof Anthropic.APIError)) return true;
+  if (typeof err.status === "number") return TRANSIENT_STATUSES.has(err.status);
+  if (err instanceof Anthropic.APIConnectionError) return true;
+  return err.type === null || err.type === undefined || TRANSIENT_EVENT_TYPES.has(err.type);
+}
+
+/**
+ * **Where and why an attempt failed**, as the labels its row carries —
+ * [`call-failure.ts`](call-failure.ts), which also says why nothing here keeps
+ * a word the error said. The same shapes `worthAnotherAttempt` sorts, asked a
+ * different question:
+ *
+ * - **A server sent a status**: `refused`, and the status.
+ * - **The connection** (`APIConnectionError` and its timeout subclass):
+ *   `network`, with the code when the SDK's wrapped `TypeError` has a known
+ *   one on its own cause, which is two causes down from here.
+ * - **An `error` event inside a `200`**: `provider:<type>` for one of
+ *   Anthropic's types, so an overloaded second and a bad key are not one
+ *   count; `in_band` for a type nobody listed or none at all.
+ * - **Anything else**: a body that broke, which the SDK wraps in a plain
+ *   `AnthropicError` with the `TypeError` as its cause. `network` when that is
+ *   what it was, `other` when it was not.
+ *
+ * `begun` is the phase and nothing else decides it. An abort never gets here.
+ */
+function failureOf(err: unknown, begun: boolean, responseStatus: number | null): CallFailure {
+  const phase = begun ? "mid_answer" : "before_answer";
+  if (!(err instanceof Anthropic.APIError)) return { phase, class: thrownClass(err), status: responseStatus };
+  if (typeof err.status === "number") return { phase, class: "refused", status: err.status };
+  if (err instanceof Anthropic.APIConnectionError) return { phase, class: networkClass(err), status: responseStatus };
+  return { phase, class: providerEventClass(err.type), status: responseStatus };
+}
+
+/** What each of this wire's log lines about a failure carries, and nothing else. The same six as ai-call.ts. */
+function failureFields(task: Task, model: string, attempt: number, failure: CallFailure): Record<string, unknown> {
+  return { job: task, wire: "messages", model, attempt, class: failure.class, status: failure.status };
+}
+
+/**
+ * How one attempt ended. An `error` has to say how, and an `aborted` has to
+ * say who stopped it; see `CallEnd` in ai-call.ts.
+ */
+type AttemptEnd =
+  | { outcome: "ok" }
+  | { outcome: "aborted"; failure: CallFailure & { class: AbortClass } }
+  | { outcome: "error"; failure: CallFailure };
+
+/** An attempt that did not answer. Both arms carry failure fields; only the outcome says which it was. */
+type UnansweredEnd = Exclude<AttemptEnd, { outcome: "ok" }>;
 
 /**
  * **Was this error the abort itself?** — the same question
@@ -622,9 +939,11 @@ function record(
   meter: CallMeter,
   usage: Anthropic.Usage | null,
   startedAt: number,
-  outcome: SpendRecord["outcome"],
+  end: AttemptEnd,
   callId: number | null,
   answeredBy: string | null,
+  /** Which go this was. This wire's loop always counts, so never `null`. */
+  attempt: number,
 ): void {
   const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
   recordSpend(
@@ -659,7 +978,9 @@ function record(
       serviceTier: meter.serviceTier,
       inferenceGeo: meter.inferenceGeo,
       ms: Date.now() - startedAt,
-      outcome,
+      outcome: end.outcome,
+      attempt,
+      failure: end.outcome === "ok" ? null : end.failure,
     },
     callId,
   );

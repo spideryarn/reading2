@@ -31,12 +31,16 @@
  * (GlossaryPanel.tsx § rowScores). The combination is our arithmetic, not the
  * model's judgment. The foot line says what `influence` is: the model's memory,
  * not a citation count.
+ *
+ * A row whose DOI Crossref holds also says *cited 357 times · Crossref*
+ * (plan 261005i, § `CitedBy`): a real count, in words, with its source and
+ * the day it was read. It is neither of the two scores and moves no order.
  */
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useTapReveal } from "./useTapReveal.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
-import { BookOpen, BookText, ExternalLink, RotateCcw, TriangleAlert } from "lucide-react";
+import { BookOpen, BookText, ExternalLink, TriangleAlert } from "lucide-react";
 import {
   MAX_CITATIONS,
   type BlockId,
@@ -47,9 +51,11 @@ import {
   type CitedMatchedBy,
   type CitedWork,
   type InvestigateStage,
+  type RegistryCitedBy,
   type RegistrySource,
 } from "../types.js";
-import { readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
+import { citedByWords, readCitationRegistry, REGISTRY_NAME, registryAuthorsText } from "../registry-work.js";
+import { effectiveInfluence, type EffectiveInfluence } from "../citation-effective-influence.js";
 import { Link } from "./Link.js";
 import { readHref } from "./router.js";
 import type { PublicCitations, PublicCitedWork } from "../public-types.js";
@@ -60,23 +66,37 @@ import { BlockRef } from "./BlockRef.js";
 import { Tooltip } from "./Tooltip.js";
 import { citePassageKey } from "./rows.js";
 import {
+  ASK_WORK_IN_CHAT,
+  AskInChatButton,
+  type CitedWorkChats,
+  OPEN_WORK_CHAT,
+  OriginChatMark,
+} from "./OriginChat.js";
+import { threadForOrigin } from "./useChatAnchors.js";
+import {
   InvestigateButton,
   type InvestigateFailureHere,
   InvestigationBlock,
   investigationViewOf,
+  type InvestigationView,
 } from "./CitationInvestigation.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { useRenderCount } from "./perf.js";
 import {
+  survivesThreshold,
+  floorToGateStep,
   applyThreshold,
   canThreshold,
-  GATE_STEP,
   hiddenNote,
   thresholdMax,
   thresholdTop,
   type ThresholdResult,
 } from "./threshold.js";
+import { ThresholdSlider } from "./ThresholdSlider.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A row as this panel draws it** — the owner's `CitedWork` and a visitor's
@@ -108,7 +128,7 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
 /* ------------------------------------------------------------- the scores -- */
 
 /**
- * The bar's **starting** position on `(2 × relevance + influence) / 3`.
+ * The bar's **starting** position on `priorityOf` (relevance alone if influence is unknown).
  *
  * **`0.25`, lowered from `0.40` on 2026-09-15**, at Greg's request that every
  * prioritised bar let most entries in by default. `0.40` was set from stage 1's
@@ -120,16 +140,8 @@ export type ShownWork = Omit<PublicCitedWork, "linkFrom" | "registry"> & {
  */
 export const CITATION_BAR_DEFAULT = 0.25;
 
-/**
- * What the bar thresholds on: two parts relevance to one part influence, **both
- * required** — a work missing either is unscored, and an unscored work survives
- * every position of the bar (src/web/threshold.ts § survivesThreshold).
- *
- * Not the glossary's product (Sol F9): there both dimensions are necessary, and
- * here influence is not — an obscure work the piece is built on is exactly what
- * the list should keep. Weighted to relevance so a famous but passing reference
- * does not ride its fame over the bar.
- */
+/* `priorityOf`, below, is what the bar thresholds on. */
+
 /**
  * **The verified place a row's *first cited* names** — a mention in the
  * `firstCited` block, else the reference when that is where it points (a
@@ -289,7 +301,7 @@ export function registryConflictNote(source: RegistrySource): string {
 
 /** Said under an entry wherever it is shown — a row's tooltip and the prose card. */
 export const CITE_ENTRY_NOTE =
-  "The entry in the article's own reference list, copied from the article. We have not looked the work up.";
+  "The entry in the article's own reference list, copied from the article, not from the work.";
 
 /**
  * The citing words in quotation marks — unless they already are in them, as a
@@ -301,9 +313,51 @@ export function quotedCitingWords(quote: string): string {
   return /^…?["“‘']/.test(words) && /["”’']$/.test(words) ? words : `“${words}”`;
 }
 
+/**
+ * **The one place this panel reads a work's influence**: the bar, the two
+ * orders, the row's bars and whether the influence order is offered all go
+ * through it. It is `effectiveInfluence` (src/citation-effective-influence.ts,
+ * plan 261003m stage 2), the read path chat shares: the number a kept *Dig
+ * deeper* answer read from the web when there is a current one, else the
+ * list's own, else nothing — the model said it does not know the work
+ * (`citations/6`) or left no usable score.
+ */
+function influenceOf(work: ShownWork): number | undefined {
+  return effectiveInfluence(work)?.value;
+}
+
+/** The web influence on this row and where it came from, or `undefined` when the influence is the list's or unknown. */
+function webInfluenceOf(work: ShownWork): Extract<EffectiveInfluence, { from: "web" }> | undefined {
+  const influence = effectiveInfluence(work);
+  return influence?.from === "web" ? influence : undefined;
+}
+
+/**
+ * What the bar thresholds on (src/web/threshold.ts § survivesThreshold):
+ *
+ * - **no relevance**: nothing, so the work survives every position of the bar;
+ * - **relevance, influence unknown**: the relevance alone;
+ * - **both**: two parts relevance to one part influence, `(2r + i) / 3`.
+ *
+ * Not the glossary's product (Sol F9): there both dimensions are necessary, and
+ * here influence is not — an obscure work the piece is built on is exactly what
+ * the list should keep. Weighted to relevance so a famous but passing reference
+ * does not ride its fame over the bar.
+ *
+ * **Relevance alone is not neutral, and that is accepted** (plan 261003m, GPT
+ * Sol's F8): returning `r` is the same arithmetic as `(2r + i) / 3` with
+ * `i = r`, so an unknown work is treated as exactly as influential as it is
+ * relevant. At relevance 0.30 it clears the default 0.25 bar, while a work known
+ * to be minor (influence 0.10) scores 0.23 and does not. Not knowing a work is
+ * not evidence against it. Before `citations/6` a work missing its influence
+ * was unscored and always shown; with unknown now common, that would stop the
+ * bar hiding anything.
+ */
 export function priorityOf(work: ShownWork): number | undefined {
-  if (work.relevance === undefined || work.influence === undefined) return undefined;
-  return (2 * work.relevance + work.influence) / 3;
+  if (work.relevance === undefined) return undefined;
+  const influence = influenceOf(work);
+  if (influence === undefined) return work.relevance;
+  return (2 * work.relevance + influence) / 3;
 }
 
 /** The bar applied once: the works to draw, and how many went. threshold.ts. */
@@ -340,6 +394,11 @@ export function canPrioritise(works: readonly ShownWork[]): boolean {
  */
 export function effectiveOrder(works: readonly ShownWork[], order: CiteOrder): CiteOrder {
   if (order === "date") return works.some((w) => publicationYear(w) !== null) ? "date" : "document";
+  /* Each score order under the condition `orderOptions` offers it on: a saved
+     `?citeby=relevance` on a list with no relevance must not reorder the rows
+     while no button is pressed (GPT Sol's F14, the class of F10). */
+  if (order === "relevance") return works.some((w) => w.relevance !== undefined) ? "relevance" : "document";
+  if (order === "influence") return works.some((w) => influenceOf(w) !== undefined) ? "influence" : "document";
   if (order !== "prioritised") return order;
   return canPrioritise(works) ? "prioritised" : "document";
 }
@@ -356,12 +415,47 @@ export function publicationYear(work: Pick<ShownWork, "authors" | "year" | "regi
   return year === undefined ? null : Number(year);
 }
 
+/** A sort comparison: higher first, a missing score after every present one, 0 on a tie. */
+function descending(a: number | undefined, b: number | undefined): number {
+  if (a === undefined && b === undefined) return 0;
+  if (a === undefined) return 1;
+  if (b === undefined) return -1;
+  return b - a;
+}
+
+/**
+ * **The bar that puts a hidden work back**, or null when nothing is hiding it —
+ * `gateToReveal` (GlossaryPanel.tsx) over this list's score, for the same
+ * press: the prose card's *Dig deeper* opens the band on a row, and a row the
+ * prioritised order is hiding cannot be opened. **Lowered, never cleared**, so
+ * the slider visibly moves; null in any other order, where the bar is dormant
+ * and must not be moved behind the reader's back; and floored to the step, so
+ * the value the URL prints is not above the work it was set to reveal. Plan
+ * 261004b.
+ */
+export function barToReveal(
+  works: readonly ShownWork[],
+  id: string,
+  order: CiteOrder,
+  bar: number,
+): number | null {
+  if (effectiveOrder(works, order) !== "prioritised") return null;
+  const work = works.find((w) => w.id === id);
+  const p = work ? priorityOf(work) : undefined;
+  if (p === undefined || survivesThreshold(p, bar)) return null;
+  return floorToGateStep(p);
+}
+
 /**
  * The list in one flat order. `document` is the artefact's own first-cited
  * order; `prioritised` is that order with what is below the bar taken out; the
- * two score orders are descending, unscored last, and first-cited order breaks
- * ties so equal scores do not shuffle. `date` is oldest first, undated last, as
- * Debate's date order is (debate-order.ts), with the same tie-break.
+ * two score orders are descending, a work without that score last, and
+ * first-cited order breaks ties so equal scores do not shuffle. **In the
+ * influence order the unknown tail is itself ordered, by relevance descending**
+ * (no relevance last): with unknown common since `citations/6`, a tail in
+ * first-cited order would be most of the list in no order at all. `date` is
+ * oldest first, undated last, as Debate's date order is (debate-order.ts), with
+ * the same tie-break.
  */
 export function orderWorks<W extends ShownWork>(
   works: readonly W[],
@@ -374,20 +468,22 @@ export function orderWorks<W extends ShownWork>(
     case "prioritised":
       return visibleWorks(works, bar).visible;
     case "relevance":
-    case "influence": {
-      const score = (w: W) => (order === "relevance" ? w.relevance : w.influence);
       return works
         .map((work, index) => ({ work, index }))
-        .sort((a, b) => {
-          const sa = score(a.work);
-          const sb = score(b.work);
-          if (sa === undefined && sb === undefined) return a.index - b.index;
-          if (sa === undefined) return 1;
-          if (sb === undefined) return -1;
-          return sb - sa || a.index - b.index;
-        })
+        .sort((a, b) => descending(a.work.relevance, b.work.relevance) || a.index - b.index)
         .map(({ work }) => work);
-    }
+    case "influence":
+      return works
+        .map((work, index) => ({ work, index, influence: influenceOf(work) }))
+        .sort(
+          (a, b) =>
+            descending(a.influence, b.influence) ||
+            /* Reached only by two knowns that tie, where relevance is not
+               asked, or by two unknowns, where it orders the tail. */
+            (a.influence === undefined ? descending(a.work.relevance, b.work.relevance) : 0) ||
+            a.index - b.index,
+        )
+        .map(({ work }) => work);
     case "date":
       return works
         .map((work, index) => ({ work, index, year: publicationYear(work) }))
@@ -422,10 +518,24 @@ export function scoresOf(work: ShownWork): { key: string; label: string; value: 
   if (work.relevance !== undefined) {
     out.push({ key: "relevance", label: "relevance to this piece", value: work.relevance });
   }
-  if (work.influence !== undefined) {
-    out.push({ key: "influence", label: "influence in its field (the model's memory)", value: work.influence });
+  const influence = effectiveInfluence(work);
+  if (influence !== undefined) {
+    out.push({
+      key: "influence",
+      label: influence.from === "web" ? INFLUENCE_LABEL_WEB : INFLUENCE_LABEL_LIST,
+      value: influence.value,
+    });
   }
   return out;
+}
+
+/**
+ * **Does the row say *influence unknown*?** When it has a relevance and no
+ * influence. A row with neither score says nothing, as before: that is an
+ * answer that lost both, not the model saying it does not know the work.
+ */
+export function influenceIsUnknown(work: ShownWork): boolean {
+  return work.relevance !== undefined && influenceOf(work) === undefined;
 }
 
 /* ------------------------------------------------------------- the source -- */
@@ -482,9 +592,71 @@ export function sourceOf(work: Pick<CitedWork, "url" | "linkFrom">): Source {
  */
 export const CAPPED_NOTE = `This piece cites more than ${MAX_CITATIONS} works; these are the ${MAX_CITATIONS} we judged it leans on most.`;
 
+/** What the influence bar measures, by where the number came from — the bar's tooltip and its spoken label. */
+const INFLUENCE_LABEL_LIST = "influence in its field (the model's memory)";
+const INFLUENCE_LABEL_WEB = "influence in its field (an AI estimate from web evidence)";
+
 /** Under every non-empty list: the weaker of the two scores, said plainly. */
 export const INFLUENCE_NOTE =
-  "Influence is the model's own memory of how much a work mattered in its field, not a citation count.";
+  "Influence is the model's own memory of how much a work mattered in its field, not a citation count. New lists give a score only when the model is confident it knows the work; older lists keep their scores. “influence unknown” means no usable influence score was saved. In prioritised order, a row with unknown influence is judged on its relevance alone when available.";
+
+/**
+ * The owner's (i) adds this after `INFLUENCE_NOTE` (plan 261003m stage 2). Not
+ * a visitor's: they have no *Dig deeper*, and their rows never carry what it found.
+ */
+export const INFLUENCE_WEB_NOTE =
+  "Dig deeper also looks for a work's influence on the web. A row marked “from the web” shows an AI estimate read from one page the search found, in place of the model's memory, and its card shows that page's words.";
+
+/** Beside the influence bar when the number came from *Dig deeper*'s web search. */
+const INFLUENCE_FROM_WEB = "from the web";
+
+/** The card on those words: our sentence, with the host and the day in it. The page's own words follow, marked as the page's. */
+function influenceFromWebNote(host: string, day: string): string {
+  return `This influence is an AI estimate from web evidence, not a citation count: Dig deeper read it from a page on ${host} on ${day}. The estimate may be wrong, and the words may be about something else on that page. The page says:`;
+}
+
+/** The words on a row with no influence, in place of a bar. Never a bar at zero. */
+export const INFLUENCE_UNKNOWN = "influence unknown";
+
+/* ------------------------------------------------- Crossref's count -- */
+
+/**
+ * **Crossref's citation count for the row's work, or null** (plan 261005i) —
+ * through `readCitationRegistry`, which keeps one only beside a found Crossref
+ * record. The one source on a row that is a count and not a judgement, so it
+ * is drawn as the number itself with where it came from, alongside the
+ * model's influence and never in its place. It moves neither the bar nor any
+ * order.
+ */
+export function citedByOf(work: Pick<ShownWork, "registry">): RegistryCitedBy | null {
+  const registry = readCitationRegistry(work.registry);
+  return registry?.kind === "found" ? (registry.citedBy ?? null) : null;
+}
+
+/** What the row says: the number and its source. The day is in the card. */
+export function citedByLine(count: number): string {
+  return `${citedByWords(count)} · ${REGISTRY_NAME.crossref}`;
+}
+
+/** The card on those words: whose count, on which day, and what it leaves out. */
+export function citedByNote(readAt: string): string {
+  return `${REGISTRY_NAME.crossref}’s count on ${dayOf(readAt)}. It counts citations from works whose reference lists publishers have deposited with ${REGISTRY_NAME.crossref}, so it is usually lower than Google Scholar’s, and it is not comparable across fields or ages.`;
+}
+
+/** In the band's (i), after the influence sentences, for owner and visitor alike. */
+export const CITED_BY_NOTE = `A row that says “cited 357 times · ${REGISTRY_NAME.crossref}” shows ${REGISTRY_NAME.crossref}’s own count for a work the article gives a DOI for, as it stood on the day in its card. It is a real count, separate from influence, and it does not change the order or what the threshold hides.`;
+
+/** The card on those words, as a visitor reads it: they have no *Dig deeper*. */
+const INFLUENCE_UNKNOWN_NOTE_SHARED =
+  "No usable influence score for this work: the model was not confident it knows it, or its score was missing. In prioritised order the bar goes by this row's relevance alone.";
+
+/**
+ * The card on those words, for the owner. It says only what is built: since
+ * plan 261003m stage 2 *Dig deeper* looks for the work's standing on the pages
+ * its web search returns. A look, not a promise: a press that finds no page
+ * about the work saying how well known it is leaves the row unknown.
+ */
+export const INFLUENCE_UNKNOWN_NOTE = `${INFLUENCE_UNKNOWN_NOTE_SHARED} Dig deeper looks on the web for a page that says how well known the work is. Most searches find none.`;
 
 /**
  * **A piece that cites nothing is a real answer**, not an error, and no retry is
@@ -506,6 +678,20 @@ export const CITATIONS_NONE = "We found no works this piece cites.";
 
 /** The label on `why`, in the band and the hover card alike. */
 export const CITE_WHY_LABEL = "what the article uses it for";
+
+/* **`why` is drawn only beside something that was checked against it** — Greg,
+   2026-10-03 (spya-zmdb7y, plan 261003j): *"err on the side of saying … nothing
+   about a paper beyond what's available in the bibliography"*. The sentence can
+   only restate the citing paragraph, and on a row nothing has looked up it
+   still reads as what the paper says, label or no label. Once a quick check
+   has a verdict (*supports what the article uses it for*) or *Dig deeper* has
+   an answer, it is the claim under test, and the reader needs it to read
+   either. Each surface asks about what IT draws: the card shows no *Dig
+   deeper* answer, so it passes only the lookup. */
+export function showsWhy(work: Pick<ShownWork, "lookup">, view?: InvestigationView): boolean {
+  return assessedOf(work) !== null || view?.kind === "arriving" || view?.kind === "kept" ||
+    (view?.kind === "failed" && view.previous !== null);
+}
 
 /** Every row, until something has read the work: nothing has. */
 export const CITE_NOT_READ = "We have not read this work, only the article that cites it.";
@@ -642,8 +828,20 @@ const NO_WORKS: ShownWork[] = [];
  * SPIDERYARN-READING2-56, plan 260929c stage 3.
  */
 export type CitationsAccess =
-  | { kind: "owner"; owner: UseCitations }
-  | { kind: "visitor"; citations: PublicCitations; owner?: never };
+  | {
+      kind: "owner";
+      owner: UseCitations;
+      /**
+       * **A chat about one work**: what a row's *Ask in chat* and its mark
+       * need (OriginChat.tsx § `ItemChats`; plan 261006d). On the owner's arm
+       * because a visitor has no chat: with `chats?: never` below, a
+       * visitor's panel cannot be handed one. Optional, so a panel drawn
+       * without it (most tests) has no button; that `Reader` passes it is
+       * held by tests/glossary-and-citations-ask-in-chat.test.tsx.
+       */
+      chats?: CitedWorkChats;
+    }
+  | { kind: "visitor"; citations: PublicCitations; owner?: never; chats?: never };
 
 interface Props {
   access: CitationsAccess;
@@ -655,9 +853,35 @@ interface Props {
   onBar(bar: number | null): void;
   /** `passage` is `citePassageKey(work.id)` when the row names the citing words (rows.ts). */
   onJump(id: BlockId, passage?: string): void;
+  /**
+   * **One work to bring into view, once** — the prose card's *Dig deeper* has
+   * just opened this band for it (plan 261004b). Not a selection: the row has
+   * no selected state and there is no `?cite=`. `n` tells two presses on the
+   * same work apart. The panel lowers the bar if it is hiding the row
+   * (`barToReveal`), scrolls to the row once it is drawn, and calls
+   * `onFocusTaken` so that coming back to the band later does not scroll again.
+   */
+  focus?: CiteFocus | null;
+  /** Handed the request it served, so an older one's answer cannot clear a newer one. */
+  onFocusTaken?(focus: CiteFocus): void;
 }
 
-export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, onBar, onJump }: Props) {
+/** `Props.focus`. */
+export interface CiteFocus {
+  id: string;
+  n: number;
+}
+
+export function CitationsPanel({
+  access,
+  order: chosenOrder,
+  onOrder,
+  bar: chosenBar,
+  onBar,
+  onJump,
+  focus = null,
+  onFocusTaken,
+}: Props) {
   useRenderCount("CitationsPanel");
   /* `null` for a visitor, and every owner-only thing below is behind it. */
   const owner = access.kind === "owner" ? access.owner : null;
@@ -670,10 +894,71 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
   const shown = orderWorks(all, order, bar);
   /* A visitor's list arrived with the page, so it is ready by construction. */
   const ready = citations !== null && (owner === null || owner.status === "ready");
-  const showJob = owner !== null && ready && !owner.stale && (owner.job || owner.starting || owner.failed);
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — IdeasPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  const showJob =
+    owner !== null &&
+    ready &&
+    !owner.stale &&
+    (owner.job || owner.starting || owner.failed || (waiting && !owner.error));
   /* Empty with fewer than two works or two orders, and then there is no order
      row and an empty head row holds the top of the band instead. */
   const orders = citations && all.length > 1 ? orderOptions(all) : [];
+
+  /* **Bring the focused work into view** — `Props.focus`. Three steps, each a
+     render apart, which is why this is an effect over what is drawn rather than
+     one call at the press: the list may still be loading (nothing is taken
+     then), the bar may be hiding the row, and the bar's new value comes back
+     through the URL on a later render. A work the ready list does not have is
+     dropped rather than waited for. The row is looked for inside this panel's
+     own list. `nearest`, so a row already on screen does not move. */
+  const list = useRef<HTMLOListElement>(null);
+  const focusDrawn = focus !== null && shown.some((w) => w.id === focus.id);
+  useEffect(() => {
+    if (focus === null || !ready) return;
+    if (!all.some((w) => w.id === focus.id)) {
+      onFocusTaken?.(focus);
+      return;
+    }
+    const lowered = barToReveal(all, focus.id, chosenOrder, bar);
+    if (lowered !== null) {
+      onBar(lowered);
+      return;
+    }
+    if (!focusDrawn) return;
+    for (const item of list.current?.querySelectorAll("[data-citation-id]") ?? []) {
+      if (item.getAttribute("data-citation-id") !== focus.id) continue;
+      /* Optional call: jsdom has no `scrollIntoView`. */
+      item.scrollIntoView?.({ block: "nearest" });
+      break;
+    }
+    onFocusTaken?.(focus);
+  }, [focus, ready, all, chosenOrder, bar, focusDrawn, onBar, onFocusTaken]);
+
+  /* **A row being dug stays drawn, and so does its answer.** A dig changes the
+     row's priority under the reader: the `finding` step detaches the kept
+     answer, and with it a web influence that may have been what held the row
+     above the bar; the new answer can score lower too. Without this the row,
+     its stage line and its stream vanish mid-press (GPT Sol, plan review of
+     261004b, F1 — true of a press on the row itself before the card had one).
+     So whenever the priority of the last work dug here changes, the bar is
+     lowered to it if it would hide it. **Keyed on that priority and not on the
+     bar**, so a reader who drags the bar above the row afterwards is not
+     fought. */
+  const digging = owner?.investigating ?? null;
+  const lastDug = useRef<string | null>(null);
+  if (digging !== null) lastDug.current = digging;
+  const keptId = lastDug.current;
+  const kept = keptId === null ? undefined : all.find((w) => w.id === keptId);
+  const keptPriority = kept ? priorityOf(kept) : undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the work's priority is the trigger; the bar and the order are read, not watched
+  useEffect(() => {
+    if (keptId === null || !ready) return;
+    const lowered = barToReveal(all, keptId, chosenOrder, bar);
+    if (lowered !== null) onBar(lowered);
+  }, [keptId, keptPriority, ready]);
   /* What the band's (i) adds after the mode's own words: the two sentences
      about the whole list (plan 261001l moved them off the foot), the count, and
      who made it — only once the list is ready and has something in it, which
@@ -685,6 +970,8 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
       <>
         {citations.capped && <p>{CAPPED_NOTE}</p>}
         <p>{INFLUENCE_NOTE}</p>
+        {owner !== null && <p>{INFLUENCE_WEB_NOTE}</p>}
+        <p>{CITED_BY_NOTE}</p>
         <p>
           {all.length} {all.length === 1 ? "work" : "works"} cited.
         </p>
@@ -700,18 +987,22 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
     ) : null;
 
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new citations haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="citations"
       icon={<BookText size={13} />}
-      runningLabel="Reading…"
+      runningLabel="Finding…"
     />
   );
 
@@ -732,6 +1023,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
 
           Otherwise a fragment, not a conditional, so the row stays put while
           the list loads — the choice Timeline and Glossary make. Plan 261001l. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={orders.length > 0 ? null : <></>}
       /* Pinned under the scroller, and **only a job's status now**. The two
          sentences about the whole list that were here went behind the (i) on
@@ -760,15 +1052,15 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
         <BarSlider works={all} bar={bar} moved={chosenBar !== null} onBar={onBar} />
       )}
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the citations…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the citations…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has listed the works this piece cites yet.</p>
+          <p>Nobody has listed the works this one cites yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article — under a minute for a short piece, two or three on a long one.
+            One model call over the whole article — under a minute for a short piece, two or three on a long one.
             Found once and kept — you will not be asked again unless the article changes.
           </p>
           {run("Find the citations")}
@@ -797,7 +1089,7 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
 
           {all.length > 0 && (
             <div className="tl-scroll">
-              <ol className="tl-list cite-list">
+              <ol className="tl-list cite-list" ref={list}>
                 {shown.map((work) => (
                   <WorkRow
                     key={work.id}
@@ -805,6 +1097,9 @@ export function CitationsPanel({ access, order: chosenOrder, onOrder, bar: chose
                     unscored={order === "prioritised" && priorityOf(work) === undefined}
                     showInSpideryarn={owner !== null}
                     onJump={onJump}
+                    /* The owner's alone: a visitor's row draws neither the
+                       button nor the mark. */
+                    chats={access.kind === "owner" ? (access.chats ?? null) : null}
                     /* The owner's alone, and never on the hover card. */
                     investigate={
                       owner === null
@@ -860,12 +1155,13 @@ function orderOptions(works: readonly ShownWork[]): { key: CiteOrder; label: str
           },
         ]
       : []),
-    ...(works.some((w) => w.influence !== undefined)
+    ...(works.some((w) => influenceOf(w) !== undefined)
       ? [
           {
             key: "influence" as const,
             label: "influence",
-            title: "The model's memory of how influential each work is in its field — not a citation count",
+            title:
+              "How influential each work is in its field — the model's memory, or an AI estimate from the web where Dig deeper found one; not a citation count. Works with unknown influence come after, by relevance",
           },
         ]
       : []),
@@ -928,44 +1224,20 @@ function BarSlider({
 }) {
   /* One pass, and every number here comes out of it — threshold.ts. */
   const { visible, hiddenCount } = visibleWorks(works, bar);
-  const count = `${visible.length} of ${works.length}`;
-
   return (
-    <div className="gloss-gate">
-      <div className="gloss-gate-row">
-        <label className="gloss-gate-label" htmlFor="cite-bar">
-          threshold
-        </label>
-        <span className="gloss-gate-value">
-          {bar.toFixed(2)} · {count}
-        </span>
-        {moved && (
-          <button
-            type="button"
-            className="gloss-gate-reset"
-            title={`Back to ${CITATION_BAR_DEFAULT.toFixed(2)}`}
-            aria-label={`Reset the threshold to ${CITATION_BAR_DEFAULT.toFixed(2)}`}
-            onClick={() => onBar(null)}
-          >
-            <RotateCcw size={11} />
-          </button>
-        )}
-      </div>
-      <input
-        id="cite-bar"
-        className="gloss-gate-range"
-        type="range"
-        min={0}
-        max={barMax(works, bar)}
-        step={GATE_STEP}
-        value={bar}
-        title="How high a work has to score to stay on screen: two parts relevance to one part influence. Left shows more works, right fewer."
-        aria-valuetext={`${bar.toFixed(2)}, showing ${count} citations`}
-        onChange={(e) => onBar(Number.parseFloat(e.target.value))}
-      />
-      {/* Always, wherever the slider is: threshold.ts § hiddenNote. */}
-      <p className="gloss-gate-note">{citationsNote(hiddenCount, works.length)}</p>
-    </div>
+    <ThresholdSlider
+      id="cite-bar"
+      value={bar}
+      max={barMax(works, bar)}
+      defaultValue={CITATION_BAR_DEFAULT}
+      moved={moved}
+      visible={visible.length}
+      total={works.length}
+      noun="citations"
+      title="How high a work has to score to stay on screen: two parts relevance to one part influence, or relevance alone where the influence is unknown. Left shows more works, right fewer."
+      note={citationsNote(hiddenCount, works.length)}
+      onChange={onBar}
+    />
   );
 }
 
@@ -996,6 +1268,7 @@ function WorkRow({
   showInSpideryarn,
   onJump,
   investigate,
+  chats,
 }: {
   work: ShownWork;
   unscored: boolean;
@@ -1003,8 +1276,16 @@ function WorkRow({
   showInSpideryarn: boolean;
   onJump(id: BlockId, passage?: string): void;
   investigate: RowInvestigate | null;
+  /** `null` for a visitor: no *Ask in chat*, and no mark. */
+  chats: CitedWorkChats | null;
 }) {
   const cited = citingPlaceOf(work);
+  /* The chat started from this row, if there is one: matched by the work's
+     id alone, so it survives a re-run that rewords the title. The name in the
+     origin built here is not compared (`sameOrigin`). */
+  const chat = chats
+    ? threadForOrigin(chats.summaries, { mode: "citations", itemId: work.id, quote: work.title })
+    : undefined;
   /* **No source at all when the public boundary refused the address** — a
      visitor's row whose link carried a credential or a private host. The row
      stays, drawn as a citation with no link, and says nothing about why: the
@@ -1012,11 +1293,20 @@ function WorkRow({
   const source = work.url === undefined ? null : sourceOf({ url: work.url, linkFrom: work.linkFrom });
   const note = investigate?.note ?? null;
   const scores = scoresOf(work);
+  const web = webInfluenceOf(work);
+  const citedBy = citedByOf(work);
   const line = workByLine(work);
   const by = byLineOf(work);
   /* The found page's own title, in the tooltip: the search result's words,
      never the model's (src/citation-find.ts). */
   const foundAs = work.found?.title ? ` — “${work.found.title}”` : "";
+  const view = investigate === null ? undefined : investigationViewOf(work.investigation, {
+    running: investigate.running === work.id,
+    stage: investigate.stage,
+    draft: investigate.draft,
+    failed: investigate.failed,
+    lookupAt: work.lookup?.at ?? null,
+  });
 
   return (
     <li
@@ -1028,13 +1318,21 @@ function WorkRow({
       {showInSpideryarn && work.inSpideryarn && <InSpideryarn match={work.inSpideryarn} />}
       {by && !byLineFolds(work, by) && <ByLine work={work} by={by} />}
       {line.conflict && <p className="cite-find-note cite-registry-conflict">{registryConflictNote(line.conflict)}</p>}
-      <p className="cite-why">
-        <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
-      </p>
+      {/* The claim accompanies exactly the verdict or answer drawn below. */}
+      {showsWhy(work, view) && (
+        <p className="cite-why">
+          <span className="cite-why-label">{CITE_WHY_LABEL}:</span> {work.why}
+        </p>
+      )}
       <p className="cite-read">{readNoteOf(work)}</p>
       <LookupReading work={work} />
       <p className="cite-meta">
         {scores.length > 0 && <ScoreBars className="cite-scores" scores={scores} />}
+        {web !== undefined && <WebInfluence influence={web} />}
+        {influenceIsUnknown(work) && (
+          <UnknownInfluence canDig={investigate !== null} />
+        )}
+        {citedBy !== null && <CitedBy citedBy={citedBy} />}
         {source === null ? null : source.kind === "address" ? (
           <span className="cite-source">
             {source.host} · {source.how}
@@ -1059,6 +1357,17 @@ function WorkRow({
             onInvestigate={investigate.onInvestigate}
           />
         )}
+        {/* Beside Dig deeper and drawn as it is (plan 261006d, D5). The press
+            sends the question (plan 261006j). It stays once a
+            chat exists: a second one can be started. */}
+        {chats && (
+          <AskInChatButton
+            label={ASK_WORK_IN_CHAT}
+            className="gloss-btn cite-ask-chat"
+            iconSize={11}
+            onAsk={() => chats.onAsk(work)}
+          />
+        )}
         <span className="cite-first">
           {work.citedInBody ? "first cited" : "only in the references"}{" "}
           {cited === null ? (
@@ -1079,6 +1388,9 @@ function WorkRow({
           )}
         </span>
       </p>
+      {/* The way back to the chat started from this row, on a line of its
+          own under the controls. */}
+      {chats && chat && <OriginChatMark chat={chat} label={OPEN_WORK_CHAT} onOpen={chats.onOpen} />}
       {/* The press's first step found no page: said quietly, and the
           reading below goes on unconfirmed (plan 260930d P-5). */}
       {note && (
@@ -1086,22 +1398,126 @@ function WorkRow({
           {note.message}
         </p>
       )}
-      {investigate !== null && (
+      {investigate !== null && view !== undefined && (
         <InvestigationBlock
           id={work.id}
-          view={investigationViewOf(work.investigation, {
-            running: investigate.running === work.id,
-            stage: investigate.stage,
-            draft: investigate.draft,
-            failed: investigate.failed,
-            lookupAt: work.lookup?.at ?? null,
-          })}
+          view={view}
           busy={investigate.running !== null}
           lookup={work.lookup}
           onInvestigate={investigate.onInvestigate}
         />
       )}
     </li>
+  );
+}
+
+/** A dated snapshot: the day the press finished, never "current". */
+function dayOf(iso: string): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? "an unknown day"
+    : at.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+}
+
+/**
+ * ***from the web*, beside the influence bar** (plan 261003m stage 2): the
+ * number came from one page of *Dig deeper*'s web search, not from the model's
+ * memory. The card says so in our words, names the host and the day, and then
+ * shows the page's own words, in a `<q>` so they read as the page's and not
+ * ours. The quote stays in the app's face: third-party text is left UI
+ * (docs/project/fonts.md § Whose voice is it). No link: the address is in the
+ * answer's own sources below. Opens on hover, focus or tap, as
+ * `UnknownInfluence` does.
+ */
+function WebInfluence({ influence }: { influence: Extract<EffectiveInfluence, { from: "web" }> }) {
+  const reveal = useTapReveal(false);
+  return (
+    <Tooltip
+      content={
+        <>
+          {influenceFromWebNote(hostOf(influence.sourceUrl), dayOf(influence.at))}{" "}
+          <q className="cite-influence-quote">{influence.quote}</q>
+        </>
+      }
+      placement="left"
+      className="score-bars-card"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+    >
+      <button
+        type="button"
+        className="cite-influence-web"
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+        }}
+      >
+        {INFLUENCE_FROM_WEB}
+      </button>
+    </Tooltip>
+  );
+}
+
+/** The explanation opens on hover, focus or tap; a finger's card closes on scroll. */
+function UnknownInfluence({ canDig }: { canDig: boolean }) {
+  const reveal = useTapReveal(false);
+  return (
+    <Tooltip
+      content={canDig ? INFLUENCE_UNKNOWN_NOTE : INFLUENCE_UNKNOWN_NOTE_SHARED}
+      placement="left"
+      className="score-bars-card"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+    >
+      <button
+        type="button"
+        className="cite-influence-unknown"
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+        }}
+      >
+        {INFLUENCE_UNKNOWN}
+      </button>
+    </Tooltip>
+  );
+}
+
+/**
+ * ***cited 357 times · Crossref*, on the row's quiet line** (plan 261005i):
+ * the number itself and its source, in words and never a bar, because nothing
+ * maps a count onto 0–1. The card gives the day it was read and what the count
+ * leaves out; it opens on hover, focus or tap, as `UnknownInfluence` does, so
+ * all three are reachable by a finger. A dated snapshot: the row never says
+ * the number is current.
+ */
+function CitedBy({ citedBy }: { citedBy: RegistryCitedBy }) {
+  const reveal = useTapReveal(false);
+  return (
+    <Tooltip
+      content={citedByNote(citedBy.readAt)}
+      placement="left"
+      className="score-bars-card"
+      open={reveal.open}
+      onOpenChange={reveal.onOpenChange}
+    >
+      <button
+        type="button"
+        className="cite-cited-by"
+        aria-expanded={reveal.open}
+        onPointerDown={reveal.onPointerDown}
+        onPointerCancel={reveal.onPointerCancel}
+        onClick={(e) => {
+          if (reveal.commit(e)) reveal.onOpenChange(!reveal.open);
+        }}
+      >
+        {citedByLine(citedBy.count)}
+      </button>
+    </Tooltip>
   );
 }
 

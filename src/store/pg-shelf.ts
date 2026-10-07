@@ -19,7 +19,7 @@
  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
@@ -32,7 +32,7 @@ import { READ_COMMITTED } from "./isolation.js";
 import { lockBillingAccount } from "./pg-billing.js";
 import { TERMINAL } from "./pg-jobs.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
-import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
+import type { DestroyOptions, LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import type { LibraryEntry, LibraryHit, ShelfState } from "../types.js";
 import { pgArticleReader } from "./pg.js";
@@ -336,7 +336,7 @@ const rawPgShelfStore: ShelfStore = {
    * and — worse on the route side — a chance to write the first and reject the
    * second. See `ShelfStore.patch`.
    */
-  async patch(slug, change): Promise<LibraryEntry> {
+  async patch(slug, change): Promise<LibraryEntry | null> {
     requireSlug(slug);
 
     const title = change.title === undefined ? undefined : (change.title?.trim() ?? "");
@@ -358,20 +358,36 @@ const rawPgShelfStore: ShelfStore = {
     }
 
     const set: Record<string, unknown> = {};
+    const changed: SQL[] = [];
     // Whitespace-only clears the override, exactly as it does on disk.
-    if (title !== undefined) set.titleOverride = title || null;
-    if (purpose !== undefined) set.purpose = purpose || null;
+    if (title !== undefined) {
+      set.titleOverride = title || null;
+      changed.push(sql`${articles.titleOverride} is distinct from ${title || null}`);
+    }
+    if (purpose !== undefined) {
+      set.purpose = purpose || null;
+      changed.push(sql`${articles.purpose} is distinct from ${purpose || null}`);
+    }
     if (change.archived !== undefined) {
       /* `coalesce(archived_at, now())` rather than a plain `now()`: archiving
          something already archived keeps the ORIGINAL date. Undo is one click
          away and a second Delete must not quietly reset the clock — the same
          rule src/shelf.ts keeps on the filesystem side. */
       set.archivedAt = change.archived ? sql`coalesce(${articles.archivedAt}, now())` : null;
+      changed.push(sql`(${articles.archivedAt} is not null) is distinct from ${change.archived}`);
     }
     // The route refuses an empty change before it gets here; this is the
     // belt-and-braces that stops a future caller producing `UPDATE … SET` with
     // nothing after it, which is a syntax error rather than a no-op.
-    if (Object.keys(set).length === 0) return entryFor(slug, false);
+    if (Object.keys(set).length === 0) {
+      const shelf = await rawPgShelfStore.read(slug);
+      return entryFor(slug, !!shelf.archivedAt);
+    }
+    /* Compare normalized values inside the UPDATE: supplying a setting again
+       is not a transition. A separate read would race another reader change.
+       Use the database wall clock rather than the transaction's older start
+       time or an application clock read before sending the query. */
+    set.updatedAt = sql`case when ${or(...changed)} then clock_timestamp() else ${articles.updatedAt} end`;
 
     const [row] = await db().update(articles).set(set).where(ownedSlug(slug)).returning();
     if (!row) throw notFound(slug);
@@ -431,11 +447,11 @@ const rawPgShelfStore: ShelfStore = {
    *
    * ## What survives, deliberately
    *
-   * The four `on delete set null` tables keep their rows with a null
+   * The five `on delete set null` tables keep their rows with a null
    * `article_id`: `ai_calls` and `ingest_events` because the ledger outlives
-   * everything, `article_visibility_changes` because takedown evidence about a
-   * document we no longer serve is exactly what a late complaint needs, and
-   * `realtime_sessions`. The `uploads` row survives too, with a stale `slug`
+   * everything, `article_visibility_changes` and `article_share_link_events`
+   * because takedown evidence about a document we no longer serve is exactly
+   * what a late complaint needs, and `realtime_sessions`. The `uploads` row survives too, with a stale `slug`
    * and no foreign key at all — the column has no unique index, so it dangles
    * harmlessly. **The terminal `jobs` rows do not survive**: they carry the
    * attempt's own slug and URL, which is a live Retry button pointing at a
@@ -447,7 +463,7 @@ const rawPgShelfStore: ShelfStore = {
    * object. Removing the row here would make the bytes unreachable rather than
    * deleted, which is the failure that stage exists to prevent.
    */
-  async destroy(slug: string): Promise<{ destroyed: string }> {
+  async destroy(slug: string, opts?: DestroyOptions): Promise<{ destroyed: string }> {
     /* Before any query, so a pasted title comes back as "that is not a name"
        rather than as "there is no such article". tests/store-slug-guard.test.ts. */
     requireSlug(slug);
@@ -501,6 +517,11 @@ const rawPgShelfStore: ShelfStore = {
       const stranded = await strandedReservationsQuery(tx, slug, ownerId);
       if (stranded.length > 0) throw strandedReservation(stranded);
 
+      /* **The caller's own last check, under these locks** (`DestroyOptions`
+         in contracts.ts). Before `deleteTerminalJobs`, so it still sees every
+         job row this transaction is about to take. */
+      if (opts?.beforeDelete) await opts.beforeDelete(tx, article);
+
       /* **And the finished ones go with it**, in this transaction, and only
          after the refusal above has established there are no others. See
          `deleteTerminalJobs` for why a terminal row is safe to delete and an
@@ -535,19 +556,16 @@ const db = () => getDb();
  * A second way of building a `LibraryEntry` is the divergence this seam exists
  * to make impossible — and it is worth the extra query at this size.
  */
-async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry> {
+async function entryFor(slug: string, archived: boolean): Promise<LibraryEntry | null> {
   const entries = await pgArticleReader.listArticles({ archived });
-  const entry = entries.find((e) => e.slug === slug);
-  if (!entry) {
-    // The write above already proved the row exists, so this is "not a complete
-    // article" (no tree, no blocks), not "no such article". Different problem,
-    // different place to look.
-    throw Object.assign(
-      new Error(`No shelf entry for ${slug} after writing — is it a complete article?`),
-      { status: 404 },
-    );
-  }
-  return entry;
+  /* `null`: the owned row was found above, so no card means the
+     article has no card in this shelf read. That includes every article while
+     it is being imported, and a concurrent edit moving it to the other archive
+     state between the write and this read. The add page saves the purpose
+     during import (plan 261004l), and until
+     2026-10-05 this threw 404 after the UPDATE had committed: a request that
+     reported failure and changed the data. `ShelfStore.patch`. */
+  return entries.find((e) => e.slug === slug) ?? null;
 }
 
 
@@ -610,7 +628,7 @@ const rawPgLibrarySearch: LibrarySearch = {
 
        So `qualia OR "hard problem"` becomes `'qualia' | ( 'hard' <-> 'problem' )`
        — a real disjunction with a real phrase in it. The filesystem adapter
-       cannot do any of that and does not pretend to; src/library-search.ts
+       could not do any of that and did not pretend to; src/library-search.ts
        § parseQuery says so out loud. */
     const tsquery = sql`websearch_to_tsquery(${CONFIG}, ${trimmed})`;
 
@@ -623,7 +641,7 @@ const rawPgLibrarySearch: LibrarySearch = {
     /* Normalisation flag **1** — divide the rank by `1 + log(document length)`
        — not the default 0, which is no normalisation at all. Without it a long
        paragraph outranks a short one simply by containing more words, and the
-       filesystem adapter explicitly damps for length, so the two would have
+       filesystem adapter explicitly damped for length, so the two would have
        disagreed about which hit is best for a reason nobody had chosen.
        https://www.postgresql.org/docs/17/textsearch-controls.html */
     const rank = sql<number>`ts_rank_cd(${revisionBlocks.fts}, ${tsquery}, 1)`;

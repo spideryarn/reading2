@@ -1,17 +1,30 @@
 # Experimental features
 
-One setting, off by default, with **two controls**: a checkbox on
-[/profile](reader-profile.md) and a button at the end of the
-[bottom bar](reading-view-overview.md). Greg, 2026-08-31:
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+One setting, off by default, with **three controls**: a checkbox on
+[/profile](reader-profile.md), a button at the end of the
+[bottom bar](reading-view-overview.md), and a row in the command bar
+([§ The three controls](#the-three-controls)). Greg, 2026-08-31:
 
 > The idea is that when this is off, it shows just the features that are most valuable/polished
 > (which is what we want for most users). When on, it includes extra features that might be still
 > under development or not ready for production.
 
-**Some reading modes and four Diagram pictures are behind it** —
+**Some reading modes, four Diagram pictures and Learn's Explore are behind it** —
 [What is behind it today](#what-is-behind-it-today) is the list, and this doc is its one home. Features go behind it one at a time, each with a reason: the switch and the decision
 about which features are unfinished are two separate arguments, and taking them together means
 neither gets made properly.
+
+## In this doc
+
+- [§ The four rules](#the-four-rules) — signed-out is off, off is the default, hidden is not unreachable, hiding never deletes
+- [§ Where it lives](#where-it-lives) — the column, the contract, the wire field and the client store, when you change how it is saved
+- [§ The three controls](#the-three-controls) — the /profile checkbox, the bar button, the command-bar row, and how each failure state is drawn
+- [§ Putting a feature behind it](#putting-a-feature-behind-it) — adding a gate, and what must happen mid-flight
+- [§ What is behind it today](#what-is-behind-it-today) — the list, and a reader says a mode has vanished; plus the history of what left the switch and when
+- [§ The two things gated below mode level](#the-two-things-gated-below-mode-level) — Learn's Explore and Diagram's four pictures
+- [§ See also](#see-also)
 
 ## The four rules
 
@@ -38,8 +51,9 @@ below holds and a second `npm run setup` does not move the date.
 switch off, and the bar draws Timeline's button while the reader is in it, so the radiogroup still
 has exactly one checked thing. Since 2026-09-04 the same sentence covers `?diagram=trail`, and it is
 the same code saying it: [`experimental-visibility.ts`](../../src/web/experimental-visibility.ts) is
-one rule with two callers, `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx) and `visibleKinds`
-in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx). The switch is about clutter, not enforcement — an old bookmark keeps
+the rule shared by `visibleModes` in [`Dock.tsx`](../../src/web/Dock.tsx), `visibleKinds`
+in [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx), and Learn's
+[visible parts](#the-two-things-gated-below-mode-level). The switch is about clutter, not enforcement — an old bookmark keeps
 working, and a shared URL shows two people **the same band**, whatever their switches say. Their
 *bars* differ, which is the whole point: the default bar for one and every mode for the other, and
 one Diagram chip against five. A gate
@@ -56,6 +70,9 @@ their own), a read/write pair on `ReaderStore` in [`contracts.ts`](../../src/sto
 implemented in [`pg-reader.ts`](../../src/store/pg-reader.ts), one field on `GET`/`PATCH
 /api/reader`, and a client store with the three states below. The other value on that row is the
 profile text itself — [reader-profile.md § Where the pieces are](reader-profile.md#where-the-pieces-are).
+A second setting has the same shape since 2026-10-04: `auto_modes_off_at`, the add page's
+*generate the main modes* box, inverted because its default is on
+([ingest-queue.md § The add page](ingest-queue.md#the-add-page)).
 The shelf's browser-only preference instead skips the server and uses `localStorage`, guarded in
 [`shelf-hidden-columns.ts`](../../src/web/shelf-hidden-columns.ts).
 
@@ -65,7 +82,7 @@ The shelf's browser-only preference instead skips the server and uses `localStor
 | Contract | `readExperimental` / `writeExperimental` on `ReaderStore` — [`src/store/contracts.ts`](../../src/store/contracts.ts) |
 | Wire | `experimentalSince` on `GET`/`PATCH /api/reader`; `PATCH` takes `{ experimental: boolean }`, **one field per request** |
 | Client | [`experimental-store.ts`](../../src/web/experimental-store.ts) — one module-level store for the whole client, session-bound, read through [`useExperimental`](../../src/web/useExperimental.ts). **All the reasoning lives there**: three states rather than two, one write at a time, the races an account switch opens, and why anonymous asks for nothing |
-| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), and the four pages that mount a `Dock` — they call the hook and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental) |
+| Read by | the row in [`SettingsSection.tsx`](../../src/web/SettingsSection.tsx), the pages that mount a `Dock` and hand the answer to the bar as a prop ([`Dock.tsx`](../../src/web/Dock.tsx) § experimental), and Learn's band and [information list](../../src/web/LearnAbout.tsx) |
 | Copy | [`experimental-copy.ts`](../../src/web/experimental-copy.ts) — the two sentences and the name, shared by both controls. **Not `src/messages.ts`**, which is the reader-facing *failure* copy and says so in its first line |
 
 **A date, not a boolean**, and [sql.md](sql.md#a-nullable-timestamp-says-more-than-a-boolean) has the
@@ -90,10 +107,11 @@ the offline cache. Each of those is a state where a press would write a value no
 [`useExperimental`](../../src/web/useExperimental.ts) has the reasoning, and GPT Sol's review
 (2026-08-31, in `docs/plans/`) is where two of the three came from.
 
-## The two controls
+## The three controls
 
-Since 2026-09-03 the setting can be moved from either end of the app. They read one store, so they
-cannot disagree; they say the same two sentences, from
+Since 2026-09-03 the setting can be moved from either end of the app, and since 2026-10-03 from the
+command bar as well (the paragraph under the table). They read one store, so they cannot disagree;
+the first two say the same two sentences, from
 [`experimental-copy.ts`](../../src/web/experimental-copy.ts), so they cannot tell a reader two
 stories about what they turned on. Greg asked for the second one mid-run:
 
@@ -106,6 +124,18 @@ stories about what they turned on. Greg asked for the second one mid-run:
 | Who sees it | anybody on their own profile | **signed-in readers only** — there is no account to save it to otherwise, and a control a stranger cannot use is an advertisement for an account |
 | Also says | *when* it was turned on | nothing else; the bar is eighteen icons |
 | Inert by | `disabled` | `aria-disabled`, so the tooltip explaining *why* is still reachable — a `disabled` button fires no hover and takes no focus, which fails in exactly the states that need explaining |
+
+**The third is a row in the command bar** — *Turn experimental features on*, or *off*: one row whose
+label follows the state, typed-only, found by `experimental` and `labs`
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx) § `experimentalRows`). Greg, 2026-09-29
+(`spya-wh2xys`): *"a command to turn on the experimental features or off … turning on the
+experimental features might be disabled if it's already on."* One row rather than a greyed twin,
+so there is nothing to press that does nothing — and for the same reason **no row at all** before
+the store has loaded, for nobody signed in, and while a save is out, when the store would drop the
+press. To make a refusal sayable, **`set` is awaitable**: it resolves to an
+`ExperimentalSaveOutcome` ([`experimental-store.ts`](../../src/web/experimental-store.ts)) — saved,
+failed, not sent, abandoned — and the bar stays open with the reason on anything but the first. The
+two switches ignore the answer; the store's state already draws everything they show.
 
 **A toggle, not a link to `/profile`**: one press, where the effect is — the modes it reveals are
 three inches to the left of it, and so are the four Diagram pictures.
@@ -165,8 +195,12 @@ In the same piece of work:
   button.
 - **What happens mid-flight is settled: the reader stays where they are.** Turning the switch off
   while an experimental mode is open leaves that mode open, and leaves its button in the bar — the
-  bar draws the non-experimental modes **plus whichever one the URL names**
-  ([`Dock.tsx`](../../src/web/Dock.tsx) § `visibleModes`). Falling back to the default mode is
+  bar offers the non-experimental modes **plus whichever one the URL names**
+  ([`Dock.tsx`](../../src/web/Dock.tsx) § `visibleModes`). *Offers*, because since 2026-10-07 five
+  modes are listed under the bar's More button instead of drawn in it, FAQ and Timeline among them:
+  when offered and not current they join that menu rather than the bar; while current they stay in
+  both
+  ([reading-view-overview.md § The modes in the band](reading-view-overview.md#the-modes-in-the-band)). Falling back to the default mode is
   allowed by this doc and was turned down: staying put is less surprising and costs nothing. A gated
   control that cannot do that — one that would be left in a state it cannot draw — must fall back
   rather than throw.
@@ -177,10 +211,12 @@ is a column rather than something in the browser's `localStorage`.
 
 ## What is behind it today
 
-**The modes in the table below**, and **four of Diagram's five pictures** — which since Diagram itself went in on 2026-09-29 only matters to somebody who reaches the mode by URL with the switch off. Greg picked the first
+**The modes in the table below**, **four of Diagram's five pictures**, and **Learn's Explore**
+([§ The two things gated below mode level](#the-two-things-gated-below-mode-level)). Diagram's picture gates,
+since Diagram itself went in on 2026-09-29, only matter to somebody who reaches the mode by URL with the switch off. Greg picked the first
 four on 2026-09-03
 ([260903c](../plans/260903c-gate-unpolished-modes-behind-experimental-features.md)), Debate joined
-them on 2026-09-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
+them on 2026-09-05, Remember came out on 2026-10-05 leaving its Explore part behind, Marginalia went in on 2026-10-01 and came out on 2026-10-05, Quotes came out on 2026-09-06, Structure, which went in on 2026-09-06, came
 out on 2026-09-10, Citations joined on 2026-09-11, Hierarchy went in on 2026-09-12 and was removed on 2026-09-29, Skim came and went on 2026-09-28, and Diagram — whole, not only four pictures — went in on 2026-09-29; each row is a required
 `experimental: boolean` in `MODE_CATALOG` ([`mode-catalog.ts`](../../src/mode-catalog.ts) — it was
 on the `MODES_UI` row in [`Dock.tsx`](../../src/web/Dock.tsx) until 2026-09-07), so mode fifteen
@@ -195,23 +231,22 @@ Everything a mode is *not* is derivable from `MODES` ([`src/modes.ts`](../../src
 | Mode | Why it is behind the switch |
 |---|---|
 | [Timeline](timeline.md) | Four dating states, and drawing an undated row like a dated one throws away what the article actually said. Ten of twenty-six rows on the test article carry no date. |
-| [Referee](referee-mode.md) | **Not because it is unfinished** — its own doc opens by saying all four sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
-| [Remember](remember-mode.md) | The name suggests saved notes and spaced repetition, neither of which exists; the quiz half is newer still. |
+| [Referee](referee-mode.md) | **Not because it is unfinished** — all five sub-modes are built and working. It is the newest mode and by far the narrowest: it is for somebody who has been *asked to peer-review* the piece, which most readers never are. Greg's call, and the one row here that is about audience rather than readiness. |
 | [Citations](citations.md) | A new mode on an unmeasured prompt: four local runs so far, and on a long bibliography the list is capped at 80 and chosen by the model. The links are safe by construction — each is one the article gave, or a search that says it is one — but which works make the list, and the two scores, have not been checked against a reader's judgment. |
 | [FAQ](faq.md) | A new mode on an unmeasured prompt: two local runs so far. The quoted words are checked against the article, but whether the questions are the ones a reader would actually have — and whether each passage really answers its question — is unchecked. |
 | [Diagram](diagram.md) | Greg, 2026-09-29 (SPIDERYARN-READING2-4R): *"Move all of Diagram mode into the 'Experimental features'. It's just not good enough yet."* It had been in everybody's bar since 2026-09-04 with only the Sketch showing; now the mode goes, and inside it a switched-on reader still gets all five pictures ([260929c](../plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md)). |
-| [Marginalia](../plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md) (called Annotations until 2026-10-01) | A first experiment with a column to the *right* of the prose, which Greg asked to "play with" (SPIDERYARN-READING2-7K, 2026-10-01). It generates nothing — the parts' questions, the arc and any ideas already made — but whether notes beside the text help reading or become a second article down the margin is exactly what has not been tried. |
 | [Debate](../plans/260905f-debate-mode-what-the-web-says-about-this-piece.md) | Two metered web searches a run, up to ~$0.27 and rising with article length — the dearest mode press in the bar — and no live run has happened yet, so nothing about what a real list looks like is known. Its content is also the only thing in the band that is not in the article at all, and what the panel can prove about a row stops well short of what a reader will read into it. |
 
-**One thing that is not a mode is behind it too: [reading time](reading-time.md)**, since
-2026-09-16 — the spine thicker where the reader has spent longer. Both the recording and the drawing,
-because it is new code running every second on an owner's article and a new kind of data about a
-person, so it starts with the readers who asked for the unfinished things. The switch is availability
-here, not consent; `/privacy` says we keep it. Fable argued for recording for every owner, since reading
-time cannot be backfilled —
-[260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what).
+**[Reading time](reading-time.md) was behind it from 2026-09-16 and came out on 2026-10-05** — an
+area chart down the spine of where the reader has spent longer. Both the recording and the drawing
+went in, because it was new code running every second on an owner's article and a new kind of data
+about a person
+([260916c § Who, and behind what](../plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md#who-and-behind-what)),
+and both came out: nothing was sampled with the switch off, so the chart had holes wherever it had
+been off. Every owner now has it, with no way yet to turn it off or erase it —
+[reading-time.md § Who gets it](reading-time.md#who-gets-it) has Greg's decision and what it gives up.
 
-**And the headings breadcrumb, since 2026-10-02** — one line in the sticky bar at the top of the
+**One thing that is not a mode is behind it: the headings breadcrumb, since 2026-10-02** — one line in the sticky bar at the top of the
 reading view saying where in the structure you are, part › section, following you as you scroll:
 
 > I sometimes feel as though I lose track of where I am. The structure mode helps a lot, but then I
@@ -221,10 +256,30 @@ reading view saying where in the structure you are, part › section, following 
 > — Greg, 2026-09-29 (spya-m3pteb)
 
 It is the tree [Structure](structure.md) draws and the same "you are here", each crumb jumps to its
-part or section and carries the row's card. It costs 44px at the top of the prose, because it reuses
-the controls bar rather than adding a second piece of sticky chrome, and the bar stops sliding away
-while it holds the breadcrumb. It is not drawn where an open mode covers the prose on a narrow
-window, including after a band link steps that mode aside. The reasoning, the patterns looked at and
+part or section and carries the row's card. A chapter whose stored children are only block leaves
+shows the chapter alone (`src/web/crumbs.ts` § `crumbPath`); bounded window sections still appear.
+A tree with only block leaves has no breadcrumb bar. It reuses the controls bar rather than adding a second
+piece of sticky chrome, and the bar stops sliding away while it holds the breadcrumb. The bar costs
+44px at the top of the prose on a wider window. **On a narrow window it is three lines in a 68px bar, since
+2026-10-03**: the ancestors on one line, the current section on up to two, because one line cut both
+crumbs on a phone in portrait
+([261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md)).
+It is not drawn where an open mode covers the prose on a narrow
+window, including after a band link steps that mode aside. **Beside an open mode on a wide window,
+the bar runs from the spine once it is stuck at the top, since 2026-10-04**: it used to start at the
+band's right edge and leave the strip above the band empty while the path was cut
+([261004a](../plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md)). **It is not drawn
+while Structure is open or Marginalia's column has room on screen, since 2026-10-04**; each
+ordinarily says where you are itself. With Marginalia switched on but no room for its column, the
+breadcrumb stays. The empty-head and contained-failure exceptions are recorded in
+[261004k](../plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md):
+
+> We don't need to show that horizontal rail when either structure or annotations mode are on,
+> because they both provide that information too.
+>
+> — Greg, 2026-10-04 (spya-rx43ku)
+
+The reasoning, the patterns looked at and
 what was deferred (one line per heading level, a thinner bar) are
 [261002h](../plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md).
 
@@ -330,6 +385,40 @@ rather than a reason to hide the mode. Pressing the button starts a paid run, th
 and Ideas, so this is a third default-visible mode that spends on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`).
 
+**Marginalia left the table on 2026-10-05.** It was called Annotations when Greg wrote this:
+
+> Let's take the annotations mode out of experimental features, i.e. make it a mainstream feature
+> available to everybody.
+>
+> — Greg, 2026-10-04 (spya-vv54j2)
+
+It had been behind the switch since it was built on 2026-10-01, as a first experiment with a column
+to the right of the prose. Its toggle is now at the end of the modes in every reader's bar, a
+visitor's included, where it draws what the public payload carries and starts nothing. Two things
+followed from the flag. **Its relation words are queued when an article is imported**, because the
+add page's list is every mode outside the switch that makes something
+([ingest-queue.md](ingest-queue.md)): one more model call per import, measured once at $0.045.
+**And the first-open default includes it for every signed-in reader with room**, no longer only
+for a reader with the switch on ([url-state.md](url-state.md)).
+[261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md).
+
+**Remember left the table on 2026-10-05, without its Explore part.** Greg:
+
+> I want to include at least part of the remember mode in the mainstream features, i.e. not only in
+> the experimental features. I'm trying to decide which submodes. I think recall submode for sure.
+> I think quiz mode as well. And then let's try tutorial too.
+>
+> — Greg, 2026-10-04 (spya-cnqcjf)
+
+It had been behind the switch since the first four went in on 2026-09-03; its row said the name
+suggests saved notes and spaced repetition, neither of which exists. That is still so. Recall,
+Tutorial and Quiz are now in every reader's bar, and Explore is gated one level down:
+[§ The two things gated below mode level](#the-two-things-gated-below-mode-level). Learn is
+owners-only as before, so a visitor's bar gains a Learn button that opens the sentence saying
+so, as Skim's does. Nothing new is generated when an article is added, because a press on Learn
+generates nothing: the Quiz is still written on the first press of its chip.
+[261005b](../plans/261005b-remember-out-of-the-experimental-switch-explore-stays-behind-it.md).
+
 **Skim (then called Trajectory) left the table on 2026-09-28, the day it arrived.** Greg:
 
 > And take Trajectory and Quotes modes out of Experimental features, i.e. into mainstream features.
@@ -348,7 +437,21 @@ are none or they are stale, as Glossary, Ideas and Quotes already do on a press
 ([`activation.ts`](../../src/web/activation.ts) § `MODE_TARGET`). Its unmeasured-prompt caveat has
 not gone away; [skim.md](skim.md) keeps it as a Question for Greg.
 
-## The one thing that is gated below mode level
+## The two things gated below mode level
+
+Four of Diagram's pictures, and one of Learn's four parts.
+
+**Learn's Explore, since 2026-10-05.** When the mode came out from behind the switch, Greg named
+Recall, Quiz and Tutorial; Explore was two days old and stays here. With the switch off the chips
+read Recall · Tutorial · Quiz, the band's (i) lists those three, and the command bar has no
+*Learn › Explore* row. `?learn=explore` still opens it, and while the reader is in it the chip
+is drawn and pressed. That address outlives the mode
+([url-state.md](url-state.md)), so a reader who used Explore and then turned the switch off comes
+back to it when they press Learn: hidden, not unreachable. It is the flag Diagram's pictures
+use, `experimental` on the sub-mode's row in [`sub-modes.ts`](../../src/web/sub-modes.ts), read by
+`visibleLearnViews` there for the chips and the (i), and by `subModeRows`
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx)) for the bar. The policy is written out a second
+time in `tests/learn-header-cards.test.tsx`, so moving the flag alone fails a test.
 
 **Diagram, since 2026-09-04.** It came out from behind the switch and four of its five pictures went
 behind it instead, on a reader's report:
@@ -376,5 +479,11 @@ Diagram buys nothing, and a shared visitor is pinned to the free picture whateve
 
 - [reader-profile.md](reader-profile.md) — the page this switch is on, and the boxes above it.
 - [sql.md](sql.md) — why the column is a nullable timestamp.
+- [mode.md](mode.md) — the checklist for adding a mode, including which side of this switch it is on
+  (`experimental` in [`src/mode-catalog.ts`](../../src/mode-catalog.ts)).
+- [`tests/dock-experimental-switch.test.tsx`](../../tests/dock-experimental-switch.test.tsx),
+  [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — the
+  appearances of the bar button, and the anonymous reading path's application requests staying
+  under `/api/public/`, with no POST.
 - [docs/plans/experimental-features-toggle.md](../plans/experimental-features-toggle.md) — the
   decisions taken when it was built, including the ones that went the other way.

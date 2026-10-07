@@ -33,11 +33,13 @@
  * `<body>` would have had its body silently deleted by the replacement. It is
  * `requireMarkersInHead` below now, and the build check calls the same function.
  */
+import { isLeadImage, publicAssetPath } from "../asset-delivery.js";
 import { escapeHtml, headText } from "../html.js";
+import { type SitePage, sitePageUrl } from "../site-pages.js";
 import { type BandMode, DEFAULT_MODE } from "../modes.js";
 import type { ArticleView } from "../read-address.js";
-import { APP_NAME, documentTitle } from "../title-text.js";
-import { articleUrl, safePublicCanonical } from "../urls.js";
+import { APP_NAME, SEP, documentTitle } from "../title-text.js";
+import { PUBLIC_ORIGIN, articleUrl, safePublicCanonical } from "../urls.js";
 import type { PublicHead } from "../store/public-reader.js";
 
 /* `PUBLIC_ORIGIN` was defined here, with the argument for why it is a constant
@@ -79,6 +81,105 @@ import type { PublicHead } from "../store/public-reader.js";
    the one file whose job is to notice when the deployed head is wrong. */
 export const CARD_TITLE = 120;
 const DESCRIPTION = 240;
+
+/**
+ * **The picture on a card that has no other**: one static image, drawn by
+ * scripts/make-og-card.ts and committed as `public/og-card.png`.
+ *
+ * Ours. It is on every card of our own pages, and on a shared article's when we
+ * hold no picture of the article fit for one (`leadImageUrl` below).
+ * docs/plans/261005f-link-previews-and-seo-for-shared-links.md has the choice.
+ *
+ * `index.html` writes this address out by hand for the default head, and
+ * tests/og-card.test.ts holds the two together, with the file's real size.
+ */
+export const OG_CARD = {
+  path: "/og-card.png",
+  url: `${PUBLIC_ORIGIN}/og-card.png`,
+  width: 1200,
+  height: 630,
+} as const;
+
+/**
+ * **The one switch for the article's own picture on its card.** `false` puts
+ * our brand image back on every card, and nothing else changes.
+ *
+ * Greg, 2026-10-05, asked whether to use it: *"hmmm, not sure. go with the lead
+ * image for now"*. So it is on, and it is one line to take back. The first
+ * slice refused it as somebody else's image on a card with our name on it; what
+ * is built is the narrow form of it, in `leadImageUrl`.
+ */
+export const LEAD_IMAGE_ON_CARDS = true;
+
+/**
+ * **The address of the article's own picture for its card, or `null` for our
+ * brand image.**
+ *
+ * Always our own origin and the public asset route
+ * (`/api/public/asset/<slug>/<hash>.<ext>`, src/public/routes.ts), which serves
+ * a copy we stored and re-asks whether the article is shared on every request.
+ * **Never the publisher's URL**: `LeadImage` does not carry one. A preview
+ * robot that hot-linked would tell the publisher which article of theirs is
+ * being shared from here, and an address we did not check would be a stranger's
+ * `src` in our head.
+ *
+ * The hash and the extension come from a `jsonb` manifest, so they are checked
+ * for shape here, at the sink, as well as being escaped like every other value:
+ * a hash that is not 64 hex digits gets the brand image rather than a guess.
+ *
+ * `on` is a parameter so the switch can be tested from both sides.
+ */
+export function leadImageUrl(head: PublicHead, on: boolean = LEAD_IMAGE_ON_CARDS): string | null {
+  if (!on || !isLeadImage(head.image)) return null;
+  const { sha256, ext } = head.image;
+  return `${PUBLIC_ORIGIN}${publicAssetPath(head.slug, sha256, ext)}`;
+}
+
+/**
+ * **The names a card's title ends with**, or `""` for none: one name, two
+ * joined by `and`, or the first and `et al.`
+ *
+ * A card has room for a title and little else, and a paper's forty authors
+ * would be all of it.
+ */
+export function cardAuthors(names: readonly string[]): string {
+  const clean = names.map((n) => headText(n, 60)).filter((n) => n !== "");
+  const [first, second] = clean;
+  if (first === undefined) return "";
+  if (second === undefined) return first;
+  return clean.length === 2 ? `${first} and ${second}` : `${first} et al.`;
+}
+
+/**
+ * **What `og:title` says**: the article's title, then who wrote it.
+ *
+ * Greg, 2026-10-04: *"Probably the article title and/or authors first in the
+ * title"*. On the card only. The tab's `<title>` is `documentTitle`, which the
+ * client rewrites a second later and must agree with
+ * (docs/project/page-titles.md).
+ *
+ * **A title the clamp cut gets no names**, and neither does one the names
+ * would push past the clamp. `CARD_TITLE` is the budget for the whole string,
+ * and scripts/check-public-shell.ts can go on comparing a long title exactly.
+ *
+ * Exported for that script, which judges a deployed head with it.
+ */
+export function cardTitle(title: string | null, authors: readonly string[]): string {
+  /* "Untitled" rather than an empty tag, matching `articleTitle()` in
+     src/title-text.ts. **Effectively unreachable from `loadHead`**, which falls
+     back to the slug and so always hands over a string — it is the defence for
+     the paths that compose a head without one, and for a title that normalises
+     to nothing. `||` and not `??`: a title of `"   "` normalises to `""`, which
+     is as titleless as `null`. */
+  const clamped = headText(title ?? "", CARD_TITLE) || "Untitled";
+  const whole = headText(title ?? "", Number.MAX_SAFE_INTEGER);
+  const names = cardAuthors(authors);
+  if (names === "" || clamped !== whole) return clamped;
+  /* One budget for the whole string: names that do not fit are left off, not
+     cut, because half a name is worse than none. */
+  const withNames = `${clamped}${SEP}${names}`;
+  return [...withNames].length <= CARD_TITLE ? withNames : clamped;
+}
 
 /**
  * The boundary markers in index.html. The function replaces everything from the
@@ -130,7 +231,39 @@ export function composeShell(
      needs the alarm — every 404, 400 and 503 — silently accepting it. */
   requireMarkersInHead(shell, start, end);
   if (head === null) return shell;
+  return replaceManagedHead(shell, start, end, tags(head, mode, view));
+}
 
+/**
+ * **The shell with its managed head replaced by one of our own pages'**: its
+ * title, its description, and a canonical and an `og:url` that name itself.
+ *
+ * The other composer in this file, and the only other one there should be. A
+ * shared article's head is composed per request, from the database; this is
+ * composed **at build time**, once per page of src/site-pages.ts, by
+ * scripts/build-site-pages.ts, and served as a static file.
+ *
+ * **No robots tag, which is the point of it.** The default head says
+ * `noindex, nofollow` and every path not on that list is served the default.
+ * Greg, 2026-10-05: *"yes definitely we want those to be visible"*.
+ *
+ * The same checks as `composeShell`, on the same markers, and the sentinels are
+ * left in place.
+ */
+export function composeSitePage(shell: string, page: SitePage): string {
+  const start = shell.indexOf(MANAGED_HEAD_START);
+  const end = shell.indexOf(MANAGED_HEAD_END);
+  requireOnce(shell, MANAGED_HEAD_START, start);
+  requireOnce(shell, MANAGED_HEAD_END, end);
+  if (start > end) {
+    throw new Error("Client shell: the managed-head end sentinel comes before the start.");
+  }
+  requireMarkersInHead(shell, start, end);
+  return replaceManagedHead(shell, start, end, sitePageTags(page));
+}
+
+/** Everything from the start sentinel to the end one, swapped for `lines`. */
+function replaceManagedHead(shell: string, start: number, end: number, lines: string[]): string {
   /* Purely cosmetic: match whatever this shell indents its head tags by, so the
      served HTML reads like the file it came from. Falls back to a bare newline
      if the sentinel is not the first thing on its line. */
@@ -138,9 +271,36 @@ export function composeShell(
   const indent = shell.slice(lineStart, start);
   const gap = /^[ \t]*$/.test(indent) ? `\n${indent}` : "\n";
 
-  return (
-    shell.slice(0, start) + tags(head, mode, view).join(gap) + shell.slice(end + MANAGED_HEAD_END.length)
-  );
+  return shell.slice(0, start) + lines.join(gap) + shell.slice(end + MANAGED_HEAD_END.length);
+}
+
+/**
+ * One of our own pages' tags. The title is the tab's, whole, on the card too:
+ * these are our pages, so the name in it is not a repeat of somebody else's
+ * title, and `Pricing` alone says too little on a card.
+ */
+function sitePageTags(page: SitePage): string[] {
+  const url = sitePageUrl(page);
+  return [
+    MANAGED_HEAD_START,
+    `<title>${escapeHtml(page.title)}</title>`,
+    meta("name", "description", page.description),
+    `<link rel="canonical" href="${escapeHtml(url)}" />`,
+    meta("property", "og:type", "website"),
+    meta("property", "og:site_name", APP_NAME),
+    meta("property", "og:title", page.title),
+    meta("property", "og:description", page.description),
+    meta("property", "og:url", url),
+    meta("property", "og:image", OG_CARD.url),
+    meta("property", "og:image:width", String(OG_CARD.width)),
+    meta("property", "og:image:height", String(OG_CARD.height)),
+    meta("property", "og:image:alt", APP_NAME),
+    meta("name", "twitter:card", "summary_large_image"),
+    meta("name", "twitter:title", page.title),
+    meta("name", "twitter:description", page.description),
+    meta("name", "twitter:image", OG_CARD.url),
+    MANAGED_HEAD_END,
+  ];
 }
 
 /**
@@ -206,13 +366,7 @@ function requireOnce(shell: string, marker: string, at: number): void {
  * becomes markup. src/html.ts explains why those are two jobs.
  */
 function tags(head: PublicHead, mode: BandMode, view: ArticleView): string[] {
-  /* "Untitled" rather than an empty tag, matching `articleTitle()` in
-     src/title-text.ts. **Effectively unreachable from `loadHead`**, which falls
-     back to the slug and so always hands over a string — it is the defence for
-     the paths that compose a head without one, and for a title that normalises
-     to nothing. `||` and not `??`: a title of `"   "` normalises to `""`, which
-     is as titleless as `null`. */
-  const cardTitle = headText(head.title ?? "", CARD_TITLE) || "Untitled";
+  const card = cardTitle(head.title, head.authors);
   /* `head.gist` is already `root_gist` — itself the gist → summary → excerpt
      fallback from src/library-scalars.ts. When there is none, all three
      description tags are omitted rather than filled with the app's strapline: a
@@ -222,27 +376,43 @@ function tags(head: PublicHead, mode: BandMode, view: ArticleView): string[] {
 
   const out = [MANAGED_HEAD_START, `<title>${escapeHtml(documentTitle(head.title, mode, view))}</title>`];
   if (description) out.push(meta("name", "description", description));
-  /* **Unconditional, and it stays that way in this slice.** Composing a head
-     changes what a card looks like; it changes crawler exposure not at all. The
-     slice that narrows `X-Robots-Tag` and edits public/robots.txt is where this
-     becomes conditional on the article being shared — until then, its constancy
-     is the decision rather than an oversight. */
+  /* **Unconditional, and decided.** Greg, 2026-10-05, asked whether a shared
+     article should ever be listed by a search engine: *"no"*. `robots.txt` lets
+     a crawler fetch a `/read/` page precisely so that it reads this and the
+     matching `X-Robots-Tag` (vercel.json), since a Disallow alone leaves the
+     address listable. Our own pages have no such tag: `sitePageTags`. */
   out.push(meta("name", "robots", "noindex, nofollow"));
   out.push(meta("property", "og:type", "article"));
   out.push(meta("property", "og:site_name", APP_NAME));
   /* Without the ` · Spideryarn` suffix: a card already carries `og:site_name`,
      so repeating it in the title spends the visible half of the card saying the
      same word twice. */
-  out.push(meta("property", "og:title", cardTitle));
+  out.push(meta("property", "og:title", card));
   if (description) out.push(meta("property", "og:description", description));
+  /* **Ours, while the canonical below is the original's, and they differ on
+     purpose.** Facebook follows an `og:url` that names another address and
+     draws that page's card instead, so the original's URL here would mean no
+     card of ours at all. docs/research/261005b § `og:url`. */
   out.push(meta("property", "og:url", articleUrl(head.slug)));
-  /* `summary`, not `summary_large_image`. There is no image in this slice —
-     a third-party lead image would be an endorsement, a privacy contact and
-     another untrusted `src` sink — and `summary_large_image` without one
-     renders as a broken card rather than a small one. */
-  out.push(meta("name", "twitter:card", "summary"));
-  out.push(meta("name", "twitter:title", cardTitle));
+  /* The article's own first picture when we hold a copy, and ours otherwise.
+     No width or height for the article's: the manifest records neither, and
+     the brand image's would be a claim about a different picture. */
+  const lead = leadImageUrl(head);
+  const image = lead ?? OG_CARD.url;
+  out.push(meta("property", "og:image", image));
+  if (lead === null) {
+    out.push(meta("property", "og:image:width", String(OG_CARD.width)));
+    out.push(meta("property", "og:image:height", String(OG_CARD.height)));
+  }
+  out.push(meta("property", "og:image:alt", lead === null ? APP_NAME : headText(head.title ?? "", CARD_TITLE) || APP_NAME));
+  /* The large card, since 2026-10-05 and the image above. Every other platform
+     draws a 1200x630 image large whatever X is told, so `summary` would only
+     make X the odd one out. Without an image this value draws a broken card:
+     the two go together. */
+  out.push(meta("name", "twitter:card", "summary_large_image"));
+  out.push(meta("name", "twitter:title", card));
   if (description) out.push(meta("name", "twitter:description", description));
+  out.push(meta("name", "twitter:image", image));
 
   /* A canonical is a public statement about a URL we did not write, so
      `safePublicCanonical` gets the last word and its `null` means no tag at

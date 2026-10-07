@@ -16,7 +16,7 @@
  * button labelled *Your profile*; and a run that had started itself said
  * *Using your profile* instead of the checkbox. The whole row went (GPT Sol's
  * review of docs/plans/260913a-drop-the-use-your-profile-checkbox.md, F3). What
- * is left is the *written for you* badge, which opens the panel.
+ * is left is the profile icon, which opens the panel.
  *
  * Drawn through the real `IdeasPanel`, so what is asserted is what a reader of
  * a panel meets. The checkbox, sentence and `ensure(true)` assertions were
@@ -51,10 +51,12 @@ function owner(over: Partial<UseIdeas> = {}): UseIdeas {
     profileChanged: false,
     slug: "constitution",
     error: null,
+    retryRead: async () => {},
     job: null,
     failed: null,
     stalled: false,
     starting: false,
+    rewriting: false,
     ensure: async () => {},
     regenerate: async () => {},
     refresh: async () => {},

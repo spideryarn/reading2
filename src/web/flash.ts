@@ -18,10 +18,10 @@
  * every step, 2026-09-28 — docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md
  * § 5a. It flashes the same way `beginJump` does, when the scroll settles.
  *
- * **What flashes is the verbatim cell**, `td.text`, never the gist columns: the
- * question is which paragraph, and the gist column already marks the current
- * row its own way. With the prose column off (`?text=0`) there is nothing to
- * flash and nothing is kept for later. **Skim narrows it to the quote's
+ * **What flashes is the verbatim cell**, `td.text`: the question is which
+ * paragraph. (It was never the gist columns, which marked the current row
+ * their own way until they went on 2026-09-29; `?text=0`, which turned the
+ * prose column off, went with them.) **Skim narrows it to the quote's
  * own words** (`FlashTarget.passage`, plan 260928a § 7b), because its stop is
  * a quote rather than a paragraph. **A citation chip whose sentence quotes the
  * article narrows it too**, by another route: it has words but no mark, so the
@@ -33,7 +33,10 @@
  * there would finish behind it. It is held instead and `flushPendingFlash` fires
  * it when the prose is exposed — Reader calls that when the band closes or
  * steps aside — so leaving the mode shows you where you landed. A newer jump
- * replaces a held one. Sol F2.
+ * replaces a held one. Sol F2. Skim's ‹ › on a phone is the long-lived case
+ * since 2026-10-03 (spya-kudr63): the band stays up for the whole walk, each
+ * step drops the last held flash, and one that outlives a switch to another
+ * covering band is dropped by Reader rather than played under it.
  *
  * Module state rather than React state because the cell is a DOM node the
  * memoised table owns, and re-rendering 2,000 rows to toggle one class would
@@ -328,7 +331,7 @@ const READER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
  *
  * Two callers: Metadata's contents list and search box (PageContents.tsx §
  * reveal, which moved this here), and the Help page's arrival at a fragment
- * (help/HelpPage.tsx § arrive).
+ * (help/HelpPage.tsx § Arriving, a question on the questions' page).
  */
 export function scrollToAndFlash(el: HTMLElement): () => void {
   let finished = false;

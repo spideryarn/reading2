@@ -77,11 +77,35 @@ take the year from*, which is a fact about us, where `phraseNotInOccurrence` is 
 extraction. The three sentences are in [`src/messages.ts`](../../src/messages.ts) §
 `DATE_REJECTED_SHORT` / `DATE_REJECTED_WHY`.
 
-**It cannot occur on an article that has a publication date**, and it is the *only* dated state on a
-frameless one — which is every article ingested before 2026-08-31, since the date only arrives on
-re-extraction. So it is simultaneously the hardest state to see and the commonest one on the shelf,
-and the throwaway `preview-timeline.tsx` fabricated it deliberately (deleted 2026-09-11; it is in
-history if you need the fixture).
+**`noYearFrame` cannot occur when there is a usable publication day.** Without one, fully stated
+dates still work; dates missing a year need the assumption below or retain the article's words.
+
+### No publication date: the article's words, and one assumption
+
+Since 2026-10-05 a `noYearFrame` row no longer shows a label about us in the date column. Greg,
+2026-10-04 (`spya-fyjac4`), on a piece where 17 rows read "dated — but which year?":
+
+> there are dates, and sometimes it even says in the, you know, description that there's a date,
+> but it's somehow not showing the dates above.
+
+Two things, and [261005d](../plans/261005d-timeline-dates-without-a-publication-date.md) has the
+cause and the numbers:
+
+- **The row shows the article's own words** — `“On July 7”`, drawn like a `words` row, because the
+  day and the month are known and only the year is not. The head of the list says once that some
+  dates have no year. This is the panel's doing (`datingWords`), so it applies to every stored
+  timeline without a re-run. The short label survives only where no phrase was located.
+  [Marginalia](marginalia.md) draws the same words in its note for the row, and places it as it
+  places a `words` row.
+- **With no publication date, the stage assumes the one year the piece itself states** —
+  `pieceYear` in [`src/timeline-time.ts`](../../src/timeline-time.ts): exactly one distinct year,
+  written beside a month, across the body, **and only when that year is the year we fetched the
+  article or the one before** (13 of the 16 production articles stating one year state an older
+  one, which is as likely history as the piece's own year). Such a row is `dated` with `yearFilled` and
+  `yearFrom: "piece"`, and the panel says the year is assumed, above the list and on the open row.
+  Two years or none, and the row stays as above. **It is the one place a year is not the
+  article's or the publisher's**, and the evidence that it is usually right is thin; the plan
+  says how thin.
 
 ## The order is the model's reading, and the dates move nothing
 
@@ -159,6 +183,9 @@ it does not change when something happened.
 Ids are inherited on **the cited block set plus the date**, never on the label. That is measured
 rather than argued: a regeneration kept 26 of 27 ids and only 7 of 26 labels, so label-keyed
 inheritance would have orphaned nineteen `?event=` links in one re-run.
+For the `noYearFrame` → assumed-year transition, [`inheritIds`](../../src/timeline.ts) also matches
+the unchanged temporal words and cited passages, refusing ambiguous matches. A row with no located
+phrase has no such fallback.
 
 ## The artefact lives in the database
 
@@ -186,8 +213,8 @@ dying with a `23514` a long way from the cause. `tests/db-step-constraint.test.t
 migrations statically and goes red the moment a step joins `STEP_ORDER`, which is what makes there
 not be a fourth. `drizzle/0035_timeline.sql` is the shape to copy.
 
-**Writing a migration is free; applying one is Greg's call, locally as well as remotely** —
-[AGENTS.md](../../AGENTS.md).
+**An ordinary additive migration is read, applied and reported; a destructive one on the remote
+is Greg's call** — [AGENTS.md](../../AGENTS.md).
 
 ## It starts itself when you press the mode
 
@@ -203,7 +230,9 @@ The loop that made Greg choose a button in the first place —
 the request goes out. Hence the two verbs on the hook: `ensure` is unforced and is what **both** the
 automatic run and the empty state's button call, because `work_key` is computed from the request and
 two keys are two paid jobs; `regenerate` is forced and is *Read it again*, offered beside a timeline
-that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
+that is already there, and held from the press until the new timeline has been read
+([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+[`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
 The reader profile is not in this stage's stamp at all (§ Freshness), so this is the one of the five
 with no profile tickbox to replace and nothing extra to say about an automatic run.
@@ -240,6 +269,10 @@ page, which lists it. Greg accepted that on 2026-09-04 rather than inherit it.
 
 ## See also
 
+- **Wanting an *Ask in chat* button on an event?** This mode has none, and does not mention chat.
+  Today only Glossary entries and Citations rows have one (the shared `AskInChatButton` in
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's.
+  The pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
 - [260831i-timeline-mode.md](../plans/260831i-timeline-mode.md) — the plan: the review that stopped the first
   design, the two spike runs, and everything deferred.
 - [ideas.md](ideas.md) — the sibling this is modelled on, and the source of the validate-every-id

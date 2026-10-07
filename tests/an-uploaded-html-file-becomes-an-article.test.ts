@@ -97,6 +97,7 @@ async function readyToVerify(
     slug: `test-html-upload-${id.slice(0, 8)}`,
     upload: { id, filename },
     report: () => {},
+    preview: () => {},
     signal: new AbortController().signal,
     cacheArticle: false,
     power: "standard" as const,

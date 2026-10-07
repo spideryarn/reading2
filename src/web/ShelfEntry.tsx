@@ -31,23 +31,27 @@ import {
   ExternalLink,
   FileText,
   Globe,
+  Link2,
   MessageCircle,
   Pencil,
   RefreshCw,
 } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
-import { SHARING_BADGE, SHARING_ON } from "../messages.js";
+import { PRIVATE_LINK_HEADING, SHARING_BADGE, SHARING_OFF_WITH_LINK, SHARING_ON } from "../messages.js";
 import type { LibraryEntry } from "../types.js";
 import { isWebUrl } from "../urls.js";
 import { IconButton } from "./IconButton.js";
 import { Link } from "./Link.js";
-import { exactly } from "./relative-time.js";
+import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "./menu.js";
+import { exactly, publishedOf } from "./relative-time.js";
 import { readHref } from "./router.js";
 import { ShelfTags } from "./ShelfTags.js";
 import { TitleEditor } from "./TitleEditor.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useCopy } from "./useCopy.js";
 import type { useShelf } from "./useShelf.js";
 import { fetchOk } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { articleTitleVoice, gistVoice, withVoice } from "./voice.js";
 
 /* `archivedAt` read directly rather than through shelf-narrow.ts's `isArchived`:
@@ -93,14 +97,15 @@ export function SharedBadge({
    * the `title` — `IconButton`'s `titled`, the same switch for the same reason.
    */
   titled = true,
-}: { titled?: boolean } = {}) {
+  privateLink = false,
+}: { titled?: boolean; privateLink?: boolean } = {}) {
   return (
     <span
       className="tw:inline-flex tw:items-center tw:gap-1 tw:rounded tw:border tw:border-highlight/40 tw:px-1.5 tw:py-0.5 tw:text-highlight-text"
-      title={titled ? SHARING_ON : undefined}
+      title={titled ? privateLink ? SHARING_OFF_WITH_LINK : SHARING_ON : undefined}
     >
-      <Globe size={11} />
-      {SHARING_BADGE}
+      {privateLink ? <Link2 size={11} /> : <Globe size={11} />}
+      {privateLink ? PRIVATE_LINK_HEADING : SHARING_BADGE}
     </span>
   );
 }
@@ -168,9 +173,16 @@ export function ShelfCard({
   note,
   archivedShown = false,
   readThis,
+  topics,
 }: {
   entry: LibraryEntry;
   shelf: Shelf;
+  /**
+   * **The article’s topic pills**, drawn by the caller (ShelfRowTopics.tsx)
+   * for `readThis`’s reason: this file is shared with lazy routes, and the
+   * pills bring the topic colours behind them. Plan 261005a.
+   */
+  topics?: ReactNode;
   /**
    * ***Read this* for a paper not read through yet**, drawn by the caller
    * (`ReadThisButton`, ReadThis.tsx). A slot rather than an import because this
@@ -202,10 +214,18 @@ export function ShelfCard({
      length and no blocks to count; what it has is a title, its authors and an
      abstract, and the one button that reads the rest. */
   const minimal = entry.processing === "minimal";
+  /* **When the piece was published, after who wrote it and where** — Greg,
+     2026-10-04: *"Show the publication date in the logged-in homepage Shelf"*.
+     Until then a card said it only while the shelf was sorted by Published.
+     Bare, with no "published" in front: beside the author and the site a date
+     reads as the piece's own, and the times that are the reader's (added,
+     opened) are on the bottom row. `publishedOf` prints it, so a paper dated
+     only to a year says the year. Plan 261005e. */
+  const published = publishedOf(entry)?.label;
   const facts = (
     minimal
-      ? [entry.byline, entry.siteName]
-      : [entry.byline, entry.siteName, `~${entry.minutes} min`, `${entry.blocks} blocks`]
+      ? [entry.byline, entry.siteName, published]
+      : [entry.byline, entry.siteName, published, `~${entry.minutes} min`, `${entry.blocks} blocks`]
   ).filter(Boolean) as string[];
 
   return (
@@ -251,11 +271,27 @@ export function ShelfCard({
         )}
       </div>
 
-      <p className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground">
+      <p
+        data-shelf-facts=""
+        className="tw:mt-1.5 tw:mb-0 tw:flex tw:flex-wrap tw:items-center tw:gap-x-2 tw:gap-y-1 tw:text-xs tw:text-muted-foreground"
+      >
         {facts.map((f, i) => (
-          <span key={f} className="tw:min-w-0 tw:max-w-full tw:break-words">
-            {i > 0 && <span className="tw:mr-2 tw:opacity-50">·</span>}
+          /* Keyed by position as well as text: an author called "2011" and a
+             paper of 2011 are two facts, and two equal keys would drop one.
+
+             **The dot follows its fact, inside the fact's span.** Each span is
+             one flex item, so a line that wraps starts with whatever the next
+             span starts with: a dot in front of each fact began the second
+             line with "·" on a phone (plan 261005h § E). After the fact, the
+             upper line ends with the dot and the lower one starts with a fact.
+             The spacing of an unwrapped line is unchanged: the dot's 8px
+             margin (`ml-2`) is before it and the row's 8px `gap-x-2` after
+             it, where it used to be the gap before and an `mr-2` after. The
+             last fact has no dot, so the chips that follow sit as they did. */
+          // biome-ignore lint/suspicious/noArrayIndexKey: the line is rebuilt whole and never reorders
+          <span key={`${i}:${f}`} data-shelf-fact="" className="tw:min-w-0 tw:max-w-full tw:break-words">
             {f}
+            {i < facts.length - 1 && <span className="tw:ml-2 tw:opacity-50">·</span>}
           </span>
         ))}
         {/* First of the chips: it is the one that says why this card is here
@@ -264,7 +300,9 @@ export function ShelfCard({
         {minimal && <NotProcessedBadge />}
         {/* Ahead of the fixture chip: of the two, this is the one that says
             something about who else can see the article. */}
-        {entry.visibility === "public" && <SharedBadge />}
+        {(entry.visibility === "public" || entry.privateLinkOn === true) && (
+          <SharedBadge privateLink={entry.visibility !== "public"} />
+        )}
         {entry.fixture && (
           <span
             className="tw:rounded tw:border tw:border-border tw:px-1.5 tw:py-0.5"
@@ -276,6 +314,7 @@ export function ShelfCard({
         {/* The reader's own tags, and the way to add one — plan 261003d. */}
         <ShelfTags entry={entry} shelf={shelf} />
       </p>
+      {topics}
 
       {/* The whole piece in one sentence: a model's gist, or the article's own
           excerpt where there is none, each in its voice's face (voice.ts). */}
@@ -359,11 +398,17 @@ export function ShelfCard({
               somebody driving the page by voice cannot say what they can see,
               and WCAG 2.5.3 Label in Name is failed. Caught by a cross-family
               review, 2026-08-26; the comment here already said the label had to
-              track the text, and the code did not. */}
+              track the text, and the code did not.
+
+              **Focus draws an outline as well as the colour.** Until
+              2026-10-07 the outline was off and a Tab changed only the ink of
+              one short date, which is not a mark anybody finds. The card's own
+              `focus-within` border says focus is somewhere in this card; this
+              says where (plan 261007a § K3). */}
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:outline-none tw:focus-visible:text-highlight-text"
+            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
           >
             {note}
           </button>
@@ -416,7 +461,10 @@ export function Details({ entry }: { entry: LibraryEntry }) {
     ["Added", exactly(entry.addedAt) ?? "unknown"],
     ["Opened", opensLine(entry)],
     ["Marked", entry.comments === 1 ? "1 comment" : `${entry.comments} comments`],
-    ["Built", built.length ? built.join(" · ") : "nothing beyond the tree"],
+    /* Of these three only: they are all `LibraryEntry.has` carries. It said
+       "nothing beyond the tree" for none until 2026-10-07, which an article
+       with summaries, ideas or quotes made false (plan 261007a § K3). */
+    ["Built", built.length ? built.join(" · ") : "no arc, thread or glossary"],
     [
       "Size",
       `${entry.words.toLocaleString()} words · ${entry.blocks} blocks · ${entry.parts} parts · ${entry.sections} sections`,
@@ -581,6 +629,18 @@ const TIPS = {
 } as const;
 
 /**
+ * Why the browser refused a clipboard write, for the end of a sentence.
+ * A rejection is usually a `DOMException`, which is an `Error`; but a promise
+ * may reject with anything, and "Couldn't copy the link: undefined" is not a
+ * reason.
+ */
+function refusal(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error) return error;
+  return "the browser refused.";
+}
+
+/**
  * **What the five actions do, written once for both presentations.**
  *
  * Since 2026-09-15 there are two: the hover-revealed row of icons below, and,
@@ -592,39 +652,37 @@ const TIPS = {
  * the five are drawn. docs/plans/260915b-shelf-actions-reachable-on-touch.md.
  */
 function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) {
-  const [copied, setCopied] = useState(false);
+  /* The write is `useCopy`'s: the guard for a browser with no clipboard, the
+     newest-press-wins token and the timer are explained once, in useCopy.ts.
+     The tick shows for 1.5 seconds. **A failure is never drawn on the button**
+     (`failedMs: null` costs nothing, because `failed` is not read here): it is
+     a sentence in the shelf's notice; `useShelf` owns when that notice is
+     cleared. */
+  const { state: copyState, copy: write } = useCopy({ copiedMs: 1500, failedMs: null });
+  const copied = copyState === "copied";
   const [rerunning, setRerunning] = useState(false);
 
   const copy = useCallback(() => {
     const url = new URL(readHref(entry.slug), window.location.origin).toString();
-    /* **There may be no clipboard object at all**, and this was the one copy
-       button in the app that did not say so. `navigator.clipboard` is undefined
-       outside a secure context, so on anything but https or localhost this threw
-       a `TypeError` out of a React event handler — past the `.catch` below,
-       which only ever sees a *rejected promise* — and the reader got a button
-       that did nothing and no message.
+    /* Reported from inside `useCopy`'s callback, which runs only for the newest
+       press on a row still on the shelf: a refusal a later press has overtaken
+       would say "Couldn't copy" over a clipboard that holds the link.
 
-       A statement rather than `navigator.clipboard?.writeText(…)`, because the
-       optional chain evaluates to `undefined` and then `.then` throws on it:
-       the same trap, moved one line down. BlockGutter.tsx and
-       AccessSharing.tsx already guard it this way and say so; this one was the
-       odd one out, found on 2026-09-05 when a new touch test pressed Copy and
-       vitest reported the uncaught `TypeError`. */
-    if (!navigator.clipboard) {
-      shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.");
-      return;
-    }
-    /* Caught, because `writeText` rejects for real reasons — a page without
-       focus, a browser that refuses the permission — and an unhandled rejection
-       here left the reader looking at a button that had simply done nothing. */
-    void navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      })
-      .catch((e: Error) => shelf.report(`Couldn't copy the link: ${e.message}`));
-  }, [entry.slug, shelf]);
+       Both failures are said, and they are different sentences. No clipboard
+       object at all is every insecure context, anything but https or localhost;
+       `writeText` also rejects for real reasons, a page without focus or a
+       browser that refuses the permission. */
+    write(url, (outcome) => {
+      if (outcome.result === "unavailable") {
+        shelf.report("Couldn't copy the link: this browser won't give the page a clipboard here.", "copy");
+      } else if (outcome.result === "refused") {
+        shelf.report(`Couldn't copy the link: ${refusal(outcome.error)}`, "copy");
+      } else {
+        /* It worked: an earlier "Couldn't copy" is no longer true. */
+        shelf.copied();
+      }
+    });
+  }, [entry.slug, shelf, write]);
 
   /* Re-running is `POST /api/jobs { slug, steps, force }` — the route that
      already exists, and the same one the add box uses. `force: ["fetch"]` is
@@ -685,7 +743,13 @@ function useShelfActions(entry: LibraryEntry, shelf: Shelf, onEdit: () => void) 
         body: JSON.stringify({ slug: entry.slug, force: [hasWebUrl ? "fetch" : "extract"] }),
       });
     } catch (e) {
-      shelf.report(`Couldn't queue a rebuild: ${(e as Error).message}`);
+      /* Three things throw here: a refusal carrying the server's own sentence
+         (`fetchOk`), a request that never arrived, whose message is the
+         browser's ("Failed to fetch", "Load failed"), and anything unexpected.
+         Only the first was written for a reader, so the helper chooses. */
+      shelf.report(
+        `Couldn't queue a rebuild: ${describeFetchFailure(e instanceof Error ? e : new Error(String(e)))}`,
+      );
     } finally {
       setRerunning(false);
     }
@@ -1138,16 +1202,9 @@ function openLabel(entry: LibraryEntry, hasWebUrl: boolean): string {
     : "Open the original page (no address recorded)";
 }
 
-/**
- * One menu item's look: finger-sized, and quiet until it is the one in focus.
- *
- * `min-h-10` — 40px, the house number for a thumb
- * (docs/project/narrow-windows.md § What a control owes a finger); the row's
- * icons were 28px. `data-highlighted` and `data-disabled` are the attributes
- * Radix writes, so the item needs no state of its own to know either.
- */
-const ITEM =
-  "tw:flex tw:min-h-10 tw:cursor-default tw:select-none tw:items-center tw:gap-2.5 tw:rounded-[3px] tw:px-2.5 tw:py-1.5 tw:text-sm tw:leading-snug tw:text-foreground tw:no-underline tw:outline-none tw:data-highlighted:bg-highlight/10 tw:data-disabled:text-muted-foreground";
+/* One menu item's look, and the list's surface: `MENU_ITEM` and `MENU_SURFACE`
+   in menu.ts, shared with the bottom bar's More menu since 2026-10-07. */
+const ITEM = MENU_ITEM;
 
 /**
  * **The five as a menu of words, behind one "⋯"** — what a device with a finger
@@ -1187,36 +1244,9 @@ function ShelfActionsMenu({
   const { copied, rerunning, hasWebUrl, canRerun, copy, rerun, archive, restore, edit } = actions;
   const [open, setOpen] = useState(false);
 
-  /**
-   * **A finger press and whether the menu was open when it began** — recorded
-   * at `pointerdown`, and good for one gesture.
-   *
-   * Radix's trigger toggles on `pointerdown` for every pointer type, which is
-   * right for a mouse and wrong for a finger: a finger that lands on "⋯" at the
-   * start of a scroll of the shelf would open the menu, and a tap would draw the
-   * list under the finger before it lifts. So a finger's press is taken at the
-   * click — which is the browser's own verdict that this was a tap and not a
-   * scroll.
-   *
-   * **Decided at `pointerdown`, never read off the click**, because on iOS 18.2
-   * and later a finger's click reports `pointerType` `mouse` (WebKit bug 282988)
-   * while its `pointerdown` says `touch`. That bug is what stopped
-   * `pressCapture` working on an iPad; this is the shape of the fix.
-   *
-   * The starting state matters on a second tap. The trigger is outside the
-   * portalled menu, so Radix's modal dismissal can close the menu during that
-   * `pointerdown`; blindly toggling the latest state at `click` would then open
-   * it again. Remembering `wasOpen` makes the click finish the transition the
-   * finger began: closed to open, or open to closed.
-   *
-   * **One gesture's lifetime**, GPT Sol's plan review: cleared by
-   * `pointercancel` (the browser took the press for a scroll), consumed by the
-   * click that reads it, and ignored by a keyboard's click — `detail === 0` —
-   * because Enter and Space have already toggled the menu through Radix's own
-   * key handler, and a "finger" left over from an earlier scroll must not toggle
-   * it shut again. tests/shelf-actions-menu.test.tsx has a case for each.
-   */
-  const fingerPress = useRef<{ wasOpen: boolean } | null>(null);
+  /* A finger opens it at the click, not at the press: `useFingerPressMenu`
+     (menu.ts), which holds the reasoning and the iOS bug behind it. */
+  const finger = useFingerPressMenu(open, setOpen);
 
   /**
    * Set when Edit title is chosen, so Radix does not hand focus back to the
@@ -1244,24 +1274,7 @@ function ShelfActionsMenu({
              Radix names it from this, and it is the only place the article's
              title reaches it. GPT Sol, 2026-09-15. */
           aria-label={`Actions for ${entry.title}`}
-          onPointerDown={(e) => {
-            const finger = e.pointerType === "touch" || e.pointerType === "pen";
-            fingerPress.current = finger ? { wasOpen: open } : null;
-            /* `preventDefault` is what makes Radix stand aside: its
-               `composeEventHandlers` runs ours first and skips its own toggle
-               when the event comes back prevented (@radix-ui/primitive 1.1.7).
-               It does not suppress the click that follows — the Pointer Events
-               spec keeps the two apart — and that click is where we open. */
-            if (finger) e.preventDefault();
-          }}
-          onPointerCancel={() => {
-            fingerPress.current = null;
-          }}
-          onClick={(e) => {
-            const press = fingerPress.current;
-            fingerPress.current = null;
-            if (press && e.detail !== 0) setOpen(!press.wasOpen);
-          }}
+          {...finger}
           /* **Drawn as a button, not a stray mark** — Greg, 2026-10-01, on an
              iPad: *"Make the triple dot menu for items in my shelf a bit more
              visible. It's very small."* A 22px glyph in the foreground colour
@@ -1281,13 +1294,9 @@ function ShelfActionsMenu({
               editing.current = false;
               e.preventDefault();
             }}
-            /* The tooltip card's surface (styles/tooltip.css § .tooltip) in its
-               tokens — raised, opaque, the strong rule, the same shadow —
-               because this is the same kind of thing, drawn over the shelf.
-               `z-[100]` for the reason `.tooltip-anchor` gives: frontmost,
-               drawer included. Radix copies the content's z-index onto the
-               wrapper it positions. */
-            className="tw:z-[100] tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+            /* The surface is `MENU_SURFACE` (menu.ts); the width is this
+               menu's own. */
+            className={`${MENU_SURFACE} tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))]`}
           >
             <DropdownMenu.Item
               className={ITEM}

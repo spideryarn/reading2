@@ -139,8 +139,8 @@
       on the installed app: *"Most of the modes don't display correctly any more
       on mobile. When activated, they occlude the text (which you can see
       scrolling behind, peeking out at the top and bottom."*
-    - **Plain and Hierarchy, once the masthead has scrolled away** and the bar
-      has stuck. Same strip, same prose, and it was there first.
+    - **Plain (and Hierarchy, until 2026-09-29), once the masthead has
+      scrolled away** and the bar has stuck. Same strip, same prose, and it was there first.
 
    One backstop answers both, and it is a backstop rather than a taller bar for
    three reasons: it changes no layout, it does not need to know whether a
@@ -194,7 +194,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.loading, .error {
+/* The whole-page states: `div.loading` (LogoLoader's still fallback) and
+   `pre.error` (ArticlePage's refusal). The error arm names its element because
+   `error` is also a state class on small rows (`li.chat-tool.error`,
+   `span.dock-question-state.error`), and a bare `.error` gave each of those
+   3rem of padding, the mono face and `pre-wrap`. */
+.loading, pre.error {
   padding: 3rem;
   color: var(--ink-soft);
   font-family: var(--font-mono);
@@ -392,6 +397,12 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   margin: 0 0.45rem;
   opacity: 0.6;
 }
+/* The minutes are an estimate with a card behind them (ReadTimeCard.tsx): a
+   dotted rule says so, as it does under a metadata tile's label. */
+.read-time-trigger {
+  border-bottom: 1px dotted var(--rule-strong);
+  cursor: help;
+}
 /* Each later fact stays whole — "9 / parts" split across a wrap once the author
    list made this line long enough to wrap (plan 260929d). The first item stays
    inline and is free to wrap; normally it is the long byline or author list.
@@ -410,8 +421,11 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
 }
 /* The fold-all at the end of the line (FoldToggle.tsx § `FoldAllButton`, plan
    261002e): the line's own size and colour, a dotted word rather than a box,
-   the way `.author-name` below reads. A button, so the dot rule above skips it. */
-.facts > .fold-all {
+   the way `.author-name` below reads. A button, so the dot rule above skips it.
+   "Show authors and details" beside it is drawn the same (§ `FrontMatterButton`,
+   plan 261007d). */
+.facts > .fold-all,
+.facts > .front-matter-toggle {
   margin-left: 0.6rem;
   padding: 0;
   border: 0;
@@ -422,7 +436,9 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
   cursor: pointer;
 }
 .facts > .fold-all:hover,
-.facts > .fold-all:focus-visible { color: var(--highlight-text); }
+.facts > .fold-all:focus-visible,
+.facts > .front-matter-toggle:hover,
+.facts > .front-matter-toggle:focus-visible { color: var(--highlight-text); }
 
 /* One author in the masthead or on the Metadata page: a name first, a link
    second, so it keeps the line's colour until you point at it. AuthorNames.tsx. */
@@ -472,8 +488,8 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    the class, and the ⟦illegible⟧ markers are in the text itself. The rule is
    here rather than in tokens.css because it is article content, not chrome.
 
-   A left border rather than a background wash: the search and comment
-   highlights already own washes, and a third one competing with them would
+   A left border rather than a background wash: quote and comment highlights
+   already own fills, and a third one competing with them would
    make a page with all three unreadable (docs/project/search.md). */
 .pdf-uncertain {
   border-left: 2px solid var(--ink-faint);
@@ -616,7 +632,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    `<p class="controls">` — `src/sanitize-policy.ts` reserves six class names and
    `controls` is not one of them, verified by running the sanitiser over a forged
    chain rather than by reading the allowlist. Unscoped, such a paragraph makes
-   `:has(.controls)` true and reserves 44px for a bar nobody drew, which is the
+   `:has(.controls)` true and reserves a bar's height for a bar nobody drew, which is the
    reported bug back again on that one article. The direct-child combinator is
    the whole of the defence: article markup lives inside a `<td>` and is never a
    child of `.reader`. `:where()` contributes no specificity, so both rows keep
@@ -655,7 +671,7 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
      hidden it falls to the inset and no further. */
   --bar-bottom: var(--safe-top);
   /* The bar's own travel, which is NOT the change in `--bar-bottom` — see
-     `--bar-hide` in § tokens for the 44px of chrome that would otherwise be
+     `--bar-hide` in § tokens for the bar's height of chrome that would otherwise be
      left drawn behind the clock. */
   --bar-hide: calc(-1 * (var(--bar-h) + var(--safe-top)));
 }
@@ -712,13 +728,14 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    **Kept when this came to laptops, and the reasoning is different there.** On a
    phone the argument was that § a narrow window makes the band cover the whole
    article anyway, so the 44px was 44px of something already behind a panel. On a
-   laptop neither half of that holds — but the bar is *empty* in a band mode (its
-   only content is Hierarchy's pills), so dropping the guard would slide a band
-   and every sticky gist to reclaim a blank strip. Reclaiming that strip properly
-   means not drawing it, which is
+   laptop neither half held when this guard was extended there: the bar was
+   empty in a band mode (its only content was Hierarchy's pills), so dropping
+   the guard would slide a band and every sticky gist to reclaim a blank strip.
+   Reclaiming that strip meant not drawing the empty bar, which is
    docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md
-   stage 3. So the rule reads: **the bar hides in Plain and Hierarchy, and stands
-   still wherever a band is anchored to it.**
+   stage 3. Today this guard keeps a present bar visible while it has focus,
+   carries breadcrumbs, or accompanies a band covering the article. Otherwise
+   the scroll watcher may hide it; Hierarchy went on 2026-09-29.
 
    **In the guard rather than as a `:not()` on the rule above.**
    `:root[data-bars="hidden"]:not(:has(.mode-band))` would be (0,3,0), a tie with
@@ -728,9 +745,9 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    docs/plans/plain-mode-and-the-way-out.md § 1.
 
    **The leading `:has(:where(.reader) > .controls)` is not padding.** It does two things at once:
-   it stops this guard reserving 44px for a bar that is not rendered — which is
-   the whole of the bug a reader reported on 2026-09-07, since `.mode-band` is
-   exactly when the bar is empty — and it takes the selector to (0,4,0), above
+   it stops this guard reserving its height for a bar that is not rendered — which is
+   the whole of the bug a reader reported on 2026-09-07, when an owner's bar
+   was empty in a band mode — and it takes the selector to (0,4,0), above
    the `:root:not(:has(.controls))` rule that then has to win in every other
    band mode. One selector rather than two, for the reason two paragraphs up:
    split, the no-bar case would be a tie decided by source order.
@@ -766,7 +783,11 @@ h1 a:hover { text-decoration: underline; text-decoration-color: var(--highlight)
    `:has()`, not a third one chained on: `.controls > .crumbs` is (0,2,0), the
    same as `.controls:focus-within`, so the selector stays (0,4,0). GPT Sol,
    plan review of 261002h. A covering band never has crumbs (Reader.tsx §
-   `showCrumbs`), so this cannot pin a bar over one. */
+   `showCrumbs`), so this cannot pin a bar over one.
+
+   **The bar it pins is taller on a narrow window**, since 2026-10-03: the same
+   `> .controls > .crumbs` raises `--bar-h` there (crumbs.css § a narrow
+   window), and both declarations below read it. */
 :root:has(:where(.reader) > .controls):has(
     :where(.reader) > .controls:focus-within,
     :where(.reader) > .controls > .crumbs,

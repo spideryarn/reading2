@@ -45,8 +45,64 @@
 .srch-input:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .srch-input::placeholder { color: var(--ink-faint); }
 /* The browser's own clear button on `type="search"`, which on a dark page is a
-   dark X on a dark field. Ours is Escape, and it is in the keydown handler. */
+   dark X on a dark field. Ours is Escape and `.srch-clear` below — the
+   browser's would be a second cross. */
 .srch-input::-webkit-search-cancel-button { display: none; }
+
+/* **The cross that empties the box** (plan 261005i), there only while the box
+   has words in it (`.srch-field--filled`). Out of the flow, over the input's
+   right-hand end; the input gives the room up from its own padding so the
+   words do not run under it, and gives up more while the spinner is showing
+   too, which then sits to the cross's left. Px like the cross, for the 12px
+   root.
+
+   Shaped like `.dock-qs-clear` (dock-quick-search.css), and for its reason
+   not `.close-x` (close.css): that is a 32px box that closes something, and
+   this is a small one that clears. */
+.srch-field--filled .srch-input { padding-right: 28px; }
+.srch-field--filled.srch-field--busy .srch-input { padding-right: 46px; }
+.srch-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.srch-clear:hover { color: var(--ink); }
+.srch-clear:focus-visible {
+  outline: 2px solid var(--highlight-text);
+  outline-offset: -1px;
+}
+/* The finger target: 40px wide, reaching left over the input, and **exactly
+   as tall as the field** — the cross is stretched to the field's height and
+   its target goes no further up or down. The bar's cross can declare 40px
+   tall because the Dock clips it; nothing clips this one, and the matcher
+   buttons are 0.4rem below, so a taller target would take their presses
+   (GPT Sol's F5 on the plan). `any-pointer`, as there: an iPad with a
+   trackpad reports `pointer: fine` and its reader still taps the glass. */
+@media (any-pointer: coarse) {
+  .srch-clear::after {
+    content: "";
+    position: absolute;
+    inset: 0 -4px 0 -16px;
+  }
+  .srch-clear {
+    top: 0;
+    bottom: 0;
+    height: auto;
+    transform: none;
+  }
+}
 /* The same arc, the same keyframe, and the same reduced-motion pulse as
    `.cmt-spinner` — see docs/project/icons.md#the-loading-spinner. Only the
    colour differs, because in this mode the working colour is the search hue. */
@@ -56,6 +112,9 @@
   animation: cmt-spin 0.7s linear infinite;
 }
 .srch-field .srch-spin { position: absolute; right: 0.5rem; }
+/* Left of the cross while both show (`.srch-clear` above). After the rule it
+   overrides, because the two have the same specificity. */
+.srch-field--filled .srch-spin { right: 28px; }
 @media (prefers-reduced-motion: reduce) {
   .srch-spin { animation: cmt-pulse 1.4s ease-in-out infinite; }
 }
@@ -69,28 +128,22 @@
   gap: 0.25rem;
   margin-top: 0.4rem;
 }
-.srch-matchers { display: flex; align-items: center; gap: 0.25rem; }
-.srch-mode {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  padding: 0.15rem 0.4rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: none;
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.83rem;
-  cursor: pointer;
-}
-.srch-mode:hover { color: var(--ink); }
-/* The selected matcher, in the search hue rather than the brand orange — so the
-   control that says which colour the page is about to go is that colour. */
-.srch-mode.on {
-  border-color: rgb(var(--hit-rgb) / 0.5);
-  background: rgb(var(--hit-rgb) / 0.14);
-  color: var(--ink);
-}
+/* **The matchers** — words | quick | meaning — are the part-switcher every
+   mode shares, `.summ-views` / `.summ-view-btn` (mode-band.css § the
+   part-switcher; plan 261007h § F2), so their look is not here and
+   `.srch-mode` stays on each as a hook. The chosen one was drawn in the search
+   hue until 2026-10-07; it is marked neutrally now, because **orange marks the
+   mode and a part within it is marked neutrally**, and the hue keeps its one
+   meaning, a search result: the hits and the spinner.
+
+   **Their side padding stays this row's own 0.4rem**, not the bar's 0.6,
+   because the row also holds `find`. On the 288px band an iPad gives this
+   mode, `find` leaves the bar 188px: at 0.6rem the bar is 234px and scrolls
+   by 46, hiding most of *words*; at 0.4rem it is 215px and scrolls by 27, the
+   chosen matcher kept in view. Before the bar, the same row was 221px of
+   matchers that did not shrink, and pushed `find` past the band's edge
+   (measured 2026-10-07, plan 261007h § F2). */
+.srch-mode { padding-inline: 0.4rem; }
 .srch-go {
   margin-left: auto;
   padding: 0.15rem 0.55rem;
@@ -108,7 +161,7 @@
 .srch-error {
   margin: 0;
   padding: 0.5rem 0.7rem;
-  color: var(--destructive, oklch(0.65 0.2 25));
+  color: var(--destructive);
   font-size: 0.88rem;
   border-bottom: 1px solid var(--rule);
 }
@@ -117,14 +170,21 @@
    Since 2026-08-26 every one of them is on screen at once with a box beside it,
    rather than one being "open". The two halves of the panel therefore share the
    height: the list is capped and scrolls, the results below take what is left.
-   `40%` rather than a fixed height so that a reader with two saved searches is
-   not looking at an empty box the size of eight. */
+   A cap rather than a fixed height so that a reader with two saved searches is
+   not looking at an empty box the size of eight.
+
+   A quarter of the panel since 2026-10-03, down from 40%. On a landscape iPad
+   the panel is about 600px tall and 40% of it, with the box and the controls,
+   left the results a window shorter than one result (Greg's report
+   spya-eqcbay; docs/plans/261003p-…). The `7.5rem` floor is for a panel
+   shorter still, a phone on its side, where a quarter would be one row: there
+   the list keeps the header and about two rows, which is what 40% gave it. */
 
 .srch-saved-wrap {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 40%;
+  max-height: max(25%, 7.5rem);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -275,7 +335,7 @@
   cursor: pointer;
 }
 .srch-icon:hover { background: var(--surface-raised); color: var(--ink); }
-.srch-icon.danger:hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+.srch-icon.danger:hover { color: var(--destructive); }
 /* The warning sign on a search that failed in a way running it again cannot fix.
    It carries the same glyph as the retry button next to it, so without this it
    inherits `cursor: pointer` and a hover background and reads as a control —
@@ -286,12 +346,9 @@
 
 /* ---------------------------------------------------------------------------
    The colour picker — sixteen swatches and "Automatic", in a floating panel.
-   `srch-picker-*`, NOT `srch-swatches`: that name was already taken, by the
-   three-hue specimen strip in the results legend a few hundred lines up. The
-   first version of this block used it and the two silently merged — the legend
-   picked up a border, a background and a drop shadow, and the picker picked up
-   the legend's `display: inline-flex` and 1px gap. Both still rendered.
-   GPT Sol's review, 2026-08-27.
+   `srch-picker-*`, NOT `srch-swatches`: that name was taken at the time, by a
+   three-hue specimen strip in a legend above the results (removed 2026-10-03),
+   and the two silently merged. GPT Sol's review, 2026-08-27.
    SearchPanel.tsx § ColourPicker says why there is no library behind it.
 
    Portalled, so none of this is inside the 288px band: the panel is a sibling
@@ -314,9 +371,7 @@
   background: var(--surface-raised);
   /* The tooltip's shadow, because it is the same kind of object: a small panel
      lifted off the page near the thing it belongs to. */
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.5),
-    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  box-shadow: var(--shadow-pop);
   font-family: var(--font-ui);
 }
 .srch-picker-grid {
@@ -455,6 +510,27 @@
 }
 .srch-thorough:not(:disabled):hover { border-color: var(--hit); color: var(--ink); }
 .srch-thorough:disabled { opacity: 0.4; cursor: default; }
+/* In the button's place while the thorough search runs by itself (plan
+   261004l). The button's type, colour and padding, with a clear border, and
+   the button's own word kept unseen under the spinner, so the box is exactly
+   the button's size and nothing beside it moves. */
+.srch-upgrading {
+  flex: none;
+  align-self: center;
+  display: inline-grid;
+  place-items: center;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid transparent;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  /* A button's own default, which a span does not get: inheriting the row's
+     made this box 2px taller than the button it stands in for. */
+  line-height: normal;
+  white-space: nowrap;
+}
+.srch-upgrading > * { grid-area: 1 / 1; }
+.srch-upgrading-word { visibility: hidden; }
 
 /* The same banner the glossary and the tweet thread page carry, in the same
    words and the same box — see `StaleNote` in SearchPanel.tsx. Sits between the
@@ -500,22 +576,11 @@
   color: var(--ink-soft);
   font-size: 0.91rem;
 }
-.srch-failed { color: var(--destructive, oklch(0.65 0.2 25)); }
+.srch-failed { color: var(--destructive); }
 /* The 600ms before the spinner is allowed to say anything. Holding one line's
    worth of height means the panel does not grow when it does — see
    `SavedLoading`, and useSlow.ts for why the words wait at all. */
 .srch-waiting { min-height: 1.2em; }
-.srch-retry {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.srch-retry:hover { border-color: var(--hit); }
 
 /* ---- the results ---- */
 
@@ -538,8 +603,35 @@
   font-size: 0.83rem;
   cursor: pointer;
 }
-.srch-sort-btn:hover { color: var(--ink); }
+/* **Behind `(hover: hover)`, with pressed feedback and a focus mark beside
+   it**, as `.gloss-sort-btn` has them (glossary.css, which says why): on iOS a
+   bare `:hover` sticks to whatever was last touched, so an order that is not
+   in force sat there in the pressed order's ink. `:active` is the feedback a
+   finger does get. These buttons are their own class, not an `OrderGroup`
+   (plan 261007a § K4), so the rules are written here; the row at rest is
+   unchanged. tests/touch-controls.test.ts. */
+@media (hover: hover) {
+  .srch-sort-btn:hover { color: var(--ink); }
+}
+.srch-sort-btn:active { color: var(--ink); background: var(--surface-raised); }
 .srch-sort-btn.on { border-color: var(--rule-strong); background: var(--surface-raised); color: var(--ink); }
+.srch-sort-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* The three orders are a named group for a screen reader (SearchPanel.tsx §
+   SortBar) and nothing for layout: the buttons stay flex items of `.srch-sort`
+   and wrap exactly as they did. */
+.srch-sort-group { display: contents; }
+/* **The finger floor `.gloss-sort-btn` has**, 40px, by the same means
+   (narrow-window.css § a coarse pointer argues the number and `min-height`
+   over padding). Here and not there because this sheet owns the class. The
+   buttons were 22px tall on a phone. */
+@media (pointer: coarse) {
+  .srch-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.5rem;
+  }
+}
 
 .srch-hits { flex: 1; margin: 0; padding: 0.3rem; list-style: none; overflow-y: auto; }
 /* A result is TWO buttons side by side — the gutter, which explains the score,
@@ -615,7 +707,8 @@
    "a match" everywhere in this mode (the wash in the prose, the selected
    matcher), so place gets neutral grey rather than a second reading of the same
    blue. Neither carries its meaning by colour alone — the confidence prints its
-   number, the place bar has an accessible name and a legend above the list. */
+   number, the place bar has an accessible name, and the card behind the gutter
+   says both in words. */
 
 .srch-gutter {
   flex: none;
@@ -690,33 +783,6 @@
   background: var(--ink-soft);
 }
 
-/* One line saying what the two gutter marks are, so neither is hover-only —
-   a hover-only explanation is one nobody on a touchscreen ever sees. Built from
-   the same components as the rows, so it cannot drift from what it describes. */
-.srch-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.15rem 0.7rem;
-  margin: 0;
-  padding: 0.3rem 0.7rem 0.35rem;
-  border-bottom: 1px solid var(--rule);
-  color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.4;
-}
-.srch-legend-item { display: inline-flex; align-items: center; gap: 0.3rem; }
-/* Three of the palette's hues as a specimen, drawn from the same tokens the
-   marks use so the legend cannot show a colour the article does not. Which
-   three is arbitrary — it is a picture of "there are colours and they mean
-   something", not a key, because a key to eight hues in a 0.7rem line would be
-   unreadable and the answer for any one row is in its hover card. */
-.srch-swatches { display: inline-flex; gap: 1px; flex: none; }
-.srch-swatches i {
-  width: 0.3rem;
-  height: 0.7rem;
-  border-radius: 1px;
-  background: rgb(var(--cat-rgb));
-}
 /* The dot on a result row, in the colour of the search that found it. */
 .srch-hit-dot {
   flex: none;
@@ -727,11 +793,6 @@
 }
 /* "2 still searching", beside a count that is real but not final. */
 .srch-count-more { font-style: italic; }
-/* Sized down and pinned to a width, so the two specimens sit on the text
-   baseline rather than stretching to whatever the flex row is. */
-.srch-legend .srch-conf { flex: none; opacity: 0.75; }
-.srch-legend .srch-place { width: 1.6rem; margin: 0; flex: none; }
-
 .srch-hit-body { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
 .srch-hit-quote {
   /* Three lines, then cut. Enough to recognise a passage, never enough to read
@@ -747,8 +808,9 @@
 .srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of
-   it is to show more than the row could. */
-.tip-hit { max-width: 26rem; }
+   it is to show more than the row could; and under the viewport cap the base
+   card has (tooltip.css § .tooltip), which a bare `26rem` replaced. */
+.tip-hit { max-width: min(26rem, calc(100vw - 1.75rem)); }
 .tip-hit p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 /* What the two numbers in the gutter mean, under the passage they belong to.
    Ruled off and set smaller, because it is *about* the result rather than part

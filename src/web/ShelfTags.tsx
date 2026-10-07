@@ -14,10 +14,12 @@
  * link's hit area rather than making dead patches on the card.
  */
 
+import { useCallback } from "react";
 import { Plus, Tag } from "lucide-react";
 import { Popover } from "radix-ui";
 
 import type { LibraryEntry } from "../types.js";
+import { isImeComposing } from "./key-chord.js";
 import { TagEditor } from "./TagEditor.js";
 import type { Shelf } from "./useShelf.js";
 import { voiceClass } from "./voice.js";
@@ -32,6 +34,28 @@ export function ShelfTags({
   /* On the shelf hook, not here: the table's cells remount on every tag edit
      (useShelf.ts § `tagging`). */
   const open = shelf.tagging === entry.slug;
+  /* Radix's document capture listener cancels Escape to dismiss. Contain a
+     composing Escape before it gets there, leaving the IME's default intact.
+     A callback ref follows the portal's actual mount, which can happen after
+     this component's effects. React 19 runs its returned cleanup on unmount. */
+  const protectComposition = useCallback(
+    (content: HTMLDivElement | null) => {
+      if (!content || !open) return;
+      const view = content.ownerDocument.defaultView;
+      if (!view) return;
+      const contain = (event: KeyboardEvent) => {
+        if (
+          event.key === "Escape" && isImeComposing(event) &&
+          event.target instanceof Node && content.contains(event.target)
+        ) {
+          event.stopPropagation();
+        }
+      };
+      view.addEventListener("keydown", contain, true);
+      return () => view.removeEventListener("keydown", contain, true);
+    },
+    [open],
+  );
   const setOpen = (next: boolean) => shelf.setTagging(next ? entry.slug : null);
   const tags = entry.tags ?? [];
   return (
@@ -61,6 +85,7 @@ export function ShelfTags({
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
+            ref={protectComposition}
             side="bottom"
             align="start"
             sideOffset={6}
@@ -76,7 +101,7 @@ export function ShelfTags({
             }}
             /* The shelf menu's surface (ShelfEntry.tsx § ShelfActionsMenu), for
                its reasons: raised, opaque, frontmost. */
-            className="tw:z-[100] tw:w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-2 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+            className="tw:z-[100] tw:w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-2 tw:shadow-[var(--shadow-pop)]"
           >
             <p className="tw:mt-0 tw:mb-1.5 tw:text-xs tw:text-muted-foreground">
               Your own tags — only you see them. Filter by them above the shelf.

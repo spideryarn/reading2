@@ -18,7 +18,12 @@
  * all, since a test that has never been red is not evidence:
  *
  *  - move `withTurn`'s anchor spread from the new-thread branch onto the
- *    returned thread, and both "does not re-anchor" tests fail;
+ *    returned thread, and both "does not re-anchor" tests failed. **That was
+ *    while `withTurn` ignored a different anchor.** Since 2026-10-07 it refuses
+ *    one before the spread is reached, so the two tests assert the refusal and
+ *    that mutation changes nothing a caller can see. The mutation that turns
+ *    them red now is deleting the refusal
+ *    (tests/chat-anchor-transaction.test.ts has the full set);
  *  - drop the `blockIdentities` insert from the chat seeder, and "survives an
  *    export and an import" fails on the foreign key, taking the whole
  *    transaction with it;
@@ -44,7 +49,7 @@ import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { withTurn } from "../src/chat.js";
+import { ChatConflict, withTurn } from "../src/chat.js";
 import { closeDb, getDb } from "../src/db/client.js";
 import { articles, blockIdentities, chatThreads } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
@@ -209,28 +214,46 @@ describe("withTurn and the anchor", () => {
     expect("anchor" in thread).toBe(false);
   });
 
-  it("does not re-anchor a thread that already exists", () => {
+  /* Both of these asserted until 2026-10-07 that the offered anchor was
+     **ignored** and the question appended anyway: the stored anchor survived,
+     and the thread grew to four messages. That is a question about passage B
+     in a conversation stored as about passage A, which the route refuses, and
+     `withTurn` now refuses too, because the route's check is per-process
+     (seventh sweep, SV3). The thing they were written to protect is unchanged
+     and still asserted: the stored anchor does not move. */
+  it("does not re-anchor a thread that already exists: a different anchor is refused", () => {
     const first = withTurn([], { threadId: THREAD, question: "what?", anchor: SELECTION }, at);
-    const second = withTurn(
-      first.threads,
-      { threadId: THREAD, question: "and now?", anchor: { blockId: OTHER_BLOCK } },
-      "2026-08-26T00:01:00.000Z",
-    );
+    expect(() =>
+      withTurn(
+        first.threads,
+        { threadId: THREAD, question: "and now?", anchor: { blockId: OTHER_BLOCK } },
+        "2026-08-26T00:01:00.000Z",
+      ),
+    ).toThrow(ChatConflict);
     /* The anchor draws a mark in the prose. A thread that re-anchored itself
        would move its mark to a paragraph the reader is not looking at, and
        nothing anywhere would disagree with it. */
-    expect(second.thread.anchor).toEqual(SELECTION);
-    expect(second.thread.messages).toHaveLength(4);
+    expect(first.thread.anchor).toEqual(SELECTION);
+    expect(first.thread.messages).toHaveLength(2);
   });
 
-  it("does not grow an anchor on a thread that never had one", () => {
+  it("does not grow an anchor on a thread that never had one: offering one is refused", () => {
     const first = withTurn([], { threadId: THREAD, question: "what?" }, at);
-    const second = withTurn(
-      first.threads,
-      { threadId: THREAD, question: "and now?", anchor: SELECTION },
-      "2026-08-26T00:01:00.000Z",
-    );
-    expect("anchor" in second.thread).toBe(false);
+    expect(() =>
+      withTurn(
+        first.threads,
+        { threadId: THREAD, question: "and now?", anchor: SELECTION },
+        "2026-08-26T00:01:00.000Z",
+      ),
+    ).toThrow(ChatConflict);
+    expect("anchor" in first.thread).toBe(false);
+  });
+
+  it("keeps the anchor through a follow-up that offers none", () => {
+    const first = withTurn([], { threadId: THREAD, question: "what?", anchor: SELECTION }, at);
+    const second = withTurn(first.threads, { threadId: THREAD, question: "and now?" }, at);
+    expect(second.thread.anchor).toEqual(SELECTION);
+    expect(second.thread.messages).toHaveLength(4);
   });
 });
 

@@ -52,7 +52,7 @@
  */
 import type { ReactNode } from "react";
 
-import { Explain } from "./Tooltip";
+import { Explain, type Tip } from "./Tooltip";
 import type { AccountUsageSection, AccountUsageView, ClockSkew, UsageWindowCard } from "./types";
 import { ago, CodexBucketSection, CodexResetCreditsCard, WindowStatCard } from "./UsagePanel";
 import { Card, cx, Pill, StatCard } from "./ui";
@@ -90,6 +90,25 @@ function isGeneralBucket(limitId: string): boolean {
   return limitId === "codex";
 }
 
+/**
+ * What the role chip means. The words are the registry's own
+ * (`tools/overseer/accounts.ts`), and a chip saying `pool` with nothing behind
+ * it was one of the two labels on this tab a reader had to already understand
+ * (qi-3sr3jht6).
+ */
+const ROLE_TIPS: Record<AccountUsageSection["role"], Tip> = {
+  orchestrator: {
+    head: "Orchestrator account",
+    what: "An account reserved for the Overseer's own model calls.",
+    how: "The registry allows at most one orchestrator per provider. Claude's automatic launcher selects only pool accounts when any are configured; with none configured it falls back to the ambient login.",
+  },
+  pool: {
+    head: "Pool account",
+    what: "An account intended for dispatched sessions.",
+    how: "Automatic pool selection currently applies to Claude launches. Unflagged launches may still use the ambient login, so the role alone does not guarantee isolation from the Overseer.",
+  },
+};
+
 function SectionHeading({ section, asOf, skew }: { section: AccountUsageSection; asOf: number; skew: ClockSkew }): ReactNode {
   /* THE SECTION'S OWN CLOCK. Not the pass's: these are independent calls and
      one account can answer fifteen minutes before its neighbour does. */
@@ -102,7 +121,9 @@ function SectionHeading({ section, asOf, skew }: { section: AccountUsageSection;
       {section.displayEmail === null ? null : (
         <span className="tw:text-label tw:text-ink-faint">{section.name}</span>
       )}
-      <Pill tone="idle">{section.role}</Pill>
+      <Explain tip={ROLE_TIPS[section.role]}>
+        <Pill tone="idle">{section.role}</Pill>
+      </Explain>
       {section.origin === "ambient" ? (
         <Explain
           tip={{

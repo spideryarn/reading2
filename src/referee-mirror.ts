@@ -160,7 +160,6 @@ export type {
   MirrorRemarkKind,
   MirrorResult,
 } from "./referee-mirror-types.js";
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import {
   type StreamEnd,
@@ -169,8 +168,9 @@ import {
   providerFailedMidAnswer,
   stoppedByReader,
 } from "./openrouter-stream.js";
+import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
-import { ENDED_UNFINISHED, NOT_CONFIGURED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
+import { ENDED_UNFINISHED, PROVIDER_UNREADABLE, saidNothing } from "./messages.js";
 import {
   assertNoBlockIdEnums,
   validateAnthropicJsonSchema,
@@ -870,24 +870,24 @@ export function coverageStatus(
  * The instructions. **This is the feature; everything else in the file is
  * plumbing around it.**
  *
- * Read src/converse.ts § `REMEMBER_SYSTEM` before editing it. Remember mode is the
+ * Read src/converse.ts § `LEARN_SYSTEM` before editing it. Learn mode is the
  * other prompt in this repo whose whole job is tone towards a person who has
  * volunteered their own thinking, and its six recorded faults are the obvious
  * things to write. Three of them are load-bearing here:
  *
  *  - **A correction may not be built out of the model's own inference.** In
- *    Remember that produced a confident objection reasoned from a different part
+ *    Learn that produced a confident objection reasoned from a different part
  *    of the article. Here the same move would be worse: the model has one
  *    paragraph and the referee has read the whole paper, so an inferred
  *    "misunderstanding" is the model's own reading dressed as the paper's.
  *    Hence the hard bar under kind 2 — the passage must contradict the comment
  *    *by itself*.
  *  - **Confirming and grading are different, and grading wears a friendly
- *    face.** Remember had to be told that "that reading holds up well" is a
+ *    face.** Learn had to be told that "that reading holds up well" is a
  *    verdict. Mirror has no room for one — the output is remarks and nothing
  *    else — but a `note` can still characterise the set, so it is forbidden
  *    explicitly.
- *  - **Forbidding a thing and then listing its ingredients.** Remember's first
+ *  - **Forbidding a thing and then listing its ingredients.** Learn's first
  *    draft banned grading and then asked for what was solid, what was off and
  *    what was missing. So this prompt never asks what is *good* about a
  *    comment, and never asks for a count.
@@ -1448,6 +1448,17 @@ export function validateRemarks(
 const READER_LEFT = "The referee disconnected before this finished.";
 
 /**
+ * Was this the error `mirrorStream` throws for a referee who left?
+ *
+ * For the route, which must not file a closed tab as a failure and must still
+ * file everything else. "The signal is aborted" is the weaker question: a
+ * provider can fail on its own a moment before the referee goes, and that
+ * failure arrives at the same catch with the signal already aborted.
+ */
+export const isRefereeLeft = (err: unknown): boolean =>
+  err instanceof Error && err.message === READER_LEFT;
+
+/**
  * **Read the referee's comments and say what is worth another look.**
  *
  * This is the whole implementation; `mirror` below drains it. Modelled line for
@@ -1530,15 +1541,6 @@ export async function* mirrorStream({
     return;
   }
 
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    // Two audiences, two sentences: the variable name is useful only to whoever
-    // runs the server, so it stays in the log. See NOT_CONFIGURED.
-    line.error("OPENROUTER_API_KEY is not set — every Mirror run will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
-
   const messages = buildMirrorMessages(input.comments, asked);
 
   const deadline = AbortSignal.timeout(timeoutMs);
@@ -1549,7 +1551,7 @@ export async function* mirrorStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   /* Our own clock, never anything the provider reports — see explain.ts for the

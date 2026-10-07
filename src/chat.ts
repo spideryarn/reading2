@@ -30,12 +30,14 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type {
   ChatAnchor,
+  ThreadOrigin,
   ChatMessage,
   ChatThread,
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { isSingleThreadKind, isThreadKind } from "./types.js";
+import { RETIRED_THREAD_KINDS, isSingleThreadKind, isThreadKind, sameAnchor, sameOrigin } from "./types.js";
+import { titleFrom, titleFromOrigin } from "./chat-title.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
 import { parseJsonFrom } from "./parse-json.js";
@@ -57,27 +59,44 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "chat.json");
 
 /**
- * A stored thread written before Remember mode existed has no `kind`. Give it one.
+ * **The kind of a thread read from a fixture's `chat.json`.** Current kinds
+ * are kept; legacy cases are handled explicitly, with no default for anything else.
  *
- * **`ChatThread.kind` is required**, deliberately — an optional field would mean
- * a `?? "chat"` at every read site, and one of those would eventually be missed,
- * which is a Remember turn answered with chat's prompt and nothing on screen
- * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
- * price of "required" is exactly this function, and its twin in
- * src/store/pg-chat.ts. Two places hold the default instead of twenty.
+ * - **Absent** is a thread written before Learn mode existed: a chat.
+ *   `ChatThread.kind` is required, deliberately — an optional field would mean
+ *   a `?? "chat"` at every read site, and one of those would eventually be
+ *   missed, which is a Learn turn answered with chat's prompt and nothing on
+ *   screen disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md,
+ *   finding 5). The price of "required" is this function.
+ * - **A retired word** (`RETIRED_THREAD_KINDS`, src/types.ts) is a file written
+ *   before a rename the database made by migration. Database migrations do
+ *   not update files, so this is that migration's half for files.
+ * - **Anything else is refused.** Until 2026-10-07 this coerced every unknown
+ *   word to `"chat"`, so the `remember` → `learn` rename turned the Recall
+ *   threads in a pre-rename `data/noema-mythology-of-conscious-ai/chat.json`
+ *   into chats on their way into Postgres, and only
+ *   tests/store-roundtrip.test.ts noticed —
+ *   docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md.
+ *   The Postgres readers stopped coercing the day before (`storedThreadKind`).
  *
- * It reads the field off a value the type says always has it, which is the one
- * honest way to write this: the type describes what the rest of the program may
- * assume, and JSON on disk is not bound by it.
+ * It reads a field off a value the type says always has it, which is the one
+ * honest way to write this: JSON on disk is not bound by the type. It never
+ * sees a row from Postgres.
  */
+export function kindFromFile(value: unknown): ThreadKind {
+  if (value === undefined) return "chat";
+  if (isThreadKind(value)) return value;
+  if (typeof value === "string" && Object.hasOwn(RETIRED_THREAD_KINDS, value)) {
+    return RETIRED_THREAD_KINDS[value as keyof typeof RETIRED_THREAD_KINDS];
+  }
+  /* File contents are unconstrained and could be prose. loadThreads logs this
+     error, so do not include the rejected value in its message. */
+  throw new Error("unknown thread kind in chat.json");
+}
+
 function normaliseKind(thread: ChatThread): ChatThread {
-  /* `isThreadKind` rather than a list written out here — src/types.ts
-     § THREAD_KINDS. The union has grown once already (`candidates`, 2026-09-01),
-     and a member missed in either normaliser is a thread that silently becomes a
-     chat on its next read, answered with chat's prompt, with nothing on screen
-     disagreeing. That is the failure this field exists to prevent, so the list
-     is not written down twice. */
-  return isThreadKind(thread.kind) ? thread : { ...thread, kind: "chat" };
+  const kind = kindFromFile((thread as { kind?: unknown }).kind);
+  return kind === thread.kind ? thread : { ...thread, kind };
 }
 
 export async function loadThreads(slug: string): Promise<ChatThread[]> {
@@ -103,22 +122,9 @@ export async function loadThreads(slug: string): Promise<ChatThread[]> {
   }
 }
 
-/**
- * A thread's name, taken from the first thing the reader typed.
- *
- * Cut on a word boundary, and only when there is something to cut — a short
- * question is its own title and does not need an ellipsis it has not earned.
- * Newlines collapse first, because a pasted paragraph would otherwise put a
- * line break in the middle of a list item.
- */
-export function titleFrom(text: string): string {
-  const clean = text.replace(/\s+/g, " ").trim();
-  if (clean.length === 0) return "New chat";
-  if (clean.length <= 60) return clean;
-  const cut = clean.slice(0, 60);
-  const space = cut.lastIndexOf(" ");
-  return `${space > 20 ? cut.slice(0, space) : cut}…`;
-}
+/* A thread's name, taken from the first thing the reader typed. In
+   chat-title.ts since 2026-10-05, so the client can import it too. */
+export { titleFrom };
 
 /** Every id in use for this article, so a new one cannot collide with one. */
 function taken(threads: ChatThread[]): Set<string> {
@@ -131,10 +137,10 @@ function taken(threads: ChatThread[]): Set<string> {
 }
 
 /**
- * **The thread a new turn lands in: the one it names, or — for Remember — the
- * article's one Remember thread.**
+ * **The thread a new turn lands in: the one it names, or — for Learn — the
+ * article's one Learn thread.**
  *
- * An article has at most one Remember thread (`chat_threads_one_remember`,
+ * An article has at most one Learn thread (`chat_threads_one_learn`,
  * src/db/schema.ts). The client mints thread ids, so a stale tab, a second tab
  * or a bookmark can still ask to begin a second one; without this the unique
  * index would answer that with a 500. Instead the turn is pointed at the thread
@@ -144,7 +150,7 @@ function taken(threads: ChatThread[]): Set<string> {
  * guard refuse, because a spoken exchange must never be appended under turns
  * the live session did not see.
  *
- * **Only when no thread has this id.** A Remember turn naming a chat thread
+ * **Only when no thread has this id.** A Learn turn naming a chat thread
  * still meets the kind check and its 409; this is a fallback for a fresh id,
  * not a redirect. docs/plans/261001m-remember-is-its-own-single-thread.md
  * § Design 3.
@@ -155,8 +161,8 @@ function targetOf(
   kind: ThreadKind | undefined,
 ): ChatThread | undefined {
   const named = threads.find((t) => t.id === threadId);
-  /* Every single-thread kind, not only Remember: Tutorial is one per article
-     too (`SINGLE_THREAD_KINDS`, src/types.ts). */
+  /* Every single-thread kind, not only Learn: Tutorial and Explore are one
+     per article too (`SINGLE_THREAD_KINDS`, src/types.ts). */
   if (named || !isSingleThreadKind(kind)) return named;
   return threads.find((t) => t.kind === kind);
 }
@@ -186,30 +192,39 @@ export interface Turn {
    * The passage this conversation is about — **only meaningful when this turn
    * creates the thread**, which is the only branch `withTurn` applies it on.
    *
-   * The route rejects an anchor sent for a thread that already exists rather
-   * than letting it fall through and be ignored here.
+   * A different anchor sent for a thread that already exists is refused, not
+   * ignored: by the route first, and by `withTurn` again inside the store's
+   * transaction. The identical one passes.
    */
   anchor?: ChatAnchor;
   /**
-   * Chat or Remember — **only meaningful when this turn creates the thread**,
+   * The item in another mode this conversation was started from — **only
+   * meaningful when this turn creates the thread**, like `anchor` above, and
+   * refused in the same two places when it differs from the stored one.
+   * See `ThreadOrigin` in src/types.ts.
+   */
+  origin?: ThreadOrigin;
+  /**
+   * Chat or Learn — **only meaningful when this turn creates the thread**,
    * which is the only branch `withTurn` applies it on, exactly like `anchor`
    * above.
    *
    * A kind that contradicts an existing thread is refused here rather than
-   * ignored: silently answering a Remember turn with chat's prompt because a stale tab
+   * ignored: silently answering a Learn turn with chat's prompt because a stale tab
    * said so is a transcript half in one voice and half in another, with nothing
    * anywhere disagreeing. The route refuses it first, with a 409 and a sentence
    * a person can act on; this is the backstop, and it is inside the Postgres
    * transaction because `inTurnOrder` is only per-process.
    *
-   * Absent means `"chat"`, which is what every caller written before Remember
+   * Absent means `"chat"`, which is what every caller written before Learn
    * mode meant.
    */
   kind?: ThreadKind;
   /**
    * The reader pressed the "?" beside a paragraph rather than typing this
    * question — **only meaningful when this turn creates the thread**, in the
-   * sense that the "?" only ever sends a first question. But unlike `anchor` and
+   * sense that the "?" only ever sends a first question, and `withTurn` refuses
+   * it on a thread that exists (`ChatTurnRefused`, a 400). But unlike `anchor` and
    * `kind` above, it does **not** belong to the thread: it is written onto the
    * **user message** this turn creates, so that a retry or an edit of that
    * question inherits it without anybody arranging it.
@@ -257,11 +272,11 @@ export interface Turn {
  */
 export function withTurn(
   threads: ChatThread[],
-  { threadId, question, anchor, kind, help }: Turn,
+  { threadId, question, anchor, origin, kind, help }: Turn,
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const ids = taken(threads);
-  /* A fresh id for a Remember turn on an article that already has a Remember
+  /* A fresh id for a Learn turn on an article that already has a Learn
      thread is appended to that thread — `targetOf` says why. The returned
      `thread.id` is then the existing one, which is what the route's `begin`
      frame reports and the client follows. */
@@ -276,6 +291,34 @@ export function withTurn(
      rule as the anchor check in the route. */
   if (existing && kind && existing.kind !== kind) {
     throw new ChatConflict("That conversation is already a different kind.");
+  }
+  /* The route's turn lock is per process. Another server can create this
+     thread after its origin check, so decide again from the snapshot read
+     under the database's article lock, before writing either message. */
+  if (existing && origin && !(existing.origin && sameOrigin(existing.origin, origin))) {
+    throw new ChatConflict("That conversation was not started from that item");
+  }
+  /* **A thread is anchored once**, and **a "?" press creates a conversation**:
+     the route's other two rules about a turn that meets an existing thread,
+     decided again here for the reason just above. Until 2026-10-07 they were
+     route-only, so a second server's first send was appended under the first
+     one's anchor, or stored a press on a follow-up and had it answered with
+     the teaching prompt. Seventh sweep, SV3 = SVO4; the class is
+     docs/postmortems/261005h-a-per-process-origin-check-leaves-the-transaction-accepting-another-origin.md.
+
+     The route's own predicate and sentences (`sameAnchor`, src/types.ts), so
+     the two cannot disagree about a request: an identical anchor resent
+     passes, and a follow-up that offers none is not asked. Help is a 400 as it
+     is there (`ChatTurnRefused`), the anchor a 409.
+
+     `existing` can be a thread the turn did not name (`targetOf`), but only
+     for a single-thread kind, and the route refuses an anchor or a help flag
+     with any kind but chat before the turn is written. */
+  if (existing && anchor && !sameAnchor(existing.anchor, anchor)) {
+    throw new ChatConflict(ANCHORED_ELSEWHERE);
+  }
+  if (existing && help) {
+    throw new ChatTurnRefused(HELP_NOT_FIRST);
   }
   const user: ChatMessage = {
     id: mintUniqueId(ids),
@@ -296,7 +339,7 @@ export function withTurn(
     text: "",
     createdAt: at,
     status: "pending",
-    /* No stance. Remember's four stances became one voice on 2026-10-02, so
+    /* No stance. Learn's four stances became one voice on 2026-10-02, so
        nothing new writes `ChatMessage.stance`; older rows keep theirs.
        docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
   };
@@ -324,13 +367,17 @@ export function withTurn(
        An anchor arriving for a thread that already exists is not silently
        dropped here — that would append a question about passage B to a thread
        the database says is about passage A, with nothing anywhere disagreeing.
-       The route refuses it before we are reached. See `answerChat` in
-       src/routes.ts and docs/plans/260826ab-chat-as-gateway.md § Set once.
+       A different one was refused above, and by the route before that. See
+       `streamChat` in src/routes.ts and
+       docs/plans/260826ab-chat-as-gateway.md § Set once.
 
        Conditional spread, never `anchor: undefined`: `exactOptionalPropertyTypes`
        is on and the two stores are compared field for field, where an explicit
        undefined and an absent key are not the same thing. */
     ...(anchor ? { anchor } : {}),
+    /* Where it was started from: only on this branch too, and by the same
+       conditional spread. */
+    ...(origin ? { origin } : {}),
     /* **Only on this branch**, the same rule and the same reason as `anchor`
        just above, sharpened: the kind chooses the system prompt, so a thread
        that changed kind halfway would have a first half answered by one set of
@@ -345,7 +392,9 @@ export function withTurn(
     // The first question names the thread. Later ones do not — a conversation
     // is about what it started as, and renaming it under the reader as it
     // wanders would lose them the entry they were looking for in the list.
-    title: base.messages.length === 0 ? titleFrom(question) : base.title,
+    title: base.messages.length === 0
+      ? (base.origin ? titleFromOrigin(base.origin) : titleFrom(question))
+      : base.title,
     updatedAt: at,
     messages: [...base.messages, user, reply],
   };
@@ -405,10 +454,10 @@ export interface SpokenTurn {
    * reason: a thread is one kind for life. Absent means chat.
    *
    * It has to come from the browser because the thread it names may exist
-   * nowhere else yet: Remember opens straight into an empty conversation that is
+   * nowhere else yet: Learn opens straight into an empty conversation that is
    * only in the tab, so pressing Live there makes the first spoken exchange the
    * write that creates it. Before this field that write always made a chat, and
-   * Remember's arrival rule, which counts threads of its own kind, then hid it
+   * Learn's arrival rule, which counts threads of its own kind, then hid it
    * behind a fresh empty conversation — SPIDERYARN-READING2-70,
    * docs/plans/260930d-a-live-conversation-started-in-remember-is-saved-as-a-remember-conversation.md.
    */
@@ -420,10 +469,10 @@ export interface SpokenTurn {
  * candidates conversation has no Live control, and a spoken turn creating one
  * would be a mode nobody has designed.
  */
-export type SpokenKind = Extract<ThreadKind, "chat" | "remember">;
+export type SpokenKind = Extract<ThreadKind, "chat" | "learn">;
 
 export function isSpokenKind(value: unknown): value is SpokenKind {
-  return value === "chat" || value === "remember";
+  return value === "chat" || value === "learn";
 }
 
 /**
@@ -431,8 +480,9 @@ export function isSpokenKind(value: unknown): value is SpokenKind {
  *
  * Live conversation's counterpart to `withTurn`, and pure for the same reason:
  * this is an invariant, and an invariant with two implementations is an
- * invariant with two behaviours. The filesystem store calls it inside its
- * mutex, the Postgres store inside its transaction, and neither owns the rule.
+ * invariant with two behaviours. The Postgres store calls it inside its
+ * transaction (the filesystem store, until 2026-09-05, inside its mutex), and
+ * does not own the rule.
  *
  * ## Why not `beginTurn` then `finishTurn`
  *
@@ -458,8 +508,8 @@ export function withSpokenTurn(
   at: string,
 ): { threads: ChatThread[]; thread: ChatThread; user: ChatMessage; reply: ChatMessage } {
   const { threadId, expectedTailId, kind } = spoken;
-  /* A fresh id for a Remember exchange on an article that already has a
-     Remember thread targets that thread (`targetOf`), so the tail guard below
+  /* A fresh id for a Learn exchange on an article that already has a
+     Learn thread targets that thread (`targetOf`), so the tail guard below
      refuses it with `ChatConflict` — the session believed the conversation was
      empty, and it is not. **Not** silently appended, as a typed turn is: the
      tail is the only thing that keeps a spoken exchange from landing under
@@ -471,6 +521,15 @@ export function withSpokenTurn(
      replayed request still meets the tail guard below and nothing else. */
   if (existing && kind && existing.kind !== kind) {
     throw new ChatConflict("That conversation is already a different kind.");
+  }
+
+  /* Only a chat or a Recall conversation is spoken into (`SpokenKind`). The
+     request may omit its kind, so the **stored** thread is asked too, inside
+     the transaction and before any row is minted or appended: without this a
+     kind-less spoken turn landed in an Explore thread (GPT Sol's review of
+     261003l, CR-11), and the same door stood open to Tutorial and Candidates. */
+  if (existing && !isSpokenKind(existing.kind)) {
+    throw new ChatConflict("That conversation does not take a live conversation.");
   }
 
   /* **The guard, and it runs before anything is minted.** `null` means the
@@ -514,12 +573,12 @@ export function withSpokenTurn(
        transcription is valid, though, so this can become the lasting title and
        must describe the kind the exchange is creating. Mirrors the local-only
        placeholders in src/web/useChat.ts. */
-    title: kind === "remember" ? "Remembering" : "New chat",
+    title: kind === "learn" ? "Remembering" : "New chat",
     createdAt: at,
     updatedAt: at,
-    /* The kind the tab began it as — Remember, when Live was pressed in the
-       empty conversation Remember opens with. The rows themselves carry no
-       stance, as spoken turns into an existing Remember thread never have. */
+    /* The kind the tab began it as — Learn, when Live was pressed in the
+       empty conversation Learn opens with. The rows themselves carry no
+       stance, as spoken turns into an existing Learn thread never have. */
     kind: kind ?? "chat",
     messages: [],
   };
@@ -562,6 +621,35 @@ export class ChatConflict extends Error {
     this.name = "ChatConflict";
   }
 }
+
+/**
+ * A new turn carrying first-turn-only metadata on an existing thread: a 400,
+ * matching the route, where `ChatConflict` is a 409.
+ *
+ * One rule throws it today: `help: true` on a thread that already exists
+ * (`withTurn`). The route answers that with a 400 and its own sentence, and
+ * the refusal inside the store's transaction has to arrive as the same
+ * status. So the status rides on the error, which is what `serveApi` reads
+ * first and what lets it through `guardDbStore` (`mayPassThrough`, src/store/db-errors.ts:
+ * anything with a numeric `status`). A `ChatConflict` here would have turned
+ * the same refusal into a 409 whenever the store gave it instead of the route.
+ */
+export class ChatTurnRefused extends Error {
+  readonly status = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "ChatTurnRefused";
+  }
+}
+
+/**
+ * The two sentences the route and `withTurn` both give, so the same refusal
+ * reads the same whichever of them gets there first. Fixed strings: neither
+ * carries a word of the reader's.
+ */
+export const ANCHORED_ELSEWHERE = "That conversation is already about a different passage";
+export const HELP_NOT_FIRST =
+  'A "?" press starts a conversation; a later question in one is not one';
 
 /** What both chat sweeps write. One constant, so they cannot drift. */
 export const CHAT_SWEPT = "The server stopped before this answer finished.";
@@ -650,7 +738,7 @@ export function withRetry(
     status: "pending",
     /* Nothing carried over: everything the old attempt had is deliberately
        dropped, as the note above says. The stance was the one exception until
-       Remember's four stances became one voice on 2026-10-02. */
+       Learn's four stances became one voice on 2026-10-02. */
   };
   const thread: ChatThread = {
     ...existing,

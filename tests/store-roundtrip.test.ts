@@ -125,7 +125,7 @@ function cleanedAsExported(artefact: string, value: unknown): unknown {
   return { ...file, blocks: sanitizeStoredBlocks(file.blocks, undefined).blocks };
 }
 
-function canonical(artefact: string, value: unknown): unknown {
+function canonical(artefact: string, value: unknown, fromFile = false): unknown {
   /* `blocks.json` carries a `sanitizer` stamp saying which version of the
      policy cleaned it (docs/project/security.md). The export re-stamps, because
      it writes the blocks through `blocksArtefact` and therefore has genuinely
@@ -184,16 +184,29 @@ function canonical(artefact: string, value: unknown): unknown {
       : /* **A thread with no `kind` IS a chat**, by the definition both stores
            implement — `normaliseKind` in src/chat.ts on the way in, and
            `not null default 'chat'` on the column. So a `chat.json` written
-           before Remember mode existed and an export of the same conversation
+           before Learn mode existed and an export of the same conversation
            differ by one key that means the same thing, and normalising it here
            is the honest comparison rather than a lowered bar.
-           It is transitional: the filesystem store writes the field on the next
-           update of any thread it loads, so these files converge on their own.
-           The default itself is not thereby untested — tests/remember-store.test.ts
+           The filesystem store is gone; these fixture files change only when
+           explicitly updated.
+           The default itself is not thereby untested — tests/learn-store.test.ts
            asserts it positively, which is the half a normalisation like this
-           would otherwise quietly delete. */
+           would otherwise quietly delete.
+           **A retired kind IS the kind it was renamed to**, by the same
+           argument: the database renamed the rows by migration but those
+           migrations do not update files (`RETIRED_THREAD_KINDS`, src/types.ts).
+           Written out here rather than by calling `kindFromFile`, so the expectation does
+           not share the code under test; tests/chat-kind-from-file.test.ts
+           asserts the reader's half. Translate only the source file: an export
+           must write the current kind, so translating both sides would hide a regression.
+           docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md. */
         key === "threads"
-        ? raw.map((t) => ({ kind: "chat", ...(t as Record<string, unknown>) }))
+        ? raw.map((t) => {
+            const thread = { kind: "chat", ...(t as Record<string, unknown>) };
+            return fromFile && (thread.kind === "review" || thread.kind === "remember")
+              ? { ...thread, kind: "learn" }
+              : thread;
+          })
         : /* **A run with no `kind` IS a meaning search**, for the same reason:
              `not null default 'meaning'` on the column, and every
              `searches.json` written before 2026-10-02 predates the field
@@ -410,6 +423,16 @@ describe("a round trip through Postgres", () => {
     expect(slugs.length).toBeGreaterThan(0);
   });
 
+  it("normalises retired thread kinds only in the source file", () => {
+    const legacy = { threads: [{ kind: "review" }, { kind: "remember" }] };
+    expect(canonical("chat.json", legacy, true)).toEqual({
+      threads: [{ kind: "learn" }, { kind: "learn" }],
+    });
+    expect(canonical("chat.json", legacy)).toEqual(legacy);
+    const inherited = { threads: [{ kind: "constructor" }, { kind: "__proto__" }] };
+    expect(canonical("chat.json", inherited, true)).toEqual(inherited);
+  });
+
   /**
    * **And an artefact no article carries is compared by every slug and checked
    * by none.**
@@ -424,7 +447,7 @@ describe("a round trip through Postgres", () => {
    * withdraws two artefacts from this suite.
    *
    * So the coverage is asserted rather than assumed — the same argument the
-   * Remember test below already makes, made once for the whole list.
+   * Learn test below already makes, made once for the whole list.
    * docs/plans/260901b-committed-fixture-corpus.md, ranked silent failure 3.
    */
   it("has at least one article carrying each artefact it claims to preserve", async () => {
@@ -466,39 +489,39 @@ describe("a round trip through Postgres", () => {
   });
 
   /**
-   * **Does this suite actually exercise a Remember thread at all?**
+   * **Does this suite actually exercise a Learn thread at all?**
    *
    * The chat.json comparison below is what would catch `kind` or `stance` going
    * missing from src/store/export.ts — the way `tools` once did, which that
    * file's own comment records. But it can only catch it if some article's
-   * conversations include a Remember thread, and `data/` is gitignored working
+   * conversations include a Learn thread, and `data/` is gitignored working
    * data that
    * varies per machine. On a laptop with none, every assertion below passes
    * while covering nothing, and nothing says so.
    *
    * So the coverage is asserted rather than assumed. A skip here is a *warning*,
    * not a pass: it is reported through the test name so somebody reading the
-   * output can see the difference between "the round trip preserved a Remember
+   * output can see the difference between "the round trip preserved a Learn
    * thread" and "there was none to preserve". docs/reusable/silent-success.md.
    *
-   * To create one: open an article in Remember mode and say something.
+   * To create one: open an article in Learn mode and say something.
    */
-  it("includes at least one Remember thread with a stance, or says it could not", async () => {
-    let remembered = 0;
+  it("includes at least one Learn thread with a stance, or says it could not", async () => {
+    let learnThreads = 0;
     let stances = 0;
     for (const slug of slugs) {
       const file = (await readJsonIfPresent(path.join(ROOT, "data", slug, "chat.json"))) as
         | { threads?: { kind?: string; messages?: { stance?: string }[] }[] }
         | undefined;
       for (const t of file?.threads ?? []) {
-        if (t.kind !== "remember") continue;
-        remembered += 1;
+        if (t.kind !== "learn") continue;
+        learnThreads += 1;
         stances += (t.messages ?? []).filter((m) => m.stance).length;
       }
     }
-    if (remembered === 0) {
+    if (learnThreads === 0) {
       console.warn(
-        "store-roundtrip: no Remember thread in data/ — kind/stance export is NOT covered by this run",
+        "store-roundtrip: no Learn thread in data/ — kind/stance export is NOT covered by this run",
       );
       return;
     }
@@ -581,7 +604,7 @@ describe("a round trip through Postgres", () => {
 
       expect(returned).toBeDefined();
       expect(sorted(canonical(artefact, returned))).toEqual(
-        sorted(canonical(artefact, cleanedAsExported(artefact, original))),
+        sorted(canonical(artefact, cleanedAsExported(artefact, original), true)),
       );
     });
 

@@ -46,13 +46,14 @@
  *
  * It is simpler, and for one reason worth stating plainly: **this view's hard
  * problem is horizontal and the bottom edge is vertical.** layout.ts spends its
- * whole length negotiating width — it shrinks the gist columns, and when that
- * is not enough it starts dropping levels. Anything permanent down the left
- * joins that negotiation: a new `--rail-w` term in five CSS rules, a new
+ * whole length negotiating width — between the prose, mode band and marginalia today,
+ * and until 2026-09-29 by shrinking the gist columns and then dropping
+ * levels. Anything permanent down the left joins that negotiation: a new
+ * `--rail-w` term in five CSS rules, a new
  * constant beside `SPINE_W`, a new interaction with the spine's on/off,
- * and a band of window widths where a column is dropped that used to fit. A bar
- * at the bottom takes height, and height is the axis where nothing is scarce —
- * the page simply scrolls. `fitView` never hears about this file.
+ * and changes to the widths where panels can sit beside the prose. A bar
+ * at the bottom takes height; the page can scroll vertically. `fitView` never
+ * hears about this file.
  *
  * Full reasoning, and the right-hand edge that was offered and turned down:
  * docs/plans/260825c-bottom-bar.md.
@@ -69,9 +70,9 @@
  * ## Three kinds of button, said out loud
  *
  * The bar used to be uniform: every button opened a drawer. It isn't any more.
- * `Tweets` and `Metadata` navigate; `Questions` opens a drawer *on the
- * reading view* and navigates everywhere else; `Hierarchy` / `Summary` /
- * `Glossary` / `Search` / `Chat`
+ * `Metadata` navigates; `Comments` opens a drawer *on the
+ * reading view* and navigates everywhere else; the modes (`Summary`,
+ * `Glossary`, `Search`, `Chat` and the rest of `MODES_UI`)
  * choose what the middle of the page **is**. That is three real differences and
  * the markup has to tell the truth about each — a link gets
  * `aria-current="page"`, a drawer trigger gets `aria-expanded`, and the mode
@@ -85,7 +86,7 @@
  * twice.** What varies is whether a `drawer` was handed in. Only the reading
  * view has the comments, because only it pays for them: `useComments(slug)`
  * fetches on mount, and a visit to the metadata page should not buy a drawer
- * nobody opened. So off the reading view, Questions is a link back to it with
+ * nobody opened. So off the reading view, Comments is a link back to it with
  * `?panel=questions` — which is also where a question is worth opening, since
  * clicking one scrolls to the passage it is about.
  *
@@ -111,7 +112,8 @@
  * source of truth, and a literal-order test makes order changes deliberate. A
  * new mode goes there, and the compiler asks for it — a `Mode` with no row is a
  * typecheck error, not a button nobody notices is missing
- * (`ModesMissingFromDock`). Anything that is not a mode goes after them.
+ * (`ModesMissingFromDock`). Article actions follow the modes; the home link
+ * precedes them.
  *
  * **Since 2026-09-29 the modes are also in runs, with a line between runs** —
  * Greg reordered them and asked for *"subtle vertical separator lines between
@@ -174,33 +176,17 @@ import {
   type ReactNode,
 } from "react";
 import {
-  AlignLeft,
-  BookA,
-  Brain,
-  ClipboardCheck,
-  Columns2,
+  Check,
   Command,
-  Lightbulb,
   ChevronUp,
-  Clock,
+  Ellipsis,
   FlaskConical,
-  Globe,
-  LoaderCircle,
-  Network,
-  Info,
-  Layers,
+  FileCog,
+  type Info,
   LifeBuoy,
-  ListOrdered,
   MessageSquareText,
-  MessagesSquare,
-  Search,
   TriangleAlert,
   X,
-  Quote,
-  BookText,
-  BadgeQuestionMark,
-  Route,
-  PanelRight,
 } from "lucide-react";
 /* The one name each mode has, and the one sentence about what it is — and the
    bar is one of four places that used to spell the name out for itself. Both
@@ -209,17 +195,19 @@ import {
    written to be readable by both runtimes for the same reason. See `ModeUi`
    below for what a row here still holds, which is layout and nothing else. */
 import { MODE_CATALOG } from "../mode-catalog.js";
+import { MODE_ICON } from "./mode-icons.js";
 import { MODE_LABEL } from "../title-text.js";
 import type { BlockId, Comment } from "../types.js";
 import { type AskedQuestion, type DrawerEntry, MARK_KIND_LABEL, commentKind, orderDrawer, passageOf } from "./comment-nav.js";
 import { HighlightDot } from "./HighlightSwatches.js";
 import { armActivationForMode, armActivationForSubMode } from "./activation.js";
-import { withSubMode, type SubMode } from "./sub-modes.js";
+import { returnToSubMode, withSubMode, withSubModeParams, type SubMode } from "./sub-modes.js";
 /* **This direction only.** `CommandBar` deliberately imports nothing from this
    file — the visible list and the one activation callback go down as props —
    because an import back the other way would close a cycle. GPT Sol, F3 on
    docs/plans/260906h-mode-catalog-and-a-command-bar.md. */
-import { CommandBar, type CommandBarArticle, type ShelfRow } from "./CommandBar.js";
+import { CommandBar, type CommandBarArticle, type CommandBarExperimental, type ShelfRow } from "./CommandBar.js";
+import type { CommandExecutor } from "./command-proposal.js";
 import { useDockFit } from "./dock-fit.js";
 /* Plain data and no React (help-anchors.ts says so on purpose), so the bar
    links into Help without pulling the page's words into its own chunk. */
@@ -250,6 +238,9 @@ import {
   marginInSearch,
   type Mode,
   type Panel,
+  learnInSearch,
+  summaryInSearch,
+  type SummaryView,
 } from "./params.js";
 import { isMarginaliaModeWord, modeFromParam } from "../modes.js";
 import { cn } from "@/lib/utils";
@@ -271,10 +262,12 @@ import {
    copy of `isTyping` until 2026-09-29, because the only shared one lived in
    keynav.ts and importing that drags the article's geometry into the bar's
    import graph. key-chord.ts imports nothing, so that argument is answered. */
-import { isModChord, isTyping } from "./key-chord.js";
+import { isImeComposing, isModChord, isTyping } from "./key-chord.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
-import { useSlow } from "./useSlow.js";
+import { BandWaiting } from "./BandWaiting.js";
 import { InstallHint } from "./InstallHint.js";
+import { DropdownMenu } from "radix-ui";
+import { MENU_ITEM, MENU_SURFACE, useFingerPressMenu } from "./menu.js";
 import { DockQuickSearch } from "./DockQuickSearch.js";
 
 /**
@@ -365,6 +358,33 @@ interface Props {
    */
   margin?: boolean;
   /**
+   * **Which of Summary's views is showing** (`?summary=`), as the reading view
+   * has parsed it — the same React state that picks the band. Off the reading
+   * view the carried query string says (`summaryInSearch`).
+   *
+   * **The reading view must pass it, and must not let this fall back to the
+   * address.** nuqs moves React first and `location` up to ~50ms later, and a
+   * Summary press armed from the stale address leaves a `simple` token with
+   * the thread mounted, for Back to spend (activation.ts § `PressContext`; GPT
+   * Sol, F1 of the 261003l review). tests/summary-thread-press.test.tsx holds
+   * it.
+   */
+  summary?: SummaryView;
+  /**
+   * **Which picture Diagram is showing** (`?diagram=`), as the reading view has
+   * parsed it — `diagramParam`'s value, which is the one `diagramInSearch`
+   * gives for a settled address (params.ts § `DEFAULT_DIAGRAM`). Off the
+   * reading view the carried query string says.
+   *
+   * **The same rule as `summary` above, for the same reason**, and it was the
+   * older of the two: a Diagram press armed from the stale address left a
+   * `sketch` token with Force mounted, and Back to the Sketch spent it on a
+   * drawing nobody pressed for (GPT Sol, F8 of the 261003l review;
+   * docs/postmortems/261003f-activation-targets-read-from-delayed-urls-can-outlive-their-presses.md).
+   * tests/every-mode-draws-its-surface.test.tsx holds it.
+   */
+  diagram?: DiagramKind;
+  /**
    * **Whether this reader sees the modes that are still being built** — and
    * therefore how many buttons the bar draws at all. `visibleModes` is the rule.
    *
@@ -391,6 +411,20 @@ interface Props {
    * `experimental?.on`.
    */
   experimental: DockExperimental;
+  /**
+   * **Play the entrance: absent for a second, then fade and rise** (plan
+   * 261007c, D7). The reading view passes it, for the first `Reader` mount of
+   * the page's lifetime and no other (reader/dock-entrance.ts); the Metadata
+   * page and the visitor pages never do.
+   *
+   * **Told, not inferred**, like everything else this bar is handed: a guard
+   * read in here would make every mount site a candidate, and the bar on the
+   * Metadata page would spend the Reader's entrance or play its own.
+   *
+   * All it does is put `dock-enter` on `.dock` and on the install hint above
+   * it — styles/dock.css § the entrance.
+   */
+  entrance?: boolean;
   /**
    * The drawer, on the one page that has one.
    *
@@ -456,6 +490,13 @@ interface Props {
    * and why its absence is a statement about the request.
    */
   shelfRow?: ShelfRow | undefined;
+  /**
+   * **What the bar's argument rows can do here** — jump, and open or ask the
+   * glossary — since 2026-10-03 (plan 261003f). The reading view's alone, and
+   * straight through to the bar like `shelfRow`: CommandBar.tsx §
+   * `CommandBarArticle.executor`.
+   */
+  executor?: CommandExecutor | undefined;
   drawer?: {
     /** Comments in reading order — App already sorts them, see comment-nav.ts. */
     comments: Comment[];
@@ -562,8 +603,8 @@ interface Props {
  * > And get rid of "Reading time" - that should be part of "Metadata".
  *
  * It already was: the metadata page has read time as one of its six stat cards
- * (Metadata.tsx § At a glance), with a tooltip that says it is words ÷ 230 and
- * a flat rate. So the bar was offering a button for something a page already
+ * (Metadata.tsx § At a glance), with a tooltip that said it was words ÷ 230 and
+ * a flat rate (ReadTimeCard.tsx since 2026-10-05, at 238). So the bar was offering a button for something a page already
  * answered. The one thing the placeholder carried that the page did not — that
  * the original version dropped the readability formulas for a model's
  * judgement, then scaled the estimate by how confident the model was — is now
@@ -620,13 +661,13 @@ interface Props {
  *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
  *  - `guides` — ways through the piece, each drawn from it along one line: a
  *    route through its quotes, the quotes, questions it answers, its terms,
- *    its ideas, its dates (Skim, Quotes, FAQ, Glossary, Ideas,
+ *    its ideas, its dates (Skim, Quotes, Glossary, FAQ, Ideas,
  *    Timeline). Not "contents": several of these are a model's reading of the
  *    piece rather than things literally in it (GPT Sol, 2026-09-29).
- *  - `critical` — reading it critically and against other work (Referee,
- *    Citations, Debate).
+ *  - `critical` — reading it critically and against other work (Citations,
+ *    Referee, Debate).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
- *    conversation, what they took from it (Search, Chat, Remember) — the
+ *    conversation, what they took from it (Search, Chat, Learn) — the
  *    same category docs/project/mode.md already names.
  *
  * Six runs became five later the same day, when Greg moved Glossary, Ideas
@@ -634,12 +675,19 @@ interface Props {
  * (SPIDERYARN-READING2-57,
  * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md).
  * The two runs that changed were renamed for what they now hold.
+ *
+ * Inside two runs the order changed on 2026-10-04, when Greg moved Glossary
+ * and Citations one place left each (spya-tnqt2t,
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md).
+ * No run gained or lost a mode.
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
 interface ModeUi {
   mode: Mode;
-  icon: typeof Info;
+  /* No `icon`: the glyph is `MODE_ICON[mode]` (mode-icons.ts) since 2026-10-05,
+     so Chat's list can wear a mode's icon without importing the bar. The
+     notes on why each glyph was chosen stay beside the rows below. */
   /* **A row holds no per-mode words at all any more, and no policy either.**
      The **name** is `MODE_LABEL[mode]` (src/title-text.ts) — a total,
      compiler-checked record the tab title and the shared-inventory dialog
@@ -672,13 +720,28 @@ interface ModeUi {
    * The labels are dropped as soon as the row stops fitting, and again when
    * even the icons are tight, because they are said twice — in the tooltip and
    * in the `aria-label` — so dropping them costs a sighted reader a hover and a
-   * screen-reader user nothing (dock-fit.ts, styles.css § the bar's fit
+   * screen-reader user nothing (dock-fit.ts, dock-fit.css § the bar's fit
    * ladder). Exactly one button is worth the width anyway: the one
    * that gets you *out*, which a reader is reaching for precisely when they do
-   * not want to hover ten icons to find it. So on a phone the row is thirteen
-   * glyphs and one word, and the word is the exit.
+   * not want to hover every icon to find it. In compact fits the other mode
+   * labels go and this word stays: it is the exit.
    */
   keepLabel?: true;
+  /**
+   * **Gathered under the More button rather than drawn in the bar** — Greg,
+   * 2026-10-06 (spya-dest8x): *"there's a whole bunch of modes in the middle
+   * that people probably don't need to open that often. I'm thinking of the
+   * glossary, FAQ, ideas, timeline, quotes … I wonder if we could maybe gather
+   * them together and create either a dot dot dot or a more button in their
+   * place."*
+   *
+   * Layout, like everything else on a row: the mode is as reachable as it was
+   * (`visibleModes` still lists it, so the command bar does), and only where
+   * its button stands has changed. `splitForMore` reads this and nothing else
+   * does. Which modes, and why no others:
+   * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md § D2.
+   */
+  more?: true;
 }
 
 /* `satisfies` and deliberately **not** `as const satisfies`, which is what
@@ -701,10 +764,10 @@ const MODES_UI = [
      be, and the exit from the document is not one of them. See the header.
 
      Not drawn larger, and that is a deliberate departure from the ask. A
-     radiogroup of ten peers with one of them enlarged reads as a mistake before
+     radiogroup of peers with one of them enlarged reads as a mistake before
      it reads as emphasis. What it gets instead is its label, kept at narrow
-     widths where every other button loses one (styles.css § the bar's fit ladder) —
-     so on a phone the bar is eight icons and one word, and the word is the exit.
+     widths where every other button loses one (dock-fit.css § the bar's fit ladder) —
+     so the compact mode segment has icons and one word, and the word is the exit.
      Cheap to change to a size bump if it does not read.
 
      **And since 2026-09-05 it is the only way out**, the `×` in the controls
@@ -718,12 +781,12 @@ const MODES_UI = [
      It is also **not the fix for the problem Greg hit**, and that is worth
      saying here so nobody thinks it was: on a phone the bar this button sits in
      is exactly what an on-screen keyboard covers, and what slides away when you
-     scroll. The fix for that is in styles.css § a small device — the bars stay
-     while a band is open. docs/plans/plain-mode-and-the-way-out.md. */
+     scroll. narrow-window.css § a small device keeps the dock visible while
+     a band covers the article; beside the article it can still hide on scroll.
+     docs/plans/plain-mode-and-the-way-out.md. */
   {
     mode: "plain",
     group: "exit",
-    icon: AlignLeft,
     keepLabel: true,
   },
   /* First of the shape run: what shape is this piece, and where am I in it —
@@ -743,24 +806,15 @@ const MODES_UI = [
   {
     mode: "structure",
     group: "shape",
-    icon: Columns2,
   },
   {
     mode: "summary",
     group: "shape",
-    icon: Layers,
   },
-  /* **A mode since 2026-09-29**, a loose link to a page of its own before
-     (SPIDERYARN-READING2-5A). In the shape run after Summary because a thread is
-     the same move Summary makes — the article restated, shorter — and Greg did
-     not place it by hand; the plan records that as an assumption he can move.
-     `ListOrdered`, the icon the link carried.
-     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-  {
-    mode: "tweets",
-    group: "shape",
-    icon: ListOrdered,
-  },
+  /* Tweets stood here from 2026-09-29 to 2026-10-03, with `ListOrdered`. The
+     thread is Summary's Thread view now, one button fewer on the bar — Greg:
+     *"I would like to have fewer modes"* (spya-thpsnd,
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
   /* **In the shape run, just after Summary, since 2026-09-29**, because it is
      the same move Summary makes — the article restated — with a picture
      instead of prose. It had sat between Referee and Chat, and Greg's reorder
@@ -791,7 +845,6 @@ const MODES_UI = [
   {
     mode: "diagram",
     group: "shape",
-    icon: Network,
   },
   /* **First of the guides run, just before Quotes, since 2026-09-29** —
      Greg: *"Move Trajectory one further left, before Quotes"* (Skim was called
@@ -802,12 +855,11 @@ const MODES_UI = [
      the plan first put it and Greg had not yet placed it by hand.
 
      `Route`, used nowhere else — a path with stops on it, which is the mode.
-     Not `ListOrdered`, which is the Tweets mode's numbered thread.
+     Not `ListOrdered`, which was the Tweets mode's numbered thread.
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
   {
     mode: "skim",
     group: "guides",
-    icon: Route,
   },
   /* **After Skim, since 2026-09-29**; straight after Summary, with
      Skim after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
@@ -827,10 +879,20 @@ const MODES_UI = [
   {
     mode: "quotes",
     group: "guides",
-    icon: Quote,
+    more: true,
   },
-  /* **In the guides run, after Quotes, since 2026-09-29** — Greg: *"Move FAQ
-     and Search a little bit further left"* (SPIDERYARN-READING2-4E). Every row
+  /* **Straight after Quotes, ahead of FAQ, since 2026-10-04** — Greg: *"move
+     the glossary one to the left"* (spya-tnqt2t, plan 261004j). It had stood
+     after FAQ since 2026-09-29. */
+  {
+    mode: "glossary",
+    group: "guides",
+    more: true,
+  },
+  /* **In the guides run since 2026-09-29** — Greg: *"Move FAQ
+     and Search a little bit further left"* (SPIDERYARN-READING2-4E) — and
+     after Glossary since 2026-10-04, when Glossary moved one place left past
+     it (spya-tnqt2t, plan 261004j); until then it stood straight after Quotes. Every row
      is a question answered by passages of the piece itself, which is what the
      piece contains. It had stood after Citations, at the end of the "one dimension
      pulled out" group, where Greg had not yet placed it by hand.
@@ -842,22 +904,18 @@ const MODES_UI = [
   {
     mode: "faq",
     group: "guides",
-    icon: BadgeQuestionMark,
+    more: true,
   },
-  {
-    mode: "glossary",
-    group: "guides",
-    icon: BookA,
-  },
-  /* Straight after Glossary, because the order runs outwards from the article's
-     own words and these two are the same kind of thing pointed at different
-     units: a term is a word you look up, an idea is a proposition you hold.
+  /* After FAQ since Glossary moved left past it on 2026-10-04. It still
+     follows Glossary in the run because these two are the same kind of thing
+     pointed at different units: a term is a word you look up, an idea is a
+     proposition you hold. FAQ now sits between them (see Glossary's row).
      Greg set this order by hand, so a new mode goes where it belongs in his
      reasoning rather than on the end. */
   {
     mode: "ideas",
     group: "guides",
-    icon: Lightbulb,
+    more: true,
   },
   /* **Last of the guides run, after Glossary and Ideas.** Greg placed it
      after Ideas on 2026-08-31, asked for it *"further right"* on 2026-09-29
@@ -870,11 +928,29 @@ const MODES_UI = [
   {
     mode: "timeline",
     group: "guides",
-    icon: Clock,
+    more: true,
   },
-  /* **First of the critical run — Referee, Citations, Debate — since
+  /* **First of the critical run — Citations, Referee, Debate — since
+     2026-10-04**: Greg, *"Move the citations mode one to the left in the
+     bottom bar"* (spya-tnqt2t, plan 261004j). It joined this run on
+     2026-09-29, between Referee and Debate — *"Move Citations further right,
+     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
+     is the web's, and Referee is somebody weighing the piece against other
+     work: the three are reading it critically. It stood after Timeline before
+     that.
+
+     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
+     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
+     is Quotes'. docs/plans/260911g-citations-mode.md. */
+  {
+    mode: "citations",
+    group: "critical",
+  },
+  /* **In the critical run — Citations, Referee, Debate — since
      2026-09-29**, which is Greg's grouping: *"Move Citations further right,
-     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). Until then it sat
+     next to Debate and Reviewer"* (SPIDERYARN-READING2-4E). First of it until
+     2026-10-04, when Citations moved one place left past it (spya-tnqt2t,
+     plan 261004j). Before the run existed it sat
      straight after Search, because it is Search's kind of thing — a pass
      over the piece looking for passages — pointed at somebody who has been
      asked to peer-review it rather than at somebody reading it for themselves.
@@ -894,22 +970,6 @@ const MODES_UI = [
   {
     mode: "referee",
     group: "critical",
-    icon: ClipboardCheck,
-  },
-  /* **Between Referee and Debate, since 2026-09-29** — Greg: *"Move
-     Citations further right, next to Debate and Reviewer"*
-     (SPIDERYARN-READING2-4E). Its list is the piece's own references, Debate's
-     is the web's, and Referee is somebody weighing the piece against other
-     work: the three are reading it critically. It stood after Timeline before
-     that.
-
-     `BookText` — a closed book with lines on it, i.e. *a work*. `Library` was
-     the obvious glyph and is refused: it is the shelf's, on every page. `Quote`
-     is Quotes'. docs/plans/260911g-citations-mode.md. */
-  {
-    mode: "citations",
-    group: "critical",
-    icon: BookText,
   },
   /* **Last of the critical run, before the input run, since 2026-09-29**, when
      Greg moved Chat past it (*"Move Chat right, just before Recall"*) and put
@@ -934,9 +994,8 @@ const MODES_UI = [
   {
     mode: "debate",
     group: "critical",
-    icon: Globe,
   },
-  /* **First of the input run — Search, Chat, Remember — since 2026-09-29.**
+  /* **First of the input run — Search, Chat, Learn — since 2026-09-29.**
      Greg: *"move Search into section with Chat"* (SPIDERYARN-READING2-57).
      First in it rather than after Chat, because the same day he had asked for
      Chat *"just before Recall"*. It is the reader coming to the article with
@@ -956,38 +1015,32 @@ const MODES_UI = [
   {
     mode: "search",
     group: "input",
-    icon: Search,
   },
   {
     mode: "chat",
     group: "input",
-    icon: MessagesSquare,
   },
   /* Last, straight after Chat — the end of the input run (Search, Chat,
-     Remember), and Greg put Chat *"just before Recall"* on 2026-09-29
+     Learn), and Greg put Chat *"just before Recall"* on 2026-09-29
      (SPIDERYARN-READING2-4E). The ordering runs from the article restated,
-     through the ways into it, to the conversation about it. Remember
+     through the ways into it, to the conversation about it. Learn
      is the only mode whose content comes from the READER — it cannot be used at
      all until they have read the piece — so it belongs past the point where the
      article's own words run out. docs/plans/260827ah-review-mode.md.
 
      **Its description is doing more work than any other in the catalog**
-     (src/mode-catalog.ts), and it has to keep doing it. "Remember" (renamed from "Review" on 2026-09-01)
-     suggests two things this mode is not: saved memories you can go back to,
-     and spaced repetition. Neither exists — nothing is stored for later and
-     nothing comes back on a schedule; the reader talks, and the model shows
-     them where their account and the piece come apart. That is the named cost
-     of the rename, so if this line is ever shortened, the denial is the part to
-     keep.
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
+     (src/mode-catalog.ts), and it has to keep doing it. *Learn* can suggest a
+     course, while this is four small ways to take one piece in and think it
+     through; the description names the parts and denies a course or
+     flashcards. It was *Remember* from 2026-09-01 to 2026-10-05; both names'
+     trade-offs are in the two rename plans, 260901d and 261005l. */
   {
-    mode: "remember",
+    mode: "learn",
     group: "input",
     /* `Brain`, not `Speech`, from 2026-09-05. `Speech` was the mode's method — the
        reader talks — and Greg asked for its subject instead: what they kept.
        SPIDERYARN-READING2-25. It is the only brain in the bar, and Lucide has
        exactly one, so there is no second thing it could be confused with. */
-    icon: Brain,
   },
   /* **Marginalia, 2026-10-01** — a run of its own at the right-hand end since
      the same day, when its column became a switch beside whichever band is
@@ -996,13 +1049,12 @@ const MODES_UI = [
      outside the radiogroup, after it, so the bar and the command bar list it in
      the same place. It had sat in the shape run beside Summary, for what it
      draws: each part's question and where the argument has got to. Behind the
-     switch. `PanelRight`: the column on the right.
+     experimental switch until 2026-10-05 (plan 261005d). `PanelRight`: the column on the right.
      docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md,
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */
   {
     mode: "marginalia",
     group: "margin",
-    icon: PanelRight,
   },
 ] satisfies readonly ModeUi[];
 
@@ -1032,8 +1084,15 @@ export type ModesMissingFromDock<
   T extends never = Exclude<Mode, (typeof MODES_UI)[number]["mode"]>,
 > = T;
 
+/** A mode's glyph at the bar's size, from the one map every drawer of it reads. */
+function ModeIcon({ mode }: { mode: Mode }) {
+  const Icon = MODE_ICON[mode];
+  return <Icon size={15} />;
+}
+
 /**
- * **Which of them the bar actually draws.** Two rules, and the second
+ * **Which of them this reader's bar offers** — drawn as a button, or listed
+ * under More (`splitForMore` below decides which). Two rules, and the second
  * is the one that is easy to lose.
  *
  * 1. Every row that is not experimental.
@@ -1043,7 +1102,7 @@ export type ModesMissingFromDock<
  * exactly one button must be checked, so `?mode=timeline` with the switch off
  * and no Timeline button would leave a group announcing *one of these* with
  * none of them on — and the reader stranded in a mode with no way back that the
- * bar could show them. It holds on the loose-link arm too (the metadata page; tweets too until 2026-09-29),
+ * bar could show them. It holds on the links arm too (the metadata page; tweets too until 2026-09-29),
  * which is where a first draft of the plan stopped short: `carriedSearch`
  * strips only `?panel=`, so `?mode=` is still in the string those links are
  * built from, and the bar there can read it back. GPT Sol, finding 9.
@@ -1084,6 +1143,52 @@ export function visibleModes(
 }
 
 /**
+ * **The bar's modes, split into what it draws and what its More menu holds.**
+ * Only `splitForMore` should build one: `fitSignature`, the two arms and the
+ * coarse-pointer counts all take this rather than a bare list, so the reachable
+ * set (`visibleModes`) cannot be handed to something that means *drawn*.
+ */
+export interface DockBar {
+  /** The rows drawn as buttons or links, in the bar's order. */
+  readonly drawn: readonly ModeUi[];
+  /** The rows listed under More. Empty means the bar draws no More button. */
+  readonly menu: readonly ModeUi[];
+}
+
+/**
+ * **`visibleModes`' reachable set, split for the bar** (plan 261007c, D3 and
+ * D5).
+ *
+ * - `drawn`: every row that is not gathered, **plus a gathered row that is the
+ *   mode the reader is in**. That is `visibleModes`' rule 2 applied to a second
+ *   reason for hiding, and for the same reason: the radiogroup must have one
+ *   button checked, a second press on the open mode must still close it, and
+ *   the reader must be able to see where they are.
+ * - `menu`: every gathered row in the reachable set, the open one included, so
+ *   the list does not shuffle as modes open and close.
+ *
+ * The reachable set itself still feeds the command bar, whose mode rows are
+ * what the bar offers **directly or under More**.
+ *
+ * Exported for tests/dock-more.test.tsx.
+ */
+export function splitForMore(reachable: readonly ModeUi[], current: BandMode | undefined): DockBar {
+  return {
+    drawn: reachable.filter((m) => m.more !== true || m.mode === current),
+    menu: reachable.filter((m) => m.more === true),
+  };
+}
+
+/**
+ * **How many buttons the bar's mode segment draws**: the drawn rows, and the
+ * More button where there is one. `--dock-mode-count`, the share a coarse
+ * pointer spreads the row by (narrow-window.css).
+ */
+function drawnCount(bar: DockBar): number {
+  return bar.drawn.length + (bar.menu.length > 0 ? 1 : 0);
+}
+
+/**
  * **Which drawn buttons begin a new run of related modes** — and so carry the
  * separator line (`ModeGroup`; dock-fit.css § lines between runs).
  *
@@ -1109,7 +1214,7 @@ export function groupStarts(visible: readonly ModeUi[]): ReadonlySet<Mode> {
  * for.
  *
  * Off the reading view there is no `mode` prop — the band is elsewhere — so this
- * is how the loose-link arm knows which mode the reader came from. Matched
+ * is how the links arm knows which mode the reader came from. Matched
  * against `MODES_UI` rather than against `MODES` so that an unrecognised word in
  * the URL simply draws nothing extra, the same way `modeParam` falls back to the
  * default rather than throwing (params.ts § modeParam).
@@ -1227,9 +1332,9 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * What the bar has in it, as one string, so `useDockFit` re-measures when the
  * row's width could have changed and not on every render of the page it sits on.
  *
- * The five things that vary: the modes are one segment on the reading view and
- * loose links elsewhere; Comments is a drawer trigger here and a link
- * elsewhere; its count grows a digit; the bar's own experimental switch is
+ * The five things that vary: the modes are buttons on the reading view and
+ * links in the same frames elsewhere; Comments is a drawer trigger here and a
+ * link elsewhere; its count grows a digit; the bar's own experimental switch is
  * absent, or drawn in one of six appearances; and the Feedback trigger at the
  * end of the row is there for a signed-in reader and not for a stranger.
  *
@@ -1270,7 +1375,8 @@ export function toggleVariant(e: DockExperimental): ExperimentalVariant | null {
  * rule is held; nothing else imports it.
  */
 export function fitSignature(
-  visible: readonly ModeUi[],
+  /** What the bar draws — `splitForMore`'s answer, never the reachable list. */
+  bar: DockBar,
   mode: BandMode | undefined,
   onMode: Props["onMode"],
   drawer: Props["drawer"],
@@ -1301,7 +1407,7 @@ export function fitSignature(
   /**
    * **Whether the quick-search control is drawn** (plan 261002h,
    * DockQuickSearch.tsx) — a 14rem box at rung 0 is the widest thing in the
-   * row. Which of its box and its ⚡ shows follows the rung (CSS) and `mode`
+   * row. Whether its box, its ⚡ or nothing shows follows the rung (CSS) and `mode`
    * (already here). The one thing this string cannot see is the box keeping
    * its width while it has focus in Search mode; that only ever makes the row
    * narrower when focus leaves, so the cost is a label dropped with room to
@@ -1310,7 +1416,11 @@ export function fitSignature(
   quickSearch = false,
 ): string {
   const shape = mode !== undefined && onMode ? "seg" : "links";
-  const modes = visible.map((m) => m.mode).join(",");
+  /* **The drawn rows, and whether More is drawn after them** (plan 261007c).
+     A gathered mode that opens takes a place in the bar, so its name arrives
+     here by the rule above; `+more` is the More button's own width, which is
+     there or not with the menu. It cannot collide with a mode's name. */
+  const modes = [...bar.drawn.map((m) => m.mode), ...(bar.menu.length > 0 ? ["+more"] : [])].join(",");
   /**
    * **The chip in the Comments button, by what it draws rather than by what it
    * counts.** A failed write replaces the number with a `!` (§ the Comments
@@ -1333,18 +1443,18 @@ export function fitSignature(
    *
    * **No `shape` guard on it, and the guard was written and then removed.**
    * The obvious version was `shape === "seg" ? mode : ""`, on the reasoning
-   * that a loose link is never `.on` so its mode cannot change the row. That is
-   * true and the guard is still dead code: `shape` is `"links"` exactly when
-   * `mode` is absent in every arrangement `Dock`'s four mount sites produce, so
-   * both spellings return the same string for every bar that exists. The test
-   * written to defend it could not be made to fail — which is the tell this
+   * that a link in the links arm is never `.on` so its mode cannot change the
+   * row. That is true and the guard is still dead code: `shape` is `"links"`
+   * exactly when `mode` is absent in every arrangement `Dock`'s four mount sites
+   * produce, so both spellings return the same string for every bar that exists.
+   * The test written to defend it could not be made to fail — which is the tell this
    * repo keeps meeting (docs/reusable/silent-success.md) — so the branch went
    * rather than the test being contorted into an unreachable arrangement to
    * justify it. GPT Sol, S1, reviewing the built code.
    *
    * **And the guard would have been actively wrong later**, which is the
-   * argument that settles it rather than merely permits it. If the loose links
-   * ever gain an `.on` state of their own, the term this string wants is the
+   * argument that settles it rather than merely permits it. If the links arm
+   * ever gains an `.on` state of its own, the term this string wants is the
    * bar's *effective* mode — `mode ?? modeInSearch(search)` — on both shapes,
    * and a `shape === "seg"` guard would be the thing standing in the way. GPT
    * Sol, second pass.
@@ -1385,10 +1495,11 @@ export function hasQuickSearch(
  *  - **Not on a repeat.** A held ⌘-K would otherwise reopen the bar every few
  *    milliseconds under whatever the reader had already typed. The same rule
  *    the arrows keep — docs/project/keyboard.md § auto-repeat is ignored.
- *  - **Not while a text field has focus.** The chat box, the comment box, the
- *    search field and the referee's criteria are all places a reader is
- *    writing, and ⌘-K is a text-editing chord in several editors. key-chord.ts
- *    § `isTyping` is the list.
+ *  - **A text field is not a refusal**, since 2026-10-04. It was — "⌘-K is a
+ *    text-editing chord in several editors" — and Greg, spya-szdjek: *"I want
+ *    to be able to hit Command-K at more or less any time from within the
+ *    reading view."* None of our fields binds it; the bar is a modal dialog,
+ *    so the field keeps its text and gets its focus back when the bar closes.
  *  - **Not over another native modal.** `showModal()` on a dialog while another
  *    modal dialog is showing stacks two in the top layer and traps focus in the
  *    newer one — the Feedback dialog, the Lightbox and the comment dialogs are
@@ -1405,7 +1516,36 @@ export function hasQuickSearch(
  * `preventDefault()` **only when the press is claimed**: Firefox focuses the
  * address bar on ⌘-K, and a listener that suppressed that without opening
  * anything would be a chord that quietly breaks a browser feature.
+ *
+ * **In the capture phase, and a claimed press goes no further.** Capture is
+ * what makes "from anywhere" a fact: the live conversation's status and button
+ * stop every keydown from bubbling (LiveStatus.tsx, LiveButton.tsx), and a
+ * bubble listener here never hears a press made inside them. And
+ * `stopPropagation()` keeps the press from the field it was typed in, so a
+ * claimed ⌘-K means the bar and nothing else — on a Mac, Ctrl-K in a text
+ * field is otherwise "delete to the end of the line". A press that is not
+ * claimed is not touched.
+ * docs/plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md § 2.
  */
+/**
+ * **The two text fields' presses ⌘/Ctrl-K still leaves alone**, both GPT Sol's
+ * on the plan (261004h, findings 3 and 5):
+ *
+ *  - **Ctrl-K without ⌘, in a text field, on a Mac.** There it is "delete to
+ *    the end of the line", a real editing key, and Greg asked for Command-K.
+ *    ⌘-K opens the bar there; Ctrl-K opens it everywhere off a Mac.
+ *  - **A field that asks to be left alone**, `data-command-bar="off"`. The
+ *    title editor saves on blur, and a modal dialog opening is a blur: the
+ *    chord would save a half-typed title the reader could no longer Escape
+ *    out of. TitleEditor.tsx.
+ */
+function keepsItsOwnModK(e: KeyboardEvent): boolean {
+  const focused = document.activeElement;
+  if (!isTyping(focused)) return false;
+  if (focused?.closest('[data-command-bar="off"]')) return true;
+  return !e.metaKey && /Mac|iPhone|iPad/.test(navigator.platform);
+}
+
 function useCommandBarChord(
   /** Whether this reader gets a command bar at all — a visitor does not (`DockCommands`). */
   enabled: boolean,
@@ -1441,16 +1581,17 @@ function useCommandBarChord(
          Caps Lock, which is not a modifier. GPT Sol's F3 on stage 2; the test
          is key-chord.ts's now, so ⌘-Enter below cannot drift from it. */
       if (!isModChord(e, "k")) return;
-      if (isTyping(document.activeElement)) return;
+      if (keepsItsOwnModK(e)) return;
       /* Checked here as well as inside `show`, because this one decides whether
          the press is *claimed* — calling `preventDefault()` and then declining
          to open is the one outcome that is worse than doing nothing. */
       if (document.querySelector("dialog[open]") !== null) return;
       e.preventDefault();
+      e.stopPropagation();
       show();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [enabled, show]);
   /* Named rather than an inline arrow in the markup, which is also one fewer
      nested function inside `Dock` — a component this file has already had to
@@ -1505,6 +1646,42 @@ function useMetadataChord(href: string): void {
 }
 
 /**
+ * **Escape on the Metadata page is a press on its button** — back to the
+ * article, by the same href, so the button, ⌘-Enter and Escape cannot disagree
+ * about where "back" is.
+ *
+ * > If I hit escape while in metadata mode, sort of hide the metadata mode, as
+ * > if I'd clicked on the metadata mode button to take me back to wherever I
+ * > was before.
+ * >
+ * > — Greg, 2026-10-04, spya-ynx97n
+ *
+ * **The page is the last surface to hear the key**, so this is a bubble-phase
+ * `window` listener — the escape inventory's T3 — and anything in front of the
+ * page gets the press first: a hover card or a popover stops it before it
+ * arrives, a native `<dialog>` owns it (the query `useEscapeToClose` makes),
+ * and a handler that `preventDefault`ed it has claimed it. **A text field
+ * keeps its Escape**: a reader who presses it in the tag editor or the page
+ * search means the box, and being thrown off a page they were editing is the
+ * worse mistake. A modified or auto-repeating Escape is not this.
+ * docs/plans/261004h-escape-leaves-metadata-cmd-k-from-inside-text-fields-and-a-metadata-icon-of-its-own.md § 1.
+ */
+function useMetadataEscape(enabled: boolean, href: string): void {
+  useEffect(() => {
+    if (!enabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || e.repeat || isImeComposing(e)) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      if (isTyping(document.activeElement)) return;
+      if (document.querySelector("dialog[open]") !== null) return;
+      navigate(href);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, href]);
+}
+
+/**
  * **Opening a mode, as a callback both doors hold.**
  *
  * The two calls — mint the token, then move the band — must stay paired and in
@@ -1551,6 +1728,7 @@ function useActivateMode(
   slug: string,
   search: string,
   diagram: DiagramKind,
+  summary: SummaryView,
   onMode: Props["onMode"],
   arms: boolean,
   current: BandMode | undefined,
@@ -1580,13 +1758,13 @@ function useActivateMode(
       /* **Nor does a Marginalia press while the column is on**, from either
          door: the bar's press turns it off, with its feed still mounted for
          that instant, and naming it in the command bar leaves it where it is.
-         Only the press that turns the column on asks for its relation words
-         (plan 261003f). */
+         Only the press that turns the column on can ask from the browser for
+         relation words missing after import (plans 261003f and 261005d). */
       const marginOn = next === "marginalia" && margin;
-      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram });
+      if (arms && !again && !marginOn) armActivationForMode(slug, next, { diagram, summary });
       onMode(next, undefined, toggles);
     },
-    [slug, search, diagram, onMode, arms, current, toggles, margin],
+    [slug, search, diagram, summary, onMode, arms, current, toggles, margin],
   );
 }
 
@@ -1629,7 +1807,7 @@ function useActivateSubMode(
  * `DockModeLinks` draws and the command bar's mode rows follow there, one
  * function so the two doors cannot land in different places.
  */
-function modeLinkHref(slug: string, search: string, mode: Mode): string {
+export function modeLinkHref(slug: string, search: string, mode: Mode): string {
   /* A metadata URL can itself carry `mode=marginalia`, or the retired
      `mode=annotations` (`isMarginaliaModeWord`). Translate it before following
      either axis: choosing a band must keep the notes, and choosing Marginalia
@@ -1640,6 +1818,13 @@ function modeLinkHref(slug: string, search: string, mode: Mode): string {
   if (mode === "marginalia") {
     return readHref(slug, withMargin(canonical, true), "article");
   }
+  /* **`mode` alone, with one exception**, the same one the reading view's
+     button makes (sub-modes.ts § `returnToSubMode`). The carried string keeps
+     everything but `panel=` (router.ts § `carriedSearch`), so a reader who came
+     here from a Chat conversation with `learn=quiz` retained carries both,
+     and a plain Learn link would open the Quiz with that thread selected. */
+  const back = returnToSubMode(mode, { learn: learnInSearch(canonical) });
+  if (back !== null) return readHref(slug, withSubModeParams(canonical, back), "article");
   return readHref(slug, withMode(canonical, mode), "article");
 }
 
@@ -1649,11 +1834,15 @@ export function Dock({
   mode,
   onMode,
   margin: marginProp,
+  summary: summaryProp,
+  diagram: diagramProp,
   marked,
   visitor,
   shelfRow,
+  executor,
   drawer,
   experimental,
+  entrance = false,
 }: Props) {
   const panel = drawer?.panel ?? null;
   const open = panel !== null;
@@ -1731,7 +1920,11 @@ export function Dock({
      string off it. Drawn by the toggle, and kept visible behind the switch
      while on, as the current mode is (`visibleModes`). */
   const margin = marginProp ?? marginInSearch(search);
-  const visible = visibleModes(experimental.on, mode ?? modeInSearch(search), margin);
+  const current = mode ?? modeInSearch(search);
+  /* The reachable set: what the command bar lists. */
+  const visible = visibleModes(experimental.on, current, margin);
+  /* What the bar draws of it, and what its More menu holds. */
+  const bar = splitForMore(visible, current);
 
   /* Computed once, above the fit measurement, because the same answer decides
      two things: whether the row is one button wider, and what that button
@@ -1760,15 +1953,23 @@ export function Dock({
    * opened something else, which is precisely the extra button-click the
    * auto-run rule removed. params.ts owns the degrade rule and every reader
    * takes it from there.
+   *
+   * **The reading view's own parsed state where there is one**, and the carried
+   * address only off it, where a press is a link and arms nothing anyway — the
+   * address lags a chip press by up to ~50ms. § Props `diagram`.
    */
-  const diagram = diagramInSearch(search);
+  const diagram = diagramProp ?? diagramInSearch(search);
+  /* Which of Summary's views a Summary press would land on: the reading view's
+     own parsed state where there is one, and the carried address only off it,
+     where a press is a link and arms nothing anyway. § Props `summary`. */
+  const summary = summaryProp ?? summaryInSearch(search);
 
   /* **Opening a mode**, and it is one callback rather than two calls made
      twice — `useActivateMode` above holds the whole of the reasoning, which
      is the reason it is a named thing at all. */
-  const activateMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, false, margin);
+  const activateMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, false, margin);
   /* The bar's own buttons: the same door, but a second press closes. */
-  const pressMode = useActivateMode(slug, search, diagram, onMode, !isVisitor, mode, true, margin);
+  const pressMode = useActivateMode(slug, search, diagram, summary, onMode, !isVisitor, mode, true, margin);
   const activateSubMode = useActivateSubMode(slug, search, onMode, !isVisitor);
 
   /* **How much of itself the bar spells out is measured, not guessed** — the
@@ -1781,7 +1982,7 @@ export function Dock({
      constant)"*. */
   const { ref: dockRef, fitClass } = useDockFit(
     fitSignature(
-      visible,
+      bar,
       mode,
       onMode,
       drawer,
@@ -1826,9 +2027,18 @@ export function Dock({
    * carries the full argument for asking the platform rather than keeping a
    * registry.
    *
+   * **And to the bar's own More menu** — see inside.
+   *
    * It does not fire for the command bar, which cannot be open over the drawer:
    * `useCommandBarChord`'s `show()` shuts the drawer on its way in,
    * deliberately, and says why.
+   *
+   * **An Escape that belongs to an input method closes nothing** (2026-10-07):
+   * it dismisses a candidate list in whichever box the reader is typing in.
+   * The press is still stopped first, so it goes no further than an ordinary
+   * one would. This listener runs before every box on the page, so no guard
+   * in a box could keep the drawer open.
+   * docs/plans/261007a-ui-sweep-k2-composition-keys.md.
    */
   const onPanel = drawer?.onPanel;
   useEffect(() => {
@@ -1836,7 +2046,22 @@ export function Dock({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (document.querySelector("dialog[open]") !== null) return;
+      /* **And to the More menu**, which is the top overlay when both are up:
+         the bar stays operable over the drawer, so More can be opened over it,
+         and the first Escape must close the menu and leave the drawer for the
+         second. Radix's own listener is on `document`, after this one, so
+         standing aside is all it needs (GPT Sol, PR-2 of plan 261007c;
+         tests/dock-more.test.tsx). The same attribute narrow-window.css reads
+         to hold the bar home under an open menu. */
+      if (document.querySelector(MORE_OPEN) !== null) return;
       e.stopImmediatePropagation();
+      if (isImeComposing(e)) {
+        /* Capture also prevents the search box's handler from cancelling the
+           browser's native Escape clear. Keep that protection here while the
+           drawer owns the key, without cancelling it in other kinds of box. */
+        if (e.target instanceof HTMLInputElement && e.target.type === "search") e.preventDefault();
+        return;
+      }
       onPanel(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });
@@ -1884,9 +2109,11 @@ export function Dock({
      docs/plans/261003c-glossary-find-more-at-the-top-and-metadata-press-closes.md § 2. */
   const metadataHref = readHref(slug, search, view === "metadata" ? "article" : "metadata");
   useMetadataChord(metadataHref);
+  useMetadataEscape(view === "metadata", metadataHref);
   /* One value for the Help link and the command bar's Help row, for the same
      reason: two doors that open on different sections teach the reader that
-     neither can be trusted. */
+     neither can be trusted. An owner has both; a visitor has only the link,
+     having no command bar (`DockHelp`). */
   const helpLink = helpHrefFor(mode);
 
   /**
@@ -2037,7 +2264,9 @@ export function Dock({
       {/* Above the bar rather than in it: it is a sentence, and the bar is thirteen
           icons. Renders nothing at all except on an uninstalled iOS device that
           has not dismissed it — install-hint.ts. */}
-      <InstallHint />
+      {/* Entering with the bar, or for that second it would float over an
+          empty strip (GPT Sol, PR-5 of plan 261007c). */}
+      <InstallHint entering={entrance} />
 
       {/* **The command bar, mounted from here rather than from `App.tsx`.**
           Everything it needs is already in this component — `slug`, `mode`,
@@ -2047,22 +2276,24 @@ export function Dock({
           why the gate is inside it, are on `DockCommandBar` below. */}
       <DockCommandBar
         isVisitor={isVisitor}
-        /* The list the Dock drew, not a second computation of it: requirement
-           4 — *the bar lists exactly what the Dock lists* — is true by
-           construction this way, and would be a promise between two copies of
-           `visibleModes` any other way. */
+        /* **What the Dock offers, directly or under More** — the reachable
+           set, not only the drawn buttons, since 2026-10-07 (plan 261007c,
+           D5): a mode gathered under More stays one ⌘K away. The same array
+           `bar` above was split from, not a second computation of it, so the
+           contract is true by construction rather than a promise between two
+           copies of `visibleModes`. */
         modes={visible}
         activateMode={activateMode}
         activateSubMode={activateSubMode}
         /* For Diagram's pictures, the one visibility `modes` cannot carry. */
-        experimentalOn={experimental.on}
+        experimental={experimental}
         diagram={diagram}
         /* The same two values the Metadata link below is built
            from, so the bar's rows and the buttons cannot go to different
            places. `search` is already through `carriedSearch`. `help` is the
            Help link's href, for the same reason. `shelfRow` is the page's,
            handed straight on (Archive and Export in the bar). */
-        article={{ slug, search, view, help: helpLink, shelfRow }}
+        article={{ slug, search, view, help: helpLink, shelfRow, executor }}
         /* **The drawer's own callback, bound to its panel**, and `undefined`
            where there is no drawer. `Comments` is the one row in the bar that
            is neither a mode nor a page — it opens the thing that is already
@@ -2072,7 +2303,11 @@ export function Dock({
         bar={commandBar}
       />
 
-      <div className={`dock${fitClass}`} ref={dockRef}>
+      {/* `dock-enter` only ever joins the list at mount and never leaves it
+          (`entrance` holds for the life of a Reader mount), so a change of fit
+          class beside it cannot restart the animation: CSS restarts one only
+          when its name changes. */}
+      <div className={`dock${fitClass}${entrance ? " dock-enter" : ""}`} ref={dockRef}>
         {/* **The way off this page, and the first thing in the bar.** See the
             header for why it is back here after 2026-08-26 took it away, and
             why the reason is the bar having changed rather than a wordmark
@@ -2140,20 +2375,24 @@ export function Dock({
             so the same visible mode list degrades to links back to it. */}
         {mode !== undefined && onMode ? (
           <DockModes
-            modes={visible}
+            bar={bar}
             mode={mode}
             /* The command bar's door, but toggling — see `useActivateMode`,
                which is where the arming and the `?mode=` write live. */
             onActivate={pressMode}
+            /* And the command bar's door itself, for a pick from More: it
+               names a destination, so it opens and never toggles shut. */
+            onOpen={activateMode}
             marked={marked}
             margin={margin}
           />
         ) : (
-          <DockModeLinks slug={slug} search={search} modes={visible} marked={marked} />
+          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} />
         )}
 
-        {/* **Quick search, from anywhere** (plan 261002h): a box, or a ⚡ where
-            a box does not fit or is not wanted — DockQuickSearch.tsx. In the
+        {/* **Quick search, from anywhere** (plan 261002h): a box where
+            there is room for one, a ⚡ while Search mode is open, and nothing
+            on a narrow bar or a touch screen — DockQuickSearch.tsx. In the
             bar's slack, between the modes and the article's other views. */}
         {hasQuickSearch(view, isVisitor ? null : own, onMode) && (
           <DockQuickSearch
@@ -2285,7 +2524,10 @@ export function Dock({
           <DockLink
             href={metadataHref}
             current={view === "metadata"}
-            icon={Info}
+            /* Not `Info`: that (i) is "about this mode" (BandAbout), and one
+               glyph for two meanings is what Greg reported, spya-jt4gmg. A
+               document with a cog, for the machinery behind the article. */
+            icon={FileCog}
             label="Metadata"
             hover={
               <ControlTip
@@ -2317,43 +2559,10 @@ export function Dock({
           <DockExperimentalSwitch setting={experimental} variant={toggle} />
         )}
 
-        {/* **Help, beside Feedback, for everybody.** Greg asked for more (i)
-            icons explaining the interface (SPIDERYARN-READING2-85); GPT Sol's
-            plan review turned that into this one labelled link rather than new
-            glyphs in the spine, which is 12px wide and clips, or in the band's
-            corner, which already holds its (i) — docs/plans/261002b-help-page.md
-            § After GPT Sol's plan review, R5.
-
-            **Here, at the app end of the row**, because Help is about the app
-            rather than about this article: outside the `TooltipGroup` above for
-            the reason the switch is, and just before Feedback because the two
-            are the conventional pair — *how does this work* and *this does not
-            work*. Unlike Feedback it has no gate: a visitor on a shared link is
-            the reader who knows least about what the buttons do, and `/help` is
-            a public page.
-
-            **Contextual**: it opens at the section for the mode the band is in,
-            or at the reading view in Plain and off the reading view —
-            `helpHrefFor`. A real link in the same tab, so Back returns to the
-            article with its address, mode and place intact, and ⌘-click opens
-            Help beside it.
-
-            `dock-help` is so the fit ladder can drop its word on the first rung,
-            with the wordmark's and Feedback's (styles/dock-fit.css § the bar's
-            fit ladder): the app-level words are the ones worth losing before
-            any mode's. On a phone the row already scrolls rather than clips
-            (docs/project/narrow-windows.md), so one more glyph pushes nothing
-            off-screen; it is one more thing to drag to. */}
-        <DockLink
-          href={helpLink}
-          current={false}
-          icon={LifeBuoy}
-          label="Help"
-          className="dock-help"
-          hover={
-            <ControlTip head="Help" what={NOT_A_MODE.help.what} how={NOT_A_MODE.help.how} />
-          }
-        />
+        {/* **Help, beside Feedback, on every bar** — again since 2026-10-07,
+            after three days on a visitor's only. The history and Greg's
+            words are on `DockHelp`. */}
+        <DockHelp href={helpLink} />
 
         {/* **Feedback, at the far end, and only for somebody a report can
             belong to.** It left the top-right corner on 2026-09-06 for the same
@@ -2365,7 +2574,7 @@ export function Dock({
             **After the switch**, because the two are the bar's app-level pair
             and this is the least urgent thing in the row — which is also why
             the fit ladder takes its word first (dock-fit.ts § the rungs). Help
-            has sat between them since 2026-10-02; see there.
+            sits between them (`DockHelp`).
 
             The one thing this makes worse, recorded rather than discovered
             later: on a phone the row already overflows and scrolls, and this
@@ -2387,7 +2596,7 @@ export function Dock({
             trailing padding out of its scrollable overflow, so the last button
             was free to sit in it — six pixels on a laptop, and `--safe-right`
             on a phone held landscape, which is the cutout the inset exists to
-            keep clear. styles.css § the floor, and dock-fit.ts. */}
+            keep clear. dock.css § `.dock` (horizontal overflow), and dock-fit.ts. */}
         <span className="dock-tail" aria-hidden="true" />
       </div>
     </>
@@ -2414,6 +2623,8 @@ const TITLES: Record<Panel, { own: string; visitor: string }> = {
  * **The buttons in this bar that are not modes**, and the two sentences
  * each of them says on hover. Three of them since Help joined on 2026-10-02 —
  * Comments, Metadata, Help — after a spell at two when Tweets became a mode.
+ * Help was a visitor's only from 2026-10-04 to 2026-10-07, and is on every bar
+ * again (`DockHelp`).
  *
  * The modes keep theirs in `MODE_CATALOG` because a `Record<Mode, …>`
  * makes the next mode a compile error until somebody writes them
@@ -2483,12 +2694,12 @@ const NOT_A_MODE = {
        revision, and `orderComments` keeps one whose block is gone entirely.
        So the sentence states the two halves and the outcome, and claims no
        mechanism between them. */
-    how: "Saving one costs nothing and asks the model nothing — the tick-box that brings the AI in saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
+    how: "Saving one costs nothing and asks the model nothing — the Ask AI button saves your words first, then opens a chat about the passage. Each stores the passage's permanent id as well as the exact words it quotes, and after the article is re-fetched the saved comment stays in the list even when those words are gone and the underline can no longer be drawn.",
   },
   metadata: {
     /* The chord in the Commands card's own format. The same card on both
        pages, so it says both directions (since 2026-10-03, plan 261003c). */
-    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article",
+    what: "Where this article came from, what shape it is, and what the pipeline wrote. ⌘Enter / Ctrl-Enter opens it; either, pressed again, goes back to the article, and so does Esc",
     /* **"Opening it spends nothing" — and the two wider claims that came
        before it were each false, a few hours apart.**
 
@@ -2512,7 +2723,8 @@ const NOT_A_MODE = {
   },
   help: {
     /* Not the button's own word back (the label is *Help*), and true on every
-       surface it is drawn on — owner, visitor, metadata page. */
+       surface it is drawn on — the reading view and the metadata page, an
+       owner's and a visitor's. */
     what: "How Spideryarn works: every mode, the map down the side, the gutter, sharing, and what costs what",
     /* The half nobody would guess: that it is not the top of a manual but the
        part about what is on screen, and that the sections are linkable. Said
@@ -2522,19 +2734,19 @@ const NOT_A_MODE = {
 } as const;
 
 /**
- * **Where the Help link opens**: the section for the mode the band is in, or
+ * **Where the Help link opens**: the page of Help for the mode the band is in, or
  * the reading view's when there is no band to explain.
  *
- * Plain has a section of its own (`mode-plain`), but in Plain the screen is the
+ * Plain has a page of its own (`mode-plain`), but in Plain the screen is the
  * reading view and nothing else, so that is what a reader pressing Help there
  * is asking about. Marginalia's column with no band is the same case — it is a
  * column beside the prose, not a mode the band is in — and it arrives here as
  * `plain`, because `mode` is the band (`BandMode` excludes it). Off the reading
  * view `mode` is undefined, and the page you are on is not a mode either.
  *
- * Through `helpHref`, never a hand-built `/help#…`: a mode retired or a section
- * renamed then turns this red at typecheck rather than into a link that opens
- * at the top (help-anchors.ts § Typed). Exported for the tests.
+ * Through `helpHref`, never a hand-built `/help/…`: a mode retired or a page
+ * renamed then turns this red at typecheck rather than into a link to a page
+ * that is not there (help-anchors.ts § Typed). Exported for the tests.
  */
 export function helpHrefFor(mode: BandMode | undefined): string {
   if (mode === undefined || mode === "plain") return helpHref("the-reading-view");
@@ -2547,8 +2759,11 @@ export function helpHrefFor(mode: BandMode | undefined): string {
  * `carriedSearch` has just stripped `?panel=` — deliberately, because a drawer
  * left open across a navigation is not a place you were. This puts one back
  * when the navigation is *for* the drawer, which is the one case where it is.
+ *
+ * Exported for the metadata page's *Comments* row, which links to the same
+ * drawer and had its own copy until 2026-10-04.
  */
-function withPanel(search: string, panel: Panel): string {
+export function withPanel(search: string, panel: Panel): string {
   return search ? `${search}&panel=${panel}` : `panel=${panel}`;
 }
 
@@ -2683,19 +2898,21 @@ export function withMargin(search: string, margin: boolean): string {
 const MARKED = "tw:opacity-55";
 
 function DockModes({
-  modes,
+  bar,
   mode,
   onActivate,
+  onOpen,
   marked,
   margin,
 }: {
   /**
-   * The rows to draw, already filtered — `visibleModes` above, which is where
-   * the two rules live. Handed in rather than read from `MODES_UI` here so that
-   * the segment and the loose links cannot disagree about what is in the bar,
-   * and so that `fitSignature` is measuring the same set that is drawn.
+   * The rows to draw and the rows under More, already filtered and split —
+   * `visibleModes` and `splitForMore` above, which is where the rules live.
+   * Handed in rather than read from `MODES_UI` here so that the buttons arm and
+   * the links arm cannot disagree about what is in the bar, and so that
+   * `fitSignature` is measuring the same set that is drawn.
    */
-  modes: readonly ModeUi[];
+  bar: DockBar;
   mode: BandMode;
   /**
    * **Opening a mode**, which since 2026-09-07 is one callback rather than the
@@ -2708,6 +2925,14 @@ function DockModes({
    * opening a mode, so it stays on the button below.
    */
   onActivate(next: Mode): void;
+  /**
+   * **Opening a mode by naming it** — a pick from the More menu. The command
+   * bar's own callback (`Dock` § `activateMode`), not `onActivate`: a menu item
+   * names a destination, so picking the mode you are in leaves you there
+   * rather than closing it. The bar button a gathered mode gets while it is
+   * open is what a second press closes.
+   */
+  onOpen(next: Mode): void;
   marked?: ReadonlyMap<Mode, string> | undefined;
   /** Whether Marginalia's column is on — `?margin=1`, the toggle's pressed state. */
   margin: boolean;
@@ -2722,7 +2947,7 @@ function DockModes({
    * deliberate. Two reasons, and the second is why it could not wait:
    *
    * **The arrows already mean something on this page.** ↑ / ↓ step through the
-   * article and ← / → choose the granularity stride (keyboard.md), and this
+   * article and ← / → can belong to the active mode (keynav.ts), and this
    * handler called `stopPropagation`, so while focus was anywhere in the bar
    * all four keys stopped doing their job. Greg, 2026-08-31:
    *
@@ -2738,15 +2963,15 @@ function DockModes({
    * A settle delay was drafted to race that; taking the arrows off removes it
    * instead, which is the smaller thing to have to be right about.
    *
-   * **The cost, which is real:** the segment goes from one tab stop to fourteen,
+   * **The cost, which is real:** the segment goes from one tab stop to one per visible mode,
    * so tabbing past the bar takes more presses. That is the price of every mode
    * staying reachable without arrows, and it is the right way round — a roving
-   * tabindex with no arrows would leave thirteen of the fourteen unreachable by
+   * tabindex with no arrows would leave all but the current mode unreachable by
    * keyboard, which is worse than what was fixed and invisible to a mouse.
    *
    * `role="radio"` and `aria-checked` stay: *exactly one of these is on* is
-   * still true, still what the hairline frame says (styles.css § the modes
-   * segment), and not what the arrow keys were for.
+   * still true, still what the hairline frame says (dock-fit.css § the mode
+   * switch), and not what the arrow keys were for.
    *
    * tests/arrows-belong-to-the-article.test.tsx holds all of it.
    */
@@ -2757,17 +2982,22 @@ function DockModes({
      `MarginToggle` and dock-fit.css.
      docs/plans/261001i-annotations-column-beside-a-band-mode.md.
 
-     **Plain, the bands and Marginalia are three frames**, since 2026-10-02 —
+     **Up to three non-empty frames: Plain, the bands and Marginalia**, since
+     2026-10-02 —
      Greg: *"move the Plain and Marginalia modes into their own icon-groups"*
      (spya-ba8kqp). Plain is still a radio in the same radiogroup (exactly one
-     of Plain and the bands is on), so the radiogroup holds two frames. The
-     lines between runs (`groupStarts`) are drawn inside the bands' frame
-     only: a frame's edge already separates the other two.
-     docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md. */
-  const radios = modes.filter((m) => m.mode !== "marginalia");
+     of Plain and the bands is on), so the radiogroup holds two frames.
+     Marginalia's third frame was absent with Experimental off and the notes
+     closed until 2026-10-05, when the mode left the switch. The lines between runs (`groupStarts`) are drawn inside the
+     bands' frame only: a frame's edge already separates the other two.
+     docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
+
+     **And a fourth since 2026-10-07: the More button's**, after the
+     radiogroup and before Marginalia's — `DockMore`. */
+  const radios = bar.drawn.filter((m) => m.mode !== "marginalia");
   const exits = radios.filter((m) => m.group === "exit");
   const bands = radios.filter((m) => m.group !== "exit");
-  const toggle = modes.find((m) => m.mode === "marginalia");
+  const toggle = bar.drawn.find((m) => m.mode === "marginalia");
   const starts = groupStarts(bands);
   const radio = (m: ModeUi) => (
     <Tooltip
@@ -2844,7 +3074,7 @@ function DockModes({
           if (e.detail > 0) e.currentTarget.blur();
         }}
       >
-        <m.icon size={15} />
+        <ModeIcon mode={m.mode} />
         {/* Classed so the stylesheet can drop it on a narrow window.
             Every one of these buttons already carries its label in the
             tooltip above and in its accessible name below, so hiding the
@@ -2858,7 +3088,7 @@ function DockModes({
   return (
     /* `--dock-mode-count`: on a coarse pointer the row grows by one share per
        button it holds (narrow-window.css), not a fixed eight. */
-    <div className="dock-modes" style={{ "--dock-mode-count": modes.length } as CSSProperties}>
+    <div className="dock-modes" style={{ "--dock-mode-count": drawnCount(bar) } as CSSProperties}>
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         <div
           className="dock-modes-radios"
@@ -2875,6 +3105,7 @@ function DockModes({
             {bands.map(radio)}
           </div>
         </div>
+        <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
         {toggle && (
           <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
             <MarginToggle
@@ -2933,7 +3164,7 @@ function MarginToggle({
           if (e.detail > 0) e.currentTarget.blur();
         }}
       >
-        <m.icon size={15} />
+        <ModeIcon mode={m.mode} />
         <span className={`dock-btn-label${m.keepLabel ? " always" : ""}`}>{MODE_LABEL[m.mode]}</span>
       </button>
     </Tooltip>
@@ -2942,8 +3173,9 @@ function MarginToggle({
 
 /**
  * **The same modes, off the reading view** — the metadata
- * page, where there is no band to switch, so the segment degrades to loose
- * links back to the article.
+ * page, where there is no band to switch, so each button of the segment is a
+ * link back to the article instead. Drawn in the segment's own frames since
+ * 2026-10-04 (see inside); loose links with no frame before that.
  *
  * A component of its own since 2026-09-07, and it is the arm this bar keeps
  * forgetting. It has now twice been the half left behind: `keepLabel` was not
@@ -2959,66 +3191,306 @@ function MarginToggle({
 function DockModeLinks({
   slug,
   search,
-  modes,
+  bar,
   marked,
 }: {
   slug: string;
   search: string;
-  /** Already filtered, by `visibleModes` — the same list the segment is given,
-   *  so the two arms cannot disagree about what is in the bar. */
-  modes: readonly ModeUi[];
+  /** Already filtered and split, by `visibleModes` and `splitForMore` — what
+   *  the segment is given, so the two arms cannot disagree about what is in
+   *  the bar. */
+  bar: DockBar;
   marked?: ReadonlyMap<Mode, string> | undefined;
 }) {
-  /* The same runs, and the same line between them, as the segment draws —
-     `groupStarts`. */
-  const starts = groupStarts(modes);
-  return (
-    /* **One group, so these scrub like the segment does.** Fourteen independent
-       300ms waits is what a row of tooltips feels like without it —
-       Tooltip.tsx § grouping. Only the modes are in it; the three buttons after
-       this block are not modes and have a group of their own, for the reason
-       given where it is opened (`Dock` § the three that are not modes). */
-    <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-      {modes.map((m) => (
-        <DockLink
-          key={m.mode}
-          href={modeLinkHref(slug, search, m.mode)}
-          current={false}
-          icon={m.icon}
-          label={MODE_LABEL[m.mode]}
-          /* `dock-mode` says *this is one of the modes* on a page where they are
-             one loose link per mode rather than one segment, so § the bar's fit
-             ladder can take their labels at the mode rung the way it takes the
-             segment's. Without it that rung does nothing on the metadata
-             page, and the bar there skips straight from every label to
-             none. GPT Sol, reviewing the design. */
-          className={`dock-mode${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
-          keepLabel={m.keepLabel}
-          /* **The same card the segment draws, plus where the press lands.** A
-             reader who learned what Quotes costs by hovering it on the reading
-             view should not meet a one-line OS box for it on the metadata page.
-             The trailing clause on `what` is the only difference in the *words*.
+  /* **The segment's non-empty frames, and its lines between runs** — the same
+     split `DockModes` makes (Plain; the bands; Marginalia), from the same
+     list. Until 2026-10-04 these were loose links with no frame, and Greg
+     asked why the bar looked different here (spya-qerga4). What differs is
+     what a press does, not what the row is, so the row is drawn the same and
+     dock-fit.css styles both arms with one set of `.dock-modes` selectors.
 
-             It is not the only difference in the behaviour, and that distinction
-             is why `how` is written the way it is: this link navigates and arms
-             nothing, where the segment's button calls `armActivationForMode`. So
-             a card saying *"opening it runs a model pass"* would be false here —
-             arriving at `?mode=glossary` from this link generates nothing
-             (activation.ts § arriving is not a press). Four of them said
-             that in first draft; the rule that replaced it is
-             src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
-             docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
-          hover={
+     **Links in plain `div`s: no radiogroup, no radio, nothing checked.** No
+     mode is open on this page, so nothing here may say it is the selected one.
+     docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md. */
+  const modes = bar.drawn;
+  const toggles = modes.filter((m) => m.mode === "marginalia");
+  const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
+  const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
+  const starts = groupStarts(bands);
+  const frame = (ms: readonly ModeUi[]) =>
+    ms.length > 0 && (
+      <div className="dock-frame" style={{ "--dock-frame-count": ms.length } as CSSProperties}>
+        {ms.map(link)}
+      </div>
+    );
+  function link(m: ModeUi) {
+    return (
+      <DockLink
+        key={m.mode}
+        href={modeLinkHref(slug, search, m.mode)}
+        current={false}
+        icon={MODE_ICON[m.mode]}
+        label={MODE_LABEL[m.mode]}
+        className={`${marked?.has(m.mode) ? MARKED : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
+        keepLabel={m.keepLabel}
+        /* **The same card the segment draws, plus where the press lands.** A
+           reader who learned what Quotes costs by hovering it on the reading
+           view should not meet a one-line OS box for it on the metadata page.
+           The trailing clause on `what` is the only difference in the *words*.
+
+           It is not the only difference in the behaviour, and that distinction
+           is why `how` is written the way it is: this link navigates and arms
+           nothing, where the segment's button calls `armActivationForMode`. So
+           a card saying *"opening it runs a model pass"* would be false here —
+           arriving at `?mode=glossary` from this link generates nothing
+           (activation.ts § arriving is not a press). Four of them said
+           that in first draft; the rule that replaced it is
+           src/mode-catalog.ts § `how`, first bullet. GPT Sol, 2026-09-07.
+           docs/plans/260907b-rich-tooltips-on-the-dock-modes.md. */
+        hover={
+          <ControlTip
+            head={MODE_LABEL[m.mode]}
+            state={marked?.get(m.mode)}
+            what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
+            how={MODE_CATALOG[m.mode].how}
+          />
+        }
+      />
+    );
+  }
+  return (
+    <div className="dock-modes" style={{ "--dock-mode-count": drawnCount(bar) } as CSSProperties}>
+      {/* **One group, so these scrub like the segment does.** Fourteen
+          independent 300ms waits is what a row of tooltips feels like without
+          it — Tooltip.tsx § grouping. Only the modes are in it; the three
+          buttons after this block are not modes and have a group of their own,
+          for the reason given where it is opened (`Dock` § the three that are
+          not modes). */}
+      <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
+        {frame(exits)}
+        {frame(bands)}
+        {/* The same place as on the reading view: after the bands, before
+            Marginalia. Its items are these same links (`modeLinkHref`). */}
+        <DockMore
+          menu={bar.menu}
+          marked={marked}
+          pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
+        />
+        {frame(toggles)}
+      </TooltipGroup>
+    </div>
+  );
+}
+
+/** The More button's word, and its accessible name on the rungs that drop the word. */
+const MORE_LABEL = "More";
+
+/**
+ * **An open More menu, as a selector** — Radix writes `data-state` on the
+ * trigger. The drawer's Escape handler asks this (`Dock`), and
+ * narrow-window.css § the guard spells the same selector to hold the bar home
+ * on a phone, because the menu is portalled out of `.dock` and takes focus
+ * with it. tests/the-dock-hides-in-a-mode-beside-the-article.test.ts holds the
+ * stylesheet's copy to this one.
+ */
+export const MORE_OPEN = '.dock-more-trigger[data-state="open"]';
+
+/**
+ * **What picking an item under More does**, which differs by arm exactly as a
+ * bar button does: on the reading view it opens the mode; off it, where there
+ * is no band, it is the mode's link. A union rather than two optional props,
+ * so an item cannot be given both or neither.
+ */
+type MorePick =
+  | {
+      kind: "open";
+      open(mode: Mode): void;
+      /** The mode the band is in, so the menu can mark it. */
+      current: BandMode;
+    }
+  | { kind: "link"; href(mode: Mode): string };
+
+/**
+ * **The More button: the modes a reader needs less often, behind one button.**
+ * Greg, 2026-10-06 (spya-dest8x), the whole of it on `ModeUi.more`:
+ *
+ * > And if you click on them, it sort of expands upwards to let them choose
+ * > from those. And that way, it would indicate somehow that they aren't as
+ * > important as the other modes like summary, structure, chat, learn, search,
+ * > marginalia.
+ *
+ * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
+ *
+ * **Not a radio, and outside the radiogroup** (D6): a frame of its own between
+ * `.dock-modes-radios` and Marginalia's, which is outside the group for the
+ * same reason. A menu button announced as one of *what the middle column
+ * shows* would be a lie. So it stands after Learn rather than where the five
+ * were; the cost is named in the plan.
+ *
+ * **Never `.on`.** The open gathered mode is drawn in the bar as its own
+ * checked radio (`splitForMore`), so this button never has to mean two things.
+ *
+ * **Radix `DropdownMenu`, portalled, `side="top"`** — sharing the shelf "⋯" menu's
+ * look and finger handling (ShelfEntry.tsx § `ShelfActionsMenu`) through
+ * menu.ts. Portalled because `.dock`
+ * clips (`overflow-y: hidden`) and has a `transform`. Being outside `.dock`
+ * is what three other things had to be told about:
+ *
+ * - the drawer's capture-phase Escape yields to it (`Dock`, `MORE_OPEN`);
+ * - the tooltip card is shut while it is open, or both would stand over the
+ *   same button — hovering does not end when the menu opens;
+ * - a phone's hide-on-scroll rule holds the bar home under it
+ *   (narrow-window.css § the guard).
+ *
+ * **A `.dock-btn` with a `.dock-btn-label`**, so every rung of the fit ladder
+ * and the coarse pointer's 44px floor treat it as they treat its neighbours
+ * with no rule of its own (dock-fit.css, narrow-window.css).
+ *
+ * Draws nothing when there is nothing gathered to list.
+ */
+function DockMore({
+  menu,
+  marked,
+  pick,
+}: {
+  menu: readonly ModeUi[];
+  marked?: ReadonlyMap<Mode, string> | undefined;
+  pick: MorePick;
+}) {
+  const [open, setOpen] = useState(false);
+  /* A finger that lands here at the start of a sideways scroll of the bar must
+     not open the menu — menu.ts § `useFingerPressMenu`. */
+  const finger = useFingerPressMenu(open, setOpen);
+  /**
+   * **Was the pick a real click?** Set by the item, read once as the menu
+   * closes. Radix hands focus back to the trigger when a menu shuts, which is
+   * right for a keyboard and for Escape — and wrong after a mouse pick, for
+   * the reason every mode button here blurs itself after a click (`DockModes`
+   * § the blur on click, Greg 2026-08-26): the reader has just opened a mode,
+   * the arrows they press next are meant for the article, and a focused More
+   * button would take ↓ and open its menu again. `detail` is 0 for a click
+   * synthesised from Enter or Space.
+   */
+  const pickedByPointer = useRef(false);
+  if (menu.length === 0) return null;
+  const names = menu.map((m) => MODE_LABEL[m.mode]).join(", ");
+  return (
+    <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
+      {/* **`modal={false}`**, where the shelf's menu takes Radix's default.
+          This bar stays operable over its own drawer (`Dock` § there is
+          deliberately no trap), and a modal menu would be the one thing in it
+          that is not: it blocks every press outside itself, so a reader who
+          opens More and then wants Chat presses twice. It also locks the
+          page's scroll, which pads `body` by the scrollbar's width and moves
+          whatever is pinned to the right-hand edge — this bar's own end
+          (postmortem 261002a). Focus still moves into the list and back,
+          Escape and a press outside still close it. */}
+      <DropdownMenu.Root open={open} onOpenChange={setOpen} modal={false}>
+        <Tooltip
+          placement="top"
+          className="tip-soon"
+          /* Shut while the menu is open (GPT Sol, PR-3). `enabled`, not a
+             conditional wrapper, which would remount the trigger and drop a
+             keyboard reader's focus (Tooltip.tsx § `enabled`). */
+          enabled={!open}
+          content={
             <ControlTip
-              head={MODE_LABEL[m.mode]}
-              state={marked?.get(m.mode)}
-              what={`${MODE_CATALOG[m.mode].description} — back in the article itself`}
-              how={MODE_CATALOG[m.mode].how}
+              head={MORE_LABEL}
+              what={`The modes you will reach for less often: ${names}.`}
+              how="Opens a list. Nothing is generated until you choose one."
             />
           }
-        />
-      ))}
-    </TooltipGroup>
+        >
+          <DropdownMenu.Trigger asChild {...finger}>
+            <button
+              type="button"
+              className="dock-btn dock-more-trigger"
+              /* Explicit, for the reason every button here gives: the fit
+                 ladder hides the word. Radix names the menu from it too. */
+              aria-label={MORE_LABEL}
+            >
+              <Ellipsis size={15} />
+              <span className="dock-btn-label">{MORE_LABEL}</span>
+            </button>
+          </DropdownMenu.Trigger>
+        </Tooltip>
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            side="top"
+            align="center"
+            sideOffset={6}
+            collisionPadding={10}
+            onCloseAutoFocus={(e) => {
+              if (!pickedByPointer.current) return;
+              pickedByPointer.current = false;
+              e.preventDefault();
+            }}
+            /* Five items with descriptions — and, for some visitors, a state
+               sentence too — can be taller than a phone in landscape. Radix
+               publishes the collision-aware room; use it as a ceiling and
+               scroll the list so no mode leaves the viewport. */
+            className={`dock-more-menu ${MENU_SURFACE} tw:max-h-[var(--radix-dropdown-menu-content-available-height)] tw:min-w-[13rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:overflow-y-auto`}
+          >
+            {menu.map((m) => {
+              const Icon = MODE_ICON[m.mode];
+              const sentence = marked?.get(m.mode);
+              const isCurrent = pick.kind === "open" && pick.current === m.mode;
+              const inside = (
+                <>
+                  <Icon size={16} aria-hidden="true" className="tw:shrink-0" />
+                  <span className="tw:flex tw:min-w-0 tw:flex-1 tw:flex-col">
+                    <span>{MODE_LABEL[m.mode]}</span>
+                    {/* **A visitor's sentence, in the item itself**, and first,
+                        as on a bar button's card: it is the one line
+                        explaining why the item is dimmed (visitor.ts §
+                        `markedModes`). */}
+                    {sentence && <span className="tw:text-xs tw:text-muted-foreground">{sentence}</span>}
+                    {/* **What the mode is, in the item**, because an item has
+                        no hover card and these five lost theirs by moving
+                        here: the catalog's `description`, the card's first
+                        paragraph and the line the command bar draws beside the
+                        same name. The card's second paragraph (`how`) is on
+                        the mode's own bar button once it is open. */}
+                    <span className="tw:text-xs tw:text-muted-foreground">{MODE_CATALOG[m.mode].description}</span>
+                  </span>
+                  {isCurrent && <Check size={14} aria-hidden="true" className="tw:shrink-0 tw:text-highlight-text" />}
+                </>
+              );
+              /* `MARKED`'s dimming, and not `disabled`, for the reason `MARKED`
+                 gives: the item still opens the band that explains itself. */
+              const className = `dock-more-item ${MENU_ITEM}${sentence ? ` ${MARKED}` : ""}`;
+              return pick.kind === "link" ? (
+                /* A real anchor, through `asChild`, so ⌘-click and "copy link
+                   address" survive — the shelf menu's reason. The same href
+                   the bar's own link for this mode has. */
+                /* No `pickedByPointer` here: the pick leaves the page. */
+                <DropdownMenu.Item key={m.mode} className={className} data-mode-label={MODE_LABEL[m.mode]} asChild>
+                  <Link href={pick.href(m.mode)}>{inside}</Link>
+                </DropdownMenu.Item>
+              ) : (
+                <DropdownMenu.Item
+                  key={m.mode}
+                  className={className}
+                  data-mode-label={MODE_LABEL[m.mode]}
+                  /* The mode the band is in, marked for a screen reader as
+                     the tick marks it for the eye. The menu lists it rather
+                     than dropping it so its contents do not shuffle (D3). */
+                  aria-current={isCurrent ? "true" : undefined}
+                  /* Runs before Radix's own click handler, which is what
+                     selects — so the flag is set by the time the menu closes. */
+                  onClick={(e) => {
+                    pickedByPointer.current = e.detail > 0;
+                  }}
+                  onSelect={() => pick.open(m.mode)}
+                >
+                  {inside}
+                </DropdownMenu.Item>
+              );
+            })}
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
+    </div>
   );
 }
 
@@ -3380,7 +3852,7 @@ function DockCommandBar({
   modes,
   activateMode,
   activateSubMode,
-  experimentalOn,
+  experimental,
   diagram,
   article,
   openComments,
@@ -3391,7 +3863,7 @@ function DockCommandBar({
   modes: readonly ModeUi[];
   activateMode(next: Mode): void;
   activateSubMode(sub: SubMode): void;
-  experimentalOn: boolean;
+  experimental: CommandBarExperimental;
   diagram: DiagramKind;
   /**
    * **Which article the bar's Metadata row (and, until 2026-09-29, Tweets row) is about**, since
@@ -3414,13 +3886,74 @@ function DockCommandBar({
       modes={modes.map((m) => m.mode)}
       activateMode={activateMode}
       activateSubMode={activateSubMode}
-      experimentalOn={experimentalOn}
+      experimental={experimental}
       diagram={diagram}
       article={article}
       openComments={openComments}
       open={bar.open}
       onOpen={bar.show}
       onClose={bar.hide}
+    />
+  );
+}
+
+/**
+ * **Help, in every bar: the owner's and a visitor's, on the reading view and
+ * on the Metadata page.**
+ *
+ * It was on every bar from 2026-10-02: Greg asked for more (i) icons
+ * explaining the interface (SPIDERYARN-READING2-85), and GPT Sol's plan review
+ * turned that into one labelled link here rather than new glyphs in the spine
+ * (docs/plans/261002b-help-page.md § After GPT Sol's plan review, R5). Then
+ * Greg, 2026-10-04 (spya-dev7pf):
+ *
+ * > We don't need to show the help icon in the bottom bar of reading view. …
+ * > I'm trying to avoid cluttering that bottom bar, but of course we also want
+ * > to make sure that if people need help, they can get to it.
+ *
+ * So from 2026-10-04 it was drawn on a visitor's bar only: gone wherever the
+ * command bar is, whose Help row opens the same page (`helpRow` in
+ * CommandBar.tsx), and kept for a visitor, who has no command bar
+ * (`DockCommands`, `DockCommandBar`) —
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
+ * Then Greg, 2026-10-06 (spya-ucftjt):
+ *
+ * > I think in a previous message I suggested that you hide the help icon from
+ * > the bottom bar. I'm second guessing that. Maybe it does make sense to keep
+ * > it down there towards the bottom right.
+ *
+ * So it is back on every bar from 2026-10-07, with no gate —
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
+ * The command bar's Help row stays, and so does *More in Help →* at the end
+ * of a mode's (i) (BandAbout.tsx); for a visitor in Plain, on the Metadata
+ * page, in a mode that is not shared (`VisitorBand`) or in a band that failed,
+ * this link is still the only way to Help from the page.
+ *
+ * **At the app end of the row**, just before Feedback, because Help is about
+ * the app rather than about this article, and the two are the conventional
+ * pair — *how does this work* and *this does not work*.
+ *
+ * **Contextual**: `href` is `helpHrefFor`'s, the page of Help for the mode the band
+ * is in, or the reading view's in Plain and off the reading view. A real link
+ * in the same tab, so Back returns to the article with its address, mode and
+ * place intact, and ⌘-click opens Help beside it.
+ *
+ * `dock-help` is so the fit ladder can drop its word on the first rung, with
+ * the wordmark's and Feedback's (styles/dock-fit.css § the bar's fit ladder).
+ *
+ * A component of its own rather than more JSX in `Dock`, which is at Biome's
+ * cognitive-complexity ceiling; it also keeps this history out of that
+ * function.
+ */
+function DockHelp({ href }: { href: string }) {
+  return (
+    <DockLink
+      href={href}
+      current={false}
+      icon={LifeBuoy}
+      label="Help"
+      className="dock-help"
+      hover={<ControlTip head="Help" what={NOT_A_MODE.help.what} how={NOT_A_MODE.help.how} />}
     />
   );
 }
@@ -3474,14 +4007,14 @@ function DockLink({
    */
   hover: ReactNode;
   /** Extra classes — `MARKED` for a mode a visitor cannot have, and
-   *  `dock-mode` for the loose mode links off the reading view. */
+   *  `dock-group-start` on a mode link that begins a run. */
   className?: string | undefined;
   /**
    * Keep this label on every rung of § the bar's fit ladder — `keepLabel` in
    * `MODES_UI`, which is Plain, the way out.
    *
-   * It only reaches here off the reading view, where the modes are
-   * loose links rather than a segment. Passing it was missed until GPT Sol
+   * It only reaches here off the reading view, where the framed controls are
+   * links rather than buttons. Passing it was missed until GPT Sol
    * found it: the word survived every narrow window on the reading view and
    * vanished on the metadata page, which is the page you are *most* likely to
    * be looking for the way back from.
@@ -3745,7 +4278,7 @@ function DockTab({
  * `aria-disabled` and a guarded handler rather than the `disabled` attribute. A
  * `disabled` button fires no pointer events in Chrome and takes no focus, so
  * the tooltip explaining *why it will not move* would be unreachable in exactly
- * the states that need explaining. styles.css § `.dock-btn.soon` was written
+ * the states that need explaining. dock.css § `.dock-btn.soon` was written
  * for this argument and this is its first user.
  *
  * Greg asked for it mid-run, 2026-09-03: *"show a button at the end of the bar
@@ -3790,8 +4323,7 @@ function DockExperimentalSwitch({
         /* `dock-experimental` styles nothing. It is how a test and a browser
            pass find this one button among eighteen that are all `dock-btn` —
            the alternative is matching on the label, which is copy and is allowed
-           to change. `dock-mode` next door is the same idea doing real work for
-           the fit ladder.
+           to change.
 
            **Never `.on`.** That is the bar's *selected* look — wash, top rule,
            orange ink — and this button is a toggle, not a place you are; the
@@ -3840,7 +4372,7 @@ function DockExperimentalSwitch({
              the offline cache — asking again is the useful act; with one, the
              useful act is moving it. */
           if (press === "retry") setting.reload();
-          else setting.set(!setting.on);
+          else void setting.set(!setting.on);
         }}
       >
         {/* **The state, for a screen reader, in the one place that does not
@@ -3959,18 +4491,8 @@ const SWITCH_STATE: Record<ExperimentalVariant, (on: boolean) => string> = {
  * so the sentence sits exactly where the one it stands in for would.
  */
 function QuestionsLoading() {
-  const slow = useSlow(true);
-  /* `role="status"` for the same reason the chat panel's has one: the sentence
-     arrives 600ms late and would otherwise be announced to nobody. */
-  return (
-    <p className="dock-empty dock-loading" role="status">
-      {slow && (
-        <>
-          <LoaderCircle className="cmt-spinner" size={13} /> Fetching your comments…
-        </>
-      )}
-    </p>
-  );
+  /* The shared wait line: BandWaiting.tsx. */
+  return <BandWaiting className="dock-empty dock-loading">Fetching your comments…</BandWaiting>;
 }
 
 /**
@@ -4072,7 +4594,7 @@ function Questions({
   if (entries.length === 0) {
     /* **Two sentences, because the second half of the owner's is an
        instruction a visitor cannot follow.** *"Select a sentence in the article
-       to bookmark it"* is the right thing to say to somebody who can, and a
+       to highlight it"* is the right thing to say to somebody who can, and a
        dead end for somebody who cannot — the shape
        docs/project/copy.md keeps warning about, where the true half of a
        sentence carries a false half along with it. A visitor is told what the
@@ -4081,7 +4603,7 @@ function Questions({
       <p className="dock-empty">
         {access.kind === "owner" ? (
           <>
-            Nothing marked yet. Select a sentence in the article to bookmark it, and add a
+            Nothing marked yet. Select a sentence in the article to highlight it, and add a
             comment if you want one.
           </>
         ) : (

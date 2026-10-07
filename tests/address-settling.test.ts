@@ -68,7 +68,7 @@ import { parseRoute, settleAddress } from "../src/web/router.js";
 
 const SLUG = "a-shared-piece";
 const TITLE = "A shared piece";
-const HEAD: PublicHead = { slug: SLUG, title: TITLE, gist: null, canonical: null };
+const HEAD: PublicHead = { slug: SLUG, title: TITLE, gist: null, canonical: null, authors: [], image: null };
 
 /* A shell with the sentinels, so `composeShell` is exercised rather than a
    stand-in for it — the title asserted below is the one that reaches the
@@ -118,7 +118,7 @@ async function serverTitle(pathname: string, search: string): Promise<string | n
     res,
     slug: SLUG,
     shell: { html: SHELL, sha256: "a".repeat(64) },
-    read: async () => HEAD,
+    read: async () => ({ sharedBy: "public", head: HEAD }),
   });
 
   const title = /<title>([\s\S]*?)<\/title>/.exec(body)?.[1] ?? null;

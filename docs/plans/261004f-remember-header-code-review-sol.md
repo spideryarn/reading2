@@ -1,0 +1,19 @@
+1. **P1 — [ProfilePanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/ProfilePanel.tsx:266):** Closing the panel returned focus to its trigger, which immediately reopened the tooltip without a new user action. Added one-event focus suppression that clears after Floating UI restores focus. Later keyboard focus and hover still work. Panel click/dismiss handlers, refs, and ARIA props are correctly composed; `aria-describedby` does not dangle, and touch opens only the panel.
+
+2. **P2 — [WrittenForYou.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/WrittenForYou.tsx:135):** The card falsely said both profile fields were used and presented prompt instructions as guaranteed behavior. It now says either field—or both—may have been used, and that the AI is instructed not to alter the article.
+
+3. **P2 — [QuizPanel.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/QuizPanel.tsx:236), [mode-catalog.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/mode-catalog.ts:349):** Recall promised that replies point back to passages, although this is requested but not enforced. “Nothing runs” was also literally false because entering Remember creates its empty thread. Both claims now describe the actual AI behavior and instructions precisely. A stale Quiz `(i)` comment describing the old catalog paragraph was corrected.
+
+4. **P2 — [help-topics.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/help/help-topics.tsx:731), [help-faq.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/help/help-faq.tsx:99), [ProfilePage.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/ProfilePage.tsx:317):** Help promised every mode could replace its result. Corrected for Quotes, whose action appends, and replaced obsolete visible-label wording with the person-and-pencil icon.
+
+5. **P2 — [remember-header-cards.test.tsx](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/tests/learn-header-cards.test.tsx:153):** The tests missed the focus-return regression and did not prove touch behavior, ARIA ownership, direct-child layout, click arming, keyboard cards, or wiring across Recall/Tutorial/Explore. Added coverage for each; the focus-return test failed before the fix.
+
+6. **P2 — [profile.css](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/styles/profile.css:431), [reader-profile.md](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/docs/project/reader-profile.md:323):** Removed dead word-pill styling and swept current code/docs/tests from “written for you” badge terminology to profile icon. Remaining matches are historical quotations. Remaining `compact` matches are unrelated or historical.
+
+7. **P2, wider than this stage — [useQuiz.ts](/home/greg/code/spideryarn2/.claude/worktrees/fbpmjy40-remember-header-tooltips/src/web/useQuiz.ts:278):** `every-mode-draws-its-surface` passes while repeatedly logging an undefined `profileHash` exception. This appears to be a wider fixture/error-reporting problem, so I left it unchanged.
+
+Remember’s extra `(i)` is correctly limited to its three owner conversation bands; Quiz retains its own card, Chat retains its own, and visitors receive the owner-only `VisitorBand`, not a Remember conversation band. Tooltip providers add no layout DOM around the chips.
+
+Checks: 13 targeted files, 319 tests passed; final wording rerun, 18/18 passed; equivalent typecheck passed all 2,977 source files. `npm run typecheck` itself could not start because the sandbox rejected `tsx`’s IPC socket, so I ran the same script through Node’s `tsx` loader. No commit made.
+
+VERDICT: approve with fixes applied

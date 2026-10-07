@@ -70,8 +70,11 @@ import {
 } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { AboutMade } from "./BandAbout.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **How few events before this stops calling itself a timeline.**
@@ -211,6 +214,17 @@ export function datingWords(
     case "untimed":
       return { text: NO_DATE, tone: "none" };
     case "rejected":
+      /* **Only the year is missing, so the article's words are still the
+         date** — "On July 7" tells the reader the day, where "dated — but
+         which year?" hid it. Greg, 2026-10-04 (spya-fyjac4): *"sometimes it
+         even says in the … description that there's a date, but it's somehow
+         not showing the dates above."* Quoted and in the article's tone, like
+         `words`, because we have computed nothing; the head of the list and
+         the open row say that the year is what is missing. The other two
+         rejections name a date we refused to use, so theirs stay out. */
+      if (dating.reason === "noYearFrame" && dating.phrase !== null) {
+        return { text: `“${dating.phrase}”`, tone: "words" };
+      }
       return { text: DATE_REJECTED_SHORT[dating.reason], tone: "rejected" };
   }
 }
@@ -237,6 +251,29 @@ export function yearsOf(events: TimelineEvent[]): Set<string> {
     }
   }
   return years;
+}
+
+/**
+ * **What the head of the list has to say about years**, as three facts.
+ *
+ * `fromPublished` and `fromPiece` are the two places a year we supplied can
+ * come from (`When.yearFrom`, src/types.ts); `yearless` is a row that shows the
+ * article's day and month with no year, because we had nowhere to take one
+ * from. Each gets its own sentence, said once above the list.
+ */
+export function yearNotes(events: TimelineEvent[]): {
+  fromPublished: boolean;
+  fromPiece: boolean;
+  yearless: boolean;
+} {
+  const filled = events.flatMap((e) =>
+    e.dating.kind === "dated" && e.dating.when.yearFilled ? [e.dating.when] : [],
+  );
+  return {
+    fromPublished: filled.some((w) => w.yearFrom === undefined),
+    fromPiece: filled.some((w) => w.yearFrom === "piece"),
+    yearless: events.some((e) => e.dating.kind === "rejected" && e.dating.reason === "noYearFrame"),
+  };
 }
 
 /**
@@ -340,8 +377,10 @@ export function TimelinePanel({
   const years = yearsOf(events);
   /* One year across the whole list, so the rows drop it and the head says it
      once. See `yearsOf`. */
-  const withYear = years.size !== 1;
-  const filled = events.some((e) => e.dating.kind === "dated" && e.dating.when.yearFilled);
+  const { fromPublished, fromPiece, yearless } = yearNotes(events);
+  /* A row with no year beside a row whose year we dropped would read as two
+     rows with no year, so the dropping stops when any row is year-less. */
+  const withYear = years.size !== 1 || yearless;
 
   /**
    * @param again beside a timeline that is already there, so the run is forced.
@@ -349,14 +388,22 @@ export function TimelinePanel({
    *   request the automatic run makes, or the two carry different `work_key`s
    *   and the reader pays twice. useTimeline.ts § `ensure`.
    */
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — IdeasPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new timeline hasn't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="timeline"
@@ -406,6 +453,7 @@ export function TimelinePanel({
           rather than lying over whichever of the band's many first rows
           (loading, empty, stale, the year line) is drawn. Dropping it would
           mean padding each of those clear of the (i) instead. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={<></>}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
@@ -424,15 +472,15 @@ export function TimelinePanel({
         timeline &&
         owner?.status === "ready" &&
         !owner.stale &&
-        (owner.job || owner.starting || owner.failed) ? (
+        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="tl-again">{run("Read it again", true)}</div>
         ) : null
       }
     >
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the timeline…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the timeline…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
@@ -489,10 +537,15 @@ export function TimelinePanel({
               is the honest provenance for a piece like the test article, where
               the year appears exactly once in twenty-four expressions and every
               other row's year is ours. */}
-          {events.length > 0 && (years.size === 1 || filled) && (
+          {events.length > 0 && (!withYear || fromPublished || fromPiece || yearless) && (
             <p className="tl-frame">
-              {years.size === 1 && `Everything dated here is in ${[...years][0]}. `}
-              {filled && "Where the piece gives no year, it comes from when the piece was published."}
+              {!withYear && `Everything dated here is in ${[...years][0]}. `}
+              {fromPublished && "Some dates use a year taken from when the piece was published. "}
+              {/* An assumption, said as one. src/timeline-time.ts § `pieceYear`. */}
+              {fromPiece &&
+                "Some dates use an assumed year: the only year the piece states beside a month. "}
+              {yearless &&
+                "Some dates here have no year. We have kept the piece’s own words where we could find them."}
             </p>
           )}
 
@@ -653,8 +706,9 @@ function EventDetail({
                 the date column cannot carry: the year is not the article's. */}
             {dating.when.yearFilled && (
               <p className="gloss-part-hint">
-                The article does not write the year here. It comes from when the piece was
-                published.
+                {dating.when.yearFrom === "piece"
+                  ? "Where this date gives no year, we have assumed the only year the piece states beside a month."
+                  : "Where this date gives no year, we take it from when the piece was published."}
               </p>
             )}
           </>

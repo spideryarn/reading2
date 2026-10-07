@@ -38,6 +38,7 @@ listed here; the names under each are files in `docs/project/`.
   `ingest-queue.md` (paste a URL, get an article) ·
   `ai-gateway.md` (every paid call goes through OpenRouter, bar one declared exception) ·
   `cost-tracking.md` (what a call cost, and how new AI work gets tracked for free) ·
+  `admin-costs.md` (`/admin/costs`, and the cost analysis an agent runs when Greg asks) ·
   `email.md` (Resend, for auth mail and anything after it) ·
   `prompt-caching.md` ·
   `prompting-guide.md` (the plain-words rule every prompt shares, and how to measure a prompt change) ·
@@ -70,15 +71,19 @@ listed here; the names under each are files in `docs/project/`.
   `tweets.md` (the piece as a thread; the one mode that writes on arrival) ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·
+  `chat-from-a-mode.md` (an "Ask in chat" button in a mode: which modes have one, and every place
+  a new one has to be told to) ·
   `live-conversation.md` (talking to the article out loud) ·
-  `remember-mode.md` (say what you took from it, and find out) ·
+  `learn-mode.md` (Learn mode: say what you took from it, and find out) ·
   `quiz.md` (the other half: the article asks, you answer) ·
-  `remembering-vision.md` (where Remember is going, and what its sub-modes share) ·
+  `learning-vision.md` (where Learn is going, and what its sub-modes share) ·
   `links.md` (hover cards on the article's own hyperlinks) ·
   `cross-references.md` (the article linked to itself, claim to the passage behind it) ·
   `tooltips.md` · `keyboard.md` ·
-  `touch.md` · `url-state.md` · `library.md` (the shelf) ·
-  `shelf-terms.md` (the topics above it, picked without a model) ·
+  `touch.md` ·
+  `phone-and-touch.md` (the map for a phone, an iPad and a finger: what Greg asked for, and where
+  the code branches) · `url-state.md` · `library.md` (the shelf) ·
+  `shelf-terms.md` (the topics above it: a model names them, a program stands in when it has not) ·
   `public-shelf.md` (the other one: `/read/public`, for strangers) ·
   `public-readable-sharing.md` (what we tell the author of a republished article) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
@@ -119,13 +124,15 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
+  `fleet-and-overseer-overview.md` (the hub for the fleet dashboard and the Overseer: which of their
+  docs to open for what, and where the code is) ·
   `overseer-direction.md` (where the Overseer and its fleet dashboard are going, and what talking to
   a session actually costs) ·
   `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·
   `overseer-queue.md` (the deferred work the Overseer may pick up in a lull, and what each waits on) ·
   `work-reports.md` (an agent's progress, blocks, decisions and completion, recorded as claims) ·
-  `fleet-dashboard-modes.md` (adding a tab to the dashboard: six places in three files, two of them
-  checked by nothing) ·
+  `fleet-dashboard-modes.md` (adding a tab to the dashboard: five places in three files, each checked
+  by the compiler) ·
   `fleet-recent-messages.md` (every agent's messages in one feed, and what makes "the last N" a
   claim it has to earn) ·
   `usage-per-account.md` (one section per Claude and Codex account-subscription: which login still
@@ -138,13 +145,15 @@ listed here; the names under each are files in `docs/project/`.
   `worktrees.md` (one tree per agent, and how to start one) ·
   `cron-scheduler.md` (there is no scheduler, and what that keeps costing us)
 
-Three are worth reading before you touch the area they cover, because a mistake there is silent:
+Four are worth reading before you touch the area they cover, because a mistake there is silent:
 **[block-ids.md](docs/project/block-ids.md)** before anything that resolves an id — the contract
 everything else depends on, see below; **[security-map.md](docs/project/security-map.md)** before
 anything that renders a stranger's article, takes a path from the URL, or acts on a model's output
-— the untrusted parties are not the ones you would guess; and
+— the untrusted parties are not the ones you would guess;
 **[mode.md](docs/project/mode.md)** before adding or changing a mode — the shapes a mode can
-take, and the other places that have to hear about it.
+take, and the other places that have to hear about it; and
+**[fleet-and-overseer-overview.md](docs/project/fleet-and-overseer-overview.md)** before anything
+under `tools/fleet/` or `tools/overseer/` — it says which of ten docs to open.
 
 Docs are cross-linked, so a doc often appears under an entry point other than the one that owns it.
 That's fine. Every doc has exactly one owner, and `tests/doc-links.test.ts` enforces it.
@@ -215,9 +224,9 @@ Four things are ours:
   new doc's line under its entry point, or a pointer's wording, needs no approval. Greg, 2026-09-02.
 - **Record decisions where they belong.** When something in
   [open-questions.md](docs/project/open-questions.md) gets decided, write it into the doc that owns
-  it and delete the question. That file should shrink. The same goes for anything you learn: your own
-  auto-memory is for preferences and machine-local state, not for knowledge Greg and the other agents
-  need.
+  it and delete the question. That file should shrink. The same goes for anything you learn, and for
+  any preference or permission Greg gives you: write it into the doc that owns it, in Git, not into
+  your own auto-memory, which lives on one machine and is lost with it. (Greg, 2026-10-05.)
 - **Keep this file short.** Detail goes in the doc; this file gets a line.
 
 ## Working agreements for agents
@@ -246,6 +255,14 @@ diagram where shape matters, an example of what each would look like in use, wha
 it gives up; then what would make you pick one over the other. A bare "A, B or C?" with a one-line
 label each is the shape he cannot answer, and it will come back to you to be rewritten. How many to
 ask at once, which ones, and in what order: [ask-me-questions.md](docs/reusable/ask-me-questions.md).
+
+**When the right thing to do is obvious and unambiguous, do it; don't ask.** Fix a bug you are
+confident about, correct a stale or wrong comment or doc, make a change with no real trade-off —
+added complexity counts as a trade-off — and say in your report what you did. Ask Greg only when
+there is a genuine choice: a product trade-off, added complexity, anything destructive to production
+data, or the wording of a rule doc. Greg, 2026-10-04 and 2026-10-06: *"if you see bugs, fix them
+without asking me"*, *"always correct stale/incorrect comments"*, *"I don't want you to ask me when
+there's an obviously/unambiguously right thing to do"*.
 
 **Real data belongs to the reader, not to us.** There is one production database and no staging copy
 of it, and what is in it is real people's articles, comments, notes and profiles. Reading it is fine.
@@ -286,7 +303,9 @@ nothing else has a copy of.
   red for reasons that are not yours, the database is not how you left it. Absorb it, do your best,
   and carry on — don't try to fence yourself off. If you are in the primary, accept that other
   agents may be editing there too, and that committing some of their changes along with yours is not
-  the end of the world.
+  the end of the world. A push may go ahead over a full-suite red in files that are not yours, once
+  you have shown your files are disjoint from the failing ones and your own tests pass
+  ([worktrees.md § The workflow](docs/project/worktrees.md#the-workflow)).
 - **Commit and push to `dev`.** That is the trunk, and a push there builds nothing. `main` is
   production and is written only by `npm run deploy`, **which only the Overseer runs** (Greg,
   2026-09-29): ask it rather than deploying yourself —
@@ -377,6 +396,8 @@ nothing else has a copy of.
 - **Root-cause every bug in a subagent, and write it up** under `docs/postmortems/`. The point is
   never the incident, it is **the class it belongs to, named** —
   [write-postmortem.md](docs/reusable/write-postmortem.md) is the five things one has to say.
+- **Handed a reader's report from the Feedback button?** [feedback-reports.md](docs/project/feedback-reports.md)
+  is the whole run.
 - **"Close this tab if successful" means exactly that** — close it with the recipe in
   [iterm.md](docs/reusable/iterm.md), and only once the work in that conversation is actually done
   and its checks passed. If anything failed or is unfinished, leave the tab open and say why.
@@ -403,15 +424,16 @@ nothing else has a copy of.
   Claude with [`scripts/run-claude.ts`](scripts/run-claude.ts) rather than `claude -p`:
   [claude-cli-as-subagent.md](docs/reusable/claude-cli-as-subagent.md). Inside a session, an
   ordinary subagent is cheaper and better, because it inherits the harness.
+
+### Writing code
+
 - **When you rename anything, hunt down everything that names it.** A rename is never one edit. Send
   a cheap subagent to sweep the whole repo — code, docs, plans, tests, fixtures, scripts,
   `package.json` — and grep for fragments as well as the whole name, since a `camelCase` rename and
   its `kebab-case` twin don't match the same pattern. Decide each hit yourself.
   [rename-or-move.md](docs/reusable/rename-or-move.md) — but ignore its advice to branch, which
-  isn't allowed here.
-
-### Writing code
-
+  isn't allowed here. A name a reader sees is renamed all the way down, stored values included
+  ([§ A rename on screen…](docs/reusable/rename-or-move.md#a-rename-on-screen-is-a-rename-all-the-way-down)).
 - **The store is Postgres and Supabase Storage, and there is only one.** The filesystem store and
   `SPIDERYARN_STORE` are gone — the store on 2026-09-05, the flag on 2026-09-06. **That includes
   your laptop**: the suite needs a database rather than a flag. A feature exercised only on files
@@ -444,7 +466,8 @@ nothing else has a copy of.
   `switch` must be exhaustive, a named type at every seam. `strict` and `noUncheckedIndexedAccess`
   are on for exactly this —
   [typechecking.md § The flags, and why](docs/project/typechecking.md#the-flags-and-why). Run
-  `npm run typecheck` as you go, not only at the end, and `npm run check` before you commit
+  `npm run typecheck` as you go, not only at the end; commit on the fast gates (typecheck, the
+  suites you touched, doc-links) and read `npm run check`'s verdict when it lands
   ([static-analysis.md](docs/project/static-analysis.md)).
 - **Every stage stays runnable on its own** against a slug, so any one can be re-run without the
   others. Cache anything expensive on a content hash, and copy an existing step's choice of hash input

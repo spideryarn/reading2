@@ -60,7 +60,7 @@ describe("the article on its own stops at the measure", () => {
      is. It used to take the whole window and put a 738px measure in the left
      of it; on a 1600px screen that is 850px of empty page down one side. Greg,
      2026-09-03: "In Plain mode, can you centre the text on the page?" —
-     layout.ts § `proseAloneMaxPx`, and styles.css § plain, centred for the auto
+     layout.ts § `proseAloneMaxPx`, and narrow-window.css § `.reader.text-alone` for the auto
      margins that divide what this leaves over. */
   const alone = (windowWidth: number) => fit({ windowWidth });
 
@@ -350,9 +350,19 @@ describe("a band past the prose's measure", () => {
 
 describe("bandShapeFor", () => {
   it("gives each mode its band, and Summary the roomy one", () => {
-    expect(bandShapeFor("structure")).toBe("structure");
-    expect(bandShapeFor("tweets")).toBe("wide");
-    expect(bandShapeFor("summary")).toBe("roomy");
-    expect(bandShapeFor("chat")).toBe("standard");
+    expect(bandShapeFor("structure", "brief")).toBe("structure");
+    expect(bandShapeFor("summary", "brief")).toBe("roomy");
+    expect(bandShapeFor("summary", "fuller")).toBe("roomy");
+    expect(bandShapeFor("chat", "brief")).toBe("standard");
+  });
+
+  it("gives Summary the wide band while its thread is showing, and only then", () => {
+    /* The thread's posts are prose at a prose measure — the Tweets mode's band
+       until 2026-10-03 (plan 261003l). */
+    expect(bandShapeFor("summary", "thread")).toBe("wide");
+    /* `?summary=thread` outlives the mode, as `?diagram=` does: it must not
+       widen another mode's band. */
+    expect(bandShapeFor("glossary", "thread")).toBe("standard");
+    expect(bandShapeFor("structure", "thread")).toBe("structure");
   });
 });

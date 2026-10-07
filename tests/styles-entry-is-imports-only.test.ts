@@ -136,6 +136,10 @@ const MANIFEST = [
   /* Shared close geometry before every component sheet, whose later rules own
      colour and shape but deliberately no width, height or padding. Plan 261002i. */
   "close.css",
+  /* The finger's invisible 40px target for any small control, beside the close
+     cross's; early, so a component's own `position` comes later and wins.
+     Plan 261007h § F5a. */
+  "tap-target.css",
   "crumbs.css",
   "table.css",
   "prose.css",
@@ -175,6 +179,9 @@ const MANIFEST = [
   "structure-mode.css",
   "quotes.css",
   "timeline.css",
+  /* Before the two sheets that place its mark: `.origin-chat` is complete
+     here, and debate.css and citations.css add placement only. */
+  "origin-chat.css",
   "debate.css",
   /* After the two `.gloss`-with-a-class-beside-it sheets it borrows from, and
      setting nothing they set on the same element — citations.css's header. */

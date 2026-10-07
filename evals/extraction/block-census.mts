@@ -69,7 +69,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ALL_FIXTURES } from "./corpus.mjs";
-import { ReadabilityRefused, TooLittleTextToRead, runExtract } from "../../src/extract.js";
+import { ChallengePage, ReadabilityRefused, TooLittleTextToRead, runExtract } from "../../src/extract.js";
 import { runBlocks } from "../../src/blocks.js";
 import { isMain } from "../../src/is-main.js";
 
@@ -101,7 +101,7 @@ export interface CensusRow {
   blocks: number;
   /** Of those, the `<pre>` blocks — the population `codeText` changed. */
   code: number;
-  /** Stage 2 refused the page — no article, or too little text — so there is nothing to count. */
+  /** Stage 2 refused the page — no article, too little text, or a bot check — so there is nothing to count. */
   refused: boolean;
 }
 
@@ -120,8 +120,16 @@ export async function censusOf(
        `medium-about` and `pmc-article` — which are in `all`, so catching only
        the older one turned a census of the whole corpus into a crash. A page
        with no article contributes no blocks either way; which refusal it was is
-       the row's business and not the count's. */
-    if (err instanceof ReadabilityRefused || err instanceof TooLittleTextToRead) {
+       the row's business and not the count's.
+
+       **All three, since 2026-10-06**: `ChallengePage` fires on `hal-anubis`
+       and `winehq-anubis`, which are in `all` too, and the same crash was one
+       fixture away again. */
+    if (
+      err instanceof ReadabilityRefused ||
+      err instanceof TooLittleTextToRead ||
+      err instanceof ChallengePage
+    ) {
       return { row: { name, blocks: 0, code: 0, refused: true }, blocks: [] };
     }
     throw err;

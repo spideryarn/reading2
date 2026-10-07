@@ -117,8 +117,8 @@ enough to show a stranger by default.
 
 **Keeping it**
 
-- **Remember** *(experimental)* — say what you took from the piece and find out where it holds and
-  where it comes apart ([remember-mode.md](docs/project/remember-mode.md)); or the other way round,
+- **Learn** (called Remember until 2026-10-05) — say what you took from the piece and find out where it holds and
+  where it comes apart ([learn-mode.md](docs/project/learn-mode.md)); or the other way round,
   a **Quiz** in which the article asks and you answer, marked against the text rather than an answer
   key ([quiz.md](docs/project/quiz.md)).
 - **The library** — every article you have added, one click from where you left off

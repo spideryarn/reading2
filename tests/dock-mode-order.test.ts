@@ -9,7 +9,7 @@
  * further left, before Quotes. Move Chat right, just before Recall. Move FAQ
  * and Search a little bit further left. Add subtle vertical separator lines
  * between groups of related modes."* Reviewer is Referee, Recall is
- * Remember and Trajectory is Skim (since 2026-10-01). How each sentence was read, and the one move he did not ask for
+ * Learn and Trajectory is Skim (since 2026-10-01). How each sentence was read, and the one move he did not ask for
  * (Diagram, into the shape run), is
  * docs/plans/260929c-mode-bar-order-and-groups-experimental-switch-gutter-icons-diagram-behind-the-switch-reading-time-line-explained.md § 1.
  *
@@ -18,24 +18,45 @@
  * And move Search into section with Chat."* Six runs became five —
  * docs/plans/260929f-mode-bar-regroup-glossary-ideas-timeline-with-trajectory-search-with-chat.md.
  *
- * Read through `visibleModes`, which is what the bar draws; with the switch on
+ * And on 2026-10-04 (spya-tnqt2t): *"Move the citations mode one to the left in
+ * the bottom bar and move the glossary one to the left."* Each swapped with its
+ * left-hand neighbour inside its own run —
+ * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md.
+ *
+ * Read through `visibleModes`, which is what the bar offers; with the switch on
  * every mode is present, and with it off the lines must still fall only where
  * two surviving runs meet.
+ *
+ * **Offers, not draws, since 2026-10-07.** Greg, 2026-10-06 (spya-dest8x),
+ * asked for *"the glossary, FAQ, ideas, timeline, quotes"* to be gathered
+ * behind *"a more button in their place"*, so five rows of the guides run are
+ * items of the More menu and the bar draws what `splitForMore` leaves. The
+ * order above is unchanged and still what the command bar lists and the menu
+ * follows; the **lines** are a fact about what is drawn, so every case about
+ * them reads the drawn list.
+ * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
  */
 import { describe, expect, it } from "vitest";
-import { groupStarts, visibleModes } from "../src/web/Dock.js";
+import { groupStarts, splitForMore, visibleModes } from "../src/web/Dock.js";
+import type { BandMode } from "../src/modes.js";
+
+/** The five under More, in the bar's order — by hand, like `RUNS`. */
+const UNDER_MORE = ["quotes", "glossary", "faq", "ideas", "timeline"] as const;
+
+/** What the bar draws as buttons for a reader in `current`, Marginalia's toggle left out. */
+const drawnBands = (on: boolean, current?: BandMode) =>
+  splitForMore(visibleModes(on, current), current).drawn.filter((m) => m.mode !== "marginalia");
 
 /** The runs, left to right. The bar is these, flattened. */
 const RUNS = [
   ["plain"],
-  /* Tweets joined the shape run on 2026-09-29, when it stopped being a page of
-     its own (docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)
-     — another shape of the whole piece, beside Summary. Greg did not place it
-     by hand. */
-  ["structure", "summary", "tweets", "diagram"],
-  ["skim", "quotes", "faq", "glossary", "ideas", "timeline"],
-  ["referee", "citations", "debate"],
-  ["search", "chat", "remember"],
+  /* Tweets stood in the shape run, beside Summary, from 2026-09-29 to
+     2026-10-03; it is Summary's Thread view now, and one button fewer
+     (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
+  ["structure", "summary", "diagram"],
+  ["skim", "quotes", "glossary", "faq", "ideas", "timeline"],
+  ["citations", "referee", "debate"],
+  ["search", "chat", "learn"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
      one of the bands, at the right-hand end like its column
      (docs/plans/261001i-annotations-column-beside-a-band-mode.md). */
@@ -43,13 +64,25 @@ const RUNS = [
 ] as const;
 
 describe("the mode bar's order", () => {
-  it("draws every mode in Greg's order, with the switch on", () => {
+  it("offers every mode in Greg's order, with the switch on", () => {
     expect(visibleModes(true, undefined).map((m) => m.mode)).toEqual(RUNS.flat());
   });
 
-  it("puts a line before the first mode of each run and nowhere else", () => {
-    const starts = groupStarts(visibleModes(true, undefined));
-    expect([...starts].sort()).toEqual(RUNS.slice(1).map((run) => run[0]).sort());
+  it("draws that order less the five under More, which the menu lists in the same order", () => {
+    const bar = splitForMore(visibleModes(true, undefined), undefined);
+    const gathered: readonly string[] = UNDER_MORE;
+    expect(bar.drawn.map((m) => m.mode)).toEqual(RUNS.flat().filter((m) => !gathered.includes(m)));
+    expect(bar.menu.map((m) => m.mode)).toEqual(UNDER_MORE);
+    /* All five are in one run, so More takes nothing from any other. */
+    expect(RUNS[2]).toEqual(["skim", ...UNDER_MORE]);
+  });
+
+  it("puts a line before each band run, while Marginalia's own frame supplies its edge", () => {
+    /* Both Dock arms pass only the bands to `groupStarts`; Plain and
+       Marginalia already have frame edges (Dock.tsx § the three frames). The
+       guides run is Skim alone in the bar now, and still begins with a line. */
+    const starts = groupStarts(drawnBands(true));
+    expect([...starts].sort()).toEqual(RUNS.slice(1, -1).map((run) => run[0]).sort());
   });
 
   it("keeps each run in one piece, so a run never draws two lines", () => {
@@ -65,28 +98,63 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary, Tweets | Skim, Quotes, Glossary, Ideas | Search, Chat:
-       the critical run is hidden whole, so no line is left for it. */
-    const drawn = visibleModes(false, undefined);
-    expect(drawn.map((m) => m.mode)).toEqual([
+    /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
+       Learn (since 2026-10-05, spya-cnqcjf): the critical run is hidden
+       whole, so no line is left for it. Marginalia's toggle is last, in a
+       frame of its own, since it left the switch the same day (spya-vv54j2). */
+    const offered = visibleModes(false, undefined);
+    expect(offered.map((m) => m.mode)).toEqual([
       "plain",
       "structure",
       "summary",
-      "tweets",
       "skim",
       "quotes",
       "glossary",
       "ideas",
       "search",
       "chat",
+      "learn",
+      "marginalia",
     ]);
-    expect([...groupStarts(drawn)].sort()).toEqual(["structure", "skim", "search"].sort());
+    /* Of those the bar draws Structure, Summary | Skim | Search, Chat, Learn
+       since 2026-10-07, with Quotes, Glossary and Ideas under More. */
+    expect(drawnBands(false).map((m) => m.mode)).toEqual([
+      "plain",
+      "structure",
+      "summary",
+      "skim",
+      "search",
+      "chat",
+      "learn",
+    ]);
+    /* The bar asks about the bands only: the toggle's frame is its own edge
+       (Dock.tsx § the three frames). */
+    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "skim", "search"].sort());
+  });
+
+  it("a gathered mode drawn while it is open joins Skim's run, and adds no line", () => {
+    for (const current of ["quotes", "glossary", "ideas", "timeline"] as const) {
+      const drawn = drawnBands(false, current);
+      expect(drawn.map((m) => m.mode), current).toEqual([
+        "plain",
+        "structure",
+        "summary",
+        "skim",
+        current,
+        "search",
+        "chat",
+        "learn",
+      ]);
+      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", "skim", "search"].sort());
+    }
   });
 
   it("gives a retained experimental mode its own line when it is alone in its run", () => {
     /* A reader with the switch off, sitting in Debate by URL: the bar draws
-       Debate, and it is a run of one between Ideas and Search. */
-    const drawn = visibleModes(false, "debate");
+       Debate, and it is a run of one between Skim and Search (Ideas, which
+       it used to follow in the bar, is under More). */
+    const drawn = drawnBands(false, "debate");
+    expect(drawn.map((m) => m.mode)).toContain("debate");
     expect([...groupStarts(drawn)]).toContain("debate");
     expect([...groupStarts(drawn)]).toContain("search");
   });

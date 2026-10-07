@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Library } from "./Library.js";
 import { AuthCallback } from "./AuthCallback.js";
+import { SignedInShell } from "./BackLink.js";
 import { HomeLogo } from "./HomeLogo.js";
 import { isAdmin } from "../admin.js";
 import { LazyPage, type PageLoader } from "./LazyPage.js";
@@ -16,8 +17,11 @@ import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
+import { SignedInReader } from "./lib/made-for.js";
 import { ProfilePage } from "./ProfilePage.js";
 import { AddPage } from "./AddPage.js";
+import { AddStopped } from "./AddStopped.js";
+import { type AddVisit, addAddress, nextAddVisit } from "./add-visit.js";
 import {
   type AdminPage,
   adminOnly,
@@ -32,6 +36,7 @@ import { takeReturn } from "./auth-return.js";
 import type { User } from "@supabase/supabase-js";
 import { FeedbackHost, FeedbackTrigger } from "./FeedbackButton.js";
 import { ArticlePage } from "./article/ArticlePage.js";
+import { useLastView } from "./last-view.js";
 
 /**
  * **The three routes whose code is not in the reader's initial download.**
@@ -48,6 +53,8 @@ const loadAdminHome = () => import("./AdminPage.js").then((m) => ({ default: m.A
 const loadAdminUsers = () => import("./AdminPage.js").then((m) => ({ default: m.AdminUsersPage }));
 const loadAdminFeedback = () =>
   import("./AdminPage.js").then((m) => ({ default: m.AdminFeedbackPage }));
+const loadAdminCosts = () =>
+  import("./AdminCostsPage.js").then((m) => ({ default: m.AdminCostsPage }));
 const loadAdminVouchers = () =>
   import("./AdminVouchersPage.js").then((m) => ({ default: m.AdminVouchersPage }));
 /* One loader per admin page, keyed by the union, so a page added to
@@ -58,6 +65,7 @@ const ADMIN_LOADERS: Record<AdminPage, PageLoader> = {
   users: loadAdminUsers,
   feedback: loadAdminFeedback,
   vouchers: loadAdminVouchers,
+  costs: loadAdminCosts,
 };
 const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.DesignPage }));
 /* `/changelog`'s own reason, beside `/design`'s: the parsed NDJSON file is
@@ -65,9 +73,12 @@ const loadDesign = () => import("./DesignPage.js").then((m) => ({ default: m.Des
    almost nobody opens — docs/project/changelog.md § The page. */
 const loadChangelog = () =>
   import("./ChangelogPage.js").then((m) => ({ default: m.ChangelogPage }));
-/* `/help`'s reason is the changelog's in miniature: a long page of prose, one
-   section per mode, that a reader opens when stuck rather than on every visit —
-   so not in the first download. docs/plans/261002b-help-page.md. */
+/* `/help`'s reason is the changelog's in miniature: pages of prose, one per
+   mode and topic, that a reader opens when stuck rather than on every visit —
+   so not in the first download. One chunk for all of them: every address
+   under `/help` is this one component, which asks the router which page
+   (help/HelpPage.tsx § One component for every address under `/help`).
+   docs/plans/261002b-help-page.md. */
 const loadHelp = () => import("./help/HelpPage.js").then((m) => ({ default: m.HelpPage }));
 
 
@@ -141,7 +152,7 @@ function drawsCornerFeedback(route: Exclude<Route, { kind: "callback" }>, user: 
  */
 export function App() {
   const route = useRoute();
-  const { session, user, loading } = useSession();
+  const { session, user, loading, known } = useSession();
 
   /**
    * **The one thing that keeps an import moving while the reader reads.**
@@ -160,6 +171,26 @@ export function App() {
   useJobSession(user?.id ?? null, session?.access_token ?? null);
 
   /**
+   * **Whose add visit this is**, when the address is an `/add/` one — the
+   * rule, and why there is one, is src/web/add-visit.ts.
+   *
+   * **Here, above the signed-out branch below**, because that branch unmounts
+   * every signed-in page: reader A signing out and reader B signing in at the
+   * same address has to be seen as a change of reader, and anything kept
+   * further down would have forgotten A by then.
+   *
+   * **A ref written during render, on purpose.** The answer has to be right in
+   * the very render that first sees the new reader, so that A's page is gone
+   * from that commit and not one effect later. `nextAddVisit` gives the same
+   * visit back when asked twice with the same answers, so StrictMode's second
+   * render changes nothing.
+   * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md § 1.
+   */
+  const addVisitRef = useRef<AddVisit | null>(null);
+  const addVisit = nextAddVisit(addVisitRef.current, addAddress(route), user?.id ?? null);
+  addVisitRef.current = addVisit;
+
+  /**
    * **Nothing here tells the experimental-features store who is reading.** It
    * used to, from an effect beside this one, and that was a frame too late: a
    * passive effect runs after its children have rendered, so on an account
@@ -168,12 +199,14 @@ export function App() {
    * same notification pass as `useSession` — src/web/experimental-store.ts
    * § the store listens for it itself.
    *
-   * **And nothing here wakes it, either.** The store starts listening on its
-   * first subscriber and asks the server for nobody until then. Since stage 2
-   * the subscribers are the components that mount a `Dock` — `Reader`
-   * below, `Metadata`, `VisitorDock` in PublicPages.tsx (and `Tweets`, until it became a mode on 2026-09-29) — each
-   * calling `useExperimental()` and handing the answer down as a prop, because
-   * the bar is told rather than going and getting it (Dock.tsx § experimental).
+   * **The store starts listening on its first subscriber**, and asks the
+   * server for nobody until then. Since 2026-10-06 that subscriber is this
+   * component, on every route, through `useLastView` below; so a signed-in
+   * visit to any page asks once, and a store update re-renders `App`. The
+   * components that mount a `Dock` — `Reader`, `Metadata` and `VisitorDock`
+   * in PublicPages.tsx — also call `useExperimental()` and hand the answer
+   * down as a prop, because the bar is told rather than going and getting it
+   * (Dock.tsx § experimental).
    * A stranger still asks for nothing: the store issues no request for a
    * signed-out reader, who is off because we decided.
    *
@@ -181,8 +214,22 @@ export function App() {
    * what it heard — so that the switch was read once up front rather than when
    * a page mounted. It bought a round trip's head start and existed mainly to
    * keep a trace assertion true, which is the wrong way round. What replaced it
-   * is the real subscriber in `Reader`.
+   * was the real subscriber in `Reader`, and since 2026-10-06 the one above.
    */
+
+  /* Keep the arrival identity above the auth branches: signing out remounts
+     ArticlePage while this tab's address can still hold the previous reader's
+     view. A non-article route advances the identity without reading or saving.
+
+     `known`, not `!loading`: the loading deadline passes without an answer on
+     a slow start, and taking that for "signed out" would make the answer that
+     follows look like a change of reader and strip a shared link's parameters
+     (tests/last-view-late-session.test.tsx). */
+  useLastView(
+    known && route.kind === "read" ? route.slug : null,
+    route.kind === "read" ? route.view : "article",
+    user?.id ?? null,
+  );
 
   /* **The callback is answered before the gate**, and it has to be: the reader
      arriving here is by definition not signed in yet, and sending them to the
@@ -267,9 +314,14 @@ export function App() {
        LazyPage.tsx. */
     if (route.kind === "changelog") return <LazyPage load={loadChangelog} routeKey="changelog" />;
     /* Since 2026-10-02, for the changelog's reason and more so: Help is the
-       page we send somebody to — `/help#spine` in an answer to a question —
+       page we send somebody to — `/help/spine` in an answer to a question —
        and a stranger who has not signed up is the reader with most to learn
-       from it. Bare and lazy, like the changelog above. help/HelpPage.tsx. */
+       from it. Bare and lazy, like the changelog above. help/HelpPage.tsx.
+
+       **One `routeKey` for every page of Help, on purpose**, here and in the
+       signed-in arm: the page is not remounted from one to the next, so the
+       search box keeps its words, and its arrival effect is keyed on the page
+       instead (help/HelpPage.tsx § Arriving). */
     if (route.kind === "help") return <LazyPage load={loadHelp} routeKey="help" />;
     /* Since 2026-09-07, and signed out for a stronger reason than any of them:
        somebody deciding whether to trust us with what they read is exactly the
@@ -352,10 +404,22 @@ export function App() {
      counts — including, since the bug above, the two addresses that reach the
      shelf sideways. */
   return (
-    <FeedbackHost>
-      <SignedIn route={route} user={user} />
-      {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
-    </FeedbackHost>
+    /* Who everything below was drawn for, so a write any of it makes late (an
+       unmount, an idle save, `pagehide`, a recording still draining) can name
+       its reader: lib/made-for.ts, plan 261006f § Stage 2. **Outside
+       `FeedbackHost`**, which draws the Feedback dialog itself, beside its
+       children: inside it, the pages had a reader and the dialog had none
+       (tests/feedback-dialog-has-its-reader.test.tsx). */
+    <SignedInReader.Provider value={user.id}>
+      <FeedbackHost readerId={user.id}>
+        {/* What tells a page's `HomeLink` that the corner logo is beside it, so
+            it draws no second way home — BackLink.tsx § `SignedInShell`. */}
+        <SignedInShell.Provider value={true}>
+          <SignedIn route={route} user={user} addVisit={addVisit} />
+        </SignedInShell.Provider>
+        {drawsCornerFeedback(route, user) && <FeedbackTrigger variant="corner" />}
+      </FeedbackHost>
+    </SignedInReader.Provider>
   );
 }
 /**
@@ -385,6 +449,7 @@ function LeaveLogin() {
 function SignedIn({
   route,
   user,
+  addVisit,
 }: {
   /* **Not `Route`, and the compiler is the reason.** `App` answers `callback`
      before the gate above — it has to, because the reader coming back from an
@@ -394,6 +459,8 @@ function SignedIn({
      arm that nothing can ever run. */
   route: Exclude<Route, { kind: "callback" }>;
   user: User;
+  /** `App`'s add visit: who an `/add/` address is running for, or that it has been stopped. */
+  addVisit: AddVisit | null;
 }) {
   /* **The administrator's pages, refused before the branch chain rather than
      inside it — and this is a courtesy, not a gate.**
@@ -446,13 +513,33 @@ function SignedIn({
   /* The shelf proper. `drawsShelf` above has already answered the sideways way
      in, so this is the address itself. */
   if (route.kind === "library") return <Library key={user.id} readerId={user.id} />;
+  /* **An add address another reader was already adding at is stopped**, and
+     stays stopped until it is left (add-visit.ts, AddStopped.tsx). Anything
+     but a running visit draws the page that posts nothing: `App` always has a
+     visit for a signed-in reader at one of these addresses, and if it ever
+     did not, starting an import is the wrong way to be wrong. */
+  if ((route.kind === "add" || route.kind === "add-upload") && addVisit?.kind !== "running")
+    return (
+      <>
+        <HomeLogo />
+        <AddStopped />
+      </>
+    );
   // The corner logo, because this is not home and the reader may have arrived
   // straight here from a bookmarklet with no shelf behind them.
   if (route.kind === "add")
     return (
       <>
         <HomeLogo />
-        <AddPage source={{ kind: "url", url: route.url }} />
+        {/* **`key`, for the reason the shelf above carries one**: the page
+            holds one reader's typed purpose, their High-powered tick and the
+            job they are watching, and removing the instance is what removes
+            all of it. A visit is stopped before another reader can reach this
+            line, so the key is the second lock and not the first.
+
+            `readerId`: every request the page makes names the reader it was
+            made for (AddPage.tsx § `readerId`). */}
+        <AddPage key={user.id} source={{ kind: "url", url: route.url }} readerId={user.id} />
       </>
     );
   /* The same page, given a file that is already in the object store rather than
@@ -462,7 +549,11 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <AddPage source={{ kind: "upload", uploadId: route.uploadId }} />
+        <AddPage
+          key={user.id}
+          source={{ kind: "upload", uploadId: route.uploadId }}
+          readerId={user.id}
+        />
       </>
     );
   if (route.kind === "design")
@@ -592,7 +683,15 @@ function SignedIn({
     return (
       <>
         <HomeLogo />
-        <ProfilePage />
+        {/* **`key`, for the reason the shelf carries one.** The page holds one
+            reader's *About you*, loaded and perhaps half edited, and nothing
+            else unmounts it when another tab signs in as somebody else: it
+            stayed in the box for the next reader, and its next save was to
+            `/api/reader`, which is whoever the token says. Removing the
+            instance removes the words; the unmount save names the reader it
+            was mounted for (lib/made-for.ts), so it is not sent as the next.
+            GPT Sol's review of plan 261006f, F3. */}
+        <ProfilePage key={user.id} />
       </>
     );
   /* The administrator's pages. Whether this reader may see them was settled at

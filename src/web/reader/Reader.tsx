@@ -23,10 +23,19 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { Article, BlockId, CitedWork, GlossaryEntry } from "../../types.js";
-import { marginaliaNotes, arcAt, headPath } from "../marginalia/notes.js";
+import {
+  awaitingStructure,
+  type Article,
+  type BlockId,
+  type CitedWork,
+  type ClaimOrigin,
+  type GlossaryEntry,
+  type ThreadOrigin,
+} from "../../types.js";
+import { marginaliaNotes, arcAt, headBlock, headPath } from "../marginalia/notes.js";
 import {
   MarginaliaHead,
   MarginNotesSlot,
@@ -43,7 +52,7 @@ import { blocksOnScreenNow } from "../on-screen.js";
 import { ReadingTimeStyle } from "../ReadingTimeStyle.js";
 import type { ReadSoFar } from "../read-filter.js";
 import { countsTowardReadingTime } from "../../block-policy.js";
-import { addressWithout, useAddress } from "../router.js";
+import { addressWithout, carriedSearch, navigate, useAddress } from "../router.js";
 import { IdeasBand, VisitorIdeasBand } from "../modes/ideas/IdeasMode.js";
 import { TimelineBand, VisitorTimelineBand } from "../modes/timeline/TimelineMode.js";
 import { QuotesBand, VisitorQuotesBand } from "../modes/quotes/QuotesMode.js";
@@ -51,7 +60,6 @@ import { quoteCardQuotes, useQuoteMarks } from "./useQuoteMarks.js";
 import { DebateBand, VisitorDebateBand } from "../modes/debate/DebateMode.js";
 import { CitationsBand, VisitorCitationsBand } from "../modes/citations/CitationsMode.js";
 import { FaqBand, VisitorFaqBand } from "../modes/faq/FaqMode.js";
-import { TweetsBand, VisitorTweetsBand } from "../modes/tweets/TweetsMode.js";
 import {
   armSkimOpening,
   firstSkimArrival,
@@ -62,40 +70,62 @@ import {
 } from "../modes/skim/SkimMode.js";
 import { SkimDoor } from "../SkimPanel.js";
 import { type CardTarget, modeForCardTarget } from "../stop-card.js";
-import type { Quote } from "../../types.js";
+import type { ChatAnchor, Quote } from "../../types.js";
 import { GlossaryBand, VisitorGlossaryBand } from "../modes/glossary/GlossaryMode.js";
 import { SearchBand, VisitorSearchBand } from "../modes/search/SearchMode.js";
 import { StructureBand } from "../modes/structure/StructureMode.js";
+import { visitorArrival } from "../modes/structure/StructureArriving.js";
+import { BarStuckSentinel } from "../BarStuckSentinel.js";
 import { HeadingsCrumbs } from "../HeadingsCrumbs.js";
+import { isCrumbSection } from "../crumbs.js";
 import { SummaryBand, VisitorSummaryBand } from "../modes/summary/SummaryMode.js";
 import { DiagramBand } from "../modes/diagram/DiagramMode.js";
+import type { FollowJump } from "../DiagramPanel.js";
 import { RefereeBand } from "../modes/referee/RefereeMode.js";
 import {
   type ChatHandoff,
   ConversationBand,
-  RememberBand,
+  LearnBand,
 } from "../modes/conversation/ConversationModes.js";
-import { askAboutTerm } from "../chat-handoff.js";
+import {
+  askAboutSummaryParagraph,
+  askAboutCitedWork,
+  askAboutGlossaryEntry,
+  askAboutBlock,
+  askAboutTerm,
+  itemOrigin,
+  askDebateThroughLens,
+  askToCheckClaim,
+} from "../chat-handoff.js";
 import type { QuizArrival } from "../QuizPanel.js";
 import { QuizInProse } from "../QuizInProse.js";
 import { questionsByAnchor } from "../quiz-anchors.js";
 import { MODE_CONTAINMENT, ModeBoundary } from "./ModeBoundary.js";
 import { type HeraldPress, ModeHerald } from "../ModeHerald.js";
 import { TableView } from "../TableView.js";
-import type { SelectionAnchor } from "../selection.js";
+import { sameAnchor, selectAnchor, type SelectionAnchor } from "../selection.js";
 import type { CiteSelection, TermSelection } from "../annotate.js";
 import { formsOf } from "../../term-match.js";
 import { horizontalInset, safeAreaInsets } from "../safe-area.js";
 import type { ArchiveControl } from "../useArchive.js";
 import { Spine } from "../Spine.js";
-import { AnnotateDialog } from "../AnnotateDialog.js";
+import { AnnotateDialog, annotateKey } from "../AnnotateDialog.js";
 import { TouchSelectionChip } from "../TouchSelectionChip.js";
 import { CommentDialog } from "../CommentDialog.js";
+import { DEFAULT_HIGHLIGHT, isPristineHighlight, spansOverlap } from "../fresh-highlight.js";
+import type { CommentsApi } from "../useComments.js";
+import { mintId } from "../../ids.js";
 import { Masthead } from "../Masthead.js";
 import { Dock } from "../Dock.js";
 import { gateToReveal, PRIORITY_GATE } from "../GlossaryPanel.js";
-import { ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import { type CiteActions, ProseHoverCard, type QuoteCardSource } from "../ProseHoverCard.js";
+import type { CiteFocus } from "../CitationsPanel.js";
 import { shownEntries } from "../glossary-shown.js";
+import { editArticleTags } from "../article-tags.js";
+import { chatExecutor, readingExecutor, type TagsControl } from "../command-runners.js";
+import { type FindMoreMode, glossaryAppendOnOffer, quotesAppendOnOffer } from "../find-more.js";
+import { ChatCommands } from "../CommandChip.js";
+import { findHref } from "../CommandBar.js";
 import { buildNoteIndex, type NoteMarker, type NoteReturn } from "../notes-view.js";
 import {
   blockHues,
@@ -118,14 +148,16 @@ import {
   eventParam,
   spineParam,
   threadParam,
-  rememberParam,
+  learnParam,
   diagramParam,
   refereeParam,
   summaryParam,
   structureParam,
+  debateParam,
+  type BandMode,
   type Mode,
 } from "../params.js";
-import { subModeParams } from "../sub-modes.js";
+import { type ModeWithSubModes, returnToSubMode, subModeParams } from "../sub-modes.js";
 import { isMarginaliaModeWord } from "../../modes.js";
 import { arrivalTarget, clearArrivalAnchor, isBlockOnScreen, scrollToBlock } from "../scroll.js";
 import { orderComments, positionOf, stepComment } from "../comment-nav.js";
@@ -133,8 +165,22 @@ import { jumpToComment, stepToComment } from "../comment-jump.js";
 import { readerRowComments } from "../quote-band-rows.js";
 import { buildSections, sectionDepth } from "../position.js";
 import { marginaliaPress, notesFit } from "../marginalia/press.js";
-import { modePress } from "./mode-press.js";
-import { bandCoversProse, bandShapeFor, fitView } from "../layout.js";
+import { arrivalBringsRailBack, modePress } from "./mode-press.js";
+import { useDockEntrance } from "./dock-entrance.js";
+import { SkipToModes } from "./SkipToModes.js";
+import {
+  bandCoversProse,
+  bandShapeFor,
+  BLOCK_CHAT_IN_COLUMN,
+  CHAT_CARD_HOST_ATTR,
+  chatCard,
+  chatDock,
+  fitView,
+  margTitleReserve,
+  NARROW_WINDOW_MAX,
+} from "../layout.js";
+import { isFolded, subscribeFold } from "../fold.js";
+import { media } from "../media.js";
 import { navPlan, useArrowNav } from "../keynav.js";
 import { ReturnChip } from "../ReturnChip.js";
 import { BandBackChip } from "../BandBackChip.js";
@@ -143,9 +189,10 @@ import { BlockLinkProvider, buildBlockLinkIndex } from "../BlockLinkCard.js";
 import { xrefTarget, type XrefResolver } from "../xref.js";
 import { flushPendingFlash, resetFlash, type JumpAim } from "../flash.js";
 import { ViewportProbe } from "../ViewportProbe.js";
-import { ChatDialog, type ChatTarget } from "../ChatDialog.js";
+import { type ChatCardPlace, ChatDialog, type ChatTarget } from "../ChatDialog.js";
 import {
   anchored,
+  askedBesideCard,
   askedQuestions,
   countByBlock,
   helpThreadFor,
@@ -169,6 +216,7 @@ import { makeBlockBookmarker } from "../block-bookmark.js";
 import { FEEDBACK_BLOCK_IDS, setFeedbackArticleContext } from "../feedback-context.js";
 import { useWindowWidth, useRootFontPx } from "./measure.js";
 import { useReadingPosition } from "./useReadingPosition.js";
+import { useModeFlashOwnership } from "./mode-flash.js";
 import { proseFound, railFound, selectPassages } from "./passages.js";
 import { quoteAlphaByBlock } from "../spine-marks.js";
 import { stepQuote } from "../QuotesPanel.js";
@@ -254,6 +302,8 @@ export function Reader({
    * drift apart. The visitor's `available` is read the same way.
    */
   const owner = capability.kind === "owner" ? capability : null;
+  /** The same fact as a boolean, for a hook that needs only that — `owner` is a new object every render. */
+  const isOwner = owner !== null;
   /**
    * The visitor's half, read the same way and for the same reason.
    *
@@ -277,6 +327,8 @@ export function Reader({
      the chip in the bar below it, neither of which is drawn for an owner.
      PublicChrome.tsx § SharedNotice for why it is two things and not one. */
   const sessionUnconfirmed = capability.kind === "visitor" && capability.sessionUnconfirmed;
+  /* The same two read this. `"public"` for the owner is never consulted. */
+  const sharedBy = capability.kind === "visitor" ? capability.sharedBy : "public";
   /**
    * **Whether this reader sees the modes that are still being built**, handed
    * down to the bar rather than fetched by it.
@@ -293,6 +345,9 @@ export function Reader({
    * stranger's at zero.
    */
   const experimental = useExperimental();
+  /* Whether this mount plays the bottom bar's entrance: the first reading
+     view of the page's lifetime, and no later one (dock-entrance.ts). */
+  const dockEntrance = useDockEntrance();
   const geometry = useMemo(
     () => buildGeometry(article.tree, article.blocks),
     [article],
@@ -332,6 +387,15 @@ export function Reader({
    * So this is a single value the layout reads, not a flag each feature checks.
    */
   const [mode, setMode] = useQueryState("mode", modeParam);
+  /* **Which of Summary's views is showing** — Brief, Fuller or Thread. Read
+     here, beside the mode, because three things outside the band depend on it
+     and must agree with the band in every frame: the band's shape (the thread
+     is the wide one, layout.ts § `bandShapeFor`), and what a Summary press
+     from the bar arms (`<Dock summary>`). The band reads the same nuqs state,
+     so this is the state that picks it, not a second parse of the address —
+     which lags a press by up to ~50ms (activation.ts § `PressContext`).
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
+  const [summaryView] = useQueryState("summary", summaryParam);
   /**
    * **Whether Marginalia's column of notes is on**, right of the prose — a
    * switch of its own beside `mode` since 2026-10-01, so the notes can sit
@@ -396,8 +460,9 @@ export function Reader({
   /**
    * **The band has stepped aside from the prose** — on a narrow window, where
    * it lies over the whole article (`band-covers`), after the reader follows a
-   * passage link out of any band (`bandJump` below, since 2026-09-29) or chooses
-   * a Skim stop (since 2026-09-28). The band stays mounted, so everything
+   * passage link out of any band (`bandJump` below, since 2026-09-29) or presses
+   * a Skim row (since 2026-09-28; its ‹ › and depth buttons did too until
+   * 2026-10-03, spya-kudr63). The band stays mounted, so everything
    * in it survives; only its paint goes (narrow-window.css § a band that has
    * stepped aside). `BandBackChip` offers it back, as does Skim's door
    * (SkimPanel.tsx § SkimDoor).
@@ -412,6 +477,26 @@ export function Reader({
   useEffect(() => {
     setBandAway(false);
   }, [mode]);
+  /**
+   * **Open a band from somewhere that is not the Dock** — a card in the prose,
+   * the command bar, a hand-off to Chat. The band asked for may be the one
+   * already open and stepped aside, and then the effect above never runs:
+   * the mode has not changed. So anything that names a band as its
+   * destination calls this rather than `setMode`, and the two lines cannot be
+   * written apart. The citation card had only the second (plan 261004b), then
+   * the term card (qi-fs4qzzfm, plan 261004g).
+   *
+   * No write when the mode is already there: `nuqs` does not elide a
+   * same-value push, so it would add a history entry that changes nothing
+   * (the Dock's press says the same, below).
+   */
+  const showBand = useCallback(
+    (target: BandMode) => {
+      setBandAway(false);
+      if (target !== mode) void setMode(target);
+    },
+    [mode, setMode],
+  );
   /* **Browser Back does not bring the band back**, deliberately. A `popstate`
      rule was in the plan and GPT Sol took it out: while the band is away the
      reader can make further pushes of their own (a footnote jump, a Skim
@@ -420,10 +505,9 @@ export function Reader({
   /**
    * **The mode the reader has just pressed, for `ModeHerald` to name.**
    *
-   * Set in the Dock's `onMode` below and nowhere else, because that is the one
-   * door a press comes through — the Dock's buttons and the command bar both
-   * reach it via `useActivateMode` — and a pasted `?mode=`, a Back step and a
-   * reload do not. The same *a mount is not a click* line activation.ts draws.
+   * Set by the Dock's `onMode` and the shared Search opener below. The Dock's
+   * buttons and command-bar picks reach them; a pasted `?mode=`, a Back step
+   * and a reload do not. The same *a mount is not a click* line activation.ts draws.
    *
    * **Component state and not the URL**, which is url-state.md applying rather
    * than being excepted: the URL is for what a link or a reload should
@@ -436,6 +520,19 @@ export function Reader({
   useEffect(() => {
     if (herald !== null && herald.mode !== mode) setHerald(null);
   }, [herald, mode]);
+
+  /**
+   * **Open Search for the command bar's *Quick search “X”* row** (plan
+   * 261005i) — `showBand`, plus the arrival rule the Dock's press runs for
+   * Search: its herald names the mode, and a rail the reader had put away comes
+   * back, since that is where the hits are drawn (`arrivalBringsRailBack`; F2
+   * on the plan). The Dock's Search arrival calls this same opener.
+   */
+  const openQuickSearch = useCallback(() => {
+    showBand("search");
+    setHerald((prev) => ({ mode: "search", nonce: (prev?.nonce ?? 0) + 1 }));
+    if (arrivalBringsRailBack({ next: "search", current: mode, showSpine })) void setShowSpine(null);
+  }, [showBand, mode, showSpine, setShowSpine]);
 
   /**
    * What stands between a visitor and the mode they have opened, if anything.
@@ -457,7 +554,7 @@ export function Reader({
   /* One answer for both the live fit and the Marginalia press's hypothetical
      fit. Keeping the value shared stops the press swapping columns at a
      threshold different from the layout it is about to draw. */
-  const bandShape = bandShapeFor(mode);
+  const bandShape = bandShapeFor(mode, summaryView);
 
   const fit = useMemo(
     () =>
@@ -523,6 +620,18 @@ export function Reader({
     [experimental.on, article.tree, article.blocks, geometry],
   );
   /**
+   * **Is a band lying over the prose?** A band is open and there is no room
+   * for it beside the article (`fit.modeW === 0`), so it is the whole window —
+   * a phone with a mode open. **Not `fit.modeW === 0` alone**: that is also
+   * true with no band open at all (Plain on a phone).
+   *
+   * Declared once, here, above everything that asks. Until 2026-10-04 it was
+   * declared below two of its own re-derivations and written out again in
+   * four more places. Still true while the band has stepped aside — that is
+   * `bandBack`, below.
+   */
+  const bandCovers = bandOpen && fit.modeW === 0;
+  /**
    * **Is the breadcrumb drawn?** For a reader with Experimental features on,
    * at every scroll position — Greg, 2026-09-29 (spya-m3pteb): *"always
    * present if experimental features are turned on, and invisible if not"*.
@@ -531,20 +640,41 @@ export function Reader({
    * shell's guard would pin the bar over the band, and the band is what is on
    * screen. That includes the band *stepped aside* (`bandAway`), deliberately
    * for v1: drawing the bar the moment a band link is followed would push the
-   * prose down 44px in the middle of that jump, before its position write has
-   * landed (GPT Sol, plan review of 261002h, finding 2).
+   * prose down by the bar's height in the middle of that jump, before its
+   * position write has landed (GPT Sol, plan review of 261002h, finding 2).
    *
-   * **Not for a tree with nothing to name** either, or the bar is 44px of
-   * blank. A tree where no part has a title or a navLabel is the case.
+   * **Not for a tree with nothing to name** either, or the bar is a blank
+   * strip. A tree where no part has a title or a navLabel is the case.
+   *
+   * **On a narrow window it also sets the bar's height**: three lines, in a
+   * taller bar, while this is true (crumbs.css § a narrow window) — which is
+   * why it is in `layoutKey` below.
+   *
+   * **Not while Structure or Marginalia's head is on screen** — Greg,
+   * 2026-10-04 (spya-rx43ku): *"We don't need to show that horizontal rail when
+   * either structure or annotations mode are on, because they both provide
+   * that information too."* Structure's band has its own "you are here";
+   * Annotations is Marginalia, whose head ordinarily names the part and the section. For
+   * Marginalia "on" means *drawn*: `?margin=1` on a window with no room for the
+   * column shows no head, so the breadcrumb stays there. For an owner the bar
+   * goes with it (`showBar` below), which `layoutKey` already hears. The plan
+   * records the empty-head and contained-failure exceptions; the commonest
+   * empty head, the rows above the first part, was closed by 261004l
+   * (notes.ts § `headBlock`), and a gap further down the tree still draws none.
+   * docs/plans/261004k-hide-the-headings-rail-while-structure-or-marginalia-is-on.md
    *
    * The tree itself is not built while the switch is off. `Reader` renders for
    * every scroll-independent state change, and an experimental feature should
    * not add a full block map and tree walk for readers who cannot see it.
    */
+  /** Marginalia's column is on screen: switched on, and the window has room for it. */
+  const marginRoom = marginOpen && fit.margW > 0;
   const showCrumbs =
     experimental.on &&
-    !(bandOpen && fit.modeW === 0) &&
-    (crumbsRoot?.children.some((c) => nodeLabel(c, c.title) !== null) ?? false);
+    !bandCovers &&
+    mode !== "structure" &&
+    !marginRoom &&
+    (crumbsRoot?.children.some((c) => isCrumbSection(c) && nodeLabel(c, c.title) !== null) ?? false);
   /**
    * **Is the controls bar drawn at all?** For a visitor, whose read-only chip
    * is in it, and since 2026-10-02 for anybody it holds the breadcrumb for.
@@ -573,12 +703,28 @@ export function Reader({
   // medium width rewrapped the article under an unchanged key (GPT Sol, F2 on
   // docs/plans/261001d-annotations-mode-marginalia-in-a-right-hand-column.md).
   //
-  // `showBar` since 2026-10-02: the controls bar is 44px in flow above the
-  // table, and it now comes and goes with the experimental switch, which loads
-  // after the article and can be pressed mid-read. That moves every row down
-  // without resizing the table, so the table's ResizeObserver hears nothing
-  // (GPT Sol, plan review of 261002h, finding 1).
-  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}`;
+  // `showBar` since 2026-10-02: the controls bar is in flow above the table
+  // (`--bar-h`, 44px by default), and it now comes and goes with the
+  // experimental switch, which loads after the article and can be pressed
+  // mid-read. That moves every row down without resizing the table, so the
+  // table's ResizeObserver hears nothing (GPT Sol, plan review of 261002h,
+  // finding 1).
+  //
+  // `tallCrumbsBar` since 2026-10-03: on a narrow window the bar is taller
+  // while it holds the breadcrumb (crumbs.css § a narrow window), so its
+  // height follows this state rather than `showBar`. A signed-in reader of
+  // somebody else's article keeps the View-only chip's bar while the
+  // breadcrumb comes and goes, and the rows move under an unchanged `showBar`
+  // (GPT Sol, plan review of 261003n, F1).
+  //
+  // The width predicate is the CSS media query's, not `windowWidth`: that
+  // value is the page beside a classic scrollbar, while media queries ask the
+  // viewport. Raw `showCrumbs` was briefly keyed here and made a wide visitor's
+  // one-line breadcrumb look like a reflow, restoring `?at=` and moving them to
+  // the section start under an unchanged 44px bar (261003h postmortem).
+  const tallCrumbsBar =
+    showCrumbs && media(`(max-width: ${NARROW_WINDOW_MAX}px)`);
+  const layoutKey = `${windowWidth}|${fit.modeW}|${fit.spine}|${fit.tableW}|${fit.margReserve}|${showBar ? 1 : 0}|${tallCrumbsBar ? 1 : 0}`;
 
   /**
    * **Is the prose on screen, for the reading-time recorder** — only this
@@ -590,7 +736,7 @@ export function Reader({
    */
   const setReadingCounting = owner?.readingTime.setCounting;
   /* A band that has stepped aside (`bandAway`) is not lying over anything. */
-  const bandOverProse = bandOpen && fit.modeW === 0 && !bandAway;
+  const bandOverProse = bandCovers && !bandAway;
   const proseOnScreen = !bandOverProse;
   useEffect(() => {
     setReadingCounting?.(proseOnScreen);
@@ -611,6 +757,18 @@ export function Reader({
   useEffect(() => {
     if (!bandOverProse) flushPendingFlash();
   }, [bandOverProse]);
+  /* **A held flash belongs to the mode that made it.** Since Skim's ‹ › stopped
+     stepping a covering band aside (spya-kudr63, plan 261003l) a flash can sit
+     held for as long as the reader walks the route. Leaving for Plain plays it,
+     above, which is the point. Leaving for *another covering band* must not
+     keep it: the prose can be moved from there by a path that never passes
+     `beginJump` and so never drops it (comment-jump.ts § `stepToComment`, for
+     one), and the next time the prose is exposed the old stop would wash,
+     wherever the reader had got to. A change which exposes the prose skips the
+     drop (`bandOverProse` is false), then the passive effect above plays it.
+     Only on a real change of mode, never on mount; the hook's layout effect runs
+     before an incoming child's passive landing effect, so that new flash survives. */
+  useModeFlashOwnership(mode, bandOverProse);
   /* A held or live flash belongs to this article. ArticlePage keys the reader
      by slug, so leaving it unmounts here; clear both the pending id and the live
      removal timer rather than retaining a detached prose cell for 1.2s. */
@@ -636,7 +794,6 @@ export function Reader({
    * hover card keep plain `jumpTo`, since none of them is under a band.
    * docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md.
    */
-  const bandCovers = bandOpen && fit.modeW === 0;
   const bandBack = bandAway && bandCovers;
   /**
    * **Where focus was in the band when it stepped aside**, so it goes back
@@ -669,6 +826,11 @@ export function Reader({
     },
     [jumpTo, bandCovers, rememberBandFocus],
   );
+  /* **The Diagram walking the picture**: plain `jumpTo`, which does not step
+     the band aside, and with the step's `ended` put in `jumpTo`'s third
+     parameter rather than its second, which is a flash aim. The step buttons
+     need to hear that their jump is over — keynav.ts § `Chain`. */
+  const followTo = useCallback<FollowJump>((blockId, ended) => jumpTo(blockId, undefined, ended), [jumpTo]);
   useEffect(() => {
     if (bandBack) return;
     const was = bandFocus.current;
@@ -713,8 +875,9 @@ export function Reader({
 
 
   /**
-   * Comments: selecting prose asks a question of the model, and the answer
-   * arrives in a floating dialog. See docs/project/comments.md.
+   * Comments and highlights: selecting prose opens the free annotation box.
+   * Ask AI is an explicit second action, and its conversation arrives in the
+   * separate floating chat dialog. See docs/project/comments.md.
    *
    * Note what is *not* here — no column, no change to `fit`, nothing threaded
    * through the layout arithmetic. That was the point of choosing a dialog.
@@ -760,27 +923,159 @@ export function Reader({
    */
   const [thread, setThread] = useQueryState("thread", threadParam);
   const [chatDraft, setChatDraft] = useState<ChatTarget | null>(null);
+  /* A saved comment can finish after the reader has changed mode. The action
+     it releases must use the mode that is committed then, not the one in the
+     render where Save was pressed. */
+  const currentMode = useRef(mode);
+  useEffect(() => {
+    currentMode.current = mode;
+  }, [mode]);
   /**
-   * **A question on its way into chat mode from another mode** — the glossary's
-   * *Ask in chat*, for a term the article does not contain.
+   * **A question on its way into chat mode from another mode.** The first two
+   * senders: the glossary's *Ask in chat*, for a term the article does not
+   * contain, and (since 2026-10-04) the button on a Summary paragraph, which
+   * carries the paragraph across, quoted
+   * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md). The rest
+   * are below.
+   *
+   * **Since 2026-10-06 the press sends the question** (`ChatHandoff.send`),
+   * for every sender whose question is complete: Greg, *"When I click "ask in
+   * Chat" anywhere, automatically submit the input (rather than just
+   * prefilling the input box and waiting for me to hit send)"*. The Summary
+   * paragraph's is the one that still waits in the box, because it carries a
+   * paragraph and no question yet
+   * (docs/plans/261006j-ask-in-chat-sends-the-question.md).
    *
    * Not `chatDraft`, and that is Greg's call rather than tidiness: asked on
    * 2026-09-11 whether the question should go into the conversation already
    * there or a new one, he said *"fresh"*. `chatDraft` is the floating panel's
-   * draft about a passage, and it is left exactly as it was — suppressed in chat
-   * mode, back when the reader leaves. This one lives for one commit: the chat
-   * band takes it, opens a new conversation with it in the box, and clears it.
+   * ordinary draft about a passage, and it is left exactly as it was — suppressed
+   * in chat mode, back when the reader leaves. A completed passage question asked
+   * while a conversation mode is open joins this handoff through
+   * `askPassageInChat` below. The handoff lives for one commit: the chat band takes
+   * it, opens a new conversation with it, and clears it.
    * `ChatHandoff` in ConversationModes.tsx says what else it guards against.
    */
   const [chatHandoff, setChatHandoff] = useState<ChatHandoff | null>(null);
-  const askInChat = useCallback(
-    (term: string) => {
-      setChatHandoff({ slug, question: askAboutTerm(term) });
-      void setMode("chat");
+  /* The one body every sender shares: the text is ready-made, and the handoff
+     and the mode are set in one event so they arrive in one commit. `then`
+     is whether this press is the Send, and each sender says: one press is one
+     handoff object, which the band takes once, so it is one model call. */
+  const handToChat = useCallback(
+    (
+      question: string,
+      then: "send" | "wait",
+      origin?: ThreadOrigin,
+      passage?: { anchor: ChatAnchor; sourceCommentId?: string },
+    ) => {
+      setChatHandoff({
+        slug,
+        question,
+        send: then === "send",
+        ...(origin ? { origin } : {}),
+        ...(passage ? { anchor: passage.anchor } : {}),
+        ...(passage?.sourceCommentId ? { sourceCommentId: passage.sourceCommentId } : {}),
+      });
+      showBand("chat");
     },
-    [slug, setMode],
+    [slug, showBand],
+  );
+  /**
+   * Send a completed question about a passage. Outside the conversation modes
+   * the floating dialog owns the turn. Chat and Learn deliberately suppress
+   * that dialog, so there the question must use the band's handoff path; a
+   * hidden `chatDraft` would otherwise wait and spend on some later visit.
+   */
+  const askPassageInChat = useCallback(
+    (target: Extract<ChatTarget, { kind: "draft" }>) => {
+      if (currentMode.current !== "chat" && currentMode.current !== "learn") {
+        setChatDraft(target);
+        return;
+      }
+      const quote =
+        "quote" in target.anchor ? target.anchor.quote : target.help ? target.opening : undefined;
+      handToChat(
+        askAboutBlock({
+          blockId: target.anchor.blockId,
+          ...(quote ? { quote } : {}),
+          question: target.question,
+        }),
+        "send",
+        undefined,
+        {
+          anchor: target.anchor,
+          ...(target.sourceCommentId ? { sourceCommentId: target.sourceCommentId } : {}),
+        },
+      );
+    },
+    [handToChat],
+  );
+  /* **A third sender since 2026-10-05, and the first whose conversation
+     remembers where it was started**: Debate's *Check this claim in chat*. The
+     claim travels twice, as words in the question and as the `origin` the
+     thread will store, so the claim can find its chat again
+     (docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md). */
+  const checkClaimInChat = useCallback(
+    (origin: ClaimOrigin) => handToChat(askToCheckClaim(origin.quote), "send", origin),
+    [handToChat],
+  );
+  /* **A fourth, the same day: Debate's *Look at the debate from an angle*.**
+     The reader's words travel twice too, in the question and as the lens the
+     thread stores, which is what Debate's *Your angles* lists it by. A lens is
+     Debate's second origin shape and has no block or quote, so this takes the
+     words and builds the origin here: a claim's handler cannot be handed one
+     (docs/plans/261005k-why-you-are-reading-feeds-the-command-bar-and-debate-takes-a-lens.md, A).
+     Trimmed here as the route trims it, so what is stored equals what is sent
+     and a resent first question is the same origin.
+
+     **Two callers, and only one of them sends.** Debate's box is the reader's
+     own typed words and a button named *Ask in chat*: the press sends. The
+     command bar's suggested row is worded by a model from the reader's
+     private profile, and the privacy page says its question is sent only when
+     the reader presses Send in Chat, so that one still waits in the box
+     (docs/plans/261006j-ask-in-chat-sends-the-question.md, D5). */
+  const lensInChat = useCallback(
+    (lens: string, then: "send" | "wait") => {
+      const words = lens.trim();
+      if (words === "") return;
+      handToChat(askDebateThroughLens(words), then, { mode: "debate", lens: words });
+    },
+    [handToChat],
+  );
+  const debateThroughLensInChat = useCallback((lens: string) => lensInChat(lens, "send"), [lensInChat]);
+  const suggestedLensInChat = useCallback((lens: string) => lensInChat(lens, "wait"), [lensInChat]);
+  const askInChat = useCallback((term: string) => handToChat(askAboutTerm(term), "send"), [handToChat]);
+  /* **A fifth and a sixth since 2026-10-06: *Ask in chat* on a Glossary entry
+     and on a Citations row**, beside Dig deeper, which is unchanged. Each
+     travels twice, as a claim does: its name fenced in the question, and as
+     the `origin` the thread stores, which is the entry's durable id and a
+     snapshot of its name cut to the route's cap (`itemOrigin`). Not
+     `askInChat` above, which is for a word the article does not contain and
+     records nothing
+     (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md). */
+  const askGlossaryEntryInChat = useCallback(
+    (entry: Pick<GlossaryEntry, "id" | "name">) =>
+      handToChat(askAboutGlossaryEntry(entry.name), "send", itemOrigin("glossary", entry.id, entry.name)),
+    [handToChat],
+  );
+  const askCitedWorkInChat = useCallback(
+    (work: Pick<CitedWork, "id" | "title" | "authors" | "year">) =>
+      handToChat(askAboutCitedWork(work), "send", itemOrigin("citations", work.id, work.title)),
+    [handToChat],
+  );
+  /* The one sender that waits: the paragraph, quoted, and an empty line for
+     the reader's question. There is nothing to ask until they type it. */
+  const askAboutSummary = useCallback(
+    (paragraphText: string) => handToChat(askAboutSummaryParagraph(paragraphText), "wait"),
+    [handToChat],
   );
   const handoffTaken = useCallback(() => setChatHandoff(null), []);
+  const handoffThread = useCallback(
+    (taken: ChatHandoff, id: string) => {
+      if (taken.sourceCommentId) owner?.comments.noteThread(taken.sourceCommentId, id);
+    },
+    [owner],
+  );
   /* **And a handoff chat mode never took does not wait for the next visit.** The
      band takes it in the commit that switches mode, so this is the case where
      the switch did not happen, or the reader was elsewhere before it could —
@@ -795,7 +1090,7 @@ export function Reader({
    * **A quiz question pressed in the prose**, for Quiz to open at — `QuizArrival`
    * in QuizPanel.tsx, and SPIDERYARN-READING2-6V. The chat handoff's shape: set
    * in the same event as the navigation, taken by the band, cleared here — and
-   * cleared if the reader leaves Remember before the band took it, so it cannot
+   * cleared if the reader leaves Learn before the band took it, so it cannot
    * wait for a later visit.
    */
   const [quizArrival, setQuizArrival] = useState<QuizArrival | null>(null);
@@ -806,10 +1101,10 @@ export function Reader({
     [],
   );
   useEffect(() => {
-    if (mode !== "remember") setQuizArrival(null);
+    if (mode !== "learn") setQuizArrival(null);
   }, [mode]);
-  /* **Mode, sub-mode and thread in one pushed entry** — Remember's rule 1
-     (ConversationModes.tsx § RememberBand): `thread` cleared on the way to Quiz,
+  /* **Mode, sub-mode and thread in one pushed entry** — Learn's rule 1
+     (ConversationModes.tsx § LearnBand): `thread` cleared on the way to Quiz,
      so there is no frame in which the URL says both, and one Back undoes the
      whole trip. Not a press of the Quiz chip, so it arms nothing and can buy
      nothing: a line in the prose exists only because a quiz already does.
@@ -821,7 +1116,7 @@ export function Reader({
      `quizAfter`'s memo, and a new one would re-render `TableView`. */
   const [quizNav, setQuizNav] = useQueryStates({
     mode: modeParam,
-    remember: rememberParam,
+    learn: learnParam,
     thread: threadParam,
   });
   /* **A mode and one of its sub-modes, in one pushed entry** — the command
@@ -832,15 +1127,16 @@ export function Reader({
      metadata page builds its href from. */
   const [subNav, setSubNav] = useQueryStates({
     mode: modeParam,
-    remember: rememberParam,
+    learn: learnParam,
     thread: threadParam,
     diagram: diagramParam,
     referee: refereeParam,
     summary: summaryParam,
     structure: structureParam,
+    debate: debateParam,
   });
   const inQuiz = useRef(false);
-  const nowInQuiz = quizNav.mode === "remember" && quizNav.remember === "quiz" && quizNav.thread === null;
+  const nowInQuiz = quizNav.mode === "learn" && quizNav.learn === "quiz" && quizNav.thread === null;
   useEffect(() => {
     inQuiz.current = nowInQuiz;
   }, [nowInQuiz]);
@@ -848,7 +1144,7 @@ export function Reader({
     (batchId: string, questionId: BlockId) => {
       setQuizArrival({ batchId, questionId });
       if (!inQuiz.current)
-        void setQuizNav({ mode: "remember", remember: "quiz", thread: null }, { history: "push" });
+        void setQuizNav({ mode: "learn", learn: "quiz", thread: null }, { history: "push" });
       /* A band that had stepped aside on a narrow window comes back: the reader
          has asked to answer. */
       setBandAway(false);
@@ -904,30 +1200,48 @@ export function Reader({
        resolve to `null` — but that is an argument from two other pieces of
        state staying empty, and this is an argument from the branch not
        existing. The floating chat dialog fetches a conversation on mount. */
-    !owner || mode === "chat" || mode === "remember"
+    !owner || mode === "chat" || mode === "learn"
       ? null
       : (chatDraft ??
         /* **Only a chat may be opened here, and that is not a tidy-up.**
            `?thread=` survives leaving the mode, so a pasted
-           `?mode=toc&thread=<a Remember thread>` used to mount this dialog over
-           a Remember conversation — chat's UI and composer rather than Remember's, and the
+           `?mode=toc&thread=<a Learn thread>` used to mount this dialog over
+           a Learn conversation — chat's UI and composer rather than Learn's, and the
            next question answered with chat's prompt. Nothing on screen would
            have said so. Gating on the summary's `kind` is what `ThreadSummary.kind`
-           exists for; a Remember thread with no matching summary simply opens
+           exists for; a Learn thread with no matching summary simply opens
            nothing,
            which is the same thing a stale id already did. GPT Sol's review of
            docs/plans/260827ah-review-mode.md, finding 7. */
-        /* **A positive test, not a negative one.** `?.kind !== "remember"`
+        /* **A positive test, not a negative one.** `?.kind !== "learn"`
            (spelled `review` at the time) was
            the first version and had its default backwards: an *unknown* thread
            — summaries not fetched yet, or a stale id — came out as a chat, so a
-           Remember URL opened the floating chat dialog for a moment on every
+           Learn URL opened the floating chat dialog for a moment on every
            load, and a missing thread sat on "Starting…" forever. Asking for
            `=== "chat"` means the overlay opens only for a thread we can see is
            one. GPT Sol's review of the built code, finding 3. */
         (thread && chatSummaries.find((t) => t.id === thread)?.kind === "chat"
           ? { kind: "thread" as const, threadId: thread }
           : null));
+
+  /**
+   * **The block the floating panel is about**, for the prose to mark
+   * (`td.text.chat-open`) — the panel is fixed to the window, docked or not, so
+   * its position says nothing about which paragraph it belongs to.
+   *
+   * A draft carries its anchor. A thread's is on its summary, the same list
+   * `overlay` has just looked the thread up in, and a conversation about the
+   * whole piece has none: `null`, and no mark. Derived from `overlay`, so it
+   * is `null` in the two conversation modes and for a visitor without saying
+   * so again. A string, so `memo(TableView)` holds while it does not change.
+   */
+  const chatOpenBlock: BlockId | null =
+    overlay === null
+      ? null
+      : overlay.kind === "draft"
+        ? overlay.anchor.blockId
+        : (chatSummaries.find((t) => t.id === overlay.threadId)?.anchor?.blockId ?? null);
 
   /**
    * **Every** glossary term, so every one of them can be underlined in the
@@ -1057,6 +1371,46 @@ export function Reader({
    */
   const works: readonly CitedWork[] = owner?.citations.citations?.citations ?? NO_WORKS;
 
+  /**
+   * **Point at a citation in the prose and press *Dig deeper*** — Greg,
+   * 2026-10-03 (report `spya-c2qmbg`): *"What I was hoping is that it would
+   * have a button for dig deeper in the tooltip."* Plan 261004b.
+   *
+   * Starts the row's own *Dig deeper* and opens Citations on that row, where
+   * the answer streams — `openTermInGlossary`'s shape, one feature over. The
+   * verb and its state are on the citations read since the same plan, because
+   * the band that used to hold them is not mounted in the mode the reader
+   * pressed from. `citeFocus` is a one-shot the band hands back once the row is
+   * in view (CitationsPanel.tsx § `Props.focus`); it is state rather than a URL
+   * parameter because nothing about it should survive a reload.
+   *
+   * `null` for a visitor, whose arm has no read: no button is drawn.
+   */
+  const [citeFocus, setCiteFocus] = useState<CiteFocus | null>(null);
+  /* Only the request that was served: a second press may have replaced it. */
+  const citeFocusTaken = useCallback(
+    (taken: CiteFocus) => setCiteFocus((now) => (now?.n === taken.n ? null : now)),
+    [],
+  );
+  const investigateCitation = owner?.citations.investigate ?? null;
+  const citationDigging = owner?.citations.investigating ?? null;
+  const citeActions = useMemo<CiteActions | null>(
+    () =>
+      investigateCitation === null
+        ? null
+        : {
+            digging: citationDigging,
+            dig: (id) => {
+              void investigateCitation(id);
+              setCiteFocus((was) => ({ id, n: (was?.n ?? 0) + 1 }));
+              /* A passage jump can leave this very mode mounted but hidden
+                 on a narrow window: `showBand`. */
+              showBand("citations");
+            },
+          },
+    [investigateCitation, citationDigging, showBand],
+  );
+
   const citeSelections = useMemo<CiteSelection[]>(
     () =>
       works.map((work) => ({
@@ -1113,9 +1467,9 @@ export function Reader({
       void setTermId(id);
       const lowered = gateToReveal(terms, id, sort, gate ?? PRIORITY_GATE);
       if (lowered !== null) void setGate(lowered);
-      void setMode("glossary");
+      showBand("glossary");
     },
-    [setTermId, setMode, setGate, gate, sort, terms],
+    [setTermId, showBand, setGate, gate, sort, terms],
   );
 
   /**
@@ -1351,10 +1705,10 @@ export function Reader({
   const hitBlocks = useMemo(() => blockMatches(railFound(passages)), [passages]);
   /* **The quotes in the rail, in every mode** — their own strip down the left
      edge (spine-marks.ts § `quoteRailMarks`; Greg, 2026-09-10, spya-yd2c47).
-     From `proseMarked`, what the prose actually outlines, and not from
+     From `proseMarked`, what the prose actually fills, and not from
      `quotes.found`: Skim's stop can be a quote the bar hides from the band,
-     resolved afresh and outlined all the same (passages.ts § `proseFound`).
-     `quoteAlphaByBlock` keeps only what carries a quote stroke. */
+     resolved afresh and filled all the same (passages.ts § `proseFound`).
+     `quoteAlphaByBlock` keeps only what carries the quote-painting field. */
   const quoteRail = useMemo(() => quoteAlphaByBlock(proseMarked), [proseMarked]);
 
   /**
@@ -1392,9 +1746,9 @@ export function Reader({
      ← / → are the browser's. */
   const skimKeys =
     mode === "skim" && skimControl ? skimControl.step : null;
-  /* …and the quiz's questions while Remember's Quiz half is showing — `quizKeys`
+  /* …and the quiz's questions while Learn's Quiz half is showing — `quizKeys`
      is only ever set while `QuizPanel` is mounted. */
-  const quizStepKeys = mode === "remember" ? quizKeys : null;
+  const quizStepKeys = mode === "learn" ? quizKeys : null;
   /* …and the quotes while Quotes is the mode — Greg, 2026-09-11 (spya-mtyquy):
      *"use left/right to navigate between quotes"*. `stepQuote` is the band's
      ‹ › rule too, so the keys can do no more than the buttons; `null` from it
@@ -1429,8 +1783,8 @@ export function Reader({
      *prioritised*; under *most important* the band's order is invisible from
      the prose, and "next" jumping back up the page would be a surprise (GPT
      Sol's plan review, P2). `quoteCardQuotes` reads the actual prose marks, not
-     only the band's list: Skim may outline its current quote after the Quotes
-     bar has hidden it. Only outlined quotes enter the map, so no step lands on
+     only the band's list: Skim may fill its current quote after the Quotes bar
+     has hidden it. Only marked quotes enter the map, so no step lands on
      nothing. `jumpTo` and not `bandJump`: the reader is in the prose already.
      Opening Quotes selects the quote first, so the band opens on its row. */
   const quoteCard = useMemo<QuoteCardSource | null>(() => {
@@ -1535,7 +1889,64 @@ export function Reader({
     owner && owner.citations.status === "ready" && !owner.citations.stale
       ? (owner.citations.citations?.citations ?? null)
       : null;
-  const marginRoom = marginOpen && fit.margW > 0;
+  /* Whether the block chat panel sits over the column rather than over the
+     prose, and the room it has there — layout.ts § `chatDock`. From the same
+     `fit` the column is drawn from, so the two cannot disagree about whether
+     there is one. Computed whether or not a panel is open: it is two
+     subtractions, and the panel must get a new value on a resize without
+     being remounted. */
+  const chatDockRoom = chatDock(fit, windowWidth);
+  /**
+   * **The block chat as a card in the column, level with its block** —
+   * docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md. On
+   * trial; `BLOCK_CHAT_IN_COLUMN` is the switch, read here and nowhere else,
+   * and on `"dock"` everything below is `null` and the panel is 261003p's.
+   *
+   * **Never nothing** (§ 3). The card needs all of: the switch, the column
+   * showing with room (`chatCard`), a chat anchored to a block, that block not
+   * folded away, and a host element actually in hand. Any one missing and
+   * `ChatDialog` is handed no card, so it is docked if `chatDockRoom` says so
+   * and floating otherwise — an unanchored thread, a block the table is not
+   * drawing, and the one commit before the host's ref lands all show the
+   * panel they showed before.
+   *
+   * **A fold hides a cell with `display: none` and unmounts nothing**
+   * (fold.ts § `foldCss`), so "is there a host" cannot be the test for it: the
+   * host would still be in hand, inside a cell nobody can see. Asked of the
+   * fold store directly, and subscribed, because folding re-renders nothing
+   * here otherwise (GPT Sol on the plan, F4). A boolean, so a fold elsewhere
+   * in the article does not wake `Reader`.
+   */
+  const chatCardWidth =
+    BLOCK_CHAT_IN_COLUMN === "card" && marginRoom ? chatCard(fit, windowWidth, rootFontPx) : null;
+  const chatBlockFolded = useSyncExternalStore(
+    subscribeFold,
+    () => chatOpenBlock !== null && isFolded(chatOpenBlock),
+    () => false,
+  );
+  /** The block whose cell gets the card's host, or `null` for no card. */
+  const chatCardBlock = chatCardWidth !== null && !chatBlockFolded ? chatOpenBlock : null;
+  /* The host's DOM node, handed up by its ref. A `useState` setter, so the ref
+     is one function for the life of the reader and `marginNotes` below can
+     depend on it without ever changing because of it. */
+  const [chatCardHost, setChatCardHost] = useState<HTMLDivElement | null>(null);
+  const chatCardPlace: ChatCardPlace | null =
+    chatCardBlock !== null && chatCardHost !== null && chatCardWidth !== null
+      ? { host: chatCardHost, width: chatCardWidth }
+      : null;
+  /* The conversation the card is showing, so the margin can leave out its own
+     line for it (§ 6). From `chatCardBlock`, not the host: the line and the
+     card swap in one render rather than the line outliving it by a commit. */
+  const chatCardThread = chatCardBlock !== null && overlay?.kind === "thread" ? overlay.threadId : null;
+  /**
+   * **A count of the presses that asked for a conversation to be open** —
+   * `ChatDialog.reopen`. The chip, the "?", a mark and the drawer only write
+   * `?thread=`, so a press that names the conversation already open changes
+   * nothing the panel could see, and a card the reader had collapsed would sit
+   * there ignoring it (GPT Sol on the plan, F1). Only the setter is used by
+   * the callbacks below, so none of them changes identity because of it.
+   */
+  const [chatReopen, setChatReopen] = useState(0);
   /* `marginNotes` itself is built below `openAskedFromDrawer`, because the
      questions the reader asked sit in the margin too and open through it
      (plan 261002j). */
@@ -1700,7 +2111,7 @@ export function Reader({
   );
 
   /**
-   * **Each block's position in the article** — Debate's *by claim* order puts
+   * **Each block's position in the article** — Debate's Claims sub-mode puts
    * its claims in the order the piece makes them, and the artefact does not
    * carry that; the blocks do. Built once here and handed to both debate
    * bands. docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F8.
@@ -1805,6 +2216,7 @@ export function Reader({
       setChatDraft(null);
       void setNote(null);
       void setThread(id);
+      setChatReopen((n) => n + 1);
     },
     [setNote, setThread],
   );
@@ -1818,14 +2230,14 @@ export function Reader({
    * the opener as a parameter, so the *here / away / nowhere* check is the
    * comment row's exactly. `openChatThread` writes `?thread=` and clears
    * `?note=` in the same tick, so they land with any jump on at most one entry,
-   * and exactly one when the passage was away. Remember is
+   * and exactly one when the passage was away. Learn is
    * the deliberate extra case: even for a passage already here (or gone), its
-   * switch into Chat is itself one pushed entry, so Back can return to Remember.
+   * switch into Chat is itself one pushed entry, so Back can return to Learn.
    * The thread, panel close and any jump are still batched into that one entry.
    *
    * **Where it opens depends on the mode**, because `overlay` above is
    * suppressed in two of them: in Chat mode the band shows `?thread=` already,
-   * and in Remember it would be a chat inside the Remember band (or wiped by
+   * and in Learn it would be a chat inside the Learn band (or wiped by
    * Quiz's cleanup), so the press follows it into Chat mode — the rule the
    * band's own `onThread` keeps (ConversationModes.tsx). Every other mode gets
    * the floating dialog. GPT Sol's plan review, finding 1.
@@ -1840,10 +2252,14 @@ export function Reader({
   );
   const openAskedFromDrawer = useCallback(
     (id: string) => {
-      if (mode === "remember") void setMode("chat");
+      /* In Chat the mode does not change, but its band may have stepped aside
+         on a narrow window, and the floating panel is suppressed there: the
+         thread would open where nobody can see it (GPT Sol, plan review
+         261004g F1). In any other mode the floating panel takes it. */
+      if (mode === "learn" || mode === "chat") showBand("chat");
       jumpToComment(askedList, id, openChatThread, jumpTo);
     },
-    [askedList, openChatThread, jumpTo, mode, setMode],
+    [askedList, openChatThread, jumpTo, mode, showBand],
   );
 
   /**
@@ -1863,18 +2279,49 @@ export function Reader({
       faq: marginaliaFaq,
       timeline: marginaliaTimeline,
       /* The owner's only: a visitor's payload does not carry them (plan 261003f). */
-      relations: owner ? ownerFeed.relations : null,
+      relations: isOwner ? ownerFeed.relations : null,
       claims: marginaliaClaims,
       citations: marginaliaCitations,
       comments,
-      asked: marginViewer === "owner" ? askedList : null,
+      /* Less the conversation drawn as a card on its block, which would
+         otherwise say *Question* directly above itself (plan 261004k § 6). */
+      asked: marginViewer === "owner" ? askedBesideCard(askedList, chatCardThread) : null,
     });
+    const cardHost = (
+      <div
+        ref={setChatCardHost}
+        className="chat-card-host"
+        {...{ [CHAT_CARD_HOST_ATTR]: "" }}
+        data-marg-note=""
+      />
+    );
     const out = new Map<BlockId, ReactElement>();
     for (const [blockId, notes] of byBlock)
       out.set(
         blockId,
-        <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />,
+        <>
+          {blockId === chatCardBlock ? cardHost : null}
+          <MarginNotesSlot notes={notes} viewer={marginViewer} onOpenAsked={openAskedFromMargin} />
+        </>,
       );
+    /* **The card's host: first in its block's cell, above the block's own
+       notes**, so the card is the thing level with the paragraph and an opened
+       note cannot push the chat away from it (GPT Sol on the plan, F3). Where
+       an earlier block's notes already run down past this one, the card is
+       pushed below them like any note.
+
+       `data-marg-note` is what `useMarginLayout` collects, so the notes after
+       it are pushed below the card and come back when it collapses or closes;
+       its ResizeObserver already re-runs as a streamed answer grows. The host
+       is the positioned, measured box (dialogs.css § `.chat-card-host`) and
+       `ChatDialog` attaches its panel inside it, in flow, so the host's height
+       is the card's. Nothing here depends on the panel's callbacks, which
+       change on every render: the memo holds, and `memo(TableView)` with it. */
+    /* Keep the notes at the same React child position with or without a
+       host, so showing the card does not close an opened note on the block. */
+    if (chatCardBlock !== null && !out.has(chatCardBlock)) {
+      out.set(chatCardBlock, cardHost);
+    }
     return out;
   }, [
     marginRoom,
@@ -1883,7 +2330,7 @@ export function Reader({
     marginaliaIdeas,
     marginaliaFaq,
     marginaliaTimeline,
-    owner,
+    isOwner,
     ownerFeed.relations,
     marginaliaClaims,
     marginaliaCitations,
@@ -1891,6 +2338,8 @@ export function Reader({
     askedList,
     marginViewer,
     openAskedFromMargin,
+    chatCardBlock,
+    chatCardThread,
   ]);
   useMarginLayout(marginRoom, marginNotes);
 
@@ -1959,11 +2408,73 @@ export function Reader({
         setChatDraft(null);
         void setNote(null);
         void setThread(existing.id);
+        /* It may be the one already open, collapsed in the column. */
+        setChatReopen((n) => n + 1);
         return;
       }
       startChatAboutBlock(blockId);
     },
     [chatSummaries, setNote, setThread, startChatAboutBlock],
+  );
+
+  /**
+   * **The summaries are asked for again when the reader leaves Chat.** Chat's
+   * band tells `useChatAnchors` nothing, so a conversation started, continued
+   * or deleted there is not in the list a caller mode draws its mark from, and
+   * `overlay` above has nothing to open `?thread=` with. The hook keeps what
+   * is on screen until the answer lands, and keeps its guards
+   * (useChatAnchors.ts § Since 2026-10-05). Plan 261005i, F1.
+   */
+  const refreshChats = owner?.chatAnchors.refresh;
+  const modeWas = useRef(mode);
+  useEffect(() => {
+    if (modeWas.current === "chat" && mode !== "chat") refreshChats?.();
+    modeWas.current = mode;
+  }, [mode, refreshChats]);
+
+  /**
+   * **Open the conversation a claim's mark names, beside the mode.** Only
+   * `?thread=` changes, so the reader stays in Debate and `overlay` draws the
+   * conversation in `ChatDialog`: docked in the right-hand column when that
+   * column is open and the window is wide enough, floating otherwise — the
+   * block chat's rule, unchanged (plan 261005i, D3).
+   *
+   * And the summaries are asked for again: an answer that finished after the
+   * reader left Chat is in nobody's list until something asks.
+   */
+  const openClaimChat = useCallback(
+    (threadId: string) => {
+      setChatDraft(null);
+      void setNote(null);
+      void setThread(threadId);
+      setChatReopen((n) => n + 1);
+      refreshChats?.();
+    },
+    [setNote, setThread, refreshChats],
+  );
+  /* What Debate's claims are handed (DebatePanel.tsx § `DebateClaimChats`).
+     Memoised on the summaries, so the band re-renders when a chat appears or
+     its latest line changes and not otherwise. */
+  const claimChats = useMemo(
+    () => ({
+      summaries: chatSummaries,
+      onCheck: checkClaimInChat,
+      onLens: debateThroughLensInChat,
+      onOpen: openClaimChat,
+    }),
+    [chatSummaries, checkClaimInChat, debateThroughLensInChat, openClaimChat],
+  );
+  /* The same three things for Glossary's entries and Citations' rows
+     (OriginChat.tsx § `ItemChats`). **The raw `chatSummaries`**, not `chats`
+     below, which is filtered to the conversations anchored to a passage and
+     so holds none of these. The way back is the claim's own handler. */
+  const entryChats = useMemo(
+    () => ({ summaries: chatSummaries, onAsk: askGlossaryEntryInChat, onOpen: openClaimChat }),
+    [chatSummaries, askGlossaryEntryInChat, openClaimChat],
+  );
+  const workChats = useMemo(
+    () => ({ summaries: chatSummaries, onAsk: askCitedWorkInChat, onOpen: openClaimChat }),
+    [chatSummaries, askCitedWorkInChat, openClaimChat],
   );
 
   /**
@@ -2027,6 +2538,8 @@ export function Reader({
         setChatDraft(null);
         void setNote(null);
         void setThread(existing.id);
+        /* As the chip: the answer they already bought may be collapsed. */
+        setChatReopen((n) => n + 1);
         return;
       }
       void setNote(null);
@@ -2082,7 +2595,14 @@ export function Reader({
    * Marginalia or a mode band — an answer arriving then must not replace what
    * they chose. The mode-specific parameters are included too: moving from
    * Recall to Quiz is a new foreground choice even though `mode` stays
-   * `remember`. GPT Sol, P1 on the plan and code review of 261002j.
+   * `learn`. GPT Sol, P1 on the plan and code review of 261002j.
+   *
+   * **Every mode's, by construction**: `subModesNow` is built from a
+   * `Record<ModeWithSubModes, …>`, so a new mode with sub-modes does not
+   * compile until its parameter is in it. The five were listed by hand until
+   * 2026-10-06, and Debate's — the sixth, added a day after this was written —
+   * was not, so a box could open over a Debate view chosen during the round
+   * trip. The same snapshot answers the held selection create below.
    *
    * **Hover cards and modals are deliberately not in it.** Sol's code review
    * also checked the DOM for any new `role="dialog"`; that was taken out,
@@ -2097,37 +2617,20 @@ export function Reader({
    * view, before the browser can accept another press.
    */
   const surface = useRef<readonly unknown[]>([]);
+  const subModeViews: Record<ModeWithSubModes, string> = {
+    learn: subNav.learn,
+    diagram: subNav.diagram,
+    referee: subNav.referee,
+    summary: subNav.summary,
+    structure: subNav.structure,
+    debate: subNav.debate,
+  };
+  /* One string, so the effect below has one dependency for all of them. The
+     views are fixed vocabularies with no NUL in them. */
+  const subModesNow = Object.values(subModeViews).join("\u0000");
   useLayoutEffect(() => {
-    surface.current = [
-      note,
-      thread,
-      chatDraft,
-      annotating,
-      panel,
-      mode,
-      margin,
-      bandAway,
-      subNav.remember,
-      subNav.diagram,
-      subNav.referee,
-      subNav.summary,
-      subNav.structure,
-    ];
-  }, [
-    note,
-    thread,
-    chatDraft,
-    annotating,
-    panel,
-    mode,
-    margin,
-    bandAway,
-    subNav.remember,
-    subNav.diagram,
-    subNav.referee,
-    subNav.summary,
-    subNav.structure,
-  ]);
+    surface.current = [note, thread, chatDraft, annotating, panel, mode, margin, bandAway, subModesNow];
+  }, [note, thread, chatDraft, annotating, panel, mode, margin, bandAway, subModesNow]);
   const bookmarkPress = useRef(0);
   const createComment = owner?.comments.create;
   const bookmarkBlock = useMemo(() => {
@@ -2143,33 +2646,379 @@ export function Reader({
     };
   }, [createComment, setNote]);
 
+  /**
+   * **What the command bar's argument rows can do on this page** — *Jump to
+   * the first “X”*, *Glossary: “term”*, *Look up “X” in this article* — and,
+   * for chat's chips in Stage 2, the bookmark. Plan 261003f, Stage 1; who gets
+   * which is command-runners.ts § `readingExecutor`.
+   *
+   *  - `jump` is **`jumpTo`**, the deliberate jump that pushes history and
+   *    feeds the return chip (GPT Sol's F3) — not `bandJump`, since the bar is
+   *    not under a band, and never a write to `?at=`.
+   *  - `terms` is the **visible** list (F2), and `ready` is the owner's
+   *    glossary read having settled with a glossary in it (F1): loading, an
+   *    error and no glossary at all each offer no ask.
+   *  - `openGlossary` is the **plain** mode setter, never the Dock's press,
+   *    which arms generate-on-open (F1). The term travels in the one-shot
+   *    hand-off (glossary-ask-handoff.ts), not the address.
+   *  - `bookmark` under the same gate as the prose's own bookmark button (F6).
+   *  - `findMore` names a band **only while its list can be added to**, as the
+   *    read mounted here says (find-more.ts § `glossaryAppendOnOffer`,
+   *    `quotesAppendOnOffer`; plan 261004k, GPT Sol's F3) — and only a band
+   *    the Dock draws. The opener is the plain mode setter here too: the bar's
+   *    press leaves a hand-off (find-more-handoff.ts) and the band presses its
+   *    own Find more.
+   *  - `openQuickSearch` is **the owner's**, the cut the bar's own box makes
+   *    (Dock.tsx § `hasQuickSearch`): a visitor's band cannot ask. Plan
+   *    261005i.
+   */
+  const glossaryReady = glossaryRead?.status === "ready" && glossaryRead.glossary !== null;
+  const canBookmark = owner !== null && owner.comments.loaded && owner.comments.loadError === null;
+  const dockDraws = (target: FindMoreMode) =>
+    shownBehindTheSwitch({
+      experimental: MODE_CATALOG[target].experimental,
+      on: experimental.on,
+      current: mode === target,
+    });
+  const moreTerms = owner !== null && glossaryAppendOnOffer(owner.glossary) && dockDraws("glossary");
+  const moreQuotes = owner !== null && quotesAppendOnOffer(owner.quotes) && dockDraws("quotes");
+  const executor = useMemo(
+    () =>
+      readingExecutor({
+        slug,
+        blocks: article.blocks,
+        jump: jumpTo,
+        glossary: isOwner
+          ? {
+              ready: glossaryReady,
+              terms,
+              openTerm: openTermInGlossary,
+              openGlossary: () => showBand("glossary"),
+            }
+          : undefined,
+        bookmark: canBookmark ? bookmarkBlock : undefined,
+        findMore: isOwner
+          ? {
+              glossary: moreTerms ? () => showBand("glossary") : undefined,
+              quotes: moreQuotes ? () => showBand("quotes") : undefined,
+            }
+          : undefined,
+        openQuickSearch: isOwner ? openQuickSearch : undefined,
+        /* The bar's suggested lens row: Debate's own handoff, so the question
+           waits in Chat's box unsent. The owner's, as Chat is. Plan 261005k. */
+        askThroughLens: isOwner ? suggestedLensInChat : undefined,
+      }),
+    [
+      slug,
+      article.blocks,
+      jumpTo,
+      isOwner,
+      glossaryReady,
+      terms,
+      openTermInGlossary,
+      showBand,
+      canBookmark,
+      bookmarkBlock,
+      moreTerms,
+      moreQuotes,
+      openQuickSearch,
+      suggestedLensInChat,
+    ],
+  );
+  /**
+   * **The reader's tags on this article, for the bar** (`ShelfRow.tags`). The
+   * reading view draws no tag editor, so there is nothing on screen to keep in
+   * step and a plain `editArticleTags` is the whole controller; the Metadata
+   * page hands in its editor's own save instead (F4).
+   */
+  const tagsControl = useMemo<TagsControl>(
+    () => ({ edit: (change) => editArticleTags(slug, change) }),
+    [slug],
+  );
+  /**
+   * **What a command chip in a chat answer presses through** (plan 261003f,
+   * Stage 2; CommandChip.tsx) — `executor` above, plus the tags and a find,
+   * which the bar gets from its shelf row and from an address. One per surface
+   * because the jump differs: the band's steps a covering band aside, the
+   * dialog's does not. Who gets what is command-runners.ts § `chatExecutor`.
+   *
+   * The find reads the address at the press, not at the render: it carries
+   * `?at=`, which the reader's scrolling rewrites.
+   */
+  const chatCommands = useMemo(() => {
+    const find = (words: string) => navigate(findHref(slug, carriedSearch(window.location.search), words));
+    const forJump = (jump: (blockId: BlockId) => void) =>
+      chatExecutor({ reading: executor, blocks: article.blocks, jump, tags: tagsControl, find });
+    return { band: forJump(bandJump), dialog: forJump(jumpTo) };
+  }, [slug, executor, article.blocks, tagsControl, bandJump, jumpTo]);
+
+  /**
+   * ## Selecting applies the highlight, and the box customises or removes it
+   *
+   * > how about if selecting text automatically applies the highlight and also
+   * > pops up the fuller box to allow the user to customise (or remove) it, and
+   * > they can just click off if they're happy with the highlighting
+   * >
+   * > — Greg, 2026-10-04
+   *
+   * Outside Referee mode a selection **writes its row at once** — a comment in
+   * `DEFAULT_HIGHLIGHT` — and the box that opens is the comment's own,
+   * `CommentDialog`. That is `bookmarkBlock`'s pattern above (create, then
+   * open the box on the row) with the same three guards, applied to words
+   * instead of a paragraph. There is no provisional mark and no draft: the
+   * paint is the ordinary mark of an ordinary row, and a create that fails
+   * takes the row, the paint and the box away together (`useComments.create`).
+   * docs/plans/261004f-selecting-applies-the-highlight-and-the-box-customises-or-removes-it.md
+   * § GPT Sol's plan review, which is where the design changed to this.
+   *
+   * **`fresh` is the box a selection opened on the comment it made**, and only
+   * that box gets the fresh rules (CommentDialog.tsx § `FreshBox`): a press
+   * elsewhere closes it, Delete reads *Remove highlight*, Copy can take the
+   * highlight off again. It ends when that box closes or shows another
+   * comment — the effect below — so the same comment opened later from its
+   * mark is an ordinary box.
+   *
+   * **`freshTouched`** is whether the reader has done anything to the fresh
+   * row. Said by the dialog at the press, because a colour or an edit is not
+   * in the stored row until the server answers, and the overlap rule below
+   * must not remove a highlight the reader had just changed.
+   *
+   * **`closedFresh` is the fresh row, remembered for one gesture.** Set by the
+   * `pointerdown` outside its box — which closes nothing yet: the box goes
+   * when that press ends, and only if it still shows this row (CommentDialog.tsx
+   * § The press outside is only recorded) — held until that mouse
+   * gesture's `mouseup`, and also cleared by the next `pointerdown` as a stale
+   * guard (the capture listener below runs before the dialog's own). A mouse
+   * drag is one gesture, so a selection whose `mouseup` finds this set is the
+   * reader correcting the words they just highlighted — see `selectProse`.
+   * Touch and pen have no compatibility `mouseup` guarantee, so their
+   * `pointerup` clears it; this stops a later keyboard activation inheriting
+   * either kind of completed gesture.
+   */
+  const [fresh, setFresh] = useState<{
+    id: string;
+    anchor: SelectionAnchor;
+    input: "mouse" | "touch";
+  } | null>(null);
+  const freshTouched = useRef(false);
+  const closedFresh = useRef<{ id: string; anchor: SelectionAnchor; touched: boolean } | null>(null);
+  /**
+   * **Has this gesture already opened a comment's box?** The fresh box closes
+   * when the press outside it ends, and by then the same press may have made a
+   * new highlight or landed on another mark, whose box is the one now wanted.
+   * The dialog checks the id it is showing and the close itself is conditional
+   * on `?note=`, but neither is enough alone: both read state that a commit not
+   * yet flushed has not reached. This is set in the handler, so it is always
+   * current. Forgotten at the next `pointerdown`.
+   */
+  const openedThisGesture = useRef(false);
+  /* A clipboard answer can arrive after its fresh box has closed. Every
+     reader change protects the row here, above any one dialog instance, and a
+     successful answer claims the id before deleting so two pending copies
+     cannot both remove it. */
+  const copyOnlyProtected = useRef(new Set<string>());
+  /** `bookmarkPress`'s twin: only the newest selection may open its box late. */
+  const selectPress = useRef(0);
+  /* What `selectProse` reads without depending on it — the function is
+     `memo(TableView)`'s `onSelect` and must keep its identity (see its
+     dependency list). Published from a committed render, as `surface` is. */
+  const commentsNow = useRef<CommentsApi | null>(null);
+  const refereeNow = useRef(false);
+  useLayoutEffect(() => {
+    commentsNow.current = owner?.comments ?? null;
+    refereeNow.current = mode === "referee";
+  });
+  /* Fresh ends when its box does. `freshShown` is there because the row can
+     be made fresh a beat before `?note=` names it. */
+  const freshShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (!fresh) {
+      freshShown.current = null;
+      return;
+    }
+    if (note === fresh.id) {
+      freshShown.current = fresh.id;
+      return;
+    }
+    if (freshShown.current === fresh.id) setFresh(null);
+  }, [note, fresh]);
+  useEffect(() => {
+    const nextGesture = () => {
+      closedFresh.current = null;
+      openedThisGesture.current = false;
+    };
+    const gestureEnded = () => {
+      closedFresh.current = null;
+    };
+    const nonMouseGestureEnded = (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") closedFresh.current = null;
+    };
+    window.addEventListener("pointerdown", nextGesture, true);
+    window.addEventListener("pointerup", nonMouseGestureEnded);
+    window.addEventListener("mouseup", gestureEnded);
+    window.addEventListener("pointercancel", gestureEnded);
+    return () => {
+      window.removeEventListener("pointerdown", nextGesture, true);
+      window.removeEventListener("pointerup", nonMouseGestureEnded);
+      window.removeEventListener("mouseup", gestureEnded);
+      window.removeEventListener("pointercancel", gestureEnded);
+    };
+  }, []);
+  /**
+   * **A mouse keeps its words selected.** The paint replaces the paragraph's
+   * nodes, which collapses the selection the reader has just made — and a
+   * reader who selected in order to copy would press ⌘C on nothing. So once
+   * the fresh row is painted the selection is put back over it, and a native
+   * copy then both works and takes the highlight off (CommentDialog.tsx § a
+   * native copy).
+   *
+   * **Twice, and then never again**: the paragraph is painted once for the
+   * row and once more when `?note=` names it and the mark gains its open ring,
+   * so the effect runs for each. Only while the box is the fresh one — keyed
+   * on `note` being this row — so the paint that takes the ring *off* when the
+   * box closes does not put a selection back over a reader who has moved on.
+   *
+   * Not by touch: there the button press clears the selection on purpose, to
+   * put the OS handles and callout away (`selectProse`). And not over a
+   * selection that is still live, which is the reader's and may be a new one.
+   */
+  const freshOpen = fresh !== null && note === fresh.id;
+  /* A passive effect, and of this component: it runs after the table's new
+     markup is committed and after `CommentDialog`'s own mount effect has moved
+     focus to its close button. Chrome leaves a selection alone when a button
+     is focused; jsdom collapses it, and nothing promises the rest do not. */
+  useEffect(() => {
+    if (!fresh || fresh.input !== "mouse") return;
+    /* The first paint comes before `?note=` has caught up; the second with it. */
+    if (!freshOpen && freshShown.current === fresh.id) return;
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) return;
+    selectAnchor(fresh.anchor);
+  }, [fresh, freshOpen]);
+
   const selectProse = useCallback(
     /* Always a real anchor since 2026-09-05: `readSelection` now distinguishes
        a drag it refused from no drag at all, and TableView stops on the first
        without calling in here. src/web/selection.ts § SelectionRead. */
-    (anchor: SelectionAnchor) => {
+    (anchor: SelectionAnchor, input: "mouse" | "touch" = "mouse") => {
       /* **The one control a visitor meets by accident**, since selecting prose
          is something people do while reading rather than a button they chose to
          press. So it is silent: they keep their selection and the page does not
          grow a box about an account. The ask lives where they went looking for
          something — the marked modes and the notice under the title. */
-      if (!owner) return;
+      if (!isOwner) return;
+      const api = commentsNow.current;
+      if (!api) return;
       /* **Nothing is bought here.** Until 2026-08-26 this line spent a model
-         call the reader had not asked for; then it opened an ask box; since
-         2026-08-28 it opens a *comment* box, where saving is free and the model
-         is a tick-box. Greg's call — see
-         docs/plans/260828a-comments-and-bookmarks.md. */
-      void setNote(null);
-      void setThread(null);
-      setChatDraft(null);
-      setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
-      /* **The browser's selection is deliberately left alone**, which is a
-         reversal. It used to be cleared because it sat on top of the mark we had
-         just drawn and hid it. There is now no mark to reveal — nothing is
-         stored until the reader asks — so clearing it would leave them looking
-         at a quote in a box with no idea which words on the page it came from. */
+         call the reader had not asked for; then it opened an ask box; from
+         2026-08-28 a comment *draft* box; since 2026-10-04 it stores a free
+         highlight. The model is only ever asked from a button. */
+      if (refereeNow.current) {
+        /* **Referee mode keeps the draft box, exactly as it was.** A selection
+           there is evidence for a criterion: it opens on No colour, the
+           placement is part of the one save, and nothing is stored until the
+           referee says. AnnotateDialog.tsx § Referee only.
+
+           The browser's selection is left alone here: there is no stored mark
+           yet, so clearing it would leave a quote in a box with no sign of
+           which words on the page it came from. */
+        void setNote(null);
+        void setThread(null);
+        setChatDraft(null);
+        setAnnotating({ blockId: anchor.blockId, quote: anchor.quote, start: anchor.start });
+        return;
+      }
+      /* **Overlap means correction** (GPT Sol, E3). The fresh box was closed
+         by the press that began this very drag, in the same paragraph, over
+         some of the same characters: the reader is fixing which words, not
+         asking for two highlights. The first goes, if it is still exactly what
+         the selection wrote — read from the stored row *now*, and from
+         `touched` for anything the store has not answered yet. A mouse only:
+         by touch the second selection is a new long-press, a new gesture. */
+      const closed = closedFresh.current;
+      /* **The very words of the fresh highlight are not a new selection.** A
+         mouse keeps them selected while the box is open (§ A mouse keeps its
+         words selected), and a click on selected text does not collapse the
+         selection until after its `mouseup` — so a click on the highlight
+         arrives here as its own anchor again. It is a click away: leave the
+         row alone, leave `closedFresh` for `openCommentDialog`, and let the
+         box close as the press ends. Before the close moved to the end of the
+         gesture, the repaint at `pointerdown` had collapsed the selection and
+         this could not arise. */
+      if (input === "mouse" && closed && sameAnchor(closed.anchor, anchor)) return;
+      closedFresh.current = null;
+      if (input === "mouse" && closed && !closed.touched && spansOverlap(closed.anchor, anchor)) {
+        const row = api.comments.find((c) => c.id === closed.id);
+        if (row && isPristineHighlight(row)) api.remove(row.id);
+      }
+
+      const id = mintId();
+      const mine = ++selectPress.current;
+      const before = surface.current;
+      /* Read before `create`, which is what decides which of the two paths
+         below this is: with the list in, the row is drawn in this same turn. */
+      const listIn = api.loaded;
+      const stored = api.create({
+        id,
+        blockId: anchor.blockId,
+        quote: anchor.quote,
+        start: anchor.start,
+        colour: DEFAULT_HIGHLIGHT,
+      });
+      const openFreshBox = (rowId: string) => {
+        openedThisGesture.current = true;
+        freshTouched.current = false;
+        setFresh({ id: rowId, anchor, input });
+        /* One panel in the slot, and the box is drawn only when no chat is. */
+        void setThread(null);
+        setChatDraft(null);
+        setAnnotating(null);
+        void setNote(rowId);
+      };
+      /* **As soon as its row exists.** With the list loaded that is now. */
+      if (listIn) openFreshBox(id);
+      void stored.then((comment) => {
+        if (comment === null) {
+          /* Refused, or removed by the reader meanwhile. The row is gone and
+             the box with it; do not leave `?note=` naming nothing. */
+          if (listIn) void setNote((current) => (current === id ? null : current));
+          return;
+        }
+        if (listIn) {
+          /* The server may mint a different id; follow the row. */
+          if (comment.id !== id) {
+            setFresh((current) => (current?.id === id ? { ...current, id: comment.id } : current));
+            void setNote((current) => (current === id ? comment.id : current));
+          }
+          return;
+        }
+        /* **Held behind the opening read**, the first seconds of a page: there
+           was no row to open a box on until now. `bookmarkBlock`'s two guards:
+           not over anything the reader opened while waiting, and not for a
+           selection that is no longer the newest. The highlight is stored and
+           painted either way. */
+        const unchanged = surface.current.every((v, i) => Object.is(v, before[i]));
+        if (mine === selectPress.current && unchanged) openFreshBox(comment.id);
+      });
+      /* **A finger's selection is put away; a mouse's is left alone** (GPT
+         Sol, E4). On touch this takes the OS handles and callout off the words
+         the paint now marks. A mouse's stays for the reader to copy. */
+      if (input === "touch") window.getSelection()?.removeAllRanges();
     },
-    [owner, setNote, setThread],
+    /* **`isOwner`, not `owner`.** The capability is a new object on every
+       render of `OwnedReader` (ArticlePage.tsx), and a reading-time step is one
+       of those — so depending on the object made this a new function each
+       time, and it is `memo(TableView)`'s `onSelect`. GPT Sol's F2 on
+       docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md;
+       tests/spine-reading.test.ts verifies a reach update leaves TableView's
+       render count unchanged, including with marginalia open. The comments
+       api and the mode come through refs for the same reason. */
+    [isOwner, setNote, setThread],
+  );
+  /** The chip's press: the same call, said to be a finger's. */
+  const selectProseByTouch = useCallback(
+    (anchor: SelectionAnchor) => selectProse(anchor, "touch"),
+    [selectProse],
   );
 
   /**
@@ -2187,7 +3036,21 @@ export function Reader({
    * `string`, so the annotation was a lie a reader would have believed. GPT Sol
    * F24, 2026-09-06.
    */
-  const openCommentDialog = useCallback((id: string) => void setNote(id), [setNote]);
+  const openCommentDialog = useCallback(
+    (id: string) => {
+      /* **A click on the words just highlighted is a click away**, not a
+         request to open them. Its `pointerdown` marked the fresh box to close
+         when the press ends (`closedFresh`); this `mouseup`, landing on that
+         highlight's own mark, comes just before that close, and without this
+         it would name the same comment again and the box would open straight
+         back up as an ordinary one.
+         The next press on the mark is a new gesture and opens it as usual. */
+      if (closedFresh.current?.id === id) return;
+      openedThisGesture.current = true;
+      void setNote(id);
+    },
+    [setNote],
+  );
 
   /**
    * The whole address, subscribed to — the input to the block permalinks.
@@ -2239,8 +3102,8 @@ export function Reader({
         /* **The key is inert today, and it is kept for the day it is not.**
            It was written when one `ConversationBand` was mounted by two modes
            — `{(mode === "chat" || mode === "review") && <ConversationBand
-           key={mode} …/>}`, commit 2dd63119 — where it is what stopped Remember
-           inheriting chat's open conversation and focus nonce. Remember
+           key={mode} …/>}`, commit 2dd63119 — where it is what stopped Learn
+           inheriting chat's open conversation and focus nonce. Learn
            has had a wrapper of its own since, so this arm renders for one mode
            and `mode` is the constant `"chat"`; the arms return different
            top-level types, so React discards the outgoing subtree with or
@@ -2255,24 +3118,31 @@ export function Reader({
            switch, the reader carries the other conversation across. See
            ConversationBand. */
         return owner ? (
-          <ConversationBand
-            key={mode}
-            slug={slug}
-            blocks={blockText}
-            onJump={bandJump}
-            kind="chat"
-            onScreen={chatOnScreen}
-            handoff={chatHandoff}
-            onHandoffTaken={handoffTaken}
-          />
+          /* Chat's answers may carry command chips; Learn's and
+             Candidates' prompts never ask for one, so only this arm and the
+             chat dialog below are given the executor. CommandChip.tsx. */
+          <ChatCommands executor={chatCommands.band}>
+            <ConversationBand
+              key={mode}
+              slug={slug}
+              blocks={blockText}
+              onJump={bandJump}
+              kind="chat"
+              onScreen={chatOnScreen}
+              handoff={chatHandoff}
+              onHandoffTaken={handoffTaken}
+              onHandoffThread={handoffThread}
+              onSettled={refreshChats}
+            />
+          </ChatCommands>
         ) : null;
-      /* **Remember is two bands behind one mode**, and the choice between them
-         is `?remember=`. The wrapper exists so that the parameter and its
+      /* **Learn is two bands behind one mode**, and the choice between them
+         is `?learn=`. The wrapper exists so that the parameter and its
          collision with `?thread=` are decided in one place rather than in each
-         half — see `RememberBand`. */
-      case "remember":
+         half — see `LearnBand`. */
+      case "learn":
         return owner ? (
-          <RememberBand
+          <LearnBand
             slug={slug}
             quizRead={owner.quiz}
             quizArrival={quizArrival}
@@ -2311,6 +3181,7 @@ export function Reader({
               onJump={bandJump}
               onSelected={setTerm}
               onAskChat={askInChat}
+              chats={entryChats}
             />
           );
         return artefacts?.glossary ? (
@@ -2336,6 +3207,10 @@ export function Reader({
       case "structure":
         return (
           <StructureBand
+            slug={slug}
+            /* Only for the line a headings tree draws: the owner's is the one
+               with *Try again* on it (StructureNotice.tsx). */
+            owner={isOwner}
             article={article}
             leafDepth={geometry.leafDepth}
             sections={sections}
@@ -2351,16 +3226,40 @@ export function Reader({
                guessed here is why that move cost this line nothing but its
                example. */
             proseBeside={fit.modeW > 0}
+            /* **The one thing here that does differ by footing**, and it is
+               data, not a second band: while the real structure is on its way
+               an owner's line comes from the job list and carries *Build it*
+               (ArticlePage.tsx § `OwnedReader`); a visitor's is read off the
+               payload and has nothing to press, so this branch starts no job
+               subscription for them. Plan 261005j, GPT Sol's F10. */
+            arrival={owner ? owner.structureArrival : visitorArrival(article.tree)}
             onJump={bandJump}
           />
         );
       /* The plain-words levels are an artefact, so since 2026-09-30 this is an
          owner/visitor pair — the visitor's band takes the stored paragraphs off
          the payload and fetches nothing.
-         docs/plans/260930i-simple-summaries-eli15-sub-mode.md. */
+         docs/plans/260930i-simple-summaries-eli15-sub-mode.md.
+
+         **And the thread, since 2026-10-03**: Summary's third view, a mode of
+         its own (Tweets) before. The band picks between the two artefacts by
+         `?summary=`, and is the wide one while the thread shows (`bandShape`
+         above). No passages either way: each post's links are jumps.
+         docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
       case "summary":
-        if (!owner) return <VisitorSummaryBand simple={artefacts?.simpleSummary} onJump={bandJump} />;
-        return <SummaryBand slug={slug} onJump={bandJump} />;
+        if (!owner)
+          return (
+            <VisitorSummaryBand
+              slug={slug}
+              simple={artefacts?.simpleSummary}
+              thread={artefacts?.tweets}
+              article={article}
+              onJump={bandJump}
+            />
+          );
+        /* `onAskChat` on the owner's band only: a visitor has no chat, and
+           `VisitorSummaryBand` above has no such prop to be handed. */
+        return <SummaryBand slug={slug} article={article} onJump={bandJump} onAskChat={askAboutSummary} />;
       /* **Mounted for a visitor too, since 2026-09-04** — one branch rather
          than the owner/visitor pair the artefact modes have, because there is
          no artefact to carry and no second component to build: the default
@@ -2387,7 +3286,7 @@ export function Reader({
             onJump={bandJump}
             /* Walking the picture follows it in the prose without stepping the
                band aside — DiagramPanel.tsx § `onFollow`. */
-            onFollow={jumpTo}
+            onFollow={followTo}
           />
         );
       /* **The first mode that could break on its own**, 2026-09-05 — the
@@ -2484,9 +3383,19 @@ export function Reader({
               onJump={bandJump}
               blockOrder={blockOrder}
               publishedAt={publishedAt}
+              articleTitle={article.meta.title}
             />
           ) : null;
-        return <DebateBand slug={slug} onJump={bandJump} blockOrder={blockOrder} publishedAt={publishedAt} />;
+        return (
+          <DebateBand
+            slug={slug}
+            onJump={bandJump}
+            blockOrder={blockOrder}
+            publishedAt={publishedAt}
+            articleTitle={article.meta.title}
+            claimChats={claimChats}
+          />
+        );
       /* **The owner/visitor pair, since 2026-09-29.** It was the owner alone
          until a public article's stored Skim was refused to a signed-out
          reader (SPIDERYARN-READING2-56); a stored list is the same case. The
@@ -2502,7 +3411,16 @@ export function Reader({
           return artefacts?.citations ? (
             <VisitorCitationsBand citations={artefacts.citations} onJump={bandJump} />
           ) : null;
-        return <CitationsBand slug={slug} read={owner.citations} onJump={bandJump} />;
+        return (
+          <CitationsBand
+            slug={slug}
+            read={owner.citations}
+            onJump={bandJump}
+            focus={citeFocus}
+            onFocusTaken={citeFocusTaken}
+            chats={workChats}
+          />
+        );
       /* **The owner/visitor pair, since 2026-09-29**, for the citations' reason
          above. No passages: each passage under a question is a jump, not a
          selection. docs/plans/260916d-faq-mode.md,
@@ -2510,16 +3428,6 @@ export function Reader({
       case "faq":
         if (!owner) return artefacts?.faq ? <VisitorFaqBand faq={artefacts.faq} onJump={bandJump} /> : null;
         return <FaqBand slug={slug} onJump={bandJump} />;
-      /* **A mode since 2026-09-29**, a page of its own before. FAQ's shape: no
-         passages, each post's links are jumps. The band is the wide one
-         (`bandShape` above). docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-      case "tweets":
-        if (!owner) {
-          return artefacts?.tweets ? (
-            <VisitorTweetsBand slug={slug} thread={artefacts.tweets} article={article} onJump={bandJump} />
-          ) : null;
-        }
-        return <TweetsBand slug={slug} article={article} onJump={bandJump} />;
       /* **The owner/visitor pair, since 2026-09-29.** A passage producer (the
          current stop) and a controller (← / → and the door after the stop's
          block), both published up here and both cleared when the band
@@ -2543,8 +3451,8 @@ export function Reader({
               blocks={article.blocks}
               tree={article.tree}
               quoteMarks={quotes.found}
-              covers={fit.modeW === 0}
-              away={bandAway && fit.modeW === 0}
+              covers={bandCovers}
+              away={bandBack}
               onAway={bandStepsAside}
               onJump={jumpTo /* not `bandJump`: Skim jumps on opening, and steps aside itself (`onAway`) — Sol, 260929g */}
               onFound={setSkimFound}
@@ -2563,8 +3471,8 @@ export function Reader({
             tree={article.tree}
             quotes={owner.quotes}
             quoteMarks={quotes.found}
-            covers={fit.modeW === 0}
-            away={bandAway && fit.modeW === 0}
+            covers={bandCovers}
+            away={bandBack}
             onAway={bandStepsAside}
             onJump={jumpTo /* not `bandJump`: see the visitor arm above */}
             onFound={setSkimFound}
@@ -2699,7 +3607,10 @@ export function Reader({
    */
   function marginColumn(): ReactNode {
     if (!marginOpen) return null;
-    const covered = bandOpen && fit.modeW === 0;
+    /* One block for the path and the arc both, so they cannot name different
+       parts; above the first part it is the first part's first block
+       (notes.ts § `headBlock`, qi-2ymfq3ek). */
+    const headAt = headBlock(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null);
     return (
       <ModeBoundary
         mode="marginalia"
@@ -2707,13 +3618,20 @@ export function Reader({
         owner={owner !== null}
         onPlain={() => void setMargin(null)}
       >
-        {owner && <OwnerMarginFeed slug={slug} onFeed={setOwnerFeed} />}
-        {!covered && (
+        {owner && (
+          <OwnerMarginFeed
+            slug={slug}
+            shown={marginRoom}
+            awaitingStructure={awaitingStructure(article.tree)}
+            onFeed={setOwnerFeed}
+          />
+        )}
+        {!bandCovers && (
           <MarginaliaHead
             room={fit.margW > 0}
             beside={bandOpen}
-            path={headPath(article.tree, rowOf, at ?? article.blocks[0]?.id ?? null)}
-            arc={arcAt(liveArc, rowOf, at ?? article.blocks[0]?.id ?? null)}
+            path={headPath(article.tree, rowOf, headAt)}
+            arc={arcAt(liveArc, rowOf, headAt)}
           />
         )}
       </ModeBoundary>
@@ -2726,12 +3644,12 @@ export function Reader({
        BlockLinkCard.tsx. */
     <BlockLinkProvider index={blockLinks} resolveXref={resolveXref} readingTimeFor={owner?.readingTime.timeFor}>
     <div
-      /* `text-alone` says the article is the only thing on the page, so the
+      /* `text-alone` says the prose has no mode band beside it, so the
          stylesheet can centre the reading column and put the masthead over it
          rather than leaving both against the left edge of a window neither
          fills. It is `fit.alone` and nothing computed here on purpose — the
          same fact under two definitions is how `proseVisible` came to exist.
-         layout.ts § `Fit.alone`, styles.css § plain, centred. */
+         layout.ts § `Fit.alone`, narrow-window.css § `.reader.text-alone`. */
       /* `band-covers` is the same idea and exists for a sharper reason: it is
          the *stylesheet's* only way to know that the mode band has no room
          beside the prose and is lying over it instead. That crossover is
@@ -2744,10 +3662,14 @@ export function Reader({
          thrown over the article.
 
          So the fact is written here, from the one number that computes it,
-         beside the `--mode-w` it is derived from. `fit.modeW === 0` is also
-         true when no band is open at all, which is why every rule keyed off
-         this class also names `.mode-band` — styles.css § a band with no room,
-         tests/spine-width.test.ts. */
+         beside the `--mode-w` it is derived from. **`fit.modeW === 0`, not
+         `bandCovers`**: it is also true when no band is open at all, and one
+         rule wants exactly that — narrow Marginalia in Plain hides the
+         small-screen banner with `.band-covers:has(.mode-band, .marg-narrow)`
+         (styles/narrow-window.css). So every rule keyed off this class also
+         names what is lying over the prose: `.mode-band`, or there
+         `.marg-narrow` — narrow-window.css § a band with no room,
+         tests/spine-width.test.ts, tests/layout-margin.test.ts. */
       className={`reader spine-${fit.spine}${fit.alone ? " text-alone" : ""}${
         fit.modeW === 0 ? " band-covers" : ""
       }${bandBack ? " band-away" : ""}`}
@@ -2760,7 +3682,7 @@ export function Reader({
       /* `+ horizontalInset(...)`: `fit.minWidth` is the spine plus the table,
          computed from a width that already had the notch taken out of it, and
          `box-sizing: border-box` means this number has to cover `.reader`'s
-         padding too — which now includes those same insets (styles.css § shell).
+         padding too — which now includes those same insets (shell.css § shell).
          Without the term the table's last column is squeezed out of the content
          box and the page scrolls sideways by the notch. */
       style={
@@ -2774,23 +3696,27 @@ export function Reader({
              the layout and the bars, rather than CSS guessing it again. */
           "--page-w": `${windowWidth}px`,
           /* The table's own width, so the masthead can be as wide as the
-             reading column when it is centred over it (styles.css § plain,
-             centred) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
+             reading column when it is centred over it (narrow-window.css §
+             `.reader.text-alone`) without a second copy of `PROSE_ALONE_MAX_REM` in CSS. */
           "--table-w": `${fit.tableW}px`,
           /* Marginalia's column, and the room `.reader` keeps for it on its
              right — layout.ts § `fitMargin`. Both 0 in every other mode. */
           "--marg-w": `${fit.margW}px`,
           "--marg-reserve": `${fit.margReserve}px`,
+          "--marg-title-reserve": `${margTitleReserve(fit)}px`,
           "--marg-left": `${fit.margLeft}px`,
         } as CSSProperties
       }
     >
+      {/* First in the reader, so it is the first Tab stop: past the spine and
+          the prose to the mode switch. SkipToModes.tsx. */}
+      <SkipToModes />
       {fit.spine !== "off" && (
         <Spine
           outline={outline}
           layoutKey={layoutKey}
           matches={hitBlocks}
-          reading={owner?.readingTime.levels}
+          reading={owner?.readingTime.reach}
           quotes={quoteRail}
           onJump={jumpTo}
         />
@@ -2817,6 +3743,7 @@ export function Reader({
         <SharedNotice
           signedIn={signedIn}
           sessionUnconfirmed={sessionUnconfirmed}
+          sharedBy={sharedBy}
           source={{ url: webSource(article.meta), guess: article.sourceGuess }}
         />
       )}
@@ -2862,7 +3789,8 @@ export function Reader({
       {/* **And since 2026-09-08 it is not drawn at all when that leaves it
           empty**, which on a reading view is most of the time: `showBar` above
           decides whether the element exists, and shell.css then stops reserving
-          its 44px. It was no longer "the one piece of chrome that
+          its height (44px, or more on a narrow window while it holds the
+          breadcrumb). It was no longer "the one piece of chrome that
           is on screen at every scroll position" — the sentence below is kept
           because it is still the ordering rule for what goes *in* the bar, and
           the Dock is what that claim is now true of.
@@ -2874,11 +3802,14 @@ export function Reader({
           one stray `{" "}` away from drawing the strip again with nothing to
           say so. docs/plans/260908a-the-top-bar-stops-being-drawn-when-it-has-nothing-in-it.md
           § The simpler options passed over. */}
+      {/* Directly before the bar, and only for a bar that holds the breadcrumb:
+          BarStuckSentinel.tsx. */}
+      {showCrumbs && <BarStuckSentinel />}
       {showBar && (
         <div className="controls">
           {/* First of all: what footing you are reading on outranks every control
               that follows. */}
-          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} />}
+          {!owner && <ViewOnlyChip sessionUnconfirmed={sessionUnconfirmed} sharedBy={sharedBy} />}
           {/* Where in the structure the reader is — `showCrumbs` above. */}
           {showCrumbs && (
             <HeadingsCrumbs
@@ -2895,7 +3826,7 @@ export function Reader({
               in", and that is still true: the Dock is the answer to it now.
   
               They could not stay: this bar is drawn only when it has content
-              (`showBar` above), so a refused delete would have summoned 44px of
+              (`showBar` above), so a refused delete would have summoned a bar of
               chrome and pushed the article down mid-read. **Not deleted** — GPT
               Sol's G3 on 260905g refused that, because `error` is not the
               drawer's `loadError`: that one is about the fetch that fills the
@@ -2929,7 +3860,7 @@ export function Reader({
            would be right only if `Reader` re-rendered on every URL change, and
            it does not. nuqs subscriptions are key-isolated, so ten reading
            parameters owned by child components — `summary`, `diagram`, `dhue`,
-           `referee`, `remember` and five more — change the address without
+           `referee`, `learn` and five more — change the address without
            waking this component at all. Until `TableView` was memoised, `?at=`
            re-rendered it once a second and hid that; it does not any more.
            router.ts § `watchHistoryWrites`. Found by GPT Sol, 2026-09-04.
@@ -2953,6 +3884,7 @@ export function Reader({
            call them theirs — BlockGutter.tsx § `notesBy`. */
         notesBy={owner ? "you" : "owner"}
         openChat={overlay?.kind === "thread" ? overlay.threadId : null}
+        chatOpenBlock={chatOpenBlock}
         onOpenChat={openChatThread}
         /* The gate, and only the gate — the body is `chatAboutBlock` above,
            which explains why it is `undefined` rather than a no-op here. */
@@ -2997,7 +3929,8 @@ export function Reader({
       />
       {/* **A finger's selection gets no `mouseup`**, so the `onSelect` above
           never hears of it on an iPad; this is the button it gets instead, and
-          it calls the same `selectProse`. Two gates, both decided here because
+          it calls the same `selectProse`, saying it was a finger — which is
+          what applies the highlight and then clears the selection. Two gates, both decided here because
           here is where they are known. `owner &&`: a visitor's selection is
           silent (`selectProse`'s early return), and a chip that appears and
           then does nothing is not silent. `suppressed`: the three conditions
@@ -3012,13 +3945,21 @@ export function Reader({
         <TouchSelectionChip
           key={`${slug}:${mode}`}
           suppressed={Boolean(annotating || overlay || openComment)}
-          onSelect={selectProse}
+          onSelect={selectProseByTouch}
         />
       )}
       {owner && annotating && (
         <AnnotateDialog
+          /* **Referee mode's box, since 2026-10-04** — `selectProse` sets
+             `annotating` nowhere else.
+
+             **One box per passage, by key.** A new selection unmounts the box
+             that was open, whose cleanup stores its draft against its own
+             passage, and mounts an empty one — AnnotateDialog.tsx §
+             `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
+          key={annotateKey(annotating)}
           anchor={annotating}
-          /* **Referee mode only**, and all four of its sub-modes: the criteria
+          /* **Referee mode only**, and all five of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}
@@ -3044,15 +3985,11 @@ export function Reader({
              tests/opening-read-gates-writes.test.tsx reads this line. */
           loaded={owner.comments.loaded}
           onCancel={() => setAnnotating(null)}
-          onSave={(id, body, ask, mark, colour) => {
-            const anchor = annotating;
-            setAnnotating(null);
-            /* **The free thing is stored first, and the paid thing waits for
-               it.** If the chat call fails, or the reader closes the panel
-               before sending, their words are already on disk. The reverse
-               order — open the chat, save afterwards — loses the comment for
-               exactly the reader who typed the most into it. */
-            void owner.comments.create({
+          onSave={({ anchor, id, body, ask, mark, colour, leaving }) => {
+            /* **The box's anchor, never `annotating`**: a draft stored because
+               the reader selected something else arrives after that state has
+               moved on to the new passage. */
+            const comment = {
               id,
               blockId: anchor.blockId,
               quote: anchor.quote,
@@ -3063,14 +4000,40 @@ export function Reader({
               mark,
               /* And the highlight colour, for the same reason. */
               ...(colour ? { colour } : {}),
-            }).then((stored) => {
+            };
+            /* The page is going (`pagehide`): the request that survives it, and
+               nothing else — the box stays as it is, because the page may yet
+               come back from the back/forward cache. */
+            if (leaving) {
+              owner.comments.createOnLeave(comment);
+              return;
+            }
+            /* **Close only the box that saved.** For the same reason as the
+               anchor: an unconditional `null` here closed the box the new
+               selection had just opened. */
+            setAnnotating((cur) => (cur && annotateKey(cur) === annotateKey(anchor) ? null : cur));
+            /* **The free thing is stored first, and the paid thing waits for
+               it.** If the chat call fails, or the reader closes the panel
+               before sending, their words are already on disk. The reverse
+               order — open the chat, save afterwards — loses the comment for
+               exactly the reader who typed the most into it. */
+            void owner.comments.create(comment).then((stored) => {
               if (!ask || !stored) return;
-              /* The conversation opens on the same words, pre-filled with what
-                 they wrote. `sourceComment` travels with it so the *server*
+              /* The conversation opens on the same words, and what they wrote
+                 is sent as its first question (`sendNow`); with nothing
+                 written it asks to have the passage explained, which is
+                 `askAboutBlock`'s reading of an empty question. Until
+                 2026-10-06 the words were pre-filled and waited for Send
+                 (plan 261003i, D5, "the smaller version"); Greg's words that
+                 day about every *Ask in chat* describe this button too, and
+                 Opus arbitrated it in
+                 (docs/plans/261006j-ask-in-chat-sends-the-question.md, D6).
+                 Still inside this `then`, so the comment is stored before
+                 anything is spent. `sourceComment` travels with it so the *server*
                  can write the link once it knows the real thread id — the
                  client's is a guess it only learns was wrong if it was. */
               void setThread(null);
-              setChatDraft({
+              askPassageInChat({
                 kind: "draft",
                 anchor: {
                   blockId: anchor.blockId,
@@ -3080,6 +4043,7 @@ export function Reader({
                 opening: anchor.quote,
                 sourceCommentId: stored.id,
                 ...(body ? { question: body } : {}),
+                sendNow: true,
               });
             });
           }}
@@ -3090,46 +4054,55 @@ export function Reader({
           be visible at the branch, not inferred from two other pieces of state
           being empty. */}
       {owner && overlay && (
-        <ChatDialog
-          slug={slug}
-          target={overlay}
-          at={at}
-          blocks={blockText}
-          onJump={jumpTo}
-          onClose={() => {
-            setChatDraft(null);
-            void setThread(null);
-          }}
-          onThread={(id) => {
-            /* The draft has become a conversation. Cleared in the same commit
-               that names the thread, so the slot never holds both — the panel
-               becomes the conversation rather than closing and reopening. */
-            /* **And the comment learns which conversation it started.** The
-               link itself was written by the server, which is the only place a
-               real thread id exists; this is the browser catching up, so the
-               mark and the dialog are right *now* rather than after a reload.
-               Read `chatDraft` before it is cleared — it is the only thing that
-               knows this conversation came from a comment. Fires again with the
-               server's correction if the id we guessed was overruled, and the
-               last word wins. */
-            const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
-            if (from) owner.comments.noteThread(from, id);
-            setChatDraft(null);
-            void setThread(id);
-          }}
-          onOpenFull={() => {
-            /* One id, so this is the whole of it: the band reads the same
-               `?thread=` the panel was reading. */
-            setChatDraft(null);
-            void setMode("chat");
-          }}
-          /* **The draft branch, on purpose**, not `chatAboutBlock` — which
-             would find this very conversation and reopen it, so the button
-             would do nothing. ChatDialog.tsx § `onNewConversation`. */
-          onNewConversation={startChatAboutBlock}
-          onCreated={owner.chatAnchors.add}
-          onDropped={owner.chatAnchors.drop}
-        />
+        <ChatCommands executor={chatCommands.dialog}>
+          <ChatDialog
+            slug={slug}
+            target={overlay}
+            at={at}
+            blocks={blockText}
+            onJump={jumpTo}
+            onClose={() => {
+              setChatDraft(null);
+              void setThread(null);
+            }}
+            onThread={(id) => {
+              /* The draft has become a conversation. Cleared in the same commit
+                 that names the thread, so the slot never holds both — the panel
+                 becomes the conversation rather than closing and reopening. */
+              /* **And the comment learns which conversation it started.** The
+                 link itself was written by the server, which is the only place a
+                 real thread id exists; this is the browser catching up, so the
+                 mark and the dialog are right *now* rather than after a reload.
+                 Read `chatDraft` before it is cleared — it is the only thing that
+                 knows this conversation came from a comment. Fires again with the
+                 server's correction if the id we guessed was overruled, and the
+                 last word wins. */
+              const from = chatDraft?.kind === "draft" ? chatDraft.sourceCommentId : undefined;
+              if (from) owner.comments.noteThread(from, id);
+              setChatDraft(null);
+              void setThread(id);
+            }}
+            onOpenFull={() => {
+              /* One id, so this is the whole of it: the band reads the same
+                 `?thread=` the panel was reading. */
+              setChatDraft(null);
+              void setMode("chat");
+            }}
+            /* **The draft branch, on purpose**, not `chatAboutBlock` — which
+               would find this very conversation and reopen it, so the button
+               would do nothing. ChatDialog.tsx § `onNewConversation`. */
+            onNewConversation={startChatAboutBlock}
+            dockRoom={chatDockRoom}
+            /* The card in the column, when there is one to draw in; it wins
+               over the room, and the room is what it falls back to. */
+            card={chatCardPlace}
+            reopen={chatReopen}
+            onCreated={owner.chatAnchors.add}
+            onDropped={owner.chatAnchors.drop}
+            onRenamed={owner.chatAnchors.rename}
+            onSettled={owner.chatAnchors.refresh}
+          />
+        </ChatCommands>
       )}
       {/* **Mounted for a visitor too, since 2026-09-04**, with an `access` of
           `{ kind: "visitor" }` — which carries none of the eight verbs below,
@@ -3160,15 +4133,75 @@ export function Reader({
           onPrev={() => stepToNeighbouringComment(stepComment(ordered, note, -1))}
           onNext={() => stepToNeighbouringComment(stepComment(ordered, note, 1))}
           onClose={() => void setNote(null)}
+          /* **Only the box the selection opened on its own new highlight** —
+             § Selecting applies the highlight, above `selectProse`. The drawer,
+             a mark, the margin and a pasted `?note=` all arrive with no
+             `fresh`, or with one that names another comment. Read by
+             tests/selecting-applies-the-highlight.test.tsx. */
+          fresh={
+            fresh?.id === openComment.id
+              ? {
+                  /* Two halves since the browser check of 2026-10-04: the
+                     press is remembered while the button is down, and the box
+                     closes when it comes up — and only if `?note=` still names
+                     this row, because the same gesture may have opened the
+                     next highlight's box. */
+                  onPressOutside: () => {
+                    closedFresh.current = {
+                      id: fresh.id,
+                      anchor: fresh.anchor,
+                      touched: freshTouched.current,
+                    };
+                  },
+                  onClickOff: () => {
+                    if (openedThisGesture.current) return;
+                    const id = fresh.id;
+                    void setNote((current) => (current === id ? null : current));
+                  },
+                  onTouched: () => {
+                    freshTouched.current = true;
+                    copyOnlyProtected.current.add(openComment.id);
+                  },
+                  onCopiedOnly: () => {
+                    const id = openComment.id;
+                    const api = commentsNow.current;
+                    const row = api?.comments.find((comment) => comment.id === id);
+                    if (!api || !row || !isPristineHighlight(row)) return;
+                    if (copyOnlyProtected.current.has(id)) return;
+                    copyOnlyProtected.current.add(id);
+                    api.remove(id);
+                    void setNote((current) => (current === id ? null : current));
+                  },
+                }
+              : undefined
+          }
           access={{
             kind: "owner",
             pending: othersPending,
-            onRetry: () => owner.comments.retry(openComment.id),
-            onDeepen: () => owner.comments.deepen(openComment.id),
-            onEdit: (body) => void owner.comments.edit(openComment.id, body),
+            onRetry: () => {
+              copyOnlyProtected.current.add(openComment.id);
+              owner.comments.retry(openComment.id);
+            },
+            onDeepen: () => {
+              copyOnlyProtected.current.add(openComment.id);
+              owner.comments.deepen(openComment.id);
+            },
+            onEdit: (body) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.edit(openComment.id, body);
+            },
+            onTouched: () => {
+              copyOnlyProtected.current.add(openComment.id);
+            },
             placing: mode === "referee",
-            onPlace: (mark) => void owner.comments.place(openComment.id, mark),
-            onRecolour: (colour) => void owner.comments.recolour(openComment.id, colour),
+            onPlace: (mark) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.place(openComment.id, mark);
+            },
+            onRecolour: (colour) => {
+              copyOnlyProtected.current.add(openComment.id);
+              void owner.comments.recolour(openComment.id, colour);
+            },
             error: owner.comments.error,
           /* **Offered only when the conversation is really there.** The link on
              a comment is advisory — a reader can delete the chat and keep the
@@ -3187,44 +4220,62 @@ export function Reader({
                   }
                 : undefined,
             onDiscuss: (question) => {
-            /* **Into the floating panel, not into chat mode.** The follow-up
-               box has always handed the reader to a conversation rather than
-               growing a transcript in this dialog — Greg's call, chat-handoff.ts
-               — and since 2026-08-26 that conversation floats over the article
-               instead of replacing it.
+              copyOnlyProtected.current.add(openComment.id);
+              /* **Into the floating panel, unless a conversation mode is already
+                 open.** The follow-up box has always handed the reader to a
+                 conversation rather than growing a transcript in this dialog —
+                 Greg's call, chat-handoff.ts — and since 2026-08-26 that
+                 conversation floats over the article instead of replacing it.
+                 Chat and Learn suppress that floating panel, so in either one
+                 `askPassageInChat` hands the same anchored first turn to a fresh
+                 Chat conversation instead.
 
-               It carries the comment's own anchor, so the new chat is tied to
-               the same words the explanation was about: the passage keeps a mark
-               and the model is told what "this" refers to on every turn, not
-               just the first. The question itself is not sent yet — it is
-               pre-filled, and the reader presses send — because a follow-up
-               typed into one box and fired from another is a model call they did
-               not quite ask for, which is the whole thing this change is about.
+                 It carries the comment's own anchor, so the new chat is tied to
+                 the same words the explanation was about: the passage keeps a
+                 mark and the model is told what "this" refers to on every turn,
+                 not just the first.
 
-               The dialog closes on the way through: one panel in the slot. */
-            /* A whole-block bookmark hands chat the whole-block anchor, which
-               is `ChatAnchor`'s other arm — and the paragraph as the opening,
-               because there are no selected words to quote. */
-            setChatDraft({
-              kind: "draft",
-              anchor:
-                openComment.quote === undefined
-                  ? { blockId: openComment.blockId }
-                  : {
-                      blockId: openComment.blockId,
-                      quote: openComment.quote,
-                      start: openComment.start,
-                    },
-              opening: openComment.quote ?? blockText.get(openComment.blockId) ?? "",
-              question,
-            });
+                 **The question is sent as the panel opens** (`sendNow`), since
+                 2026-10-06. It used to be pre-filled for the reader to send, on
+                 the argument that a follow-up typed into one box and fired from
+                 another was a model call they did not quite ask for. Greg, of
+                 every *Ask in chat*: *"automatically submit the input (rather
+                 than just prefilling the input box and waiting for me to hit
+                 send)"*. They typed it and pressed a button named Ask
+                 (docs/plans/261006j-ask-in-chat-sends-the-question.md, D4).
+
+                 The dialog closes on the way through: one panel in the slot. */
+              /* A whole-block bookmark hands chat the whole-block anchor, which
+                 is `ChatAnchor`'s other arm — and the paragraph as the opening,
+                 because there are no selected words to quote. */
+              askPassageInChat({
+                kind: "draft",
+                anchor:
+                  openComment.quote === undefined
+                    ? { blockId: openComment.blockId }
+                    : {
+                        blockId: openComment.blockId,
+                        quote: openComment.quote,
+                        start: openComment.start,
+                      },
+                opening: openComment.quote ?? blockText.get(openComment.blockId) ?? "",
+                question,
+                sendNow: true,
+              });
               void setNote(null);
               void setThread(null);
             },
             onDelete: () => {
               // Step to the neighbour rather than closing outright: deleting one
               // of five is a tidy-up, not a reason to lose the panel.
-              const next = stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1);
+              /* **Except from the fresh box**, where the press is *Remove
+                 highlight*: the reader is undoing the selection they just
+                 made, and a neighbour's box opening in its place would read as
+                 the removal having gone somewhere else. */
+              const next =
+                fresh?.id === openComment.id
+                  ? null
+                  : (stepComment(ordered, note, 1) ?? stepComment(ordered, note, -1));
               owner.comments.remove(openComment.id);
               void setNote(next);
             },
@@ -3271,6 +4322,9 @@ export function Reader({
            both verbs (plan 261002c § 3). Null for a visitor, whose arm has no
            read to pass — the enforcement is that there is nothing here. */
         termActions={glossaryRead}
+        /* *Dig deeper* on a cited work: built over the owner's citations read
+           (plan 261004b). Null for a visitor, for `termActions`' reason. */
+        citeActions={citeActions}
         quotes={quoteCard}
         blockText={blockText}
         notes={notes}
@@ -3305,10 +4359,10 @@ export function Reader({
       {band()}
       {marginColumn()}
 
-      {/* **Over the top of the band, for three seconds after a press** —
+      {/* **At the foot of the band, for three seconds after a press** —
           ModeHerald.tsx. After the band in source order so it paints above it
-          at the same z-index. Only while a band is open: Plain and Hierarchy
-          have no *"top of the mode column"* to stand on. */}
+          at the same z-index. Only while a band is open: Plain
+          has no band to stand on. */}
       <ModeHerald
         press={bandOpen && !bandAway && herald !== null && herald.mode === mode ? herald : null}
         onDone={() => setHerald(null)}
@@ -3340,11 +4394,16 @@ export function Reader({
       <Dock
         slug={slug}
         view="article"
+        entrance={dockEntrance}
         /* Which modes the bar draws at all — Dock.tsx § experimental, and the
            hook call at the top of this component. */
         experimental={experimental}
         mode={mode}
         margin={marginOpen}
+        summary={summaryView}
+        /* The same state the Diagram band's chips read (`diagramParam`), not
+           the address, which lags a chip press — Dock.tsx § Props `diagram`. */
+        diagram={subNav.diagram}
         onMode={(next, sub, toggle = false) => {
           /* The callback itself is proof of a press. Arm before `setMode`:
              nuqs updates React now but may leave `location.href` on the old
@@ -3401,6 +4460,12 @@ export function Reader({
             }
           }
           armSkimOpening(skimArrival.current, mode, next);
+          /* One Search arrival for its Dock button, quick box and command row.
+             The toggle-to-close above has already handled a second mode press. */
+          if (next === "search" && sub === undefined) {
+            openQuickSearch();
+            return;
+          }
           /* A sub-mode row has already armed its chip's press (Dock.tsx §
              `useActivateSubMode`); this only moves the band, sub-mode and all. */
           /* A command naming the mode already open, or the bar bringing a
@@ -3410,7 +4475,16 @@ export function Reader({
              recovery paths do not depend on that write — the token minted in
              Dock is their signal. */
           if (sub === undefined) {
-            if (next !== mode) void setMode(next);
+            if (next !== mode) {
+              /* **`mode` alone, with one exception**: returning to Learn
+                 while `learn=quiz` is still in the address is a navigation
+                 to Quiz, so it clears `thread` in the same pushed entry rather
+                 than mounting the Quiz over Chat's conversation for
+                 `LearnBand` to repair (sub-modes.ts § `returnToSubMode`). */
+              const back = returnToSubMode(next, { learn: subNav.learn });
+              if (back === null) void setMode(next);
+              else void setSubNav(back, { history: "push" });
+            }
           } else void setSubNav(subModeParams(sub), { history: "push" });
           /* Pressing the mode you are in brings its band back if it had stepped
              aside — `bandAway` above. */
@@ -3449,11 +4523,7 @@ export function Reader({
              this threaded through the piece, or concentrated in one section?
              So it earns the same arrival rule search has, for the same reason
              and with the same `null` rather than `true`. */
-          if (
-            (next === "search" || next === "ideas") &&
-            mode !== next &&
-            showSpine === false
-          ) {
+          if (arrivalBringsRailBack({ next, current: mode, showSpine })) {
             void setShowSpine(null);
           }
         }}
@@ -3465,8 +4535,11 @@ export function Reader({
         /* The command bar's Archive and Export (CommandBar.tsx §
            `CommandBarArticle.shelfRow`). `archive` arrives only from
            `OwnedArticle`, which exists only for the reader's own article —
-           so its presence is the shelf row's, and a visitor gets neither. */
-        shelfRow={archive === undefined ? undefined : { archive }}
+           so its presence is the shelf row's, and a visitor gets neither —
+           nor the tag rows that come with it (`tagsControl`). */
+        shelfRow={archive === undefined ? undefined : { archive, tags: tagsControl }}
+        /* The bar's argument rows — `executor` above. */
+        executor={executor}
         drawer={
           owner
             ? {

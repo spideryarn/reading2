@@ -1,8 +1,12 @@
 # The admin page
 
-**`/admin`, with `/admin/users` and `/admin/feedback` under it.** One person can see them. The
-first shows who has signed up and how much each of them has read — counts and dates. The second
-shows the bug reports readers filed with the Feedback button, in their own words.
+Up: [security-map.md](security-map.md)
+
+**`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
+and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
+with the Feedback button, in their own words. The others are `/admin/vouchers` (below) and
+`/admin/costs`, which has a doc of its own —
+[admin-costs.md](admin-costs.md).
 
 Greg, 2026-08-27:
 
@@ -13,6 +17,23 @@ Greg, 2026-08-27:
 
 Built the same day. The plan, the options weighed and the review are in
 [260827z-admin-page.md](../plans/260827z-admin-page.md).
+
+## In this doc
+
+- [§ Why this doc is filed under security](#why-this-doc-is-filed-under-security) — the one request that reads across owners
+- [§ The three refusals](#the-three-refusals-and-only-one-of-them-is-a-gate) — which check is the gate, which two are courtesies
+- [§ Who the administrator is](#who-the-administrator-is) — account ids, not an email address
+- [§ What it deliberately does not show](#what-it-deliberately-does-not-show) — the line between metadata and reading
+- [§ The accounts come from the Auth service](#the-accounts-come-from-the-auth-service-not-from-a-query) — why `auth.users` is not queried
+- [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
+- [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
+- [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
+- [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
+- [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+- [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
+- [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
+- [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
+- [§ See also](#see-also) — neighbouring docs
 
 ## Why this doc is filed under security
 
@@ -130,11 +151,11 @@ own address arrives on an id we do not know — which is either Greg on a new ac
 who has taken his address, and both are things to find out immediately. Fixed prose, nothing
 interpolated: a message is the one field redaction cannot reach ([logging.md](logging.md)).
 
-[`src/admin.ts`](../../src/admin.ts) is one constant, one three-line function and one log sentence,
-with no imports at all — so the browser and the server ask the *same* function rather than two
-spellings of one idea. It is on the shared-module allowlist in `tests/client-imports.test.ts`
-because it qualifies, not because it was convenient. The id is not a secret: it travels in every
-JWT that account holds, and it identifies rather than authorises.
+[`src/admin.ts`](../../src/admin.ts) is the import-free boundary shared by the browser and server:
+the administrator's ids and check, the miss explanation, and the administrator-only response shapes
+and money formatters. It is on the shared-module allowlist in `tests/client-imports.test.ts` because
+it qualifies, not because it was convenient. The id is not a secret: it travels in every JWT that
+account holds, and it identifies rather than authorises.
 
 ### One account per Supabase project, which is why it is a list
 
@@ -220,6 +241,19 @@ projection is written out by hand rather than sharing `REPORT_COLUMNS` with the 
 report, so a field added to a report does not reach this page until somebody decides it should,
 and `tests/admin-feedback-store.test.ts` pins the exact set of keys that comes back.
 
+**One route under `/api/admin/feedback/` is not across owners**, since 2026-10-07:
+`GET /api/admin/feedback/earlier` is the administrator's **own** reports for the Feedback dialog's
+Earlier tab, read through the owner-scoped `feedbackStore`, never `adminStore`. It is under the
+namespace because it carries what no other reader is sent: that a report was ignored, whether its
+note says declined or awaiting, its stored number, and the note's comment
+([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
+The same answer carries the questions agents have put to the administrator, and
+**`POST /api/admin/feedback/answers`** stores a reply to one: a row in `feedback_question_answers`
+under the signed-in administrator's own id, again through `feedbackStore`. It is the second write
+under `/api/admin/feedback/` (the first is the Ignore mark), it touches no report and no other
+reader's data, and it is under the namespace because only an administrator is asked anything
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
+
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is
 **confirmed**, and — since 2026-09-03 — whether the account **can reach these pages**, which is
@@ -230,6 +264,12 @@ the server. Everything else on the page is a number or a date.
 still a fact about the account rather than about their reading: what their model calls cost us, over
 a stated month, with no article, model or job named. See
 [The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest).
+
+**`/admin/costs` goes further, because Greg asked it to (2026-10-04).** For each account with a
+ledger row in the selected period, it shows which article the money went on and the mode or task
+and model behind it. It still does not say what any other reader's article is called — theirs are
+opaque ids, and no other owner's slug leaves the database.
+[admin-costs.md](admin-costs.md#what-the-administrator-sees-of-other-peoples-articles).
 
 **The plan is the same kind of thing**, added 2026-09-03: which tier the account is entitled to, the
 raw Stripe subscription status beside it, and how many ingests of the allowance are gone. A tier id
@@ -569,9 +609,10 @@ only: `GET /api/admin/articles/:slug/cost`, behind the same namespace gate, grou
 **It answers only for an article the administrator owns.** The route asks `ownedArticleIdentity`
 before it reads any spend, so another account's slug is the ordinary 404. Everything else on these
 pages is a fact about an *account*; a per-mode breakdown of somebody else's article is a fact about
-what they did with it, which is the line § *What it deliberately does not show* draws. Widening it
-to other people's articles is a decision for Greg
-([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
+what they did with it, which is the line § *What it deliberately does not show* draws. Greg widened
+that on 2026-10-04 for `/admin/costs`, which shows other accounts' articles by opaque id
+([admin-costs.md](admin-costs.md)); this route, which takes a slug, still answers only for the
+administrator's own ([260930f](../plans/260930f-article-cost-on-the-metadata-page.md)).
 
 ## The plan and ingest columns
 
@@ -618,7 +659,7 @@ without a database; the aggregate itself is checked against a real one in
 asked for the address, and because the second and third entries then have somewhere to be listed
 rather than somewhere to be remembered.
 
-**The third of those is `/design`, and it is not an admin page.** It moved here off the shelf's
+**The last entry on it is `/design`, and it is not an admin page.** It moved here off the shelf's
 masthead on 2026-09-05 — *"Move the Design link on the logged-in Homepage into /admin"* — because a
 page of colour tokens is developer furniture that every signed-in reader was being shown. The page
 itself is unchanged, and it is on `ADMIN_ONLY` since later the same day, so a reader who types the
@@ -678,7 +719,7 @@ Greg, 2026-09-04:
 
 > indicate somewhere in /admin exactly when the last deploy happened
 
-`Built 2 hours ago · 8ca6bc7`, faint, under the two entries on the index, with the exact compile
+`Built 2 hours ago · 8ca6bc7`, faint, under the entries on the index, with the exact compile
 time and the whole sha in the tooltip. Nothing new is collected to draw it: `vite.config.ts`
 compiles the commit **and the build time** into the bundle, from the stamp
 [`build-stamp.ts`](../../scripts/build-stamp.ts) resolves — the same one that goes into
@@ -771,14 +812,15 @@ checks for each of them:
 | Route | Does |
 |---|---|
 | `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`) and free usage — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
 | `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued; a different body under that id → 409 |
-| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, email, revoked }`; the address only while unclaimed (409 after) |
+| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, recipientName, email, revoked }`; the address only while unclaimed (409 after) |
 | `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
 
 Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in
 [`pg-vouchers.ts`](../../src/store/pg-vouchers.ts)): articles a whole number 1–1000, a note of at
-most 500 characters, an address with an `@`, `revoked` a boolean, and an unknown key is a 400 rather
+most 500 characters, a name of at most 80 (refused when longer, never shortened; then made one line
+and trimmed), an address with an `@`, `revoked` a boolean, and an unknown key is a 400 rather
 than a default. There is no delete: a revoked voucher stays as a record, and `revoked: false`
 restores it.
 
@@ -788,7 +830,10 @@ from the `/admin` index (`ADMIN_LOADERS` in App.tsx, keyed by `AdminPage`, so a 
 loader is a compile error). A create form — address, articles (20 by default), private note, and a
 note to them that goes in their email, with a sketch of that email beside it showing where the note
 lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whole-dollar-spend.md);
-the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body) — over
+the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body), and
+since 2026-10-07 an optional *Their name* above the note, which opens the email *Dear <name>,* and
+is drawn in the sketch as it is typed ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md); the table shows it under the address, and Edit can change
+it, which re-sends nothing) — over
 a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.
@@ -813,13 +858,13 @@ a Retry where the server allows one. How they are kept to once each is
   other, since 2026-10-03, is the **Ignore** button on a feedback card: it sets or clears
   `feedback.ignored_at` and changes nothing the reader sent
   ([feedback.md § Ignoring a report](feedback.md#ignoring-a-report-since-2026-10-03)).
-- **No model spend per user**, though `ai_calls` is right there. It carries no `owner_id` — it hangs
-  off a revision — so per-user spend is a join through revisions and articles, and it is a page of
-  its own the day a spend limit exists ([auth.md § Still open](auth.md#still-open)).
+- **No spend limit.** Spend per user, article, mode and model is `/admin/costs`
+  ([admin-costs.md](admin-costs.md)); nothing acts on it
+  ([ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
 - **No pagination.** Nine accounts. When there are hundreds this becomes a server-side sort, and the
   URL state already says what to sort by.
-- **Soft-deleted accounts are filtered out**, on `auth.users.deleted_at`. The row survives a
-  deletion in Supabase's schema; a deleted user in a list of users is wrong in the direction nobody
+- **Soft-deleted accounts are filtered out**, on the `deleted_at` the Auth service returns
+  (`accountFrom`). The row survives a deletion in Supabase's schema; a deleted user in a list of users is wrong in the direction nobody
   checks.
 - **Accounts with no email address are filtered out.** They cannot sign in here — the gate refuses
   them by name, `[auth-noemail]` — and a row whose first column is blank is a blank line rather than

@@ -29,7 +29,30 @@ A grep for `trajector` outside the historical folders should find only these, ea
 - **The cost ledger.** `ai_calls` is append-only, so its historical rows keep `purpose` /
   `step_name` `'trajectory'`; a legacy alias in [`src/cost-categories.ts`](../../src/cost-categories.ts)
   counts them with `skim`.
+- **Step and prompt-version aliases**: `trajectory → skim` in `src/step-order.ts` and
+  `src/feedback-payload.ts`, and `#mode-trajectory` in the help page's anchors
+  ([`help-anchors.ts`](../../src/web/help/help-anchors.ts)). The prompt tag is `skim/N` since
+  `skim/8`; routes stored under `trajectory/N` are older.
 - History: plan, postmortem and feedback file names, and the applied migrations.
+
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ What shipped](#what-shipped) — how Skim works today: the step, the band, the keys, and every change since v1, newest last
+- [§ What we tried for v2](#what-we-tried-for-v2) — the three scrapbook mockups and which survived (history)
+- [§ What Greg asked for](#what-greg-asked-for) — his words, the intent behind the mode
+- [§ The core idea](#the-core-idea-as-we-read-it) — our reading of the ask, before building (history)
+- [§ Version one](#version-one) — the first cut, as specified (history)
+- [§ Version two: the scrapbook](#version-two-the-scrapbook) — what Greg wanted of v2 (history)
+- [§ Decided](#decided) — the calls already made
+- [§ Later](#later) — what is not built
+- [§ Questions for Greg](#questions-for-greg) — seven defaults taken to keep the build moving, each cheap to change
+- Code: [`src/skim.ts`](../../src/skim.ts) (the step) · [`SkimPanel.tsx`](../../src/web/SkimPanel.tsx) ·
+  [`modes/skim/SkimMode.tsx`](../../src/web/modes/skim/SkimMode.tsx) · [`useSkim.ts`](../../src/web/useSkim.ts) ·
+  [`skim-route.ts`](../../src/web/skim-route.ts) · [`skim.css`](../../src/web/styles/skim.css) ·
+  tests: [`skim.test.ts`](../../tests/skim.test.ts), [`skim-route.test.ts`](../../tests/skim-route.test.ts),
+  [`skim-panel.test.tsx`](../../tests/skim-panel.test.tsx)
 
 ## What shipped
 
@@ -46,11 +69,13 @@ v1, for the article's owner only, and behind the experimental switch until later
   pinned head with `‹ Stop k of N ›` and **Gist · More · Most** (only the depths that add stops),
   then the stops with their section paths and (since 260928e) their words, the role shown on the current row only. Until
   2026-09-29 a deeper pass also listed the shallower passes' stops, dimmed; since then each pass
-  lists and walks only its own (below).
+  lists and walks only its own (below) — and, since 2026-10-03, any earlier stop the route
+  carries into it, with pips on each row saying which passes it is in (below).
 - **In the prose**: the current stop's quote is ringed and barred, brought into view on every
   step (centred since 2026-09-29, below), and followed by a **Next stop ›** door — *More detail ›*
-  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside once a stop is
-  chosen, and the door carries the walk.
+  at the end of a pass, and nothing at the end of the deepest, since 2026-09-29, below. On a narrow window the band steps aside when a row is
+  pressed, and the door carries the walk; the head's ‹ › and depth buttons keep the band up (since
+  2026-10-03, below).
 - **Keys and address**: ← / → step the stops while the mode is open
   ([keyboard.md](keyboard.md) § ← / → in Skim); `?depth=` pushes and `?stop=`
   replaces ([url-state.md](url-state.md)). The rules for where a step or a depth change lands are
@@ -59,6 +84,7 @@ v1, for the article's owner only, and behind the experimental switch until later
 v2, the scrapbook, is built on top of that:
 
 - **A cue instead of a role.** The same call now gives each stop one **cue**: at most 140
+  (200 since `skim/10`, 2026-10-06, below)
   characters, an instruction or a question naming what to *look for* in the passage, never what it
   found — *"Look for how rich-club membership changes the comparison."* It stands on its own and
   never mentions another stop, because a reader can arrive at a stop from anywhere. The current row
@@ -70,10 +96,11 @@ v2, the scrapbook, is built on top of that:
 - **The stop card**, under the current row only
   ([`stop-card.ts`](../../src/web/stop-card.ts) gathers it; the panel draws it). It holds whatever
   the other modes have **already** written about this paragraph:
-  - the glossary terms it uses, as chips that open to a one-line sense and an icon into Glossary
-    (a text link until 2026-09-29, below). They are found in the prose the reader sees, by the
-    glossary's own matcher, over every term. A term an earlier stop on this pass also uses says
-    *"also at stop k"*;
+  - the glossary terms it uses, as chips that open the glossary's own card, the one the prose shows
+    for the same term (since 2026-10-06, below). They are found in the prose the reader sees, by the
+    glossary's own matcher, over every term. Until 2026-10-06 a chip opened one line of the term's
+    sense in place with an icon into Glossary (a text link until 2026-09-29, below), and a term an
+    earlier stop on this pass also used said which stop;
   - the ideas it bears on — links into Ideas until 2026-09-29, chips that open in place since;
   - where it sits in the study, as links into Timeline when that experimental control is available,
     and as text when it is hidden.
@@ -84,6 +111,36 @@ v2, the scrapbook, is built on top of that:
   (`useIdeasRead`, `useTimelineRead`, beside `useGlossaryRead`), so it cannot start a run. Nothing on
   it is generated for it: what ties the pieces together is seeing them side by side, not a new
   summary of them.
+
+  **A term chip opens the glossary's card, and names no other stop**, since 2026-10-06
+  (report `spya-se0e4v`,
+  [plan 261006e](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md)):
+
+  > In Skim mode, the Glossary clues don't have to say "also at stop X". And they should provide/reuse the usual "go to glossary" etc in rich tooltips
+  >
+  > — Greg, 2026-10-06
+
+  What changed:
+
+  - The chip is the term's name and nothing else. `alsoAt` and the route it was counted along are
+    gone from [`stop-card.ts`](../../src/web/stop-card.ts).
+  - The chip opens `TermCard`, exported from
+    [`ProseHoverCard.tsx`](../../src/web/ProseHoverCard.tsx), inside the shared `Tooltip` with
+    `interactive` ([tooltips.md § A card the pointer can enter](tooltips.md#a-card-the-pointer-can-enter)).
+    It is `TermChip` in `SkimPanel.tsx`. The line of sense that used to open in place is gone for
+    terms, so a term is drawn one way. Ideas chips still open in place.
+  - Hover or focus opens it for a mouse or a keyboard. A tap opens it for a finger and it stays
+    until a tap elsewhere. A mouse click does not pin it. A tapped card is the panel's one open
+    snippet, so opening an idea closes it and so does stepping to another stop.
+  - The owner's card has *Dig deeper*, *Hide* and *Open glossary*. A visitor's has *Open glossary*
+    alone. A reader whose Glossary control is hidden gets neither *Open glossary* nor *Dig deeper*,
+    because a dig's answer is drawn in Glossary.
+  - The card scrolls inside half the window's height, so the buttons under a long entry can be
+    reached on a short screen (`.skim-term-card` in
+    [`skim.css`](../../src/web/styles/skim.css)).
+  - After *Hide* the chip is gone, so keyboard focus moves to the stop's row if it still belongs
+    to the control that started the hide or was lost when that control disappeared. A slow hide
+    preserves focus if the reader has moved on.
 
 Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 [plan § Stage 5](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)):
@@ -120,6 +177,30 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
   ones always were — unforced, so current Quotes cost nothing — and the empty state says when they
   will be. The Metadata row names only `skim`, so it never buys Quotes or Ideas, and refuses
   in the row when there are no Quotes.
+
+  **One press, one route** (since 2026-10-07,
+  [261007e](../plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md)).
+  From the press until the new route has been read, *Plan it again* is held, in the banner and in
+  the status foot: the rewrite hold every other forced verb has
+  ([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+  Before it, the button was live over the old route between the job ending and its read landing,
+  and two clicks in one tick made two forced requests. Held with nothing running, the band says
+  *The new route hasn't loaded yet.* and offers *Try again*, which only reads.
+
+  **What the hold does about the Quotes and the Ideas.** It is keyed by the article and the `skim`
+  step, and it follows the one job the press made. When that job chooses the Quotes or finds the
+  Ideas first, the hold lasts through them while that job runs. Failure or cancellation in a
+  prerequisite releases it too. It holds nothing of theirs: *Find more* in Quotes and Regenerate
+  in Ideas have holds of their own, under their own steps, and a held one of those does not hold
+  *Plan it again*. A press made while the Quotes or Ideas read is still out is kept as an intent and made once, when
+  they answer; the hold starts when the request is made. The unforced run (the empty state's
+  button, the automatic run, *Plan the route for this*) is never held.
+
+  **A reply is checked before it is published** (the same plan). The read asks that a reply has a
+  route with a list of stops, which is what the server itself requires before it answers 200; a
+  404 and a `200 null` both mean none yet. Anything else is a failed read: the route on screen and
+  its banners stay, and the band says so with *Try again* —
+  [`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx).
 
 Stage 6 ([plan § Stage 6](../plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md)),
 written under `trajectory/7` and unchanged in `skim/8` (whose request adds a strict JSON schema):
@@ -199,7 +280,10 @@ his words quoted there):
 
 **Each pass walks only its own stops** — Greg's SPIDERYARN-READING2-4P, 2026-09-29
 ([plan 260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md), which quotes
-the whole report):
+the whole report). **Amended 2026-10-03**: a pass may now also walk an earlier stop the route
+carries into it — *A stop may be walked at more than one depth*, below. What follows is what was
+built on 2026-09-29, and it is still how a route with no carried stop walks, which is every route
+planned before `skim/9`:
 
 > In Trajectory mode, it's a bit annoying for the more detailed levels of granularity to reuse the
 > same snippets as the coarser levels if I've just read the coarser level. [...] The main thing is
@@ -280,7 +364,9 @@ no purpose, a small box, *What do you want from this piece?*, and **Plan the rou
 saves the purpose and only then re-plans the route (unforced — the stamp's profile hash is what
 re-plans it). **Not in the empty state**: the automatic run plans one there, and a second request
 with a different profile would not de-duplicate. Nothing for a visitor, nothing while the purpose
-cannot be read, and no second ask under the stale or profile-changed banner.
+cannot be read, and no second ask under the stale or profile-changed banner. A save whose reply is
+lost is checked against what is stored before the box says whether it was saved
+([copy.md § The same seam in the browser](copy.md#the-same-seam-in-the-browser)).
 [`SkimPurpose.tsx`](../../src/web/SkimPurpose.tsx).
 
 **Quiz questions at a stop are the prose's, not the card's** — Greg, 2026-09-30,
@@ -297,6 +383,119 @@ spya-bjbcxp): *"Remove the FAQ snippets (they don't add much)"*. The question ab
 row, and the passages it opened, were removed, and Skim no longer reads the FAQ at all. The
 terms, ideas and events on the card stay, and so does the cue above the quote, which is a different
 thing: the question to read the passage with.
+
+**A cue sets the scene when its quote needs one (`skim/10`, 2026-10-06)** — Greg, report
+spya-jghnva, plan [261006e](../plans/261006e-skim-cue-situates-the-quote-and-term-chips-use-the-glossary-card.md):
+
+> In Skim mode, when generating a question, use it as a way to contextualise the quote. [...] The
+> question we generate with Skim mode is an opportunity to situate the quote, eg it could tell us
+> what's being asked of the evidence and/or what are the two interpretations?
+>
+> — Greg, 2026-10-06
+
+His example was *"Which interpretation does their evidence favour?"* before a quote that says *"the
+latter interpretation"*: the reader is told to look for something without being told what the
+choice is. So when a quote leans on words it does not explain ("the latter", "this approach",
+"these results"), its cue first names the question or the options, as a question and never as a
+statement of what the passage says, and then points: *"Which of the two possibilities does the
+evidence favor: real transfer or benchmark-specific gains?"* Most quotes stand on their own, and
+their cue is still one instruction or question and nothing else. A cue is one or two whole
+sentences, at most 200 characters (it was 140), adds no detail that is not in the quotes, the Ideas
+or the outline, never states the finding, and never refers to another stop.
+
+Two wordings were measured blind on five articles
+([261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md)). The first set a scene on
+every cue. Readers were judged better prepared by it in 72 pairs of 88, but it gave the finding away
+twice as often as the old cue and misstated the context in one cue in ten. The one kept was
+preferred to the old cue in 50 pairs of 88 against 19. On the dangling subset it was ahead 15 to 8,
+with 5 ties, not clearly outside the control's 11 to 10. Its judge marked 18 giveaways against the
+old cue's 19, and 3 misstatements against 1: these observations do not establish no regression.
+There was one run of the revised wording and one same-family judge per comparison.
+
+**Not shown: that `skim/10` situates a quote that leans on something outside itself.** On the 13
+quotes hand-marked as truly dangling it was preferred to the old cue 7 to 5, no different from two
+runs of the old prompt (6 to 4). It shipped on the overall preference (50 to 19) and on the reported
+example, with the plan's dangling-case gate **not met**: GPT Sol's code review said so (F1), and an
+Opus arbiter agreed with the finding and still said land, because nothing got worse, no stored
+route changes, and it is one prompt section to revert. The first wording situates far better (11 to
+2 on those 13) and gives more away; which of the two Greg wants is an open question put to him.
+
+**What it cannot do** is name a referent
+that only the surrounding paragraph holds, because
+the prompt is still given no prose. Handing it each quote's paragraph was measured too, did not
+clearly do better on the quotes it was meant for, cost about a third more per route, and was removed
+(its code is at commit `c943494a9`). An older route is outdated, not stale, so it keeps its cues
+until it is planned again from Metadata.
+
+**On a phone, the head's controls stay in Skim; a row goes to the article** — Greg, 2026-10-03,
+report spya-kudr63, plan
+[261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md) § Stage 1.
+Where the band lies over the prose, every step used to step it aside, so ‹ › showed one stop and
+closed the band. Greg: *"in this special case, the left and right buttons of skim mode should stay
+in skim mode ... if it's showing me a quote and I click on the quote, I think I do want to be taken
+to the article."* So ‹ ›, ← → and Gist · More · Most leave the band up — the prose still scrolls to
+the stop underneath, and its flash is held until the prose shows — and only a row press steps aside
+(`SkimMode.tsx` § `moveTo`, `onRow`). It keys on `covers`, the app's one test for "band and prose
+cannot both be seen", not on a device or an orientation.
+
+**A stop may be walked at more than one depth, and pips say which** — Greg, 2026-10-03, report
+spya-ms9d69, plan [261003l](../plans/261003l-skim-arrows-stay-in-the-band-and-stops-shared-across-depths.md) § Stage 2. It reverses, in part, his own report of four days
+earlier (*Each pass walks only its own stops*, above):
+
+> So I guess it is okay if they show up across multiple levels. It probably is better. But maybe we
+> could indicate in the UI that either that I've already read them, you know, because I spent a
+> long time looking at them in other mode, or that they show up in the other modes. So maybe there'd
+> be, and again, if possible, we want to avoid text labels. So maybe it's some kind of subtle visual
+> indicator that indicates which of the three it shows up for. A bit like we have a spark line at
+> the top of skim mode to show the trajectory. [...] So it's not a guarantee, but nor is it excluded
+> that something in a coarser level shows up in a more detailed level. And the visual indicator is a
+> way for me to see whether I've probably read it or not.
+>
+> — Greg, 2026-10-03
+
+What set it off: two related points, one placed in Gist and the other in More, read as disjointed
+when each pass walked only its own. So:
+
+- **A stop keeps its one `depth`, and gains `again`** (`SkimStop`, src/types.ts): the deeper passes
+  it is walked in as well. It is walked in pass *d* when `depth === d` or `again` names *d* —
+  `walkedIn` in [`skim-route.ts`](../../src/web/skim-route.ts), the one definition, which the list,
+  the counts on the depth buttons, ← / →, the door and the links all ask. A carried stop keeps its
+  one place in the route order.
+- **A carried stop does not make a pass.** A depth is offered only when some stop is first placed
+  there, as before; an `again` naming a depth the route does not offer is ignored (GPT Sol, plan
+  review F1 — one Gist stop carried into an otherwise empty More would be the same stop again).
+- **A depth change still lands on stop 1 of the new pass.** That can now be the stop you are on,
+  when it is carried and comes first there: the pass changes, one history entry is pushed, and the
+  page does not move. *More detail ›* is the same.
+- **A link's `?stop=` still wins over its `?depth=`**, and draws the asked pass when the stop is
+  walked in it, otherwise the stop's own. A link with no `?depth=`, and every link to a route with
+  no carried stop, arrive exactly as before.
+- **The pips.** Under each row's number, one small dot per pass the route offers, shallowest first,
+  filled when the stop is in that pass (`SkimPanel.tsx` § `StopPasses`, `skim.css` § `.skim-pips`).
+  One filled is this pass only; more than one is a stop you may have met already. No printed label
+  and nothing to press — the number's column is inside the row's own button, and the "where am I"
+  button already lies over the position line, which moves down to make room (Sol F3). A screen
+  reader hears the other passes in the row's name (*"Also in Gist"*), and the band's (i) says what
+  the dots mean, since a phone has no hover. **Not drawn** where they would never vary: a route
+  offering one depth, or one with no carried stop.
+- **The prompt has asked this since `skim/9`** (now `skim/10`): it asks the model which earlier stops to carry, and when not to
+  (src/skim.ts). A route planned before it has no `again`, is not announced as out of date
+  (260929c), and walks as it did until planned again from Metadata. Measured on six articles, three
+  rounds ([261003e](../investigations/261003e-skim-again-carried-stops-eval.md)). As shipped: about
+  a quarter of a More walk and a fifth of a Most walk are carried stops (the most in any one walk,
+  40%), against 43% under full nesting; aggregate Idea coverage held, and three of twelve runs moved
+  one stop between passes. A blind read preferred the new More for a reader who starts there in 12
+  of 12 pairs. For a reader coming from Gist it was preferred 8 to 2, which is inside what two runs
+  of the old prompt differ by, so **that half — the walk Greg reported — is not shown**.
+- **Two things the measurement changed.** The first wording put every carried stop at the head of
+  More, as a recap, because the old prompt already listed Gist stops first; the prompt now says the
+  route is one order with the depths mixed. And wording alone let one run carry every Gist stop and
+  the next none, so **a pass carries at most half as many earlier stops as it has of its own, rounded
+  up** (`maxCarried`, src/skim.ts: one into a pass of one or two, two into a pass of three), said in the prompt and enforced in `validateRoute` (GPT Sol, code
+  review F7). The model kept under it in 10 of 12 runs once told.
+
+Not built, and named in the plan: a mark for "I have actually read this", from reading time — the
+other thing he offered — and the pips on the prose's door.
 
 ### What we tried for v2
 
@@ -374,7 +573,11 @@ Three things follow from Greg's words and they shape everything below:
   depth up, because the stop you are on is still there.~~ **Reversed 2026-09-29**: walking the
   first pass's stops again at the second was the thing Greg found annoying, so each pass now walks
   only the stops it adds (above, under *Each pass walks only its own stops*). The route is still
-  one order, planned as nesting passes; only the walk changed.
+  one order, planned as nesting passes; only the walk changed. **Amended 2026-10-03**: part of the
+  way back — a pass may carry earlier stops chosen by the route and marked with pips (above, under
+  *A stop may be walked at more than one depth*). Capped since the same day at half as many as the
+  pass has of its own, rounded up (`maxCarried`); before the cap, measured routes sometimes carried
+  all of Gist into More.
 
 **Who is reading changes the route.** When the reader has said who they are
 ([reader-profile.md](reader-profile.md) — *About you*) or why they are reading this piece (the
@@ -455,8 +658,8 @@ chosen, is written below when it lands.
    the web for what others say about a piece — the two would want to share rather than duplicate.
    Until then, a reader whose stated purpose is "how is this different from X" gets a route that
    leans on what the paper itself says about earlier work, and no more.
-2. **Quotes as the stops** — see the plan's *Reuse* section for why v1 does not do this, and what
-   would change our mind.
+2. **A fresh choice of passages as the stops, instead of the Quotes** — v1 uses the Quotes
+   (Question 1 below, which says what would change our mind).
 
 ## Questions for Greg
 
@@ -486,7 +689,7 @@ Only if that fails would a second set be worth it.
 
 **Background.** Each stop gets one short generated line, shown on the current stop and, in small
 italics, under the **Next stop ›** door, so the door says where it leads. v1 wrote a *role* (what
-the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters, saying
+the passage does: "The headline result"). v2 writes a **cue** instead, at most 140 characters (200 since 2026-10-06), saying
 what to look for in the passage ("Look for how rich-club membership changes the comparison"). Like
 the role, it never says what the passage found.
 

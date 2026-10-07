@@ -16,10 +16,10 @@
  *
  * ## Why this is a module rather than a function in src/store/pg-jobs.ts
  *
- * Because there are five call sites in two files — the three job transitions in
- * src/store/pg-jobs.ts and the three draft fences in src/store/pg-revisions.ts
- * — and the whole history of this fence is one copy of it drifting from
- * another. src/store/pg-revisions.ts cannot import src/store/pg-jobs.ts without
+ * Because job transitions in src/store/pg-jobs.ts and draft fences in
+ * src/store/pg-revisions.ts need the same predicate, and the whole history of
+ * this fence is one copy of it drifting from another.
+ * src/store/pg-revisions.ts cannot import src/store/pg-jobs.ts without
  * risking the cycle `npm run check` gates on, so the predicate lives on its own
  * with nothing but the schema behind it.
  *
@@ -39,15 +39,16 @@
  *   through skew. `clock_timestamp()` is volatile, so Postgres re-reads it when
  *   it re-checks the qualifier after taking the lock.
  *
- * ## The boundary, and it agrees with the filesystem adapter
+ * ## The boundary, and it agreed with the filesystem adapter
  *
  * **Live is `lease > clock_timestamp()`; over is `lease <= clock_timestamp()`
  * or a lease that is missing altogether.** Exactly complementary, so there is
  * no instant at which a job is neither writable by its claimant nor settleable
- * by the sweep. src/store/jobs-fs.ts has always treated its `expires` the same
- * way (`held.expires > now` is live), and until this the Postgres side used
- * `<`, which is a one-microsecond disagreement between two adapters that
- * `tests/store-jobs-parity.test.ts` is supposed to hold to one contract.
+ * by the sweep. The filesystem adapter (gone 2026-09-05) treated its `expires`
+ * the same way (`held.expires > now` was live), and before this fix the Postgres
+ * side used `<`, a one-microsecond disagreement between two adapters that
+ * `tests/store-jobs-parity.test.ts` was then supposed to hold to one contract
+ * (it still exists, and asserts the one store's contract now).
  *
  * ## A missing lease is *over*, not *live*
  *
@@ -57,9 +58,9 @@
  * *live* is what `coalesce(…, false)` used to do in `requestCancel`, and it
  * leaves a corrupt row that no claimant can advance and no sweep can settle:
  * "Stopping…", disabled, for ever. Treating it as *over* makes the same corrupt
- * row recoverable by the machinery that already exists, and matches the
- * filesystem adapter, where *no entry in the `attempts` map at all* has always
- * meant lapsed. GPT Sol raised it as hardening, 2026-09-01; this is the choice.
+ * row recoverable by the machinery that already exists, and matched the
+ * filesystem adapter (gone 2026-09-05), where *no entry in the `attempts` map
+ * at all* had always meant lapsed. GPT Sol raised it as hardening, 2026-09-01; this is the choice.
  */
 
 import { and, eq, sql } from "drizzle-orm";

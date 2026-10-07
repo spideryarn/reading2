@@ -29,6 +29,7 @@ import { parseObservation, type JsonValue } from "../tools/overseer/observation.
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
 import { editableFixture, type FixtureName } from "./overseer-fixtures.js";
+import { tickAfter } from "./helpers/overseer-until.js";
 
 /** Dashboard runs, minted for this file. */
 const RUN_A = "0dd5e7a1";
@@ -52,7 +53,17 @@ function fakeClock(startIso: string): { now: () => Date; advance(ms: number): vo
   return { now: () => new Date(ms), advance: (by) => (ms += by), ms: () => ms };
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Wait for `n` heartbeat ticks that ran AFTER this call. The watchdog these
+ * tests ask about runs inside the heartbeat tick, so the heartbeat is the
+ * callback in question; and this is called between a script's yields, when no
+ * payload is being folded, so nothing but the ticker is writing the checkpoint.
+ * A "no condition was raised" assertion needs it: over a fixed sleep it passes
+ * vacuously on a box too loaded to fit a tick in (postmortem 260930a).
+ */
+async function ticksAfter(root: string, n: number): Promise<void> {
+  for (let tick = 0; tick < n; tick += 1) await tickAfter(root);
+}
 
 function payload(json: JsonValue, via: "sse" | "poll" = "sse"): SourceMessage {
   return { kind: "payload", via, atMs: 0, json };
@@ -370,12 +381,13 @@ describe("an old producer, which is ordered exactly as well as it was yesterday"
               attemptedAt: new Date(clock.ms() - 15_000).toISOString(),
             }),
           );
-          await sleep(15);
+          // The watchdog is asked at this clock, before it moves on.
+          await ticksAfter(root, 2);
           clock.advance(65_000);
         }
         // Today's clock ordering still applies: an earlier clock is refused.
         yield payload(fixtureWith("session-new-before", { collectedAt: "2026-09-08T03:00:10.000Z" }));
-        await sleep(15);
+        await ticksAfter(root, 2);
       },
       { clock },
     );
@@ -485,9 +497,9 @@ describe("an unknown schema stays unknown", () => {
       async function* () {
         yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }, { attemptedAt: frozen }));
         clock.advance(6 * 60_000);
-        await sleep(40);
+        await ticksAfter(root, 1);
         yield payload(stamped("session-new-before", { instance: RUN_A, publication: 1, inventory: 1 }, { attemptedAt: frozen }));
-        await sleep(20);
+        await ticksAfter(root, 1);
         // The collector is now degraded. A schema-2 payload from a "new run",
         // with a fresh attempt clock and an unreadable stamp.
         yield payload(
@@ -498,7 +510,8 @@ describe("an unknown schema stays unknown", () => {
             producer: { instance: "not a run", publication: -1, inventory: 7 },
           }),
         );
-        await sleep(40);
+        // The ticks that would restore the collector, if the payload were believed.
+        await ticksAfter(root, 3);
         yield payload(
           fixtureWith("session-new-after", {
             schema: 2,
@@ -533,7 +546,7 @@ describe("an unknown schema stays unknown", () => {
             producer: { instance: RUN_B, publication: 1, inventory: 1 },
           }),
         );
-        await sleep(20);
+        await ticksAfter(root, 3);
       },
       { clock },
     );
@@ -607,6 +620,7 @@ describe("the producer's disagreement sentinel", () => {
   const snapshot: FleetSnapshot = {
     rows: [],
     tmuxServerPid: 132280,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
     collectedAt: EARLIER_AT,
     tookMs: 1200,
   };

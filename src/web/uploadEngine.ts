@@ -60,6 +60,7 @@
 import type { Job } from "../types.js";
 import { jobEngine } from "./jobEngine.js";
 import { apiFetch, readJson, statusOf } from "./lib/api.js";
+import { warnBeforeUnload } from "./unload-guard.js";
 import {
   type Grant,
   type UploadProgress,
@@ -171,6 +172,8 @@ export interface UploadEngineDeps {
 export interface UploadEngine {
   /** Bind to a reader. Idempotent for the same key; a different one tears down first. */
   start(readerId: string): void;
+  /** The reader it is bound to right now, or `null`. For the live requests below. */
+  reader(): string | null;
   /** Fence everything in flight, abort the transfer, and forget it. */
   stop(): void;
   subscribe(onChange: () => void): () => void;
@@ -382,6 +385,8 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
       engine.stop();
       readerId = key;
     },
+
+    reader: () => readerId,
 
     stop() {
       fence += 1;
@@ -595,36 +600,45 @@ export function createUploadEngine(deps: UploadEngineDeps): UploadEngine {
   return engine;
 }
 
-/** The live one. */
+/**
+ * The live one.
+ *
+ * **Its three requests go out as the reader it is bound to, or not at all**,
+ * read when each call is made (`NotThisReader` in lib/api.ts;
+ * docs/plans/261006e-add-page-forgets-everything-when-the-reader-changes.md
+ * § 2). `stop()` runs from an effect, after the session has already changed,
+ * so until it does a grant or a queue POST for reader A's file would be sent
+ * with reader B's token. The bytes themselves go to a signed address and
+ * carry no token.
+ */
 export const uploadEngine: UploadEngine = createUploadEngine({
-  requestGrant,
+  requestGrant: (file, signal) => requestGrant(file, signal, {}, uploadEngine.reader()),
   putFile,
   queue: async (uploadId) =>
     readJson<Job | AlreadyAnArticle>(
-      await apiFetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uploadId }),
-      }),
+      await apiFetch(
+        "/api/jobs",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uploadId }),
+        },
+        uploadEngine.reader(),
+      ),
     ),
   cancelUpload: async (uploadId) => {
-    await apiFetch(`/api/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
+    await apiFetch(
+      `/api/uploads/${encodeURIComponent(uploadId)}`,
+      { method: "DELETE" },
+      uploadEngine.reader(),
+    );
   },
   jobs: {
     epoch: () => jobEngine.epoch(),
     actionSucceeded: (epoch) => jobEngine.actionSucceeded(epoch),
     actionFailed: (message, status, epoch) => jobEngine.actionFailed(message, status, epoch),
   },
-  guardUnload() {
-    const warn = (e: BeforeUnloadEvent): void => {
-      /* `preventDefault` is the modern spelling and `returnValue` the one older
-         browsers still read. Both, because the cost of the dead one is a line
-         and the cost of missing the live one is a lost upload. The string is
-         never shown — browsers replaced it with their own wording years ago. */
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  },
+  /* Shared with the batch engine, and read by safe-to-reload.ts: "a transfer
+     has asked for the warning" is also when a page must not reload itself. */
+  guardUnload: () => warnBeforeUnload("upload"),
 });

@@ -3,7 +3,7 @@
  * **Every thread kind but `chat` has to reach the server, and the list of them
  * is `THREAD_KINDS` rather than the one name somebody remembered.**
  *
- * `useChat`'s `send` forwarded `kind` only when it was `"remember"`, written
+ * `useChat`'s `send` forwarded `kind` only when it was `"remember"` (now `"learn"`), written
  * when Remember was the only second kind there was. Candidates arrived on
  * 2026-09-01 as the third, and the check was not widened — so a Candidates turn
  * posted a body with no `kind`, the server read that as chat, and the thread was

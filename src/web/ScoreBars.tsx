@@ -103,7 +103,7 @@ export function ScoreBars({
 
   return (
     <Tooltip content={detail} placement="left" className="score-bars-card">
-      {/* biome-ignore lint/a11y/useSemanticElements: `<meter>` is the obvious
+      {/* Not a `<meter>`: it is the obvious
           tag and is the wrong one — it carries its own UA-drawn appearance in
           every engine, which cannot be restyled consistently and cannot be
           stacked two to a row at this size. `role="img"` with a label that

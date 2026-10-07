@@ -25,10 +25,11 @@
  * `tests/store-revision-columns.test.ts` already draws for the owner's reads.
  */
 
+import { effectiveInfluence, INFLUENCE_VERSION } from "../src/citation-effective-influence.js";
 import { describe, expect, it } from "vitest";
 
 import type { Assets } from "../src/assets.js";
-import { publicArticle } from "../src/public/dto.js";
+import { publicArticle, publicAuthorNames } from "../src/public/dto.js";
 import type {
   Arc,
   Block,
@@ -39,6 +40,7 @@ import type {
   Debate,
   DirectDebateRow,
   Faq,
+  SimpleSentence,
   SimpleSummary,
   Glossary,
   Ideas,
@@ -50,6 +52,7 @@ import type {
   TreeNode,
   TweetThread,
 } from "../src/types.js";
+import { isUsableSimpleSummary } from "../src/types.js";
 
 /**
  * An article whose four slice-1b columns are all empty, for the cases that are
@@ -86,6 +89,10 @@ const NO_ARTEFACTS = {
      revision says today. */
   navLabelStatus: "ready",
   sourceGuess: null,
+  /* Which way the visitor got in (plan 261005e). Required, like the two above,
+     so a call site cannot forget it; `"public"` is what every fixture here is
+     unless it says otherwise. */
+  sharedBy: "public",
 } as const;
 
 /** Every key path in a value, dotted, with array elements collapsed to `[]`. */
@@ -176,7 +183,9 @@ const NODE_FIELDS = {
   navLabel: "Example",
   summary: "A longer restatement.",
   sourceHeading: "The example",
-  gist: "The one worked example, and what it costs the argument.",
+  /* Crosses: it decides the face a title is drawn in, as `sourceHeading` does. */
+  titleFrom: "opening-words" as const,
+  gist:"The one worked example, and what it costs the argument.",
   /* **It crosses**, and the note above about leaving a note is why this line
      says so. The question is drawn in Summary mode, and Summary mode is a
      public surface as much as a signed-in one — a visitor reading a shared
@@ -293,6 +302,11 @@ const FORBIDDEN_ON_META = [
      DTO cannot be handed one — there is no such argument. That is the design
      this file's header describes, and it is why the list below is short. */
   "fetchedAt",
+  /* The owner's field, which may carry a time of day and an offset. A visitor
+     gets `published`, the day alone (plan 261004h). */
+  "publishedAt",
+  "doi", // not one of the two facts Greg approved on 2026-10-04
+  "abstract",
   "note", // the extraction note
   "source", // and the whole PDF/upload provenance block below
   "method",
@@ -320,6 +334,17 @@ describe("the public article payload", () => {
     siteName: "Noema",
     lang: "en",
     excerpt: "Two sentences of Readability's own.",
+    /* A journal and a day with a time, so the whole-key-set assertion sees
+       `meta.journal` and `meta.published` (plan 261004h). The year is its own
+       fixture below, because an article has a day or a year and never both. */
+    journal: "Noema Journal",
+    publishedAt: "2026-01-14T09:00:00+00:00",
+    publishedYear: null,
+    /* A whole rating, so the key-set assertion sees the three fields a
+       visitor is sent and would see a fourth (plan 261005j). */
+    readingLanguage: 3,
+    readingIdeas: 4,
+    readingDifficultyReason: "Ordinary prose about an unfamiliar argument.",
     headingTitle: "The mythology of conscious AI",
     /* **A real address, not `null`**, for the same reason `assets` below is a
        real manifest: with `null` in, the whole-key-set assertion never sees
@@ -398,7 +423,20 @@ describe("the public article payload", () => {
         "meta",
         "meta.byline",
         "meta.excerpt",
+        /* Where and when the piece was published, since 2026-10-04 — Greg:
+           "Q-visitor-page yes". `published` is the calendar day alone, never
+           the owner's `publishedAt`; `meta.publishedYear` takes its place for
+           a paper dated only to a year (§ the journal and the publication
+           date, below). `doi` stays out. */
+        "meta.journal",
         "meta.lang",
+        "meta.published",
+        /* The difficulty rating, since 2026-10-05: the two levels and the
+           model's sentence, and not which model or when (plan 261005j). */
+        "meta.readingDifficulty",
+        "meta.readingDifficulty.ideas",
+        "meta.readingDifficulty.language",
+        "meta.readingDifficulty.reason",
         "meta.siteName",
         "meta.slug",
         "meta.title",
@@ -419,6 +457,11 @@ describe("the public article payload", () => {
            above, and for the same reason: `PublicArticle.searches` is required.
            docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
         "searches",
+        /* **Which way this visitor was let in**, `"public"` or `"link"`, so the
+           notice under the masthead can say *private link* (Greg, 2026-10-05).
+           One of two words. The key itself has no line in this list, and
+           § the private link, below, looks for it in the bytes. */
+        "sharedBy",
         "tree",
         "tree.generator",
         "tree.nodes",
@@ -453,6 +496,7 @@ describe("the public article payload", () => {
         "tree.nodes.n1.summary",
         "tree.nodes.n1.sourceHeading",
         "tree.nodes.n1.title",
+        "tree.nodes.n1.titleFrom",
         /* Apparatus or argument, and it crosses on purpose since 2026-08-29 —
            see the test below for the decision and what a visitor saw without
            it. */
@@ -533,6 +577,12 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [HEADING, BLOCK],
@@ -626,6 +676,12 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [EVERY_BLOCK_FIELD],
@@ -673,6 +729,12 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [
@@ -721,6 +783,12 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -732,6 +800,47 @@ describe("the public article payload", () => {
     expect(JSON.stringify(out)).not.toContain("whoAsked");
   });
 
+  /**
+   * **A stored node with no `children` key is a leaf, and a visitor still gets
+   * the article.** The tree is JSON out of the database and its type is a claim,
+   * not a check; spreading a list that is not there throws, and the public
+   * route turns that into a 500. The node goes out with `children: []`, which
+   * is the shape the client's own mend gives it (src/web/tree.ts §
+   * `withChildLists`). Review finding C-4 on plan 261005h.
+   */
+  it.each([
+    ["the root", "n0"],
+    ["an inner node", "n1"],
+  ] as const)("sends %s with an empty children list when the stored node has none", (_which, id) => {
+    const { children: _dropped, ...listless } = TREE.nodes[id]!;
+    const stored: Tree = { ...TREE, nodes: { ...TREE.nodes, [id]: listless as TreeNode } };
+    const out = publicArticle({
+      slug: "noema",
+      title: "t",
+      byline: null,
+      siteName: null,
+      lang: null,
+      excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
+      headingTitle: null,
+      finalUrl: null,
+      blocks: [BLOCK],
+      tree: stored,
+      arc: null,
+      assets: null,
+      ...NO_ARTEFACTS,
+    });
+    expect(out.tree.nodes[id]!.children).toEqual([]);
+    /* And the node beside it is untouched. */
+    const other = id === "n0" ? "n1" : "n0";
+    expect(out.tree.nodes[other]!.children).toEqual(TREE.nodes[other]!.children);
+  });
+
   /** `null` from Postgres becomes an absent key, not `undefined`. */
   it("leaves an absent field absent rather than null", () => {
     const bare = publicArticle({
@@ -741,6 +850,12 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: "From the article's own h1",
       finalUrl: null,
       blocks: [BLOCK],
@@ -763,6 +878,12 @@ describe("the public article payload", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -772,6 +893,171 @@ describe("the public article payload", () => {
       ...NO_ARTEFACTS,
     });
     expect(bare.meta.title).toBe("noema");
+  });
+
+  /**
+   * **How hard the piece is to read**, for a visitor: the owner's two levels
+   * and the model's sentence, or nothing. Plan 261005j. That the real reader
+   * selects the columns is tests/reading-difficulty-pg.test.ts.
+   */
+  describe("the difficulty rating", () => {
+    const rated = (over: {
+      readingLanguage: number | null;
+      readingIdeas: number | null;
+      readingDifficultyReason: string | null;
+    }) =>
+      publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: null,
+        publishedAt: null,
+        publishedYear: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...over,
+      }).meta;
+
+    it("sends the two levels and the sentence, and nothing else", () => {
+      expect(
+        rated({ readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: "Plain words, hard ideas." }),
+      ).toEqual({
+        slug: "noema",
+        title: "T",
+        readingDifficulty: { language: 2, ideas: 5, reason: "Plain words, hard ideas." },
+      });
+    });
+
+    it("has no key for an unrated piece", () => {
+      const out = rated({ readingLanguage: null, readingIdeas: null, readingDifficultyReason: null });
+      expect(Object.keys(out)).toEqual(["slug", "title"]);
+    });
+
+    it("sends nothing rather than part of a rating, or a level that is not one", () => {
+      for (const bad of [
+        { readingLanguage: 2, readingIdeas: null, readingDifficultyReason: "Why." },
+        { readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: null },
+        { readingLanguage: 2, readingIdeas: 5, readingDifficultyReason: "   " },
+        { readingLanguage: 0, readingIdeas: 5, readingDifficultyReason: "Why." },
+        { readingLanguage: 2, readingIdeas: 6, readingDifficultyReason: "Why." },
+        { readingLanguage: 2.5, readingIdeas: 3, readingDifficultyReason: "Why." },
+      ]) {
+        expect(Object.keys(rated(bad)), JSON.stringify(bad)).toEqual(["slug", "title"]);
+      }
+    });
+  });
+
+  /**
+   * **Where and when the piece was published** — the journal and the
+   * publication date, at the precision we hold it. Greg, 2026-10-04:
+   * "Q-visitor-page yes". Plan 261004h.
+   *
+   * The owner's `publishedAt` may carry a time of day and an offset; a visitor
+   * gets the calendar day and nothing after it, under a different name.
+   */
+  describe("the journal and the publication date", () => {
+    const meta = (over: { journal?: string | null; publishedAt?: string | null; publishedYear?: number | null }) =>
+      publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: null,
+        publishedAt: null,
+        publishedYear: null,
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...over,
+      }).meta;
+
+    it("sends the journal and the day", () => {
+      expect(meta({ journal: "Entropy", publishedAt: "2024-05-31" })).toEqual({
+        slug: "noema",
+        title: "T",
+        journal: "Entropy",
+        published: "2024-05-31",
+      });
+    });
+
+    it("sends the day alone when the stored string carries a time and an offset", () => {
+      const out = meta({ publishedAt: "2024-03-11T23:30:00-05:00" });
+      expect(out.published).toBe("2024-03-11");
+      expect(JSON.stringify(out)).not.toContain("23:30");
+      expect(JSON.stringify(out)).not.toContain("-05:00");
+    });
+
+    it("sends the year for a paper with no day", () => {
+      expect(meta({ journal: "Neuron", publishedYear: 2011 })).toEqual({
+        slug: "noema",
+        title: "T",
+        journal: "Neuron",
+        publishedYear: 2011,
+      });
+    });
+
+    it("has none of the three keys for an article with none of the facts", () => {
+      expect(Object.keys(meta({}))).toEqual(["slug", "title"]);
+    });
+
+    it("sends nothing for a stored date that is not a real day, or a year out of range", () => {
+      expect(Object.keys(meta({ publishedAt: "soon" }))).toEqual(["slug", "title"]);
+      expect(Object.keys(meta({ publishedAt: "2024-02-31T09:00:00Z" }))).toEqual(["slug", "title"]);
+      expect(Object.keys(meta({ publishedYear: 20111 }))).toEqual(["slug", "title"]);
+      expect(Object.keys(meta({ publishedYear: 2011.5 }))).toEqual(["slug", "title"]);
+    });
+
+    it("never sends both: a day beside a year crosses as the day", () => {
+      const out = meta({ publishedAt: "2011-06-02", publishedYear: 2011 });
+      expect(out.published).toBe("2011-06-02");
+      expect("publishedYear" in out).toBe(false);
+    });
+
+    it("does not send the owner's `publishedAt` key, or a DOI it is handed by mistake", () => {
+      /* The DTO has no `doi` argument, so the only way one arrives is a caller
+         spreading a whole revision row in. It must still not cross. */
+      const out = publicArticle({
+        slug: "noema",
+        title: "T",
+        byline: null,
+        siteName: null,
+        lang: null,
+        excerpt: null,
+        journal: "Entropy",
+        publishedAt: "2024-05-31T09:00:00+02:00",
+        publishedYear: null,
+        readingLanguage: null,
+        readingIdeas: null,
+        readingDifficultyReason: null,
+        headingTitle: null,
+        finalUrl: null,
+        blocks: [BLOCK],
+        tree: TREE,
+        arc: null,
+        assets: null,
+        ...NO_ARTEFACTS,
+        ...({ doi: "10.3390/e26060481", abstract: "An abstract." } as object),
+      }).meta;
+      expect(Object.keys(out).sort()).toEqual(["journal", "published", "slug", "title"]);
+      expect(JSON.stringify(out)).not.toContain("10.3390");
+    });
   });
 });
 
@@ -992,7 +1278,9 @@ describe("the artefacts a shared link carries", () => {
    * the route was planned for, and an assertion about a route with a `null`
    * hash would pass a projection that spread the document. One stop carries a
    * `cue` and one does not (routes before `trajectory/5`), so `opt` is
-   * exercised both ways. src/public-types.ts § `PublicSkim`.
+   * exercised both ways — and the same for `again` (`skim/9`, plan 261003l):
+   * the first stop is carried into More and the second is carried nowhere, as
+   * every stop on an older route is. src/public-types.ts § `PublicSkim`.
    */
   const SKIM: Skim = {
     version: "trajectory/7",
@@ -1001,7 +1289,13 @@ describe("the artefacts a shared link carries", () => {
     sourceHash: "abc123",
     profileHash: "profile-of-a-person",
     stops: [
-      { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+      {
+        quoteId: "spya-quote1",
+        depth: 1,
+        role: null,
+        cue: "Look for what the first example costs the claim.",
+        again: [2],
+      },
       { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
     ],
     visible: [1, 2, 2],
@@ -1067,18 +1361,33 @@ describe("the artefacts a shared link carries", () => {
     profileHash: "0f1e2d3c4b5a6978",
     levels: {
       brief: [
-        { text: "It asks what a measurement carries.", ids: ["spya-bbbbbb" as BlockId] },
-        { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId] },
-      ],
-      simple: [
-        /* Sentences that are its text exactly (plan 261002e): they cross, rebuilt. */
+        /* A list with a key phrase, and a key that is not its sentence's words
+           (plan 261004b): `list` and the good key cross, the bad one does not. */
         {
-          text: "This essay asks what a measurement has to carry.",
+          text: "It asks three things. What is carried? By what? And why does a copy fail?",
           ids: ["spya-bbbbbb" as BlockId],
-          sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb", stray: "x" }],
+          list: true,
+          sentences: [
+            /* `stray` is not a field: each sentence is rebuilt, never copied. */
+            { text: "It asks three things.", id: null, key: "three things", stray: "x" } as SimpleSentence,
+            { text: "What is carried?", id: "spya-bbbbbb", key: "key-not-in-its-sentence" },
+            { text: "By what?", id: null, key: null },
+            { text: "And why does a copy fail?", id: null },
+          ],
+        },
+        /* `list` on a paragraph with no usable sentences draws nothing, and does not cross. */
+        { text: "A copy would not do.", ids: ["spya-cccccc" as BlockId], list: true },
+      ],
+      /* **The middle level, which a row from before 2026-10-04 still has**
+         (plan 261004f). Nothing of it may reach a visitor. */
+      simple: [
+        {
+          text: "middle-level-words-here asks what a measurement has to carry.",
+          ids: ["spya-bbbbbb" as BlockId],
+          sentences: [{ text: "middle-level-words-here asks what a measurement has to carry.", id: "spya-bbbbbb" }],
         },
         {
-          text: "It matters because a copy would not do.",
+          text: "It matters because a copy would not do, middle-level-words-here.",
           ids: ["spya-bbbbbb" as BlockId, "spya-cccccc" as BlockId],
         },
       ],
@@ -1092,7 +1401,7 @@ describe("the artefacts a shared link carries", () => {
         { text: "It matters because a copy would not do.", ids: ["spya-cccccc" as BlockId] },
         { text: "Its key idea is that carrying is the whole of it.", ids: ["spya-bbbbbb" as BlockId] },
       ],
-    },
+    } as SimpleSummary["levels"],
     /* The fidelity guard's audit record (plan 261001i) — the owner's, not a visitor's. */
     check: {
       checker: "simple-check/1",
@@ -1107,7 +1416,7 @@ describe("the artefacts a shared link carries", () => {
           stored: 2,
           flags: [{ paragraph: 1, why: "checker-why-sentence" }],
         },
-      },
+      } as NonNullable<SimpleSummary["check"]>["levels"],
     },
   };
 
@@ -1150,6 +1459,9 @@ describe("the artefacts a shared link carries", () => {
           moreAuthors: 3,
           year: 2004,
           venue: "Journal of Works",
+          /* Crossref's count and the day it was read (plan 261005i): public
+             data about a public DOI, rebuilt field by field like the rest. */
+          citedBy: { count: 357, readAt: "2026-10-04T12:00:00.000Z", extra: "cited-by extra must not cross" },
           ownerOnlySentinel: "citation registry extra must not cross",
         } as CitationRegistry & { ownerOnlySentinel: string },
         found: { host: "found.example", searches: 1, model: "m", at: "2026-09-29T10:00:00.000Z" },
@@ -1196,6 +1508,16 @@ describe("the artefacts a shared link carries", () => {
             readAt: "2026-10-01T10:00:00.000Z",
             passages: [{ chunk: "c1", page: 1, text: "paper passage sentinel from the pdf", bears: "supports" }],
           },
+          /* Plan 261003m stage 2: the influence Dig deeper read from the web
+             is the owner's too. A different number from the list's own 0.7,
+             so a visitor's row can be seen to keep the list's. */
+          influence: {
+            value: 0.31,
+            quote: "web influence quote sentinel from a page",
+            sourceUrl: "https://web-influence-source-sentinel.example/page",
+            sourceTitle: "web influence title sentinel",
+            version: INFLUENCE_VERSION,
+          },
         },
         /* The work's reference entry (plan 260930i) — owner-only until the
            public DTO names it, which is Greg's call on a defence. */
@@ -1235,6 +1557,17 @@ describe("the artefacts a shared link carries", () => {
         citedInBody: false,
         url: "http://192.168.0.1/paper",
         linkFrom: "article",
+        /* A well-formed count on a DataCite record: nothing we write, but a
+           stored row is not revalidated, and the panel would label it
+           Crossref's (plan 261005i, GPT Sol's F2). The record crosses; the
+           count does not. */
+        registry: {
+          kind: "found",
+          source: "datacite",
+          title: "A work on a private host",
+          authors: [],
+          citedBy: { count: 424242, readAt: "2026-10-04T12:00:00.000Z" },
+        },
       },
       {
         /* A `web` link is the owner's own *Find it*: dropped unjudged. */
@@ -1266,6 +1599,12 @@ describe("the artefacts a shared link carries", () => {
     siteName: null,
     lang: null,
     excerpt: null,
+    journal: null,
+    publishedAt: null,
+    publishedYear: null,
+    readingLanguage: null,
+    readingIdeas: null,
+    readingDifficultyReason: null,
     headingTitle: null,
     finalUrl: null,
     blocks: [BLOCK],
@@ -1274,6 +1613,7 @@ describe("the artefacts a shared link carries", () => {
     assets: null,
     navLabelStatus: "ready" as const,
     sourceGuess: null,
+    sharedBy: "public" as const,
     crossrefs: null,
     crossrefsFresh: false,
     /* **No `as const`.** It would freeze `blocks` into a readonly tuple, which
@@ -1766,17 +2106,35 @@ describe("the artefacts a shared link carries", () => {
    */
   it("carries the route's stops and the offered count, and not who it was planned for", () => {
     expect(pathsUnder("skim")).toEqual(
-      ["offered", "stops", "stops[].cue", "stops[].depth", "stops[].quoteId", "stops[].role"].sort(),
+      [
+        "offered",
+        "stops",
+        "stops[].again",
+        "stops[].cue",
+        "stops[].depth",
+        "stops[].quoteId",
+        "stops[].role",
+      ].sort(),
     );
     expect(built.skim).toEqual({
       stops: [
-        { quoteId: "spya-quote1", depth: 1, role: null, cue: "Look for what the first example costs the claim." },
+        {
+          quoteId: "spya-quote1",
+          depth: 1,
+          role: null,
+          cue: "Look for what the first example costs the claim.",
+          /* Which passes a stop is walked in is the route itself: without it a
+             visitor would walk a different More from the owner (Sol F4). */
+          again: [2],
+        },
         { quoteId: "spya-quote2", depth: 2, role: "Names the trouble" },
       ],
       offered: 12,
     });
-    /* The cue-less stop crosses with no `cue` key, not an `undefined` one. */
+    /* The cue-less stop crosses with no `cue` key, not an `undefined` one —
+       and the uncarried one with no `again` key. */
     expect("cue" in (built.skim?.stops[1] ?? {})).toBe(false);
+    expect("again" in (built.skim?.stops[1] ?? {})).toBe(false);
     const json = JSON.stringify(built);
     expect(json).not.toContain("profileHash");
     expect(json).not.toContain("profile-of-a-person");
@@ -1804,34 +2162,45 @@ describe("the artefacts a shared link carries", () => {
   });
 
   /** Both levels' paragraphs and ids, and not the stamp or the owner's profile hash. Plans 260930i, 261001b. */
-  it("carries Simple's paragraphs and their ids at every level, and not the stamp", () => {
+  it("carries Simple's paragraphs and their ids at Brief and Fuller, and not the stamp or a stored middle level", () => {
     expect(pathsUnder("simpleSummary")).toEqual(
       [
         "levels",
         "levels.brief",
         "levels.brief[].ids",
+        "levels.brief[].list",
+        "levels.brief[].sentences",
+        "levels.brief[].sentences[].id",
+        "levels.brief[].sentences[].key",
+        "levels.brief[].sentences[].text",
         "levels.brief[].text",
         "levels.fuller",
         "levels.fuller[].ids",
         "levels.fuller[].text",
-        "levels.simple",
-        "levels.simple[].ids",
-        "levels.simple[].sentences",
-        "levels.simple[].sentences[].id",
-        "levels.simple[].sentences[].text",
-        "levels.simple[].text",
       ].sort(),
     );
+    /* The stored row is usable with its middle level in it, and only the two
+       levels a reader is shown cross. */
+    expect(isUsableSimpleSummary(SIMPLE)).toBe(true);
+    expect(Object.keys(built.simpleSummary?.levels ?? {}).sort()).toEqual(["brief", "fuller"]);
     /* Through the one accessor: the usable list rebuilt, the unusable one gone. */
-    expect(built.simpleSummary?.levels.simple[0]).toEqual({
-      text: "This essay asks what a measurement has to carry.",
-      ids: ["spya-bbbbbb"],
-      sentences: [{ text: "This essay asks what a measurement has to carry.", id: "spya-bbbbbb" }],
-    });
     const plain = ({ text, ids }: SimpleSummary["levels"]["brief"][number]) => ({ text, ids });
     expect(built.simpleSummary?.levels.fuller).toEqual(SIMPLE.levels.fuller.map(plain));
-    expect(built.simpleSummary?.levels.brief).toEqual(SIMPLE.levels.brief);
-    expect(built.simpleSummary?.levels.simple.slice(1)).toEqual(SIMPLE.levels.simple.slice(1));
+    /* Bold and bullets (plan 261004b): `list: true` and a valid key, and nothing else new. */
+    expect(built.simpleSummary?.levels.brief).toEqual([
+      {
+        text: "It asks three things. What is carried? By what? And why does a copy fail?",
+        ids: ["spya-bbbbbb"],
+        list: true,
+        sentences: [
+          { text: "It asks three things.", id: null, key: "three things" },
+          { text: "What is carried?", id: "spya-bbbbbb" },
+          { text: "By what?", id: null },
+          { text: "And why does a copy fail?", id: null },
+        ],
+      },
+      { text: "A copy would not do.", ids: ["spya-cccccc"] },
+    ]);
     const json = JSON.stringify(built.simpleSummary);
     for (const provenance of [
       "simple/2",
@@ -1845,10 +2214,32 @@ describe("the artefacts a shared link carries", () => {
       "checker-model",
       "checker-why-sentence",
       "stray",
+      "middle-level-words-here",
       "unchecked-words-here",
+      "key-not-in-its-sentence",
     ]) {
       expect(json, provenance).not.toContain(provenance);
     }
+  });
+
+  it("does not publish list formatting when a stored list has no two bullet sentences", () => {
+    const malformedList = {
+      text: "These are the findings. It read faster.",
+      ids: ["spya-bbbbbb" as BlockId],
+      list: true,
+      sentences: [
+        { text: "These are the findings.", id: null },
+        { text: "It read faster.", id: "spya-bbbbbb" as BlockId },
+      ],
+    };
+    const summary: SimpleSummary = {
+      ...SIMPLE,
+      levels: { ...SIMPLE.levels, brief: [malformedList, SIMPLE.levels.brief[1]!] },
+    };
+    const shared = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: summary });
+    const paragraph = shared.simpleSummary?.levels.brief[0];
+    expect(paragraph?.sentences).toEqual(malformedList.sentences);
+    expect(paragraph).not.toHaveProperty("list");
   });
 
   it("does not publish a stored Simple artefact outside either level's contract", () => {
@@ -1861,7 +2252,7 @@ describe("the artefacts a shared link carries", () => {
   });
 
   it("does not publish a simple/1 row even when it has valid-looking levels", () => {
-    const v1 = { ...SIMPLE, version: "simple/1", paragraphs: SIMPLE.levels.simple } as unknown as SimpleSummary;
+    const v1 = { ...SIMPLE, version: "simple/1", paragraphs: SIMPLE.levels.brief } as unknown as SimpleSummary;
     const invalid = publicArticle({ ...ARTICLE_BASE, ...NO_ARTEFACTS, simpleSummary: v1 });
     expect("simpleSummary" in invalid).toBe(false);
   });
@@ -1895,6 +2286,9 @@ describe("the artefacts a shared link carries", () => {
         "citations[].registry.authors",
         "citations[].registry.authors[].family",
         "citations[].registry.authors[].given",
+        "citations[].registry.citedBy",
+        "citations[].registry.citedBy.count",
+        "citations[].registry.citedBy.readAt",
         "citations[].registry.kind",
         "citations[].registry.moreAuthors",
         "citations[].registry.source",
@@ -1916,6 +2310,13 @@ describe("the artefacts a shared link carries", () => {
     expect(built.citations?.citations[0]?.registry?.kind).toBe("found");
     expect(built.citations?.citations.find((w) => w.id === "w-cred")?.registry).toBeUndefined();
     expect(json).not.toContain("conflict");
+    /* Crossref's count crosses with its day and nothing else; a DataCite record keeps its metadata and loses a count. */
+    expect(built.citations?.citations[0]?.registry?.citedBy).toEqual({ count: 357, readAt: "2026-10-04T12:00:00.000Z" });
+    expect(json).not.toContain("cited-by extra must not cross");
+    const datacite = built.citations?.citations.find((w) => w.id === "w-private")?.registry;
+    expect(datacite).toMatchObject({ kind: "found", source: "datacite", title: "A work on a private host" });
+    expect(datacite).not.toHaveProperty("citedBy");
+    expect(json).not.toContain("424242");
     expect(built.citations?.capped).toBe(true);
   });
 
@@ -1962,10 +2363,31 @@ describe("the artefacts a shared link carries", () => {
       "paper-selection-sentinel",
       "paper passage sentinel from the pdf",
       '"sentWords"',
+      /* The web influence (plan 261003m stage 2). */
+      "web influence quote sentinel from a page",
+      "web-influence-source-sentinel.example",
+      "web influence title sentinel",
+      '"sourceUrl"',
+      INFLUENCE_VERSION,
     ]) {
       expect(json, sentinel).not.toContain(sentinel);
     }
     expect(built.citations?.citations.find((w) => w.id === "w-clean")).not.toHaveProperty("investigation");
+  });
+
+  /* Plan 261003m stage 2, GPT Sol's F6: the owner's row draws the web number
+     through `effectiveInfluence`; the list's own field is never overwritten,
+     so the visitor's row carries the list's 0.7 and reads as the list's. */
+  it("carries the list's own influence, never the one Dig deeper found on the web", () => {
+    const owners = CITATIONS.citations.find((w) => w.id === "w-clean");
+    expect(owners && effectiveInfluence(owners), "the fixture's web influence is live for the owner").toMatchObject({
+      value: 0.31,
+      from: "web",
+    });
+    const visitors = built.citations?.citations.find((w) => w.id === "w-clean");
+    expect(visitors?.influence).toBe(0.7);
+    expect(visitors && effectiveInfluence(visitors)).toEqual({ value: 0.7, from: "list" });
+    expect(JSON.stringify(built.citations)).not.toContain("0.31");
   });
 
   /**
@@ -2057,6 +2479,12 @@ describe("the artefacts a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2080,6 +2508,7 @@ describe("the artefacts a shared link carries", () => {
       sketch: null,
       navLabelStatus: "ready",
       sourceGuess: null,
+      sharedBy: "public",
     });
     expect("glossary" in empty).toBe(true);
     expect(empty.glossary?.entries).toEqual([]);
@@ -2096,6 +2525,12 @@ describe("the artefacts a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2126,6 +2561,72 @@ describe("the artefacts a shared link carries", () => {
  * Same reason `tests/public-reads.test.ts` reads the generated SQL rather than
  * the projection object beside it.
  */
+/**
+ * **Which way the visitor got in, and nothing about the key.** Plan 261005e.
+ *
+ * The payload gains one fact for a private link: `sharedBy`. The reader works
+ * it out from the row its predicate matched (tests/public-visibility-pg.test.ts
+ * proves that against real rows, including that a public article opened with a
+ * key says `"public"`); this proves the projection carries the word it was
+ * handed, changes nothing else, and has nowhere to put a key.
+ */
+describe("the private link, in the payload", () => {
+  const ROW = {
+    slug: "noema",
+    title: "t",
+    byline: null,
+    siteName: null,
+    lang: null,
+    excerpt: null,
+    journal: null,
+    readingLanguage: null,
+    readingIdeas: null,
+    readingDifficultyReason: null,
+    publishedAt: null,
+    publishedYear: null,
+    headingTitle: null,
+    finalUrl: null,
+    blocks: [BLOCK],
+    tree: TREE,
+    arc: null,
+    assets: null,
+    ...NO_ARTEFACTS,
+  };
+
+  it("says public for a public article and link for a private one opened by its key", () => {
+    expect(publicArticle({ ...ROW, sharedBy: "public" }).sharedBy).toBe("public");
+    expect(publicArticle({ ...ROW, sharedBy: "link" }).sharedBy).toBe("link");
+  });
+
+  /* The two payloads differ in that one word. A private link shows a visitor
+     exactly what a public article would. */
+  it("and that word is the only difference between the two payloads", () => {
+    const asPublic = publicArticle({ ...ROW, sharedBy: "public" });
+    const asLink = publicArticle({ ...ROW, sharedBy: "link" });
+    expect({ ...asLink, sharedBy: "public" }).toEqual(asPublic);
+    expect(keyPaths(asLink)).toEqual(keyPaths(asPublic));
+  });
+
+  /**
+   * **A key handed to the projection by mistake does not cross.** The function
+   * takes no key, so the mistake has to be a wider object spread into its
+   * argument, which is how a row from a careless `select` would arrive.
+   * Default-absent is the allowlist's whole point, and this is that point
+   * asserted for the one value that is a credential.
+   */
+  it("and a key or a token on the row it is handed never reaches the payload", () => {
+    const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+    const out = publicArticle({
+      ...ROW,
+      sharedBy: "link",
+      ...({ key: KEY, shareToken: KEY, share_token: KEY, shareTokenAt: "2026-10-05T00:00:00Z" } as object),
+    });
+    expect(JSON.stringify(out)).not.toContain(KEY);
+    expect(JSON.stringify(out)).not.toMatch(/share_?token/i);
+    expect(keyPaths(out).filter((p) => /key|token/i.test(p))).toEqual([]);
+  });
+});
+
 describe("the source URL a stranger receives", () => {
   /** One article, one `finalUrl`, and only the published `meta.url` back. */
   const published = (finalUrl: string | null): string | undefined =>
@@ -2136,6 +2637,12 @@ describe("the source URL a stranger receives", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl,
       blocks: [HEADING, BLOCK],
@@ -2343,6 +2850,12 @@ describe("the debate a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl,
       blocks: [BLOCK],
@@ -2589,6 +3102,12 @@ describe("the debate a shared link carries", () => {
       siteName: null,
       lang: null,
       excerpt: null,
+      journal: null,
+      publishedAt: null,
+      publishedYear: null,
+      readingLanguage: null,
+      readingIdeas: null,
+      readingDifficultyReason: null,
       headingTitle: null,
       finalUrl: null,
       blocks: [BLOCK],
@@ -2598,5 +3117,33 @@ describe("the debate a shared link carries", () => {
       ...NO_ARTEFACTS,
     });
     expect("debate" in bare).toBe(false);
+  });
+});
+
+/**
+ * **The names on a link preview are the names a visitor is already shown.**
+ * `authors` is not in the public payload and `byline` is, so the byline is the
+ * licence. docs/plans/261005f-link-previews-and-seo-for-shared-links.md.
+ */
+describe("publicAuthorNames", () => {
+  const authors = [
+    { name: "Jane Doe", affiliations: ["A Private Lab"] },
+    { name: "John Smith", affiliations: [] },
+  ];
+
+  it("gives the names the public byline contains, and never an affiliation", () => {
+    expect(publicAuthorNames(authors, "Jane Doe; John Smith")).toEqual(["Jane Doe", "John Smith"]);
+  });
+
+  /* Mutation: return every name whatever the byline says. Red here. */
+  it("holds back a name the byline does not show", () => {
+    expect(publicAuthorNames(authors, "Jane Doe")).toEqual(["Jane Doe"]);
+    expect(publicAuthorNames(authors, null)).toEqual([]);
+    expect(publicAuthorNames(authors, "")).toEqual([]);
+  });
+
+  it("gives none for a page with a byline and no structured authors", () => {
+    expect(publicAuthorNames(null, "By Jane Doe | Staff reporter")).toEqual([]);
+    expect(publicAuthorNames([{ name: "  " }], "By   somebody")).toEqual([]);
   });
 });

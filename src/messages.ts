@@ -31,7 +31,7 @@ import { readableDay } from "./billing-plan.js";
    — where the fact belongs — reaches src/fetch.ts's untyped packages. */
 import type { DocumentOrigin } from "./document-origin.js";
 import type { Mode } from "./modes.js";
-import type { DateRejection, EmbeddingReason, StepName } from "./types.js";
+import type { DateRejection, EmbeddingReason, FetchFailureCode, StepName } from "./types.js";
 import { MAX_PAGES, MAX_UPLOAD_BYTES } from "./uploads.js";
 
 /**
@@ -310,7 +310,6 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      end in this code, or it would read as authored. */
   "live-upstream": "retry",
   "jb-slot-held": "bug",
-  "cite-resting": "blocked",
   /* Citations' *Investigate* — src/citation-investigate.ts. */
   "cite-quoted": "retry",
   "cite-no-extract": "retry",
@@ -323,6 +322,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "cite-gone": "blocked",
   "guess-resting": "blocked",
   "ai-not-set-up": "ours",
+  /* The command bar's suggestions — see `REASON_NOT_READ`. */
+  "bar-reason-unread": "retry",
   "ai-overflowed": "retry",
   "ai-slow": "retry",
   "ai-stalled": "retry",
@@ -337,38 +338,32 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "ai-filtered": "blocked",
   "ai-no-room": "retry",
   "ai-empty": "retry",
-  /* **Raised outside this file**, by `CLAIMS_UNUSABLE` (src/referee-claims-run.ts)
-     and `ANSWER_UNUSABLE` (src/referee-criteria-run.ts): the model answered and
-     none of what came back could be found in the paper. `retry` because both
-     sentences end "asking again usually works", which is true — it is a fact
-     about that answer, never about the paper.
+  /* `ANSWER_UNUSABLE`, below: a Referee run whose every row was thrown away.
+     `retry` because the sentence ends "asking again usually works", which is
+     true. It is a fact about that answer, never about the paper.
 
-     Both sites had asked in prose since 2026-09-02 to be registered here, and
-     `referee-criteria-run.ts` said exactly why it would not happen: *"Skipping
-     the second has no symptom here — `kindOfMessage` returns null,
-     `worthRetrying` says yes, and Retry is the right answer anyway."* It was
-     right, and being right by a default's coincidence is not the same as being
-     declared. tests/every-ai-code-is-registered.test.ts is what now says so.
+     **It took four days to register and a month to move here.** The code was
+     first raised from two sentences in the runners' own files, both of which
+     had asked in prose since 2026-09-02 to be registered, and one of which said
+     exactly why it would not happen: *"Skipping the second has no symptom here
+     — `kindOfMessage` returns null, `worthRetrying` says yes, and Retry is the
+     right answer anyway."* Being right by a default's coincidence is not the
+     same as being declared; tests/every-ai-code-is-registered.test.ts is what
+     now says so. The two sentences became one, in this file, on 2026-10-04
+     (plan 261004c § R6), which also settled the "one distinct sentence, one
+     code" rule they had been breaking.
 
      **Registering a code is not only bookkeeping**, which GPT Sol pointed out
-     and this entry is the first case of: `authored()` in src/monitoring-scrub.ts
-     is `kindOfMessage(message) !== null`, so a message ending in a registered
-     code has its **full text forwarded to Sentry** instead of being withheld.
-     That is correct for these two — both are fixed literals with nothing
-     interpolated into them, which is exactly what that allowlist is for. But
-     note what it means for the next sentence given this code: it must stay free
-     of article prose and of anything a reader typed (docs/project/logging.md).
-     `monitoring-scrub.ts`'s own reasoning says the vocabulary is closed because
-     "tests/messages.test.ts round-trips every sentence in that file", and these
-     two sentences are not in this file — which is the sharpest argument for
-     moving them here, still open, and belonging to docs/project/copy.md's own
-     batch rather than to this line.
-
-     **Two different sentences share this one code**, which the "one distinct
-     sentence, one code" rule says they must not — see
-     docs/plans/260906h-improve-the-codebase-fourth-sweep.md § T2.8. Recorded
-     rather than fixed here: unifying them or splitting the code changes what a
-     reader is shown, which is copy.md's call and not a sweep's. */
+     and this entry was the first case of: `authored()` in
+     src/monitoring-scrub.ts is `kindOfMessage(message) !== null`, so a message
+     ending in a registered code has its **full text forwarded to Sentry**
+     instead of being withheld. That is correct here, because the sentence is a
+     fixed literal with nothing interpolated into it, which is exactly what
+     that allowlist is for. Any sentence given this code must stay free of
+     article prose and of anything a reader typed (docs/project/logging.md).
+     `monitoring-scrub.ts` calls the vocabulary closed because
+     "tests/messages.test.ts round-trips every sentence in that file", and
+     since the move that is true of this one too. */
   "ai-unusable": "retry",
   /* Not a model call, and not the reader's fault either. `retry` on purpose:
      an interrupted job resumes from its artefacts rather than starting again,
@@ -459,6 +454,12 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      rule that made two codes compulsory once the sentences differed. */
   "jb-file-no-article": "blocked",
   "jb-file-too-little-text": "blocked",
+  /* **The third stage-2 refusal, 2026-10-06: the document is a site's bot
+     check.** `blocked` like the four above, and for their reason — Retry reads
+     the copy stage 1 stored, which is the same check. A code per origin because
+     the sentences differ. See `documentIsABotCheck`. */
+  "jb-bot-check": "blocked",
+  "jb-file-bot-check": "blocked",
   /* Stage 3's own, and the one the first sweep missed: it is reachable from an
      uploaded *scan*, where a PDF's only text is a publisher record that
      `renderHtml` withholds. ⟨GPT Sol, F24⟩ See `articleHadNoText`. */
@@ -467,6 +468,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "jb-no-sketch": "blocked",
   "jb-sketch-stale": "blocked",
   "jb-sketch-profile": "blocked",
+  /* A step that reads the structure, on an article still showing the stand-in
+     outline it opened with. See `STRUCTURE_NOT_BUILT`. */
+  "jb-no-structure": "blocked",
+  "structure-check": "retry",
   /* The Skim's two refusals: no usable Quotes, or only abstract Quotes.
      See `SKIM_NO_QUOTES` and `SKIM_ONLY_ABSTRACT_QUOTES`. */
   "jb-no-quotes": "blocked",
@@ -505,6 +510,8 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      glance — see `STORAGE_BUSY`. */
   "db-busy": "retry",
   "db-failed": "bug",
+  /* The database is ahead of this code, most likely mid-deploy. CHAT_BEING_UPDATED. */
+  "db-updating": "retry",
   /* Reading something back out of this app's own API, `rd-`. Not a model call,
      not the database as the reader meets it, and not a job — it is the *check*
      that failed, behind a page that is still on screen. Its own prefix for the
@@ -514,6 +521,9 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   /* The same family: a panel's opening list read, given up on at its deadline.
      See LIST_LOAD_TIMED_OUT. */
   "rd-timeout": "retry",
+  /* And the Referee band's scan read, given up on at *its* deadline. See
+     SCAN_TIMED_OUT. */
+  "rd-scan-timeout": "retry",
   /* Uploading a file. `up-` for the same reason `db-` is not `ai-`: a reader
      quoting four characters should not have to explain which part of the app
      they were in. **Their kinds are not uniform**, which is the whole reason
@@ -525,6 +535,31 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the list it counts goes stale on the next line added, and no test can see
      it, so there is no count here now.) */
   "up-big": "blocked",
+  /* The same refusal for a document fetched by address. See FETCH_TOO_BIG. */
+  "fetch-big": "blocked",
+  /* The rest of the `fetch-` family: one for each other way a fetch by address
+     can fail, and two for the catch-all. Registered because their kinds are not
+     uniform, which is `up-`'s reason above. See `fetchFailed`. */
+  "fetch-address": "blocked",
+  "fetch-scheme": "blocked",
+  "fetch-private": "blocked",
+  "fetch-no-site": "retry",
+  "fetch-unreachable": "retry",
+  "fetch-certificate": "blocked",
+  "fetch-slow": "retry",
+  "fetch-redirects": "blocked",
+  "fetch-login": "blocked",
+  "fetch-refused": "blocked",
+  "fetch-not-found": "blocked",
+  "fetch-rate": "retry",
+  "fetch-site-trouble": "retry",
+  "fetch-type": "blocked",
+  "fetch-empty": "retry",
+  "fetch-declined": "blocked",
+  "fetch-incomplete": "retry",
+  /* Not one of the fetcher's codes: a paper source's own PDF address answered
+     that it has no such document. See `FETCH_PAPER_MISSING`. */
+  "fetch-paper-missing": "blocked",
   "up-pdf": "blocked",
   /* The page cap, as the *upload record* states it. The job card gets
      `pdf-pages` instead, which names the count — see `UPLOAD_TOO_MANY_PAGES`
@@ -564,6 +599,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-dup": "blocked",
   "up-dup-archived": "blocked",
   "up-dup-wait": "blocked",
+  /* One of our own reading pages pasted into Add. `blocked`: the same link is
+     refused the same way every time, and the way out is the article's own
+     address. See `OWN_READING_PAGE`. */
+  "jb-own-page": "blocked",
   /* A paper on the shelf with only its title and abstract read, and something
      asked of it that needs the whole article — plan 261001m. `blocked`: the
      same request gets the same answer until *Read this* has run, and that is
@@ -572,6 +611,11 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "np-share": "blocked",
   "np-power": "blocked",
   "np-reset": "blocked",
+  /* A shared address opened before the import behind it has published: plan
+     261005l § 2c. `retry`: the same request answers differently once the
+     article is ready, and asking again is exactly what the visitor's page does.
+     See `STILL_BEING_ADDED_REFUSAL` below. */
+  "pub-adding": "retry",
   /* These two were missing until 2026-08-26, so `kindOfMessage` returned null
      for `NO_RESPONSE` and `TOOL_CALL_LOST` and the interface was guessing on
      both. It guessed right — both are `retry`, and null means offer the retry —
@@ -601,11 +645,15 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the dialog puts a Copy button beside it for the case where it keeps failing.
      `fb-store` is a deployment running without the database reports are kept in,
      which another go cannot fix. `fb-list` is the transient failure to read the
-     reports back. See § feedback below, and
+     reports back. `fb-reply` is an admin's reply to a question not getting
+     through, and `fb-reply-stale` the same on a page older than the server it
+     reached: both leave the words in the box. See § feedback below, and
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
   "fb-list": "retry",
+  "fb-reply": "retry",
+  "fb-reply-stale": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -786,6 +834,52 @@ export const PROVIDER_UNREADABLE: ReaderFacingFailure = {
   message:
     "The AI service sent back something this app could not read at all. That is usually a one-off, " +
     "so asking again generally works. [ai-unreadable]",
+};
+
+/**
+ * **Referee: the model answered, and not one row of the answer could be kept.**
+ *
+ * Thrown by both Referee runners: `runCriterionStream`
+ * (src/referee-criteria-run.ts) when every result row was discarded, and
+ * `runClaimsStream` (src/referee-claims-run.ts) when every claim was.
+ *
+ * There are three outcomes a run can have, not two: the model found passages,
+ * the model found nothing, and *the model returned something nothing could be
+ * made of*. The third had no sentence until 2026-09-01. Its rows were dropped
+ * and counted, correctly, and then the run was stored `done` with no results,
+ * so the panel printed "the model did not find a passage for this", which is
+ * the sentence for the second outcome and false for the third ⟨GPT Sol's
+ * finding 4, docs/plans/260831an-referee-mode-stage3b5c-review-sol.md⟩. *Found
+ * nothing* and *found things I could not use* call for different actions, so
+ * they must not print the same sentence. For Claims the wrong one would read
+ * as *the paper makes no claims*, a finding that sub-mode exists not to make.
+ *
+ * So this is a **failed run** rather than an empty one: the row goes to
+ * `status: "error"`, the panel prints this and offers Try again, and a retry
+ * resets the row. A *partial* loss is still a success: one usable row means
+ * the run ran, and the rows that were dropped stay a log line.
+ *
+ * **One sentence, deliberately true of every discard path.** A row is thrown
+ * away for a quote that is not in the paper, for a block id the paper does not
+ * have, for a missing valence on a `diverging` criterion, and for having no
+ * anchor at all. "Nothing it returned could be used" covers all four. Until
+ * 2026-10-04 there were two sentences sharing this one code, one in each
+ * runner's file: Criteria's said the model "pointed at passages", which a row
+ * with no anchor never did, and Claims' (`CLAIMS_UNUSABLE`) said nothing "could
+ * be found in the paper", which is not why a shapeless row is dropped. Plan
+ * 261004c § R6.
+ *
+ * The rule it must keep: **a null result is evidence about the model, never a
+ * claim about the paper.** tests/referee-copy-is-about-the-model.test.ts holds
+ * it to that. And it is a fixed literal with nothing interpolated, which is
+ * what lets its full text go to Sentry (see `ai-unusable` in `CODE_KINDS`).
+ */
+export const ANSWER_UNUSABLE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The model answered, but nothing it returned could be used, so there is nothing to show. " +
+    "That is about the answer rather than about the paper, and asking again usually works. " +
+    "[ai-unusable]",
 };
 
 /**
@@ -1346,6 +1440,50 @@ export function documentHadTooLittleText(
 }
 
 /**
+ * **The document is a site's check that its visitor is not a bot** —
+ * `ChallengePage`'s sentence (src/challenge-page.ts), for the two framings the
+ * reader can be in.
+ *
+ * **Its own sentence rather than `documentHasNoArticle`'s**, which would have
+ * been one factory cheaper. That one says *"usually a login wall, an error
+ * page, or…"* and sends the reader to look at the address, because the rule
+ * behind it does not know what the page is. This rule does: the page said so
+ * in its own markup. So the sentence does not hedge, and it names the move
+ * that works — the reader's own browser can pass the check, and this app can
+ * read what that browser saves.
+ * docs/plans/261006c-a-bot-check-page-is-refused-by-its-own-markup.md.
+ *
+ * **Plain words.** Not the product's name and not how the check works; *"a
+ * check that its visitor is not a bot"* is what the page itself tells a person.
+ * The provider is on the error and in the log's diagnostic.
+ *
+ * **"an HTML file", not "a web page"**, which could be heard as a browser's
+ * archive format this app does not take. And the futility of another go is
+ * tied to the stored copy, because that is the true reason: Retry never
+ * re-runs the fetch. GPT Sol, 2026-10-06.
+ */
+export function documentIsABotCheck(origin: DocumentOrigin): ReaderFacingFailure {
+  if (origin === "upload") {
+    return {
+      kind: "blocked",
+      message:
+        "The file you uploaded is a site's check that its visitor is not a bot, saved before " +
+        "the page behind it had loaded. Sending the same file again cannot change that. If you " +
+        "can still open the original page in a browser, wait for it to load and save it again " +
+        "from there. [jb-file-bot-check]",
+    };
+  }
+  return {
+    kind: "blocked",
+    message:
+      "The site answered with a check that its visitor is not a bot, instead of the page " +
+      "itself, and this app cannot pass that check. Another go here would read the same stored " +
+      "copy of that check. If the page opens in your own browser, save it from there as a PDF " +
+      "or an HTML file and upload that file. [jb-bot-check]",
+  };
+}
+
+/**
  * **The document was read, an article came out of it, and it had no text in
  * it** — one branch further along than `documentHasNoArticle`, in stage 3
  * rather than stage 2, and deliberately its own sentence: there the page gave
@@ -1474,10 +1612,29 @@ export const ILLUSTRATE_SKETCH_STALE: ReaderFacingFailure = {
 export const ILLUSTRATE_SKETCH_PROFILE: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "The sketch of this article was drawn for a different reader profile, so the painting would " +
-    "be made for somebody else's reading of it. Draw the Sketch again — it is the chip one to " +
+    "The sketch of this article was drawn before your reader profile said what it says now, so " +
+    "the painting would be made for an earlier reading of it. Draw the Sketch again — it is the chip one to " +
     "the left — and then press this one. Until it is redrawn, this will come back the same " +
     "way. [jb-sketch-profile]",
+};
+
+/**
+ * **A step that reads the article's structure was asked to run before the
+ * structure exists.** An article that opened early is published with a
+ * stand-in outline cut from its headings, and the job that builds the real
+ * structure failed or has not run; `runStep` (src/jobs.ts) refuses every step
+ * after `structure` but `assets` until it has.
+ *
+ * `blocked`, so no Retry is offered, and so the sentence has to carry the way
+ * out itself: the Structure band is where the structure is built.
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md § Review record, F4.
+ */
+export const STRUCTURE_NOT_BUILT: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The structure of this article has not been built yet, and this is made from the structure. " +
+    "Open Structure and build it there, then run this again. Until it is built, this will come " +
+    "back the same way. [jb-no-structure]",
 };
 
 /* ----------------------------------------------------- asking the web (debate) -- */
@@ -1666,13 +1823,17 @@ export function pdfPagesIncomplete(pages: readonly number[]): ReaderFacingFailur
  * `blocked` rather than `bug`, matching the exception's own declared kind and
  * for its stated reason — a request that cannot pass a size boundary, where the
  * reader's move is a shorter piece.
+ *
+ * It said until 2026-10-05 that "reading a long piece in sections is not built
+ * yet". Structure and labels do read one in sections now and no longer end
+ * here; every other `budgetFor` caller still can, so the message stays and the
+ * clause went — docs/plans/261005c-long-document-follow-ups-stale-sentence-run-codex-overwrite-guard-breadcrumb-paragraph-source-guess-page-cap.md § (e).
  */
 export const ARTICLE_TOO_LONG_FOR_ONE_PASS: ReaderFacingFailure = {
   kind: "blocked",
   message:
-    "This article is longer than this step can handle in one go, and reading a long piece in " +
-    "sections is not built yet. Trying again will not help — the article is the same length each " +
-    "time — but a shorter piece will work. [ai-too-long]",
+    "This article is longer than this step can handle in one go. Trying again will not help — " +
+    "the article is the same length each time — but a shorter piece will work. [ai-too-long]",
 };
 
 /**
@@ -2076,6 +2237,246 @@ export const UPLOAD_TOO_BIG: ReaderFacingFailure = {
 };
 
 /**
+ * **The same limit, met by an address rather than a file.** The fetch stopped
+ * at `MAX_UPLOAD_BYTES` (`DEFAULTS.maxBytes` in src/fetch.ts is that constant),
+ * so the number here and the number in the dialog are one number.
+ *
+ * `blocked` because this document cannot fit under the cap. A URL may change,
+ * but retrying the same document cannot make it fit. Until 2026-10-04 this
+ * failure had no sentence of its own, so the
+ * job card gave it the generic copy and a Retry that fetched up to the limit
+ * again and failed again
+ * (docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md).
+ *
+ * Raised by the pipeline's fetch step and nowhere else. A link preview or a
+ * figure that is too big is refused under its own, smaller cap and never
+ * reaches a reader as this.
+ */
+export const FETCH_TOO_BIG: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    `The document at that address is larger than ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB, ` +
+    "which is the most this app can take. Trying again with the same document will not help. " +
+    "Choose a smaller document, or save a shorter extract of this one as a file. [fetch-big]",
+};
+
+/**
+ * **Every other way a fetch by address can fail, each with its own sentence.**
+ *
+ * Until 2026-10-04 `too-large` above was the only one. The rest took
+ * `stepGaveUp`'s generic copy, which is `retry`, so a page that is not there
+ * was offered a Retry that asked the same address and got the same answer
+ * (docs/plans/261004l-four-small-queued-fixes-fetch-failure-sentences-composer-focus-stale-remember-param-marginalia-head-at-the-top.md § A).
+ *
+ * **The kind answers one question: will the Retry button on this job card
+ * help?** It is not `FetchFailure.retryable`, which asks whether *the fetcher*
+ * should try again within the same second, and gives no sentence.
+ *
+ * - `blocked` where the address or the site is the obstacle and will be the
+ *   same obstacle next time. Each of those names the step that can work
+ *   instead: check the address, or save the page as a PDF and upload the file,
+ *   which the add-article dialog takes.
+ * - `retry` where a later go can come out differently. Two of those are
+ *   deliberately generous. `dns` covers a name that does not exist and a
+ *   resolver's blip alike; the fetcher tells them apart for its own automatic
+ *   retries, and the card offers Retry for both because withholding a button
+ *   that would have worked is the worse mistake. `empty` is `retry` because we
+ *   do not know whether an empty body will last, not because it usually will
+ *   not.
+ *
+ * **No sentence names the address, the host or the status.** A stored failure
+ * message is not a place for a reading history (docs/project/logging.md), and
+ * a status is not an explanation (docs/project/copy.md, rule 1). Several codes
+ * are also raised part-way down a chain of redirects, so a sentence may not
+ * assume the address at fault is the one the reader typed.
+ *
+ * `http-error` is absent on purpose: it is two answers, decided by its status,
+ * in `fetchFailed` below.
+ */
+const FETCH_FAILED: Record<Exclude<FetchFailureCode, "http-error">, ReaderFacingFailure> = {
+  "invalid-url": {
+    kind: "blocked",
+    message:
+      "That address, or one the site redirected to, is not a web address this app can read. " +
+      "Trying again with the same address will not help. Check it for a slip or a missing part " +
+      "and add it again, or save the page as a PDF and upload the file. [fetch-address]",
+  },
+  "unsupported-scheme": {
+    kind: "blocked",
+    message:
+      "This app only opens addresses that begin with http or https, and that address, or one " +
+      "the site redirected to, begins with something else. Trying again will not help. If the " +
+      "page opens in your browser, save it as a PDF and upload the file. [fetch-scheme]",
+  },
+  "blocked-address": {
+    kind: "blocked",
+    message:
+      "That address leads somewhere private rather than to the public web, and this app does " +
+      "not open those. Trying again will not help. If you can open the page yourself, save it " +
+      "as a PDF and upload the file. [fetch-private]",
+  },
+  dns: {
+    kind: "retry",
+    message:
+      "This app could not find a site at that address. That is usually a slip in the address, " +
+      "and now and then a passing fault in looking the name up. Check the address first. If it " +
+      "is right, trying again in a minute is worth a go. [fetch-no-site]",
+  },
+  connection: {
+    kind: "retry",
+    message:
+      "The site at that address did not answer, or the connection dropped part-way. That is " +
+      "usually passing, so waiting a minute and trying again often works. [fetch-unreachable]",
+  },
+  certificate: {
+    kind: "blocked",
+    message:
+      "The site's security certificate did not check out, so this app did not read the page " +
+      "over that connection. That is the site's to fix, and trying again will not help until " +
+      "it does. If the page opens in your browser, save it as a PDF and upload the file. " +
+      "[fetch-certificate]",
+  },
+  timeout: {
+    kind: "retry",
+    message:
+      "The site took too long to answer, so this app stopped waiting. A slow site often " +
+      "answers on a second attempt, so trying again is worth a go. [fetch-slow]",
+  },
+  "too-many-redirects": {
+    kind: "blocked",
+    message:
+      "That address kept redirecting to another address without ever arriving at a page. " +
+      "Trying again would go round the same way. If the page opens in your browser, save it as " +
+      "a PDF and upload the file. [fetch-redirects]",
+  },
+  unauthorized: {
+    kind: "blocked",
+    message:
+      "That page is only shown to people signed in to its site, and this app cannot sign in " +
+      "for you. Trying again will not help. If you can open the page yourself, save it as a " +
+      "PDF and upload the file. [fetch-login]",
+  },
+  forbidden: {
+    kind: "blocked",
+    message:
+      "The site refused to give this app the page. Sites that turn away automated readers " +
+      "answer this way, and this one will most likely answer the same again. If the page opens " +
+      "in your browser, save it as a PDF and upload the file. [fetch-refused]",
+  },
+  "not-found": {
+    kind: "blocked",
+    message:
+      "There is no page at that address. The site said so, and trying again will get the same " +
+      "answer. Check the address for a slip or a missing part, and add it again. [fetch-not-found]",
+  },
+  "rate-limited": {
+    kind: "retry",
+    message:
+      "The site asked this app to slow down, because it has had too many requests lately. " +
+      "Waiting a few minutes and trying again usually works. [fetch-rate]",
+  },
+  "server-error": {
+    kind: "retry",
+    message:
+      "The site ran into trouble of its own while answering. That is usually passing, so " +
+      "waiting a few minutes and trying again is worth a go. [fetch-site-trouble]",
+  },
+  "too-large": FETCH_TOO_BIG,
+  "unsupported-type": {
+    kind: "blocked",
+    message:
+      "What is at that address is not a web page or a PDF, and those are the two things this " +
+      "app can read. Trying again will not help. If it is a document you can open, save it as " +
+      "a PDF and upload the file. [fetch-type]",
+  },
+  empty: {
+    kind: "retry",
+    message:
+      "The site answered with an empty page. This app cannot tell whether that will last, so " +
+      "trying again is worth a go. If it comes back empty again and the page opens in your " +
+      "browser, save it as a PDF and upload the file. [fetch-empty]",
+  },
+};
+
+/** `http-error` with a status the site will give again. See `fetchFailed`. */
+const FETCH_DECLINED: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "The site answered, but would not hand over the page, and it will most likely answer the " +
+    "same way again. Check the address. If the page opens in your browser, save it as a PDF " +
+    "and upload the file. [fetch-declined]",
+};
+
+/** `http-error` with any other status, or none. See `fetchFailed`. */
+const FETCH_INCOMPLETE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The site did not send the whole page in a form this app could use. That can be passing, " +
+    "so trying again is worth a go. If it keeps happening and the page opens in your browser, " +
+    "save it as a PDF and upload the file. [fetch-incomplete]",
+};
+
+/**
+ * **A paper whose PDF is not where its source usually keeps it.**
+ *
+ * For a link a paper source recognises (src/paper-sources.ts) the fetch step
+ * asks for the paper's PDF at an address it worked out, never the page that
+ * was pasted. When the last of those addresses answers that it has no such
+ * document, `not-found`'s sentence would be wrong: it tells the reader to
+ * check their address for a slip, and their address is fine. What is missing is
+ * an address they never saw. ⟨GPT Sol's plan review, G12⟩
+ *
+ * `blocked`: the same address answers the same way next time. The way out is
+ * the one every `blocked` fetch names, an upload, and here the reader has a
+ * page in front of them with the PDF's real link on it.
+ *
+ * Raised by the pipeline's fetch step and nowhere else, and only for a paper
+ * source: an ordinary address that is absent still gets `[fetch-not-found]`.
+ *
+ * **Written without Greg**, on 2026-10-06, and recorded as his to change:
+ * docs/plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md
+ * § What a wrong rule costs. It does not say "we found the page": the pasted
+ * page is never fetched. And it does say to check the link, because for a
+ * source whose rule is complete (arXiv) a missing paper is a mistyped id.
+ */
+export const FETCH_PAPER_MISSING: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "This site did not have the paper where it usually keeps it. Trying again will not help. " +
+    "Check the link is right, or download the PDF from the site and upload it here. " +
+    "[fetch-paper-missing]",
+};
+
+/**
+ * **The sentence for one `FetchFailure`**, given its code and the status it
+ * kept. Called by the pipeline's fetch step and nowhere else: a link preview, a
+ * figure and a bibliographic lookup classify a failed fetch their own way and
+ * never put it on a job card.
+ *
+ * **Total, with no default arm**: `FETCH_FAILED` is a `Record` over the union,
+ * so a new code is a red compile here rather than a failure that quietly takes
+ * the generic sentence and a Retry.
+ *
+ * **`http-error` is the fetcher's catch-all, and it is not one kind.**
+ * `classifyStatus` in src/fetch.ts sends every status it has no name for there
+ * (400, 405, 413, 451 and the rest of the unnamed 4xx), and so do a body that
+ * arrived in part and a redirect that named no destination. A 4xx is the site
+ * refusing this request, and it will refuse it again, so that half is
+ * `blocked`. The exceptions are 408 and 425, which are about the moment and not
+ * the request. Everything else, a missing status included, is `retry`: we do
+ * not know it is lasting. ⟨GPT Sol's plan review, F1⟩
+ *
+ * `status` is compared and never printed, so a value that is not a number
+ * falls to `retry` and reaches nobody.
+ */
+export function fetchFailed(code: FetchFailureCode, status: number | null): ReaderFacingFailure {
+  if (code !== "http-error") return FETCH_FAILED[code];
+  const refused =
+    typeof status === "number" && status >= 400 && status < 500 && status !== 408 && status !== 425;
+  return refused ? FETCH_DECLINED : FETCH_INCOMPLETE;
+}
+
+/**
  * The bytes are neither a PDF nor a web page, whatever the file is called.
  *
  * `blocked` for the same reason: renaming a file does not change what is in it.
@@ -2172,6 +2573,23 @@ export const UPLOAD_STILL_ARRIVING: ReaderFacingFailure = {
   message:
     "That file is still on its way — nothing has been lost. Trying again in a moment will " +
     "work, and this page does that for you as long as a Spideryarn tab stays open. [up-wait]",
+};
+
+/**
+ * **A Spideryarn reading page pasted into Add**, refused by `POST /api/jobs`
+ * before a slot is reserved (src/own-reading-page.ts has the rule and why).
+ *
+ * `blocked`, so the Add page offers no *Try again* under it
+ * (src/web/AddPage.tsx § `worthRetrying`): the link is the request, and it
+ * cannot be added. The reader still has two moves and the sentence names both.
+ * Plan 261007f, E8.
+ */
+export const OWN_READING_PAGE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That link opens an article already in Spideryarn, rather than the original article, so " +
+    "adding the same link will not help. Open the link to read it, or paste the article's " +
+    "original address to add your own copy. [jb-own-page]",
 };
 
 export const UPLOAD_MISSING: ReaderFacingFailure = {
@@ -2279,6 +2697,26 @@ export const STORAGE_FAILED: ReaderFacingFailure = {
     "it. It has been recorded. [db-failed]",
 };
 
+/**
+ * The database holds a kind of conversation this copy of the app has no name
+ * for: `UnknownStoredThreadKind` in src/types.ts, which carries this sentence
+ * and a 409.
+ *
+ * In practice that is the few minutes of a deploy that renames a kind, when the
+ * database has already been changed and the new code is not serving yet. The
+ * app refuses to read or change the article's conversations rather than treat
+ * one as an ordinary chat. "Most likely", because the same refusal would fire
+ * for a row that was simply wrong, and this must not be false then. `retry`: a
+ * reload after the deploy is the whole fix.
+ */
+export const CHAT_BEING_UPDATED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app is most likely being updated right now, so it could not open this article's " +
+    "conversations, and it has changed nothing. Reloading the page in a minute or two and trying " +
+    "again usually works. [db-updating]",
+};
+
 /* ── Checking whether there is a newer one ────────────────────────────────── */
 
 /**
@@ -2350,6 +2788,43 @@ export const LIST_LOAD_TIMED_OUT: ReaderFacingFailure = {
     "[rd-timeout]",
 };
 
+/**
+ * Referee's check of the source document for hidden instructions was given up
+ * on at its deadline — `useSourceScan` (src/web/useSourceScan.ts), sixty
+ * seconds, through the same finite read as the lists above.
+ *
+ * Its own sentence rather than `LIST_LOAD_TIMED_OUT`, because nothing here was
+ * saved by the reader and nothing is unlocked by the wait ending. Its own code
+ * so whoever is helping can tell the two reads apart.
+ *
+ * It says the check **did not finish**, not that it found nothing: the notice
+ * it lands in (`SourceScanNotice`) is at pains that a failed check is neither a
+ * warning nor a clean bill, and this must not undo that. And it says to reload,
+ * because the hook has no retry of its own, on purpose — its header says why.
+ * `retry` because another attempt can work; the attempt is the reload.
+ */
+export const SCAN_TIMED_OUT: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "The check took too long to answer, so this app stopped waiting for it. It did not finish, " +
+    "so it says nothing either way about this document. Reload the page to run the check again. " +
+    "[rd-scan-timeout]",
+};
+
+/**
+ * **The command bar was asked to suggest from why you are reading, and the
+ * reason could not be read** (src/routes.ts § `suggestFromWhyReading`, plan
+ * 261005k, GPT Sol's F6). A failed read is never "you have not said why": told
+ * that, a reader types over the sentence they already wrote. Nothing was sent
+ * to a model, so trying again costs nothing.
+ */
+export const REASON_NOT_READ: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This app could not read why you're reading this article just now, so it had nothing to suggest " +
+    "from. What you wrote is still saved. Trying again in a moment usually works. [bar-reason-unread]",
+};
+
 /** The overall deadline fired. `seconds` is that deadline, not elapsed time. */
 export function tookTooLong(seconds: number): ReaderFacingFailure {
   return {
@@ -2418,12 +2893,16 @@ export const LIVE_UPSTREAM: ReaderFacingFailure = {
  * development build still adds that hint — `couldNotReach` in
  * src/web/lib/reader-facing.ts — and this is what everyone else reads. It does
  * not guess which side is at fault, because the client cannot tell.
+ *
+ * It also reaches a reader whose stream or download was cut part-way (the
+ * transport marks that the same way), so it does not say that nothing was sent
+ * or received. Until 2026-10-07 it did, which was false there.
  */
 export const COULD_NOT_REACH: ReaderFacingFailure = {
   kind: "retry",
   message:
-    "Couldn't reach the server, so nothing was sent or received just now. That is usually the " +
-    "connection; trying again once it is back should work. [net-down]",
+    "Couldn't reach the server. That is usually the connection; trying again once it is back " +
+    "should work. [net-down]",
 };
 
 /**
@@ -2865,6 +3344,19 @@ export const SHARED_WITH_YOU =
   "This article was shared publicly. The whole piece is here to read, at every zoom level.";
 
 /**
+ * **The same place, for somebody who came by a private link**, in place of the
+ * sentence above. Greg asked for it when he approved the link (plan 261005e
+ * § What Greg decided): the page says it is a private link, not visible to
+ * anyone without it.
+ *
+ * Drawn when the server says `sharedBy: "link"`, which it says only of an
+ * article that is not public. A public article opened with a key gets the
+ * sentence above, because public wins.
+ */
+export const SHARED_BY_PRIVATE_LINK =
+  "This is a private link. This article isn't listed anywhere, and nobody can see it without the link.";
+
+/**
  * The ask, and it is to join rather than to unlock this page.
  *
  * The New York Times' own reported figure is that free registration lifted paid
@@ -2964,7 +3456,7 @@ export const SIGN_IN_AGAIN = "Sign in again";
  * `noun` is a noun phrase with its article: `"a glossary"`, `"a summary"`.
  */
 export function notBuiltYet(noun: string): string {
-  return `Nobody has built ${noun} for this piece yet.`;
+  return `Nobody has built ${noun} for this one yet.`;
 }
 
 /**
@@ -2993,7 +3485,7 @@ export function notBuiltYet(noun: string): string {
  * `noun` is capitalised and carries its article: `"A glossary"`, `"A summary"`.
  */
 export function builtButEmpty(noun: string): string {
-  return `${noun} was built for this piece, and it came back with nothing in it.`;
+  return `${noun} was built for this one, and it came back with nothing in it.`;
 }
 
 /**
@@ -3543,6 +4035,20 @@ export const BANNER_TRAINING_LINK = "privacy policy";
 export const SHARING_OFF = "Only you can read this.";
 
 /**
+ * **The switch, off, while the article has a private link** (plan 261005e).
+ * The sentence above would be false then, on the card whose job is to say who
+ * can read the article. The card draws this one in its place.
+ */
+export const SHARING_OFF_WITH_LINK =
+  "This is not public. You can read it, and so can anyone who has the private link.";
+
+/**
+ * **The switch, off, when the card could not read whether there is a private
+ * link.** It says what it knows and makes no claim about who else can read.
+ */
+export const SHARING_OFF_LINK_UNKNOWN = "This is not public.";
+
+/**
  * **The switch, on — and the promise it makes changed on 2026-09-04.**
  *
  * It used to say *"Anyone with the link can read this, without signing in."*,
@@ -3814,7 +4320,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  *
  * **What was lost with it, stated rather than glossed:** *"nothing they do
  * costs a model call"*, which the inventory only implies by listing Chat,
- * Search, Remember and Referee as owner-only. It is said outright to the person
+ * Search, Learn and Referee as owner-only. It is said outright to the person
  * who meets it — `visitorSentence` (web/visitor.ts) — and no longer to the
  * owner. Worth a line back if an owner ever asks whether a link can spend their
  * money.
@@ -3832,7 +4338,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  * sentence, nothing to keep in step.
  */
 export const SHARED_LINK_CARRIES =
-  "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+  "A shared link carries the article, its table of contents, and the reading " +
   "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
   "FAQ, citations and Debate. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +
@@ -3939,9 +4445,12 @@ export const SHARING_CONFIRM_TITLE = "Share the full text of this article?";
  * sharing card lists exactly what will go out before you turn it on"*, and it
  * is the inventory that keeps that true.
  */
-export function sharingConfirmBody(title: string): string {
+export function sharingConfirmBody(title: string | null): string {
+  /* No title: the add page asks while the article is still importing, and an
+     import may not have found one yet (`SHARE_AT_ADD_LABEL`, below). */
+  const named = title === null ? "this article" : `“${title}”`;
   return (
-    `This puts the whole extracted text of “${title}” where anyone can read it without ` +
+    `This puts the whole extracted text of ${named} where anyone can read it without ` +
     "signing in, and lists it publicly — so somebody who was never sent the link can find it."
   );
 }
@@ -4063,9 +4572,19 @@ export function sharingPersonalisedList(kinds: StepName[]): string {
 }
 
 /**
+ * **We are still finding out.** The metadata request is out and has neither
+ * landed nor failed.
+ *
+ * Its own sentence since 2026-10-06 (qi-jpqg6r3b): the card drew
+ * `SHARING_UNKNOWN` for this, so every load said *"We could not check"* about a
+ * check that was still running.
+ */
+export const SHARING_CHECKING = "Checking who can read this…";
+
+/**
  * **We never found out**, and no write was attempted.
  *
- * The filesystem store has no column, or the page's metadata fetch failed. The
+ * The page's metadata fetch failed, or its answer carried no `sharing` block. The
  * second sentence is the load-bearing one and it is true *only* in this case:
  * nothing was asked of the server, so whatever was true before still is.
  */
@@ -4102,6 +4621,233 @@ export function sharingInFlight(to: "private" | "public"): string {
 /** The box the owner ticks, which the server refuses the request without. */
 export const SHARING_RIGHTS_CONFIRM =
   "I have the right to share this article's text.";
+
+/* ------------------------------------------- while an article is importing --
+   The same switch, offered on the add page before the article exists, and the
+   address the import will have. Greg, 2026-10-05 (spya-h7skj5, spya-e9t58e);
+   docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md.
+   Drawn by src/web/AddShare.tsx, `JobCard` (src/web/AddArticle.tsx) and
+   src/web/article/StillBeingAdded.tsx.
+
+   The confirmation is the Metadata card's own, word for word
+   (`SHARING_CONFIRM_TITLE`, `sharingConfirmBody`, `SHARING_RIGHTS_CONFIRM`).
+   What is written here is only what is true of an import and not of an
+   article. */
+
+/**
+ * The tip on a job card's copy-the-link button.
+ *
+ * **It promises the address of this import, not of the article for good**: a
+ * Retry can come back under another slug (`slugForRetry`, src/jobs.ts), and a
+ * failed or cancelled import leaves the address leading nowhere. GPT Sol's
+ * plan review, P2-6.
+ */
+export const IMPORT_LINK_COPY_TIP =
+  "Copy the link this import's article will have. It opens for you once the import has " +
+  "finished, and for anyone else only if you share it. If the import fails, the link leads " +
+  "nowhere.";
+
+/** The copy did not happen. The card has no box holding the link, so this is followed by the address itself. */
+export const IMPORT_LINK_COPY_FAILED = "Your browser would not allow the copy. The link is";
+
+/** The add page's third box. */
+export const SHARE_AT_ADD_LABEL = "Make it public";
+
+/** Under the label, before anything is pressed. Nothing goes out on the tick: it opens the confirmation. */
+export const SHARE_AT_ADD_WHAT =
+  "Anyone can read it without signing in, and it is listed publicly, once the import has " +
+  "finished. Ticking this shows what would be shared and asks you to confirm.";
+
+/**
+ * **The import adopted an article already on the shelf** (`freeSlug`,
+ * src/jobs.ts), which may have a glossary, notes and comments. The add page
+ * offers no switch over those: the Metadata card lists what that article
+ * really carries. GPT Sol's plan review, P2-2.
+ */
+export const SHARE_AT_ADD_ALREADY_AN_ARTICLE =
+  "This article is already on your shelf. Share it from Access & sharing on its Metadata page.";
+
+/** Confirmed, and not sent yet: the import has not made the article's row. */
+export const SHARE_AT_ADD_WAITING = "Will be made public as soon as the import is ready for it.";
+
+/**
+ * The switch is on. **"Once the import has finished"**, because a public
+ * article with nothing published is readable by nobody
+ * (src/store/public-reader.ts § `publicCurrentRevisionQuery`).
+ */
+export const SHARE_AT_ADD_ON =
+  "Public. Other people can read it at this link once the import has finished.";
+
+/** Five minutes of *not yet* while the job sat queued. `settle` sends it again at completion. */
+export const SHARE_AT_ADD_GAVE_UP =
+  "Not shared: the import had not started after five minutes. It will be tried again when the " +
+  "import finishes.";
+
+/**
+ * A write did not come back, and it may have taken effect:
+ * `SHARING_WRITE_UNCERTAIN` says why. That one says *reload the page*, which
+ * on the add page would start the import again.
+ */
+export const SHARE_AT_ADD_UNKNOWN =
+  "That did not come back, so we cannot say whether it took effect. Check Access & sharing on " +
+  "the article's Metadata page.";
+
+/**
+ * **The page was reloaded after this tab asked to make the article public,
+ * and the import has not published.** *Asked*, not *made*: the mark is
+ * written before the request and kept through an answer that never came, so
+ * that it took is not established (GPT Sol's fix check, F18). Nothing on the server can be asked about
+ * visibility until it has, so the box does not claim either state: it is
+ * drawn ticked, with this, and unticking sends the private write. The tab's
+ * own memory is a hint and not an answer (src/web/add-share.ts §
+ * `ShareIo.marks`). GPT Sol's code review, F10.
+ */
+export const SHARE_AT_ADD_RECALLED =
+  "You asked to make this public before this page was reloaded, and we cannot read back " +
+  "whether it is until the import has finished. Untick this to make it private.";
+
+/** The owner opened the import's address before the article was published. src/web/article/StillBeingAdded.tsx. */
+export const STILL_BEING_ADDED_HEADING = "Still being added";
+/** The add page's job disappeared from a list requested after its POST answered. */
+export const ADD_IMPORT_LOST = "We lost sight of this import. Look on your shelf before trying again.";
+export const STILL_BEING_ADDED =
+  "This article is still being imported. It opens here when the import has finished.";
+
+/**
+ * **The same address, opened by somebody it was shared with** before the
+ * import has published (plan 261005l § 2c;
+ * src/web/article/StillBeingAddedVisitor.tsx). Under the heading above.
+ *
+ * *When it is ready*, and nothing about when that is: a queued import may be
+ * waiting on its owner's browser. Nothing about the article either, since the
+ * server's answer carries none (`STILL_BEING_ADDED_REFUSAL`, below).
+ */
+export const STILL_BEING_ADDED_VISITOR =
+  "This article is still being added. This page will open it when it is ready.";
+
+/* The add page's Sharing section: *Make it public* above, and a private link
+   beside it, behind one row that starts shut. Greg, 2026-10-06: *"bundle all
+   sharing-related stuff in a default-collapsed section, because most people
+   won't want to use it"*. Plan 261005l § 2b. Drawn by src/web/AddSharing.tsx
+   and src/web/AddShareLink.tsx. The link's confirmation is the Metadata
+   card's own (`PRIVATE_LINK_CONFIRM_TITLE` and its neighbours, below). */
+
+/**
+ * The section's one row. **Shut, it names what is on**, so nobody is public,
+ * or holding a live link, behind a row that says nothing.
+ */
+export function sharingAtAddSummary(isPublic: boolean, linkOn: boolean): string {
+  if (isPublic && linkOn) return "Sharing: public, and a private link";
+  if (isPublic) return "Sharing: public";
+  if (linkOn) return "Sharing: private link";
+  return "Sharing";
+}
+
+/** Under the link control's heading, before anything is pressed. The button opens the confirmation. */
+export const LINK_AT_ADD_WHAT =
+  "Anyone who has the link can read the article without signing in, once the import has " +
+  "finished. It is not listed anywhere. The button shows what would be shared and asks you to " +
+  "confirm.";
+
+/** Confirmed, and not made yet: the import has not made the article's row. */
+export const LINK_AT_ADD_WAITING = "The link will be made as soon as the import is ready for it.";
+
+/** A link is on. **"Once the import has finished"**, for `SHARE_AT_ADD_ON`'s reason. */
+export const LINK_AT_ADD_ON =
+  "Private link on. It opens the article for whoever has it once the import has finished.";
+
+/** Five minutes of *not yet* while the job sat queued. `settle` sends it again at completion. */
+export const LINK_AT_ADD_GAVE_UP =
+  "No link made: the import had not started after five minutes. It will be tried again when " +
+  "the import finishes.";
+
+/**
+ * **A create or a turn-off did not come back.** It is not sent again by
+ * itself: making a link a second time replaces the first, and a link the
+ * reader had already copied would stop working (GPT Sol's stage 2 plan
+ * review). *Check again* reads the state, which changes nothing.
+ */
+export const LINK_AT_ADD_UNKNOWN =
+  "That did not come back, so we cannot say whether it took effect. Check again before making " +
+  "another link: a new link replaces the one before it.";
+
+/** The read of the link's state failed on coming back to this page. Nothing was changed, and no link is drawn from memory. */
+export const LINK_AT_ADD_UNREAD =
+  "We could not check whether this article has a private link. Nothing has been changed.";
+
+/* ------------------------------------------------------ the private link --
+   The owner's other control on the same card: a link that lets anyone who has
+   it read the article, without listing it. Plan 261005e. Drawn by
+   src/web/PrivateLink.tsx.
+
+   The rights tick-box above and the inventory below are the public switch's
+   own and are reused as they are: a private link republishes the same text,
+   to fewer people. What is written here is only what differs. */
+
+/** The control's heading. */
+export const PRIVATE_LINK_HEADING = "Private link";
+
+export const SHARING_MARK_NAME_LINK = "Private link — manage sharing";
+export const SHARING_MARK_PRESS_LINK =
+  "Press to go to this article's Metadata page, where you can turn off its private link.";
+
+/** What a private link is, said under the control in both states. */
+export const PRIVATE_LINK_WHAT =
+  "Anyone who has the link can read this without signing in, and can pass it on. A private link " +
+  "does not list the article anywhere.";
+
+/**
+ * **Both are on.** Public wins: the article is readable with any key or none,
+ * so the owner must not think turning the link off closes it.
+ */
+export const PRIVATE_LINK_ALSO_PUBLIC =
+  "This article is also public, so its ordinary address works without the link. Turning the " +
+  "link off will not make the article private.";
+
+export const PRIVATE_LINK_CONFIRM_TITLE = "Share the full text of this article by a private link?";
+
+/** The confirmation's first sentence. `sharingConfirmBody` is its public twin. */
+export function privateLinkConfirmBody(title: string | null): string {
+  /* No title: the add page asks while the article is still importing, as
+     `sharingConfirmBody` allows for. */
+  const named = title === null ? "this article" : `“${title}”`;
+  return (
+    `This puts the whole extracted text of ${named} where anyone who has the link can read ` +
+    "it without signing in. Making this link does not list the article anywhere, but anyone you send the link to can pass it on."
+  );
+}
+
+/** What turning the link off can and cannot do. `SHARING_CANNOT_UNRING` is its public twin. */
+export const PRIVATE_LINK_CANNOT_UNRING =
+  "Turning the link off refuses the next request made with it, and making a link again makes a " +
+  "new one. It cannot take back a page somebody's browser already has, or anything they copied " +
+  "out of it.";
+
+/** A write is in flight. */
+export function privateLinkInFlight(to: "on" | "off"): string {
+  return to === "on" ? "Creating the link…" : "Turning the link off…";
+}
+
+/** The read failed, so nothing was asked of the server and nothing changed. */
+export const PRIVATE_LINK_UNKNOWN =
+  "We could not check whether this article has a private link, so nothing is offered here — " +
+  "reload the page to try again. Nothing has been changed.";
+
+/** A write did not come back. It may have taken effect: `SHARING_WRITE_UNCERTAIN` says why. */
+export const PRIVATE_LINK_WRITE_UNCERTAIN =
+  "That did not come back, so we cannot say whether it took effect — it may have. Reload the " +
+  "page to see whether the link is on.";
+
+/** The three tooltips on the three controls. */
+export const PRIVATE_LINK_OPEN_TIP =
+  "Nothing goes out yet. This opens a list of exactly what somebody with the link would get, " +
+  "and asks you to confirm before a link is made.";
+export const PRIVATE_LINK_STOP_TIP =
+  "The link stops working, so the next request made with it is refused. What somebody has " +
+  "already read or copied stays with them.";
+export const PRIVATE_LINK_COPY_TIP =
+  "Puts the link on your clipboard. Anyone you send it to can read the article, and can send " +
+  "it on.";
 
 /* ------------------------------------------------- the sharing inventory --
    The owner's list of what a shared link carries. Greg, 2026-09-02: *"Better
@@ -4219,16 +4965,15 @@ export const ALWAYS_SHARED = [
   {
     key: "pictures",
     label: "Its pictures",
-    /* **Not "served from our copy", which the first draft said and which is not
-       true today.** The `assets` step stores the bytes and the manifest crosses
-       in the payload, but nothing in `src/web/` reads it yet: every `<img>` in
-       `block.html` still points at the publisher, for a visitor exactly as for
-       the owner (docs/plans/260829b-hosting-the-articles-images.md). The sentence
-       says what a visitor gets — the pictures, and the record — and stays true
-       whichever server ends up sending the bytes. */
+    /* **Which server sends the bytes has changed once already, so the sentence
+       names both.** Until the images were rehosted every `<img>` pointed at the
+       publisher and this row said so; since then a visitor's browser asks our
+       public asset route first (src/web/rehost.ts) and falls back to the
+       publisher only for a picture we hold no copy of. GPT Sol's C3 on plan
+       261005e found the old sentence still here. */
     detail:
-      "Every image in the article. A visitor's browser fetches them from the publisher, exactly " +
-      "as yours does.",
+      "Every image in the article. A visitor's browser gets them from the copy we keep, or from " +
+      "the publisher where we have no copy.",
   },
   {
     key: "provenance",
@@ -4241,10 +4986,15 @@ export const ALWAYS_SHARED = [
 
        **And for an upload, the page we matched it to**, since 2026-10-02: a
        found source guess crosses to a visitor's banner (plan 261002g,
-       `PublicArticle.sourceGuess`), so the owner is told it goes out. */
+       `PublicArticle.sourceGuess`), so the owner is told it goes out.
+
+       **And the journal and when it was published**, since 2026-10-04 (plan
+       261004h): the day, or the year alone for a paper dated only to a year.
+       "Where we know them", because most articles have neither. */
     detail:
-      "The article's title, byline, publication, language and one-line excerpt, plus a source link " +
-      "where we have one — for an uploaded file, that may be a page we found that matches it.",
+      "The article's title, byline, publication, language and one-line excerpt; its journal and " +
+      "when it was published, where we know them; plus a source link where we have one — for an " +
+      "uploaded file, that may be a page we found that matches it.",
   },
   {
     /**
@@ -4276,14 +5026,14 @@ export const ALWAYS_SHARED = [
 ] as const;
 
 /**
- * **The artefact that crosses but has no mode of its own.**
+ * **The artefacts that cross but have no mode of their own** — this one and
+ * `SHARED_THREAD` below.
  *
- * There were two until 2026-09-29. `SHARED_TWEETS` was here first, and GPT Sol
- * pointed out on 2026-09-02 that the arc was in the same position and quietly
- * missing: `available.arc` was computed, sent, and never read. Then the thread
- * stopped being a page and became a mode, so the sweep over `MODES` lists it
- * through `OWNER_MODE_NOTE.tweets`, and `SHARED_TWEETS` went — two rows for one
- * artefact is what the sweep exists to prevent.
+ * `SHARED_TWEETS` was here first, and GPT Sol pointed out on 2026-09-02 that
+ * the arc was in the same position and quietly missing: `available.arc` was
+ * computed, sent, and never read. From 2026-09-29 to 2026-10-03 the thread was
+ * a mode, and the sweep over `MODES` listed it instead; it is back as a row of
+ * its own now that it is one of Summary's views.
  *
  * The arc is the extra rung Outline draws when there is one, so Outline is
  * shared either way and the arc is a separate row rather than a condition on it.
@@ -4295,9 +5045,27 @@ export const SHARED_ARC = {
 };
 
 /**
+ * **The thread, which crosses when there is one and has no mode to be swept.**
+ *
+ * It is Summary's Thread view since 2026-10-03, and Summary is `available` to
+ * a visitor whatever is stored (src/web/visitor.ts § `POLICY`), so the sweep's
+ * Summary row cannot say whether a thread goes out. This row can: it is listed
+ * as shared when `available.tweets`, and under *if built* otherwise — exactly
+ * where the Tweets mode's row stood (src/web/shared-inventory.ts).
+ * `key` is the wire key, as the arc's is. The sentence is the one that row
+ * carried, and `SHARED_TWEETS.detail` before it.
+ * docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md.
+ */
+export const SHARED_THREAD = {
+  key: "tweets",
+  label: "The thread",
+  detail: "The article rewritten as a numbered thread, each post linked to where it came from.",
+};
+
+/**
  * **What never goes out, whatever the switch says.**
  *
- * The modes among these — Chat, Remember and Referee — are not listed
+ * The modes among these — Chat, Learn and Referee — are not listed
  * here: they arrive from the sweep, which is what keeps a mode added next month
  * on this side of the line without anybody editing this file. What is here is
  * the things that are not modes at all.
@@ -4373,7 +5141,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      (src/public/dto.ts § `provisional`). A flat promise of a gist per section is
      a claim about an article that has finished ingesting, and these rows are
      shown about articles that have not. GPT Sol's review, 2026-09-02. */
-  summary: "The one-line gist written for each section, down the page, where there is one.",
+  /* The plain-words paragraphs since 2026-10-01, when the outline of gists left
+     Summary (docs/plans/261001p-summary-loses-parts-and-sections-a-touch-wider.md);
+     this sentence went on describing the gists until 2026-10-03. The thread has
+     a row of its own, `SHARED_THREAD`. */
+  summary: "The piece in plain words, in a few short paragraphs, where they have been written.",
   glossary:
     "The terms the model pulled out of the piece, and what each one means here. Your lookups are " +
     "listed separately and are not part of this.",
@@ -4393,7 +5165,7 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      one is not said on the row — it is said once, for the whole column, in
      `SHARED_NOTE` below. */
   search: "The questions you have put to this piece, in your words, and the passages they found.",
-  remember: "What you said you took from the piece, and the quizzes on it.",
+  learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
   /* **"went looking for", not "found"**, and the tense is the whole row. This
      is the only mode whose content is not in the article, so an owner reading
@@ -4431,9 +5203,6 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
      line are the model's reading (src/skim.ts). */
   skim:
     "A route through this piece's quotes, in the order the model thought best for you, walked a little deeper each time round.",
-  /* `SHARED_TWEETS.detail`'s sentence until 2026-09-29, when the thread became a
-     mode and the sweep over `MODES` started listing it. */
-  tweets: "The article rewritten as a numbered thread, each post linked to where it came from.",
   /* What the column draws is all built elsewhere: the tree's question for each
      part, the arc, and the ideas where they have been made. So the row names
      those, and says they sit beside the text — the one thing this mode adds is
@@ -4485,8 +5254,8 @@ export const DATE_REJECTED_SHORT: Record<DateRejection, string> = {
  */
 export const DATE_REJECTED_WHY: Record<DateRejection, string> = {
   noYearFrame:
-    "The piece gives a day and a month here but never the year, and we have no publication date " +
-    "for it to take the year from. Re-adding the article will usually fix it.",
+    "The piece gives no year for all or part of this date, and we have no publication date to " +
+    "take one from. We have not worked out a date from these words.",
   phraseNotInOccurrence:
     "The date this event was placed by is not in the passage below, so we did not use it. The " +
     "event and the passage are the article's; the date was not.",
@@ -4554,8 +5323,8 @@ export const TIMELINE_THIN =
  * **It says *by name*, and that is the whole of the claim.** What a direct row
  * has to prove is that the page identifies *this* article — its address, its
  * words, or its title. A page that argues against the piece without ever having
- * heard of it is not missing from this answer; it is in the rest of the list,
- * which is what `DEBATE_CLAIMS_FOLLOW` goes on to say.
+ * heard of it is not missing from this answer; it is in the other search,
+ * which since 2026-10-03 is the Claims sub-mode (`debateClaimsHandoff`).
  */
 export const DEBATE_RESPONSES_NONE = "No page the search found responds to this piece by name.";
 
@@ -4598,18 +5367,6 @@ export function debateClaimsUnverified(pages: number): string {
 }
 
 /**
- * **What the reader is looking at instead.**
- *
- * Appended to whichever of the two sentences above fired for the *direct*
- * search, and only when there are claim rows below it to be looking at. Without
- * it the lead is a dead end — *no page responds to this piece* over a list of
- * rows, with nothing saying what the rows are. With it, the empty answer reads
- * as a finding and a hand-off rather than as a broken panel, which is what Greg
- * asked for.
- */
-export const DEBATE_CLAIMS_FOLLOW = "What follows takes up what it argues.";
-
-/**
  * **A visitor's empty search, said without the count the owner is told.**
  *
  * The owner's two sentences above tell *came back with nothing* from *came back
@@ -4646,44 +5403,120 @@ export function debateWithheldOnSharedLink(search: string, n: number): string {
 }
 
 /**
- * **What the order on screen is, said out loud — one sentence per order.**
+ * **The heading over Reception's title-only rows** — the pages that name this
+ * piece by its title and neither link nor quote it. Since 2026-10-03, when the
+ * identification slider that used to hide them went (src/web/debate-levels.ts).
  *
- * A reader looking at a list assumes its order carries a claim, so each order
- * says what it is, on the line over the list. Since 2026-09-29 these
- * replace `DEBATE_NO_RANKING` (*"no ranking … is applied"*), which became false
- * the day the list gained an order bar (SPIDERYARN-READING2-5P,
- * docs/plans/260929h-debate-mode-clearer-sources-and-orders.md F16).
- *
- * **None of them ranks by authority**, and that part of the old sentence still
- * stands: there is no honest way to rank it — any list we maintain is wrong per
- * domain, and on an ML paper the sharpest critique is routinely a pseudonymous
- * blog. The site is on every row for the reader to judge. The two orders that
- * rest on a model's judgment say so, because the order is then the model's
- * reading, not a fact about the page.
+ * A heading in our voice, so it states only what was checked: the title was
+ * found in the page's extract. It does not say the page is *not* about this
+ * piece — a paper that cites it, and a published reply, both look like this —
+ * and it does not say it is. That is the reader's call, from the row.
  */
-export const DEBATE_ORDER_BY_CLAIM =
-  "Grouped under the claim in the piece each one answers, in the order the piece makes them.";
-
-/** …stance: the lean is the model's reading of each page, so the order is too. */
-export const DEBATE_ORDER_STANCE = "Most critical first — the lean is the AI's reading of each page.";
+export const DEBATE_TITLE_ONLY = "Names this piece by its title only";
 
 /**
- * …prioritised: how directly a page bears on its claim is a model's judgment,
- * not a measure, and the sentence says whose. Whether the relevance bar is
- * hiding anything is said beside the bar, in every state (`hiddenNote`).
+ * **The button under Reception's empty sentence, when Claims has rows** — it
+ * switches sub-mode. It replaced *"What follows takes up what it argues."*,
+ * which handed over to rows below it on the one mixed list; since 2026-10-03
+ * those rows are a sub-mode away. Without it, *no page responds to this piece*
+ * is a dead end on a paper whose only findings are about its claims.
  */
-export const DEBATE_ORDER_PRIORITISED =
-  "Rows about this piece first, then the AI's judgment of how directly each bears on its claim.";
+export function debateClaimsHandoff(sources: number): string {
+  return `See the ${sources} ${sources === 1 ? "source" : "sources"} on what it claims`;
+}
 
 /**
- * …date: the year is what the AI read off each page (found in its extract, but
- * not proven to be that page's own date — the plan's F2), and the undated ones
- * go last.
+ * **What each of Debate's two searches is, said once before the button and
+ * once in the band's (i).** The sub-mode control's own cards say the same of
+ * each (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no sentence sits under the
+ * control, because docs/project/mode.md bans a description line there.
  */
-export const DEBATE_ORDER_DATE =
-  "Oldest first, by the year the AI read off each page; pages with no year come last.";
+export const DEBATE_BEFORE_SEARCH =
+  "Two searches of the open web. Reception: what others have written about this piece. " +
+  "Claims: what has been written about the claims it makes. It takes about a minute and " +
+  "costs real money. Many pieces have no reception at all. Searched once and kept.";
 
-/** The line over *prioritised*'s claim rows the AI gave no relevance to. Never hidden by the bar. */
+/* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
+
+   One plain sentence per outcome of `CitersResult` (src/types.ts), so the
+   reader is never left with a blank where a list might have been. Plan
+   261004h, and its review's F3, F5 and F6. */
+
+export const CITERS_HEADING = "Cited by";
+export const CITERS_LOADING = "Looking up which papers cite this piece…";
+export const CITERS_NO_DOI = "This piece has no DOI on record, so we cannot look up who cites it.";
+export const CITERS_NOT_INDEXED = "OpenAlex, the index we ask, has no record of this piece.";
+/**
+ * **Not "the DOI belongs to another work"**: what failed is our check that the
+ * record is this piece — its title and an author must both agree — and a piece
+ * with no byline fails it with a perfectly good DOI.
+ */
+export const CITERS_UNCONFIRMED =
+  "We could not confirm that the DOI on record is this piece's own, so we have not listed who cites it.";
+/** The one outcome with a Try again beside it. */
+export const CITERS_UNAVAILABLE = "We could not reach OpenAlex just now.";
+/** No Try again: the same request would be too large again. */
+export const CITERS_TOO_LARGE = "OpenAlex's list for this piece is too large for us to read yet.";
+export const CITERS_NONE = "OpenAlex knows this piece and lists no paper citing it yet.";
+/** Under every list: the list is a list, and nothing here says what a citing paper thinks. */
+export const CITERS_UNREAD = "We have not read what any of them says about it.";
+/** What the band's (i) says of the section, for the owner. */
+export const CITERS_ABOUT =
+  "Cited by is OpenAlex's list of the papers that cite this piece. To get it we send OpenAlex " +
+  "the piece's DOI and our contact address, never its text or reader details. No AI is involved, " +
+  "and we have not read the papers.";
+
+const papers = (n: number): string => (n === 1 ? "1 paper" : `${n} papers`);
+
+/**
+ * **What a found list says about itself**, one sentence per fact.
+ *
+ * Three numbers can differ and each difference has its own reason, so each gets
+ * its own sentence rather than one "the 100 most cited of 389" that is false
+ * the moment a record is dropped (GPT Sol's F5): OpenAlex's `count`; how many
+ * we `listed`; whether the page limit left some out (`capped`, of `returned`
+ * asked for); and how many records could not be shown (`dropped`).
+ *
+ * @param day the day OpenAlex answered, already formatted, or undefined.
+ */
+export function citersLines(
+  found: { count: number; returned: number; dropped: number; capped: boolean; listed: number },
+  day: string | undefined,
+): string[] {
+  if (found.count === 0 && found.returned === 0) return [CITERS_NONE];
+  const lines = [
+    `${papers(found.count)} ${found.count === 1 ? "cites" : "cite"} this piece, by OpenAlex's count${day ? ` on ${day}` : ""}.`,
+  ];
+  if (found.listed === 0) {
+    lines.push("None of them could be shown here.");
+    return lines;
+  }
+  if (found.capped) {
+    lines.push(
+      found.dropped === 0
+        ? `The ${found.listed} most cited are listed.`
+        : `We asked for the ${found.returned} most cited, and ${found.listed} are listed.`,
+    );
+  } else {
+    lines.push(found.listed === found.count ? "Most cited first." : `${found.listed} are listed, most cited first.`);
+  }
+  if (found.dropped > 0) {
+    lines.push(
+      found.dropped === 1
+        ? "1 record could not be shown: it has no title, an invalid identifier, or it repeats another."
+        : `${found.dropped} records could not be shown: they have no title, an invalid identifier, or repeat another.`,
+    );
+  }
+  lines.push(CITERS_UNREAD);
+  return lines;
+}
+
+/** *"cited 34 times"*, on a citing paper's own line. */
+export function citedTimes(n: number): string {
+  return n === 1 ? "cited once" : `cited ${n} times`;
+}
+
+/** A claim row without `bears` survives every bar without clearing its judgment. */
 export const DEBATE_UNJUDGED = "Not judged for relevance by the AI";
 
 /**
@@ -4840,7 +5673,7 @@ export const DIRECT_ADD_SENT_TEXT_AWAY =
  * at all.
  *
  * No hedging, and it must not be styled as an alarm — see
- * src/web/styles.css § referee mode.
+ * src/web/styles/referee.css § referee mode.
  */
 export const REFEREE_TEXT_ALREADY_SENT =
   "This article's text has already been sent to a third-party model provider — that happened when " +
@@ -4849,21 +5682,12 @@ export const REFEREE_TEXT_ALREADY_SENT =
   "confidentiality on its own, whoever writes the review. This mode is meant for public preprints, " +
   "open-review submissions, and drafts shared with you with the author's consent.";
 
-/**
- * **The same fact in one line, for the shut state of the notice.**
- *
- * The notice in Referee mode is collapsed until a referee opens it — Greg,
- * 2026-09-02 — and a collapse that took the fact away with the paragraph would
- * be a dismissal wearing a chevron. So the fact itself is the label on the
- * control: whatever the referee does, this sentence is on screen.
- *
- * It is the first clause of `REFEREE_TEXT_ALREADY_SENT` and nothing else. The
- * long sentence is left exactly as it was reviewed — what is behind the
- * disclosure is *which venues call that a breach, and which manuscripts this
- * mode is for*, which is the part somebody reads once.
- */
-export const REFEREE_TEXT_ALREADY_SENT_SHORT =
-  "This article's text has already been sent to a third-party model provider.";
+/* `REFEREE_TEXT_ALREADY_SENT_SHORT`, the sentence's first clause, was here as
+   the always-visible label of the notice's collapse (2026-09-02 to 2026-10-03).
+   The notice is behind the band's Notices button now and prints in full when
+   opened, so nothing reads it. Whether a one-line fact should stay on screen
+   is [Q-referee-notices-hidden] in
+   docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md. */
 
 /**
  * **The second fact, and it applies to the venues that said yes.**
@@ -4885,29 +5709,28 @@ export const REFEREE_DECLARE_IT =
  * Candidates is the only control in the mode that reaches a **search engine**,
  * which is a different third party from the model provider, at a different time.
  *
- * **It is here, above the chips, rather than on the chip's tooltip**, and that
- * placement is the whole point. Candidates used to sit behind a labelled button
- * whose *visible words* named both parties before either was reached; on
- * 2026-09-06 the chip itself started the run, which moved the disclosure on that
- * button to after the fact. A `ControlTip` is not a replacement —
- * docs/project/referee-mode.md § Four labels changed says it outright, *"a
- * tooltip is not read by anybody in a hurry"*, which is what a referee is. So
- * the sentence moved to the one place that is on screen before any chip has been
- * pressed.
+ * **It is printed where the search is caused: at the top of the Candidates
+ * panel, on screen before the first turn and beside the composer after it.**
+ * From 2026-09-06 to 2026-10-03 the Candidates chip itself started the run, so
+ * this sentence had to be on screen before any chip was pressed and was drawn
+ * above the chips in all four sub-modes — and read *"Opening Candidates may
+ * send…"*. Greg, 2026-10-03 (`spya-vbeyse`), met that as one of *"a whole bunch
+ * of warnings"* over the mode's actions. Candidates went back behind its
+ * button (src/web/activation.ts § REFEREE_TARGET), opening it sends nothing,
+ * and the sentence moved to the panel whose controls it is about. It is also
+ * in the band's Notices box, so the list of where text goes is whole in one
+ * place.
  *
- * **Never behind the collapse, and drawn above it.** The two sentences it sits
- * over fold away into `REFEREE_TEXT_ALREADY_SENT_SHORT`; this one does not,
- * because folding a warning about something that has not happened yet is
- * dismissing it. It is *above* them rather than below because the box is a
- * 40%-height scroller, and underneath them an expanded notice pushes this out of
- * sight while the Candidates chip stays on screen.
+ * Visible text and not a tooltip, for the reason docs/project/referee-mode.md
+ * gives — *"a tooltip is not read by anybody in a hurry"* — and because a touch
+ * device has no hover at all.
  *
- * If Candidates ever goes back behind a button, this line goes with it.
- * docs/plans/260906b-opening-a-mode-starts-it-generating.md § Stage 4.
+ * If the chip ever starts the run again, this goes back above the chips with
+ * it. docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md.
  */
 export const REFEREE_CANDIDATES_REACHES_SEARCH =
-  "Opening Candidates may send terms drawn from this paper to a search engine, which is a " +
-  "different third party from the model provider.";
+  "Candidates may send terms drawn from this paper to a search engine, which is a different " +
+  "third party from the model provider.";
 
 /* ------------------------------------------------------------- feedback -- */
 
@@ -4938,11 +5761,13 @@ export const FEEDBACK_SEND_FAILED: ReaderFacingFailure = {
 /**
  * Feedback is asking for a database this deployment does not have.
  *
- * `ours`, not `retry`: the filesystem store answers this route with a 501 by
- * design (src/store/index.ts), so trying again is the one thing guaranteed not
- * to work. It is a developer-machine sentence rather than one a reader meets,
- * and it is written plainly anyway because the whole point of copy.md is that
- * we do not know in advance who is reading.
+ * `ours`, not `retry`: until 2026-09-05 the filesystem store answered this
+ * route with a 501 by design, so trying again was the one thing guaranteed not
+ * to work. Nothing in src/ sends a 501 since that store went; the dialog still
+ * maps one to this sentence (src/web/FeedbackDialog.tsx). It was a
+ * developer-machine sentence rather than one a reader meets, written plainly
+ * anyway because the whole point of copy.md is that we do not know in advance
+ * who is reading.
  */
 export const FEEDBACK_NOT_AVAILABLE: ReaderFacingFailure = {
   kind: "ours",
@@ -4966,6 +5791,34 @@ export const FEEDBACK_EARLIER_FAILED: ReaderFacingFailure = {
   message:
     "Your earlier feedback would not load just now. What you sent is safe with us — trying again " +
     "in a moment usually works. [fb-list]",
+};
+
+/**
+ * **A reply to a question did not get through** — the reply box under a
+ * question in an admin's Earlier tab (plan 261007d). `retry`: the words are
+ * still in the box, and sending the same words again is safe, because the
+ * reply carries an id the server answers twice with the one stored row.
+ */
+export const FEEDBACK_REPLY_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That reply did not get through. Your words are still in the box — trying again in a moment " +
+    "usually works. [fb-reply]",
+};
+
+/**
+ * **The server this page reached has no way to take a reply** — a 404 from
+ * `POST /api/admin/feedback/answers`: a page loaded from a newer build than
+ * the server answering it, after a rollback or in the minutes of a deploy.
+ * Sending again from this page cannot work until one of them changes, so the
+ * sentence says what does, and says to copy first: the box is not kept across
+ * a reload.
+ */
+export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This page and the server are out of step, so that reply was not sent. Your words are still " +
+    "in the box: copy them, reload the page, and reply again. [fb-reply-stale]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */
@@ -5293,6 +6146,25 @@ export const NOT_READ_YET_RESET: ReaderFacingFailure = {
 };
 
 /**
+ * **A visitor opened a shared address before its article was published**, and
+ * an import for it is queued or running. `pgPublicReader.loadArticle` throws it
+ * as `StillBeingAdded` (src/still-being-added.ts), a 409.
+ *
+ * **One fixed sentence, and nothing in it is about the article**: no title, no
+ * slug, no owner, no progress. Greg accepted, 2026-10-06, that the holder of a
+ * shared address learns an unpublished article exists there; that is all they
+ * learn. Plan docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md
+ * § 2c. It says nothing about *when* either: a queued job may be waiting on its
+ * owner's browser.
+ */
+export const STILL_BEING_ADDED_REFUSAL: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This article is still being added, so there is nothing to read here yet. Looking again " +
+    "later will open it once it is ready. [pub-adding]",
+};
+
+/**
  * **A file already on this reader's shelf**, or on its way there from another
  * tab — the minimal upload's duplicate check (src/minimal-paper.ts). The
  * response carries the existing article's slug beside it when there is one.
@@ -5475,29 +6347,6 @@ export const CITATION_NO_MATCH =
 export const CITATION_LOOKUP_NO_MATCH =
   "No page the search found was clearly this work's own, so nothing was read from it. The article's own link is still there.";
 
-/**
- * *Find it* refused by its allowance (src/citation-find.ts § `FIND_RATE_POLICY`)
- * — one sentence per reason, because each tells the reader something different
- * to do. Each press is a billed web search, which is why there is a limit.
- */
-export const CITATION_FIND_BUSY =
-  "Another Find it is still running. Wait for it to finish, then try this one.";
-export const CITATION_FIND_LIMITED =
-  "You have looked up a lot of works recently. Try again in a while — the Scholar search is still there.";
-/**
- * The one of the three answered with a 5xx (503 — the allowance is everyone's,
- * not this reader's), so the one that carries a code: `handleApi` lets a 5xx's
- * message reach the reader only when it is declared or coded (plan 260924a
- * § Stage 2c). The two 429s pass as they are.
- */
-export const CITATION_FIND_RESTING: ReaderFacingFailure = {
-  kind: "blocked",
-  message:
-    "Find it has done as many searches as it can for today, so asking again today will get the " +
-    "same answer. Try again tomorrow — the Scholar " +
-    "search is still there. [cite-resting]",
-};
-
 /* --------------------------------------------- Citations' *Investigate* --
    src/citation-investigate.ts, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
    Every one of these reaches the reader as the whole of what they see in place
@@ -5578,7 +6427,7 @@ export const CITATION_INVESTIGATE_BUSY =
   "Another Dig deeper on a cited work is still running. Wait for it to finish, then try this one.";
 export const CITATION_INVESTIGATE_LIMITED =
   "You have dug deeper into a lot of works recently. Try again in a while — the row's link is still there.";
-/** The 503 of the three, so it carries a code, as `CITATION_FIND_RESTING` does. */
+/** The 503 of the three, so it carries a code; the two 429s pass as they are. */
 export const CITATION_INVESTIGATE_RESTING: ReaderFacingFailure = {
   kind: "blocked",
   message:
@@ -5669,3 +6518,44 @@ const PAPER_UNREADABLE: Record<PaperUnreadableReason, string> = {
 export function paperUnreadableSentence(why: PaperUnreadableReason): string {
   return PAPER_UNREADABLE[why];
 }
+
+/* ------------------------------------------------------------------------ *
+ * The line at the top of the Structure band while the real structure is on
+ * its way — src/web/modes/structure/StructureArriving.tsx,
+ * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The band is showing a stand-in outline, and the real one is being built.
+ *
+ * **It does not say the rows are the article's own headings**, which the first
+ * draft did. Where an article has no usable headings the stand-in cuts windows
+ * and names them from their opening words (src/heading-tree.ts), and even a
+ * headed article can gain subdivisions the author never wrote. GPT Sol's plan
+ * review, F6. A visitor is shown this one too.
+ */
+export const STRUCTURE_ARRIVING = "This is a temporary outline. The full structure is not available yet.";
+
+/**
+ * No job is building it and the tree is still the stand-in: the job failed, or
+ * was stopped, or never ran. Not a `ReaderFacingFailure` — the job's own
+ * failure is on its own record with its own code; this is the band saying what
+ * it can see, beside the button that starts another.
+ */
+export const STRUCTURE_STALLED = "The full structure is not available.";
+
+/** The owner's way out of `STRUCTURE_STALLED`. Never drawn for a visitor. */
+export const STRUCTURE_BUILD = "Build it";
+
+/** The live tree read failed; this offers a read retry, not another paid build. */
+export const STRUCTURE_CHECK_FAILED =
+  "The structure could not be checked. Try again in a few seconds. [structure-check]";
+
+/**
+ * The structure was built, and from blocks that are not the ones on screen —
+ * a Rebuild in another tab while this one was open. Swapping the tree in would
+ * point its rows at the wrong paragraphs, so the page asks for the one thing
+ * that puts both right. Nothing reloads by itself: a reload drops a typed draft
+ * and a streaming answer.
+ */
+export const STRUCTURE_READY_RELOAD = "The structure is ready. Reload the page to see it.";

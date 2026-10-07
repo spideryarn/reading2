@@ -31,8 +31,10 @@
  *
  * SYNCHRONOUS, BECAUSE `sendMessage` IS — AND THAT IS WHY IT IS BOUNDED TWICE.
  * `sendMessage` runs up to six `execFileSync` calls with ten-second timeouts
- * each (three identity checks, a capture, two `send-keys`), so one item is ~60
- * seconds of worst case and this process has one thread, which also serves the
+ * each (three identity checks, a capture, two `send-keys`). Those timeouts are
+ * when a signal is sent, not a bound: a tmux that will not die holds the call
+ * for as long as it likes (postmortem 260910a), so one item costs ~60 seconds
+ * only if every child obeys. And this process has one thread, which also serves the
  * page, the stream and every route. **A `Promise.race` cannot bound it** — the
  * timer cannot fire while the event loop is blocked — so the only honest bound
  * is to send fewer things: `MAX_SENDS_PER_PASS` and `DRAIN_BUDGET_MS`, both
@@ -94,14 +96,17 @@ import type { RefusalCode, SteerTarget } from "./steer.js";
  * THE TWO BOUNDS, AND THE ARITHMETIC THEY ARE CHOSEN BY.
  *
  * One `sendMessage` is up to six `execFileSync` calls at a ten-second timeout
- * each, so ~60 seconds of worst case, and it cannot be interrupted: while it
- * blocks, this process serves nothing. Unbounded, a fleet where everybody has
- * something queued is 36 × 60 seconds ≈ 36 minutes of dead dashboard.
+ * each, so ~60 seconds when every child stops at its signal — and longer, with
+ * no ceiling, when one does not (docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md).
+ * It cannot be interrupted: while it blocks, this process serves nothing.
+ * Unbounded, a fleet where everybody has something queued is 36 × 60 seconds
+ * ≈ 36 minutes of dead dashboard.
  *
  * Bounded at three sends and a five-second budget CHECKED BETWEEN ROWS, the
  * worst case is `budget + one send` — a send already under way is never
  * abandoned, because there is no way to abandon one — which is roughly 5 + 60 =
- * 65 seconds against a refresh interval of 60. That is survivable and it is
+ * 65 seconds against a refresh interval of 60, given children that stop when
+ * signalled. That is survivable and it is
  * honest: a bad pass delays the next collection by about one cycle rather than
  * stopping the loop. In the ordinary case a send is milliseconds and neither
  * bound is reached.

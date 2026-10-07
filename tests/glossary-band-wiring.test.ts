@@ -56,6 +56,11 @@ const quoteMarks = await readFile(path.join(ROOT, "src/web/reader/useQuoteMarks.
 const glossaryPanel = await readFile(path.join(ROOT, "src/web/GlossaryPanel.tsx"), "utf8");
 const quotesPanel = await readFile(path.join(ROOT, "src/web/QuotesPanel.tsx"), "utf8");
 const searchPanel = await readFile(path.join(ROOT, "src/web/SearchPanel.tsx"), "utf8");
+/* The Glossary's threshold row is drawn by the shared component since
+   2026-10-04, so what was asserted of GlossaryPanel's own markup is asserted of
+   this file, plus that the panel hands it what it used to print itself. The
+   row as rendered is tests/threshold-slider-adopters.test.tsx. */
+const thresholdSlider = await readFile(path.join(ROOT, "src/web/ThresholdSlider.tsx"), "utf8");
 
 describe("the reading view's glossary wiring", () => {
   it("reads the glossary exactly once", () => {
@@ -221,16 +226,23 @@ describe("the threshold wiring", () => {
     expect(branch).toMatch(/<ConfSlider/);
   });
 
-  it("prints the foot line unconditionally, wherever the slider is", () => {
+  it("prints the foot line unconditionally in Glossary and Quotes, and in Search whenever something is hidden", () => {
     /* Present wherever the threshold control is, absent wherever it is not. A
        line that is sometimes missing for a *different* reason teaches the
-       reader nothing, so none of the three may be behind a `note &&`. */
-    expect(glossaryPanel).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
-    expect(quotesPanel).toMatch(/<p className="quotes-bar-note">\{note\}<\/p>/);
-    expect(searchPanel).toMatch(/<p className="srch-gate-note">\{note\}<\/p>/);
-    for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
+       reader nothing, so neither of the first two may be behind a `note &&`. */
+    expect(glossaryPanel).toMatch(/<ThresholdSlider\s[^>]*note=\{gateNote\(hiddenCount, entries\.length\)\}/);
+    expect(thresholdSlider).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
+    expect(quotesPanel).toMatch(/<p className="gloss-gate-note">\{note\}<\/p>/);
+    for (const panel of [glossaryPanel, thresholdSlider, quotesPanel, searchPanel]) {
       expect(panel).not.toMatch(/\{note && </);
     }
+    /* Search is the exception since 2026-10-03, and by one rule only: no line
+       when the count is zero, because the `N of M` above it already says so
+       (Greg, spya-eqcbay; tests/search-results-get-the-room.test.tsx is the
+       behaviour). The condition is the count, never the string. */
+    expect(searchPanel).toMatch(
+      /\{hiddenCount > 0 && <p className="gloss-gate-note">\{note\}<\/p>\}/,
+    );
   });
 
   it("gives each foot line its own noun and the counts from one pass", () => {
@@ -253,7 +265,7 @@ describe("the threshold wiring", () => {
   it("says 'showing' rather than 'promoting' on every slider", () => {
     /* An unscored item is shown without being promoted, so the verb would be a
        small lie in the one place this feature has to be honest. */
-    for (const panel of [glossaryPanel, quotesPanel, searchPanel]) {
+    for (const panel of [thresholdSlider, quotesPanel, searchPanel]) {
       expect(panel).toMatch(/aria-valuetext=\{`[^`]*showing \$\{count\}/);
     }
   });
@@ -399,7 +411,7 @@ describe("the quotes' marks", () => {
  * **What is deliberately not asserted: `key={mode}` on `ConversationBand`.** A
  * first draft of this block did assert it, on the strength of a mutation that
  * deleted the key and left every test green. GPT Sol showed the mutation was
- * green because the key is inert — chat and Remember return different top-level
+ * green because the key is inert — chat and Learn return different top-level
  * component types, so React discards the outgoing subtree either way — and a
  * guard on a no-op is a guard that will one day be defended for the wrong
  * reason. The history, and the condition that would make the key matter again,

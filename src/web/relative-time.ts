@@ -16,9 +16,12 @@
  * Pure, and takes `now` as an argument, because a function that reads the clock
  * is a function nothing can test.
  *
- * The client's one relative-time formatter, paired with `useNow` for the clock;
- * `ago` in Metadata.tsx is an older private copy — web-client.md#shared-code-client.
+ * The client's one relative-time formatter, paired with `useNow` for the clock
+ * — web-client.md#shared-code-client. (Metadata.tsx had a private `ago` until
+ * 2026-10-04; its `whenSaid` now puts "on" before this file's date.)
  */
+
+import { publishedYearOf } from "../types.js";
 
 /** How far past which a date reads better as a date. */
 const ABSOLUTE_AFTER_DAYS = 30;
@@ -103,6 +106,13 @@ export function relativeAgo(
   return undefined;
 }
 
+/** `25 Aug 2026` for an instant — the day alone, where the hour is noise (*"by OpenAlex's count on …"*). */
+export function dayOf(iso: string | undefined): string | undefined {
+  if (!iso) return undefined;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? undefined : absolute(t);
+}
+
 /** `25 Aug 2026, 14:02` — where precision is the point, and the tooltip has room. */
 export function exactly(iso: string | undefined): string | undefined {
   if (!iso) return undefined;
@@ -110,6 +120,70 @@ export function exactly(iso: string | undefined): string | undefined {
   return Number.isNaN(t)
     ? undefined
     : new Date(t).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+/**
+ * **A calendar day somebody else stated**, as a number to sort on and the words
+ * to print — `{ t, label: "12 Mar 2024" }` — or `undefined` when the string
+ * does not start with a real day.
+ *
+ * For `LibraryEntry.publishedAt`, the publisher's own ISO string. Unlike every
+ * other date in this file it is **not an instant**: the day in the publisher's
+ * own frame is the whole content (src/db/schema.ts § `publishedAt`). So only
+ * the first ten characters are read, and both halves are built in UTC from
+ * them — `Date.parse` on the whole string would turn 23:30 on the 11th at
+ * UTC-5 into the 12th, order two pieces published on one day by their time of
+ * day, and print a different day to a reader in another zone.
+ *
+ * One function for the number and the words, so the order the shelf is in and
+ * the date a card prints cannot disagree about what counts as a date.
+ */
+export function calendarDay(iso: string | undefined): { t: number; label: string } | undefined {
+  const day = /^(\d{4}-\d{2}-\d{2})(?:$|T)/.exec(iso ?? "")?.[1];
+  if (!day) return undefined;
+  /* The day alone, at UTC midnight — the check src/extract.ts §
+     `publicationDate` makes when it writes the field. `2026-02-31` has the
+     right shape and is not a day, and some engines roll it over into March
+     rather than refusing it, so it has to come back as the day it went in.
+     (Not `Date.UTC(y, m, d)`: that reads a year under 100 as 19xx.) */
+  const t = Date.parse(`${day}T00:00:00Z`);
+  if (Number.isNaN(t) || !new Date(t).toISOString().startsWith(`${day}T`)) return undefined;
+  const date = new Date(t);
+  const label = date.toLocaleDateString(undefined, {
+    /* Localise the words, while keeping the ISO calendar the publisher used.
+       The locale may otherwise choose Persian, Buddhist, etc. ISO year zero
+       is 1 BC; without its era it prints identically to year one. */
+    calendar: "gregory",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    ...(date.getUTCFullYear() === 0 ? { era: "short" as const } : {}),
+    timeZone: "UTC",
+  });
+  return { t, label };
+}
+
+/**
+ * **When a piece was published, at the precision we were told**: a day
+ * (`publishedAt`) or a year alone (`publishedYear`), as a number to sort on and
+ * the words to print. `undefined` when it has neither.
+ *
+ * The one reader of the pair, for the shelf and both Metadata pages, so no
+ * caller decides for itself what a year-only paper prints or where it sorts.
+ * A day reads exactly as `calendarDay` reads it. A year prints as `2011` and
+ * sorts at the start of that year, so it sits among the pieces dated in 2011
+ * (and ties with one dated 1 January). That start-of-year number is a sort key
+ * only: it is never stored and never printed as a day. Plan 261004h.
+ */
+export function publishedOf(piece: {
+  publishedAt?: string | undefined;
+  publishedYear?: number | undefined;
+}): { t: number; label: string; precision: "day" | "year" } | undefined {
+  const day = calendarDay(piece.publishedAt);
+  if (day) return { ...day, precision: "day" };
+  const year = publishedYearOf(piece.publishedYear);
+  if (year === undefined) return undefined;
+  return { t: Date.parse(`${year}-01-01T00:00:00Z`), label: String(year), precision: "year" };
 }
 
 /**

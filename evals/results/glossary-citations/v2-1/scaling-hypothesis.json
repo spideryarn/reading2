@@ -1,0 +1,156 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "v2-1",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "63e6d6736ae1e82c08ebf0b9d71dfb3fae211bdbc795ef200808fc9e5b3676f7",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "scaling hypothesis",
+      "kind": "concept",
+      "aliases": [
+        "strong scaling hypothesis"
+      ],
+      "senseHere": "The idea that intelligence does not need clever new algorithms but simply emerges when a scalable neural architecture is trained with ever more data and compute, with each increase in scale reliably unlocking new abilities."
+    },
+    {
+      "name": "GPT-3",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "A huge neural network language model built from a simple, old 2018-era architecture, trained only to predict the next word in text, which turned out to learn new tasks from just a few examples without any retraining.",
+      "background": "Released by OpenAI in 2020, it was at the time the largest neural network ever trained, over ten times bigger than its predecessor GPT-2."
+    },
+    {
+      "name": "meta-learning",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A model's ability to learn new tasks on the fly from a few examples given in its input, rather than only having memorized fixed skills from training, which the author treats as the hallmark of GPT-3's surprising leap beyond GPT-2."
+    },
+    {
+      "name": "GPT-2",
+      "kind": "work",
+      "aliases": [],
+      "senseHere": "The predecessor model that already surprised researchers by generating fluent text and performing tasks like summarization, setting the baseline GPT-3 was judged against."
+    },
+    {
+      "name": "blessings of scale",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The author's name for the pattern that, unlike most engineering problems, neural networks get easier to train and more capable, stable, and general the larger the model, data, and compute become."
+    },
+    {
+      "name": "Transformer",
+      "kind": "concept",
+      "aliases": [
+        "self-attention"
+      ],
+      "senseHere": "The neural network design built around an 'attention' mechanism that GPT-3 uses, treated here mainly as a convenient, efficient but not fundamentally special architecture for scaling up."
+    },
+    {
+      "name": "Hans Moravec",
+      "kind": "person",
+      "aliases": [
+        "Moravec"
+      ],
+      "background": "A robotics researcher who in the 1980s-90s argued that AI progress was bottlenecked by hardware cost, not ideas, and predicted using Moore's law when human-level-cheap computing would arrive."
+    },
+    {
+      "name": "OpenAI",
+      "kind": "organization",
+      "aliases": [
+        "OA",
+        "OpenAI LP"
+      ],
+      "background": "The AI lab that built GPT-3, originally a pure nonprofit that restructured into a nonprofit controlling a for-profit subsidiary so it could raise the large sums needed to fund massive scaling experiments."
+    },
+    {
+      "name": "the Bitter Lesson",
+      "kind": "concept",
+      "aliases": [
+        "bitter lesson"
+      ],
+      "senseHere": "The lesson that simple, general methods combined with more computation reliably beat hand-crafted, clever approaches as scale increases, which the author treats as repeatedly vindicated."
+    },
+    {
+      "name": "DeepMind",
+      "kind": "organization",
+      "aliases": [
+        "DM"
+      ],
+      "background": "A well-funded Google-owned AI lab known for game-playing systems like AlphaGo, portrayed here as favoring piecemeal, brain-module-by-module research over OpenAI's bet on pure scaling."
+    },
+    {
+      "name": "AlphaZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "A DeepMind game-playing system that reached superhuman performance at chess and Go purely through self-play and a large neural network, without hand-coded chess knowledge or human game data."
+    },
+    {
+      "name": "MuZero",
+      "kind": "work",
+      "aliases": [],
+      "background": "A later DeepMind system that matched or exceeded AlphaZero's game-playing performance by learning to predict rewards and plan without even being told the rules of the game in advance."
+    },
+    {
+      "name": "double descent",
+      "kind": "term",
+      "aliases": [],
+      "background": "An observed and initially puzzling phenomenon in machine learning where a model's test error first rises then unexpectedly falls again as the model is made larger than the amount of training data would normally allow."
+    },
+    {
+      "name": "lottery ticket hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "The idea that a large randomly-initialized neural network contains many smaller sub-networks, some of which are 'winning tickets' that could achieve good performance on their own if isolated."
+    },
+    {
+      "name": "pretraining thesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The author's name for the argument that because truly minimizing next-word prediction error requires modeling causality, logic, and the world itself, a model pushed to a low enough prediction loss must be genuinely intelligent."
+    },
+    {
+      "name": "hardware overhang",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "A situation where computing power sufficient for a breakthrough already exists but sits unused because no one has yet directed it at the right approach, as the author argues was true for deep learning for decades."
+    },
+    {
+      "name": "Ilya Sutskever",
+      "kind": "person",
+      "aliases": [],
+      "background": "A deep learning researcher and OpenAI co-founder, an early and vocal believer that simply scaling up known neural network methods with enough data and compute would work."
+    },
+    {
+      "name": "intentional stance",
+      "kind": "concept",
+      "aliases": [],
+      "background": "Philosopher Daniel Dennett's idea that treating a system as if it has beliefs, desires, and goals is often the most useful way to predict its behavior, even when the system has no literal mind."
+    },
+    {
+      "name": "Conway's Game of Life",
+      "kind": "concept",
+      "aliases": [
+        "GoL"
+      ],
+      "background": "A simple cellular automaton grid whose cells switch on or off following fixed local rules, famous for spontaneously producing complex, interacting moving patterns like 'gliders'."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "TM"
+      ],
+      "background": "An abstract mathematical model of computation consisting of a tape and a set of rules for reading, writing, and moving along it, used as the most general possible notion of an algorithm."
+    },
+    {
+      "name": "Occam's razor",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Here used to describe how a giant neural network, acting like an average over countless internal sub-models, is biased toward simple solutions, only adopting more complex ones like true reasoning when enough data forces it."
+    }
+  ]
+}

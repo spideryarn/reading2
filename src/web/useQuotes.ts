@@ -43,12 +43,16 @@
  *
  * See docs/project/quotes.md and src/quotes.ts.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type QuotesStatus = "loading" | "none" | "ready" | "error";
 
@@ -110,6 +114,8 @@ export interface QuotesRead {
   profiled: boolean;
   profileChanged: boolean;
   error: string | null;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   /**
    * Fetch again **only if nothing is already fetching** — the band's mount.
    * Joins a request in flight rather than starting a second, and never returns
@@ -124,6 +130,8 @@ export interface QuotesRead {
    * the five-step sequence this gets wrong the other way.
    */
   refresh(): Promise<void>;
+  /** This read's bookkeeping for the forced verb's hold — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
 }
 
 export interface UseQuotes {
@@ -150,6 +158,8 @@ export interface UseQuotes {
   error: string | null;
   /** The job choosing this article's quotes, if one is. */
   job: Job | null;
+  /** The job list has answered once, so `job === null` means no run rather than not known yet. */
+  loaded: boolean;
   /** Why the job this session started stopped, if it stopped badly. */
   failed: StepFailure | null;
   /**
@@ -187,6 +197,16 @@ export interface UseQuotes {
    *   the profile (the *Use your profile* checkbox went on 2026-09-13).
    */
   regenerate(useProfile?: boolean): Promise<void>;
+  /**
+   * The forced run was pressed on the list still on screen, and has neither
+   * changed it nor failed — *Find more* and *Choose them again* both wait.
+   * rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /** Read again, trailing a read in flight — `QuotesRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -198,18 +218,37 @@ export function useQuotesRead(slug: string): QuotesRead {
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
-   * The read itself — the parse, the 404 branch and the error copy, which are
+   * The read itself — the parse, the "none yet" branch and the error copy, which are
    * this mode's own. `current()` after every `await`, before any state is
    * set: false means this reply is about an article, or an artefact, the hook
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
-      const res = await apiFetch(`/api/quotes/${encodeURIComponent(slug)}`);
+      /* The header asks for "none yet" as `200 null` rather than a 404, which
+         a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
+         is still read the same way, for a server that has not heard of the
+         header — the minutes of a deploy. */
+      const res = await apiFetch(`/api/quotes/${encodeURIComponent(slug)}`, {
+        headers: { [NONE_YET_AS_NULL_HEADER]: "1" },
+      });
       if (!current()) return;
-      if (res.status === 404) {
+      const loaded = res.status === 404 ? null : await readJson<QuotesResponse | null>(res);
+      if (!current()) return;
+      if (loaded === null) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
         setQuotes(null);
@@ -217,24 +256,34 @@ export function useQuotesRead(slug: string): QuotesRead {
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
-      const loaded = await readJson<QuotesResponse>(res);
-      if (!current()) return;
+      /* Only an explicit `null` means none yet, and a reply without its
+         artefact is published nowhere: a `MalformedReply`, so the reader gets
+         `PAGE_FAULT` (tests/read-error-matrix.test.tsx) and what is on screen
+         stays. */
+      if (typeof loaded?.quotes !== "object" || loaded.quotes === null) {
+        throw new MalformedReply("the quotes reply has no quotes");
+      }
+      const profiled = loaded.quotes.profileHash != null;
       setQuotes(loaded.quotes);
+      landed(started, res, loaded.quotes.generatedAt);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null` rather than truthiness: the field is `string | null |
          undefined` and only `null` and absent mean "chosen without one". */
-      setProfiled(loaded.quotes.profileHash != null);
+      setProfiled(profiled);
       setProfileChanged(loaded.profileChanged);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
          job finishes — and the panel renders the list only under
@@ -242,20 +291,29 @@ export function useQuotesRead(slug: string): QuotesRead {
          connection blank a list that was still perfectly good. Only the opening
          read has nothing to fall back on. The message is shown either way. Same
          guard, same reason, as useIdeas.ts and useGlossary.ts. */
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
   /* A run that finishes after the reader left the band still reaches the prose.
      useCitations.ts § An always-mounted read is not an
      always-fresh read. */
   useStepFinished(slug, "quotes", refresh);
+
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. Quotes already on screen stay there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (quotes === null) setStatus("loading");
+    await reload();
+  }, [quotes, reload]);
 
   /* The opening read. Everything after it goes through `reload`, which does not
      return `status` to `loading` — including `QuotesBand`'s own mount effect,
@@ -264,7 +322,7 @@ export function useQuotesRead(slug: string): QuotesRead {
     void reload();
   }, [reload]);
 
-  return { status, quotes, stale, outdated, profiled, profileChanged, error, reload, refresh };
+  return { status, quotes, stale, outdated, profiled, profileChanged, error, retryRead, reload, refresh, fresh };
 }
 
 /**
@@ -311,11 +369,26 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     },
     [queue],
   );
+  /* **The forced verb holds the list it was pressed on** (rewrite-hold.ts), as
+     useGlossary.ts § `more` does for the other appending verb. The list's
+     clock is the identity, and an append re-stamps it as a rewrite does
+     (src/quotes.ts § `generatedAt: completedAt`) — which is all the release
+     claims: the job wrote. A *Find more* that found nothing still re-stamps,
+     so it lets go too. */
+  const hold = useRewriteHold({
+    slug,
+    step: "quotes",
+    identity: quotes?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(
     async (useProfile = true) => {
-      await queue.start({ force: true, useProfile });
+      await held(() => queue.start({ force: true, useProfile }));
     },
-    [queue],
+    [queue, held],
   );
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read is
@@ -332,9 +405,13 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    loaded: queue.loaded,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
+    refresh,
+    retryRead: read.retryRead,
     ensure,
     regenerate,
     cancel: queue.cancel,

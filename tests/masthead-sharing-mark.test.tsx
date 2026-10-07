@@ -43,10 +43,13 @@ import {
   SHARING_MARK_NAME_PUBLIC,
   SHARING_MARK_ON_ARCHIVED,
   SHARING_OFF,
+  SHARING_OFF_WITH_LINK,
+  SHARING_OFF_LINK_UNKNOWN,
   SHARING_ON,
 } from "../src/messages.js";
 import type { Article, Visibility } from "../src/types.js";
 import type { ArchiveControl } from "../src/web/useArchive.js";
+import { DELAY } from "../src/web/Tooltip.js";
 
 vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: {
@@ -122,6 +125,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 /** The masthead, as the owner sees it (`onRenamed`) or as a visitor does. */
@@ -129,6 +133,7 @@ async function mount(
   visibility: Visibility | undefined,
   owner: boolean,
   archivedAt: string | null | "unknown" = null,
+  privateLinkOn: boolean | "unknown" = false,
 ) {
   /* A still controller rather than `useArchive`: this file reads cards, and
      tests/masthead-archive-mark.test.tsx owns the presses. */
@@ -142,7 +147,7 @@ async function mount(
   await act(async () => {
     root.render(
       createElement(Masthead, {
-        article: article(visibility),
+        article: { ...article(visibility), ...(privateLinkOn === "unknown" ? {} : { privateLinkOn }) },
         slug: SLUG,
         ...(owner ? { onRenamed: () => {}, archive } : {}),
       }),
@@ -155,8 +160,9 @@ async function cardOf(trigger: Element): Promise<HTMLElement> {
   /* A native `mouseenter` opens it — tooltips.md § Three things about testing
      a card in jsdom. The card is portalled to `<body>`, not into `host`. */
   await act(async () => {
+    vi.useFakeTimers();
     trigger.dispatchEvent(new MouseEvent("mouseenter"));
-    await new Promise((r) => setTimeout(r, 400));
+    vi.advanceTimersByTime(DELAY.open);
   });
   const cards = document.querySelectorAll(".tip-soon");
   expect(cards).toHaveLength(1);
@@ -188,6 +194,24 @@ function marked(name: string, tip: string): void {
 }
 
 describe("the sharing mark beside the title", () => {
+  it("says who can read a private article with a link on", async () => {
+    await mount("private", true, null, true);
+    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
+    if (!link) throw new Error("no sharing mark");
+    const card = await cardOf(link);
+    expect(card.querySelector(".tip-soon-head")?.textContent).toBe("Private link");
+    expect(card.querySelector(".tip-soon-what")?.textContent).toBe(SHARING_OFF_WITH_LINK);
+    expect(card.textContent).not.toContain(SHARING_OFF);
+    expect(card.querySelector(".tip-soon-press")?.textContent).toContain("turn off");
+  });
+
+  it("does not claim exclusivity when the private link state is unknown", async () => {
+    await mount("private", true, null, "unknown");
+    const link = host.querySelector<HTMLAnchorElement>(`a[href^="${METADATA}"]`);
+    if (!link) throw new Error("no sharing mark");
+    expect((await cardOf(link)).querySelector(".tip-soon-what")?.textContent).toBe(SHARING_OFF_LINK_UNKNOWN);
+  });
+
   it("says an article is out in the world, and links to the switch", async () => {
     await mount("public", true);
 

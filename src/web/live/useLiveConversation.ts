@@ -94,9 +94,11 @@ import { useAudioLevel } from "../useAudioLevel.js";
 import { ExchangeLedger, type Exchange } from "./exchanges.js";
 import { LiveMeter, responseReport, transcriptionReport } from "./meter.js";
 import { resolvePlacement, type ResolvedPlacement } from "./mic-placement.js";
-import { apiWiring, type LiveWiring } from "./wiring.js";
+import { apiWiringFor, type LiveWiring } from "./wiring.js";
+import { useMadeFor } from "../lib/made-for.js";
 import { ToolResponses } from "./tool-responses.js";
 import { stallOf, type LiveStall } from "./stall.js";
+import { type TalkMode, type TapEventKind, tapRefusal } from "./tap.js";
 import {
   DISCONNECT_GRACE_MS,
   GRACE_POLL_MS,
@@ -164,40 +166,7 @@ export interface LiveToolRun {
   ms: number;
 }
 
-/**
- * **Who decides when the reader's turn starts and ends.**
- *
- * `hands-free` is the conversation as it has always been: the microphone is
- * open and OpenAI's voice detector decides. In a street that detector can hear
- * the traffic as somebody who has not finished, and hold the turn open for
- * ever (spya-kzdmhb; the one `LiveStall-open-turn` event, 2026-09-30, was a
- * 74-second turn that never closed). So the `open-turn` notice offers **tap to
- * talk**, which is OpenAI's documented push-to-talk: `turn_detection: null`, a
- * clear when the reader taps Talk, and a commit when they tap Done, with the
- * microphone track disabled in between so noise never reaches the service.
- *
- * **Not** "disable the track and let the detector close the turn on the
- * silence". The first draft did that; nothing documents that a disabled WebRTC
- * track sends silence rather than nothing, or that semantic VAD closes an
- * unfinished-sounding turn on it. GPT Sol, plan review, 2026-10-03.
- * docs/plans/261003d-tap-to-talk-when-noise-holds-the-live-turn-open.md.
- *
- * It lasts for the call and survives a Reconnect, including the pickers'; a
- * start the reader makes themselves is hands-free again. There is no way back
- * within a call, because that would need a second copy of the server's
- * turn-detection settings.
- */
-export type TalkMode =
-  | "hands-free"
-  /** Ready: the detector is off and nothing is being sent. */
-  | "tap-idle"
-  /** Between Talk and Done. */
-  | "tap-talking"
-  /**
-   * From Done until the reply begins. Nothing else says the companion is busy
-   * in that gap, and Talk in it would start a turn over the one being sent.
-   */
-  | "tap-sending";
+export type { TalkMode };
 
 export interface LiveApi {
   phase: LivePhase;
@@ -346,7 +315,6 @@ const TAP_TAIL_MS = 300;
 const TAP_MIN_MS = 500;
 /** Every tap-to-talk client event's `event_id` starts with this. See the `error` handler. */
 const TAP_EVENT = "spya-tap-";
-type TapEventKind = "entry" | "clear" | "commit" | "response";
 
 /** The counts a stall report carries. Numbers only — never a word the reader said. */
 interface StallTally {
@@ -375,6 +343,8 @@ const freshTally = (): StallTally => ({
 });
 
 export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveApi {
+  const madeFor = useMadeFor();
+  const defaultWiring = useRef(apiWiringFor(madeFor)).current;
   const [phase, setPhase] = useState<LivePhase>("idle");
   const [step, setStep] = useState<LiveStep | null>(null);
   const [reconnectPending, setReconnectPending] = useState(false);
@@ -1009,7 +979,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
       const timeout = setTimeout(() => request.abort(), TOOL_TIMEOUT_MS);
       try {
         const out = await Promise.race([
-          (wired.current.wiring ?? apiWiring).runTool(slug, name, args, request.signal),
+          (wired.current.wiring ?? defaultWiring).runTool(slug, name, args, request.signal),
           new Promise<never>((_, reject) => {
             request.signal.addEventListener("abort", () => reject(new Error("The tool took too long. Try again.")), { once: true });
           }),
@@ -1023,7 +993,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         toolRequests.current.delete(request);
       }
     },
-    [send, slug, continueAfterTools],
+    [send, slug, continueAfterTools, defaultWiring],
   );
 
   /**
@@ -1224,43 +1194,30 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
       if (type === "error") {
         const detail = e.error as { message?: string; event_id?: unknown } | undefined;
-        /* **An error against one of tap to talk's own events is a notice.**
-           Every other provider error ends the session, which is right for
-           errors nobody planned for. These are planned for: a Done over an
-           empty buffer, a `session.update` the service will not take. Hanging
-           up on the reader for either would be worse than the noise was. */
+        /* **An error against one of tap to talk's own events is a notice**,
+           not the end of the call: tap.ts § tapRefusal says what it leaves
+           behind. Only an id this session sent counts (see `tapEvents`). */
         const refused = typeof detail?.event_id === "string" ? detail.event_id : "";
         const tapEvent = tapEvents.current.get(refused);
         if (tapEvent) {
           tapEvents.current.delete(refused);
+          const mode = talkModeRef.current;
+          /* Waiting on a sent turn, rather than still in Done's tail. This
+             can also be a reply already owed when entering tap mode. */
+          const submitted = mode === "tap-sending" && doneTimer.current === null;
+          const after = tapRefusal(tapEvent, { mode, submitted }, detail?.message);
+          if (after.keep) return;
+          talkModeRef.current = after.mode;
+          setTalkModeState(after.mode);
+          if (micTrack.current) micTrack.current.enabled = after.mic;
+          /* § TapRefusal: no tap turn is in flight after any of these. The
+             tail in particular: left running, the button says Talk while
+             `talk` refuses it. */
           tapCommitPending.current = false;
-          if (tapEvent === "entry") {
-            talkModeRef.current = "hands-free";
-            setTalkModeState("hands-free");
-            if (micTrack.current) micTrack.current.enabled = true;
-            setNotice("Tap to talk couldn’t start, so the conversation is listening as before.");
-          } else if (talkModeRef.current === "hands-free") {
-            /* `detectorOff` sends update then clear. If both are refused, the
-               update's recovery has already restored hands-free; the following
-               clear error must not mute it again or replace its explanation. */
-          } else if (tapEvent === "response" && talkModeRef.current === "tap-sending") {
-            /* The commit succeeded, so the reader's item is already in both the
-               provider conversation and our ledger. Calling it Ready would put
-               a new turn behind an unanswered one and stop the ledger harvesting
-               later exchanges. Keep the turn closed and its reply debt honest;
-               Reconnect is the recovery for a session that refused to answer. */
-            if (micTrack.current) micTrack.current.enabled = false;
-            setNotice(`Tap to talk: ${detail?.message ?? "the reply couldn’t start"}. Reconnect to try again.`);
-          } else {
-            /* A refused clear or commit: back to Ready, whatever it was.
-               Not recording onto a buffer whose state is unknown, and not
-               owing a reply to a turn the service never took. */
-            if (micTrack.current) micTrack.current.enabled = false;
-            talkModeRef.current = "tap-idle";
-            setTalkModeState("tap-idle");
-            owedSince.current = null;
-            setNotice(`Tap to talk: ${detail?.message ?? "that didn’t go through"}. Tap Talk to try again.`);
-          }
+          if (doneTimer.current) clearTimeout(doneTimer.current);
+          doneTimer.current = null;
+          if (after.dropDebt) owedSince.current = null;
+          setNotice(after.notice);
           return;
         }
         failSession(detail?.message ?? "The live session reported an error. Try again or carry on typing.", "provider-error");
@@ -1388,6 +1345,10 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     setStall(null);
     if (connectionDeadline.current) clearTimeout(connectionDeadline.current);
     connectionDeadline.current = null;
+    /* Done's tail: a hang-up inside it drops the turn. Its callback would
+       refuse anyway (`isLive`); this says so. */
+    if (doneTimer.current) clearTimeout(doneTimer.current);
+    doneTimer.current = null;
     if (startup.current) {
       clearTimeout(startup.current.timer);
       startup.current.abort.abort();
@@ -1796,7 +1757,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
           setPlacement(where);
           placedAs.current = where.placement;
 
-          const wiring = wired.current.wiring ?? apiWiring;
+          const wiring = wired.current.wiring ?? defaultWiring;
           const ticket = await wiring.ticket(slug, opts.threadId, where.placement, abort.signal);
           /* **The tail travels with the history it belongs to**, and the first
              exchange claims exactly this. Read separately they would be a claim
@@ -2186,7 +2147,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
         }
       })();
     },
-    [onEvent, slug, updateLines, failSession, enableAudio, checkStall, detectorOff],
+    [onEvent, slug, updateLines, failSession, enableAudio, checkStall, detectorOff, defaultWiring],
   );
 
   const say = useCallback(
@@ -2372,8 +2333,12 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
 
   const enterTapToTalk = useCallback(() => {
     if (!isLive() || talkModeRef.current !== "hands-free") return;
-    talkModeRef.current = "tap-idle";
-    setTalkModeState("tap-idle");
+    /* Dropping the open buffer cannot settle an earlier submitted turn.
+       Keep Talk closed until that reply starts (or Reconnect recovers it),
+       without asking for a manual reply to a detector-owned turn. */
+    const mode: TalkMode = owedSince.current === null ? "tap-idle" : "tap-sending";
+    talkModeRef.current = mode;
+    setTalkModeState(mode);
     detectorOff();
     /* **The turn the noise was holding open is dropped, not answered.** The
        reader has just been told that sound is holding it open; answering half
@@ -2418,7 +2383,7 @@ export function useLiveConversation(slug: string, opts: LiveOptions = {}): LiveA
     }
     talkModeRef.current = "tap-sending";
     setTalkModeState("tap-sending");
-    /* Bound to this session: `start` cancels it, and a callback that outlived
+    /* Bound to this session: `start` and `stop` cancel it, and a callback that outlived
        its call must not commit into the next one's buffer. A hang-up inside
        the tail drops the turn, as a hang-up while talking does. */
     const mine = sessionNo.current;

@@ -104,7 +104,7 @@ const DIR = path.join("evals", "extraction", "fixtures");
  * a manifest *replaced* by another without the count changing, and the artefact's
  * fixture-by-fixture matrix is what catches that.
  */
-const MANIFESTS_EXPECTED = 15;
+const MANIFESTS_EXPECTED = 17; // 17 since 2026-10-06: `hal-anubis` (261006c) and `winehq-anubis` (261006f), both `notAnArticle` bot checks.
 
 const SHORT: Record<MetricName, string> = {
   requiredRecall: "recall",

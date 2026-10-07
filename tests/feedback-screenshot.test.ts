@@ -138,6 +138,39 @@ function pngSize(bytes: Uint8Array): { width: number; height: number } {
   return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
+/**
+ * A PNG that declares these dimensions and is **exactly `total` bytes long**.
+ *
+ * For the shrink-to-fit tests, which are about one comparison — is this
+ * attempt's file under the target — and need to put a file a known distance
+ * either side of it. A real raster cannot be steered to a byte count, so the
+ * `IDAT` here is padding: the header is true (which is what `pngSize` reads
+ * back) and the picture is not, so nothing built with this goes near
+ * `reencodeScreenshot`.
+ */
+function sizedPng(width: number, height: number, total: number): Uint8Array<ArrayBuffer> {
+  const ihdr = new Uint8Array(13);
+  const view = new DataView(ihdr.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  ihdr[8] = 8;
+  ihdr[9] = 6;
+  /* 8 of signature, 25 of IHDR, 12 around the IDAT payload, 12 of IEND. */
+  const parts = [
+    Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", new Uint8Array(total - 57)),
+    chunk("IEND", new Uint8Array(0)),
+  ];
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
 /* ------------------------------------------------- the three missing APIs -- */
 
 /** What the stubbed decoder reports, or `null` to make it reject. */
@@ -148,6 +181,8 @@ let painted: { width: number; height: number } | null = null;
 let closed = 0;
 /** The MIME type the module asked the canvas to encode. */
 let asked: string | null = null;
+/** The long edge of every canvas the module asked to have encoded, in order. */
+let attempts: number[] = [];
 /** What the stubbed `toBlob` hands back for a canvas of this size. */
 let encode: (width: number, height: number) => Blob | null = (width, height) =>
   new Blob([pngBytes(width, height)], { type: "image/png" });
@@ -160,6 +195,7 @@ beforeEach(() => {
   painted = null;
   closed = 0;
   asked = null;
+  attempts = [];
   encode = (width, height) => new Blob([pngBytes(width, height)], { type: "image/png" });
 
   /* `vi.fn` rather than a bare function, so "it never tried to decode this"
@@ -183,6 +219,7 @@ beforeEach(() => {
        throw where the module catches, and a wrong MIME type would surface as
        "unreadable" instead of saying what went wrong. */
     asked = type ?? null;
+    attempts.push(Math.max(this.width, this.height));
     callback(encode(this.width, this.height));
   };
 });
@@ -270,12 +307,102 @@ describe("screenshotFromFile", () => {
     });
   });
 
-  it("reports too-big for a screenshot still over the cap after downscaling", async () => {
+  /**
+   * **Shrink until it fits** —
+   * docs/plans/261003k-feedback-screenshot-shrinks-to-fit-and-profile-sections-collapse.md.
+   *
+   * Until 2026-10-03 the module encoded once at 1600 and refused whatever came
+   * out over the limit, so a screenshot with a photograph in it — a PNG of one
+   * to three megabytes at that size — was turned away with a sentence saying
+   * "even after shrinking it" about a single attempt. Greg's report `spya-wa7wms`.
+   *
+   * `TARGET` is restated here rather than imported: the point is to hold the
+   * module to the number the plan gives, not to whatever it exports.
+   */
+  const TARGET = Math.floor(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.9);
+  const sized = (bytesFor: (long: number) => number) => (width: number, height: number) =>
+    new Blob([sizedPng(width, height, bytesFor(Math.max(width, height)))], { type: "image/png" });
+
+  it("steps down to 1280 when the 1600 picture is over the target", async () => {
     decodes = { width: 3200, height: 1800 };
-    encode = (width, height) => new Blob([pngBytes(width, height, true)], { type: "image/png" });
+    encode = sized((long) => (long >= 1600 ? MAX_FEEDBACK_SCREENSHOT_BYTES * 2 : TARGET));
+    const out = shot(await screenshotFromFile(imageFile()));
+
+    expect({ width: out.width, height: out.height }).toEqual({ width: 1280, height: 720 });
+    expect(pngSize(Buffer.from(out.base64, "base64"))).toEqual({ width: 1280, height: 720 });
+    expect(out.bytes).toBe(TARGET);
+    expect(attempts).toEqual([1600, 1280]);
+    /* One decode and one close, however many times it was drawn. */
+    expect(createImageBitmap).toHaveBeenCalledTimes(1);
+    expect(closed).toBe(1);
+  });
+
+  /* The server writes the file again and its deflate is not the browser's, so
+     a picture that only just fits here can come out over there. The headroom
+     applies to the first attempt as much as to the others. */
+  it("steps down from a first encode that is under the limit but over the target", async () => {
+    decodes = { width: 3200, height: 1800 };
+    encode = sized((long) => (long >= 1600 ? TARGET + 1 : TARGET - 1));
+    expect(TARGET + 1).toBeLessThan(MAX_FEEDBACK_SCREENSHOT_BYTES);
+    const out = shot(await screenshotFromFile(imageFile()));
+
+    expect(out.width).toBe(1280);
+    expect(attempts).toEqual([1600, 1280]);
+  });
+
+  it("reports too-big only after the whole ladder has been tried", async () => {
+    decodes = { width: 3200, height: 1800 };
+    encode = sized(() => TARGET + 1);
     const out = await screenshotFromFile(imageFile());
 
     expect(out).toEqual({ ok: false, problem: "too-big" });
+    expect(attempts).toEqual([1600, 1280, 1024, 800, 640]);
+    expect(closed).toBe(1);
+  });
+
+  it("starts the ladder at the size the picture arrived, and never encodes one size twice", async () => {
+    encode = sized(() => TARGET + 1);
+    decodes = { width: 1280, height: 400 };
+    await screenshotFromFile(imageFile());
+    expect(attempts).toEqual([1280, 1024, 800, 640]);
+
+    attempts = [];
+    decodes = { width: 300, height: 700 };
+    await screenshotFromFile(imageFile());
+    expect(attempts).toEqual([700, 640]);
+
+    attempts = [];
+    decodes = { width: 500, height: 300 };
+    await screenshotFromFile(imageFile());
+    expect(attempts).toEqual([500]);
+  });
+
+  /**
+   * **The worst picture there is still goes**, and this replaced a test that
+   * asserted the opposite.
+   *
+   * Square, every pixel random, stored without compression: nothing a browser
+   * encodes is bigger for its size. Under the 400,000 cap that was `too-big`.
+   * Under two megabytes it cannot be, because 640 × 640 × 4 is 1.64 MB and the
+   * target is 1.8 — so with these numbers `too-big` is a backstop for an
+   * encoder that inflates, not something a reader's picture reaches. Real
+   * bytes rather than `sizedPng`, so the server's own validator can be run on
+   * what came out.
+   */
+  it("sends even a square of pure noise, at the bottom of the ladder", async () => {
+    decodes = { width: 3200, height: 3200 };
+    encode = (width, height) => new Blob([pngBytes(width, height, true)], { type: "image/png" });
+    const out = shot(await screenshotFromFile(imageFile()));
+
+    expect({ width: out.width, height: out.height }).toEqual({ width: 640, height: 640 });
+    expect(attempts).toEqual([1600, 1280, 1024, 800, 640]);
+    expect(out.bytes).toBeLessThanOrEqual(TARGET);
+    const result = reencodeScreenshot(
+      new Uint8Array(Buffer.from(out.base64, "base64")),
+      MAX_FEEDBACK_SCREENSHOT_BYTES,
+    );
+    if (!result.ok) throw new Error(`the server refused our own PNG: ${result.reason}`);
+    expect(result.screenshot.bytes.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
   });
 
   it("emits base64 the server's own expression accepts", async () => {

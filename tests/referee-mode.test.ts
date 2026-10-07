@@ -1,5 +1,5 @@
 /**
- * Referee mode's vocabulary: the mode itself, and its four sub-modes.
+ * Referee mode's vocabulary: the mode itself, and its sub-modes.
  *
  * Stage 1 of docs/plans/260831an-referee-mode-for-peer-reviewers.md builds a
  * mode that calls no model, so there is nothing here about prompts or costs.
@@ -41,13 +41,13 @@ describe("the referee mode itself", () => {
     }
   });
 
-  it("is a sibling of Search rather than of Remember", () => {
-    /* Not a decoration: `remember` — `review` until 2026-09-01, and renamed
+  it("is a sibling of Search rather than of Learn", () => {
+    /* Not a decoration: `learn` — `review` until 2026-09-01, and renamed (to `remember`)
        partly because of this very adjacency — is a different mode with a
        different job, and the plan's § "The name is `referee`, not `reviewer`"
        is about keeping one word for one thing. If somebody renames this to
        `reviewer` they should have to come here and argue with the sentence. */
-    expect(MODES).toContain("remember");
+    expect(MODES).toContain("learn");
     expect(MODES).not.toContain("review");
     expect(MODES).not.toContain("reviewer");
     expect(MODES.indexOf("referee")).toBe(MODES.indexOf("search") + 1);
@@ -55,7 +55,7 @@ describe("the referee mode itself", () => {
 });
 
 describe("which sub-mode a link asks for", () => {
-  it("recognises the four, and nothing else", () => {
+  it("recognises the five, and nothing else", () => {
     for (const view of REFEREE_VIEWS) expect(isRefereeView(view)).toBe(true);
     expect(isRefereeView("verdict")).toBe(false);
     expect(isRefereeView("Criteria")).toBe(false);
@@ -95,14 +95,20 @@ describe("which sub-mode a link asks for", () => {
     expect(REFEREE_VIEWS).toContain(fallback);
   });
 
-  it("carries the editor's question last, and it is not the default", () => {
+  it("carries the editor's question after the referee's three, and it is not the default", () => {
     /* `candidates` is the one sub-mode that is not the referee's own question —
        it is an editor asking who should review this — and Greg added it on
-       2026-08-31 over the cut the plan's appendix argues for. Last in the list
-       and never the landing view: somebody who opened Referee mode is almost
-       always the referee. */
-    expect(REFEREE_VIEWS).toContain("candidates");
-    expect(REFEREE_VIEWS[REFEREE_VIEWS.length - 1]).toBe("candidates");
+       2026-08-31 over the cut the plan's appendix argues for. After the
+       referee's own three and never the landing view: somebody who opened
+       Referee mode is almost always the referee. It was last until
+       2026-10-07, when the source scan became the fifth (plan 261007h). */
+    expect(REFEREE_VIEWS.slice(0, 4)).toEqual(["criteria", "claims", "mirror", "candidates"]);
     expect(DEFAULT_REFEREE_VIEW).not.toBe("candidates");
+  });
+
+  it("carries the source scan last, and it is not the default", () => {
+    /* Greg, 2026-10-07: *"Perhaps squirrel this info away as a sub-mode?"* */
+    expect(REFEREE_VIEWS[REFEREE_VIEWS.length - 1]).toBe("hidden");
+    expect(DEFAULT_REFEREE_VIEW).not.toBe("hidden");
   });
 });

@@ -12,7 +12,7 @@
  * first, against a mutation aimed at it or against the read-only panel this
  * replaced.
  *
- * Opened through the real *written for you* badge (`WrittenForYou`), which has
+ * Opened through the real profile icon (`WrittenForYou`), which has
  * been the only way into it from a reading view since 2026-09-13, when the
  * *Use your profile* row beside every paid button — checkbox, and a *Your
  * profile* button — was removed on Greg's request
@@ -101,6 +101,8 @@ vi.mock("../src/web/lib/api.js", async () => {
     },
     leavingFetch: (input: string, init?: RequestInit) => {
       left.push({ url: input, body: JSON.parse(String(init?.body)) });
+      /* Settles like the real one: `leaveProfile` and `leavePurpose` chain on it. */
+      return Promise.resolve();
     },
   };
 });
@@ -111,6 +113,7 @@ vi.mock("../src/web/useDictationField.js", () => ({
   useDictationField: () => ({
     dictation: { supported: false, armed: mic.armed, transcribing: false },
     readOnly: false,
+    busy: mic.armed,
     toggle: () => {},
   }),
 }));
@@ -120,6 +123,7 @@ vi.mock("../src/web/DictationStrip.js", () => ({
 }));
 
 const { WrittenForYou } = await import("../src/web/WrittenForYou.js");
+const { AUTOSAVE_IDLE_MS } = await import("../src/web/ProfileBox.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -139,11 +143,11 @@ const spy = (busy = false): Spy => ({
 
 /** The real badge, on text written for a profile — never the panel on its own,
  *  so every assertion below is about something a reader can get to. */
-function render(opts: { changed?: boolean; regenerate?: Spy } = {}) {
+function render(opts: { changed?: boolean; regenerate?: Spy; written?: boolean } = {}) {
   act(() => {
     root.render(
       createElement(WrittenForYou, {
-        written: true,
+        written: opts.written ?? true,
         changed: opts.changed ?? false,
         slug: "some-article",
         regenerate: opts.regenerate,
@@ -607,6 +611,32 @@ describe("Regenerate", () => {
   });
 });
 
+/* Greg, 2026-10-05: "B treat a first profile as a change". The server now
+   answers `profileChanged` for text written when the reader had no profile;
+   the badge used to draw nothing for such text, so the press had nowhere to
+   be. src/profile.ts § profileIsStale. */
+describe("text written before the reader had a profile", () => {
+  it("draws nothing while they still have none", () => {
+    render({ written: false, changed: false });
+    expect(host.querySelector("button.prof-badge")).toBeNull();
+  });
+
+  it("draws the badge once they have one, says which case this is, and offers Regenerate", async () => {
+    const regenerate = spy();
+    render({ written: false, changed: true, regenerate });
+    const trigger = host.querySelector<HTMLButtonElement>("button.prof-badge");
+    expect(trigger?.getAttribute("aria-label")).toMatch(/without your profile/i);
+    const opened = await open();
+    expect(opened.textContent).toMatch(/without your profile/i);
+    expect(opened.textContent).not.toMatch(/before you had a profile/i);
+    expect(opened.textContent).not.toMatch(/before you last changed it/i);
+    const b = button(/Regenerate/);
+    if (!b) throw new Error("no Regenerate for a first profile");
+    act(() => b.click());
+    expect(regenerate.run).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("more than one personalised badge on a page", () => {
   it("never leaves two profile panels open at once", async () => {
     act(() => {
@@ -628,4 +658,22 @@ describe("more than one personalised badge on a page", () => {
     await settle();
     expect(document.querySelectorAll(".prof-panel")).toHaveLength(1);
   });
+});
+
+
+it("Done completes after an older refused purpose save is replaced by newer words", async () => {
+  render();
+  await open();
+  type(box(1), "A");
+  act(() => button(/^Done$/)?.click());
+  type(box(1), "B");
+  patches[0]?.answer(new Response(JSON.stringify({ error: "A was refused" }), { status: 503 }));
+  await settle();
+  expect(document.querySelector(".prof-panel")?.textContent).not.toContain("A was refused");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_IDLE_MS + 30)); });
+  expect(patches.map((p) => p.body)).toEqual([{ purpose: "A" }, { purpose: "B" }]);
+  expect(document.querySelector(".prof-panel")).not.toBeNull();
+  patches[1]?.answer(ok({ purpose: "B" }));
+  await settle();
+  expect(document.querySelector(".prof-panel"), "the close latch waited forever after an unrelated refusal").toBeNull();
 });

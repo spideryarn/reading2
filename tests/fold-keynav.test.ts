@@ -12,7 +12,13 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Block, BlockId } from "../src/types.js";
-import { clearFoldArticle, isFolded, setFoldArticle, toggleFold } from "../src/web/fold.js";
+import {
+  clearFoldArticle,
+  isFolded,
+  setFoldArticle,
+  toggleFold,
+  toggleFrontMatter,
+} from "../src/web/fold.js";
 
 const jumps: string[] = [];
 vi.mock("../src/web/scroll.js", async (importOriginal) => {
@@ -20,7 +26,7 @@ vi.mock("../src/web/scroll.js", async (importOriginal) => {
   return { ...real, scrollToBlock: (id: string) => void jumps.push(id) };
 });
 
-const { useArrowNav } = await import("../src/web/keynav.js");
+const { beginJump, useArrowNav } = await import("../src/web/keynav.js");
 type NavPlan = import("../src/web/keynav.js").NavPlan;
 
 const block = (i: number, heading = false): Block => ({
@@ -79,6 +85,170 @@ describe("↓ and a folded section", () => {
     toggleFold("spya-b0" as BlockId);
     down();
     expect(jumps).toEqual(["spya-b3"]);
+  });
+});
+
+/**
+ * **The masthead's echo is hidden and is not a fold** (fold.ts § `isFoldedAway`;
+ * Greg, spya-t6cdve;
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md).
+ * Block 0 is the echo and is also where the first section starts, so ↑ must
+ * still be able to ask for it: `scrollToBlock` then goes to the top of the
+ * page (below). Filtered out like a folded start, ↑ from inside the first
+ * section had nowhere to go.
+ */
+describe("↑ and the masthead's echo", () => {
+  const up = () =>
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+    });
+  /* Sections start at b0 (the echo heading) and b3. */
+  const sections: NavPlan = { starts: [[0, 3]] };
+  function BySection() {
+    useArrowNav(sections, blocks, 0);
+    return null;
+  }
+
+  /** The reader on row `at`: every row before it above the line, the echo rows with no height. */
+  function standOn(at: number, echo: number): () => void {
+    const table = document.createElement("table");
+    table.innerHTML = `<tbody>${blocks.map((b) => `<tr data-block="${b.id}"><td></td></tr>`).join("")}</tbody>`;
+    document.body.append(table);
+    const rows = [...table.querySelectorAll("tr")];
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const i = rows.indexOf(this as HTMLTableRowElement);
+      const top = i < 0 ? 0 : (Math.max(i, echo) - at) * 100;
+      return { top, bottom: top + (i < echo ? 0 : 100), height: i < echo ? 0 : 100 } as DOMRect;
+    });
+    return () => {
+      spy.mockRestore();
+      table.remove();
+    };
+  }
+
+  it("reaches the start of the first section from inside it", async () => {
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const leave = standOn(2, 1);
+    await act(async () => root.render(createElement(BySection)));
+    try {
+      up();
+      expect(jumps).toEqual(["spya-b0"]);
+    } finally {
+      leave();
+    }
+  });
+
+  it("does not add a history entry for an echo jump that is already at the page top", () => {
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const pushed: BlockId[] = [];
+    expect(beginJump(blocks, "spya-b0" as BlockId, (id) => void pushed.push(id))).toBe(false);
+    expect(pushed).toEqual([]);
+    expect(jumps).toEqual([]);
+  });
+
+  /* GPT Sol, code review round two, D2. An instant move (reduced motion,
+     `"auto"`) holds no glide target but still owes one frame and its landing
+     callback. A jump to the echo from the page top ends at once, and that
+     older frame must end with it, or it lands, flashes or anchors afterwards. */
+  it("cancels an instant move still owed its frame when an echo jump ends at the page top", async () => {
+    const real = await vi.importActual<typeof import("../src/web/scroll.js")>("../src/web/scroll.js");
+    globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    /* Every row still below the reading line, as at the top of a page under
+       its masthead: the origin `beginJump` measures is then "top". */
+    const leave = standOn(-5, 1);
+    let y = 300;
+    const tall = vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(5000);
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockImplementation(() => y);
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(((o: ScrollToOptions) => {
+      y = o.top ?? y;
+    }) as typeof window.scrollTo);
+    try {
+      const outcomes: string[] = [];
+      real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o));
+      expect(y).toBe(0);
+      expect(real.glideTarget()).toBeNull();
+      expect(outcomes).toEqual([]);
+      expect(beginJump(blocks, "spya-b0" as BlockId, () => {})).toBe(false);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(outcomes).toEqual(["cancelled"]);
+    } finally {
+      real.abandonScroll();
+      scrollTo.mockRestore();
+      tall.mockRestore();
+      scrollY.mockRestore();
+      leave();
+    }
+  });
+
+  it("still finishes an echo jump from part-way through the masthead", () => {
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockReturnValue(40);
+    const pushed: BlockId[] = [];
+    try {
+      expect(beginJump(blocks, "spya-b0" as BlockId, (id) => void pushed.push(id))).toBe(true);
+      expect(pushed).toEqual(["spya-b0"]);
+      expect(jumps).toEqual(["spya-b0"]);
+    } finally {
+      scrollY.mockRestore();
+    }
+  });
+
+  it("still has nowhere to go when that start is folded away (the control)", async () => {
+    /* b1 to b4 under one folded heading, and a plan whose starts are all inside it. */
+    const under: NavPlan = { starts: [[1, 4]] };
+    function Under() {
+      useArrowNav(under, blocks, 0);
+      return null;
+    }
+    const all = blocks.map((b, i) => (i === 3 ? block(3) : b));
+    setFoldArticle("slug", all);
+    toggleFold("spya-b0" as BlockId);
+    await act(async () => root.render(createElement(Under)));
+    up();
+    down();
+    expect(jumps).toEqual([]);
+  });
+
+  it("ends at the top of the page: the jump to an echo row measures no row", async () => {
+    const real = await vi.importActual<typeof import("../src/web/scroll.js")>("../src/web/scroll.js");
+    globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const leave = standOn(2, 1);
+    let y = 300;
+    /* Tall enough to scroll: `scrollToBlock` clamps to the page, and jsdom's
+       zero-height document would send every destination to 0. */
+    const tall = vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(5000);
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockImplementation(() => y);
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(((o: ScrollToOptions) => {
+      y = o.top ?? y;
+    }) as typeof window.scrollTo);
+    try {
+      const outcomes: string[] = [];
+      real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o));
+      expect(y).toBe(0);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(outcomes).toEqual(["settled"]);
+      /* The control: a visible row is measured, and it is not at the top. */
+      real.scrollToBlock("spya-b3", "auto");
+      expect(y).not.toBe(0);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o), { align: "centre" });
+      expect(y).toBe(0);
+      await act(async () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+      expect(outcomes).toEqual(["settled", "settled"]);
+      expect(real.arrivalAnchor()).toBeNull();
+      real.abandonScroll();
+      expect(isFolded("spya-b0")).toBe(true);
+    } finally {
+      real.abandonScroll();
+      scrollTo.mockRestore();
+      tall.mockRestore();
+      scrollY.mockRestore();
+      leave();
+    }
   });
 });
 
@@ -145,5 +315,167 @@ describe("measureRow with nothing to measure", () => {
     const { measureRow } = await import("../src/web/keynav.js");
     document.body.innerHTML = "";
     expect(measureRow()).toBe(0);
+  });
+});
+
+/**
+ * **A section that starts inside the shut front matter** (front-matter.ts;
+ * Greg, spya-duh4w3;
+ * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ * § Sections that start inside the run). The Structure prompt invites one
+ * node for the byline and the abstract together, so a section's first block
+ * can be a hidden row while the rest of it is on screen. `scrollToBlock` opens
+ * the run for whatever it is sent to, so the arrow keys must not send it
+ * there: they land on the section's first visible row, and step over a
+ * section that is wholly hidden.
+ *
+ * b0 is the title and the echo, b1 and b2 the front matter, b3 and b4 prose.
+ */
+describe("↑ / ↓ and the shut front matter", () => {
+  const press = (key: "ArrowUp" | "ArrowDown") =>
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    });
+  const echo = new Set(["spya-b0" as BlockId]);
+  const front = ["spya-b1", "spya-b2"] as BlockId[];
+
+  /** The reader on row `at`, with the first `hidden` rows drawn at no height. */
+  function standOn(at: number, hidden: number): () => void {
+    const table = document.createElement("table");
+    table.innerHTML = `<tbody>${blocks.map((b) => `<tr data-block="${b.id}"><td></td></tr>`).join("")}</tbody>`;
+    document.body.append(table);
+    const rows = [...table.querySelectorAll("tr")];
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const i = rows.indexOf(this as HTMLTableRowElement);
+      const top = i < 0 ? 0 : (Math.max(i, hidden) - at) * 100;
+      return { top, bottom: top + (i < hidden ? 0 : 100), height: i < hidden ? 0 : 100 } as DOMRect;
+    });
+    return () => {
+      spy.mockRestore();
+      table.remove();
+    };
+  }
+
+  async function nav(starts: number[]): Promise<void> {
+    const plan: NavPlan = { starts: [starts] };
+    function Nav() {
+      useArrowNav(plan, blocks, 0);
+      return null;
+    }
+    await act(async () => root.render(createElement(Nav)));
+  }
+
+  it("lands on the first visible row of a section that starts in the run, and leaves the run shut", async () => {
+    /* Sections start at b0, b2 (hidden, and it runs on through b3) and b4. */
+    setFoldArticle("slug", blocks, echo, front);
+    const leave = standOn(4, 3);
+    await nav([0, 2, 4]);
+    try {
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3"]);
+      expect(isFolded("spya-b2")).toBe(true);
+    } finally {
+      leave();
+    }
+  });
+
+  it("treats that first visible row as the section's start: ↑ from it goes to the one before", async () => {
+    setFoldArticle("slug", blocks, echo, front);
+    const leave = standOn(3, 3);
+    await nav([0, 2, 4]);
+    try {
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b0"]);
+    } finally {
+      leave();
+    }
+  });
+
+  it("steps over a section that is wholly inside the run, both ways", async () => {
+    /* Sections start at b0, b1 (b1 and b2: all hidden), b3 and b4. */
+    setFoldArticle("slug", blocks, echo, front);
+    const leave = standOn(4, 3);
+    await nav([0, 1, 3, 4]);
+    try {
+      press("ArrowUp");
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3", "spya-b0"]);
+      press("ArrowDown");
+      expect(jumps).toEqual(["spya-b3", "spya-b0", "spya-b3"]);
+    } finally {
+      leave();
+    }
+  });
+
+  it("steps to the run's own rows once the reader has opened it", async () => {
+    setFoldArticle("slug", blocks, echo, front);
+    toggleFrontMatter();
+    const leave = standOn(4, 1);
+    await nav([0, 2, 4]);
+    try {
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b2"]);
+    } finally {
+      leave();
+    }
+  });
+
+  /* **The run starts at block 0**: a web article imported with no title
+     heading (front-matter.ts § Where it starts). There is no echo; b0 and b1
+     are the run, and the first section starts on a hidden row. */
+  const fromTop = ["spya-b0", "spya-b1"] as BlockId[];
+
+  it("reaches the first section's first visible row when the run starts at block 0, and stops there", async () => {
+    /* Sections start at b0 (hidden; it runs on through b2) and b3. */
+    setFoldArticle("slug", blocks, new Set(), fromTop);
+    const leave = standOn(4, 2);
+    await nav([0, 3]);
+    try {
+      press("ArrowUp");
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3", "spya-b2"]);
+      /* The top: nowhere further up, and the key is left to the browser. */
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3", "spya-b2"]);
+      press("ArrowDown");
+      expect(jumps).toEqual(["spya-b3", "spya-b2", "spya-b3"]);
+      expect(isFolded("spya-b0")).toBe(true);
+      expect(isFolded("spya-b1")).toBe(true);
+    } finally {
+      leave();
+    }
+  });
+
+  it("steps over a first section that is the run and nothing else", async () => {
+    /* Sections start at b0 (b0 and b1: all hidden), b2 and b4. */
+    setFoldArticle("slug", blocks, new Set(), fromTop);
+    const leave = standOn(4, 2);
+    await nav([0, 2, 4]);
+    try {
+      press("ArrowUp");
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b2"]);
+      expect(isFolded("spya-b0")).toBe(true);
+    } finally {
+      leave();
+    }
+  });
+
+  it("still steps over the run when a real fold covers it (the control)", async () => {
+    /* No echo: b0 is an ordinary heading, folded over everything up to b3. */
+    setFoldArticle("slug", blocks, new Set(), front);
+    toggleFold("spya-b0" as BlockId);
+    const leave = standOn(4, 3);
+    await nav([0, 2, 3, 4]);
+    try {
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3"]);
+      press("ArrowUp");
+      expect(jumps).toEqual(["spya-b3", "spya-b0"]);
+    } finally {
+      leave();
+    }
   });
 });

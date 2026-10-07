@@ -2,11 +2,38 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ It transcribes twice](#it-transcribes-twice) — why live words are decoration and the second pass is a vocabulary
+- [§ Why not OpenAI](#why-not-openai) — which model transcribes, and what was measured
+- [§ The ums come out](#the-ums-come-out-and-nothing-else-does) — filler words, and why it is not a prompt line
+- [§ What is in the vocabulary](#what-is-in-the-vocabulary) — the five sources, the cap, the guards
+- [§ Adding a box somewhere else](#adding-a-box-that-takes-dictation-somewhere-else) — a new vocabulary place
+- [§ One capture](#one-capture-and-it-is-always-ours) — one microphone track, per-browser differences, the `[mic-offline]` fallback
+- [§ The gap](#what-the-reader-sees-in-the-gap) — readOnly box and the one-span replace
+- [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
+- [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
+- [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
+- [§ The hook does not know which server](#the-hook-does-not-know-which-server-it-is-talking-to) — the `transcribe` seam the fleet dashboard reuses
+- [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
+- [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
+- [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) — IndexedDB recovery, `keepDictation`
+- [§ The ways it fails](#the-ways-it-fails) — nine failure modes
+- [§ The codes](#the-codes) — every `[mic-…]` code and where it is raised
+- [§ Where the pieces are](#where-the-pieces-are) — file map
+- [§ What a browser pass could check](#what-a-browser-pass-could-and-could-not-check) (history)
+- [§ What is still open](#what-is-still-open) — unmeasured things
+- [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
+
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
-box. It is on eight boxes today — both profile boxes, the chat composer, the comment follow-up, the
+box. It is on ten boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
-([feedback.md](feedback.md)) and the note under an Illustrated picture
-([illustrated.md](illustrated.md#steering)) — and adding it to a ninth is three lines.
+([feedback.md](feedback.md)) and, for an admin, the box that replies to a question in its Earlier tab
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)),
+the note under an Illustrated picture
+([illustrated.md](illustrated.md#steering)) and the command bar's box
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)) — and adding
+it to an eleventh is three lines.
 
 This is **one-shot and one-way**. The other thing — a conversation, where you talk and it talks
 back and either of you can cut the other off — is a separate feature, not a setting on this one:
@@ -211,7 +238,7 @@ nothing rather than being conditionally skipped, so a recipe is only ever a list
 *source* is one entry in `SOURCES`: a name and an async function from a place to terms, which must
 never throw.
 
-`transcribeWith` takes the vocabulary as a plain string, so a caller that has words from somewhere
+`transcribeWith` takes the vocabulary as a plain list of terms, so a caller that has words from somewhere
 else entirely can send them without going near any of this.
 
 Every read is best-effort, wrapped, and bounded at 1.5 seconds. A reader who talks for a minute and
@@ -313,6 +340,61 @@ live phrases extend it, the transcript replaces it. On Safari and Firefox the sp
 sits at the caret, so "replace" is an insertion — two situations that look entirely different to
 the reader are one line of code with no branch to get wrong.
 
+## A double press on Stop also sends
+
+Greg, 2026-10-04 (`spya-rp8676`): *"if I'm in a feedback report and I double click the stop button,
+then it should also click send afterwards for me. And if I'm in chat or whatever and I double click
+the stop button, then it should automatically send that message after it's finished transcribing"*.
+
+A box hands `useDictationField` its own done action as **`onDone`**, and passes the field's `again`
+and `sendingAfter` on to `DictationButton` and `DictationStrip`. Six boxes send: Feedback (Send),
+Feedback's reply to a question (Send reply), chat (Send), the comment follow-up (Ask in chat), the
+quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the command bar, presses Enter (below). The plan, with what was deferred and why, is
+[261005a](../plans/261005a-dictation-double-press-on-stop-also-sends.md).
+
+- **The second press has to be able to land.** A `disabled` button is sent no click. So on a box
+  with `onDone`, **for 600 ms after Stop** (`DOUBLE_PRESS_MS`), the button stays enabled and is
+  named "Send when the words arrive"; its only press there is `again()`, and it never starts a
+  dictation. After that, or once the press is taken, it is `disabled` as it always was. The field
+  returns `again` only while a second press would count, which is the whole of how the button
+  knows. Not `aria-disabled`: that says "cannot be used" at the one moment it can (GPT Sol).
+- **Once taken, the strip says** *"Turning that into text, then sending…"*.
+- **It sends only where it was said.** A box that is reused across things — one comment dialog for
+  every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
+  not honoured on another. Feedback's key is whether it is open.
+- **It sends only a real transcript.** The done action runs only if that ending put the transcript
+  in the box. A failed upload, `[mic-silent]`, a recording too short to send, a transcript refused
+  because the box changed, and a later **Try again** send nothing, and the wish to send ends with
+  the ending it was made for.
+- **`onDone` runs from an effect, one render after the ending**, because every box's send closes
+  over its render's value and refuses while `busy`. Called from `onEnd` it would see the box from
+  before the transcript and refuse in silence.
+- **The box's own rules still apply.** `onDone` is the same function the Send button calls, so a
+  double press cannot send what a Send press would refuse. A box that stays mounted when shut must
+  refuse there too; Feedback checks `open`.
+- **Do not offer it while the done action would refuse.** The annotate box passes `onDone` only
+  once its comments have loaded, so a press is never taken and then dropped.
+
+**The command bar takes it too, and there it presses Enter** — Greg, 2026-10-05, on the question
+the plan left open:
+
+> Q-double-stop-elsewhere yes for the command bar
+
+Its `onDone` is `enter` in [`CommandBar.tsx`](../../src/web/CommandBar.tsx), the function the Enter
+key itself calls, so the double press cannot run anything Enter would not: a phrase that names a
+row runs that row (a row that writes or generates included, as Enter on it does), and a phrase that
+names nothing is asked about, with the answer drawn under **Did you mean** unless it is a sure pick
+that only moves the reader. The bar does not "send", so the button and the strip take
+`done="enter"` and say *"Press Enter when the words arrive"* and *"Turning that into text, then
+pressing Enter…"* (`DONE_WORDS` in `DictationStrip.tsx`). Like Feedback it stays mounted when shut:
+`onDone` checks `open`, and its `doneKey` is whether it is open. It is not offered while a run is
+`Starting…`, when Enter is refused. **The Illustrated note still has none**: it starts a paid
+repaint.
+
+Tests: `tests/dictation-double-stop-sends.test.tsx` for the field policy and button;
+`tests/dictation-double-stop-sends-real-hook.test.tsx` for the real hook ordering;
+`tests/command-bar-double-stop.test.tsx` for the command bar.
+
 ## When it hears nothing, and after
 
 **While the microphone is on and hears nothing**, the strip says *"No sound detected yet"* — ten seconds
@@ -334,10 +416,11 @@ message. The **×** on the audio row takes the error with it too.
 
 ```tsx
 const box = useRef<HTMLTextAreaElement>(null);
+const transcribe = useReaderTranscriber();
 const dictate = useDictationField({
   value, onChange, box,
   context: { kind: "article", slug },
-  transcribe: sendForTranscription,
+  transcribe,
   keep: keepDictation(`chat:${slug}`), // names this box; § A closed tab
 });
 
@@ -346,8 +429,10 @@ const dictate = useDictationField({
 <DictationStrip dictation={dictate.dictation} />
 ```
 
-`transcribe` is always `sendForTranscription` from
-[`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app, and it is a parameter rather
+`transcribe` comes from `useReaderTranscriber` in
+[`dictation-upload.ts`](../../src/web/dictation-upload.ts) in this app. It binds the upload to the
+reader the box was mounted for, before recording, tape draining or retries can outlive an account
+change. Each recording retains its first reader across retries. It is a parameter rather
 than something the hook imports — see [The hook does not know which server it is talking
 to](#the-hook-does-not-know-which-server-it-is-talking-to) below.
 
@@ -358,13 +443,19 @@ list from the client: a box adopting a microphone should not have to know how to
 vocabulary, and a vocabulary accepted from a caller is a string that caller chooses landing in a
 model prompt, for no gain, since the server has the glossary already.
 
-If the box is inside a form, guard the submit on `dictate.readOnly` — **and on
-`dictate.dictation.armed` as well**, which is not the same thing and is the guard everybody forgets.
+If the box is inside a form, guard the submit on **`dictate.busy`** — `readOnly || dictation.armed`,
+a field on the hook's result so that nobody writes the pair out (the half everybody forgets is
+`armed`).
 `readOnly` is `transcribing` alone, the two seconds *after* the reader presses stop; `armed` is the
 microphone actually being on. Guard only the first and ⌘+Enter mid-sentence sends the rough live
 guesses, or on Safari and Firefox sends nothing that was said at all. GPT Sol found it in the
 Feedback dialog, 2026-09-02; [`FeedbackDialog.tsx`](../../src/web/FeedbackDialog.tsx) is the worked
 example.
+
+**If the box sends, give it the double press**: `onDone: send` on the field (and `doneKey` if the
+box is reused across things), and
+`again={dictate.again} sendingAfter={dictate.sendingAfter}` on the button and the strip
+([§ A double press on Stop also sends](#a-double-press-on-stop-also-sends)).
 
 **And disable the button too, not only the guard.** A correct guard behind a lit button is a press
 that does nothing and says nothing — the worse half of the pair, because the reader has no way to
@@ -376,11 +467,37 @@ chat, the comment follow-up, annotate, quiz and Feedback — and
 the exception on purpose: ⌘+Enter there saves prose to a field the arriving transcript will overwrite
 a second later, and the next blur saves it again, so there is nothing to lose.
 
+**The guard is for a press, not for a box that is going away.** The annotate box stores a draft on
+its way out (the ×, Escape, another selection, an unmount), and that store has neither guard: the
+press is refused because better words are about to arrive, and at an exit nothing better will —
+unmounting aborts the transcription — so the choice is the words the reader could see, or none. The
+kept recording is still offered back in that passage's next box. Arbitrated by Opus, 2026-10-03;
+[comments.md § The box a selection opens](comments.md#the-selection-box).
+
 **And if the box lives in a component that stays mounted when it disappears** — a dialog whose
 parent renders it open *or* shut, as `FeedbackButton` does — closing it unmounts nothing, so
 `useDictation`'s cleanup never runs and the microphone keeps recording behind a shut dialog. One
 effect on the open flag fixes it, calling `dictation.toggle` (not the field wrapper's `toggle`,
 which puts the focus back into a box that is no longer on screen).
+
+**The command bar's box is the one where the guard covers more than a submit**
+([`CommandBar.tsx`](../../src/web/CommandBar.tsx) § `dictationBusy`). Its box is a filter, so Enter
+*and a click on any row* are refused while the microphone is `armed` or the box is `readOnly` — a
+half-heard phrase would otherwise run whichever row it happened to select — and the rows are dimmed
+and `aria-disabled` so the refusal is visible (GPT Sol, 2026-10-03). It is also a stays-mounted box:
+it stops the microphone on close as above, and hands the hook a `keep` only while open. Its strip
+sits *after* the bar's own status line, because the strip is a live region and the bar's sentence
+has to stay the first one. With no article around it the context is `{ kind: "profile" }`, which no
+production mount reaches today. Tests: `tests/command-bar-arguments.test.tsx`.
+
+A dictated sentence is in the box like a typed one, so when it matches no row it takes the typed
+one's path: the **Ask what you meant** button, or Enter, asks what it meant
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). The same
+guard refuses both while the microphone is busy. **The button is there because of dictation**: a
+dictation can finish with no phone keyboard on screen, as the reported iPhone run did, so there may
+be no Enter to press
+([261005f](../postmortems/261005f-an-action-offered-in-words-that-only-a-key-can-take.md)). Anything a
+dictated box offers next has to be something a finger can press.
 
 ## The hook does not know which server it is talking to
 
@@ -479,11 +596,34 @@ The rules that make it safe, each a decision in
   exists from the press, and the superseding abort runs on every browser, not only where there is a
   recogniser.
 
-**The ceiling on a whole dictation stays at five minutes** (`MAX_MS`), and hitting it ends the
-dictation and transcribes what was said, under `[mic-full]` with a sentence that is now true. Not
-higher, although parts would allow it: five minutes of speech is about what the largest box —
-Feedback's 4,000 characters — holds, and the other boxes take 600 to 4,000. A ceiling sized from
-each box's own limit is the later refinement.
+**The ceiling on a whole dictation is fifteen minutes** (`MAX_MS`), and hitting it ends the
+dictation and transcribes what was said, under `[mic-full]`. It was five until 2026-10-07, sized to
+what Feedback's box then held, and Greg met it there in the middle of a long thought
+(`spya-n8cuqq`):
+
+> if you're ever going to cut me off like that, you should give me some kind of feedback of some
+> kind. But more importantly, let's make sure if there is going to be a cap, let's make it at least
+> 15 minutes.
+
+**So it cannot arrive unnoticed.** There had been a sentence, in small type, shown once the
+microphone was already off, and somebody thinking aloud is not looking at the box. Now, in the last
+minute (`CAP_WARNING_MS`), the strip takes its warning look and counts down, *"Dictation stops in
+0:45"*; a rising two-note chime plays when that minute starts and a falling three-note one at the
+cap ([`quiet-chime.ts`](../../src/web/quiet-chime.ts)), each once; and the `[mic-full]` sentence
+stays after the words arrive. **There is one deadline and the tape owns it**: `endsAt`, which the
+strip counts down to, the timer is set for, and every arriving chunk is checked against, because a
+timer in a throttled tab or on a laptop that slept fires late. The cap happens once. A warning
+chime that would arrive more than five seconds late is dropped, and the cap's chime plays only once
+the track is off, so it is not on the tape. A press on Stop within a second and a half of the cap is
+ignored: the countdown invites it, and it used to start a new dictation and abort the uploads of the
+one just recorded. A screen reader is told once, not each second. The fleet dashboard gets the cap and the chimes with the hook, and its own strip counts down
+too. Feedback's limit went from 4,000 to 12,000 characters the same day
+([feedback.md](feedback.md)). **That is about thirteen minutes of speech without a pause, not
+fifteen**: 12,072 is what the database admits, and raising that is a question put to Greg in the
+plan. Past it the words stay in the box and Send is off until they are trimmed. The other boxes keep
+their own limits: a long dictation into a small one overflows it, as it did before. A cap is still there because a microphone left on
+by mistake records, uploads and is billed for as long as it runs.
+[261007b](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md).
 
 **What is not verified.** A spike on the box (plan § The spike) rotated five parts in Chrome 152
 and Chromium 151: every part decoded on its own, and a seam loses **up to ~70 ms** — the old
@@ -533,7 +673,7 @@ passed over, and GPT Sol's review.
   [`transcriber.ts`](../../src/web/transcriber.ts) is types only; the product passes
   `keep: keepDictation("<box>")` from [`dictation-keep.ts`](../../src/web/dictation-keep.ts), and
   the fleet dashboard passes nothing and is unchanged. **A new box adds that one line**, naming
-  itself: `feedback`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
+  itself: `feedback`, `feedback-reply`, `chat:<slug>`, `comment:<id>`, `annotate:<block>:<start>`,
   `quiz:<slug>:<question>`, `profile:<field>`. A recording is offered back only in the box it was
   made in, to the reader who made it, and is transcribed against the `where` it was recorded with.
 - **Web Locks decide which tab may offer it.** The page holding a tape holds a lock named for it,
@@ -541,6 +681,8 @@ passed over, and GPT Sol's review.
   offered by another, and a dead tab's tape is offered by one page only. No Web Locks, no keeping.
 - **Feedback keeps only while open**, because the dialog is mounted on every page whether or not it
   is showing — a keeper there while shut would let a background tab claim the recording invisibly.
+  Its reply box keeps only while it can be seen, for the same reason (`ReplyBox` in
+  [`FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx)).
 - **The row says so only when it is true.** "The audio is kept on this device, even if you close the
   page" appears only when every write landed (`KeptTape.intact()`); a failed keeper is never
   described as holding anything, and never touches the dictation.
@@ -554,9 +696,12 @@ passed over, and GPT Sol's review.
   (`sweepDictations`, at startup). Not on a lapsed session. [privacy.md § On the reader's own
   device](privacy.md#on-the-readers-own-device-until-the-words-arrive).
 
-**Not covered**: the words once they are in the box. The audio is forgotten when the transcript
-lands, so a tab that dies between that and Send loses the text as it would lose typed text. Keeping
-the Feedback draft itself is the next step, and is named in the plan.
+**Usually not covered**: the words once they are in the box. The audio is forgotten when the
+transcript lands, so a tab that dies between that and Send loses the text as it would lose typed
+text. The annotate box is the one exception for an ordinary close or reload: its `pagehide` handler
+makes a best-effort save of the visible field ([comments.md § The box a selection
+opens](comments.md#the-selection-box)); a crash or killed browser still fires no event. Keeping the
+Feedback draft itself is the next step, and is named in the plan.
 
 ## The ways it fails
 
@@ -646,7 +791,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | | |
 |---|---|
 | `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
-| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the five-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
+| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |
@@ -746,14 +891,11 @@ once for that origin. And the origin includes the port, which Vite moves.
 ## This is not two-way voice
 
 Worth saying plainly, because the UI implies otherwise. The chat composer's button says **"Talk"**
-and flips to **"Listening…"**, and Remember mode wears a `Speech` icon under *"Say what you took
-from this…"* — but every one of those is this feature: audio in, text out. **The app has never played a
-sound.** There is no text-to-speech, no WebRTC, no WebSocket, and no speech-to-speech anywhere.
-
-A voice-dialogue feature would be entirely greenfield, and the accounting for it has already been
-decided in [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the OpenAI
-Realtime API cannot go through OpenRouter, so it would be the first paid call in the product that
-does not.
+and flips to **"Listening…"** — but that is this feature: audio in, text out, nothing spoken back.
+The two-way kind is a separate button, **Live**, in [live-conversation.md](live-conversation.md); its
+accounting is [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the
+OpenAI Realtime and GPT-Live APIs cannot go through OpenRouter, so Live is the paid feature in the
+product that calls OpenAI directly.
 
 ## See also
 

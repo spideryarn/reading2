@@ -71,7 +71,7 @@ vi.mock("../src/web/lib/api.js", () => {
   return api;
 });
 
-const { useLinkFacts } = await import("../src/web/link-facts.js");
+const { blockOfLink, useLinkFacts } = await import("../src/web/link-facts.js");
 
 function aLink(url: string): LinkPreview {
   return {
@@ -120,6 +120,60 @@ it("asks for a summary for a link in a paragraph", async () => {
   expect(summaries).toHaveLength(1);
   /* And it says which mention, which is the other half of the same rule. */
   expect(summaries[0]).toContain("block=spya-aaaaaa");
+});
+
+/**
+ * **A chat answer drawn as a card in the Marginalia column is inside its
+ * block's row and is still not that block's prose.**
+ *
+ * Since docs/plans/261004k-block-chat-as-a-card-in-the-marginalia-column.md the
+ * conversation's `<aside>` sits in a host in the anchor block's `td.text`. A
+ * rule that reads "which paragraph" off the nearest row would make every link
+ * in the answer the anchor paragraph's own — and an answer about a paragraph
+ * very often cites the page that paragraph links to, which is exactly the URL
+ * the server has a paragraph-relative summary for. GPT Sol on the plan, F7.
+ */
+function rowWithCard(url: string): { inProse: Element; inChat: Element; remove(): void } {
+  const table = document.createElement("table");
+  table.innerHTML = `<tbody><tr data-block="spya-crdlk1"><td class="text">
+      <div class="prose"><p>See <a href="${url}">the paper</a>.</p></div>
+      <div data-chat-card-host="" data-marg-note="">
+        <aside class="chat-dialog in-column"><div class="chat-turn">
+          <a class="cited-link" href="${url}">the paper</a>
+        </div></aside>
+      </div>
+    </td></tr></tbody>`;
+  document.body.append(table);
+  const inProse = table.querySelector(".prose a");
+  const inChat = table.querySelector("a.cited-link");
+  if (!inProse || !inChat) throw new Error("fixture did not build");
+  return { inProse, inChat, remove: () => table.remove() };
+}
+
+it("reads a link in the prose as its row's, and the same link in the chat card as nobody's", () => {
+  const { inProse, inChat, remove } = rowWithCard("https://destination.example/both-places");
+  try {
+    expect(blockOfLink(inProse)).toBe("spya-crdlk1");
+    expect(blockOfLink(inChat)).toBeNull();
+    expect(blockOfLink(null)).toBeNull();
+  } finally {
+    remove();
+  }
+});
+
+it("does not ask for the anchor paragraph's summary for a chat link in the card", async () => {
+  asked.length = 0;
+  const url = "https://destination.example/cited-in-the-card-and-the-paragraph";
+  const { inChat, remove } = rowWithCard(url);
+  try {
+    await hover(url, blockOfLink(inChat));
+    /* The card still opens and the preview still lands: hover cards are not
+       switched off in the chat card, only the paragraph-relative half. */
+    expect(asked.some((path) => path.startsWith("/api/link-preview"))).toBe(true);
+    expect(asked.filter((path) => path.startsWith("/api/link-summary"))).toEqual([]);
+  } finally {
+    remove();
+  }
 });
 
 it("does not ask for one for a link that is in no paragraph", async () => {

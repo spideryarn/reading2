@@ -96,6 +96,7 @@ describe("the stamp stage 3 writes", () => {
         power: "standard",
         slug: "a-slug",
         report: () => {},
+        preview: () => {},
         signal: new AbortController().signal,
         cacheArticle: false,
       },

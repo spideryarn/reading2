@@ -24,7 +24,7 @@
  *
  * Until 2026-09-05 `load-article.ts` built a `createFsArtifactStore` over the
  * fixture root and handed it to `copyArtefacts` as the source. Measured by
- * [`scripts/store-migration-witness.ts`](../../scripts/store-migration-witness.ts)
+ * the store-migration witness script (deleted 2026-10-06)
  * on 2026-09-04, **56 test files executed `createFsArtifactStore` and only 14
  * of them named it**: the other ~42 inherited it from that single line, through
  * `scratchArticleInPg`. It was the largest single thing keeping
@@ -51,7 +51,7 @@
  * so a path this table got wrong makes a step's artefacts unreadable, shortens
  * `copied`, and reddens them by name: `chat-library-exclusion`, `chat-route`,
  * `comment-referee-mark`, `helpers-load-article`, `referee-routes-postgres`,
- * `remember-route`, `routes`, `store-block-roles-pg`, `store-parity`. See
+ * `learn-route`, `routes`, `store-block-roles-pg`, `store-parity`. See
  * `LoadedArticle.copied` in `./load-article.ts` for why that return value exists.
  *
  * **But an assertion can only reach a row the corpus populates**, and that is a
@@ -269,6 +269,16 @@ async function readArtefact(
   step: StepName,
   kind: ArtifactKind,
 ): Promise<unknown | null> {
+  /* **No fixture holds a difficulty rating, and one that has blocks reads as
+     unrated** — the answer Postgres gives for a revision with blocks and
+     nothing in its five rating columns (src/store/artifacts-pg.ts §
+     `readReadingDifficulty`). Without it `copyArtefacts` would refuse every
+     fixture as holding some but not all of what `blocks` produces. Absent when
+     the blocks are, so a slug the fixture has never heard of still copies
+     nothing. Plan 261005j. */
+  if (step === "blocks" && kind === "readingDifficulty") {
+    return (await readArtefact(at, step, "blocks")) === null ? null : { rated: false };
+  }
   const where = LAYOUT[step][kind];
   if (!where) throw new Error(`${step} does not produce ${kind}`);
   const file = where(at);

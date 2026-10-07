@@ -114,8 +114,7 @@ import {
   platedScenes,
   readModelBrief,
 } from "./illustrated-plate.js";
-import { MODEL_REFUSED } from "./messages.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { finishedText, streamMessage } from "./messages-stream.js";
 import { type Effort, generatorFor, type ModelPower } from "./models.js";
 import { parseJsonAnswer } from "./parse-json.js";
 import {
@@ -125,7 +124,7 @@ import {
 } from "./messages-structured-output.js";
 import { hashProfile, profileSection } from "./profile.js";
 import type { Sketch, SketchItem, SketchScene } from "./sketch-scene.js";
-import { budgetFor, truncationFailure } from "./token-budget.js";
+import { budgetFor } from "./token-budget.js";
 import type { Meta } from "./types.js";
 import { plainWords } from "./plain-words.js";
 import { paperwork } from "./paperwork.js";
@@ -183,6 +182,20 @@ export const PROMPT_VERSION = ILLUSTRATED_VERSION;
  * bytes are, and src/illustrated-image.ts decides whether that is allowed.
  */
 export const IMAGE_MODEL = "google/gemini-3.1-flash-image";
+
+/**
+ * The answer the brief asks room for. Generous rather than tight, and the spike
+ * is why: the first attempt truncated at 8,000 output tokens and lost the whole
+ * pass, while 24,000 was comfortable at 6,302 actual — for ONE plate. Four
+ * plates of vignettes and 500-word compositions need several times that, and
+ * undersizing does not degrade here, it throws and loses everything.
+ *
+ * Exported so tests/jobs-lease-budget.test.ts can pin the known gap: at the
+ * measured Sonnet `STREAM_TOKENS_PER_SECOND`, its full-token time estimate
+ * exceeds a claim (src/jobs.ts § `STEP_BUDGET_MS.illustrated`). This is not
+ * a wall-clock bound, nor a claim that every brief takes that long.
+ */
+export const ILLUSTRATED_ANSWER_TOKENS = 32_000;
 export const ASPECT_RATIO = "2:3";
 export const RESOLUTION = "1K";
 
@@ -1149,12 +1162,7 @@ export async function generateIllustrated(opts: {
   const draw = opts.draw ?? drawWithGateway;
   const figures = opts.figures ?? [];
 
-  /* Generous rather than tight, and the spike is why: the first attempt
-     truncated at 8,000 output tokens and lost the whole pass, while 24,000 was
-     comfortable at 6,302 actual — for ONE plate. Four plates of vignettes and
-     500-word compositions need several times that, and undersizing does not
-     degrade here, it throws and loses everything. */
-  const answerTokens = 32_000;
+  const answerTokens = ILLUSTRATED_ANSWER_TOKENS;
   const maxTokens = budgetFor("illustrated", answerTokens);
 
   const briefStarted = Date.now();
@@ -1208,21 +1216,11 @@ export async function generateIllustrated(opts: {
   } catch (err) {
     throw anthropicCallFailed(err);
   }
-  if (wasRefused(message)) throw new Error(MODEL_REFUSED.message);
-  if (message.stop_reason === "max_tokens") {
-    throw truncationFailure("illustrated", maxTokens, answerTokens, {
-      outputTokens: message.usage.output_tokens,
-      answerChars: message.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .reduce((n, b) => n + b.text.length, 0),
-    });
-  }
+  /* A refusal here was thrown undeclared until 2026-10-04 and the reader got
+     the generic sentence. `finishedText` is where it is declared now. */
+  const raw = finishedText(message, "illustrated", maxTokens, answerTokens);
   const briefMs = Date.now() - briefStarted;
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
 
   /* **Every block's own text, keyed by its own id** — one structure rather than
      an id list plus a lookup beside it, for the reason

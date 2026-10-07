@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Comment, ThreadSummary } from "../src/types.js";
 import { type AskedQuestion, orderDrawer } from "../src/web/comment-nav.js";
 import { Dock, fitSignature } from "../src/web/Dock.js";
-import { askedQuestions } from "../src/web/useChatAnchors.js";
+import { askedBesideCard, askedQuestions } from "../src/web/useChatAnchors.js";
 import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 import { EXPERIMENTAL_OFF } from "./helpers/experimental-fixtures.js";
 
@@ -82,7 +82,7 @@ describe("askedQuestions", () => {
       { ...base, id: "a", kind: "chat", anchor: { blockId: FIRST } },
       { ...base, id: "b", kind: "chat", anchor: { blockId: SECOND, quote: "q", start: 2 } },
       { ...base, id: "c", kind: "chat" },
-      { ...base, id: "d", kind: "remember", anchor: { blockId: FIRST } },
+      { ...base, id: "d", kind: "learn", anchor: { blockId: FIRST } },
     ];
     const got = askedQuestions(summaries, []);
     expect(got.map((q) => q.id)).toEqual(["a", "b"]);
@@ -99,6 +99,23 @@ describe("askedQuestions", () => {
     ];
     const got = askedQuestions(summaries, [{ ...COMMENT, threadId: "from-comment" }]);
     expect(got.map((q) => q.id)).toEqual(["from-gutter"]);
+  });
+});
+
+/* Plan 261004k § 6: while a conversation is drawn as a card in the Marginalia
+   column, the margin's own *Question* line for it is dropped — the block would
+   say it directly above the card that is that question. The margin's list
+   only; the drawer keeps listing it. */
+describe("askedBesideCard", () => {
+  const list: AskedQuestion[] = [HELP, SELECTED];
+  it("drops the conversation the card is showing, and nothing else", () => {
+    expect(askedBesideCard(list, HELP.id).map((q) => q.id)).toEqual([SELECTED.id]);
+    expect(askedBesideCard(list, "thr-not-in-the-list").map((q) => q.id)).toEqual([HELP.id, SELECTED.id]);
+  });
+
+  it("is the same list, by identity, when there is no card: the margin's memo must hold", () => {
+    expect(askedBesideCard(list, null)).toBe(list);
+    expect(askedBesideCard(list, "thr-not-in-the-list")).toBe(list);
   });
 });
 
@@ -221,7 +238,8 @@ describe("the Comments drawer lists the questions the reader asked", () => {
   });
 
   it("changes the fit signature when a question takes the visible count from 9 to 10", () => {
-    const rest = [[], undefined, undefined, undefined] as const;
+    /* No modes drawn and none under More: this is about the chip. */
+    const rest = [{ drawn: [], menu: [] }, undefined, undefined, undefined] as const;
     const nine = fitSignature(...rest, { comments: [], count: 9 }, null, false);
     const ten = fitSignature(...rest, { comments: [], count: 10 }, null, false);
     expect(nine).toContain("|9|");

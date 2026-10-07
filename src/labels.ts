@@ -54,15 +54,20 @@
  * A label's documented job is to tell its paragraph apart from its neighbours
  * (docs/project/structure-step.md), so every pair a reader compares must have
  * been written in the same call. `planBatches` therefore packs whole sibling
- * sets and never splits one. Batching on a token window instead would break
- * exactly that and nothing else, which is why it would be hard to notice.
+ * sets while the packed batches can be asked. Batching on a token window instead
+ * would break exactly that and nothing else, which is why it would be hard to notice.
+ *
+ * **One exception, since 2026-10-06, and it is not a preference.** A section
+ * in a batch no single answer could hold is asked about in windows, because
+ * the other choice was no labels for it at all, and until then no model tree
+ * for the article either. See `planBatches`.
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
 import PQueue from "p-queue";
 import { createHash } from "node:crypto";
 import { underCacheFloor } from "./article-prompt.js";
-import { streamMessage, wasRefused } from "./messages-stream.js";
+import { messageText, streamMessage, wasRefused } from "./messages-stream.js";
 import { generatorFor, type ModelPower, modelFor } from "./models.js";
 import { stageFailure } from "./job-failure.js";
 import { codeOfMessage, kindOfMessage, MODEL_REFUSED } from "./messages.js";
@@ -78,7 +83,8 @@ import { isBodyEvidence, isStructural } from "./block-policy.js";
 import { log } from "./log.js";
 import type { CheckpointStore } from "./store/checkpoints.js";
 import { hashBlocks, structureHash } from "./source-hash.js";
-import { budgetFor, truncatedMessage } from "./token-budget.js";
+import { isSupplementNode } from "./supplement.js";
+import { budgetFor, TooLongForOnePass, truncatedMessage } from "./token-budget.js";
 import type { Block, NodeId, Tree, TreeNode } from "./types.js";
 import { plainWords } from "./plain-words.js";
 
@@ -316,6 +322,16 @@ const EFFORT = "low" as const;
 export const LABEL_HEADROOM = 16_000;
 
 /**
+ * The reservation a truncated batch is re-drawn with: room to think, twice
+ * over. The one home of "the retry's headroom", because two readers must
+ * agree on it: `generateLabels` sends the re-draw with it, and `planBatches`
+ * asks whether a batch would fit *with it* before planning one. A batch whose
+ * first call fits and whose only retry could not be sent is not a batch we can
+ * stand behind.
+ */
+export const LABEL_RETRY_HEADROOM = LABEL_HEADROOM * 2;
+
+/**
  * How many gistable blocks a batch aims for, and the most it will take.
  *
  * Sibling sets are packed until adding the next one would pass this, so batches
@@ -348,13 +364,16 @@ export const LABEL_HEADROOM = 16_000;
  * `MIN_BATCH` cannot be shift-checked, so it is not a batch we are able to
  * stand behind — see `MIN_BATCH`, and `acceptGap`. And the small call is not
  * cheap: on the corpus here it is where three of fourteen articles put their
- * tail. So the merge happens and it does breach this cap, by at most
- * `MIN_BATCH - 1` blocks — 71 on the widest real case measured. That is the same
- * trade the paragraph above already makes for an oversized sibling set: the cap
- * is a preference, and the things it gives way to are the sibling rule and now
- * this.
+ * tail. So the merge happens and adds at most `MIN_BATCH - 1` blocks to the
+ * preceding batch, which the floor may already have taken past the cap.
+ * The widest real case measured was 71 blocks. The cap is a
+ * preference, and the things it gives way to are the sibling rule (a section
+ * larger than this still gets one call to itself) and now this.
+ *
+ * It is also the size of a window, when `planBatches` has to cut a section no
+ * one call could label.
  */
-const MAX_BATCH = 60;
+export const MAX_BATCH = 60;
 
 /**
  * What `detectShift` needs before it is allowed to fail a batch.
@@ -418,7 +437,7 @@ const SHIFT_OWN_CEILING = 0.3;
  * residue is `acceptGap`'s to refuse, and it is why the refusal is not deleted
  * now that this exists.
  */
-const MIN_BATCH = ((): number => {
+export const MIN_BATCH = ((): number => {
   for (let n = 1; n <= MAX_BATCH; n++) {
     if (n - droppedBudget(n) >= MIN_SHIFT_EVIDENCE) return n;
   }
@@ -431,7 +450,15 @@ const CONCURRENCY = 4;
 /** One block of the article either side of a batch, for flow. Not labelled. */
 const CONTEXT_BLOCKS = 1;
 
-/** A lowest-level section and the blocks it holds — the unit that cannot be split. */
+/**
+ * A lowest-level section and the blocks it holds: the unit that is not split
+ * while its packed batch can be asked.
+ *
+ * **Or one window of such a section**, when no call could hold the plan it
+ * would be part of (`planBatches`). Windows of one section share its `nodeId`,
+ * `crumb` and `gist` and differ in `blocks`, so `nodeId` does not identify a
+ * set; its blocks do.
+ */
 export interface SiblingSet {
   nodeId: NodeId;
   /** Root-to-here titles, so a batch knows where in the article it is. */
@@ -658,12 +685,81 @@ export interface CompletedLabelsFile extends LabelsManifest {
 export type LabelsFile = PendingLabelsFile | CompletedLabelsFile;
 
 /**
+ * `[lo, hi]` as consecutive windows of at most `max` items, near-equal, and at
+ * least `atLeast` of them (the caller guarantees that many items). A window
+ * does not end on a heading where it can help it: the heading opens the next
+ * one. It cannot help it when the window would otherwise be empty.
+ *
+ * One home for two callers who must cut alike: the bounded headings tree
+ * (src/heading-tree.ts), whose windows become sections, and `planBatches`,
+ * whose windows are only calls.
+ */
+export function cutIntoWindows(
+  seg: { lo: number; hi: number },
+  opts: { max: number; atLeast: number; isHeading: (index: number) => boolean },
+): { lo: number; hi: number }[] {
+  const out: { lo: number; hi: number }[] = [];
+  let lo = seg.lo;
+  for (let owed = opts.atLeast; ; owed--) {
+    const left = seg.hi - lo + 1;
+    const count = Math.max(owed, Math.ceil(left / opts.max));
+    if (count <= 1) {
+      out.push({ lo, hi: seg.hi });
+      return out;
+    }
+    let hi = lo + Math.ceil(left / count) - 1;
+    while (hi > lo && opts.isHeading(hi)) hi--;
+    out.push({ lo, hi });
+    lo = hi + 1;
+  }
+}
+
+/** One sibling set as windows of at most `max` blocks, each a set of its own under the same node. */
+function windowsOf(set: SiblingSet, max: number): SiblingSet[] {
+  return cutIntoWindows(
+    { lo: 0, hi: set.blocks.length - 1 },
+    { max, atLeast: 1, isHeading: (i) => isHeading(set.blocks[i]!) },
+  ).map(({ lo, hi }) => ({ ...set, blocks: set.blocks.slice(lo, hi + 1) }));
+}
+
+/**
  * Cut the tree into calls.
  *
  * Pure, and separately testable, because everything that can go quietly wrong
  * with this design goes wrong here: a sibling set split across two calls, a
  * block that lands in no call at all, or one that lands in two. None of those
  * would throw. See tests/labels-batching.test.ts.
+ *
+ * **No batch it returns is too long to ask, and "ask" includes the re-draw**
+ * (at the default `max`; a caller's own cap past what one answer holds is the
+ * caller's). A truncated batch is asked for again with `LABEL_RETRY_HEADROOM`,
+ * so that is the budget a batch must fit: 1,741 blocks today, where the first
+ * call alone would take 2,032. That is a promise about
+ * the finished plan and not about a section, because the floor and the tail
+ * merge below join sets: a section one call could just hold became a call none
+ * could beside a one-paragraph neighbour (GPT Sol, F1 of
+ * docs/plans/261005j-stage-1a-rest-plan-review-sol.md). So the rule reads the
+ * plan: pack as always; if a batch could not be asked, cut every section in it
+ * that is over `max` into windows and pack again, until none is left. A plan
+ * with no such batch is returned from the first packing untouched, which is
+ * what keeps every ordinary article's batches, and so its checkpoint keys,
+ * exactly what they were.
+ *
+ * **Plans with a packed batch of 1,742 to 2,032 blocks moved on 2026-10-06**,
+ * the day after windows arrived, and their stored batches are bought again.
+ * Accepted: such a batch's first call fitted but its only retry threw
+ * `TooLongForOnePass` before it was sent, so one truncated answer lost the
+ * article's labels (GPT Sol, A1 of
+ * docs/plans/261005j-stage-1a-rest-A-code-review-sol.md).
+ *
+ * What a windowed section gives up is the sibling rule, for that section: its
+ * labels are written without the far windows in view, so two can come out
+ * alike. Until 2026-10-06 the structure step threw the model's whole tree away
+ * instead (`labels-could-not-ask`), which cost the reader every gist.
+ *
+ * Not done: cutting a section between `max` and that limit in an askable batch.
+ * It would be the better call (see `oversizedSets`), and it would move the batches
+ * of trees that label fine today.
  */
 export function planBatches(
   tree: Tree,
@@ -671,14 +767,34 @@ export function planBatches(
   opts: { max?: number } = {},
 ): Batch[] {
   const max = opts.max ?? MAX_BATCH;
-  /* **The floor gives way to the caller's own cap**, rather than overriding it.
-     A caller that asks for batches of ten — which is the evals and the tests,
-     never the pipeline — is asking for something smaller than `detectShift` can
-     read, and silently handing back batches of thirteen would be answering a
-     different question from the one asked. Those batches are then exactly the
-     ones `acceptGap` refuses to keep a gap in, which is the right answer to
-     "you asked for a batch nothing can check". */
-  const min = max >= MIN_BATCH ? MIN_BATCH : 0;
+  let sets = siblingSets(tree, blocks);
+  /* A window is not cut again, so each round cuts a section of the tree or
+     ends, and the loop cannot outlive the tree's sections whatever
+     `windowsOf` returns. */
+  const windows = new Set<SiblingSet>();
+  for (;;) {
+    const batches = packSets(sets, blocks, max);
+    const tooLong = new Set(
+      batches
+        .filter((batch) => !canAskFor(batch.blocks.length))
+        .flatMap((batch) => batch.sets)
+        .filter((set) => set.blocks.length > max && !windows.has(set)),
+    );
+    if (tooLong.size === 0) {
+      assertCoversEveryBlock(batches, blocks);
+      return batches;
+    }
+    sets = sets.flatMap((set) => {
+      if (!tooLong.has(set)) return [set];
+      const cut = windowsOf(set, max);
+      for (const window of cut) windows.add(window);
+      return cut;
+    });
+  }
+}
+
+/** The tree's sibling sets, in document order: one per lowest-level section with something to label. */
+function siblingSets(tree: Tree, blocks: Block[]): SiblingSet[] {
   const order = new Map(blocks.map((b, i) => [b.id, i]));
 
   /* The sections are the internal nodes whose children are all leaves. Reading
@@ -687,9 +803,14 @@ export function planBatches(
   const sets: SiblingSet[] = [];
   const walk = (id: NodeId, crumb: string[]): void => {
     const node = tree.nodes[id];
-    if (!node || node.children.length === 0) return;
+    if (!node || isSupplementNode(node) || node.children.length === 0) return;
     const here = node.title ? [...crumb, node.title] : crumb;
-    const children = node.children.map((c) => tree.nodes[c]).filter((c): c is TreeNode => !!c);
+    /* Appending apparatus to a root-only body tree puts supplement branches
+       beside its body leaves. They have no labels to buy and must not hide
+       that leaf sibling set from the all-leaves test. */
+    const children = node.children
+      .map((c) => tree.nodes[c])
+      .filter((c): c is TreeNode => !!c && !isSupplementNode(c));
     const allLeaves = children.every((c) => c.children.length === 0);
 
     if (allLeaves) {
@@ -706,6 +827,20 @@ export function planBatches(
   walk(tree.rootId, []);
 
   sets.sort((a, b) => (order.get(a.blocks[0]!.id) ?? 0) - (order.get(b.blocks[0]!.id) ?? 0));
+  return sets;
+}
+
+/** Whole sets, in order, into batches: full at `max`, and none left too small to check. */
+function packSets(sets: SiblingSet[], blocks: Block[], max: number): Batch[] {
+  /* **The floor gives way to the caller's own cap**, rather than overriding it.
+     A caller that asks for batches of ten — which is the evals and the tests,
+     never the pipeline — is asking for something smaller than `detectShift` can
+     read, and silently handing back batches of thirteen would be answering a
+     different question from the one asked. Those batches are then exactly the
+     ones `acceptGap` refuses to keep a gap in, which is the right answer to
+     "you asked for a batch nothing can check". */
+  const min = max >= MIN_BATCH ? MIN_BATCH : 0;
+  const order = new Map(blocks.map((b, i) => [b.id, i]));
 
   const batches: Batch[] = [];
   let current: SiblingSet[] = [];
@@ -749,8 +884,9 @@ export function planBatches(
        taking sets. That can carry a batch past `max`, by less than `MIN_BATCH`,
        and that is the intended trade rather than an oversight.
 
-       A set larger than `max` still gets a call of its own rather than being
-       cut: the cap is a preference, the sibling rule is not. */
+       A set larger than `max` still gets a call of its own here rather than
+       being cut. Whether that call can be asked at all is `planBatches`'s
+       question, one level up, and it is the only thing that cuts a set. */
     if (count >= min && count + set.blocks.length > max) close();
     current.push(set);
     count += set.blocks.length;
@@ -762,9 +898,8 @@ export function planBatches(
      last one is whatever was left when the sets ran out, and there was nothing
      after it to take. So it is merged backwards into the batch before it — the
      move the removed minimum's comment rejected for want of a principle, and
-     `MIN_BATCH` is the principle. Whole sets move, so the sibling rule is
-     untouched, and `close` recomputes `setStarts` and `span` from the merged
-     list rather than splicing them.
+     `MIN_BATCH` is the principle. Whole sets move, and `close` recomputes
+     `setStarts` and `span` from the merged list rather than splicing them.
 
      One pass is enough and a loop would be misleading: after this there is at
      most one batch under `min`, and it is the single-batch case — a whole
@@ -782,19 +917,53 @@ export function planBatches(
     close();
   }
 
-  assertCoversEveryBlock(batches, blocks);
   return batches;
+}
+
+/** What an answer labelling `count` blocks is expected to cost. */
+const labelAnswerTokens = (count: number): number => 200 + count * 55;
+
+/**
+ * The `max_tokens` of one labels call over `count` blocks, and it throws
+ * `TooLongForOnePass` where no call could hold the answer. The one home of
+ * that sum: `runBatch` sizes its call with it, and `planBatches` asks it
+ * whether a batch can be asked at all before planning one.
+ */
+export function labelCallBudget(count: number, headroom: number = LABEL_HEADROOM): number {
+  return budgetFor("nav labels", labelAnswerTokens(count), headroom);
+}
+
+/** Could a labels call for `count` blocks be asked, and asked again if it came back truncated? */
+function canAskFor(count: number): boolean {
+  try {
+    labelCallBudget(count, LABEL_RETRY_HEADROOM);
+    return true;
+  } catch (err) {
+    if (err instanceof TooLongForOnePass) return false;
+    throw err;
+  }
+}
+
+/**
+ * The planned batches of `tree` whose call, or its re-draw after a truncation,
+ * would be refused as too long for one answer. **Empty for every tree since 2026-10-06**, when `planBatches`
+ * began cutting such a section into windows; the structure step used to ask
+ * this and fall back to the headings tree. Kept as the measure of that promise:
+ * the tests and the long-document evals still ask it.
+ */
+export function unaskableBatches(tree: Tree, blocks: Block[]): Batch[] {
+  return planBatches(tree, blocks).filter((batch) => !canAskFor(batch.blocks.length));
 }
 
 /**
  * A sibling set larger than `MAX_BATCH` is the unbounded call coming back.
  *
- * `planBatches` will not cut one — the sibling rule outranks the cap — so a tree
- * with one enormous section produces one enormous call, and the ceiling of this
- * stage becomes the largest section the structure model happened to emit rather
- * than the ~1,976 blocks the budget refuses at. Nothing else notices: the budget
- * for a 400-label batch is well under the cap, so it runs, and 400 labels in one
- * answer is the shape that dropped one at 42.
+ * `planBatches` keeps one whole while its packed batch can be asked — the sibling
+ * rule outranks the cap — so a tree with one enormous section produces one enormous
+ * call. Nothing else notices: the budget for a 400-label batch is well under
+ * the limit, so it runs, and 400 labels in one answer is the shape that dropped
+ * one at 42. Only when the packed batch passes 1,741 blocks is a section cut, and
+ * its windows are at most `max`, so they are not counted here.
  *
  * We do not refuse it, because refusing would fail an article that will probably
  * label fine. We say it out loud, because the fix is upstream — the structure
@@ -961,7 +1130,10 @@ export function renderBatch(batch: Batch, blocks: Block[], outline: string): str
     body.push(`[${n}] <${block.tag}>${kind}: ${block.text}`);
   }
 
+  /* A section asked about in windows is still one section: two of its windows
+     in one call name it once. (`planBatches`; no other two sets share a node.) */
   const where = batch.sets
+    .filter((s, i) => s.nodeId !== batch.sets[i - 1]?.nodeId)
     .map((s) => `  ${s.crumb.join(" › ")}${s.gist ? `\n    ${s.gist}` : ""}`)
     .join("\n");
 
@@ -1876,8 +2048,8 @@ async function runBatch(
   only?: number[],
 ): Promise<{ labels: Record<string, string>; record: LabelBatchRecord }> {
   const started = Date.now();
-  const answerTokens = 200 + (only ?? batch.blocks).length * 55;
-  const maxTokens = budgetFor("nav labels", answerTokens, headroom);
+  const answerTokens = labelAnswerTokens((only ?? batch.blocks).length);
+  const maxTokens = labelCallBudget((only ?? batch.blocks).length, headroom);
   const { shared, own } = batchParts(batch, blocks, outline);
 
   /* The request itself, wrapped: a 429/401/etc from the SDK is not caught
@@ -1906,8 +2078,9 @@ async function runBatch(
      wrapper is what records what this call cost; the stream's own method works
      and records nothing. See src/messages-stream.ts. */
   let message: Anthropic.Message;
+  let requests: number;
   try {
-    message = await streamMessage(
+    const call = streamMessage(
       "labels",
       {
         max_tokens: maxTokens,
@@ -1933,15 +2106,14 @@ async function runBatch(
         ],
       },
       { power, ...(signal ? { signal } : {}) },
-    ).finalMessage();
+    );
+    message = await call.finalMessage();
+    requests = call.attempts();
   } catch (err) {
     throw anthropicCallFailed(err);
   }
 
-  const raw = message.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
+  const raw = messageText(message);
 
   /* Built here, above every throw below it, because a call that failed still
      cost what it cost. Without this the tokens of a truncated attempt, or of a
@@ -1954,9 +2126,10 @@ async function runBatch(
   const record: LabelBatchRecord = {
     blocks: batch.blocks.map((b) => b.id),
     setStarts: batch.setStarts,
-    /* One request, by definition: this function makes exactly one. `sumRecords`
-       is where two of these become a two-request batch. */
-    requests: 1,
+    /* One request, unless the gateway retried a transport failure before the
+       answer began (src/messages-stream.ts § `attempts`). `sumRecords` is where
+       two of these become a two-request batch. */
+    requests,
     inputTokens: message.usage.input_tokens,
     outputTokens: message.usage.output_tokens,
     cacheReadTokens: message.usage.cache_read_input_tokens ?? 0,
@@ -1978,7 +2151,8 @@ async function runBatch(
      * The one truncation in the pipeline that is **not** tagged `bug`, and the
      * only place that still takes the bare sentence.
      *
-     * The other five stages throw `truncationFailure`, which carries a
+     * The ordinary stages throw `truncationFailure` (through `finishedText`,
+     * src/messages-stream.ts), which carries a
      * `failureKind` so the job card withholds Retry (src/job-failure.ts). This
      * one must not, for two reasons, and either alone would be enough:
      *
@@ -2590,7 +2764,7 @@ export async function generateLabels(opts: {
                 outline,
                 signal,
                 opts.power,
-                LABEL_HEADROOM * 2,
+                LABEL_RETRY_HEADROOM,
               );
               /* Both requests' usage, not just the one that worked. The first
                  attempt was truncated or displaced, and it was paid for; a

@@ -37,6 +37,7 @@ import {
   readingTime,
   glossaryHiddenEntries,
   articleTags,
+  quizAttempts,
   refereeClaims,
   refereeCriteria,
   revisionBlocks,
@@ -112,8 +113,9 @@ export interface TableCoverage {
  *
  * **The foreign-key rule over-reaches, deliberately.** It follows every key, not
  * only the ones that mean ownership, so `jobs` arrives here because it points at
- * the draft revision it is building, and `queue_state` because it points at
- * `jobs`. Narrowing it would drop those two and would also drop the next child
+ * the draft revision it is building. (`queue_state` arrived the same way, through
+ * an unused key to `jobs`, until that column was dropped on 2026-10-07.)
+ * Narrowing it would drop `jobs` and would also drop the next child
  * table that happens to hold a nullable parent id, which is the silence this
  * record exists to prevent. The cost of over-reach is one written-down sentence
  * per table; the cost of under-reach is a rollback that quietly loses somebody's
@@ -213,6 +215,16 @@ export const ARTICLE_TABLE_COVERAGE = {
   article_tags: {
     rollback: { exported: true, into: "tags.json" },
     bundle: { exported: true, into: "augmentations/tags.json" },
+  },
+  /* The reader's finished quiz marks — their own words and what they were
+     told about them, so exported for `reading_time`'s reason. Every row,
+     including those for a batch *Write them again* has since replaced: the
+     `question` column is what lets such a row be read on its own.
+     docs/plans/261005b-quiz-answers-are-kept-and-restored.md, GPT Sol's plan
+     review finding 6. */
+  quiz_attempts: {
+    rollback: { exported: true, into: "quiz-attempts.json" },
+    bundle: { exported: true, into: "augmentations/quiz-attempts.json" },
   },
 
   /** The one table the two projections disagree about — see `TableCoverage`. */
@@ -364,6 +376,23 @@ export const ARTICLE_TABLE_COVERAGE = {
         "another column.",
     },
   },
+  article_share_link_events: {
+    rollback: {
+      exported: false,
+      why:
+        "An append-only audit of who made a private link for an article and who " +
+        "turned it off (src/store/pg-share-link.ts). The filesystem store has no " +
+        "sharing of any kind, so a rollback to data/ has nothing that could read it.",
+    },
+    bundle: {
+      exported: false,
+      why:
+        "An append-only audit of the private link, kept for takedown evidence, " +
+        "like the visibility log below. That a link is on, and since when, is in " +
+        "article.json as `shareTokenAt`; the link's key is deliberately in no file, " +
+        "because a zip gets forwarded and the key opens the article.",
+    },
+  },
   article_visibility_changes: {
     rollback: {
       exported: false,
@@ -395,23 +424,6 @@ export const ARTICLE_TABLE_COVERAGE = {
         "The ingest queue's own state, reachable only because a job points at the " +
         "draft revision it built. Scaffolding once the article exists — and it " +
         "carries a reader-profile snapshot, which is not this article's data.",
-    },
-  },
-  queue_state: {
-    rollback: {
-      exported: false,
-      why:
-        "One row saying which job is running, reachable from an article only " +
-        "through `jobs` above. It describes this machine at this moment, not any " +
-        "article, and a rollback that restored it would name a job that is not " +
-        "running.",
-    },
-    bundle: {
-      exported: false,
-      why:
-        "One row saying which job this server is running now, reachable from an " +
-        "article only through `jobs`. It describes the machine at this instant and " +
-        "says nothing about the article.",
     },
   },
   /* The two the record could not see until 2026-09-01, because the guard's
@@ -591,6 +603,11 @@ export interface ArticleRows {
   readonly glossaryHiddenEntries: readonly (typeof glossaryHiddenEntries.$inferSelect)[];
   /** The reader's own tags, by tag. Plan 261003d. */
   readonly articleTags: readonly (typeof articleTags.$inferSelect)[];
+  /**
+   * Every finished quiz mark, oldest first — **all batches**, not only the one
+   * the article has now. Plan 261005b.
+   */
+  readonly quizAttempts: readonly (typeof quizAttempts.$inferSelect)[];
 }
 
 /**
@@ -808,6 +825,11 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     .from(articleTags)
     .where(eq(articleTags.articleId, article.id))
     .orderBy(asc(articleTags.tag));
+  const quizMarks = await tx
+    .select()
+    .from(quizAttempts)
+    .where(eq(quizAttempts.articleId, article.id))
+    .orderBy(asc(quizAttempts.createdAt), asc(quizAttempts.id));
 
   return {
     article,
@@ -826,6 +848,7 @@ async function walk(tx: Tx, slug: string): Promise<ArticleRows> {
     readingTime: secondsRead,
     glossaryHiddenEntries: hiddenTerms,
     articleTags: tags,
+    quizAttempts: quizMarks,
   };
 }
 

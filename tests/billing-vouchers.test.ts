@@ -50,6 +50,7 @@ import {
   parseVoucherPatch,
   updateVoucher,
 } from "../src/store/pg-vouchers.js";
+import { waitUntilBlockedBy } from "./helpers/blocked-by.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -107,7 +108,6 @@ const confirmed = (owner: string): ClaimDepsLookup => async () => ({ kind: "conf
 type ClaimDepsLookup = (ownerId: string) => Promise<AccountConfirmation>;
 
 beforeAll(async () => {
-  if (!pool) return;
   await sweep();
   for (const owner of [READER, OTHER]) await seedAuthUser(pool, { id: owner, email: emailOf(owner) });
 });
@@ -118,14 +118,12 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  if (!pool) return;
   await sweep();
   await pool.query("delete from auth.users where id::text like $1", [RUBBLE]).catch(() => {});
   await pool.end();
 });
 
 async function sweep(): Promise<void> {
-  if (!pool) return;
   /* Vouchers before accounts: `claimed_by` references the billing anchor. */
   await pool.query(
     "delete from spideryarn.billing_vouchers where email like 'gift-0000b0c4-%' or claimed_by::text like $1",
@@ -138,7 +136,6 @@ async function sweep(): Promise<void> {
 
 /** `n` settled private ingests, the way a publication would have charged them. */
 async function givenUsed(owner: string, n: number): Promise<void> {
-  if (!pool) return;
   for (let i = 0; i < n; i += 1) {
     await pool.query(
       `insert into spideryarn.ingest_events (owner_id, reserved_at, succeeded_at)
@@ -150,7 +147,7 @@ async function givenUsed(owner: string, n: number): Promise<void> {
 
 /** A voucher for `owner`'s address, unclaimed. */
 async function givenVoucher(owner: string, n: number, note: string | null = null): Promise<string> {
-  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote: null }, ADMIN_USER_ID_LOCAL);
+  const made = await createVoucher({ id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote: null, recipientName: null }, ADMIN_USER_ID_LOCAL);
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
   return made.id;
 }
@@ -161,7 +158,6 @@ async function claims(...args: Parameters<typeof claimVouchersFor>): Promise<num
 }
 
 async function makePaid(owner: string, status = "active", priceId = READER_PRICE): Promise<void> {
-  if (!pool) return;
   const start = new Date(Date.now() - 5 * 86_400_000);
   const end = new Date(Date.now() + 25 * 86_400_000);
   await pool.query(
@@ -272,7 +268,6 @@ describe("a claimed voucher raises the free allowance, and nothing else does", (
 
 /** Release whatever `limitOf` reserved, so the next reading starts from the same usage. */
 async function sweepReservations(owner: string): Promise<void> {
-  if (!pool) return;
   await pool.query(
     "delete from spideryarn.ingest_events where owner_id = $1 and succeeded_at is null and released_at is null",
     [owner],
@@ -306,6 +301,12 @@ describe("the sum is a number, or the read refuses", () => {
 
 /* ------------------------------------------------------------ concurrency -- */
 
+/** The backend a held connection is, so a lock test can ask who waits behind it. */
+async function backendPid(client: { query: (text: string) => Promise<{ rows: unknown[] }> }): Promise<number> {
+  const found = await client.query("select pg_backend_pid() as pid");
+  return Number((found.rows[0] as { pid: number | string }).pid);
+}
+
 describe("concurrent admissions and revokes", () => {
   it("admits exactly five of twenty concurrent ingests on a 3 + 2 account", async () => {
     await givenVoucher(READER, 2);
@@ -322,7 +323,6 @@ describe("concurrent admissions and revokes", () => {
    * admits against the old limit (F2).
    */
   it("an admission waiting behind a revoke sees the revoke", async () => {
-    if (!pool) return;
     const id = await givenVoucher(READER, 2);
     await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) });
     await givenUsed(READER, 3);
@@ -339,7 +339,10 @@ describe("concurrent admissions and revokes", () => {
         settled = true;
         return r;
       });
-      await new Promise((r) => setTimeout(r, 400));
+      /* Postgres's word that the admission is queued behind *this* transaction,
+         not 400 ms of hoping: a sleep is as happy with an admission that is
+         merely slow, which then sees the revoke for the wrong reason. */
+      await waitUntilBlockedBy(await backendPid(a), { what: "the admission" });
       expect(settled).toBe(false);
 
       await a.query("commit");
@@ -355,7 +358,6 @@ describe("concurrent admissions and revokes", () => {
 
   /** And the other half: `updateVoucher` really does wait for the billing lock. */
   it("a revoke waits for an admission that holds the claimant's billing row", async () => {
-    if (!pool) return;
     const id = await givenVoucher(READER, 2);
     await claimVouchersFor({ id: READER, email: emailOf(READER) }, { lookup: confirmed(READER) });
 
@@ -369,7 +371,7 @@ describe("concurrent admissions and revokes", () => {
         settled = true;
         return r;
       });
-      await new Promise((r) => setTimeout(r, 400));
+      await waitUntilBlockedBy(await backendPid(a), { what: "the revoke" });
       expect(settled).toBe(false);
 
       await a.query("commit");
@@ -413,7 +415,7 @@ describe("the administrator's side", () => {
     const id = randomUUID();
     expect(parseNewVoucher({ id, email: " A@B.example ", articles: 20 })).toEqual({
       ok: true,
-      value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null },
+      value: { id, email: "a@b.example", articles: 20, note: null, recipientNote: null, recipientName: null },
     });
     /* The id is the browser's, and required: it is what makes a replay the same create. */
     expect(parseNewVoucher({ email: "a@b.example", articles: 20 }).ok).toBe(false);
@@ -434,6 +436,38 @@ describe("the administrator's side", () => {
     expect(parseVoucherPatch({}).ok).toBe(false);
     expect(parseVoucherPatch({ revoked: "yes" }).ok).toBe(false);
     expect(parseVoucherPatch({ revoked: true, note: "  " })).toEqual({ ok: true, value: { revoked: true, note: null } });
+  });
+
+  it("takes their name as one line of at most 80 characters, refusing a longer one rather than shortening it", () => {
+    /* Plan 261007f: refused first, cleaned second. */
+    const id = randomUUID();
+    const base = { id, email: "a@b.example", articles: 2 };
+    const nameOf = (recipientName: unknown) => {
+      const parsed = parseNewVoucher({ ...base, recipientName });
+      return parsed.ok ? parsed.value.recipientName : parsed.message;
+    };
+    const TOO_LONG = "recipientName must be at most 80 characters.";
+    expect(nameOf("  Ada Lovelace ")).toBe("Ada Lovelace");
+    expect(nameOf("x".repeat(80))).toBe("x".repeat(80));
+    expect(nameOf("x".repeat(81))).toBe(TOO_LONG);
+    /* Code points, as Postgres' char_length counts: one emoji is one. */
+    expect(nameOf("😀".repeat(80))).toBe("😀".repeat(80));
+    expect(nameOf("😀".repeat(81))).toBe(TOO_LONG);
+    /* The raw value is what is measured, so padding cannot be trimmed into range. */
+    expect(nameOf(` ${"x".repeat(80)}`)).toBe(TOO_LONG);
+    /* A line break and a control character each become a space. */
+    expect(nameOf(`Ada${String.fromCharCode(10)}Lovelace${String.fromCharCode(0)}B`)).toBe("Ada Lovelace B");
+    expect(nameOf(`Ada${String.fromCharCode(13, 10)}L`)).toBe("Ada  L");
+    expect(nameOf("   ")).toBeNull();
+    expect(nameOf(null)).toBeNull();
+    expect(nameOf(7)).toBe("recipientName must be a string or null.");
+
+    expect(parseVoucherPatch({ recipientName: " Ada " })).toEqual({ ok: true, value: { recipientName: "Ada" } });
+    expect(parseVoucherPatch({ recipientName: "" })).toEqual({ ok: true, value: { recipientName: null } });
+    expect(parseVoucherPatch({ recipientName: null })).toEqual({ ok: true, value: { recipientName: null } });
+    expect(parseVoucherPatch({ recipientName: "x".repeat(81) })).toEqual({ ok: false, message: TOO_LONG });
+    /* A patch without it does not touch it. */
+    expect(parseVoucherPatch({ note: "n" })).toEqual({ ok: true, value: { note: "n" } });
   });
 });
 
@@ -502,7 +536,6 @@ describe("the routes", () => {
   });
 
   it("carries a claimed gift on the paid wire while leaving the paid limit unchanged", async () => {
-    if (!pool) return;
     const { rows } = await pool.query<{ stripe_price_id: string; ingests_per_period: number }>(
       `select stripe_price_id, ingests_per_period
          from spideryarn.billing_tiers

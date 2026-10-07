@@ -47,9 +47,12 @@ import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import type { BlockId } from "../types.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job finding the
@@ -135,8 +138,14 @@ export function IdeasPanel({
    *   auto-start window carries a different `work_key`, is not de-duplicated,
    *   and buys a second model call. useIdeas.ts § `ensure`.
    */
+  /* A rewrite has finished and its list is not here yet: the forced button
+     gives way to a read, never to a second paid run. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
   const run = (label: string, again = false) =>
-    owner && (
+    owner &&
+    (again && waiting && !owner.error ? (
+      <RewriteWaiting line="The new ideas haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
       <div className="gloss-run">
         <JobProgress
           job={owner.job}
@@ -144,6 +153,8 @@ export function IdeasPanel({
           failed={owner.failed}
           stalled={owner.stalled}
           onRun={() => (again ? owner.regenerate() : owner.ensure())}
+          /* With `error` set the retry is `ReadError`'s; the button stays held. */
+          runDisabled={again && owner.rewriting}
           onCancel={owner.cancel}
           label={label}
           step="ideas"
@@ -151,7 +162,7 @@ export function IdeasPanel({
           runningLabel="Finding…"
         />
       </div>
-    );
+    ));
 
   /* What the band's (i) adds after the mode's own words: how many ideas, in
      which group, and who found them. Greg, 2026-10-01 (spya-ucu35y): *"how
@@ -200,11 +211,10 @@ export function IdeasPanel({
             written={owner.profiled}
             changed={owner.profileChanged}
             slug={owner.slug}
-            compact
             /* The forced run replaces the list (plan 261002b). */
             regenerate={{
               run: () => void owner.regenerate(),
-              busy: owner.job !== null || owner.starting,
+              busy: owner.job !== null || owner.starting || owner.rewriting,
               refresh: () => owner.refresh(),
             }}
           />
@@ -217,6 +227,7 @@ export function IdeasPanel({
           on 2026-10-02, to the corner. Without the row the corner would sit on
           the first group's heading and its count; mode-band.css floors a head
           at the corner's height. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={<></>}
       /* No standing redo button under the list any more. Greg, 2026-09-29
           (SPIDERYARN-READING2-53): *"Same goes for any other modes that still
@@ -231,20 +242,22 @@ export function IdeasPanel({
           stall warning and failure can be seen in this mode; idle renders
           nothing, so this does not put the standing button back. Not on a
           stale list, whose banner carries the job; an outdated list has no
-          banner (plan 260929c), so its job shows here. */
+          banner (plan 260929c), so its job shows here. And while a rewrite's
+          list has not loaded (`waiting`), for the read that brings it in —
+          unless `ReadError` above is already offering that read. */
       foot={
         ideas &&
         owner?.status === "ready" &&
         !owner.stale &&
-        (owner.job || owner.starting || owner.failed) ? (
+        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="ideas-again">{run("Find them again", true)}</div>
         ) : null
       }
     >
 
-      {owner?.error && <p className="gloss-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the ideas…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the ideas…</BandWaiting>}
 
       {/* A piece with no ideas never mounts this panel for a visitor —
           `visitorGap` answers *not-built* and the band says so instead. What is

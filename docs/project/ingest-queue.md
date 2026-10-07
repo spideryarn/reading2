@@ -1,5 +1,27 @@
 # The ingest queue
 
+Up: [architecture.md](architecture.md)
+
+## In this doc
+
+- [§ Uploading a PDF](#uploading-a-pdf) — how a file off disk becomes an article
+- [§ The add page](#the-add-page) — `/add/<url>`, the watching page, the bookmarklet
+- [§ Two URLs, one article](#two-urls-one-article) — de-duplicating near-identical URLs
+- [§ Opening a link starts a fetch](#opening-a-link-starts-a-fetch-and-that-is-new) — why arriving on `/add` is expensive
+- [§ The pipeline is a list](#the-pipeline-is-a-list-not-a-function) — `STEP_ORDER`, adding or reordering a step
+- [§ The queue](#the-queue-it-was-p-queue-and-now-it-is-an-index-and-a-loop) — claims, the loop, why p-queue went (history)
+- [§ Why polling](#why-polling) — `GET /api/jobs` cadence
+- [§ Idempotent is the goal](#idempotent-is-the-goal-this-is-a-step-towards-it) — surviving a restart, resuming a job
+- [§ The failures Retry is not offered under](#the-failures-retry-is-not-offered-under) — which errors hide the button
+- [§ The one security check](#the-one-security-check) — `isSlug`, the path-traversal guard
+- [§ The routes](#the-routes) — the job and article endpoints
+- [§ Naming the step is the point](#naming-the-step-is-the-point) — progress-list wording
+- [§ The box only shows this sitting](#the-box-only-shows-this-sitting) — what the Add box lists
+- [§ A finished job publishes the article](#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not) — `publishRevision`, why a done job left the shelf empty (history)
+- [§ When this becomes Postgres](#when-this-becomes-postgres) — the filesystem queue versus the table (history)
+- [§ The CLI is this queue](#they-are-the-same-functions-the-cli-runs) — `npm run extract` and friends
+- [§ See also](#see-also)
+
 Paste a URL on the homepage and an article appears on the shelf a minute or two later, with the
 stages ticking over while you watch. Since 2026-08-26 the watching happens on a page of its own,
 `/add/<the URL>` — [§ The add page](#the-add-page).
@@ -28,30 +50,10 @@ The job row itself is behind `JobStore` in [`src/store/jobs.ts`](../../src/store
 > by an instance that did not create the job. p-queue and the in-memory `Map` are gone with it, and
 > what replaced them is a **claim**: an attempt token, a lease, and every write fenced on
 > `id = $id and attempt_id = $attempt and status = 'running'`.
->
-> **An ingest works on Vercel as of 2026-08-30, and everything below this line about it not working
-> is kept because each answer was a correct diagnosis of a real obstacle and none of them was the one
-> that mattered.** A real article — `paulgraham.com/todo.html` — was pasted at spideryarn.com and
-> came out the other end: fetched, extracted, ten blocks with fresh ids, a table of contents, and
-> published to the shelf. That morning the same paste had failed in sixteen milliseconds, as nine
-> before it had.
->
-> Three things had to be true together, and the last was the one nobody was looking at:
->
-> 1. **A writable disk.** `ROOT` was derived from the module's own location, which is two levels up
->    from `src/store/` in the repository and `/var` in a bundle — so every ingest died on
->    `mkdir '/var/data'`. Now an injected, invocation-scoped root.
-> 2. **One invocation for the whole job.** Every `/advance` may land on a different instance, so
->    step two looked for what step one wrote and found nothing. A claim now walks every step —
->    `advanceJobToCompletion`, [`src/jobs.ts`](../../src/jobs.ts).
-> 3. **Something that actually publishes.** This is the one that had been marked done and was not.
->    `publishRevision` was called only from `revisions.ts`, the fixture loader and tests — **never
->    from the job path**. So a job could run every stage, write every file, go `done`, and leave
->    `articles.current_revision_id` exactly where it was. A green job, an empty shelf, and every
->    check reporting success. `src/store/publish-session.ts` is the finalizer that closed it. (That
->    decorator was deleted on 2026-09-01; the publication is now `pgStoreSession`'s own — see
->    *A finished job publishes the article* below.)
->
+
+The three obstacles an ingest on Vercel had to clear before it worked on 2026-08-30 are in
+[261007g-ingest-queue-history.md § The top of the doc](../plans/261007g-ingest-queue-history.md#the-top-of-the-doc).
+
 > **What still does not work, found within a minute of the first success:** re-running a *single*
 > step against an existing article. Opening an article starts an `arc` job, which gets its own job
 > id and therefore its own empty scratch, and cannot see what the ingest wrote —
@@ -70,30 +72,19 @@ The job row itself is behind `JobStore` in [`src/store/jobs.ts`](../../src/store
 > paragraph contrasts against — `src/job-scope.ts` and `src/store/data-root.ts` — was itself deleted
 > 2026-09-05, once every store was Postgres.)
 
-> **Superseded, and kept.** *"This does not make an ingest work on Vercel, and the section below
-> saying it nearly does is the mistake worth not repeating."* Every stage still writes
-> `data/<slug>/*.json` and `stepIsDone` reads those files, so invocation A writes `raw.json` to an
-> ephemeral disk and invocation B finds nothing and fetches again. The job is durable; the *pipeline*
-> is not. **True when written, and it correctly named obstacle 2 above** — what it missed is that
-> fixing it would still have produced a green job and an empty shelf, because nothing published.
-
 > Now let's think about the "Add" functionality that takes a URL as an argument. There should be
 > some kind of queue that processes things (e.g. fetch, Mozilla Readability, sanitiser), and ideally
 > a progress indicator.
 >
 > — Greg, 2026-08-25
 
-Before this, the add box on the homepage printed the four commands for you to run yourself. That was
-honest — there was no job runner — and it is what
-[library.md § Adding an article](library.md#adding-an-article-the-box-submits-now) described. This is that stub
-growing up, and it kept the shape it promised it would: the input stayed, and the command list became
-the progress list.
+What the add box did before there was a queue is in [261007g-ingest-queue-history.md § The top of the doc](../plans/261007g-ingest-queue-history.md#the-top-of-the-doc).
 
 | File | What's in it |
 |---|---|
-| [`src/pipeline.ts`](../../src/pipeline.ts) | the six steps, as data — the only place that knows the pipeline's order |
-| [`src/jobs.ts`](../../src/jobs.ts) | the queue, the job records, and the restart sweep |
-| [`src/routes.ts`](../../src/routes.ts) | six HTTP routes, all of which return immediately |
+| [`src/pipeline.ts`](../../src/pipeline.ts) | the steps, as data — each with its label, what it produces and the function that makes it (the order itself is `STEP_ORDER` in [`src/step-order.ts`](../../src/step-order.ts)) |
+| [`src/jobs.ts`](../../src/jobs.ts) | the queue, the job records, the claim loop and the lease sweep |
+| [`src/routes.ts`](../../src/routes.ts) | the job and upload routes ([§ The routes](#the-routes)), all of which return immediately |
 | [`src/web/jobEngine.ts`](../../src/web/jobEngine.ts) | the poll and the driver, for the whole tab — [§ The browser is the worker](#the-browser-is-the-worker) |
 | [`src/web/useJobs.ts`](../../src/web/useJobs.ts) | the subscription over the engine, and the actions |
 | [`src/web/AddArticle.tsx`](../../src/web/AddArticle.tsx) | the box on the shelf, the progress list, and `JobCard` |
@@ -317,10 +308,11 @@ they come to disagree.
 
 ### The slug comes from the filename, and that is the ugly part
 
-`source.pdf` becomes the slug `source`; `paper.pdf` becomes `paper`, then `paper-2`. The reader
-sees the title everywhere that matters — the shelf card, the masthead, the tab — so this is a
-directory name rather than anything they read. But `document.pdf` and `download.pdf` are extremely
-common and the counters will pile up.
+`source.pdf` becomes the slug `source-spya-k3m9qt`; `paper.pdf` becomes `paper-spya-…`, and a
+second `paper.pdf` gets an id of its own (the `paper-2` counter went on 2026-08-31, above). The
+reader sees the title everywhere that matters — the shelf card, the masthead, the tab — so this is
+a directory name rather than anything they read. But `document.pdf` and `download.pdf` are
+extremely common, so the same stem will recur.
 
 The plan's alternative is to store under a provisional id, run pass 0, and reserve the final slug
 from the title. That is a **rename**, and [block-ids.md](block-ids.md) is largely about why renames
@@ -495,7 +487,9 @@ paper. The hash is the browser's claim; that is safe only because the check is t
 - `loadArticle` throws it, carrying `paper` — the title, authors, abstract, DOI, filename and kind
   the not-yet-read page draws — so chat, live, comments, citations, term lookup, similar, link
   previews and the article read all refuse before they spend. Search and a referee criterion ask
-  first (`refuseAPaperNotReadYet`), because they write a row before they read the article.
+  first (`refuseAPaperNotReadYet`), and store nothing when refused. That gate reads the `articles`
+  row alone, so it also refuses a minimal paper whose first revision is not published yet, which
+  `loadArticle`'s revision join answers 404.
 - `enqueue` refuses any job naming a minimal article except the admitted *Read this*: its
   reservation is an unsettled ingest bound to that article (`isReadThisFor`), or the owner is the
   administrator asking through *Read this* or retrying it. A mode, Rebuild and a step re-run are
@@ -584,10 +578,10 @@ snapshot is reported on the next microtask. `tests/job-engine-terminal.test.ts` 
 
 ***Read this* from the browser** is `readThis` in [`read-this.ts`](../../src/web/read-this.ts):
 `POST /api/jobs {slug, readThis: true}` through the engine's action seam, so the job is driven at
-once from the shelf card or the paper's page. It keeps the add page's *Generate the main modes*
-promise: when the box was ticked (the same stored choice, `readAutoModes`), it watches the job and
-queues the modes once it is `done` — through `watchTerminal`, because the card that was pressed may
-be long gone by then. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
+once from the shelf card or the paper's page. It posts nothing else: *Read this* is an import, so
+the publication that turns the paper full queues the main modes on the server, as for every import
+([§ The add page](#the-add-page)). Until 2026-10-04 this function watched the job and posted them
+itself. [library.md § A paper not read through yet](library.md#a-paper-not-read-through-yet)
 has the card and the page.
 
 ## The add page
@@ -615,19 +609,73 @@ where it was rather than starting again ([§ Idempotent is the goal](#idempotent
 *An article can be handed to us from outside.* A bookmarklet, a share sheet, or a shortcut is now
 `spideryarn/add/` plus wherever you are, with nothing to paste.
 
-**Since 2026-09-30 it can also start the main modes.** While the import runs, the page shows a tick
-box that is on by default. When the import finishes, the page opens the article and queues one job
-per main mode: Tweets, Glossary, Quotes, Ideas, then Skim, which carries Quotes and Ideas in
-front of it. These are ordinary mode jobs on this queue, posted from the page, so a tab closed before
-the import finishes queues none. Which modes, what it costs, and the deferred ideal (opening the
-paper before `structure`):
-[260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md) and
-[`src/web/auto-modes.ts`](../../src/web/auto-modes.ts).
+**Since 2026-09-30 an import also starts the main modes, and since 2026-10-04 the server does
+it.** When an import's first full publication commits, the same transaction queues one job per main
+mode's step: Summary's thread and its plain-words levels, Glossary, Quotes, Ideas and the
+cross-reference links, then Skim, which carries Quotes and Ideas in front of it. They are ordinary
+mode jobs on this queue, free like the `labels` job they are stamped after, and each carries the
+reader's profile as it stood at publication.
+
+It happens for every way an import starts: the add page, *add to Spideryarn* on a link's hover card,
+Retry on the shelf's job card, *Read this*, and an import whose add page was closed before it
+finished. It does not happen for a Rebuild, a Start again (which has its own list), a paper added
+with only its title and abstract, or a re-add of something already on the shelf, which publishes
+nothing. **Queued is not run**: nothing on the server drives a queued job. The owner's browser does,
+from any page, as it drives `labels`; with every tab closed the modes wait.
+
+The page's tick box, on by default, is the reader's setting rather than the page's:
+`reader_profiles.auto_modes_off_at`, read by the publication and written by
+`PATCH /api/reader { autoModes }` on each change. Publication uses the choice committed when it
+reads the setting; the box shows when a change is still being saved. It follows the account. The
+page itself posts no mode job. A purpose typed on
+the page and saved after the import ends reaches chat and anything generated later, not these first
+jobs.
+
+Which publication counts, the hand-over of the old per-browser choice and what that cannot cover,
+and what it costs: [261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md). The
+list is [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts), the trigger is `publishRevisionIn`
+in [`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts), and
+`tests/publication-queues-the-main-modes.test.ts` holds each case. The first version, where the page
+queued them, and the deferred ideal (opening the paper before `structure`) are
+[260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md).
 
 **Since 2026-10-02 it can also switch the article to High-powered AI** — a second tick box, off by
 default and never remembered, which sends the Metadata switch's own request as soon as the job's slug
-is known; the main modes above wait for it to answer.
+is known. The main modes are not held for its answer; what is promised instead is in
 [high-powered-ai.md § Switching it on while the article is added](high-powered-ai.md).
+
+**Since 2026-10-05 it can also make the article public, and an import's card hands out its
+address.** Greg, 2026-10-05, in two reports (`spya-h7skj5`, `spya-e9t58e`):
+
+> While I'm importing a paper, I don't know what the permalink will be, so I have to wait for it to
+> be finished to be able to bookmark or send it to someone.
+
+> While I'm importing an article, make it possible for me to mark it as public/shared as it's
+> importing
+
+Three things, all in the browser, in
+[261005l](../plans/261005l-permalink-and-share-while-an-article-is-importing.md):
+
+- **The card's link button.** `JobCard` copies `/read/<job.slug>` for an import job
+  (`isImportJob`, [`src/job-state.ts`](../../src/job-state.ts): `fetch` among its steps, because a
+  mode job carries a `url` too). It is the address of *this import*: a failed one leads nowhere,
+  and a Retry that adopts an article already on the shelf comes back under another slug.
+- **The owner's early visit.** `/read/<slug>` before the import has published used to tell its own
+  owner *Not shared*. `OwnerNotShared`
+  ([`src/web/article/StillBeingAdded.tsx`](../../src/web/article/StillBeingAdded.tsx)) asks the job
+  engine for a fresh list, and if a live import job has that slug it draws the job's card and
+  re-reads the article when the job is done. It does not send the reader to the add page, because
+  arriving there posts an import.
+- **A *Sharing* section, shut by default**, holding *Make it public* and, since 2026-10-06,
+  *Create a private link*. What each asks and sends, and what a visitor sees who arrives before
+  the import has published, are in
+  [public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
+- **The card is drawn from the POST's answer** (since 2026-10-06). The page used to look its job
+  up only in the polled list, so it said *Queueing it…* for about eight seconds, and a web import
+  now takes about ten: the card, the link button and the sharing section often never appeared.
+  The returned job is held in the `started` record and gives way to the list's copy, or to a
+  later ending the list reports
+  ([postmortem 261006c](../postmortems/261006c-a-provisional-job-snapshot-outlived-newer-evidence.md)).
 
 ### The three traps in a page whose whole job is one effect
 
@@ -645,6 +693,20 @@ is known; the main modes above wait for it to answer.
 - **Leave properly.** The navigation to the article `replace`s rather than pushes, so Back takes the
   reader to wherever they came from rather than dropping them here to watch a job that has already
   finished.
+
+**And a visit is one reader's**, since 2026-10-06. The page starts an import by arriving and holds
+one reader's typed purpose, their High-powered tick and their job. So if a different reader turns
+up at the same address, because another tab signed in as somebody else or this one signed out and
+in again, they get a short stopped page that posts nothing
+([`AddStopped.tsx`](../../src/web/AddStopped.tsx)) until the address is left, and they add the
+article from the shelf. A fresh page would have started the import for them unasked. Somebody who
+arrives signed out and then signs in is a first arrival, and the page runs as usual. `App` keeps
+whose visit it is, above its signed-out branch; the rule is a table in
+[`src/web/add-visit.ts`](../../src/web/add-visit.ts). Every request the page and the engines make
+also names its reader
+([auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another));
+the plan is
+[261006e](../plans/261006e-add-page-forgets-everything-when-the-reader-changes.md).
 
 ### Three ways the address can lie about itself
 
@@ -705,6 +767,37 @@ happily slugged as `x` one function later.
 entirely, a leading `www.`, one trailing slash, and the tracking parameters a share button staples on
 (`utm_*`, `fbclid`, `igshid` and a dozen more).
 
+**And a paper a source recognises has one key whatever shape its link takes**, since 2026-10-05.
+arXiv serves one paper at `abs/`, `pdf/`, `html/` and its own DOI, and the fetch step reads the
+same document whichever was pasted ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)),
+so `urlKey` answers `arxiv.org/abs/<id>` for all of them, and `slugFromUrl` answers the source's
+slug (`arxiv-2608-13566`; it used to be `arxiv-2608`, because `.13566` read as a file extension).
+A version is part of the key: `2608.13566` and `2608.13566v1` are two articles.
+
+The same holds for the sources added on 2026-10-06. A Hugging Face or alphaXiv page about an arXiv
+paper has the arXiv paper's key. An ACL Anthology, PMLR, NeurIPS, CVF or JMLR paper has the key
+its landing page always had (`aclanthology.org/2020.acl-main.703`), and the PDF's own address now
+answers with it too. Their slugs are `acl-…`, `pmlr-…`, `neurips-…`, `cvf-…` and `jmlr-…`, cut to
+60 characters while the key keeps the whole id. An NBER working paper, added later the same day,
+has `nber.org/papers/w30000` and `nber-w30000`. The table of what each recognises is
+[fetching.md § The sources](fetching.md#the-sources).
+
+A short link or a redirecting DOI has no paper's key: nothing can be read off it before it is
+fetched. The fetch step finds the paper afterwards
+([fetching.md § A link that leads to a paper](fetching.md#a-link-that-leads-to-a-paper)), so that
+article's own address is the paper's and its pasted one is kept beside it, in `articles.asked_url`.
+`slugForUrlKey` asks that column as well, so a second paste of the same link finds the article. It
+asks it only for an article that came through a paper source: a link to an ordinary page may be
+meant to move, and Refresh never goes back to it. The column is written once, when the article row
+is made, and never by a refresh
+([261006i](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md)).
+
+A job row stores the key it was queued with, so a job queued before that change carries the old
+one. `enqueue` therefore looks at an adopted active job with `sameWork`, which compares addresses
+by today's `urlKey`, and hands it back before the insert rather than trusting the stored keys to
+agree — otherwise a second job lands on the same article and its slot is charged for a run that
+skips every step. `tests/a-paper-queued-before-the-resolver.test.ts`.
+
 ### The rule it is written to, which is an asymmetry
 
 **Failing to merge two spellings of one article costs a duplicate** — a second card on the shelf,
@@ -762,6 +855,32 @@ than a copy for convenience: a slug the reader renames no longer contains one, a
 handle a rename would redirect through. `slugForShortId`
 ([`src/store/find-article.ts`](../../src/store/find-article.ts)) is that lookup. The rename itself is
 not built.
+
+### A new id is checked against every article, and when two imports mint the same id at once
+
+A short id is random, so a new one can equal one an article already has. For one import that is 8
+in 100 million at 62 articles, but it grows with the square of the library: an even chance of a
+first collision by about 33,000 articles. So since 2026-10-07 `mintSlug`
+([`src/jobs.ts`](../../src/jobs.ts)) asks whether any article has the id, through the boolean
+`shortIdIsTaken` ([`src/store/short-id-is-taken.ts`](../../src/store/short-id-is-taken.ts)), and
+mints again if so. All three places `enqueue` mints go through it. Before that, the import failed
+where its article row is created and Retry, which keeps the name, failed again.
+
+**Known and left open:** asking is not reserving. Two imports in flight that mint the same id at the
+same moment both hear "free", and the database refuses the second row. For exactly two imports in
+that window, the chance is about 1 in 772 million; unlike collision with the existing library, it
+does not grow with the library's size. No model has been paid at that point, because
+the row is created when the job's draft opens, before any step. `lockOrCreateArticle`
+([`src/store/pg-revisions.ts`](../../src/store/pg-revisions.ts)) turns the violation into a refusal
+in plain words, but **the reader does not see them**: a refusal thrown while a claim opens its draft
+ends no job, so the card shows an import running for about 38 minutes (the lease, then two requeues)
+and then *"This stopped part-way through"* with a Retry that repeats it. Pasting the address again
+works at once. That gap belongs to every refusal thrown at draft open, the older "slug already
+belongs to another reader" included, and closing it is queued separately
+([261007f](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#progress)).
+Closing the window itself would take a unique index on the queue and a migration; passed over as
+machinery for a roughly one-in-772-million collision between a particular pair of simultaneous
+imports. `tests/short-id-collision.test.ts`.
 
 ### What the short id changed about adoption, and it is not nothing
 
@@ -844,10 +963,59 @@ same machinery given a different sub-list, and none of them needed a special cas
   wait on it ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
 - **Re-run a stage** — `{ slug, steps: ["arc"], force: ["arc"] }`.
 - **Refresh from source** — the default steps, with `force: ["fetch"]`.
-- **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button in the Tweets mode's band (a page until 2026-09-29, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md)); `useTweets.ts` sends it.
+- **Write the thread** — `{ slug, steps: ["tweets"] }`, which is the button in the thread's band — Summary's Thread view (a page until 2026-09-29, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md); a mode until 2026-10-03, [261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md)); `useTweets.ts` sends it.
 - **Buy the paragraph labels** — `{ slug, steps: ["labels"] }`, and nothing else. That is the whole
   shape of the successor job an ingest leaves behind, and `unrunnableStepPlan` is checked against it
   by name in `tests/jobs.test.ts`.
+- **Build the structure an import opened without** — `{ slug, steps: ["structure"] }`, the other
+  successor a publication can leave behind. Next section.
+
+### A first import opens before its structure
+
+Since 2026-10-05 ([261005j](../plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md)).
+On a pasted web page the structure call was 25 of the 31 seconds before the article opened, and the
+reader needs none of it to start reading. Greg, 2026-10-05:
+
+> it would be lovely if Structure mode could load after the page is already visible without
+> requiring a page reload, but if that's complex, I can live with the page auto-reloading when
+> Structure gets generated
+
+The step list does not change. What changes is what one step does, once:
+
+- **Asked for by two routes only**: the add-by-URL route and the upload route send `openEarly`.
+  The CLI, *Read this*, Refresh, Rebuild and Start again do not, and behave as before. Those last
+  four already have an article on screen while they run, and deferring there is where the earlier
+  attempts at this went wrong (a carried tree, a second job that skips).
+- **`enqueue` marks the `structure` step `headingsFirst`** when the request asked and the slug was
+  minted for it. The mark lives in the job's `steps` JSON, and a retry keeps it.
+- **The step then writes the bounded headings tree and returns**, with no model call, marked
+  `provisional: "awaiting-structure"`, and only while the article has never been published
+  (`hasEarlierBlocks`). It is the step's own fallback tree
+  ([structure-step.md § The fallback](structure-step.md#the-fallback-a-tree-from-the-documents-own-headings)),
+  so the run row and its hash are real and the publication gate needed no new arm. Under four body
+  blocks there is no such tree, and the step calls the model as it always did.
+- **That publication queues `["structure"]`** and holds back the `labels` job and the main-mode
+  jobs. **The publication that replaces the stand-in queues those**, read off the previous
+  revision's tree.
+- **`structure` is not done while a published tree is awaiting** (`STEPS.structure.isDone`).
+  Without that the successor finds a finished run row, skips, reports success, and the real tree
+  never arrives. The one exception is the marked import itself before it has published: there the
+  stand-in *is* the step's work, so a claim handed back resumes at `assets` and does not cut the
+  same tree again
+  ([postmortem 261005p](../postmortems/261005p-a-successor-completion-rule-must-not-undo-the-producer-on-resume.md)).
+- **A step that reads the structure ends `blocked` on a stand-in**: every step after `structure` in
+  `STEP_ORDER` except `assets`. Normally none gets that far, because the structure job is exclusive
+  and older, so later jobs wait behind it. The gate is for when it failed.
+- **The import is charged at the first publication**, when the article is readable. The structure
+  job reserves nothing.
+- **The way back**: stop the two routes sending `openEarly`. Everything else is inert without it.
+
+What it does not cover: `assets` still runs before the article opens, which on a PDF is the 49
+seconds of figure recovery
+([261004e](../investigations/261004e-open-the-article-before-structure-and-assets-where-the-import-s-time-goes-and-what-deferring-costs.md)).
+With every tab closed the structure job waits for the owner's next page, as `labels` does. A
+visitor to a shared article sees the outline until their next load. What the open page does when
+the tree lands is [structure.md § While the structure is still being built](structure.md#while-the-structure-is-still-being-built).
 
 ### `STEP_ORDER` is not the default list
 
@@ -919,7 +1087,7 @@ step went on reporting itself current. All six are now fingerprinted against the
 ([`src/source-hash.ts`](../../src/source-hash.ts)) — two functions, because `ideas` and `sketch` send
 a head with a `URL:` line and a synthetic title the other four never send; `assets` keeps the
 blocks-only hash because the blocks really are all it reads. Nothing was visibly broken, and that is the shape to notice: the
-pipeline's artefact reads return `null` today, so the stage re-runs whatever the stamp says. The
+pipeline's artefact reads returned `null` at that point (2026-08-31), so the stage re-ran whatever the stamp said. The
 fault would have arrived with the reads that make skipping work.
 [260831b-finish-the-database-move.md](../plans/260831b-finish-the-database-move.md) § stage 1.
 
@@ -982,7 +1150,8 @@ of date. A button that offers a re-run and makes no claim about whether you need
 answer. See [the plan](../plans/260907d-re-run-any-generated-mode-from-the-metadata-page.md) for
 what saying it would still take, and for why `structure` — the workaround the 2026-09-05 postmortem
 names — is **not** on the list: a forced run publishes a tree with no navigation labels, and the
-free `labels` successor that would restore them is not built.
+free `labels` successor that restores them (built 2026-09-07, [above](#one-job-in-the-app-was-asked-for-by-nobody)) is the
+slowest and dearest pass, so one press would buy two metered steps.
 
 **One click, since 2026-09-30.** From 2026-09-07 every press, and every Retry, opened an inline
 confirm first; Greg asked for it to go:
@@ -1061,10 +1230,6 @@ the block rows theirs since the Postgres move. What keeps their doneness apart i
 asks the *asking step's own* `revision_step_runs` row before it looks at an artefact, so one step's
 write never makes another step done ([`tests/shared-site-run-row-gate.test.ts`](../../tests/shared-site-run-row-gate.test.ts)).
 
-(It declared an `outputs` list of repository paths beside `produces` until 2026-09-05, and the pair
-existed so the swap to kinds could be checked against the old declaration. The paths went with the
-filesystem store.)
-
 **There are two writes of the `blocks` kind, and it matters here.** Stage 3 produces `blocks`; stage
 4 produces `blocks` again as it writes the tree, so the copy that lands is guaranteed to be the one
 the tree was built from. (Until 2026-09-05 this was literally two files — stage 3's
@@ -1102,9 +1267,10 @@ to make interrupted work visible.
 
 #### Why it is a step at all
 
-Stage 1 used to be three lines inside `src/extract.ts`. It is now a step with an artefact,
-`data/<slug>/raw.html`, which [architecture.md § Storage](architecture.md#storage) has always listed
-and nothing had ever written.
+Stage 1 used to be three lines inside `src/extract.ts`. It is now a step with an artefact, the raw
+document (`raw.html`, or `raw.pdf`; first under `data/<slug>/`, now in Storage under its hash),
+which [architecture.md § Storage](architecture.md#storage) has always listed and nothing had ever
+written.
 
 The reason is retries. Extraction going wrong is the common failure — Readability is a heuristic —
 and when it does you want to try again **without asking the publisher a second time**, and without
@@ -1121,27 +1287,16 @@ the fetch rather than waiting it out. See [fetching.md](fetching.md).
 
 ## The queue: it was p-queue, and now it is an index and a loop
 
-**p-queue is gone as of 2026-08-27**, and the reason is worth keeping because the library was never
-the problem. It was chosen on 2026-08-25 against
-[third-party-library-selection.md](../reusable/third-party-library-selection.md) — **p-queue 9.3.3**,
-33.6M downloads a week, one small pure-ESM package, concurrency and `AbortSignal` in the API — and
-the rejected list below is still the right list for the question that was being asked.
+Why p-queue was chosen on 2026-08-25 and went on 2026-08-27, and the libraries rejected beside it,
+are in [261007g-ingest-queue-history.md § The queue](../plans/261007g-ingest-queue-history.md#the-queue-it-was-p-queue-and-now-it-is-an-index-and-a-loop).
 
-What changed is the question. Concurrency 1 was a promise **this process** made, and the moment
-there can be two instances it stops being a fact. It became `jobs_only_one_running`, a partial unique
-index that the database enforced across all of them. The loop that keeps a laptop's job going after
+The loop that keeps a laptop's job going after
 the tab is closed is the pump in [`src/jobs.ts`](../../src/jobs.ts), which is `advanceJob` in a
 `for(;;)` with a backoff — the same primitive the browser calls, with nothing privileged about it.
 
 ### Concurrency is a number now, and it was never a resource limit
 
-**Until 2026-08-30 this section said "concurrency is still 1, and still deliberately"**, and the
-argument it gave was a good one: three of the six steps are long model calls billed by the token and
-one is a fetch of somebody else's server, so running two articles at once doubles the spend rate and
-halves the politeness — *"for a single reader adding a handful of articles a day, in exchange for
-nothing."*
-
-The exchange stopped being nothing.
+What this section said while concurrency was still 1 is in [261007g-ingest-queue-history.md § Concurrency is a number now](../plans/261007g-ingest-queue-history.md#concurrency-is-a-number-now-and-it-was-never-a-resource-limit).
 
 > In general, I think we will need the ability for multiple things to run simultaneously. What is
 > stopping that? Is it worries about CPU/RAM/database connections? Or something else? Certainly
@@ -1256,7 +1411,9 @@ waits like everything else.
 **A predecessor that is stopping still blocks.** Stop on a *queued* job settles it terminal at once
 and it leaves the line by itself; Stop on a *running* one leaves it `running` with `cancelling` set
 until its claimant releases or its lease lapses, and the line still counts that row as running. The
-successor unblocks when the cancellation becomes terminal, not when Stop is pressed.
+successor unblocks when the cancellation becomes terminal, not when Stop is pressed. When it was
+pressed is `jobs.cancel_requested_at`, written on both branches and never cleared; `finished_at` is
+the later settlement.
 
 **The cost, named rather than solved: an abandoned `queued` row blocks its own article's line.** It
 is not swept, and there is no `last_seen_at` — that would turn *"durable until resumed or
@@ -1336,7 +1493,7 @@ claimant's work is still used. The whole story, including why aborting the aband
 been the wrong companion fix, is
 [260902c-the-truncation-retry-cost-storm.md](../postmortems/260902c-the-truncation-retry-cost-storm.md).
 
-**Two OS processes over one `data/` are still not fenced**, and that is unchanged rather than fixed —
+**Two OS processes over one `data/` were never fenced**, and that was left rather than fixed —
 `claimIn`'s single `update … where status = 'queued'` is what makes Postgres immune, and running with
 Postgres is the only store there is, since 2026-09-05.
 ### The browser is the worker
@@ -1344,16 +1501,7 @@ Postgres is the only store there is, since 2026-09-05.
 So a wedged job in production is not a queue that needs draining. It is a job whose only engine has
 walked away — and until 2026-09-01 walking away was ordinary navigation.
 
-The loop that calls `POST /api/jobs/:id/advance` lived inside `useJobs`, which is mounted from the
-shelf, the add page and `useStepJob`. **`App()` is a chain of early returns**, so it returns a
-different root per route and there is no persistent shell component at all: every route change
-unmounted all three, and `drive`'s `while (alive())` stopped.
-
-**The plan for this work said that meant "click into an article and your import stops", and that was
-wrong** — worth recording, because it is the claim two rounds of review were argued against.
-`useArc` runs on every owned reading view and goes through `useStepJob`, so the reading view mounts
-a poller of its own and picks the job back up within a second. What actually stopped were the routes
-that mount none: `/profile`, `/design`, `/admin`, the landing page.
+Where the drive loop lived until 2026-09-01 is in [261007g-ingest-queue-history.md § The browser is the worker](../plans/261007g-ingest-queue-history.md#the-browser-is-the-worker).
 
 **The fault worth fixing was never the size of that gap.** It was that whether an ingest kept
 running depended on whether the page you happened to open happened to mount an unrelated hook —
@@ -1411,12 +1559,21 @@ how long it has been running, and one place decides what state an import is in:
 [`src/job-state.ts`](../../src/job-state.ts), beside [`job-failure.ts`](../../src/job-failure.ts)
 which does the same job for what a failure offers.
 
+**The card's heading is the job's title, and the slug until it has one** (`job.title ?? job.slug`,
+`src/web/AddArticle.tsx`). The title is whatever `extract` or `metadata` read, lifted onto the job by
+`runStep` and written to the row by the next progress write. Until 2026-10-07 only `extract` was
+lifted and the title reached the row only at a release or an ending, so a minimal paper's job
+(`fetch`, `metadata`) never had one, and a job that paused mid-step after `extract` lost it for
+good, because the next claim skips `extract`. One gap is left: a claimant that dies between
+`extract`'s commit and the progress write after it. An absent or blank title preserves the stored
+one. No column was added; `jobs.title` was there.
+
 `displayJob(job, now)` is **pure, with the clock injected** — a mapper that reads the wall clock is a
 mapper nothing can test — and returns one of eight states: `waiting`, `working`, `slow`, `stopping`,
 `interrupted`, `failed`, `stopped`, `done`. Four things about it are decisions rather than details.
 
 **It takes no lease, and cannot.** `Job` on the wire carries no `leaseExpiresAt`; it lives on the
-Postgres row and the filesystem `attempts` map and never reaches `publicJob`. So *running with an
+Postgres row (and, until 2026-09-05, the filesystem `attempts` map) and never reaches `publicJob`. So *running with an
 expired lease* is invisible to the browser until [the sweep](#the-browser-is-the-worker) settles it,
 and that is the design working: taking a lease here would re-derive ownership in the reader's
 browser. Elapsed time is a **display** clock and decides nothing.
@@ -1458,18 +1615,7 @@ compute `finishedAt − startedAt`. That is the same subtraction the card shows,
 fields, so the number can be held to the screen. Successful steps only, because a promise about
 finishing cannot be measured from something that did not finish.
 
-> **The trap, sprung three times in one day, and the third time it survived two reviews.** The first
-> figure came from grouping `_ai-calls.jsonl` by `runId`, which pulls in **eval batches of several
-> articles under one id**. Corrected to group by `jobId` — and that version, *"hierarchy: six runs,
-> median 409s"*, was wrong in both halves: **five of the six jobs failed at `hierarchy`**, so the
-> median was a time to *failure* printed on a card as a time to finish; and model-call spans are not
-> the clock `displayJob` shows, so the number could not be checked against the screen at all.
->
-> **The tell was there and was argued away.** One "run" was 772 seconds, and no step can run that
-> long — the claimant aborts itself at 740s. A measurement impossible under the code's own deadline
-> is not a measurement. Noticing that and explaining it away is how a wrong number survives two
-> reviews. GPT Sol found it on the third pass;
-> [silent-success.md](../reusable/silent-success.md) is the whole of it.
+The trap that measurement fell into three times in one day is in [261007g-ingest-queue-history.md § What the card says](../plans/261007g-ingest-queue-history.md#what-the-card-says-and-why-it-says-the-time).
 
 **An unmeasured step still warns, and must not say "usual" while it does.** The default threshold is
 a guess, so past it the reader is told the step *has been running for a while* — not that it is
@@ -1522,7 +1668,7 @@ error type rather than to this case — but nothing on the server puts a structu
 field** rather than spreading an error's own properties: a Drizzle failure's message carries bound
 parameters, and a provider's carries its own words.
 
-*`Too many articles already called "x"` is a different sentence and stays.* It is the retry budget
+*`Too many articles already have that name.` is a different sentence and stays.* It is the retry budget
 running out inside slug allocation, which is a fault rather than a queue state.
 
 ### One job in the app was asked for by nobody
@@ -1600,30 +1746,6 @@ bracketed codes, because none of them is a failure — [copy.md](copy.md).
 
 The plan and both reviews are
 [260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md](../plans/260831ao-a-stuck-ingest-job-the-reader-can-see-and-clear.md).
-
-### The rejected list, kept
-
-Still the right answers to the 2026-08-25 question, and pg-boss is still the first thing to
-re-evaluate — see [§ When this becomes Postgres](#when-this-becomes-postgres).
-
-| Rejected | Why |
-|---|---|
-| **BullMQ** | The best-known of these and its `updateProgress` + `QueueEvents` is exactly the progress mechanism we want — but it needs **Redis**, and [architecture.md](architecture.md) says filesystem, one process, no infrastructure. Worth a second look one day: BullMQ 6 added a Postgres backend, though its own docs still call Redis "the most battle-tested option". |
-| **pg-boss** | The runner-up — Postgres-only, nothing else to run, with retries, backoff, dead-lettering and cron included. It needed a database we didn't have, and adopting one to get a queue would have been the tail wagging the dog. **Postgres has since landed as a plan**, and this was reconsidered rather than inherited: still no, but for a different reason, and it stays the first thing to re-evaluate — see [§ When this becomes Postgres](#when-this-becomes-postgres). |
-| **graphile-worker** | The same idea as pg-boss and a good library. pg-boss has 2.7× the downloads and 1.6× the stars, which under [our first criterion](../reusable/third-party-library-selection.md#selection-criteria) — pretraining data — is the whole difference. |
-| **bee-queue** | Redis again, with less momentum than BullMQ. No upside. |
-| **fastq** | Fine, and lower-level than we need. Its enormous download count is `glob` pulling it in transitively, not people choosing it. |
-| **better-queue** | Looks like it does everything; last published September 2022, no types. A trap. |
-| **Inngest, Trigger.dev** | Hosted SaaS, or a self-hosted stack of eight to ten containers. For one reader on a laptop. |
-| **Nothing at all** — a hand-rolled FIFO | Genuinely viable at ~50 lines, and it was close. p-queue wins on the two criteria that matter here: an API a model already knows cold, and someone else owning the concurrency and abort edges. |
-
-The previous version of this project had **no queue**, and is worth reading as evidence rather than
-as precedent — [original-version/overview.md](original-version/overview.md). Its ingestion ran inline
-inside Next.js API routes, with the browser tab as the orchestrator: a React component held the task
-list and called the API once per unit of work. Their own docs call it a prototype shortcut, and it
-cost them production 504s on long documents, lost all progress on a refresh, and never got migrated.
-`PROJECT_STATUS.md` there still lists *"Background processing — move from frontend-driven to proper
-job queue"* as unstarted. So: the server owns the queue here, and the browser only watches.
 
 ## Why polling
 
@@ -1714,9 +1836,9 @@ before a window is granted, so an un-checkpointed paid call can be bought once p
 expensive fan-outs are checkpointed, which is why the number is the whole of the protection. The
 budget is per *job*: pressing Retry makes a new job with a fresh two, so the reader is the outer loop,
 and the machine gives up before the person does. `jobs.requeues` is the counter on Postgres; the
-filesystem adapter keeps it in memory, so a restart resets the cap there — weaker parity, accepted
-because a restart there is `sweepStopped`, which requeues with no budget at all, and because that
-store is not what ships.
+filesystem adapter (deleted 2026-09-05) kept it in memory, so a restart reset the cap there — weaker
+parity, accepted because a restart there was `sweepStopped`, which requeued with no budget at all,
+and because that store was not what shipped.
 
 ### A claimant that runs out of time puts the job down, and keeps its draft
 
@@ -1769,6 +1891,79 @@ only the third. And the cap is what the pause needs and the between-steps releas
 hand-back before this one was preceded by a *completed* step, so progress was structurally
 guaranteed, where a step that can never fit in one window would otherwise pause, re-claim and spend
 another window for ever.
+
+**A step can ask for the same pause itself, since 2026-10-06.** The structure step's slices stop
+themselves ahead of the deadline, so the queue's abort never reaches them; out of time, they used
+to finish the step on the headings tree and lose every gist. With a window left they now throw
+`NeedsAnotherWindow` ([`src/another-window.ts`](../../src/another-window.ts)). `runStep` reports
+that as its own outcome, `handed-back`, and `walkClaim` takes it through the same
+`pauseForDeadline` call and the same four answers as its own deadline: one path, two triggers.
+The step is told which window it is in and whether another is left (`StepContext.window`, from
+`requeues` when the step starts), and with none left it finishes on the headings tree as before.
+If the store then refuses the pause, the endings are the ones above, and the step does not fall
+back to the headings tree a second time.
+[structure-step.md § When one answer will not fit](structure-step.md#when-one-answer-will-not-fit)
+has the step's side;
+[261005j § Plan: the rest of stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)
+has the reasoning, stage C.
+
+**A step that returns after the deadline takes the same pause, since 2026-10-07.** A step that
+ignores its signal runs to the end and hands back a product. Until then that case alone *ended*
+the job: `transitionAfter` answered an `error` ending, the product was committed into a draft the
+same transaction failed, and the card said the finished steps were kept. It was reachable through
+`assets`, which answers an abort by returning and whose two clocks allow 360 s, against what was
+then a 185 s budget. Now `transitionAfter` throws the deadline instead of answering, so nothing is
+committed and the walk reaches `pauseForDeadline` with its four answers, exactly as for a step that
+obeyed. **The product is dropped on purpose**: `assets` returns a manifest whose unfetched images
+are marked `failed: "network"` and stamped current, and keeping it would publish it. The step runs
+again in the next window, on a draft that still holds every step before it.
+
+**And the budget that let `assets` start on a remnant was raised the same day.**
+`STEP_BUDGET_MS` in [`src/jobs.ts`](../../src/jobs.ts) is what the walk checks between steps: the
+next step starts only if that much of the claim is left, and otherwise the claim is handed back
+intact; the first runnable step starts ungated. A step admitted on less than its own clocks allow
+can meet our deadline instead of its own,
+and each such overrun spends one of `REQUEUE_BUDGET`'s windows, so a slow PDF could lose the
+import. `assets` went 185 s → **400 s** (its `collectAssets` cap and its PDF-figures cap, 180 s
+each, with unwinding and the storage read the figures clock does not cover) and `fetch` 150 s →
+**360 s** (three `fetchDocument`s of 110 s since a pasted address can lead to a paper source with
+two candidates). `tests/jobs-lease-budget.test.ts` derives both floors from the constants that
+enforce the clocks. These are admission estimates with slack, not hard upper bounds: `assets`
+reads blocks, its raw manifest and PDF bytes outside its collector races; `fetch` has untimed
+storage and cleanup, and page counting has only the claimant's signal. Image/figure puts are
+inside the collector races. Measured, production's worst `assets` is 92.8 s and its worst `fetch`
+4.3 s, so the estimates use the clocks rather than the measured tail; the raise adds a request
+when `structure` leaves 185–400 s (excluding 400 s). Below 185 s it already deferred.
+`fetch`'s row decides nothing today, since it is always a claim's
+first step and the first step runs ungated.
+[261007g](../plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md).
+
+**Five mode budgets followed the same day, sized by tokens rather than clocks.** `ideas`,
+`tweets`, `sketch`, the `illustrated` brief and `debate`'s up to three calls have no wall clock of their
+own: `streamMessage` sets none, the SDK's timeout stops at the response headers, and
+`openRouterJson` fetches without one. What the code does state is each call's `max_tokens`, and
+`deadlineFor` estimates full-token time at a measured Sonnet rate, so these rows reserve that
+estimate with slack. This does not bound Opus, provider waits, slower streams or failed attempts: `ideas`
+120 s → **600 s** (587 s), `tweets` 90 s → **600 s** (561 s), `sketch` 240 s → **700 s** (685 s),
+`debate` 120 s → **360 s** (318 s for one attempt per call, plus searches no token count describes).
+Production's worst runs were over every old row: 357.8 s, 114.7 s, 335.6 s and 161.6 s. Of those four, only
+`ideas` decides anything in today's app, because Skim's job is `quotes → ideas → skim`; the
+others are always queued alone or first, so their rows matter only for a hand-written job.
+**`illustrated` cannot be sized this way**: its brief's estimated full-token time is 948 s, longer than the
+claim, then up to four unclocked image calls, and production's worst run was 739.3 s. Its row went
+600 s → **700 s** as a reservation: after every Sketch duration in the measured sample it hands
+back and starts as a fresh claim's first step, avoiding a late start that risks discard.
+Admission requires total claim time of at most 40 s instead of 140 s; faster, unmeasured Sketch
+runs can still admit it. Only chains in that interval gain a hand-back. Release spends no retry
+window; the extra request can wait for queue capacity. That it can outlive even a whole claim is an open design question (a cap on plates or
+on the brief per request, or two steps). `tests/jobs-lease-budget.test.ts` derives the token floors from
+the steps' exported sizing and pins Illustrated's known timing gap explicitly.
+[261007h](../plans/261007h-five-more-step-budgets-to-what-they-measure.md).
+
+**Stop in the same position is a different signal with a different rule**: a last step that
+returns after the reader's Stop is kept and published —
+[§ A Stop during the last step keeps the article](#a-stop-during-the-last-step-keeps-the-article).
+Which of the two fired first decides which rule applies.
 
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
@@ -1832,10 +2027,10 @@ disabled at "Stopping…" for ever, with neither the claimant nor the sweep able
 makes it recoverable by machinery that already exists. It also matches the filesystem adapter, where
 no entry in `attempts` has always meant lapsed.
 
-**Taking a job away from a claimant is deliberately not done.** Guessing that an owner is dead is how
+**Taking a job away from a claimant with a live lease is deliberately not done.** Guessing that an owner is dead is how
 two runners end up writing one article, and it is only safe once every durable write is inside the
-fenced transaction — [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md), not
-built. What makes an expired lease mean something in the meantime is that the claimant sets **its own
+fenced transaction — [260827j-transactional-stage-runner.md](../plans/260827j-transactional-stage-runner.md),
+which has since been built (`pgStoreSession`); `settleExpired` in `src/store/pg-jobs.ts` now settles or requeues expired claims and clears their attempt tokens. What makes an expired lease mean something is that the claimant sets **its own
 timer**, shorter than the lease, and aborts its own step: so a lapsed lease says *the process is
 gone* rather than *the process is slow*.
 
@@ -1873,14 +2068,18 @@ than a shared path — see [block-ids.md § The freshness guard](block-ids.md#th
    specifies that `tree.json` is keyed on `hash(blocks.json) + prompt version + model id`. Three
    steps implement it — `tweets` and `summary` via the optional `isDone` above, `glossary` via the
    newer `stamp`, which hands the store four values and lets one `sameStamp` do the comparing.
-   `tree.json` and `arc.json` carry no hash at all, so `structure` and `arc` are still presence-only, and
-   `arc` still needs the force-cascade to notice that its tree moved. `labels.json` *does* carry
+   (Now: every mode step and `arc` and `assets` declare a `stamp`; only `structure` is still
+   presence-only, with an `isDone` that refuses a stand-in tree, and it deliberately has no stamp —
+   see its comment in `STEPS`.) `labels.json` *does* carry
    one, and since 2026-09-06 something **does** compare it: the `labels` step declares a `stamp()` of
    the blocks hash, its prompt version and its model, and `stepIsDone` checks it. What keeps that
    step honest across a *re-cut tree* is not the stamp but the receipt deletion in `writeArtefacts`
    ([structure-step.md § Why they are two steps](structure-step.md#two-steps)).
-2. **Atomic artefact writes across a step's whole set.** `structure` and `labels` write temp-then-rename,
-   and the store's `write` does too; the other stages still write in place, and none of it makes the
+2. **Atomic artefact writes across a step's whole set.** *(Built since: under Postgres a step's
+   artefacts, its completion and the job's transition commit in one transaction,
+   [`pg-session.ts`](../../src/store/pg-session.ts), as the section above says. What follows is the
+   filesystem-era reasoning.)* `structure` and `labels` wrote temp-then-rename,
+   and the store's `write` did too; the other stages wrote in place, and none of it made the
    *pair* `extract` produces atomic. Only a database transaction prevents that.
 
    **And the state a kill leaves is worse than "one artefact of two", which is what this said until
@@ -1919,12 +2118,55 @@ the one before it wrote. Carrying on past a failure would run the two model call
 stale file happened to be on disk, and produce a tree for the previous version of the article —
 which looks entirely fine. A [silent success](../reusable/silent-success.md).
 
+### A read or a progress write that fails does not abandon the claim
+
+Until 2026-10-07 four awaits in the walk stood outside every catcher: the freshness read
+(`stepIsDone`, in `runStep`'s `if`) and the three progress writes (`note()`: a skip, a step
+starting, a kept step). Any of them failing once left the request as a throw that recorded nothing.
+The row stayed `running` behind a live lease, so its own next advance answered `busy`, every other
+job on the article waited behind it, and it held one of the machine's slots, for up to the 760 s of
+`LEASE_MS`.
+
+Two rules now, in [`src/jobs.ts`](../../src/jobs.ts):
+
+- **A freshness read that fails is the step's failure**, caught where it is made and rethrown
+  inside `runStep`'s `try`, as a failed power read already was. The job ends `error`, retryable,
+  with its draft failed and its pointer cleared. It is never taken as "not current", which would
+  start paid work on a question nobody answered.
+- **A progress write that fails is logged and the walk goes on**, unless the failure is the fence
+  saying the claim has moved, which still stops the claimant. The step's own `beginStep` or
+  commit, which comes next, is what decides whether the store can be reached. A failed write
+  loses the card's update and one look at `cancelling`; a successful starting write checks it
+  again before the next runnable step runs. Repeated failures can delay Stop over several steps,
+  bounded by the finite step list and the claim deadline.
+
+**A step's commit writes the job's steps, so a forced step is bought once.** `force` is a request,
+and it is spent when the step's stored status is `done` (`stillForced`); the artefacts cannot say
+it, because a rebuilt one looks like the one it replaced. Until 2026-10-07 a commit that kept the
+claim wrote nothing to the `jobs` row, and `done` reached it only through the progress write
+after. Anything that lost that write left the step stored `running` and forced, the requeue put it
+back to `pending`, and the next claim ran it and paid for it again. Two roads led there: a claim
+that lapsed between the commit and the write, which is as old as the kept claim (2026-08-30), and,
+for the hours tolerant progress writes existed without this, two failed writes followed by a
+mid-step pause. The steps now go in the product's transaction (`keepStepIn`,
+[`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), which already held the job row's lock, so
+neither road is open and a progress write carries nothing a repeat purchase depends on. Status,
+lease and title are not written there.
+
+**Ending the job when a progress write fails was the other option, and it was not taken.** It
+would have made a database blink between two steps of a refresh a failed job, and Retry gives a
+forced job all its force back ([§ below](#the-failures-retry-is-not-offered-under)), so pressing
+it would run the finished forced steps again and pay again for every call in them that is not
+checkpointed.
+
+**What is still left to the lease** is a failure of the write that *settles* the job
+(`pauseForDeadline`, or `settleJob` recording a cancel or a failure): there is no further write to
+fall back on. `tests/jobs-walk.test.ts` § *the exits of a claim* has the cases;
+[261007b](../plans/261007b-seventh-sweep-job-queue-tier-0.md) has the count.
+
 ## The failures Retry is not offered under
 
-Until 2026-08-26 the button appeared under every failure. That included the ones that are
-arithmetic. Greg pasted a long article, stage 4 worked out that its answer would not fit in one
-model response, said so, and offered him a Retry — which made the identical call and failed
-identically. The whole story is in [260826a-toc-max-tokens.md](../postmortems/260826a-toc-max-tokens.md).
+Why Retry stopped appearing under every failure on 2026-08-26 is in [261007g-ingest-queue-history.md § The failures Retry is not offered under](../plans/261007g-ingest-queue-history.md#the-failures-retry-is-not-offered-under).
 
 **A failure can now say what kind it is**, and the card asks before drawing the button. The kinds
 are the four in [`src/messages.ts`](../../src/messages.ts) — the same four the reader-facing failure
@@ -1972,8 +2214,7 @@ same mistake on a chat message.
 nothing, so a retry never *forces* a step that already succeeded — but that is not the same as never
 rerunning one. Under Postgres a failed attempt's draft is discarded, and whatever its steps wrote
 went with it, so the new attempt's own freshness checks may find them gone and correctly rerun them
-anyway; only on the filesystem store, where an artefact really does stay on disk, is the skip
-guaranteed. A stage that failed while reading an artefact an earlier step wrote will read that
+anyway (the filesystem store, where an artefact really did stay on disk, is gone). A stage that failed while reading an artefact an earlier step wrote will read that
 identical artefact again. That is what separates the two lists:
 
 | Cannot come out differently | Might |
@@ -1981,7 +2222,8 @@ identical artefact again. That is what separates the two lists:
 | an answer too long for one response (`TooLongForOnePass`) | a model answer that would not parse |
 | a missing source URL — Retry asks the same `meta.json` | the wrong number of arc sentences |
 | a page Readability already refused, over cached bytes | an empty answer, a refusal, a timeout |
-| a tree that does not contain its own root | a fetch that failed at somebody else's server |
+| a tree that does not contain its own root | a fetch that failed for the moment at somebody else's server: too slow, a dropped connection, a site that is busy or in trouble |
+| a fetch the site or the address will answer the same way again: no page there, a sign-in wall, a refusal, a redirect loop, a bad certificate, something that is not a page or a PDF, a document over the size limit | |
 | a PDF over the page cap, or a chunk over the request cap | a nav-label batch that came back truncated |
 | a PDF that will not open — locked with a password, or damaged past parsing | |
 | a source document whose stored bytes are damaged — it is content-addressed, so a re-fetch lands on the same bad bytes | |
@@ -2038,12 +2280,31 @@ rather than a truncation. Hiding the button there would be wrong on both counts.
 this. It marks a plain HTTP 500 non-retryable while 502–504 are retryable, which is a sensible
 enough thing for a fetch layer to believe and not a claim that the page will never load.
 
+What the card asks instead is `fetchFailed` in [`src/messages.ts`](../../src/messages.ts): one
+sentence and one kind for each `FetchFailureCode`, declared by the fetch step at its one `.catch`
+(`fetchStepFailure` in [`src/pipeline.ts`](../../src/pipeline.ts)). Until 2026-10-04 only a
+document over the size limit had one, and every other fetch failure took the generic sentence and
+a Retry, a page that is not there included. Two of the kinds are judgement calls, recorded beside
+the map: a server name that does not resolve keeps its Retry, and so does an empty page. The
+fetcher's catch-all, `http-error`, is split by its status, because a 4xx will be repeated and a
+body that arrived in part may not be. The codes are the `fetch-` family in
+[copy.md § The bracketed code](copy.md#the-bracketed-code);
+[`tests/fetch-failure-sentences.test.ts`](../../tests/fetch-failure-sentences.test.ts) holds the
+kind for each.
+
+One `fetch-` sentence is not in that map, because it is not one of the fetcher's codes:
+`FETCH_PAPER_MISSING`, `[fetch-paper-missing]`, `blocked`. A paper source's own PDF address
+answered that it has no such document, so the reader is told to check the link or download the
+PDF and upload it, not that their page does not exist
+([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
+
 ## The one security check
 
 `isSlug` in [`src/ingest.ts`](../../src/ingest.ts) is a path-traversal guard, not a tidiness check.
 
-A slug arrives from the client on `POST /api/jobs` and is joined onto `data/` and `output/`, so
-`../../.ssh` has to be refused there or it is refused nowhere. It lives beside `slugFromUrl` because
+A slug arrives from the client on `POST /api/jobs` and was joined onto `data/` and `output/` until
+2026-09-05, so `../../.ssh` has to be refused there or it is refused nowhere; it is still the check
+that a client's slug is a plain name. It lives beside `slugFromUrl` because
 the two must not drift: everything `slugFromUrl` can produce must pass, and
 [`tests/ingest.test.ts`](../../tests/ingest.test.ts) asserts both halves.
 
@@ -2092,6 +2353,13 @@ the server asks whether to spend, and a client is not where a spending rule live
 job stays a **404** (`null`), because *no such job of yours* and *that job is not a candidate* are
 different answers.
 
+**Advance answers 404 for a job that is not there, whatever the queue is doing**, since
+2026-10-07. `claim` takes the queue's lock with `NOWAIT` and answers `busy` when another claim holds
+it, before it has looked for the job. `advanceJobWith` then read the job and assumed it was there,
+so for the moment the lock was held a missing job, or somebody else's, got 200
+`{ran: null, busy: true, done: false}` with no `job` field, and the browser's driver threw on it.
+The read is now checked. A job that exists is still told to wait.
+
 Cancelling stops a queued job outright, and a running one as fast as the step it is in allows. Every
 step gets the `AbortSignal`: the fetch layer folds it into its own deadline, and the Anthropic SDK
 takes one directly, so a model call stops mid-stream. The tokens already streamed are paid for
@@ -2119,7 +2387,7 @@ running branch's** — `draftRevisionId` included, because the running branch de
 pointer for the claimant to dispose of, and a terminal row still holding one is a draft
 `sweepAbandonedDrafts` spares for ever — a sweep which, checked 2026-09-04, **nothing called**, so
 failed drafts accumulated without bound. (Since 2026-09-11 it runs on each job's first step, scoped
-to that article, and only counts until the first deletion is approved —
+to that article; it deletes abandoned drafts —
 [cron-scheduler.md](cron-scheduler.md#what-we-do-instead-for-now).) Ranked and deliberately not built in
 [260904a](../postmortems/260904a-a-retry-minted-a-fresh-name-so-the-checkpoints-could-never-be-found.md). And the condition is written **once**, as `over`, and reused
 across every `case`: seven branches that have to agree is the shape of the bug this section is about.
@@ -2161,10 +2429,41 @@ created after `parts.session(...)` had been awaited, which under Postgres is two
 possibly a block copy — with no deadline armed for any of it. The real deadline drifted later than
 the arithmetic assumed, which is precisely what let a claimant still be alive when its lease lapsed.
 
+### A Stop during the last step keeps the article
+
+> re Stop, yes, probably best to err on the side of caution, and keep & publish
+>
+> — Greg, 2026-10-07, relayed by the Overseer
+
+**A Stop that lands while an import's last step is finishing keeps and publishes the article,
+whichever server it reached.** If the step returns its product, the product is committed, the
+draft is published and the job ends `done`. Until 2026-10-07 that was true only when the Stop
+reached another server; when it reached the claimant's own, the in-process abort made
+`transitionAfter` end the job `cancelled` and fail the draft, so the same press kept the article or
+lost it by which server answered.
+[261007f](../plans/261007f-stop-during-the-last-step-keeps-and-publishes.md) has the build.
+
+Four things it does not change. **A Stop during an earlier step** still does no more: the later
+steps do not run, the job ends `cancelled`, and the draft is failed. **A step that obeys the Stop**
+throws and leaves nothing to keep. **Our own deadline** still discards a late product and pauses
+([above](#a-claimant-that-runs-out-of-time-puts-the-job-down-and-keeps-its-draft)). And when both
+fire, the first abort's reason sticks: deadline first ends as the pause's *Stop wins* answer,
+`cancelled`; Stop first keeps the article.
+
+**`done` is the word, and the press is still on the row.** The card shows the finished state and
+says nothing about the Stop; `jobs.cancel_requested_at` keeps when it was pressed, for an operator.
+
+**Keeping is safe only if the step does not claim a part-made product is finished.** `assets`
+answers a Stop by returning a manifest in which every image not yet fetched is a failure, so it
+writes `sourceHash: "stopped-part-way"` and the manifest is not current: those images hot-link the
+publisher until a run that includes `assets` fetches them (*Refresh from source* and *Start again*
+force it). `illustrated` throws on a Stop between plates rather than publish a half-painted set
+over the last good one.
+
 ## Naming the step is the point
 
-Each row of the progress list says what is happening: *Extracting the article*, *Building the table
-of contents*. Not "Step 3 of 5", and not "Loading…".
+Each row of the progress list says what is happening: *Extracting the article*, *Building the
+structure*. Not "Step 3 of 5", and not "Loading…".
 
 That is the one thing the previous version got right without a queue at all —
 [original-version/extraction.md § Document lifecycle](original-version/extraction.md#document-lifecycle-atomic-no-processing-state)
@@ -2253,8 +2552,11 @@ Five things about it are worth knowing before touching it.
   can skip the step and still publish it.
 - **It happens on every run, since 2026-09-05.** There was a filesystem session beside it, chosen by
   the store flag, that did none of this — no draft, no publication, no database — and a suite
-  that proved it by taking `DATABASE_URL` away. Both went with the flag
-  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F);
+  that proved it by taking `DATABASE_URL` away. The branch that chose it and that suite went with
+  the flag
+  ([260903f](../plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md) § F).
+  The session itself (`fsStoreSession`) outlived them, called by one test and nothing else, until
+  2026-10-07 ([261007e](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md));
   [`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is what says
   this line opens what it says it opens.
 - **Opening it is a database call, so it can fail — and that failure ends the job.** Three doors reach
@@ -2277,13 +2579,8 @@ Five things about it are worth knowing before touching it.
   the reproduction is
   [`tests/a-claim-that-lost-its-draft.test.ts`](../../tests/a-claim-that-lost-its-draft.test.ts).
 
-**A decorator held this seam from 2026-08-30 to 2026-09-01**, and it is worth a paragraph because
-several plans and reviews are about it. `publishingSession` wrapped the *filesystem* session and, at
-the end of a `done` job, copied the files the stages had written into a draft and published that. It
-existed because the stages wrote their own files inside `run()` and returned nothing a session could
-write, so `pgStoreSession` would have refused every one of them by name. Every step returns its
-product now, so the copy has nothing left to do, and the flip
-([260831b](../plans/260831b-finish-the-database-move.md) § Stage 3 — the flip) deleted it.
+The decorator that held this seam from 2026-08-30 to 2026-09-01 is in [261007g-ingest-queue-history.md § A finished job publishes the article](../plans/261007g-ingest-queue-history.md#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not).
+
 [`copyArtefacts`](../../src/store/copy-artefacts.ts) stays, as the fixture loader it started life as.
 [`tests/claim-session-postgres.test.ts`](../../tests/claim-session-postgres.test.ts) is the proof,
 and the trick that makes it evidence is a **fresh empty scratch root per claim**, so filesystem
@@ -2331,8 +2628,8 @@ The seam is [`src/jobs.ts`](../../src/jobs.ts): `enqueue`, `listJobs`, `getJob`,
 
 ## The CLI *is* this queue <a id="they-are-the-same-functions-the-cli-runs"></a>
 
-`npm run extract`, `npm run blocks` and `npm run structure` still work, and `npm run fetch` is
-`npm run ingest`. **Since 2026-09-05 they are this queue rather than a second caller of the same
+`npm run ingest` (stage 1 and the whole default ingest), `npm run extract`, `npm run blocks` and
+`npm run structure` still work; there is no `npm run fetch`. **Since 2026-09-05 they are this queue rather than a second caller of the same
 functions**: [`scripts/stage.ts`](../../scripts/stage.ts) enqueues a job and runs `advanceJob` in a
 loop, which is what a browser tab does. So "one code path per stage, and no way for the two to
 drift" stopped being a discipline and became a fact about the shape.

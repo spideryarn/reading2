@@ -1,19 +1,17 @@
 /**
  * The client half of comments — see docs/project/comments.md.
  *
- * **Closed to new arrivals since 2026-08-26.** Selecting text used to create a
- * comment here and spend a model call on the spot; it now opens a conversation
- * instead — docs/plans/260826ab-chat-as-gateway.md. So this hook reads the explanations
- * a reader already has, and offers the two ways to ask one again: `retry` for a
- * model call that failed, `deepen` for an answer they have read and judged thin.
+ * Selecting text creates a free comment here: at once, as a yellow highlight
+ * (Reader.tsx § `selectProse`, since 2026-10-04), or in Referee mode from
+ * `AnnotateDialog`'s Save, close and Ask AI paths. Ask AI then opens a separate
+ * conversation; it does not make this create a paid request. This hook also reads existing
+ * comments, edits their reader-owned fields, and offers `retry` and `deepen` for
+ * the older explanations that are still stored on comments.
  *
- * That is why there is no longer an `ask`, and why the id is no longer minted
- * here: both re-ask paths send an id the server already knows, and the server
- * refuses one it does not. The rule lives there rather than here, because
- * deleting a function closes the React path and nothing else.
- *
- * The POST is also the answer: it streams, and the terminal frame carries the
- * finished comment, so there is nothing to poll.
+ * Creation and answering are separate routes. A create takes an id minted once
+ * by the draft; both re-answer paths use an id the server already knows, and the
+ * server refuses one it does not. Answering streams, and its terminal frame
+ * carries the finished comment, so there is nothing to poll.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -24,7 +22,8 @@ import {
   type HighlightColour,
 } from "../types.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
-import { apiFetch, failure, fetchOk, readJson } from "./lib/api.js";
+import { apiFetch, failure, fetchOk, leavingFetch, readJson, statusOf } from "./lib/api.js";
+import { useMadeFor } from "./lib/made-for.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { openingRead } from "./lib/opening-read.js";
@@ -46,6 +45,67 @@ import type { Mark } from "./PlaceOnCriterion.js";
 export type ClientComment = Comment & {
   replacing?: true;
 };
+
+/**
+ * **The fields an answer owns**, and so the only ones an answer stream may
+ * write: the six `AnswerPatch` names in src/comments.ts, which are the columns
+ * `beginAnswer` blanks and `patch` fills, plus this tab's own `replacing`.
+ * Everything else on the row is the reader's (their note, its placement, its
+ * colour, the conversation it started) or never changes (the id, the passage).
+ *
+ * Two writers share a row here, and neither waits for the other: the reader's
+ * PATCHes are queued among themselves and deliberately not behind the 15 to 25
+ * second stream (`patching`). Until 2026-10-07 each of them wrote the **whole**
+ * row from whatever copy it held, so a delta put back a note edited a moment
+ * before, and a PATCH answered mid-stream blanked the words already streamed.
+ * Now each writes its own half: `withAnswerOf` for the stream, and
+ * `landPatch` (in the hook) for a PATCH that crossed one.
+ * tests/comment-answer-stream-keeps-reader-edits.test.tsx; seventh sweep, WC1.
+ */
+type AnswerHalf = Pick<ClientComment, "status"> &
+  Partial<Pick<ClientComment, "answer" | "citations" | "searches" | "model" | "error" | "replacing">>;
+
+/** One comment's answer streams in this tab. See `answers` in the hook. */
+interface AnswerMark {
+  /** Streams open now. */
+  open: number;
+  /** Streams that have ended, however they ended. */
+  ended: number;
+}
+const NO_ANSWERS: AnswerMark = { open: 0, ended: 0 };
+
+/**
+ * `row`, with its answer replaced by `from`'s.
+ *
+ * **Replaced, not merged**: a field `from` does not carry is absent afterwards.
+ * A spread could not say that, and three things depend on it: a frame without
+ * an error clears the last attempt's `error`, the first delta drops `replacing`, and a finished
+ * answer with no citations does not keep the old ones. The keys are taken off
+ * by name rather than set to `undefined`, because `exactOptionalPropertyTypes`
+ * is on and an absent key is a different shape.
+ */
+function withAnswerOf(row: ClientComment, from: AnswerHalf): ClientComment {
+  const {
+    status: _status,
+    answer: _answer,
+    citations: _citations,
+    searches: _searches,
+    model: _model,
+    error: _error,
+    replacing: _replacing,
+    ...readers
+  } = row;
+  return {
+    ...readers,
+    status: from.status,
+    ...(from.answer !== undefined ? { answer: from.answer } : {}),
+    ...(from.citations !== undefined ? { citations: from.citations } : {}),
+    ...(from.searches !== undefined ? { searches: from.searches } : {}),
+    ...(from.model !== undefined ? { model: from.model } : {}),
+    ...(from.error !== undefined ? { error: from.error } : {}),
+    ...(from.replacing ? { replacing: true as const } : {}),
+  };
+}
 
 /**
  * What a selection knows about the passage it is marking — or, from the
@@ -78,8 +138,10 @@ interface NewCommentInputFields {
    */
   mark?: Mark;
   /**
-   * A highlight's colour, if the reader picked one. Only on a selection: the
-   * server refuses a colour on a whole-block bookmark.
+   * A highlight's colour, if the saved selection has one. Yellow is what a
+   * selection is stored in (`DEFAULT_HIGHLIGHT`, fresh-highlight.ts), so it
+   * need not have been picked explicitly. Only on a selection: the server
+   * refuses a colour on a whole-block bookmark.
    */
   colour?: HighlightColour;
 }
@@ -133,10 +195,10 @@ export interface CommentsApi {
    * calling a failed load a failed save. Plan 260908f § A.
    */
   loadError: string | null;
-  /* **No `ask`.** Selecting text used to create a comment and spend a model
-     call on the spot; since 2026-08-26 it opens a conversation instead
-     (docs/plans/260826ab-chat-as-gateway.md), so nothing creates a new explanation and
-     this hook is a reader of old ones plus the two ways to re-ask them.
+  /* **No `ask`.** A new comment is always free. `AnnotateDialog`'s Ask AI path
+     stores it through `create`, then opens a separate chat composer; nothing in
+     this hook creates a new explanation. It only reads the old ones still on
+     comments and offers the two ways to re-answer them.
 
      The rule is not enforced here. `POST /api/comments/:slug` refuses an id it
      has not already stored, because deleting a function closes the React path
@@ -151,6 +213,14 @@ export interface CommentsApi {
    * server refused — the caller needs to know before it opens a chat about it.
    */
   create(input: NewCommentInput): Promise<Comment | null>;
+  /**
+   * **`create`, when the page is being torn down** (`pagehide`): the same
+   * request, started at once as a `keepalive` write (`leavingFetch`,
+   * src/web/lib/api.ts), because an ordinary fetch from a dying page often
+   * never leaves. Best effort by nature — nothing is awaited and nothing is
+   * drawn. Its one caller is the draft in `AnnotateDialog` (plan 261003i, D2).
+   */
+  createOnLeave(input: NewCommentInput): void;
   /** Change the reader's words, or clear them back to a bare bookmark. */
   edit(id: string, body: string | null): Promise<void>;
   /**
@@ -223,11 +293,101 @@ function markFields(mark: Mark | undefined): { criterionId?: string; valence?: n
   };
 }
 
+/**
+ * The request that creates a comment — one spelling, for the ordinary write and
+ * the leaving one, so the two cannot come to store different things.
+ */
+function createRequest(input: NewCommentInput): RequestInit {
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      id: input.id,
+      blockId: input.blockId,
+      /* No `quote` and no `start` is a whole-block bookmark; the route
+         refuses one without the other. */
+      ...anchorFields(input),
+      ...(input.body ? { body: input.body } : {}),
+      ...markFields(input.mark),
+      ...(input.colour ? { colour: input.colour } : {}),
+    }),
+  };
+}
+
+/** The row drawn while a free create is in flight. */
+function optimisticComment(input: NewCommentInput): ClientComment {
+  return {
+    id: input.id,
+    blockId: input.blockId,
+    ...anchorFields(input),
+    createdAt: new Date().toISOString(),
+    ...(input.body ? { body: input.body } : {}),
+    /* The placement goes on the optimistic row too, so the dialog that opens
+       over it is already showing the judgement the referee just made rather
+       than catching up a beat later. */
+    ...markFields(input.mark),
+    ...(input.colour ? { colour: input.colour } : {}),
+    status: "none",
+  };
+}
+
+/** Send a create after its hook has gone, with no React state left to update. */
+async function createAfterLeaving(
+  url: string,
+  input: NewCommentInput,
+  madeFor: string | null,
+): Promise<Comment | null> {
+  try {
+    const r = await fetchOk(url, createRequest(input), madeFor);
+    return (await readJson<{ comment: Comment }>(r)).comment;
+  } catch {
+    return null;
+  }
+}
+
+/** How an opening read ended, as far as a held `create` cares — `opening`. */
+type OpeningEnd = "live" | "gone";
+
+interface OpeningGate {
+  /** How it ended, or `null` while the read is still out. Read synchronously. */
+  settled: OpeningEnd | null;
+  /** The same, for a `create` that has to wait. Never rejects. */
+  done: Promise<OpeningEnd>;
+  /** First call wins: a read that answered cannot later be called gone. */
+  settle(end: OpeningEnd): void;
+}
+
+function openGate(): OpeningGate {
+  let resolve!: (end: OpeningEnd) => void;
+  const gate: OpeningGate = {
+    settled: null,
+    done: new Promise<OpeningEnd>((r) => {
+      resolve = r;
+    }),
+    settle(end) {
+      if (gate.settled !== null) return;
+      gate.settled = end;
+      resolve(end);
+    },
+  };
+  return gate;
+}
+
+/** Before the first effect, and after the last cleanup: no list to draw in. */
+const GONE: OpeningGate = { settled: "gone", done: Promise.resolve("gone"), settle() {} };
+
 export function useComments(slug: string): CommentsApi {
   const [comments, setComments] = useState<ClientComment[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /* **Whose comments these are** (lib/made-for.ts), for creates and queued
+     edits that can send late: `AnnotateDialog` stores an unsaved draft from its
+     unmount cleanup and from `pagehide`, and a change of reader is what
+     unmounts it. Unnamed, the draft was stored on the next reader's article
+     of the same slug. `null` for a visitor, who makes none.
+     docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+  const madeFor = useMadeFor();
 
   /**
    * Ids the reader has deleted while their answer was still in the air.
@@ -264,21 +424,42 @@ export function useComments(slug: string): CommentsApi {
    *    the screen disagrees with it until the next reload, which is the shape
    *    docs/reusable/silent-success.md is about.
    *
-   * Only the PATCHes queue here (`edit`, `place`, and `recolour` since
-   * 2026-10-03). `send` streams for 15-25 seconds and
-   * putting an edit behind it would freeze the reader's own note for the length
-   * of a model call; `forget` is a DELETE the tombstone already makes win.
+   * A `create` is the first link when one is still live; then the PATCHes queue
+   * here (`edit`, `place`, and `recolour` since 2026-10-03). `send` streams for
+   * 15-25 seconds and putting an edit behind it would freeze the reader's own
+   * note for the length of a model call; `forget` is a DELETE the tombstone
+   * already makes win.
    * GPT Sol, reviewing the built code, 2026-09-01.
    */
   const patching = useRef(new Map<string, Promise<void>>());
 
+  /**
+   * Creates that have been called but have not settled, including ones still
+   * held behind the opening read.
+   *
+   * `remove` uses this to avoid sending DELETE in front of a POST that has not
+   * made a row yet; the create itself either notices the tombstone before it
+   * sends, or re-deletes after its response. The same create is also the first
+   * link in `patching`, so an edit of its optimistic id cannot PATCH a row that
+   * does not exist yet.
+   */
+  const creating = useRef(new Map<string, Promise<Comment | null>>());
+
   // Switching article throws the tombstones away with the comments they name.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: slug scopes these registries to one article
   useEffect(() => {
     const gone = deleted.current;
     const chains = patching.current;
+    const births = creating.current;
     return () => {
-      gone.clear();
-      chains.clear();
+      /* Replace rather than clear. A create held for the article we are leaving
+         still needs its old tombstones and chain after this cleanup releases
+         its opening gate. The new article must not inherit either collection. */
+      if (deleted.current === gone) deleted.current = new Set<string>();
+      if (patching.current === chains) patching.current = new Map<string, Promise<void>>();
+      if (creating.current === births) {
+        creating.current = new Map<string, Promise<Comment | null>>();
+      }
     };
   }, [slug]);
 
@@ -298,14 +479,54 @@ export function useComments(slug: string): CommentsApi {
    * still means *this write is done* — which is what
    * tests/refused-writes-are-reported.test.tsx waits on.
    */
-  const queue = useCallback((id: string, write: () => Promise<void>): Promise<void> => {
-    const next = (patching.current.get(id) ?? Promise.resolve()).then(write, write);
-    patching.current.set(id, next);
+  const queue = useCallback((
+    id: string,
+    write: (isCurrent: () => boolean) => Promise<void>,
+  ): Promise<void> => {
+    const tombstones = deleted.current;
+    const chains = patching.current;
+    /* The write still belongs to this captured article after a slug change, but
+       its response no longer belongs in the hook's now-new state. */
+    const isCurrent = () => patching.current === chains;
+    const run = () => (tombstones.has(id) ? Promise.resolve() : write(isCurrent));
+    const next = (chains.get(id) ?? Promise.resolve()).then(run, run);
+    chains.set(id, next);
     return next;
   }, []);
 
+  /**
+   * **The opening read, as something a `create` can wait behind.**
+   *
+   * That read's answer *replaces* the list, so a row created while it is out is
+   * wiped from the tab when it lands
+   * (docs/postmortems/260908c-an-opening-read-can-erase-a-later-write.md).
+   * Since 2026-09-11 the Save button has waited on `loaded` for that reason, and
+   * while a press was the only way to save that was enough. Since 2026-10-03 it
+   * is not: the box a selection opens stores its draft on the way *out* — the ×,
+   * Escape, another selection, an unmount — and a box that is going away has no
+   * button to wait at. So the order is kept here too, in the one place every
+   * create passes through. GPT Sol's review of plan 261003i, D3. The button's
+   * gate stays: it is what tells the reader why nothing happened.
+   *
+   * `settled` is the synchronous half, and it is what keeps the ordinary case
+   * as it was: once the list is in, `create` draws its row in the same turn.
+   *
+   * It ends one of two ways. `"live"`: the read answered, failed or was given
+   * up on at its deadline — in every case it can no longer commit a snapshot,
+   * and (resolved after `setComments` in the same callback) the held create's
+   * row is queued behind the list's. `"gone"`: this hook went away, or moved to
+   * another article, first. The reader's words are still theirs, so the held
+   * create is still **sent**; it just has no list left to draw itself in.
+   *
+   * A ref, set by the effect below, rather than state: `create` must see the
+   * gate that is current when it is *called*, not the one it closed over.
+   */
+  const opening = useRef<OpeningGate>(GONE);
+
   useEffect(() => {
     let live = true;
+    const gate = openGate();
+    opening.current = gate;
     setComments([]);
     /* Both cleared alongside the comments, not left over from the last article
        — the whole point of them is that they describe *this* slug's fetch. */
@@ -330,6 +551,8 @@ export function useComments(slug: string): CommentsApi {
         if (body.error) setLoadError(body.error);
         else setComments(body.comments ?? []);
         setLoaded(true);
+        /* After the list is queued, so a held create's row lands on top of it. */
+        gate.settle("live");
       })
       .catch((e: Error) => {
         if (!live) return;
@@ -338,10 +561,15 @@ export function useComments(slug: string): CommentsApi {
            network is down waits for ever, spinner turning, next to an error
            message — one of them lying. See `loaded` in CommentsApi. */
         setLoaded(true);
+        gate.settle("live");
       });
     return () => {
       live = false;
       read.abandon();
+      /* Release whatever is held behind this read: it is never going to answer
+         now, and a create left waiting on it would be the reader's words kept
+         in a promise nobody resolves. */
+      gate.settle("gone");
     };
   }, [slug]);
 
@@ -354,21 +582,92 @@ export function useComments(slug: string): CommentsApi {
     );
   }, []);
 
+  /**
+   * **An answer frame, written onto the row as it is on screen now.**
+   *
+   * `put`, for the half an answer stream owns: the answer fields come from
+   * `next`, and every other field stays as the tab currently has it, whatever
+   * copy of the row `next` was built from. See `withAnswerOf`.
+   *
+   * A row that is not there is appended whole, as `put` would: that is the
+   * re-minted id, whose optimistic row `send` has just dropped.
+   */
+  const putAnswer = useCallback((next: ClientComment) => {
+    setComments((prev) =>
+      prev.some((c) => c.id === next.id)
+        ? prev.map((c) => (c.id === next.id ? withAnswerOf(c, next) : c))
+        : [...prev, next],
+    );
+  }, []);
+
+  /**
+   * The answer streams of each comment, in this tab: how many are open now,
+   * and how many have ended. `send` writes it; `landPatch` reads it, through
+   * `answerMark`, to ask whether one was open at any point while a PATCH was
+   * out.
+   *
+   * `ended` as well as `open`, because the case that matters most is the one
+   * where nothing is open at either end: the PATCH was sent while an answer
+   * streamed and answered after it finished. Not cleared on a change of
+   * article: nothing renders from it, and a count nobody asks about is inert.
+   */
+  const answers = useRef(new Map<string, AnswerMark>());
+  const answerMark = useCallback(
+    (id: string): AnswerMark => answers.current.get(id) ?? NO_ANSWERS,
+    [],
+  );
+
+  /**
+   * **A PATCH's answer, put on screen.** `edit`, `place` and `recolour` all end
+   * here.
+   *
+   * The server's comment **replaces** the stored one; it is not merged over
+   * it. A merge cannot express a *removal*: clearing the body returns a comment
+   * with no `body` key, and `{ ...c, ...comment }` keeps the old one, so a
+   * reader who emptied the box watched their words come straight back. The
+   * response is the whole row, so replacing is both correct and the only thing
+   * that can clear a field. GPT Sol, reviewing the built code, 2026-08-28.
+   *
+   * **Except the answer, when an answer stream was open at any point while
+   * this PATCH was out** (`sentAt` is `answerMark(id)` from just before the
+   * request). The response is a snapshot from the moment the write committed,
+   * and for the length of a stream that snapshot says `pending` with no
+   * answer. Landing after a delta it blanked the words on screen; landing
+   * after the `done` frame it brought the spinner back, and nothing would ever
+   * stop it. So then the reader's half comes from the response and the
+   * answer's half stays as the stream left it. With no stream in the way the
+   * response is the newest word on every column and the whole row is taken, as
+   * before. Seventh sweep, WC1 (the Opus review's reverse interleaving).
+   */
+  const landPatch = useCallback(
+    (id: string, comment: Comment, sentAt: AnswerMark) => {
+      const now = answerMark(id);
+      const crossed = sentAt.open > 0 || now.open > 0 || now.ended !== sentAt.ended;
+      setComments((prev) =>
+        prev.map((c) => (c.id !== id ? c : crossed ? withAnswerOf(comment, c) : comment)),
+      );
+    },
+    [answerMark],
+  );
+
   /** The DELETE itself, checked. Also used to re-delete after a late answer. */
   const forget = useCallback(
-    async (id: string) => {
+    async (id: string, reportFailure = true) => {
       try {
         // A DELETE that 500s used to remove the comment from the screen and say
         // nothing, so the reader saw it gone and found it back after a reload.
         // `fetchOk` is that check made unforgettable — lib/api.ts.
         await fetchOk(`/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
           { method: "DELETE" },
+          madeFor,
         );
       } catch (e) {
-        setError(describeFetchFailure(e as Error));
+        /* A write captured for the article we just left must still finish, but
+           its failure does not belong in the next article's error state. */
+        if (reportFailure) setError(describeFetchFailure(e as Error));
       }
     },
-    [slug],
+    [slug, madeFor],
   );
 
   /**
@@ -409,7 +708,7 @@ export function useComments(slug: string): CommentsApi {
         status: "pending",
         ...(previous ? { answer: previous, replacing: true as const } : {}),
       };
-      put(pending);
+      putAnswer(pending);
       setError(null);
       // Asking again un-deletes: the reader is plainly no longer finished with
       // it, whatever they clicked a moment ago.
@@ -422,6 +721,21 @@ export function useComments(slug: string): CommentsApi {
       let id = pending.id;
       let text = "";
       let settled = false;
+
+      /* This stream is open, as far as a PATCH's answer is concerned, from here
+         to the `finally` below: see `answers` and `landPatch`. Under every id
+         the row goes by, because the server may re-mint it at `begin`. */
+      const marks = answers.current;
+      const names = new Set([pending.id]);
+      const opened = (name: string) => {
+        const was = marks.get(name) ?? NO_ANSWERS;
+        marks.set(name, { open: was.open + 1, ended: was.ended });
+      };
+      const closed = (name: string) => {
+        const was = marks.get(name) ?? NO_ANSWERS;
+        marks.set(name, { open: was.open - 1, ended: was.ended + 1 });
+      };
+      opened(pending.id);
 
       void (async () => {
         try {
@@ -453,13 +767,18 @@ export function useComments(slug: string): CommentsApi {
              `sse(res)` beats every 15 seconds on this route too, so the same
              60-second silence means the same thing here. */
           for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
-            /* **Read to the end even when the reader has deleted it.** Breaking
-               out here was the obvious thing and it loses the row: the server
-               writes the answer on its own `done`, *after* our DELETE has run,
-               so the comment comes back on the next reload. The `done` branch
-               below is what re-sends the DELETE once the write it is racing has
-               definitely landed — so the loop has to reach it. Until then the
-               deleted row is simply not drawn. */
+            /* **Read to the end even when the reader has deleted it.** The
+               reason given here until 2026-10-07 is no longer true: that the
+               server writes the answer on its own `done`, after our DELETE has
+               run, "so the comment comes back on the next reload". The answer's
+               write is an `UPDATE` (`pgCommentStore.patch`), which cannot bring
+               back a row a DELETE removed; pinned by
+               tests/comment-answer-stream-lifetime.test.ts § *a comment deleted
+               mid-answer*. What reading on still does is reach the `done`
+               branch, which sends the DELETE a second time. After the first
+               succeeds that is a no-op (a missing id answers 200); if the first
+               fails, the second can still remove the row. Until
+               then the deleted row is simply not drawn. */
             const gone = deleted.current.has(id);
             if (event.name === "begin") {
               const begun = event.data as Comment;
@@ -471,9 +790,13 @@ export function useComments(slug: string): CommentsApi {
                 const stale = id;
                 setComments((prev) => prev.filter((c) => c.id !== stale));
                 id = begun.id;
+                names.add(id);
+                opened(id);
               }
               if (!gone) {
-                put({ ...begun, ...(previous ? { answer: previous, replacing: true as const } : {}) });
+                /* The answer half only. `begun` is the row as the server
+                   claimed it, and a PATCH answered since then is newer than it. */
+                putAnswer({ ...begun, ...(previous ? { answer: previous, replacing: true as const } : {}) });
               }
               continue;
             }
@@ -485,12 +808,12 @@ export function useComments(slug: string): CommentsApi {
               // `replacing` deliberately dropped: from the first word on, what
               // is on screen is the new answer, not the old one being held.
               if (!gone) {
-                /* Spread, for the reason on `pending` above: a delta must not
-                   be the moment the reader's own note leaves the screen.
-                   `replacing` goes, because from the first word on what is on
-                   screen is the new answer, not the old one being held. */
-                const { replacing: _held, ...rest } = pending;
-                put({ ...rest, id, status: "pending", answer: text });
+                /* A delta must not be the moment the reader's own note leaves
+                   the screen, nor the moment an edit they made a second ago
+                   does: only the answer is written, onto the row as it is now
+                   (`putAnswer`). `carried` is the fallback for a row that has
+                   gone: the row from before the request, without its answer. */
+                putAnswer({ ...carried, id, status: "pending", answer: text });
               }
               continue;
             }
@@ -499,13 +822,19 @@ export function useComments(slug: string): CommentsApi {
               const done = event.data as Comment;
               if (deleted.current.has(done.id)) {
                 /* Deleted while the answer was in the air. The DELETE we sent
-                   may have run *before* the server finished writing, so the row
-                   can be back on disk; send it again now that nothing else will
-                   write it. */
+                   may have run *before* the server finished writing. That write
+                   cannot recreate a deleted row. After the first DELETE
+                   succeeds, the second is a no-op; if it failed or is still
+                   in flight, this one can perform the deletion. */
                 void forget(done.id);
                 return;
               }
-              put(done);
+              /* The answer half only, here too. The frame is the stored row
+                 (src/routes.ts § `settle`), but a PATCH can commit after the
+                 server read it and be answered before this is, and a server
+                 from before 2026-10-07 sent the row as it was when the answer
+                 began. */
+              putAnswer(done);
               return;
             }
           }
@@ -521,8 +850,8 @@ export function useComments(slug: string): CommentsApi {
           if (deleted.current.has(id)) return;
           const message = describeFetchFailure(e as Error);
           setError(message);
-          put({
-            ...pending,
+          putAnswer({
+            ...carried,
             id,
             status: "error",
             error: message,
@@ -536,10 +865,12 @@ export function useComments(slug: string): CommentsApi {
                 ? { answer: previous, replacing: true as const }
                 : {}),
           });
+        } finally {
+          for (const name of names) closed(name);
         }
       })();
     },
-    [slug, put, forget],
+    [slug, putAnswer, forget],
   );
 
 
@@ -547,8 +878,8 @@ export function useComments(slug: string): CommentsApi {
    * Make a free comment.
    *
    * **The caller mints the id once for the act it is saving**, so the mark can
-   * be drawn and the dialog opened in the same frame the reader lets go of the
-   * mouse. For a draft that is once per draft; for the gutter it survives an
+   * be drawn in the same turn the dialog closes or Save is pressed. For a draft
+   * that is once per draft; for the gutter it survives an
    * uncertain retry (`makeBlockBookmarker`). The server takes it as given
    * unless it is malformed or already used — and "already used by a different
    * comment" is a 409 rather than an overwrite, which is what stops a collision
@@ -560,67 +891,139 @@ export function useComments(slug: string): CommentsApi {
    * is not on their next visit.
    */
   const create = useCallback(
-    async (input: NewCommentInput): Promise<Comment | null> => {
+    (input: NewCommentInput): Promise<Comment | null> => {
       const id = input.id;
-      const optimistic: ClientComment = {
-        id,
-        blockId: input.blockId,
-        ...anchorFields(input),
-        createdAt: new Date().toISOString(),
-        ...(input.body ? { body: input.body } : {}),
-        /* The placement goes on the optimistic row too, so the dialog that
-           opens over it is already showing the judgement the referee just
-           made rather than catching up a beat later. */
-        ...markFields(input.mark),
-        ...(input.colour ? { colour: input.colour } : {}),
-        status: "none",
-      };
-      /* What was under this id before, if anything, so a failure can put it
-         back rather than delete it. Blindly filtering by id on the way out
-         would remove a *legitimate* comment in the one case that matters — an
-         id collision — which is the failure the rollback exists to prevent.
-         GPT Sol, reviewing the built code. */
-      let displaced: ClientComment | undefined;
-      setComments((prev) => {
-        displaced = prev.find((c) => c.id === id);
-        return prev.some((c) => c.id === id)
-          ? prev.map((c) => (c.id === id ? optimistic : c))
-          : [...prev, optimistic];
-      });
-      setError(null);
-      try {
-        const r = await fetchOk(`/api/comments/${encodeURIComponent(slug)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id,
-            blockId: input.blockId,
-            /* No `quote` and no `start` is a whole-block bookmark; the route
-               refuses one without the other. */
-            ...anchorFields(input),
-            ...(input.body ? { body: input.body } : {}),
-            ...markFields(input.mark),
-            ...(input.colour ? { colour: input.colour } : {}),
-          }),
-        });
-        const { comment } = await readJson<{ comment: Comment }>(r);
-        /* The server may have minted a different id. Drop the row we invented
-           before putting the real one, or `put` appends it and the reader has
-           two marks over one passage. */
-        if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
-        put(comment);
-        return comment;
-      } catch (e) {
-        setComments((prev) =>
-          displaced
-            ? prev.map((c) => (c.id === id ? displaced! : c))
-            : prev.filter((c) => c.id !== id),
-        );
-        setError(describeFetchFailure(e as Error));
-        return null;
-      }
+      /* The same id while its first create is live is the same attempt. Apart
+         from avoiding two POSTs, this keeps a retry from clearing the tombstone
+         that is making an older, deleted attempt stop. Once that task has
+         settled, a new call really is a new attempt — notably the gutter
+         bookmark's retry after a cancelled create — and may reuse the id. */
+      const existing = creating.current.get(id);
+      if (existing) return existing;
+      const url = `/api/comments/${encodeURIComponent(slug)}`;
+      const tombstones = deleted.current;
+      const isCurrent = () => deleted.current === tombstones;
+      tombstones.delete(id);
+      const births = creating.current;
+      const chains = patching.current;
+      const task = (async (): Promise<Comment | null> => {
+        /* **Behind the opening read, if it is still out** — see `opening`. The
+           `settled` check keeps the ordinary case synchronous: no `await`, so
+           the mark is drawn in the turn the caller asks to store it. */
+        const gate = opening.current;
+        const list = gate.settled ?? (await gate.done);
+        /* Deleted while held: no row existed yet, so the right DELETE is no
+           request at all. `remove` left the tombstone for this check. */
+        if (tombstones.has(id)) return null;
+        if (list === "gone") {
+          /* The hook left this article while the create was held (or, in the gap
+             between a new article's render and its effect, before there was a
+             read to wait behind). Send the words; touch no state — the list on
+             screen, if there is one, is another article's. */
+          return createAfterLeaving(url, input, madeFor);
+        }
+        const optimistic = optimisticComment(input);
+        /* What was under this id before, if anything, so a failure can put it
+           back rather than delete it. Blindly filtering by id on the way out
+           would remove a *legitimate* comment in the one case that matters — an
+           id collision — which is the failure the rollback exists to prevent.
+           GPT Sol, reviewing the built code. */
+        let displaced: ClientComment | undefined;
+        if (isCurrent()) {
+          setComments((prev) => {
+            displaced = prev.find((c) => c.id === id);
+            return prev.some((c) => c.id === id)
+              ? prev.map((c) => (c.id === id ? optimistic : c))
+              : [...prev, optimistic];
+          });
+          setError(null);
+        }
+        try {
+          const r = await fetchOk(url, createRequest(input), madeFor);
+          const { comment } = await readJson<{ comment: Comment }>(r);
+          if (tombstones.has(id)) {
+            /* DELETE was deliberately held behind this POST. Now the row is
+               known to exist, make the reader's later action win. */
+            await forget(comment.id, isCurrent());
+            return null;
+          }
+          /* The server may have minted a different id. Drop the row we invented
+             before putting the real one, or `put` appends it and the reader has
+             two marks over one passage. */
+          if (isCurrent()) {
+            if (comment.id !== id) setComments((prev) => prev.filter((c) => c.id !== id));
+            put(comment);
+          }
+          return comment;
+        } catch (e) {
+          if (tombstones.has(id)) {
+            /* The POST was already in flight when delete happened. With no HTTP
+               response, or a server failure, it may have committed before its
+               answer was lost. Retry the identical idempotent create first: a
+               success proves this id names our row and it is safe to DELETE; a
+               409 proves it names a collision that must not be touched. */
+            const status = statusOf(e);
+            if (status === null || status >= 500) {
+              try {
+                const retry = await fetchOk(url, createRequest(input), madeFor);
+                const { comment } = await readJson<{ comment: Comment }>(retry);
+                await forget(comment.id, isCurrent());
+              } catch (retryError) {
+                /* A 409 confirms a collision, so preserving that row completes
+                   the reader's delete of this attempted create. Any other
+                   failure leaves it genuinely unknown whether their row is on
+                   disk; say so rather than showing a deletion that may undo
+                   itself on reload. The single retry remains bounded. */
+                if (statusOf(retryError) !== 409 && isCurrent()) {
+                  setError(describeFetchFailure(retryError as Error));
+                }
+              }
+            }
+            return null;
+          }
+          if (isCurrent()) {
+            setComments((prev) =>
+              displaced
+                ? prev.map((c) => (c.id === id ? displaced! : c))
+                : prev.filter((c) => c.id !== id),
+            );
+            setError(describeFetchFailure(e as Error));
+          }
+          return null;
+        }
+      })();
+
+      births.set(id, task);
+      /* The create is the first write in this id's PATCH queue. An edit made
+         from an optimistic row waits until POST has made a real row. */
+      chains.set(id, task.then(() => undefined, () => undefined));
+      void task.then(
+        () => {
+          if (births.get(id) === task) births.delete(id);
+        },
+        () => {
+          if (births.get(id) === task) births.delete(id);
+        },
+      );
+      return task;
     },
-    [slug, put],
+    [slug, put, forget, madeFor],
+  );
+
+  /**
+   * `create`, for a page that is going away — see `CommentsApi.createOnLeave`.
+   *
+   * No optimistic row, no waiting behind the opening read, and no answer read:
+   * there may be no page left to do any of it on. If the page comes back from
+   * the back/forward cache, `AnnotateDialog` replays the frozen request through
+   * ordinary `create`, which reconciles this tab's list before closing the box.
+   */
+  const createOnLeave = useCallback(
+    (input: NewCommentInput): void => {
+      // `void`: it never rejects, and nothing may wait on it (api.ts § `leavingFetch`).
+      void leavingFetch(`/api/comments/${encodeURIComponent(slug)}`, createRequest(input), madeFor);
+    },
+    [slug, madeFor],
   );
 
   /**
@@ -637,8 +1040,9 @@ export function useComments(slug: string): CommentsApi {
    */
   const edit = useCallback(
     (id: string, body: string | null): Promise<void> =>
-      queue(id, async () => {
-        setError(null);
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`,
@@ -647,26 +1051,20 @@ export function useComments(slug: string): CommentsApi {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ body }),
             },
+            madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          /* **The server's comment replaces the stored one; it is not merged
-             over it.** A merge cannot express a *removal*: clearing the body
-             returns a comment with no `body` key, and `{ ...c, ...comment }`
-             keeps the old one — so a reader who emptied the box watched their
-             words come straight back. The response is the whole row, so
-             replacing is both correct and the only thing that can clear a
-             field. The one client-only field, `replacing`, deliberately does
-             not survive an edit. GPT Sol, reviewing the built code, 2026-08-28.
-
-             Replacing is also why this had to be queued: it carries the mark
-             the server held when it answered, so out of order it is a mark the
-             referee has already changed. */
-          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          /* Replaced, not merged: `landPatch` says why, and what it leaves
+             alone when an answer was streaming. Replacing is also why this had
+             to be queued: the response carries the mark the server held when
+             it answered, so out of order it is a mark the referee has already
+             changed. */
+          if (isCurrent()) landPatch(id, comment, sentAt);
         } catch (e) {
-          setError(describeFetchFailure(e as Error));
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue],
+    [slug, queue, madeFor, answerMark, landPatch],
   );
 
   /**
@@ -701,8 +1099,9 @@ export function useComments(slug: string): CommentsApi {
    */
   const place = useCallback(
     (id: string, mark: Mark): Promise<void> =>
-      queue(id, async () => {
-        setError(null);
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/mark`,
@@ -716,14 +1115,15 @@ export function useComments(slug: string): CommentsApi {
                  start travelling by accident. */
               body: JSON.stringify({ criterionId: mark.criterionId, valence: mark.valence }),
             },
+            madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) landPatch(id, comment, sentAt);
         } catch (e) {
-          setError(describeFetchFailure(e as Error));
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue],
+    [slug, queue, madeFor, answerMark, landPatch],
   );
 
   /**
@@ -737,8 +1137,9 @@ export function useComments(slug: string): CommentsApi {
    */
   const recolour = useCallback(
     (id: string, colour: HighlightColour | null): Promise<void> =>
-      queue(id, async () => {
-        setError(null);
+      queue(id, async (isCurrent) => {
+        if (isCurrent()) setError(null);
+        const sentAt = answerMark(id);
         try {
           const r = await fetchOk(
             `/api/comments/${encodeURIComponent(slug)}/${encodeURIComponent(id)}/colour`,
@@ -747,14 +1148,15 @@ export function useComments(slug: string): CommentsApi {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ colour }),
             },
+            madeFor,
           );
           const { comment } = await readJson<{ comment: Comment }>(r);
-          setComments((prev) => prev.map((c) => (c.id === id ? comment : c)));
+          if (isCurrent()) landPatch(id, comment, sentAt);
         } catch (e) {
-          setError(describeFetchFailure(e as Error));
+          if (isCurrent()) setError(describeFetchFailure(e as Error));
         }
       }),
-    [slug, queue],
+    [slug, queue, madeFor, answerMark, landPatch],
   );
 
   /**
@@ -818,9 +1220,14 @@ export function useComments(slug: string): CommentsApi {
     (id: string) => {
       deleted.current.add(id);
       setComments((prev) => prev.filter((c) => c.id !== id));
-      // If a POST is still out, its `.then` re-sends the DELETE once the write
-      // it is racing has definitely landed. Doing it only here would let the
-      // POST write the row back after we deleted it.
+      /* A create still owns this id. It will either see the tombstone before
+         POST and cancel, or see it after the response and DELETE then. Sending
+         DELETE here would race in front of a row that does not exist yet. */
+      if (creating.current.has(id)) return;
+      // An answer POST is not in `creating`: its `done` handler re-sends this
+      // DELETE once the write it is racing has landed. That write is an UPDATE,
+      // which cannot put a deleted row back. Either DELETE may be the one that
+      // succeeds; the second is a no-op once the first has succeeded.
       void forget(id);
     },
     [forget],
@@ -832,6 +1239,7 @@ export function useComments(slug: string): CommentsApi {
     loadFailed: loadError !== null,
     loadError,
     create,
+    createOnLeave,
     edit,
     place,
     recolour,

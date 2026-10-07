@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { blockIndex } from "../src/section-path.js";
+import { checkTree } from "../src/tree-invariants.js";
 import type { Arc, Block, CitedWork, FaqQuestion, Idea, TimelineEvent, Tree, TreeNode } from "../src/types.js";
 import {
   type MarginClaim,
@@ -12,6 +13,7 @@ import {
   DRAWN_RELATIONS,
   marginaliaNotes,
   arcAt,
+  headBlock,
   headPath,
   layoutNotes,
   type MarginEntry,
@@ -222,6 +224,111 @@ describe("the head", () => {
   });
 });
 
+/**
+ * **The block the head speaks for** (qi-2ymfq3ek, plan 261004l § D): above the
+ * first part the head borrows the first part's first block, and nowhere else.
+ * The ids are deliberately out of string order against document order: block 1
+ * sorts *after* the first part's first block as a string, so a comparison of
+ * ids rather than of index positions answers wrongly here
+ * (docs/project/block-ids.md § the warning on range checks).
+ */
+describe("the block the head speaks for", () => {
+  const order = ["spya-zzzzz1", "spya-mmmmm2", "spya-aaaaa3", "spya-kkkkk4", "spya-bbbbb5", "spya-ccccc6"];
+  const at = new Map(order.map((id, i) => [id, i]));
+  /* Block 1 above every part; part A over 2–3; block 4 in a gap; part B over 5; block 6 after the last. */
+  const gapped = {
+    version: "t",
+    generator: "t",
+    slug: "s",
+    rootId: "root",
+    nodes: {
+      root: node({ id: "root", depth: 0, range: ["spya-zzzzz1", "spya-ccccc6"], title: "Article", children: ["a", "b"] }),
+      a: node({ id: "a", depth: 1, parent: "root", range: ["spya-mmmmm2", "spya-aaaaa3"], title: "Part A" }),
+      b: node({ id: "b", depth: 1, parent: "root", range: ["spya-bbbbb5", "spya-bbbbb5"], title: "Part B" }),
+    },
+  } as unknown as Tree;
+  const nodes = gapped.nodes as Record<string, TreeNode>;
+
+  it("a block above the first part answers with the first part's first block", () => {
+    expect(headBlock(gapped, at, "spya-zzzzz1")).toBe("spya-mmmmm2");
+    expect(headPath(gapped, at, headBlock(gapped, at, "spya-zzzzz1"))).toEqual([{ title: "Part A", voice: "ai" }]);
+  });
+
+  it("no block at all answers with the first part's first block", () => {
+    expect(headBlock(gapped, at, null)).toBe("spya-mmmmm2");
+  });
+
+  it("a block inside a part answers with itself, the first part's own first block included", () => {
+    expect(headBlock(gapped, at, "spya-mmmmm2")).toBe("spya-mmmmm2");
+    expect(headBlock(gapped, at, "spya-aaaaa3")).toBe("spya-aaaaa3");
+    expect(headBlock(gapped, at, "spya-bbbbb5")).toBe("spya-bbbbb5");
+  });
+
+  it("a block in a later gap, or after the last part, does not borrow a part", () => {
+    expect(headBlock(gapped, at, "spya-kkkkk4")).toBe("spya-kkkkk4");
+    expect(headBlock(gapped, at, "spya-ccccc6")).toBe("spya-ccccc6");
+    expect(headPath(gapped, at, headBlock(gapped, at, "spya-kkkkk4"))).toEqual([]);
+  });
+
+  it("a block id the index does not know is not the top", () => {
+    expect(headBlock(gapped, at, "spya-000000")).toBe("spya-000000");
+  });
+
+  it("a missing tree, an empty one, and one with no root answer with what they were given", () => {
+    const empty = { ...gapped, nodes: { root: { ...nodes.root, children: [] } } } as unknown as Tree;
+    const rootless = { ...gapped, nodes: {} } as unknown as Tree;
+    for (const t of [null, undefined, empty, rootless]) {
+      expect(headBlock(t, at, "spya-zzzzz1")).toBe("spya-zzzzz1");
+      expect(headBlock(t, at, null)).toBe(null);
+    }
+  });
+
+  it("a first part whose first block is not in the article answers with what it was given", () => {
+    const stale = {
+      ...gapped,
+      nodes: { ...nodes, a: { ...nodes.a, range: ["spya-gone00", "spya-aaaaa3"] } },
+    } as unknown as Tree;
+    expect(headBlock(stale, at, "spya-zzzzz1")).toBe("spya-zzzzz1");
+    expect(headBlock(stale, at, null)).toBe(null);
+  });
+
+  it("does not borrow the argument for a block covered by an earlier supplement", () => {
+    const noteId = order[0]!;
+    const bodyId = order[1]!;
+    const articleBlocks: Block[] = [
+      { ...blocks[1]!, id: noteId, treatment: "supplement", role: "footnote", gistable: false },
+      { ...blocks[1]!, id: bodyId },
+    ];
+    const articleIndex = blockIndex(articleBlocks);
+    const withOpeningNotes = {
+      ...gapped,
+      nodes: {
+        root: node({ id: "root", depth: 0, children: ["notes", "part"], range: [noteId, bodyId], title: "Article", gist: "The argument." }),
+        notes: node({ id: "notes", depth: 1, parent: "root", children: ["note"], range: [noteId, noteId], title: "Notes", treatment: "supplement" }),
+        note: node({ id: "note", depth: 2, parent: "notes", range: [noteId, noteId], title: "" }),
+        part: node({ id: "part", depth: 1, parent: "root", children: ["paragraph"], range: [bodyId, bodyId], title: "Part A", gist: "The argument." }),
+        paragraph: node({ id: "paragraph", depth: 2, parent: "part", range: [bodyId, bodyId], title: "", navLabel: "The argument" }),
+      },
+    } satisfies Tree;
+    // This ordering is permitted by the tree contract, even though today's producer appends Notes.
+    expect(checkTree(articleBlocks, withOpeningNotes).problems).toEqual([]);
+    expect(headBlock(withOpeningNotes, articleIndex, noteId)).toBe(noteId);
+    expect(headPath(withOpeningNotes, articleIndex, headBlock(withOpeningNotes, articleIndex, noteId))).toEqual([
+      { title: "Notes", voice: "ui" },
+    ]);
+    expect(headBlock(withOpeningNotes, articleIndex, null)).toBe(bodyId);
+  });
+
+  it("a root missing its child list answers with what it was given", () => {
+    const missingChildren = {
+      ...gapped,
+      nodes: { root: { ...nodes.root, children: undefined } },
+    } as unknown as Tree;
+    expect(headBlock(missingChildren, at, order[0]!)).toBe(order[0]);
+    expect(headBlock(missingChildren, at, null)).toBeNull();
+  });
+});
+
 /* ------------------------------------------------------------------------
    Report 82: FAQ, Debate, Citations and comments, beside their blocks, one
    shut line per kind per block. Nothing here generates; these are the items
@@ -335,7 +442,7 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
     ]);
   });
 
-  /* *Save & ask* with an empty box is allowed (AnnotateDialog): no words, no
+  /* *Ask AI* with an empty box is allowed (AnnotateDialog): no words, no
      answer, but a conversation. It is not a bare bookmark. GPT Sol, plan 261002j. */
   it("keeps a wordless comment that asked the AI", () => {
     const comments = [
@@ -398,8 +505,9 @@ describe("marginaliaNotes, other modes' items (report 82)", () => {
 });
 
 /* Timeline events in the margin — plan 261003f stage 1. Only events the piece
-   dates (`dated` or its own `words`), beside the earliest occurrence whose
-   quoted words are still in their block. */
+   dates (`dated`, its own `words`, or since plan 261005h a date with no year),
+   beside the passage that dates them, whose quoted words are still in their
+   block. */
 function event(
   id: string,
   dating: TimelineEvent["dating"],
@@ -461,6 +569,89 @@ describe("marginaliaNotes, Timeline events (plan 261003f)", () => {
     expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
     const here = notes.get("spya-aaaaa4") ?? [];
     expect(here[0]?.kind === "timeline" && here[0].items.map((i) => i.event.id)).toEqual(["e2"]);
+  });
+
+  /* Plan 261005h D: the panel shows a date with no year in the article's own
+     words (`datingWords`), so the margin places it like a `words` event. */
+  const yearless = (phrase: string | null, reason = "noYearFrame") =>
+    ({ kind: "rejected", reason, phrase }) as TimelineEvent["dating"];
+
+  it("puts a date with no year beside the earliest mention whose block says its phrase", () => {
+    const e = event("e9", yearless("topic 3"), [
+      { blockId: "spya-aaaaa2", quote: say(1) },
+      { blockId: "spya-aaaaa4", quote: say(3) },
+    ]);
+    const notes = marginaliaNotes(null, quoted, null, { timeline: [e] });
+    expect([...notes.keys()]).toEqual(["spya-aaaaa4"]);
+    expect(notes.get("spya-aaaaa4")).toEqual([{ kind: "timeline", items: [{ event: e, quote: say(3) }] }]);
+  });
+
+  it.each(["unparseablePhrase", "phraseNotInOccurrence"])("draws nothing for a date rejected as %s", (reason) => {
+    const e = event("e10", yearless("topic 3", reason), [{ blockId: "spya-aaaaa4", quote: say(3) }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [e] }).size).toBe(0);
+  });
+
+  it("draws nothing for a date with no year whose phrase is in no block, or whose quote has gone", () => {
+    const lost = event("e11", yearless("On July 7"), [{ blockId: "spya-aaaaa4", quote: say(3) }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [lost] }).size).toBe(0);
+    const unquoted = event("e12", yearless("topic 3"), [{ blockId: "spya-aaaaa4", quote: "Acme launched on topic 3" }]);
+    expect(marginaliaNotes(null, quoted, null, { timeline: [unquoted] }).size).toBe(0);
+  });
+
+  /* GPT Sol, F4 on plan 261005h: the server only keeps a phrase it found
+     INSIDE an occurrence's quote (`locatePhrase`, src/timeline.ts), for `words`
+     and for a rejected date alike. An earlier block that says the phrase about
+     something else, and quotes the event without it, is not where it is dated. */
+  describe("the phrase must be inside the mention's own quote", () => {
+    it.each([
+      ["words", { kind: "words", phrase: "Later on" } as TimelineEvent["dating"],
+        "Acme discussed the late Ron and its launch.", "Later on, Acme launched."],
+      ["yearless", yearless("In June"),
+        "Acme discussed its launch in Injune.", "In June, Acme launched."],
+    ])("does not remove word boundaries to place a %s phrase in an earlier quote", (_, dating, earlier, later) => {
+      const blocks = [earlier, later].map((text, i) => ({
+        id: i === 0 ? "spya-aaaaa2" : "spya-aaaaa3", text, html: "", kind: "text", gistable: true, words: 40,
+      })) as unknown as Block[];
+      const e = event("word-boundaries", dating, blocks.map((b) => ({ blockId: b.id, quote: b.text })));
+      expect([...marginaliaNotes(null, blocks, null, { timeline: [e] }).keys()]).toEqual(["spya-aaaaa3"]);
+    });
+
+    it("keeps original slice offsets while matching repeated whitespace and folded quotation marks", () => {
+      const text = "İstanbul: Acme said “On  May\n1, we launch”.";
+      const blocks = [{ id: "spya-aaaaa2", text, html: "", kind: "text", gistable: true, words: 40 }] as unknown as Block[];
+      const e = event("normalised", yearless("On May 1"), [
+        { blockId: "spya-aaaaa2", quote: 'Acme said "On May 1, we launch"' },
+      ]);
+      expect([...marginaliaNotes(null, blocks, null, { timeline: [e] }).keys()]).toEqual(["spya-aaaaa2"]);
+    });
+
+    const two = [
+      { id: "spya-aaaaa2", text: "On July 7, another company launched. Acme discussed its launch." },
+      { id: "spya-aaaaa3", text: "On July 7, Acme launched." },
+    ].map((b) => ({ ...b, html: "", kind: "text", gistable: true, words: 40 })) as unknown as Block[];
+    const mentions = [
+      { blockId: "spya-aaaaa2", quote: "Acme discussed its launch" },
+      { blockId: "spya-aaaaa3", quote: "On July 7, Acme launched" },
+    ];
+
+    it.each([
+      ["a date with no year", yearless("On July 7")],
+      ["the article's own words", { kind: "words", phrase: "On July 7" } as TimelineEvent["dating"]],
+    ])("%s goes beside the mention that says it, not an earlier block that says it of something else", (_, dating) => {
+      const e = event("e13", dating, mentions);
+      const notes = marginaliaNotes(null, two, null, { timeline: [e] });
+      expect([...notes.keys()]).toEqual(["spya-aaaaa3"]);
+      expect(notes.get("spya-aaaaa3")).toEqual([
+        { kind: "timeline", items: [{ event: e, quote: "On July 7, Acme launched" }] },
+      ]);
+    });
+
+    it("draws nothing when no mention's quote holds the phrase, or the phrase is null", () => {
+      const outside = event("e14", yearless("On July 7"), [mentions[0]!]);
+      expect(marginaliaNotes(null, two, null, { timeline: [outside] }).size).toBe(0);
+      const none = event("e15", yearless(null), mentions);
+      expect(marginaliaNotes(null, two, null, { timeline: [none] }).size).toBe(0);
+    });
   });
 
   it("puts the Timeline line after FAQ and before Debate on one block", () => {

@@ -44,13 +44,13 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   },
   faq: {
     head: "FAQ",
-    what: "A question a careful reader might ask, which this passage answers. Press it to see the words that answer it.",
+    what: "A question a careful reader might ask, which this passage answers. Press this line to open it and see the words that answer it.",
     how: "From FAQ mode. The question was written by AI; the answer is quoted from the article. It sits beside the first passage that answers it.",
   },
   timeline: {
     head: "When",
-    what: "Something the article says happened, with the date it gives. Press it to see the words that mention it.",
-    how: "From Timeline mode. The short description was written by AI; the date is read out of the article's own words, never guessed, and a phrase in quotation marks is the article's own. A dated event sits beside the passage that dates it; the article's own relative wording sits beside its first surviving mention.",
+    what: "Something the article says happened, with the date it gives. Press this line to open it and see the words that mention it.",
+    how: "From Timeline mode. The short description was written by AI; the date comes from the article's words. A missing year can come from its publication date, or be assumed from a year stated elsewhere in it and marked 'year assumed'. A phrase in quotation marks is the article's own. A dated event sits beside the passage that dates it; the article's own relative wording sits beside its first surviving mention.",
   },
   debate: {
     head: "Debate",
@@ -59,8 +59,11 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
   },
   citation: {
     head: "Cites",
-    what: "A work the article cites, at the first place it does. Press it to see who wrote it and why it is cited.",
-    how: "From Citations mode. The title is the work's own; the reason it is cited was written by AI from the article.",
+    /* "Press this line", not "Press it" (Greg, spya-xf6m2u: *"I don't see
+       anything to press"*): the line is the button. And only what opens — the
+       by-line and the reference entry, never the model's reason (261003j). */
+    what: "A work the article cites, at the first place it does. Press this line to open it and see what the article gives for the work: who wrote it, and its entry in the reference list.",
+    how: "From Citations mode, where AI read the article's references and matched each to the places it is cited. The title, the authors and the entry are the article's own words.",
   },
   "comment-own": {
     head: "Yours",
@@ -76,7 +79,7 @@ export const MARG_TIPS: Record<MargTipKey, MargTip> = {
 
 /** Where a relation word came from: the same for all of them. */
 const RELATION_ORIGIN =
-  "Written by AI, which read each paragraph against the one before it. Made for Marginalia when you turn it on. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
+  "Written by AI, which read each paragraph against the one before it. Made for Marginalia. Only the turns in the argument are marked; most paragraphs carry on in the same direction and get no word.";
 
 /**
  * **What each relation word means**, in a card of its own on the word (a

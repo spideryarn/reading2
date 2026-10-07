@@ -91,11 +91,20 @@ const MUST_NOT_SHIP = [
 ];
 
 describe("what @vercel/nft collects for the API function", () => {
-  const built = existsSync(BUNDLE);
-
-  it.skipIf(!built)(
+  it(
     "ships every file pdf.js loads through an untraceable specifier",
     async () => {
+      /* A failure, not a skip: if api-dist/ is missing this would quietly check
+         nothing, and a silent skip is how a guard stops being a guard. Until
+         2026-10-06 this was a second test below an `it.skipIf(!built)`; `npm
+         run worktree:setup` builds now, so no checkout has an honest reason to
+         skip. */
+      expect(
+        existsSync(BUNDLE),
+        "api-dist/vercel.js is missing — run `npx vite build --config vite.api.config.ts` " +
+          "(after `npm run build`). Without it there is nothing to trace.",
+      ).toBe(true);
+
       /* `base: "/"`, and suffix matching rather than `fileList.has()`.
          `npm run deploy` runs the gates in a git worktree whose `node_modules`
          is a *symlink* back to the main tree (scripts/deploy.ts), and nft
@@ -179,15 +188,4 @@ describe("what @vercel/nft collects for the API function", () => {
        fixed, and is not worth reopening to save minutes. */
     600_000,
   );
-
-  it("has a build to inspect", () => {
-    /* Separate, and deliberately not skipped: if api-dist/ is missing, the test
-       above quietly checks nothing, and a silent skip is how a guard stops
-       being a guard. This one fails loudly instead of pretending. */
-    expect(
-      built,
-      "api-dist/vercel.js is missing — run `npx vite build --config vite.api.config.ts` " +
-        "(after `npm run build`). Without it the trace assertions above are skipped.",
-    ).toBe(true);
-  });
 });

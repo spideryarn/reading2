@@ -32,6 +32,16 @@
   padding-right: calc(var(--marg-reserve, 0px) + var(--safe-right));
 }
 
+/* The masthead is a page-wide bar and centres the title in its own box
+   (narrow-window.css § plain, centred), so it has to keep the same room clear
+   whenever the column or the card's shift moves the prose left of centre.
+   `margTitleReserve` in layout.ts is 0 beside a band and with no column.
+   The band case subtracts the reserve in its own rule (§ the title over the
+   column). */
+.reader.text-alone .masthead {
+  padding-right: calc(var(--masthead-pad-r) + var(--marg-title-reserve, 0px));
+}
+
 /* ---------------------------------------------------------- § a note --
    Inside its block's `td.text` (which is `position: relative` — prose.css),
    at the cell's top, starting just past its right edge. Out of flow, so the
@@ -82,7 +92,7 @@
   cursor: help;
 }
 .marg-question:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 
@@ -103,7 +113,7 @@
 }
 .marg-idea:focus-visible,
 .marg-arc:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 /* A relation word — so, but, vs: how this paragraph bears on the one before
@@ -123,7 +133,7 @@
   color: var(--ink-soft);
 }
 .marg-relation:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 .marg-stamp {
@@ -178,14 +188,37 @@ p.marg-shut {
   text-overflow: ellipsis;
 }
 .marg-shut-button:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
+}
+/* **The line answers the pointer** (Greg, spya-xf6m2u: the card said to press
+   and *"I don't see anything to press"*). Its words are underlined and its
+   chevron darkens under a pointer or the keyboard, so what the card calls
+   "this line" is visibly the thing to press. `hover: hover`, so a finger's tap
+   does not leave the underline stuck on. */
+@media (hover: hover) {
+  .marg-shut-button:hover .marg-shut-line {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .marg-shut-button:hover .marg-chevron {
+    color: var(--ink);
+  }
+}
+.marg-shut-button:focus-visible .marg-shut-line {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.marg-shut-button:focus-visible .marg-chevron {
+  color: var(--ink);
 }
 .marg-chevron {
   position: absolute;
   left: -0.9rem;
   top: 0.2rem;
-  color: var(--ink-faint);
+  /* A shade darker than the stamp beside it: it is the one mark that says the
+     line opens. */
+  color: var(--ink-soft);
   transition: rotate 120ms ease;
 }
 .marg-shut[data-open] .marg-chevron {
@@ -203,6 +236,11 @@ p.marg-shut {
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
+/* `display: grid` above outranks the browser's own `[hidden]` rule, so a shut
+   panel kept its padding. Said here so that shut means gone. Plan 261006i. */
+.marg-open[hidden] {
+  display: none;
+}
 .marg-open-item {
   display: grid;
   gap: 0.125rem;
@@ -211,6 +249,10 @@ p.marg-shut {
   color: var(--ink);
 }
 .marg-open-by {
+  color: var(--ink-faint);
+}
+/* The article's own reference entry for a cited work (plan 261003j). */
+.marg-cite-entry {
   color: var(--ink-faint);
 }
 .marg-open-answer {
@@ -349,7 +391,10 @@ p.marg-shut {
   width: max-content;
   max-width: min(22rem, calc(100vw - 2rem));
   box-sizing: border-box;
-  padding: 0.4rem 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
   background: var(--page);
   border: 1px solid var(--rule);
   border-radius: 6px;
@@ -361,5 +406,35 @@ p.marg-shut {
   -webkit-user-select: none;
 }
 .marg-narrow p {
+  flex: 1;
   margin: 0;
+}
+/* Its size is `.close-x`'s (close.css), so a finger can hit it on an iPad,
+   which is where this line is mostly seen. tests/close-cross.test.ts. */
+.marg-narrow-close {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--ink-faint);
+  cursor: pointer;
+}
+.marg-narrow-close:hover { color: var(--ink); }
+.marg-narrow-close:focus-visible { outline: 1px solid var(--highlight-text); outline-offset: 1px; }
+/* **Gone after a few seconds, or on its ×** (MarginaliaColumn.tsx §
+   `NarrowLine`). The element stays, because narrow-window.css hides the
+   small-screen banner while it exists. The box is made invisible rather than
+   hidden, so after the clock runs out a screen reader still finds the
+   sentence. An explicit Dismiss adds `aria-hidden` in NarrowLine. The button,
+   which would otherwise be an invisible tab stop, is hidden outright. */
+.marg-narrow.is-gone {
+  opacity: 0;
+  pointer-events: none;
+}
+.marg-narrow.is-gone .marg-narrow-close {
+  visibility: hidden;
+}
+/* The fade, only for a reader who has not asked for less movement
+   (feedback.css § the toast has the reason). */
+@media (prefers-reduced-motion: no-preference) {
+  .marg-narrow { transition: opacity 400ms ease-out; }
 }

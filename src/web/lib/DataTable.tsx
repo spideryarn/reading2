@@ -75,6 +75,7 @@ import {
 import { ArrowDown, ArrowUp, Check, Columns3, EyeOff } from "lucide-react";
 import { ContextMenu, DropdownMenu } from "radix-ui";
 import { ControlTip, Tooltip } from "../Tooltip.js";
+import { SidewaysScrollBox } from "./SidewaysScrollBox.js";
 import type { NaturalDirections } from "./table-sort.js";
 
 /**
@@ -99,6 +100,13 @@ declare module "@tanstack/react-table" {
     fluid?: boolean;
     /** Kept out of the chip row — a column you sort from its header only. */
     noChip?: boolean;
+    /**
+     * Hidden until the reader shows it from the Columns menu. Read by the
+     * page's own visibility state (the shelf's is shelf-hidden-columns.ts), not
+     * by anything in this file: a page that passes no visibility state shows
+     * every column.
+     */
+    startsHidden?: boolean;
   }
 }
 
@@ -176,7 +184,7 @@ const DEFAULT_COLUMN = { sortUndefined: false } as const;
  * 16px against the two outer edges so the text is not sitting on the border.
  * It was a flat `px-2` (8px) until 2026-09-06 — which read as cramped only
  * *after* the vertical column rules stopped being drawn over the top of it
- * (styles.css § the head with no row). Research band for a dense table is
+ * (table.css § the head with no row). Research band for a dense table is
  * 12–16px horizontal against 8px vertical.
  */
 const CELL_X = "tw:px-3 tw:first:pl-4 tw:last:pr-4";
@@ -427,7 +435,7 @@ export function SortChips<T>({
  * is the lower layer and must not reach up into a page's components.
  */
 const MENU_SURFACE =
-  "tw:z-[100] tw:min-w-[12rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]";
+  "tw:z-[100] tw:min-w-[12rem] tw:max-w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[var(--shadow-pop)]";
 
 /** One row of either menu — `ShelfActionsMenu`'s `ITEM`, for the same reason. */
 const MENU_ITEM =
@@ -595,24 +603,21 @@ export function DataTable<T>({
   table,
   rows,
   caption,
+  sidewaysCue = false,
 }: {
   table: Table<T>;
   rows: Row<T>[];
   /** Named for screen readers, which otherwise meet a table with no title. */
   caption: string;
+  /**
+   * Shade the edge of the box while columns are hidden past it —
+   * `SidewaysScrollBox`, which then *is* the scroll box, so what it measures
+   * is the element that scrolls. Off unless asked for: `/admin/costs` asks,
+   * and the shelf and `/admin/users` draw as they did (plan 261006g § Stage 2).
+   */
+  sidewaysCue?: boolean;
 }) {
-  return (
-    /* The table scrolls inside its own box rather than pushing the page
-       sideways: a horizontally scrolling *page* makes everything hard to read,
-       not just the table.
-
-       Tailwind's `sr-only` labels are absolutely positioned. `relative` makes
-       this wrapper their containing block, so its `overflow` clip contains
-       them too. Without it, the Actions label's static position at the table's
-       intrinsic right edge contributed to page overflow outside this box; the
-       page measured ~300px too wide at 390px. Browser measurement, 2026-09-28
-       (plan 260928a). `relative` with no z-index creates no stacking context. */
-    <div className="tw:relative tw:overflow-x-auto tw:rounded-lg tw:border tw:border-border">
+  const drawn = (
       <table className="tw:w-full tw:border-collapse tw:text-sm">
         <caption className="tw:sr-only">{caption}</caption>
         <thead>
@@ -647,7 +652,26 @@ export function DataTable<T>({
           ))}
         </tbody>
       </table>
-    </div>
+  );
+  /* The table scrolls inside its own box rather than pushing the page
+     sideways: a horizontally scrolling *page* makes everything hard to read,
+     not just the table.
+
+     Tailwind's `sr-only` labels are absolutely positioned. The box is
+     `relative`, which makes it their containing block, so its `overflow` clip
+     contains them too. Without it, the Actions label's static position at the
+     table's intrinsic right edge contributed to page overflow outside this
+     box; the page measured ~300px too wide at 390px. Browser measurement,
+     2026-09-28 (plan 260928a). `relative` with no z-index creates no stacking
+     context.
+
+     One component with or without the cue, because either way the box has to
+     be measured: while it overflows it is a tab stop named by the caption
+     (plan 261006h). */
+  return (
+    <SidewaysScrollBox label={caption} cue={sidewaysCue}>
+      {drawn}
+    </SidewaysScrollBox>
   );
 }
 

@@ -32,6 +32,21 @@
   --rule: var(--border);
   --rule-strong: oklch(0.36 0 0);
 
+  /* **Elevation: three shadows, by what is floating** (plan 261007h § F6).
+     Each was a literal in several rules, tuned for the dark page; written once
+     here so the light block below can soften them. Things that are not
+     elevation keep their own `box-shadow` — swatch rings, inset highlight
+     marks, table dividers, focus rings.
+     - `--shadow-pop`: a small surface over the page — tooltips, menus,
+       pickers (tooltip.css, menu.ts, DataTable, TagEditor, ShelfTags…).
+     - `--shadow-dialog`: a panel over the prose — the chat, annotate and
+       comment panels, the command bar, the return chip, the toast.
+     - `--shadow-sheet`: a large modal surface — the purpose prompt on
+       /profile, the feedback dialog, the lightbox. */
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -6px rgb(0 0 0 / 0.65);
+  --shadow-dialog: 0 12px 32px rgb(0 0 0 / 0.55);
+  --shadow-sheet: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+
   --highlight: var(--spideryarn-orange);
   /* The orange tinted *into* the page rather than into white — a lit patch, not a
      pale one. Any "mix the orange with black to darken it" from the light palette
@@ -101,19 +116,33 @@
   --chat-mark: oklch(0.72 0.12 235);
   --chat-mark-wash: color-mix(in oklab, var(--chat-mark) 18%, var(--page));
 
+  /* **Where you have spent time reading**, on the spine: the area's fill (at
+     0.4) and its edge (opaque) — spine.css § reading time. A cyan, because the
+     rail's own ground is the part tint, an orange at hue ~52, and this has to
+     be told from it at a glance in a strip twelve pixels wide. It sits between
+     old quote strip's green (~165; the strip is a purple since 2026-10-03)
+     and `--chat-mark`'s blue (235) and is lighter than either. **Not a hue
+     nothing else uses** — there is none left
+     (styles/tokens.css § --quote-rgb says the same): two of the
+     reader-picked search colours, `--cat-11` and `--cat-12`, are its
+     neighbours, and are told from it by being thin lanes on the rail's other
+     side. docs/plans/261003j-reading-time-on-the-spine-drawn-as-an-area-chart.md. */
+  --read-time: oklch(0.82 0.11 200);
+
   /* **A highlight's four washes** — the reader's own colours, stored by name on
      the comment (`HighlightColour`, src/types.ts) so they can be retuned here
      without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
 
-     One set, because the app is dark only (styles/tokens.css § DARK ONLY); if
-     light mode ever comes back these need a light twin like everything else.
+     Dark's set. Light's is in the `:root[data-theme="light"]` block at the
+     foot of this file.
 
-     Kept clear of the three washes already in the prose — "don't put three
-     meanings on one hue" (original-version/highlighting.md): the yellow sits
-     at 100°, well round from the orange (58°) that `--highlight-wash` and the
-     gist's active cell mean; the blue at 270°, away from a chat's 235°; and
-     all four are chromatic, where a search's `--hit-wash-rgb` is a deliberately
-     grey slate. Tinted into the page in oklab, for the reason the long note on
+     Kept clear of the other fills in the prose — "don't put three meanings on
+     one hue" (original-version/highlighting.md): the yellow sits at 100°, well
+     round from the orange (58°) that `--highlight-wash` and the gist's active
+     cell mean; the blue at 270°, away from a chat's 235°; and the nearest two
+     stay about 40° from the model quote's purple at 310°. Search is an outline
+     at rest; its pressed-only slate fill is deliberately achromatic. Tinted
+     into the page in oklab, for the reason the long note on
      `--highlight-wash` gives, and at a strength that keeps the light prose
      comfortably legible on top. */
   --hl-yellow: color-mix(in oklab, oklch(0.88 0.16 100) 30%, var(--page));
@@ -141,7 +170,6 @@
   --depth-0: oklch(0.82 0.155 58);
   --depth-1: oklch(0.68 0.120 52);
   --depth-2: oklch(0.55 0.080 46);
-  --depth-3: oklch(0.44 0.045 40);
 
   /**
    * ------------------------------------------------------------ safe areas --
@@ -179,13 +207,15 @@
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
-  --bar-h: 2.75rem; /* .controls */
+  /* .controls: 44px. One rule raises it: crumbs.css § a narrow window, to
+     4.25rem while the bar holds the headings breadcrumb on a narrow window. */
+  --bar-h: 2.75rem;
   /**
    * **The y where the controls bar ends**, and the one name for what five
    * separate rules were each spelling `var(--bar-h)`: the table head, the mode
    * band, the spine, the overflow fade and a gist cell's sticky box all pin
    * *underneath the controls bar*, and the bar itself derives its own `top`
-   * from it. A bar that moved without them would leave a 44px band of article
+   * from it. A bar that moved without them would leave a bar-high band of article
    * sliding along above a row of pinned chrome, so they have to move together —
    * one substitution rather than five judgement calls, and the next thing that
    * pins below the bar gets it right by using the obvious token.
@@ -295,19 +325,21 @@
   /* **The table head's height, and it is zero on purpose since 2026-09-05.**
      Greg: *"I'm even wondering if we can get rid of the row of
      column-header-labels in Hierarchy mode … to save on vertical space"* — so
-     the row went, and the element stayed. It is still doing three jobs that
-     have nothing to do with being visible: the fisheye panels take every
+     the row went, and the element stayed. It was still doing three jobs that
+     had nothing to do with being visible: the fisheye panels took every
      column's rectangle from `thead th[data-col]` (useColumnContext.ts), a
      `<th scope="col">` is what names a column for a screen reader, and the
-     head's sticky `top` is what a panel's `bottom` resolves to. Deleting it
+     head's sticky `top` was what a panel's `bottom` resolved to. Deleting it
      would have emptied Hierarchy's Parts and Sections columns outright — the
-     gist cell under a panel deliberately draws nothing (TableView.tsx).
+     gist cell under a panel deliberately drew nothing (TableView.tsx). The
+     panels and the gist columns went on 2026-09-29; the `<th>` is the job
+     that is left.
 
      **Changed here rather than on `thead th` alone**, because `td.gist .sticky`
-     positions itself at `--bar-bottom + --head-h` (§ table): moving the token
-     keeps that consumer right for free, where a rule on the head would have
-     left every gist floating a head's height below the bar. Three consumers
-     and no more — this line, the head's own `height`, and that one.
+     positioned itself at `--bar-bottom + --head-h` (§ table): moving the token
+     kept that consumer right for free, where a rule on the head would have
+     left every gist floating a head's height below the bar. One consumer is
+     left: the head's own `height` in table.css.
 
      `0px` and not `0`: it goes into a `calc()` sum with a length, and a
      unitless zero there makes the whole declaration invalid.
@@ -430,6 +462,13 @@
   /* On a light ground a raised surface is the lightest thing there. */
   --surface-raised: oklch(1 0 0);
   --rule-strong: oklch(0.78 0 0);
+  /* The elevation shadows at about 0.35–0.4 of the dark alphas: black on a
+     white page reads far heavier than on a black one, and the raised surface
+     here already has a border to stand on. The marketing pages made the same
+     call for `--site-lift` (site.css, 0.75 → 0.28). */
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -6px rgb(0 0 0 / 0.24);
+  --shadow-dialog: 0 12px 32px rgb(0 0 0 / 0.2);
+  --shadow-sheet: 0 24px 64px -16px rgb(0 0 0 / 0.3);
   /* Orange as text, darkened rather than lifted: #DB8A45 on white is ~2.6:1. */
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 72%, black);
   --highlight-text: var(--highlight-ink);
@@ -438,6 +477,8 @@
   --toward-page: white;
   --toward-ink-rgb: 0 0 0;
   --chat-mark: oklch(0.52 0.13 235);
+  /* The same cyan, darkened: on the light rail the edge has to be a dark line. */
+  --read-time: oklch(0.5 0.1 200);
 
   /* The reader's four highlighter washes (span highlights, plan 261003e-span-highlights): the
      same bases, mixed into the light page a little harder, because a share
@@ -462,5 +503,4 @@
   --depth-0: oklch(0.55 0.155 52);
   --depth-1: oklch(0.64 0.120 50);
   --depth-2: oklch(0.73 0.080 46);
-  --depth-3: oklch(0.82 0.045 40);
 }

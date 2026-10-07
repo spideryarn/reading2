@@ -31,6 +31,7 @@ import { pass0, type PdfRecord } from "../src/pdf.js";
 import type { AuthorsReader } from "../src/pdf-authors.js";
 import type { FrontMatterAnswer, FrontMatterReader } from "../src/pdf-frontmatter.js";
 import { type PdfReader, runPdfExtract } from "../src/pdf-read.js";
+import type { TitleTidier } from "../src/title-tidy.js";
 import { memoryCheckpoints } from "./helpers/memory-checkpoints.js";
 
 vi.mock("../src/log.js", () => {
@@ -101,12 +102,18 @@ const frontMatterSaying = (answer: FrontMatterAnswer, onAsk?: () => void): Front
   },
 });
 
-async function run(frontMatter: FrontMatterReader | null, authors: AuthorsReader | null = null, front = FRONT) {
+async function run(
+  frontMatter: FrontMatterReader | null,
+  authors: AuthorsReader | null = null,
+  front = FRONT,
+  titleTidier?: TitleTidier,
+) {
   const bytes = new Uint8Array(await readFile(EASY));
   const pass = await pass0(bytes);
   return runPdfExtract({
     frontMatter,
     authors,
+    ...(titleTidier ? { titleTidier } : {}),
     bytes,
     url: "https://example.test/paper.pdf",
     checkpoints: memoryCheckpoints({ slug: "paper", articleId: "article-paper" }),
@@ -122,6 +129,48 @@ describe("the front-matter pass inside the stage", () => {
     );
     expect(result.meta.title).toBe("A landscape of consciousness");
     expect(result.meta.byline).toBe("Robert Lawrence Kuhn");
+  });
+
+  it("a title printed in capitals reaches meta in title case, with the original beside it", async () => {
+    /* Plan 261005g. The rendered page keeps the capitals: only `meta` is tidied. */
+    const shouted = FRONT.map((r) =>
+      r.text === "A landscape of consciousness" ? { ...r, text: "A LANDSCAPE OF CONSCIOUSNESS" } : r,
+    );
+    const result = await run(
+      frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }),
+      null,
+      shouted,
+    );
+    expect(result.meta.title).toBe("A Landscape of Consciousness");
+    expect(result.meta.titleOriginal).toBe("A LANDSCAPE OF CONSCIOUSNESS");
+    expect(result.extractedHtml).toContain("<title>A LANDSCAPE OF CONSCIOUSNESS</title>");
+  });
+
+  it("uses the tidier it is handed, and the rendered page still keeps the capitals", async () => {
+    /* Plan 261005j: import hands in a model's. The rule would say `Of`-less
+       title case; this stub says something the rule never would. */
+    const shouted = FRONT.map((r) =>
+      r.text === "A landscape of consciousness" ? { ...r, text: "A LANDSCAPE OF CONSCIOUSNESS" } : r,
+    );
+    const seen: string[] = [];
+    const result = await run(
+      frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }),
+      null,
+      shouted,
+      async (title) => {
+        seen.push(title);
+        return { title: "A landscape of consciousness", titleOriginal: title };
+      },
+    );
+    expect(seen).toEqual(["A LANDSCAPE OF CONSCIOUSNESS"]);
+    expect(result.meta.title).toBe("A landscape of consciousness");
+    expect(result.meta.titleOriginal).toBe("A LANDSCAPE OF CONSCIOUSNESS");
+    expect(result.extractedHtml).toContain("<title>A LANDSCAPE OF CONSCIOUSNESS</title>");
+  });
+
+  it("and a title that needed nothing has no original", async () => {
+    const result = await run(frontMatterSaying({ titleIds: ["p1-r3"], bylineIds: ["p1-r4"], publisherIds: [] }));
+    expect(result.meta).not.toHaveProperty("titleOriginal");
   });
 
   it("uses a verified author list for the byline and structured metadata", async () => {

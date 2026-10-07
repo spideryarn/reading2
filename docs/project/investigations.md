@@ -22,6 +22,22 @@ is called done.** A plan's § Result or a file under `evals/results/` is not whe
 write-up says what was asked, what was measured, what was decided and what was
 ruled out. It links to the plan and the raw results rather than copying their tables.
 
+The files are not indexed here; list the directory. A few that show the shape, mostly of a prompt
+measured with scripted readers and a blind judge:
+
+- [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md) — Tutorial's prompt
+  weighted towards the author, old against new, with the old run twice as the control.
+- [261003e](../investigations/261003e-explore-sub-mode-against-chat-with-the-notes-tool.md) —
+  Explore against Chat with the `reader_notes` tool: a product comparison, the numbers set before
+  the run, and the one it did not meet.
+- [261005e](../investigations/261005e-explore-prompt-widened-to-critiques-of-the-piece.md) —
+  Explore's prompt widened to critiques of the piece: before and after with a scripted critic, a
+  blind read inside its control's spread, and the false "no source" claims that took two revisions.
+- [261006b](../investigations/261006b-skim-cue-situates-the-quote-eval.md) — Skim's cue asked to
+  set the scene its quote assumes, with and without the quote's paragraph: a large gain on the
+  question asked, and the two regressions (giving the finding away, misstating the context) that a
+  second and third judge question caught.
+
 ## Naming
 
 The same convention as a planning doc — `yyMMdd<letter>-kebab-description.md`, from

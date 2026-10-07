@@ -41,9 +41,12 @@ import { TextDecoder as SpecTextDecoder } from "@exodus/bytes/encoding.js";
 import { Agent } from "undici";
 import sniffHTMLEncoding from "html-encoding-sniffer";
 import type { DocumentOrigin } from "./document-origin.js";
+import { parseRetryAfter } from "./retry-after.js";
 import { CONTACT_EMAIL } from "./site-text.js";
+import type { FetchFailureCode } from "./types.js";
 import { canonicalKey } from "./source.js";
-import { uploadContentType } from "./uploads.js";
+import { readStreamCapped } from "./read-capped.js";
+import { MAX_UPLOAD_BYTES, uploadContentType } from "./uploads.js";
 import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js";
 
 /* ------------------------------------------------------------------ *
@@ -53,7 +56,8 @@ import { blobStore, storeRawSource, type RawSourceStore } from "./store/blobs.js
 /** The two things we can do anything with. Everything else is refused by name. */
 export type DocumentKind = "html" | "pdf";
 
-export interface FetchedDocument {
+/** What every fetched document has, whichever of the two it turned out to be. */
+interface FetchedBase {
   /** What the caller asked for, verbatim. */
   requestedUrl: string;
   /**
@@ -67,16 +71,36 @@ export interface FetchedDocument {
   /** Every URL in the chain, requested first, final last. One entry if no redirect. */
   chain: string[];
   status: number;
-  kind: DocumentKind;
   /** The `Content-Type` header verbatim, or `null` — some servers send none at all. */
   contentType: string | null;
   bytes: Uint8Array;
-  /** HTML only, decoded with `encoding` below. `null` for a PDF. */
-  text: string | null;
-  /** The WHATWG encoding name actually used. `null` for a PDF. */
-  encoding: string | null;
   fetchedAt: string;
 }
+
+/** A web page: the bytes, and the string they decode to. */
+export interface FetchedHtml extends FetchedBase {
+  kind: "html";
+  /** `bytes` decoded with `encoding` below. */
+  text: string;
+  /** The WHATWG encoding name actually used. */
+  encoding: string;
+}
+
+/** A PDF: the bytes are the document, and there is nothing to decode. */
+export interface FetchedPdf extends FetchedBase {
+  kind: "pdf";
+  text: null;
+  encoding: null;
+}
+
+/**
+ * **A union on `kind`, so a PDF with text and a web page without any are not
+ * values.** It was one interface with `text: string | null` until 2026-10-04,
+ * which let `storedDocumentBytes` below paper over the second with `?? ""` —
+ * an empty document, stored under a real hash, with nothing raised.
+ * tests/fetched-document-is-a-union.test.ts.
+ */
+export type FetchedDocument = FetchedHtml | FetchedPdf;
 
 /**
  * **What stage 1 acquired, and where the bytes of it are.**
@@ -277,10 +301,14 @@ export function storedDocumentBytes(
      it decodes with no encoding branch, on the strength of this line — and it
      has no `FetchedDocument`, because an upload has no URL, no redirect chain
      and no status. Narrowing the parameter is what lets it call this instead of
-     writing the rule out a third time. */
-  doc: Pick<FetchedDocument, "kind" | "bytes" | "text">,
+     writing the rule out a third time.
+
+     **Two arms rather than a `Pick` over the union**, since 2026-10-04: a
+     `Pick` of a union keeps the keys and loses which `text` goes with which
+     `kind`, and that correlation is the whole of what this reads. */
+  doc: Pick<FetchedPdf, "kind" | "bytes"> | Pick<FetchedHtml, "kind" | "text">,
 ): Uint8Array {
-  return doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text ?? "");
+  return doc.kind === "pdf" ? doc.bytes : new TextEncoder().encode(doc.text);
 }
 
 export async function writeRaw(
@@ -349,8 +377,10 @@ export async function writeRaw(
  * store the bytes, and this puts *those* bytes — from the same
  * `storedDocumentBytes` — under the name the manifest gives them.
  *
- * All of this dies at stage 4 with the filesystem store, which is the right
- * time for it to die. docs/plans/260831b-finish-the-database-move.md § Stage 4.
+ * All of this was meant to die at stage 4 with the filesystem store
+ * (docs/plans/260831b-finish-the-database-move.md § Stage 4) and did not: the
+ * command line that called it went on 2026-09-05 (see the foot of this file),
+ * and its only caller today is tests/stage2c-raw-bytes.test.ts.
  */
 export async function writeRawFiles(
   dir: string,
@@ -438,8 +468,7 @@ export class RawDocumentUnavailable extends Error {
  *
  * `storeRawSource` proves what was written; this proves what came back, and
  * they are different moments with a network and a filesystem in between. One
- * SHA-256 pass over a buffer already in memory — about 60 ms at the 32 MB
- * ceiling — against a stage that is about to run jsdom over it or spend a
+ * SHA-256 pass over a buffer already in memory, against a stage that is about to run jsdom over it or spend a
  * vision-model call on it. The same trade `pg-source.ts` makes, for the same
  * reason.
  */
@@ -479,7 +508,9 @@ export async function readRawBytes(
   try {
     bytes = await store.get(
       key,
-      manifest.storedBytes === undefined ? {} : { maxBytes: manifest.storedBytes },
+      // Legacy HTML lacks a stored count and may expand when decoded to UTF-8.
+      // At most three UTF-8 bytes replace one input byte (including U+FFFD).
+      { maxBytes: manifest.storedBytes ?? MAX_UPLOAD_BYTES * (kind === "html" ? 3 : 1) },
     );
   } catch (err) {
     /* **The bound throwing is corruption; everything else is a fault.** Both
@@ -650,33 +681,13 @@ function credentialsSeen(): string {
  * ------------------------------------------------------------------ */
 
 /**
- * Why a fetch failed, as something to switch on.
- *
- * These exist because **every network and TLS failure in Node arrives as the
- * identical `TypeError: fetch failed`** — DNS, refused connection, expired
- * certificate, self-signed certificate and a missing intermediate are one
- * string at the top level, and the difference lives only in `err.cause.code`.
- * Code that matches on the message learns nothing, which is exactly the trap
- * the previous version fell into (docs/project/original-version/extraction.md).
+ * Why a fetch failed, as something to switch on. The union and the reason for
+ * it are in src/types.ts § `FetchFailureCode`: it lives there because
+ * src/messages.ts maps every code to a reader's sentence and may not import
+ * this file. Re-exported so that this stays the name's address for everybody
+ * else.
  */
-export type FetchFailureCode =
-  | "invalid-url"
-  | "unsupported-scheme"
-  | "blocked-address"
-  | "dns"
-  | "connection"
-  | "certificate"
-  | "timeout"
-  | "too-many-redirects"
-  | "unauthorized"
-  | "forbidden"
-  | "not-found"
-  | "rate-limited"
-  | "server-error"
-  | "http-error"
-  | "too-large"
-  | "unsupported-type"
-  | "empty";
+export type { FetchFailureCode };
 
 export class FetchFailure extends Error {
   readonly code: FetchFailureCode;
@@ -685,7 +696,12 @@ export class FetchFailure extends Error {
   readonly status: number | null;
   /** Whether trying the identical request again could plausibly work. */
   readonly retryable: boolean;
-  /** What the server asked us to wait, from `Retry-After`, in ms. */
+  /**
+   * What the server asked us to wait, from `Retry-After`, in ms
+   * (src/retry-after.ts). `null` where it sent none, sent nonsense, or sent a
+   * wait that is not positive: `0` and a date already past are not an
+   * instruction, so the caller's own backoff or cooldown applies.
+   */
   readonly retryAfterMs: number | null;
 
   constructor(
@@ -729,14 +745,23 @@ export const USER_AGENT =
 /**
  * The defaults, exported so tests and docs can quote them rather than repeat them.
  *
- * `maxBytes` is 32 MB and the number has a source: the previous version capped
- * at 4 MB, and one of the three articles Greg named as a representative hard
- * case — the Nagel PDF at `sas.upenn.edu` — is 4,930,377 bytes. A cap chosen
- * without a real document in front of you rejects real documents.
+ * `maxBytes` is `MAX_UPLOAD_BYTES`, **the same constant an upload stops at**,
+ * so the dialog's "up to 50 MB" is true of a file chosen and of an address
+ * pasted and the two cannot drift. It was a second literal, 32 MiB, until
+ * 2026-10-04, and a document fetched by address was refused at a size the
+ * dialog had just said was fine. Greg, 2026-10-04:
+ * "make them consistent (and perhaps reuse the same protection-machinery)".
+ * docs/plans/261004k-one-size-limit-for-an-upload-and-an-address.md.
+ *
+ * Still a hard cap on bytes that arrived, and it still has a floor with a
+ * source: the version before this one capped at 4 MB, and one of the three
+ * articles Greg named as a representative hard case, the Nagel PDF at
+ * `sas.upenn.edu`, is 4,930,377 bytes. A cap chosen without a real document in
+ * front of you rejects real documents.
  */
 export const DEFAULTS = {
   timeoutMs: 30_000,
-  maxBytes: 32 * 1024 * 1024,
+  maxBytes: MAX_UPLOAD_BYTES,
   attempts: 3,
   maxRedirects: 5,
   userAgent: USER_AGENT,
@@ -1111,50 +1136,16 @@ export function pinnedAgent(pinned: Map<string, readonly string[]>): Agent & {
 /**
  * Read a body, counting as we go, and give up the moment it is too big.
  *
- * The counting is the point. By the time bytes reach here they are already
- * decompressed — undici does that for us — so this caps the size that actually
- * matters rather than the size the server advertised. `cancel()` closes the
- * socket rather than politely draining however many gigabytes are still coming.
+ * The counter itself is `readStreamCapped` in src/read-capped.ts, shared with
+ * the store's own read since 2026-10-04 so that there is one size guard rather
+ * than two. This is the fetch's half: what "too big" is called here.
  */
 export async function readCapped(body: ReadableStream<Uint8Array> | null, maxBytes: number, url: string): Promise<Uint8Array> {
-  if (!body) return new Uint8Array(0);
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        throw new FetchFailure(
-          "too-large",
-          url,
-          `That page is over the ${Math.round(maxBytes / (1024 * 1024))} MB limit.`,
-        );
-      }
-      chunks.push(value);
-    }
-  } catch (err) {
-    /* Every way out of that loop except a clean finish leaves a socket open —
-       going over the cap, and also the read itself failing mid-body, which is
-       the one easy to forget. Cancelling twice is harmless; not cancelling
-       leaves the server streaming into nothing. */
-    await reader.cancel().catch(() => {});
-    throw err;
-  } finally {
-    /* Without this the stream stays locked after we are done with it, so
-       nothing else can ever read or cancel it. */
-    reader.releaseLock();
-  }
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return out;
+  return readStreamCapped(
+    body,
+    maxBytes,
+    () => new FetchFailure("too-large", url, `That page is over the ${Math.round(maxBytes / (1024 * 1024))} MB limit.`),
+  );
 }
 
 /** The MIME type on its own, lower-cased, without the parameters. */
@@ -1437,7 +1428,7 @@ interface LeadingToken {
  *
  * **There is no prefix cap here**, which is ⟨Sol F6⟩ answered: a licence header
  * or an unterminated comment pushes the first tag past any window we would pick,
- * and the input is already bounded by the 32 MB fetch cap and the 50 MB upload
+ * and the input is already bounded by the shared 50 MiB fetch and upload
  * cap. The walk is linear and stops at the first non-skippable unit, so the
  * common case reads a handful of them.
  *
@@ -1957,16 +1948,6 @@ export function decodeHtml(bytes: Uint8Array, contentType: string | null): { tex
  * Classifying what went wrong
  * ------------------------------------------------------------------ */
 
-/** `Retry-After`, as milliseconds. Accepts both the seconds form and the HTTP-date form. */
-export function retryAfterMs(header: string | null, now: Date): number | null {
-  if (!header) return null;
-  const trimmed = header.trim();
-  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
-  const when = Date.parse(trimmed);
-  if (Number.isNaN(when)) return null;
-  return Math.max(0, when - now.getTime());
-}
-
 /**
  * An HTTP status we didn't want, as a failure worth reading.
  *
@@ -2110,7 +2091,9 @@ function safeHost(url: string): string {
  * How long to wait before trying again.
  *
  * `Retry-After` wins where the server sent one — it is the only party that
- * knows. Otherwise exponential backoff with **full** jitter: a delay drawn
+ * knows. A `Retry-After: 0` never arrives here as `0`: the parser reads a wait
+ * that is not positive as `null` (src/retry-after.ts), so it gets the backoff
+ * below rather than a retry at once. Otherwise exponential backoff with **full** jitter: a delay drawn
  * uniformly from zero to the ceiling, rather than the ceiling nudged a little.
  * Nobody is being thundered here, but it is one multiplication.
  */
@@ -2379,7 +2362,7 @@ async function attemptFetch<T>(
  */
 async function readBody(res: Response, finalUrl: string, opts: Resolved): Promise<Uint8Array> {
   if (!res.ok) {
-    const asked = retryAfterMs(res.headers.get("retry-after"), opts.now());
+    const asked = parseRetryAfter(res.headers.get("retry-after"), opts.now().getTime());
     await discard(res);
     throw classifyStatus(res.status, finalUrl, asked);
   }
@@ -2405,7 +2388,7 @@ async function readBody(res: Response, finalUrl: string, opts: Resolved): Promis
      already established lies about it. A server that overstates would have had
      a perfectly good article refused with a confident number in the message,
      and no way to tell from the outside. What the check bought was skipping a
-     download the cap already bounds at 32 MB — a few seconds, against a class
+     download the cap already bounds at 50 MiB — a few seconds, against a class
      of bug nobody could diagnose. */
   const bytes = await readCapped(res.body, opts.maxBytes, finalUrl);
   if (bytes.byteLength === 0) {
@@ -2433,20 +2416,19 @@ async function readDocument(
     );
   }
 
-  const decoded = kind === "html" ? decodeHtml(bytes, contentType) : null;
-
-  return {
+  const base = {
     requestedUrl,
     url: finalUrl,
     chain,
     status: res.status,
-    kind,
     contentType,
     bytes,
-    text: decoded?.text ?? null,
-    encoding: decoded?.encoding ?? null,
-    fetchedAt: opts.now().toISOString(),
   };
+  if (kind === "pdf") {
+    return { ...base, kind, text: null, encoding: null, fetchedAt: opts.now().toISOString() };
+  }
+  const decoded = decodeHtml(bytes, contentType);
+  return { ...base, kind, text: decoded.text, encoding: decoded.encoding, fetchedAt: opts.now().toISOString() };
 }
 
 /* ------------------------------------------------------------------ *
@@ -2555,7 +2537,7 @@ export async function fetchAsset(url: string, options: AssetFetchOptions): Promi
  * ------------------------------------------------------------------ */
 
 /**
- * **The only two hosts this caller will dial**, checked before any DNS lookup.
+ * **The only three hosts this caller will dial**, checked before any DNS lookup.
  *
  * `fetchBibliographicJson` exists so that src/bibliographic.ts can ask Crossref
  * and DataCite about a DOI without a third, general "fetch me some JSON" door
@@ -2563,8 +2545,13 @@ export async function fetchAsset(url: string, options: AssetFetchOptions): Promi
  * fixed list rather than a parameter, so a caller cannot widen it.
  * docs/plans/261001a-citations-read-the-cited-paper-and-a-shared-bibliographic-lookup.md
  * § Stage 1, and GPT Sol's P-8.
+ *
+ * **OpenAlex since 2026-10-04**, for src/citation-index.ts: which papers cite a
+ * DOI. The same door for the same reason — one fixed, public, bibliographic
+ * API, asked about an identifier and nothing else.
+ * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
  */
-export const BIBLIOGRAPHIC_HOSTS: readonly string[] = ["api.crossref.org", "api.datacite.org"];
+export const BIBLIOGRAPHIC_HOSTS: readonly string[] = ["api.crossref.org", "api.datacite.org", "api.openalex.org"];
 
 /**
  * **An honest User-Agent, unlike `USER_AGENT` above**, and on purpose.
@@ -2628,7 +2615,7 @@ async function readJson(res: Response, finalUrl: string, _chain: string[], opts:
 }
 
 /**
- * **One GET to Crossref or DataCite, parsed as JSON.**
+ * **One GET to Crossref, DataCite or OpenAlex, parsed as JSON.**
  *
  * The same guarded path as `fetchDocument` — the address guard and its pin, one
  * deadline, the byte cap on the bytes that arrive — with the host checked
@@ -2652,7 +2639,7 @@ export async function fetchBibliographicJson(
     throw new FetchFailure(
       "blocked-address",
       input.trim(),
-      "Only the Crossref and DataCite APIs are asked for bibliographic records.",
+      "Only the Crossref, DataCite and OpenAlex APIs are asked for bibliographic records.",
     );
   }
   return await fetchBytes(
@@ -2678,7 +2665,7 @@ export async function fetchBibliographicJson(
  */
 export async function fetchHtml(url: string, options: FetchOptions = {}): Promise<string> {
   const doc = await fetchDocument(url, options);
-  if (doc.kind !== "html" || doc.text === null) {
+  if (doc.kind !== "html") {
     throw new FetchFailure(
       "unsupported-type",
       doc.url,

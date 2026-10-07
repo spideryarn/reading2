@@ -12,6 +12,8 @@ into the prose. Asked for by an admin through the Feedback button on 2026-09-12
 The design, the two reviews that reshaped it and the real runs are
 [260916d-faq-mode.md](../plans/260916d-faq-mode.md). This page says what is built.
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 ## A row
 
 The question, one sentence in the article's own terms; then one to three passages, in document
@@ -115,10 +117,16 @@ answered by a model now. FAQ never marks the reader and never writes an answer.
 
 ## Making it again
 
-From the Metadata page: *AI processing* has an FAQ row, since 2026-09-29, and it is the only
-redo — the panel says nothing when its list was made by an older prompt
-([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
-model call; the list is replaced only if the run succeeds. The row is drawn with the experimental
+From the Metadata page: *AI processing* has an FAQ row, since 2026-09-29, and it is the usual
+place to redo a list the article still matches — the panel says nothing when its list was made by an
+older prompt
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). When the
+article has changed under the list, the banner that says so has *Find them again*, which is held
+from the press until the new list has been read
+([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+After a refused start, the panel's foot also offers *Find them again* on a current list, held in
+the same way.
+A press is one model call; the list is replaced only if the run succeeds. The row is drawn with the experimental
 switch off too, as Timeline's and Debate's are. Why it is safe to offer is in
 [`src/rerun-steps.ts`](../../src/rerun-steps.ts).
 
@@ -126,7 +134,7 @@ switch off too, as Timeline's and Debate's are. Why it is safe to offer is in
 
 Asking for one is owner-only, and behind the [experimental switch](experimental-features.md) — which
 is also why the add page's *generate the main modes* box does not make one after an import: that
-list is every mode outside the switch that makes something, derived in [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts)
+list is every mode outside the switch that makes something, derived in [`src/web/auto-modes.ts`](../../src/web/auto-modes.ts) and written out for the server in [`src/auto-mode-steps.ts`](../../src/auto-mode-steps.ts)
 ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)). **Since
 2026-09-29 a visitor to a public article sees a stored FAQ**, drawn from the page's own payload with
 no way to ask for another; with none stored they are told nobody has built one (SPIDERYARN-READING2-56,
@@ -145,6 +153,8 @@ plan's § Deferred, with the reason.
 [`src/faq.ts`](../../src/faq.ts) (the stage) · [`useFaq.ts`](../../src/web/useFaq.ts) ·
 [`FaqPanel.tsx`](../../src/web/FaqPanel.tsx) · [`faq-order.ts`](../../src/web/faq-order.ts) ·
 [`FaqMode.tsx`](../../src/web/modes/faq/FaqMode.tsx) ·
-[`faq.css`](../../src/web/styles/faq.css).
+[`faq.css`](../../src/web/styles/faq.css). Tests: [`faq.test.ts`](../../tests/faq.test.ts),
+[`faq-order.test.ts`](../../tests/faq-order.test.ts),
+[`faq-panel.test.tsx`](../../tests/faq-panel.test.tsx).
 
 Up: [reading-view-overview.md](reading-view-overview.md)

@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Article, Comment, Crossref, Visibility } from "../../types.js";
+import { awaitingStructure, type Article, type Comment, type Crossref, type Visibility } from "../../types.js";
 import { HomeLogo } from "../HomeLogo.js";
 import { LandingPage } from "../LandingPage.js";
 import { LogoLoader } from "../LogoLoader.js";
@@ -33,23 +33,30 @@ import { useCitationsRead } from "../useCitations.js";
 import { useQuizRead } from "../useQuiz.js";
 import { useCrossrefs } from "../useCrossrefs.js";
 import type { SavedSearch } from "../useSearch.js";
-import { useLastView } from "../last-view.js";
 import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
-import { useExperimental } from "../useExperimental.js";
 import { useReadingTime } from "../useReadingTime.js";
 import { PurposePrompt } from "../PurposePrompt.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
-import type { PublicArtefactSet, PublicArtefacts } from "../../public-types.js";
-import { NotSharedPage, ReauthRequiredPage } from "../PublicChrome.js";
+import type { PublicArtefactSet, PublicArtefacts, PublicSharedBy } from "../../public-types.js";
+import { ReauthRequiredPage } from "../PublicChrome.js";
 import { PublicMetadataPage } from "../PublicPages.js";
 import { useRenderCount } from "../perf.js";
 import { FeedbackTrigger } from "../FeedbackButton.js";
 import { type ArchiveControl, useArchive } from "../useArchive.js";
 import { useArticleAccess } from "./access.js";
+import { type LateStructure, useLateStructure } from "./useLateStructure.js";
+import { type StepJob, useStepJob } from "../useStepJob.js";
+import {
+  STRUCTURE_BUILDING,
+  type StructureArrival,
+} from "../modes/structure/StructureArriving.js";
+import { useShareKey } from "../useShareKey.js";
 import { UnreadPaperPage } from "./UnreadPaperPage.js";
+import { OwnerNotShared } from "./StillBeingAdded.js";
+import { StillBeingAddedVisitor } from "./StillBeingAddedVisitor.js";
 import type { OnRenamed } from "../TitleEditor.js";
 
 /**
@@ -91,22 +98,21 @@ export function ArticlePage({
   readerId: string | null;
 }) {
   useRenderCount("ArticlePage");
-  /* **Reopen this article where the reader left it.** Above the fetch, and
-     first, because its restore is a layout effect that settles the address
-     before anything paints — `useReadingPosition` then reads the `?at=` it put
-     back exactly as it reads a pasted one, and needs to know nothing about it.
-
-     Here rather than in main.tsx, which is where every other address rewrite
-     lives, because those run once per page load and the commonest way to reopen
-     an article is a click on the shelf — a client-side navigation that never
-     re-runs that file. src/web/last-view.ts has the whole of it, including why
-     a shared link always beats the memory. */
-  useLastView(slug);
-  /* Bumped by the not-yet-read page once *Read this* is done, to load the
-     article it made in place. */
+  /* Bumped by the not-yet-read page once *Read this* is done, and by the
+     still-being-added page once its import is, to load the article in place. */
   const [attempt, setAttempt] = useState(0);
   const reread = useCallback(() => setAttempt((n) => n + 1), []);
-  const access = useArticleAccess(slug, readerId, attempt);
+  /* A job list can first reveal an import already done after access got 404.
+     Check it once for this owner/address, even across the loading unmount. */
+  const [checkedImport, setCheckedImport] = useState<{ slug: string; readerId: string | null } | null>(null);
+  const rereadImport = useCallback(() => {
+    setCheckedImport({ slug, readerId });
+    reread();
+  }, [slug, readerId, reread]);
+  /* A private link's key, when the address has one (useShareKey.ts). A visitor's
+     requests carry it; an owner's never do. */
+  const shareKey = useShareKey();
+  const access = useArticleAccess(slug, readerId, attempt, shareKey);
   const signedIn = readerId !== null;
   const slow = useSlow(access.kind === "loading");
 
@@ -152,11 +158,38 @@ export function ArticlePage({
      especially so, since the mark is the only thing on screen that says whose
      page this is. The last branch draws none: it mounts a `Dock`, and the bar
      carries the wordmark there (2026-09-06 — see that branch). */
-  if (access.kind === "not-shared") return signedIn ? <NotSharedPage /> : <LandingPage />;
+  /* **Signed in, it may be the reader's own import that has not published
+     yet**, opened from the link its job card hands out. `OwnerNotShared` looks
+     for that job and draws it; with none it is `NotSharedPage`, as it always
+     was. A signed-out visitor is untouched. StillBeingAdded.tsx, plan 261005l. */
+  /* **Or the address is shared and its import has not published**: the
+     public read said *still being added* (access.ts). Then anybody who is not
+     its owner waits on `StillBeingAddedVisitor`, which asks again and has
+     this page read once more when the answer changes. A signed-out visitor
+     gets it at once. A signed-in reader goes through `OwnerNotShared` first,
+     exactly as for a 404, because their own read is a 404 until publication
+     too, and the import's card is the better page for the person running it;
+     the visitor's page is what that falls back to where it would have said
+     *Not shared* (GPT Sol's stage 2 plan review, F3). Plan 261005l § 2c. */
+  if (access.kind === "not-shared" || access.kind === "still-being-added") {
+    const waiting =
+      access.kind === "still-being-added" ? (
+        <StillBeingAddedVisitor slug={slug} shareKey={shareKey} onChanged={reread} />
+      ) : null;
+    if (!signedIn) return waiting ?? <LandingPage />;
+    return (
+      <OwnerNotShared
+        slug={slug}
+        onPublished={rereadImport}
+        retryCompleted={checkedImport?.slug !== slug || checkedImport.readerId !== readerId}
+        otherwise={waiting ?? undefined}
+      />
+    );
+  }
 
   /* **Its own branch, beside `error` and never through it.** The reader can fix
      this one, and the error page is a `<pre>` with nothing to press. It draws
-     its own corner logo, as `NotSharedPage` above does. PublicChrome.tsx. */
+     its own corner logo, as `NotSharedPage` does. PublicChrome.tsx. */
   if (access.kind === "reauth-required") return <ReauthRequiredPage />;
 
   /* **Yours, and not read through yet** (plan 261001m): the paper's title,
@@ -234,6 +267,7 @@ export function ArticlePage({
           crossrefs={access.crossrefs}
           signedIn={signedIn}
           sessionUnconfirmed={access.sessionUnconfirmed}
+          sharedBy={access.sharedBy}
           view={view}
         />
       )}
@@ -311,9 +345,9 @@ function OwnedArticle({
    * failed after the server committed leaves `AccessSharing` unable to say what
    * is true (`WRITE_UNCERTAIN` there), and the honest thing for the masthead is
    * to stop claiming a state rather than keep the one from before the write. It
-   * *removes* the key, because an absent `Article.visibility` already means
-   * *nobody could tell us* — the same thing the filesystem store's silence
-   * means (src/types.ts).
+   * *removes* the owner-side key so the masthead draws no visibility claim
+   * (src/types.ts). Visitors also omit that key, but their `sharedBy` field
+   * separately identifies public access or a private link (src/public-types.ts).
    *
    * The slug travels beside it for the reason it travels beside the title: the
    * `PUT` behind it resolves after the reader may have moved on.
@@ -322,6 +356,8 @@ function OwnedArticle({
     null,
   );
   const visibility = shared?.slug === slug ? shared.visibility : null;
+  const [linked, setLinked] = useState<{ slug: string; on: boolean | null } | null>(null);
+  const linkState = linked?.slug === slug ? linked.on : undefined;
 
   /**
    * **One archive controller across both views.** A request begun from the
@@ -354,7 +390,14 @@ function OwnedArticle({
       mine !== null
         ? { ...fetched, meta: { ...fetched.meta, title: mine.title }, titleOverridden: mine.overridden }
         : fetched;
-    const guessedAt = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    const guessedArticle = guessed !== null ? { ...titled, sourceGuess: guessed } : titled;
+    let guessedAt = guessedArticle;
+    if (linkState === null) {
+      const { privateLinkOn: _cleared, ...rest } = guessedArticle;
+      guessedAt = rest;
+    } else if (linkState !== undefined) {
+      guessedAt = { ...guessedArticle, privateLinkOn: linkState };
+    }
     if (visibility === null) return guessedAt;
     if (visibility === "unknown") {
       /* Deleted rather than set to `undefined`: `exactOptionalPropertyTypes`
@@ -364,7 +407,7 @@ function OwnedArticle({
       return rest;
     }
     return { ...guessedAt, visibility };
-  }, [fetched, mine, guessed, visibility]);
+  }, [fetched, mine, guessed, visibility, linkState]);
 
   const renameTo = useCallback(
     (forSlug: string, next: string, overridden: boolean) =>
@@ -386,6 +429,9 @@ function OwnedArticle({
     setShared((was) =>
       was?.slug === forSlug && was.visibility === now ? was : { slug: forSlug, visibility: now },
     );
+  }, []);
+  const linkedTo = useCallback((forSlug: string, on: boolean | null) => {
+    setLinked((was) => was?.slug === forSlug && was.on === on ? was : { slug: forSlug, on });
   }, []);
 
   /**
@@ -428,11 +474,51 @@ function OwnedArticle({
         article={article}
         onRenamed={renameTo}
         onVisibility={sharedTo}
+        onPrivateLink={linkedTo}
         archive={archive}
       />
     );
   return <OwnedReader slug={slug} article={article} onRenamed={renameTo} archive={archive} />;
 }
+/** `useStepJob`'s completion callback, for a caller with nothing to re-read. Stable. */
+const NOTHING_TO_REFRESH = () => {};
+
+/**
+ * **What the Structure band is told**, from where the structure stands and the
+ * owner's job for it — `null` when there is nothing to say, which is nearly
+ * always. The owner's half of modes/structure/StructureArriving.tsx; a
+ * visitor's is `visitorArrival`, which has no job in it.
+ */
+function structureArrivalOf(
+  structure: LateStructure,
+  job: StepJob<"structure">,
+  retry: () => void,
+): StructureArrival | null {
+  switch (structure) {
+    case "final":
+      return null;
+    case "building":
+      return STRUCTURE_BUILDING;
+    case "stalled":
+      return {
+        state: "stalled",
+        build: {
+          press: () => void job.start(),
+          starting: job.starting,
+          failed: job.failed?.message ?? null,
+        },
+      };
+    case "mismatch":
+      return { state: "mismatch" };
+    case "unread":
+      return { state: "unread", retry };
+    default: {
+      const unreachable: never = structure;
+      throw new Error(`Unknown structure state: ${String(unreachable)}`);
+    }
+  }
+}
+
 /**
  * **Where the private hooks are mounted, and the only place they are.**
  *
@@ -451,7 +537,7 @@ function OwnedArticle({
  */
 function OwnedReader({
   slug,
-  article,
+  article: handed,
   onRenamed,
   archive,
 }: {
@@ -460,6 +546,37 @@ function OwnedReader({
   onRenamed: OnRenamed;
   archive: ArchiveControl;
 }) {
+  /**
+   * **The article, with the real structure laid over it once that exists.**
+   *
+   * A first import opens before its structure is built, on a stand-in tree;
+   * `useLateStructure` swaps the real one in live when its job has gone — the
+   * same article, the same `blocks` array, a new `tree`. Everything below reads
+   * `article`, so nothing below knows there were two.
+   * docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md
+   * § Stage 2.
+   *
+   * **Here and not in `OwnedArticle`**: it subscribes to the job engine, and
+   * the metadata page has no tree to draw. Coming back from that page mounts
+   * this afresh, which is fine — the check is a level, so it finds the tree
+   * again rather than needing to have been watching.
+   *
+   * Owner-only by being here. A visitor keeps the tree they were sent.
+   */
+  const late = useLateStructure(slug, handed);
+  const article = late.article;
+  /**
+   * **Build it** — the owner's way out when no structure job is coming and the
+   * tree is still the stand-in. `{ slug, steps: ["structure"] }`, unforced: the
+   * step itself answers *not done* while the stored tree is awaiting
+   * (src/pipeline.ts § `STEPS.structure.isDone`).
+   *
+   * Quiet, for the arc's reason below: it is mounted on every owned article
+   * and must not hold the engine's idle poll. Nothing to refresh on completion
+   * either — `useLateStructure` hears completions and checks the list itself.
+   */
+  const structureJob = useStepJob(slug, "structure", NOTHING_TO_REFRESH, "quiet");
+  const structureArrival = structureArrivalOf(late.structure, structureJob, late.retry);
   const comments = useComments(slug);
   const chatAnchors = useChatAnchors(slug);
   /**
@@ -541,22 +658,24 @@ function OwnedReader({
    * in useArc.ts keeps the job it starts, not the poll.
    * tests/public-network-trace.test.tsx § an owner's reading view, left alone.
    */
-  const arc = useArc(slug, article.arc);
+  /* **And not while the tree is a stand-in** — the third argument. The arc is a
+     sentence per part, and the parts are about to be replaced; once the real
+     tree is in this runs as it does on any open (useArc.ts § `structureAwaited`). */
+  const arc = useArc(slug, article.arc, awaitingStructure(article.tree));
   /**
-   * **Where the reader has spent time**, recorded and drawn only with
-   * experimental features on — both halves, as availability rather than
-   * consent: it is new code on every paying reader's article view and new data
-   * about a person, so it starts where the unfinished things are.
-   * docs/plans/260916c-show-where-you-have-spent-time-reading-in-the-spine-and-gutter.md
-   * § Who, and behind what, which also records Fable's case for recording for
-   * everyone.
+   * **Where the reader has spent time**, recorded and drawn for every owner —
+   * since 2026-10-05, when Greg took both halves out from behind the
+   * experimental switch. While it was behind it, nothing was sampled with the
+   * switch off, so a stretch read then looked unread for ever. Owner-only by
+   * being here. **`true` is the whole gate**: there is no setting to turn it
+   * off yet, and when there is, this argument is where it goes.
+   * docs/project/reading-time.md § Who gets it.
    */
-  const experimental = useExperimental();
   const words = useMemo(
     () => new Map(article.blocks.map((b) => [b.id, b.words] as const)),
     [article.blocks],
   );
-  const readingTime = useReadingTime(slug, words, experimental.on);
+  const readingTime = useReadingTime(slug, words, true);
 
   return (
     <>
@@ -573,6 +692,7 @@ function OwnedReader({
           quiz,
           crossrefs,
           arc,
+          structureArrival,
           readingTime,
         }}
         onRenamed={onRenamed}
@@ -607,10 +727,13 @@ function VisitorArticle({
   crossrefs,
   signedIn,
   sessionUnconfirmed,
+  sharedBy,
   view,
 }: {
   slug: string;
   article: Article;
+  /** Public, or by a private link. For the notice, on both views. */
+  sharedBy: PublicSharedBy;
   /** The artefacts the payload carried. reader-capability.ts § artefacts. */
   artefacts: PublicArtefactSet;
   available: PublicArtefacts;
@@ -639,6 +762,7 @@ function VisitorArticle({
         available={available}
         signedIn={signedIn}
         sessionUnconfirmed={sessionUnconfirmed}
+        sharedBy={sharedBy}
       />
     );
   return (
@@ -654,6 +778,7 @@ function VisitorArticle({
         crossrefs,
         signedIn,
         sessionUnconfirmed,
+        sharedBy,
       }}
     />
   );

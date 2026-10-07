@@ -20,7 +20,7 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  * **`innerWidth` minus the notch, not `innerWidth`.** `index.html` carries
  * `viewport-fit=cover`, so on a notched phone in landscape the window is wider
  * than the part of it anything may be drawn in — and `.reader` spends the
- * difference on padding (styles.css § shell). Handing `fitView` the raw width
+ * difference on padding (shell.css § shell). Handing `fitView` the raw width
  * builds a table for a screen that is 47px wider than the one it has to fit in,
  * and the page then scrolls sideways by exactly the notch. Raised by GPT Sol
  * against the plan, 2026-08-28; see safe-area.ts for why this cannot be done in
@@ -40,15 +40,14 @@ import { DEFAULT_ROOT_PX } from "../layout.js";
  * stable`) that no longer happens where the property is supported, and this
  * is the fallback for where it is not. **It could flip**, which an earlier
  * version of this comment denied: a narrower page is not always a taller one,
- * because Structure's band jumps from its columns to 400px near 1175 and hands
- * the prose 200px more (GPT Sol). So it is coalesced to one read a frame, as
+ * because Structure's band can switch from its columns to a narrower list and
+ * hand space back to the prose (GPT Sol). So it is coalesced to one read a frame, as
  * dock-fit.ts's observer is, and the gutter is what actually stops the flip.
  */
 export function useWindowWidth(): number {
-  const measure = () => pageWidth() - horizontalInset(safeAreaInsets());
-  const [w, setW] = useState(measure);
+  const [w, setW] = useState(usableWidth);
   useEffect(() => {
-    const on = () => setW(measure());
+    const on = () => setW(usableWidth());
     window.addEventListener("resize", on);
     window.addEventListener("orientationchange", on);
     let frame = 0;
@@ -66,6 +65,17 @@ export function useWindowWidth(): number {
     };
   }, []);
   return w;
+}
+
+/**
+ * **`useWindowWidth`'s one read, without the hook**: the page's width less the
+ * notch. Named and exported for last-view.ts § the first-open default, which
+ * decides once, on arrival, what the layout will have room for — and has to
+ * ask with the layout's own number or the two disagree by a scrollbar or a
+ * notch (GPT Sol, plan 261005a, F3).
+ */
+export function usableWidth(): number {
+  return pageWidth() - horizontalInset(safeAreaInsets());
 }
 
 /**
@@ -149,18 +159,21 @@ export function layoutViewportWidth(): number {
  * when a stylesheet may not even have loaded.
  */
 export function useRootFontPx(): number {
-  const measure = () => {
-    const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-    /* A browser that answers `""` or `0` gets the default rather than a table
-       nought pixels wide — this is a multiplier, so a falsy answer is not a
-       small error, it is the whole column. */
-    return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
-  };
-  const [px, setPx] = useState(measure);
+  const [px, setPx] = useState(rootFontPx);
   useEffect(() => {
-    const on = () => setPx(measure());
+    const on = () => setPx(rootFontPx());
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
   return px;
+}
+
+/** `useRootFontPx`'s one read, without the hook — for the caller `usableWidth`
+ *  names, and for the same reason. */
+export function rootFontPx(): number {
+  const px = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  /* A browser that answers `""` or `0` gets the default rather than a table
+     nought pixels wide — this is a multiplier, so a falsy answer is not a
+     small error, it is the whole column. */
+  return Number.isFinite(px) && px > 0 ? px : DEFAULT_ROOT_PX;
 }

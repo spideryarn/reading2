@@ -12,9 +12,9 @@
  *
  * A readiness answer needs three things a request path must not do:
  *
- *  - **git**, which `spawnSync`s. On a box that has hit load average 391, a
- *    `rev-list` blocked on object IO inside a handler makes the whole
- *    diagnostic dashboard unresponsive at the moment somebody needs it.
+ *  - **git**. On a box that has hit load average 391, a `rev-list` blocked on
+ *    object IO inside a handler makes the whole diagnostic dashboard
+ *    unresponsive at the moment somebody needs it.
  *  - **a directory scan** across every checkout.
  *  - **`tmux ls`**, to tell a run that is still going from one that was killed.
  *
@@ -22,11 +22,18 @@
  * snapshot. The page therefore shows an answer that is *up to one refresh old*,
  * and it is told exactly how old rather than left to assume — the same contract
  * `health.ts` has, for the same reason.
+ *
+ * **The timer is the same thread as the requests.** Moving git and tmux onto it
+ * kept them out of a handler and no further: while they were `spawnSync` and
+ * `execFileSync`, a child that would not die froze every request anyway,
+ * because a synchronous `timeout` signals and then goes on waiting (postmortem
+ * 260910a). Both now run through the process's owned asynchronous child runner
+ * (`child.ts`), and `collect()` is awaited by a latched refresh. The directory
+ * scan is still synchronous file IO on that thread.
  */
-import { execFileSync } from "node:child_process";
-
+import { processProbeOwner, type ProbeOwner } from "./child.js";
 import { checkoutRoots, scanLogs, scriptBodiesFor, type ScanResult } from "./readiness-backfill.js";
-import { snapshotDev, type DevSnapshot } from "./readiness-git.js";
+import { snapshotDevAsync, type DevSnapshot } from "./readiness-git.js";
 import { openReadinessStore, readinessDirFromEnv, type ReadinessStore } from "./readiness-store.js";
 import { readinessVerdict, type Verdict } from "./readiness-verdict.js";
 import type { Reading } from "./readiness.js";
@@ -34,7 +41,7 @@ import type { Reading } from "./readiness.js";
 /** How far back the tab looks. Greg asked for a day. */
 export const WINDOW_HOURS = 24;
 
-/** Nothing here may hold anything up for longer than this. */
+/** When tmux is signalled. The caller stops waiting one grace after it (`child.ts`). */
 const TMUX_TIMEOUT_MS = 3_000;
 
 export type ReadinessSnapshot = {
@@ -76,20 +83,54 @@ export type ReadinessSnapshot = {
  * would turn the whole board void in one stroke on a box where tmux happened to
  * be busy. `readingFromLog` treats null as "fall back to the quiet window".
  */
-export function liveSessionNames(): { names: Set<string> } | { why: string } {
-  try {
-    const out = execFileSync("tmux", ["list-sessions", "-F", "#{session_name}"], {
-      encoding: "utf8",
-      timeout: TMUX_TIMEOUT_MS,
-      maxBuffer: 1024 * 1024,
-    });
-    return { names: new Set(out.split("\n").map((s) => s.trim()).filter((s) => s !== "")) };
-  } catch (err) {
-    /* No server running is a normal state and not a fault — but it is still
-       "we could not ask", because `tmux list-sessions` exits non-zero for it.
-       Either way the caller falls back rather than concluding. */
-    return { why: `tmux would not list its sessions: ${(err as Error).message}` };
+export async function liveSessionNames(owner: ProbeOwner = processProbeOwner()): Promise<LiveSessions> {
+  const outcome = await owner.run({
+    key: "readiness:tmux-list-sessions",
+    cmd: "tmux",
+    args: ["list-sessions", "-F", "#{session_name}"],
+    timeoutMs: TMUX_TIMEOUT_MS,
+    maxBytes: 1024 * 1024,
+  });
+  if (outcome.kind === "ok") {
+    return { names: new Set(outcome.stdout.split("\n").map((s) => s.trim()).filter((s) => s !== "")) };
   }
+  /* No server running is a normal state and not a fault — but it is still
+     "we could not ask", because `tmux list-sessions` exits non-zero for it.
+     So is a tmux that timed out, overflowed, or was REFUSED because the last
+     one this process started is still unaccounted for. Every one of them is
+     "we did not look", and the caller falls back rather than concluding. */
+  return { why: `tmux would not list its sessions: ${outcome.why}` };
+}
+
+export type LiveSessions = { names: Set<string> } | { why: string };
+
+/**
+ * One readiness collection at a time, and only a finished one is published.
+ *
+ * `collect()` awaits its children, so a turn of the timer can arrive while the
+ * last collection is still out. The latch is set before the first await and
+ * cleared in `finally`; a call that finds it set returns without collecting. A
+ * collection that fails publishes nothing — the previous snapshot stays, and
+ * the page shows how old it is. The returned function never rejects, so the
+ * loop can start it without awaiting it.
+ */
+export function latchedReadinessRefresh(deps: {
+  collect(): Promise<ReadinessSnapshot>;
+  publish(snapshot: ReadinessSnapshot): void;
+  onError(why: string): void;
+}): () => Promise<void> {
+  let inFlight = false;
+  return async function refresh(): Promise<void> {
+    if (inFlight) return;
+    inFlight = true;
+    try {
+      deps.publish(await deps.collect());
+    } catch (err) {
+      deps.onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      inFlight = false;
+    }
+  };
 }
 
 /**
@@ -104,17 +145,24 @@ export function sessionNameForLog(logPath: string): string {
 export type ReadinessDeps = {
   /** The primary checkout, whose worktrees are scanned alongside it. */
   primary: string;
+  /** The other place worktrees live; null for none. Unset means the box's own, scripts/worktree-roots.ts — so a test sets it, or it scans real trees. */
+  externalRoot?: string | null | undefined;
   dir?: string | undefined;
   nowMs?: (() => number) | undefined;
   /** Injected by tests, so a scan can be driven without a tmux server. */
-  liveSessions?: (() => { names: Set<string> } | { why: string }) | undefined;
+  liveSessions?: (() => LiveSessions | Promise<LiveSessions>) | undefined;
+  /** Runs tmux and git. The process's one owner unless a test supplies its own. */
+  owner?: ProbeOwner | undefined;
 };
 
 export type ReadinessRetention = {
   /** Null when the store would not open. The dashboard runs on regardless. */
   store: ReadinessStore | null;
-  /** Recompute the snapshot. Call from the refresh loop, never from a handler. */
-  collect(): ReadinessSnapshot;
+  /**
+   * Recompute the snapshot. Call from the refresh loop, never from a handler,
+   * and through `latchedReadinessRefresh` so two never overlap.
+   */
+  collect(): Promise<ReadinessSnapshot>;
   /** What to say at startup — the directory, or why there is not one. */
   lines: { log: string[]; error: string[] };
 };
@@ -124,7 +172,8 @@ export function makeReadinessRetention(deps: ReadinessDeps): ReadinessRetention 
   const opened = openReadinessStore(dir);
   const store = opened.kind === "open" ? opened.store : null;
   const nowMs = deps.nowMs ?? ((): number => Date.now());
-  const liveSessions = deps.liveSessions ?? liveSessionNames;
+  const owner = deps.owner ?? processProbeOwner();
+  const liveSessions = deps.liveSessions ?? ((): Promise<LiveSessions> => liveSessionNames(owner));
 
   const log: string[] = [];
   const error: string[] = [];
@@ -135,7 +184,7 @@ export function makeReadinessRetention(deps: ReadinessDeps): ReadinessRetention 
     store,
     lines: { log, error },
 
-    collect(): ReadinessSnapshot {
+    async collect(): Promise<ReadinessSnapshot> {
       const at = nowMs();
       const sinceMs = at - WINDOW_HOURS * 60 * 60 * 1000;
 
@@ -144,8 +193,8 @@ export function makeReadinessRetention(deps: ReadinessDeps): ReadinessRetention 
       const held = store?.read({ sinceMs, nowMs: at }) ?? null;
       const knownRunIds = new Set((held?.readings ?? []).map((r) => r.record.runId));
 
-      const roots = checkoutRoots(deps.primary);
-      const live = liveSessions();
+      const roots = deps.externalRoot === undefined ? checkoutRoots(deps.primary) : checkoutRoots(deps.primary, deps.externalRoot);
+      const live = await liveSessions();
       const bodies = new Map<string, Readonly<Record<string, string>>>();
 
       const scan: ScanResult = scanLogs({
@@ -167,7 +216,7 @@ export function makeReadinessRetention(deps: ReadinessDeps): ReadinessRetention 
       });
 
       const readings = [...(held?.readings ?? []), ...scan.readings].sort((a, b) => a.atMs - b.atMs);
-      const dev = snapshotDev(deps.primary, new Date(at).toISOString());
+      const dev = await snapshotDevAsync(owner, deps.primary, new Date(at).toISOString());
 
       return {
         collectedAt: new Date(at).toISOString(),

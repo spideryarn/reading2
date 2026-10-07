@@ -35,8 +35,8 @@
  * This draws a press it is handed and says when it is finished with it.
  * **Which presses count is `Reader`'s**: a Dock button or a command-bar pick,
  * never a pasted `?mode=`, a Back step or a reload — the same *a mount is not a
- * click* line `activation.ts` draws for paid runs — and never Plain or
- * Hierarchy, which have no band to stand on.
+ * click* line `activation.ts` draws for paid runs — and never Plain, which
+ * has no band to stand on.
  *
  * ## It never takes a tap
  *
@@ -104,7 +104,7 @@ export function ModeHerald({ press, onDone }: { press: HeraldPress | null; onDon
  * bottom minus the bottom of its **last child that grows**.
  *
  * Every band is a flex column whose scroller is the child with `flex: 1`, and a
- * pinned row — `ModeSurface`'s `foot`, Chat's and Remember's composer — is a
+ * pinned row — `ModeSurface`'s `foot`, Chat's and Learn's composer — is a
  * direct child after it. Reading the layout rather than naming the foot classes
  * is what lets a new band be right without anyone remembering this.
  * A band where nothing grows gets `0` rather than a guess: its content ends

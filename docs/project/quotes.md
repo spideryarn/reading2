@@ -1,5 +1,44 @@
 # Quotes — the lines worth keeping
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+- [§ Whose words these are](#whose-words-these-are) — why "the article's", not "the author's"
+- [§ The one safety property](#the-one-safety-property) — verbatim verification; drops counted
+- [§ Two scores, combined with `max`](#two-scores-combined-with-max) — what ranks a quote
+- [§ The orders, and the bar](#the-orders-and-the-bar) — in order / prioritised / most important; the slider
+- [§ Every visible quote is marked](#every-visible-quote-is-marked-in-every-mode-and-the-bar-is-how-many)
+  — the underline in the prose, in every mode
+- [§ A highlighter pen](#a-highlighter-pen-which-is-how-a-quote-says-how-much-it-matters) — the
+  fill and its fade, light and dark colours
+- [§ The reason is behind a button](#the-reason-is-behind-a-button)
+- [§ Your highlights are rows too](#your-highlights-are-rows-too) — the reader's own highlights
+  drawn as rows; "who and when" on every card
+- [§ The stage](#the-stage) — the model call; [Find more appends](#find-more-appends-only-a-stale-or-outdated-list-is-replaced);
+  [freshness](#freshness)
+- [§ Five ways to break this quietly](#five-ways-to-break-this-quietly) · [§ What is still open](#what-is-still-open)
+  · [§ See also](#see-also)
+
+**Why a quote could appear twice** (a signpost, not the mechanism). There are three places to look,
+and they are different things:
+
+1. **The server drops overlapping quotes**: `dedupeOverlaps` in [`src/quotes.ts`](../../src/quotes.ts),
+   within one run and, on Find more, against the lines already on the list, which always win —
+   [§ Find more appends](#find-more-appends-only-a-stale-or-outdated-list-is-replaced). Overlap is
+   by span in one block, so the *same sentence in two blocks* is two quotes.
+2. **Your highlights are separate rows, and nothing de-duplicates them against the model's quotes**
+   (`isReaderRow`, `quoteBandRows` in [`src/web/quote-band-rows.ts`](../../src/web/quote-band-rows.ts)):
+   highlight words the AI also chose and you see both, one marked *yours* —
+   [§ Your highlights are rows too](#your-highlights-are-rows-too).
+3. **A replaced list** (stale, or outdated by an older prompt) is rewritten, not appended to; a
+   stale one mints every id fresh and an outdated one keeps an id only for exactly the same words
+   in the same block — same section as 1.
+
+Tests: [`tests/quotes-find-more.test.ts`](../../tests/quotes-find-more.test.ts),
+[`tests/quote-band-rows.test.ts`](../../tests/quote-band-rows.test.ts). Nothing here is specific
+to a phone; I found no phone-only quote rendering path.
+
 The sentences of a piece that are worth carrying out of it, in the band between the spine and the
 prose. **Every row is the article's own text**, verified verbatim against the block it came from, and
 **every row the panel is showing is marked in the prose — in every mode, whether or not the band is
@@ -66,7 +105,7 @@ defaults rest on — is listed at the end, in [§ What is still open](#what-is-s
  │             │ │ imp·62  str·94      │                            │   │
  │             │ ┃…                    │                            │   │
  ├─────────────┴───────────────────────┴────────────────────────────┴───┤
- │ ⊞Hierarchy ▤Summary 📖Glossary 💡Ideas ❝Quotes ● 🔍Search ⌸Chat  …     │
+ │ ⊞Structure ▤Summary 📖Glossary 💡Ideas ❝Quotes ● 🔍Search ⌸Chat  …     │
  └───────────────────────────────────────────────────────────────────────┘
 
  EVERY WORD IN THE LIST IS FROM THE ARTICLE. The only things on screen that
@@ -96,7 +135,7 @@ Code: [`src/quotes.ts`](../../src/quotes.ts) (stage 5h — the prompt, the call,
 [`tests/quotes.test.ts`](../../tests/quotes.test.ts) (the stage),
 [`tests/quotes-panel.test.ts`](../../tests/quotes-panel.test.ts) (the orders and the bar),
 [`tests/quote-marks.test.ts`](../../tests/quote-marks.test.ts) (what the prose marks),
-[`tests/quote-stroke-fade.test.ts`](../../tests/quote-stroke-fade.test.ts) (the fade and its floor),
+[`tests/quote-fill.test.ts`](../../tests/quote-fill.test.ts) (the fill, its fade and its colours),
 [`tests/quotes-find-more.test.ts`](../../tests/quotes-find-more.test.ts),
 [`tests/quotes-find-more-stage.test.ts`](../../tests/quotes-find-more-stage.test.ts) and
 [`tests/quotes-find-more-panel.test.tsx`](../../tests/quotes-find-more-panel.test.tsx) (Find more:
@@ -344,11 +383,11 @@ in the feedback report that asked for it (SPIDERYARN-READING2-1Z):
 **Outside Skim, what is marked is what the panel lists**, and that is one function — `markedQuotes` in
 [`QuotesPanel.tsx`](../../src/web/QuotesPanel.tsx), called by the panel and, since 2026-09-08, by
 [`useQuoteMarks`](../../src/web/reader/useQuoteMarks.ts) rather than by the band — so the rows and
-the strokes cannot come apart, and the bar doubles as the highlight-density control. A row the bar
-has hidden with its stroke still on the paragraph is the precise failure
+the marks cannot come apart, and the bar doubles as the highlight-density control. A row the bar
+has hidden with its mark still on the paragraph is the precise failure
 [threshold.ts](../../src/web/threshold.ts) exists to prevent.
 
-**Skim deliberately adds its current stop after that rule.** Its stop remains outlined while the
+**Skim deliberately adds its current stop after that rule.** Its stop remains marked while the
 reader is standing on it even when Quotes' bar hides it; `proseFound` owns that exception. The spine
 strip and the quote card therefore read the merged prose marks, not only `markedQuotes`.
 
@@ -390,17 +429,22 @@ Greg, in two feedback reports:
 >
 > — 2026-09-11 (spya-mtyquy)
 
-- **The spine: a green strip down its left 2px, in every mode** — `--quote-stroke-rgb`, faded by the
-  block's brightest quote exactly as the outline is. **Its own element, never a lane**
+- **The spine: a purple strip down its left 2px, in every mode** — `--quote-rgb` (a green until
+  2026-10-03, when the quote colour moved), faded by the block's brightest quote exactly as the fill
+  is. **Its own element, never a lane**
   (spine-marks.ts § `quoteRailMarks`, the `.spine-from` precedent): the search gutter is the right
   10px of the 12px rail, so the strip pushes no search sideways and is never counted as a "search
-  match" on a band's card. It is drawn from what the prose actually outlines (`proseMarked`), which
+  match" on a band's card. It is drawn from what the prose actually marks (`proseMarked`), which
   includes Skim's stop when the bar hides it from the band. And **the quotes left the search lanes
   in every mode** (`railFound` in passages.ts): until then Quotes mode drew them as a lane in
   `--cat-0`, the first saved search's colour, and Skim drew its stop the same way. Where seven or
   more searches are on, the lanes' 1.5px floor reaches into the strip's 2px and paints over it —
   accepted, since the strip is still there above and below. Reading-time runs sit under it.
 - **A card on a quote in the prose**, in `ProseHoverCard` beside the term, citation and link halves:
+  **what a quote is**, in one paragraph with *More in Help →*, first — since 2026-10-06, because the
+  fills are in every mode and this card is where a reader who has never opened Quotes meets one
+  (Greg, `spya-tpmde9`: *"Add a tooltip for Quotes, so readers know what they are"*;
+  [261006j](../plans/261006j-the-card-on-a-quote-in-the-prose-says-what-a-quote-is.md)); then
   both raw scores, drawn and printed (this card is where the rows' numbers live — never the `max`
   composite); the reason, in the model's face; ‹ › to the quote before or after it **down the
   page**; and *open Quotes*, which selects it and opens the band on its row. **Pointer only.** A
@@ -411,7 +455,7 @@ Greg, in two feedback reports:
   reading, not a word they point at; still a guess to be felt in use.
 - **In Quotes mode, ‹ › under the list and ← / →** step the band's own list, in its order, through
   one rule (`stepQuote`) — [keyboard.md](keyboard.md) § ← / → in Quotes. Both step only
-  over quotes the prose outlines (`useQuoteMarks`' `steppable`), so a row whose block is gone is
+  over quotes the prose fills (`useQuoteMarks`' `steppable`), so a row whose block is gone is
   skipped rather than selected with nowhere to go. The selected row scrolls into view in the list
   (its own `scrollTop`, never `scrollIntoView`).
 
@@ -419,42 +463,39 @@ Greg, in two feedback reports:
 from where the reader is when nothing is selected (it goes to the first quote); and keeping the card
 open on the next quote after ‹ › (it closes, and the reader points at the next one).
 
-### The stroke, which is how a quote says how much it matters
+### A highlighter pen, which is how a quote says how much it matters
 
-**Not yellow, and since 2026-09-07 not a wash at all: a quote is drawn as an outline.** Greg
-decided it on 2026-09-06, against his own earlier *"maybe a yellow highlighter pen"*:
+**A quote is a fill, like a highlighter pen, and a search hit is an outline.** Greg, 2026-10-03
+(`spya-xrgste`):
 
-> Perhaps use another UI convention, e.g. provide a border (i.e. the boundary but not the fill) for
-> quotes, perhaps with bold, and use thickness and boldness as an indicator of the Quote priority.
-> … Failing that, let's just use a fluorescent-yellow highlighter, and tweak the Search colourings
-> to be pastel or something so they have a different feel to them.
+> I think right now the quotes show an outline, and the search results show a highlighter filled in,
+> like as if with a highlighter pen. Let's switch this round. I think the quotes should be like with
+> a highlighter pen, so filled in, and the searches should have an outline.
 
-The yellow was the fallback and was not needed. It would have cost the hue channel — which carries
-*which search found this*, 2026-08-26 — or added a quotes-specific wash, a second way of drawing a
-marked passage, which is what this mode was built not to have. **A stroke costs neither, because it
-is a channel nothing else in the prose was using. Search fills; quotes outline.** If a later design
-finds it needs a fill for quotes after all, the reason this was chosen has been lost.
+The plan is
+[261003l](../plans/261003l-quotes-filled-like-a-highlighter-pen-and-search-hits-outlined.md); the
+rules are `annotations.css` § quote fills, and the search half is
+[search.md § An outline, since 2026-10-03](search.md#an-outline-since-2026-10-03).
 
 | Channel | Carries |
 |---|---|
-| the wash | a search's **confidence** (`--hit-a`) |
-| the bottom band's hues | **which search** found it |
+| **the fill** | **that this is a quote, and how much it matters** |
+| the outline's top edge and ends | a search's **confidence** (`--hit-a`) |
+| the band under the words | **which search** found it |
 | the `::after` glyph | a referee criterion's **direction** |
-| **the stroke** | **that this is a quote, and how much it matters** |
+| a fill in yellow, green, blue or pink | the **reader's own** highlight ([comments.md](comments.md)) |
 
 **Two tiers, from `priorityOf`.** `quoteTier` (QuotesPanel.tsx, beside `priorityOf`) is heavy at or
 above `QUOTE_HEAVY_AT`, `0.80`, and light below it. **That number is its own, not the bar's**, since
 2026-09-15. It used to be the bar's resting position, so every quote the default bar kept was heavy;
-when the bar came down to `0.60` the tie would have made the stroke's split idle in exactly the
-state most readers see, and only visible once somebody dragged the bar. Decoupled, the quotes
-between `0.60` and `0.80` draw light beside the heavy ones on first open, so thickness means
-something without anyone touching anything (the fade carries the continuous signal; the tier's one
-job is a visible split).
+when the bar came down to `0.60` the tie would have made the split idle in exactly the state most
+readers see. Decoupled, the quotes between `0.60` and `0.80` draw light beside the heavy ones on
+first open.
 
 What the two controls still agree on is **order**: raising the bar removes scored light quotes
 before scored heavy ones, because both read `priorityOf`. (Not "what survives is exactly the heavy
-strokes": the bar snaps to real scores, so there may be no stop at `0.80`, and an unscored quote
-survives every bar while drawing light.) Driving the stroke from `importance` alone would let them
+ones": the bar snaps to real scores, so there may be no stop at `0.80`, and an unscored quote
+survives every bar while drawing light.) Driving the tier from `importance` alone would let them
 disagree, since `?bar=` thresholds on `max(importance, striking)`; a quote that is merely *striking*
 clears the bar, so it must also draw heavy.
 
@@ -462,72 +503,181 @@ clears the bar, so it must also draw heavy.
 scored on neither axis survives every position of the bar (§ The bar hides what is below it), so
 leaving it unmarked would be a row in the panel with nothing in the prose.
 
-**And a fade, since 2026-09-11 — the fine channel on top of the coarse one.** Greg, in
-SPIDERYARN-READING2-2W:
+**And a fade — the fine channel on top of the coarse one.** Greg, 2026-09-11, in
+SPIDERYARN-READING2-2W, when the mark was a border:
 
 > perhaps slightly fade the border based on the priority-score (but even low-priority quotes should
 > still be clearly visible)
 
-`quoteAlpha` (beside `quoteTier`) runs the stroke's alpha from **0.70** at `priorityOf` 0.5 and below
-— and for the unscored — to **1.00** at 1.0, linearly. Weight and fade **move the same way**, so a
-heavier quote is always also a brighter one and the two can never cancel; the weight keeps the
-two-step split the blind test allowed and the fade adds the continuous impression nobody has to
-identify pairwise. It spends the finding of 260907c's own acceptance pass, that priority *"does help
-skimming — but through brightness more than thickness"*.
-
-**"Clearly visible" is kept by the floor, and the floor is tested, not felt.**
-[tests/quote-stroke-fade.test.ts](../../tests/quote-stroke-fade.test.ts) composites the 1px stroke at
-`QUOTE_ALPHA_FLOOR` over the page colour read out of `styles/tokens.css` and requires more than 4.5:1
-— WCAG's non-text floor is 3:1, and a 1px line wants the margin. It travels as `--quote-a` in the
-inline style `annotateHtml` already writes for `--hit-a`, so there is no new attribute for the
-sanitiser to reserve, and a mark without it falls back to the token's old 0.95. The pressed white
-stroke overrides the whole colour, so the fade never dims *you pressed this*.
-[260911a](../plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md) § 1.
+`quoteAlpha` (beside `quoteTier`) runs from **0.70** at `priorityOf` 0.5 and below — and for the
+unscored — to **1.00** at 1.0, linearly, and travels as `--quote-a` in the inline style
+`annotateHtml` already writes for `--hit-a`. **The fill's strength is the tier's base times that.**
+The bases are per appearance (`--quote-fill-light` and `--quote-fill-heavy`, beside `--quote-rgb` in
+`styles/tokens.css`): 0.20 and 0.32 on the light page, so light runs 0.14 to 0.18 (a light quote's
+priority stops below 0.80) and heavy 0.28 to 0.32; 0.48 and 0.58 on the dark page, so 0.34 to 0.42
+and 0.51 to 0.58, of a darker colour than the light page's
+(§ [A little less saturated](#a-little-less-saturated-since-2026-10-06)). Tier
+and fade **move the same way**, so a heavier quote is always also a brighter one and the two can never
+cancel. It spends the finding of 260907c's acceptance pass, that priority *"does help skimming — but
+through brightness more than thickness"*: with a fill, brightness is all there is.
 
 **Two tiers and not three, and that is a measurement rather than a preference.** Blind pairwise on
-the box, 2026-09-07: three tiers at 1/2/3px scored **13/20, which is chance**, with answers
-correlating to slot position rather than thickness. Two tiers at 1px and 3px scored **12/12 at both
-device scale factors**. Everything involving a middle tier is what fails. A third level would be a
-ranking the reader cannot see, which is worse than no ranking.
+the box, 2026-09-07, on stroke widths: three tiers scored **13/20, which is chance**; two scored
+**12/12**. It has not been re-run on fills. The step between the tiers is asserted in the test
+below; whether a reader sees it is the browser check's.
 
-**Bold is out**, though Greg asked for *"perhaps with bold"*. It does not change the paragraph's
-height — measured — but it **re-wraps** the prose, moving the text after the mark by 80px in the
-sample. With quotes on a slider, every drag would reshuffle the words under the reader's eye.
-`text-shadow` and `-webkit-text-stroke` thicken without reflowing and are rejected too, for the
-older rule: the verbatim column is not restyled to advertise our annotation.
+**The words keep their colour, and these are tested, not felt.**
+[tests/quote-fill.test.ts](../../tests/quote-fill.test.ts) reads the real tokens in both themes and
+requires: the article's ink and its soft ink clear 4.5:1 on the strongest fill there can be; a link
+inside a quote clears 3:1 on it (**the weakest pairing, and what set the strengths**: a link is only
+5.7:1 on the bare light page, and at the first build's 0.42 it was 2.9:1); the faintest fill still
+differs from the page; the heavy tier is stronger than the light where they meet; and the spine
+strip, a thin line in `--quote-rgb` at `QUOTE_ALPHA_FLOOR`, clears 3:1.
 
-**How it is drawn, and the two things that make it work.** `box-shadow`, because it reserves no
-layout space at all — measured identical to three decimal places with the ring on and off — where a
-border costs inline width per fragment and `outline` is the focus ring. And **the caps are the hard
-part**: `annotateHtml` emits one `<mark>` per text node and splits again at every annotation
-boundary, so one quote containing an `<em>` is *three sibling elements*, and three closed rings read
-as three quotes. So the rules above and below are drawn on every fragment and the inline caps only
-on the two carrying `data-quote-start` / `data-quote-end`. The caps are **inset**, because drawn
-outside they weld two abutting quotes into one. `annotations.css` § quote strokes has the numbers.
+#### Stronger on the dark page, since 2026-10-05
 
-**And quotes stopped being washes at all**, which had to happen first: a quote was a `strength: 1`
-hit, and `--hit-a` is the maximum over every mark covering a run, so **a quote lying over a hedged
-search hit repainted that hit's confidence at full**. `data-wash` now says which marks want search
-painting, and `--hit-a` is computed over those only.
+**This was the first of two changes that day, and the second replaced its numbers** — the colour
+and both strengths are in the next section. What is still true from this one is that the strengths
+are per appearance, and why the old contrast check missed the complaint.
 
-That was a fault in the renderer rather than something a reader could then see: one mode's marks were
-on the page at a time, so a quote and a search hit were never drawn over one phrase. The overlap was
-a contract `annotateHtml` held, not a state the app could reach — worth being exact about, because
-the first write-up of this called it a live bug and it was not one.
+Greg, two days after the fill shipped (`spya-s0gppw`):
 
-**It is one now.** Since 2026-09-08 the quotes are on the page in every mode, so a search hit and a
-quote share a fragment whenever they share a phrase, and *"one mode's marks at a time"* is no longer
-true anywhere it is written. **Fixing this a day early is what made that change cheap** — had the
-wash still been computed over every mark, turning the quotes on everywhere would have silently
-repainted every hedged search hit under a quote at full confidence, in the one channel that says how
-sure the model was.
+> The quote highlighting color is not very visible against the black background in dark mode. Take a
+> screenshot and see if you can slightly tweak it.
 
-What the overlap still costs is cosmetic and known: `[data-wash]`'s `padding-bottom: 2px` makes the
-shared fragment 2px taller, so the quote's bottom rule steps down across the hit and back up —
-measured at 718.67 against 720.67 in Chrome on 2026-09-08. Not fixed;
+The dark page's quote colour was a pale lavender, `204 151 243`, drawn at the light page's two
+strengths. At 14% over near-black that is a dark grey with a little purple in it. **The dark
+page's strengths went to 0.28 and 0.36**, up from 0.20 and 0.32, so a light quote was about 40%
+stronger and a heavy one about 12%
+([261005f](../plans/261005f-dark-quote-fill-stronger.md)). The light page's are what they were, and
+the test pins them.
+
+**What stopped the lavender going further.** A search hit over a quote draws its outline on the
+fill, and the blue automatic search colour (`--cat-4`) was 3.03:1 on the strongest fill; at 0.38 it
+was under 3.
+
+**The colour did not move in that change**, though a more saturated purple looked better in the
+prose. The spine strip shared it and is drawn on the rail's panel, a lighter ground than the page,
+where a darker purple fell from 3.3:1 to 2.2:1 (GPT Sol's plan review). So the question went to
+Greg.
+
+**The old contrast check did not catch the complaint**: the faintest fill passed its
+"differs from the page" floor at 1.22. That ratio measures luminance only, while OKLab distance also
+counts chroma. So on the dark page the test asks for both.
+
+#### A deeper purple in the dark prose, since 2026-10-05
+
+**The numbers in this section are that day's. The colour was turned down the next morning**, and
+the current values are in § A little less saturated, below.
+
+Greg, the same day, having looked at the stronger lavender on an iPad:
+
+> the purple Quote-highlights in dark mode on an iPad screen were a little hard to see. I don't mind
+> if they're slightly different from the Spine
+
+**So on the dark page the fill in the prose and the strip on the spine are two colours of one
+hue.** That releases, for the dark prose fill only, his rule of 2026-09-10 (*"use the same colour we
+use for their outline-border"*, § In the spine, above). The fill is `--quote-prose-rgb`,
+`151 48 208`: the strip's hue (310), darker with about 1.7 times its OKLab chroma. The strip keeps
+`--quote-rgb`, `204 151 243`. On the light page the two tokens hold one colour and nothing moved.
+Plan: [261005j](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md).
+
+**A darker colour is the more visible one here**, because it can be drawn more strongly. The
+lavender is light, so little of it can go over the page before the words on it lose contrast, and a
+little of a pale colour over near-black is a dark grey. The deeper purple is drawn at **0.48 and
+0.60** and what reaches the page is purple: the faintest quote's chroma went from 0.035 to 0.099,
+and its OKLab distance from the page from 0.146 to 0.171 (the test's floors are 0.08 and 0.16).
+
+**The words on it are as readable as they were, or more so.** Ink 8.90 to 9.56, soft ink 4.85 to
+5.21, a link 4.2 to 4.6, the opaque blue search band or full-confidence outline 3.03 to 3.25. The soft ink in a block drawn on
+`--muted` (a code block), which the lavender left at 3.88, is 4.61 and now has a floor in the test.
+The step between the tiers grows slightly in OKLab distance (0.047 to 0.048), while its
+luminance contrast falls from 1.188 to 1.158 and remains above the test's 1.12 floor.
+
+**Why the strip did not follow.** In the prose colour a 2px strip would be about 2.2:1 on the page
+and less on the rail's panel. The test holds that as a control.
+
+**What it did not fix**: a glossary's dotted rule and a cross-reference's rule under a heavy quote
+are 2.58 and 2.56, under 3:1. The glossary improves from 2.51; the cross-reference falls very
+slightly, from 2.5635 to 2.5562. The test holds minimum floors of 2.50 and 2.55, respectively. Lifting them is a change to those rules (queue entry `qi-9wyymfdy`). Caption ink in a
+block on `--muted` under a heavy quote is 2.64, up from 2.22, and has no floor.
+
+**Some overlapping signals lose contrast.** Low-confidence search outlines are translucent; the
+opaque-band check above does not cover them. On the strongest fill, a bluish-green outline at
+`--hit-a: 0.45` falls from 2.550 to 2.504. The page-coloured gap between abutting quotes falls
+from 2.040 to 1.898 against the strongest fill. The reader's four washes become more distinct in
+OKLab beside a quote, but lose luminance contrast with it. These are small, on signals already
+under 3:1, and accepted as the price of the more visible quote; adjusting the
+outline is the next step if a search hit over a heavy quote proves hard to see. The sums are in
+[261005j § Independent review](../plans/261005j-dark-quote-prose-colour-deeper-purple-spine-keeps-its-own.md#independent-review-overlaps-and-grounds).
+
+**Change `--quote-prose-rgb` and the two strengths have to be summed again**: they are a set.
+
+#### A little less saturated, since 2026-10-06
+
+Greg, the next morning (`spya-hsbz0z`):
+
+> Now the purple Quote highlighting is a little toooo saturated. Just dial it down a bit.
+
+**So the dark fill is `143 70 189` at 0.48 and 0.58**: the same hue and lightness as the purple of
+the day before, with four fifths of its chroma, and the heavy tier a touch weaker. On the page it is
+about a quarter less saturated at both ends (the faintest quote's chroma 0.099 to 0.076, the
+strongest's 0.156 to 0.119). The light page and the spine strip did not move. Plan:
+[261006e](../plans/261006e-dark-quote-fill-a-little-less-saturated.md), which has the table.
+
+**It is a band now, with a complaint at each end.** The lavender was too grey (0.035) and the first
+purple too much (0.099), and the test holds the faintest quote's chroma between 0.065 and 0.09.
+**Keeping it visible after his "hard to see" complaint bounds the cut**: the faintest quote is
+0.162 from the page against an adopted floor of 0.16, so a bigger cut spends more of the remaining
+visibility margin.
+
+**The heavy strength moved for the soft ink in a code block.** A less saturated purple of the same
+lightness is a little brighter, and at 0.60 the soft ink on `--muted` fell to 4.42; at 0.58 it is
+4.52. Ink, soft ink, a link and the blue search colour on the strongest fill are within 0.05 of
+what they were on the page. Other grounds and adjacent signals have regressions recorded in
+[261006e](../plans/261006e-dark-quote-fill-a-little-less-saturated.md#independent-review).
+The step between the tiers is 1.13, down from 1.16, floor 1.12.
+
+**Purple, because the reader has fills of their own.** Since 2026-10-03 a reader's highlight is a
+wash in yellow, green, blue or pink. The quote colour was a green at hue about 163, which as a wash
+is the reader's green. It is now a purple at hue 310 (`--quote-rgb`, `styles/tokens.css`), 40° from
+the reader's blue and 40° from their pink, and the same test fails if either set of tokens moves
+closer. Teal, in the wider gap, was the plan's first choice and was refused because the spine strip
+shares the token and the spine's reading-time area is a cyan. **Where a reader's highlight covers a
+quote's words, theirs wins on those words.**
+
+**How it is drawn.** `background-color` on every fragment. `annotateHtml` emits one `<mark>` per
+text node and splits again at every annotation boundary, so one quote containing an `<em>` is
+*three sibling elements*; the pieces are square so the fill does not notch at the joins, and only
+the two carrying `data-quote-start` / `data-quote-end` are rounded. A 1px line of the page's colour
+inside each quote's start keeps two abutting quotes two.
+
+**Pressed, or Skim's current stop: the fill stays and a ring appears**, 1px in the page's strongest
+ink, capped at the true ends. Not a stronger fill, because strength already means priority.
+
+**Bold is still out**, though Greg asked for *"perhaps with bold"* on 2026-09-06. It does not change
+the paragraph's height — measured — but it **re-wraps** the prose, moving the text after the mark by
+80px in the sample. `text-shadow` and `-webkit-text-stroke` thicken without reflowing and are
+rejected too, for the older rule: the verbatim column is not restyled to advertise our annotation.
+
+**A quote over a search hit draws both**, the fill and the outline. `data-wash` says which marks
+want search painting and `--hit-a` is computed over those only, so a quote never repaints a search's
+confidence. What the overlap costs is cosmetic: `[data-wash]`'s `padding-bottom: 2px` makes the
+shared fragment 2px taller, so the fill steps down across the hit and back up. Both kinds share
+`data-hit-open`; pressing either gives the shared run the quote's purple fill and full ink ring,
+with the search's coloured bottom band still visible.
+
+#### Before 2026-10-03: an outline
+
+From 2026-09-07 a quote was a green outline and a search hit a slate fill, also Greg's call
+(2026-09-06, report 1Z), made when the alternative on the table was a yellow wash that would have
+cost search its hue channel. That write-up ended *"If a later design finds it needs a fill for
+quotes after all, the reason this was chosen has been lost."* It was not lost: he looked at both for
+a month and preferred the other. What that month measured is still used above (two tiers, the fade,
+`box-shadow` reserving no layout, caps only on the true ends, which is how the search outline is now
+drawn). The whole of it is in
 [260907c](../plans/260907c-quotes-drawn-as-a-stroke-in-the-prose-with-weight-carrying-priority.md)
-§ *The step where a quote crosses a search hit* weighed the cheap fixes and found each worse than the
-defect, and it is a decision for Greg rather than a bug to be quietly patched.
+and [260911a](../plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md).
 
 ### The bar hides what is below it
 
@@ -739,7 +889,8 @@ the request goes out. The two verbs exist for the same reason: `ensure` is unfor
 **both** the automatic run and the empty state's button call, because `work_key` is computed from the
 request and two keys are two paid jobs; `regenerate` is forced and is **Find more** beside a
 result that is already there — and, on a stale one, *Choose them again* (§ Find more
-appends).
+appends). Both are held from the press until the list the run wrote has been read, and so is the
+command bar's *Find more*: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
 An automatic run uses the reader's profile, as does *Choose them again*; only **Find more** asks in
@@ -812,6 +963,16 @@ counts the runs; `discarded` and `elapsedMs` accumulate across them. The list is
 `MAX_QUOTES_TOTAL` (120) in [types.ts](../../src/types.ts); a pass never asks for more than the room
 left, at the ceiling no call is made, and the foot says so instead of offering the button.
 
+**The command bar presses Find more too, since 2026-10-04** — *Quotes › Find more*
+([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)). Its row is
+drawn under the guard the foot's button is — settled, a list, not stale, not outdated, under the
+ceiling (`quotesAppendOnOffer` in [find-more.ts](../../src/web/find-more.ts), which `Foot` reads) —
+and the band makes the press through the button's own function, in the list's own profile setting,
+only when nothing is out: no job — on a job list asked for after the press, not the one the tab
+already had — no *Starting…*, no failure. That includes a refused POST, where
+the foot itself still shows the button under the server's sentence; the command leaves that press to
+the reader.
+
 **What the reader gave up** is a whole rewrite of a current list, including one for a new profile —
 *Choose them again* was the only way to throw a current list away. It survives on the **stale**
 banner; the **outdated** banner, the other state where extending cannot give the reader what the
@@ -847,15 +1008,17 @@ false rather than merely dated, which is why the banner sits above the list and 
 
 ### Effort, and the cache
 
-`STAGE_EFFORT.quotes = "medium"`, `ARTICLE_RENDERER.quotes = "text"` — so this stage is
-**cache-compatible with `glossary`** and with nothing else: same model, same effort, same renderer,
-same bytes.
+`STAGE_EFFORT.quotes = "medium"`, `ARTICLE_RENDERER.quotes = "text"` — the same model, effort,
+renderer and article bytes as `glossary`. **It shares no cache with it any more**: the two stages
+send different output schemas, and the format is part of the cache key, so `sharesArticleCache`
+([`pipeline.ts`](../../src/pipeline.ts)) says no to every pairing (`ARTICLE_OUTPUT_FORMAT`; plan
+261001s, 2026-10-02).
 
-**Compatible is all it is.** A cache entry is only *written* when a later step in the same job would
-read it (`cacheArticle` in [`pipeline.ts`](../../src/pipeline.ts)), and a reader pressing *Find the
-terms* and then *Choose the quotes* has made two jobs minutes apart. The saving is real for
-`steps: ["glossary","quotes"]` in one job and for nothing else — the plan claimed more and GPT Sol
-caught it. It is still a constraint: moving either stage's effort ends the compatibility silently.
+**It was never real in a way that paid.** A cache entry is only *written* when a later step in the
+same job would read it (`cacheArticle` in [`pipeline.ts`](../../src/pipeline.ts)), and a reader
+pressing *Find the terms* and then *Choose the quotes* has made two jobs minutes apart. Until
+2026-10-02 the saving existed for `steps: ["glossary","quotes"]` in one job and for nothing else;
+the schemas now keep even that apart.
 
 `medium` is a guess, like every effort choice that has not been through
 `evals/results/effort-vs-quality.md`.
@@ -934,7 +1097,7 @@ wrong — but worth knowing.
   [260912e](../plans/260912e-quotes-long-enough-to-stand-on-their-own.md). **Longer quotes mark more
   of the prose**, which makes the density point below more pressing — and make the known gap likelier:
   text inside `<svg>` or `<math>` is counted but not wrapped (`annotateHtml`), so a quote crossing a
-  formula has a break in its outline, and one that starts or ends inside one can lose an end cap.
+  formula has a break in its fill, and one that starts or ends inside one can lose a rounded end.
 - **The density with Find more is unlooked-at.** The default rank marks every quote in Plain, and a
   list can now grow to 120.
 - **`validateHits` (search) and `validateOccurrences` (ideas) have the same two bugs** this stage was
@@ -948,21 +1111,19 @@ wrong — but worth knowing.
 - **Keyboard traversal of the list is ← / → since 2026-10-02**, not ↑ / ↓, which still belong to the
   article ([keyboard.md](keyboard.md) § ← / → in Quotes). The rows and the ⓘ are ordinary tab stops
   as before.
-- **Nothing generates quotes for the `example/` fixture**, consistent with the glossary and equally
-  unsatisfying.
 
 ## See also
 
+- **Wanting an *Ask in chat* button on a quote?** This mode has none. Today only Glossary entries
+  and Citations rows have one (the shared `AskInChatButton` in
+  [`OriginChat.tsx`](../../src/web/OriginChat.tsx)), plus Debate's own, Summary's per-paragraph one ([summaries.md § Ask about a paragraph](summaries.md#ask-about-a-paragraph-since-2026-10-04)) and the comment box's. The
+  pattern to copy is [glossary.md § Asking about an entry in chat](glossary.md#asking-about-an-entry-in-chat).
 - [glossary.md](glossary.md) — the mode this took its shape from: the prioritised order, the
   threshold slider, and the condition attached to keeping model scores
 - [ideas.md](ideas.md) — the mode this took its lifecycle from until 2026-09-11: replaces rather
   than appends, one verb, no DELETE. Find more swapped the first for the glossary's append
-- [search.md](search.md) — where `Found`, the wash and the rail lane come from
+- [search.md](search.md) — where `Found`, the outline and the rail lane come from
 - [block-ids.md](block-ids.md) — why a passage is a block id and never an offset
 - [url-state.md](url-state.md) — `?mode=quotes`, `?quote=`, `?rank=`, `?bar=`
 - [security.md](security.md) — the sanitiser, and the `hit` class this mode's marks made it reserve
 - [architecture.md](architecture.md#pipeline) — where stage 5h sits
-
----
-
-Up: [reading-view-overview.md](reading-view-overview.md)

@@ -25,8 +25,8 @@
  *  - **`resetKey`** — `` `${slug}|${owner ? "owner" : "visitor"}` ``, supplied
  *    by the caller. Two honest limits on it: `owner`/`visitor` is an access
  *    *class*, not an access identity, and a feature with a genuine sub-mode
- *    must put **that sub-mode's own identity** in the key — Remember's
- *    `?remember=`, Diagram's picture chips. Not the top-level `mode`, which a
+ *    must put **that sub-mode's own identity** in the key — Learn's
+ *    `?learn=`, Diagram's picture chips. Not the top-level `mode`, which a
  *    sub-mode does not change; the key carried it until Sol's F18 pointed out
  *    that it is dead for a boundary mounted only inside one mode, and that
  *    copying it would document the wrong extension point. Owner A → owner B on
@@ -95,7 +95,7 @@ interface BoundaryProps {
  * **Reads the press, then renders the boundary.**
  *
  * The subscription lives here rather than in `Reader` so that it costs nothing
- * where there is no boundary — Plain and Hierarchy — and so that a press
+ * where there is no boundary — Plain — and so that a press
  * re-renders this component rather than the whole reading view.
  *
  * `pendingActivation` is the snapshot because it returns a **primitive** — a

@@ -86,7 +86,7 @@ const PRODUCERS = {
 /**
  * **The modes with no passage producer**, named rather than derived — the
  * point of the file is that this set is a decision somebody made and not a
- * fall-through. `chat` and `remember` were verified to publish nothing when
+ * fall-through. `chat` and `learn` were verified to publish nothing when
  * they moved out of `App.tsx`; `glossary`'s selection is a different currency
  * (`termSelections`) that never reaches this state.
  *
@@ -104,7 +104,7 @@ const SILENT: BandMode[] = [
   "glossary",
   "summary",
   "diagram",
-  "remember",
+  "learn",
   "structure",
   "debate",
   /* Earned, not the cheap fix: v1's row has a "first cited" *jump* to one
@@ -118,10 +118,6 @@ const SILENT: BandMode[] = [
      docs/plans/260916d-faq-mode.md § Deferred. When it lands, this entry moves
      to PRODUCERS. */
   "faq",
-  /* Earned for FAQ's reason: each post's links are jumps through `onJump`,
-     not a selection, and a Tweets band that marked every post's passages would
-     mark most of the article. docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-  "tweets",
   /* Marginalia is not here since 2026-10-01: its column is a switch beside the
      band, not a value of `?mode=` (`BandMode`) —
      docs/plans/261001i-annotations-column-beside-a-band-mode.md. */

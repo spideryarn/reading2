@@ -1298,8 +1298,10 @@ export async function health(req: IncomingMessage, res: ServerResponse): Promise
         commit: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         build,
         store,
-        /* Absent rather than null on a filesystem store, so that "not checked"
-           and "checked and found nothing" cannot be confused in the output. */
+        /* Absent rather than null when nothing was checked — a filesystem
+           store, until 2026-09-05; `cachedSchemaCheck` always answers now — so
+           that "not checked" and "checked and found nothing" cannot be
+           confused in the output. */
         ...(schema === undefined ? {} : { schema }),
         /* Same rule, and the field anything can read without a database
            credential to tell whether this deployment's code and its schema are

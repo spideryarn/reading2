@@ -1,13 +1,15 @@
 # Marginalia
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The column of notes to the right of the prose, each level with the block it is about. Its address is
-`?margin=1`, and it stands beside whichever band is open. Up from here:
-[reading-view-overview.md](reading-view-overview.md). Where this is meant to go is
+`?margin=1`, and it stands beside whichever band is open. Where this is meant to go is
 [interface-vision.md](interface-vision.md): the right column is for what is anchored to the text.
 
-The code is `src/web/marginalia/`: `notes.ts` decides which note goes beside which block (pure, and
-tested in `tests/marginalia-notes.test.ts`), `MarginaliaColumn.tsx` draws them and the head, and
-`press.ts` decides what the Dock button does on a narrow window.
+The code is [`src/web/marginalia/`](../../src/web/marginalia/): [`notes.ts`](../../src/web/marginalia/notes.ts) decides which note goes beside which block (pure, and
+tested in [`tests/marginalia-notes.test.ts`](../../tests/marginalia-notes.test.ts)), [`MarginaliaColumn.tsx`](../../src/web/marginalia/MarginaliaColumn.tsx) draws them and the head,
+[`tips.ts`](../../src/web/marginalia/tips.ts) holds every note's card, and
+[`press.ts`](../../src/web/marginalia/press.ts) decides what the Dock button does on a narrow window.
 
 **The block's gutter of icons sits between the prose and the notes.** It moved to the right of the
 block on 2026-10-03 ([261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md)),
@@ -42,14 +44,24 @@ one would otherwise be missed; it would not be, so it is not
   [§ Relation words](#relation-words).
 - **The head**, pinned at the top: which part and section you are in, and the arc's sentence for
   where the argument has got to. It has a rule under it so it does not read as one more note (Greg,
-  spya-rczgjb).
+  spya-rczgjb). Uncovered rows above the first part (a title, a byline) name the first part, so it is not
+  empty at the very top; in a gap the tree does not cover further down it draws nothing
+  (`src/web/marginalia/notes.ts` § `headBlock`). While it is on screen the headings breadcrumb in the top bar is not drawn
+  ([experimental-features.md](experimental-features.md#what-is-behind-it-today)).
 - **Each part's Socratic question**, beside the part's first real paragraph.
 - **An idea stamp** ("assumes", "introduces") where each idea first occurs.
 - **Other modes' items, shut by default**: FAQ questions, Timeline's dated events, Debate's claim rows, Citations and comments
   (the owner's on a shared article; a bookmark with no words stays a mark in the gutter). Each block gets at most one line of each kind.
   One item shows its title; several show a count ("3 works"). Pressing the line opens the supporting
   quote and remaining-passage count for FAQ, the source quote and bearing for Debate, the byline and
-  reason for a citation, or the comment and the first lines of its AI answer. This was
+  reference entry for a citation (not the model's reason, since 261003j), or, for a comment, the
+  first lines of its AI answer. A lone comment's own words are its line and are not said again
+  underneath: pressing a comment with no answer only lets a long line wrap (Greg, `spya-a0wpv4`;
+  [261006i](../plans/261006i-a-lone-comment-in-the-margin-says-its-words-once-and-the-gutter-s-chat-button-wears-chat-s-two-bubbles.md)).
+  **The line is the button**, so its card says "Press this line" and
+  its words are underlined under a pointer or keyboard focus (Greg, `spya-xf6m2u`: *"the tooltip
+  says to 'press it' but I don't see anything to press"*;
+  [261005m](../plans/261005m-earlier-tab-links-the-page-and-marginalia-tips-say-what-to-press.md)). This was
   [report 82](../user-feedback/261002_0300-marginalia-shows-other-modes-items.md), and the reasons
   are in [261002b](../plans/261002b-marginalia-shows-faq-citations-debate-and-comments-shut-by-default.md):
 
@@ -61,7 +73,7 @@ one would otherwise be missed; it would not be, so it is not
   | Kind | Beside | Rule |
   |---|---|---|
   | FAQ | the question's earliest answering passage that is still there | the quoted words must still be in that block |
-  | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. An untimed event or a date we could not read stays in the band. The date always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
+  | Timeline | the passage that dates the event: where its date was read from, or the earliest mention that holds the article's own phrase for when | only events the piece dates. A date with no year counts, and shows the article's words as the band does (*"On July 7"*). An untimed event or any other date we could not read stays in the band. A date we did read always carries its year, because the margin has no head to say it once ([261003f](../plans/261003f-marginalia-relation-words-and-timeline-events.md)) |
 | Debate | the block of the claim a row answers | the claim's words must still be in that block. Whole-article rows have no block, so they stay in the band |
   | Citations | the earliest block that cites the work | **owner only**, and only from a fresh list, because the prose's citation marks are owner-only ([citations.md](citations.md)) |
   | Comments | the comment's block | a referee note (one with a `criterionId`) and a bare bookmark are left out |
@@ -76,6 +88,55 @@ one would otherwise be missed; it would not be, so it is not
   The quote check is there because a visitor's payload carries no staleness flag (no "this was
   written against an older version of the article"). A list written before a block changed could
   otherwise sit beside prose that no longer says what it quotes.
+
+**The block chat sits here too, while one is open**, as a card level with its block (on trial since
+2026-10-04). Its host is a `[data-marg-note]` like any note, first in its block's cell, so
+`useMarginLayout` pushes later notes below it. It is wider than the notes when the window has the
+room. The margin's *Question* line for that conversation is left out while its card is up. Without
+room for a card, or with the trial's switch off, the panel docks over the lower part of the column
+or floats in the corner. [comments.md § Where the chat panel sits](comments.md#chat-dock).
+
+**The column is wider on a wide window.**
+
+> it still seemed pretty narrow. Maybe if the screen is wide we allow the Marginalia column to be a
+> bit wider
+>
+> — Greg, 2026-10-05, about the chat card
+
+It is 288px at most wherever it has to take room from the prose or a band, as before. Where
+the centred prose already leaves more than that to its right, the column grows into it, up to
+384px. With a 16px root, the rail on and no band, it is 310px in a 1440px window and reaches
+384px from about 1590px. Beside a band it grows only into room
+that was already spare right of the column. The prose and the band do not move or change width, and
+below about 1400px nothing changes at that root size. The chat card's own width did not change:
+it already took all the room right of the prose, up to 576px, so at 1440px it is still about 282px, and wider there would
+mean moving the prose. `MARG_WIDE` and `widened` in [`layout.ts`](../../src/web/layout.ts);
+[`layout-margin.test.ts`](../../tests/layout-margin.test.ts).
+
+**From a 1600px window the prose moves left, for the chat card.**
+
+> re wider margin for chat card: B give it more room on wide windows
+>
+> — Greg, 2026-10-06
+
+B was offered as a small shift left from about 1600px, keeping the prose's width, so the margin
+and the card get about 100px more. With the column on and no band, the prose moves up to 100px
+further left from 1600px, whether or not a card is open. It moves only as far as the card can use, and the card
+stops at 576px. With a 16px root and the rail on: 100px at 1600 (card 362 → 462), 54px at
+1920 (522 → 576), and none from 2028px, where the prose is centred again. Larger type can leave
+less space on the left; the shift keeps at least half of it clear of the rail. The notes' cap
+stays at 384px; at larger roots the notes can also grow into the new room, up to that cap.
+Below 1600px the prose stays where it was, so it jumps as a window
+is dragged across that width. Beside a band nothing moves: the prose is not centred there and
+the band has the page left of it. The masthead's title follows the prose at every width
+(`marginalia.css` § the room) — since 2026-10-06 below 1600px too, where the column had been
+pushing the prose left without it, leaving the title up to about 145px right of the prose from an iPad's width to about 1400px
+([the plan](../plans/261006c-the-title-follows-the-prose-below-1600px-with-the-marginalia-column-on.md) has the measurements).
+`shiftForCard` and `margTitleReserve` in [`layout.ts`](../../src/web/layout.ts).
+
+**A lone question's line says its words once.** Opened, it shows only *Open the conversation*; the
+line itself un-truncates. Among several entries each keeps its own head, which is how they are told
+apart (report `spya-f6dpj5`).
 
 ## Relation words
 
@@ -98,14 +159,34 @@ options passed over and GPT Sol's review are in
   which, with a card for each in `tips.ts`. On the 108 paragraphs of the decorated experiment the
   three are about one paragraph in three; all ten would be a word on every paragraph. Drawing
   *why* or *e.g.* later is a row in each table and no new model call.
-- **The press that turns the column on asks for it**, and nothing else does. Marginalia's row in
-  `MODE_TARGET` (src/web/activation.ts) is `relations`, so it is the house rule for a mode that
-  starts itself ([`useAutoRun`](../../src/web/useAutoRun.ts)): one attempt per article per session;
-  a pasted `?margin=1` link, a reload and Back spend nothing; the press that turns the column off
-  arms nothing. A stale or outdated list counts as none, so the next press rewrites it. The hook is
-  [`src/web/useRelations.ts`](../../src/web/useRelations.ts).
-- **Nothing in the column says it is running.** The words appear when the job finishes; the job
-  is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
+- **Made when the column is shown, not on import and not on a press.**
+
+  > generate linking words when Marginalia mode is opened
+  >
+  > — Greg, 2026-10-05
+
+  The owner's column mounting is what asks ([`src/web/useRelations.ts`](../../src/web/useRelations.ts),
+  through `useAutoRunOnArrival` in [`useAutoRun.ts`](../../src/web/useAutoRun.ts), the rule the
+  thread in Summary already used). So it does not matter what showed the column: a press of the
+  toggle, the first-open default that turns it on with nobody pressing anything
+  ([url-state.md § Reopening an article where you left it](url-state.md#reopening-an-article-where-you-left-it)),
+  a pasted `?margin=1` link, a reload, or this browser restoring the view you left. A press could
+  not carry it, because the default arrives without one, and a new article would then have had no
+  words until the column was turned off and on.
+  - **One attempt per article per page load**, and unforced, so the step's own stamp check has the
+    last word. Turning the column off and on again buys nothing, and a failed run does not loop.
+  - **A stale or outdated list counts as none**, so the next showing rewrites it.
+  - **Nothing is shown, nothing is spent.** On a window too narrow for the notes the owner's feed
+    still reads, but waits to generate until the notes fit on screen. A visitor's column never reaches the hook.
+  - **The press arms nothing.** Marginalia's row in `MODE_TARGET` (src/web/activation.ts) is
+    `delegated` and answers `null`: the command bar still marks the row as one that may start work,
+    and the import's list, which is derived from that table, does not include it.
+  - **For part of 2026-10-05 an import queued it**, with the other main modes' steps
+    ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)). That cost a call
+    for every article, opened or not. **No backfill**: an article from before gets its words the
+    next time its owner has the column open (Greg: *"yes leave that for now"*).
+- **Nothing in the column says it is running.** The notes are drawn without the words, and the
+  words appear when the job finishes, with no reload; the job is in the jobs tray like any other. Metadata has a *Relation words* row to run it again.
 - **Owner only.** A visitor's payload does not carry them: it has no staleness verdict, and a word,
   unlike a quote, cannot be checked against its paragraph, so an old *but* could sit beside a
   rewritten one.

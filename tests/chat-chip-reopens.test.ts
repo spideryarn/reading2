@@ -100,16 +100,16 @@ describe("the conversation the chat chip opens", () => {
   });
 
   it("ignores a conversation that is not a chat", () => {
-    /* A Remember thread anchored to this block would open chat's UI over a
-       Remember conversation — the same failure `App`'s overlay gates against.
+    /* A Learn thread anchored to this block would open chat's UI over a
+       Learn conversation — the same failure `App`'s overlay gates against.
        Filtered **positively** on `kind === "chat"`, so a fourth kind arriving
        tomorrow is excluded by default rather than by somebody remembering. */
-    const remember = whole("spya-rem111", "2026-09-05T09:00:00.000Z", BLOCK, "remember");
-    expect(threadFor([remember], BLOCK)).toBeUndefined();
+    const learn = whole("spya-rem111", "2026-09-05T09:00:00.000Z", BLOCK, "learn");
+    expect(threadFor([learn], BLOCK)).toBeUndefined();
     /* And it does not merely lose to a chat — it is not a candidate at all,
        which a fixture with a chat beside it could not tell apart. */
     const found = threadFor(
-      [remember, whole("spya-cha111", "2026-09-04T10:00:00.000Z")],
+      [learn, whole("spya-cha111", "2026-09-04T10:00:00.000Z")],
       BLOCK,
     );
     expect(found?.id).toBe("spya-cha111");

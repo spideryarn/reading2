@@ -67,8 +67,8 @@
  * ## Skips loudly when there is no database
  *
  * A check that skips when the database is away, in a suite written *because*
- * nobody exercised the database, is the joke writing itself. `pgReady` says so
- * on stderr, and `REQUIRE_POSTGRES=1` turns the skip into a failure —
+ * nobody exercised the database, is the joke writing itself. It did skip, until
+ * 2026-09-05; `pgReady` throws now, so this file fails with no database —
  * docs/project/testing.md § When a skip is not acceptable.
  */
 
@@ -84,7 +84,7 @@ import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import type { DivergingResult, SingleResult } from "../src/referee-criteria.js";
 import type { Comment } from "../src/types.js";
 import { CRITERION_SWEPT } from "../src/referee-criteria-store.js";
-import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
+import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { CommentStore, RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
@@ -315,6 +315,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
     const first = await store.begin(
       SLUG,
+      HASH,
       "Are the controls adequate?",
       { kind: "single" },
       "spya-crta22",
@@ -337,6 +338,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
     const second = await store.begin(
       SLUG,
+      HASH,
       "How strong is the evidence?",
       {
         kind: "diverging",
@@ -360,6 +362,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        referee fixes and runs again. */
     const retried = await store.begin(
       SLUG,
+      HASH,
       "How strong is the evidence?",
       {
         kind: "diverging",
@@ -406,7 +409,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     // reading the list and pressing a swatch, so it is a no-op, not a throw.
     await take("recolour a criterion nobody has", await store.recolour(SLUG, "spya-crtz99", 2));
 
-    const third = await store.begin(SLUG, "Is the sample big enough?", { kind: "single" }, "spya-crtc22", now);
+    const third = await store.begin(SLUG, HASH, "Is the sample big enough?", { kind: "single" }, "spya-crtc22", now);
     await take("begin a third and abandon it", third.row);
 
     /* A **negative** grace window, and that is deliberate rather than sloppy:
@@ -486,37 +489,42 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     expect(at(13)).toEqual(at(12));
   });
 
-  it("never trims a criterion that is still being answered", async () => {
+  it("never drops a criterion that is still being answered, or any other", async () => {
     /* Sweep 5, D1 (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
-       A retry keeps its original `created_at`, so the oldest criterion of a full
-       history can be the one that is `pending`. The trim did not look at status:
-       one more `begin` deleted it, its fenced `finish` updated nothing, and the
-       answer the referee was waiting on was gone. Search's twin of this test is
-       in tests/store-searches-pg.test.ts. */
+       A retry keeps its original `created_at`, so the oldest criterion of a long
+       history can be the one that is `pending`. The trim to twenty did not look
+       at status: one more `begin` deleted it, its fenced `finish` updated
+       nothing, and the answer the referee was waiting on was gone. There has
+       been no trim at all since 2026-10-07 (an add at `MAX_CRITERIA` is refused
+       instead, tests/referee-routes-postgres.test.ts), and this keeps the
+       retry half of the story: past the old cap of twenty, nothing is dropped
+       and the retry still lands. Search's twin of this test, where the trim
+       remains, is in tests/store-searches-pg.test.ts. */
     const store = pgRefereeCriteriaStore;
     const start = Date.parse("2026-08-01T00:00:00.000Z");
     const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
+    const PAST_THE_OLD_CAP = 25;
 
-    const oldest = await store.begin(SLUG, "the one that failed", { kind: "single" }, undefined, at(0));
+    const oldest = await store.begin(SLUG, HASH, "the one that failed", { kind: "single" }, undefined, at(0));
     await store.finish(SLUG, oldest.row.id, { status: "error", error: "the provider refused" }, oldest.attempt);
-    for (let i = 1; i < MAX_CRITERIA; i++) {
-      const { row, attempt } = await store.begin(SLUG, `criterion ${i}`, { kind: "single" }, undefined, at(i));
+    for (let i = 1; i < PAST_THE_OLD_CAP; i++) {
+      const { row, attempt } = await store.begin(SLUG, HASH, `criterion ${i}`, { kind: "single" }, undefined, at(i));
       await store.finish(SLUG, row.id, { status: "done", results: [] }, attempt);
     }
-    expect(await store.load(SLUG)).toHaveLength(MAX_CRITERIA);
+    expect(await store.load(SLUG)).toHaveLength(PAST_THE_OLD_CAP);
 
     // Retried: the same row, the same date, waiting again.
-    const retry = await store.begin(SLUG, "the one that failed", { kind: "single" }, oldest.row.id, at(100));
+    const retry = await store.begin(SLUG, HASH, "the one that failed", { kind: "single" }, oldest.row.id, at(100));
     expect(retry.row.id).toBe(oldest.row.id);
     expect(retry.row.createdAt).toBe(oldest.row.createdAt);
 
     // And while it is out, one more criterion is begun.
-    await store.begin(SLUG, "one more", { kind: "single" }, undefined, at(101));
+    await store.begin(SLUG, HASH, "one more", { kind: "single" }, undefined, at(101));
 
     const kept = await store.load(SLUG);
     expect(kept.find((c) => c.id === oldest.row.id)?.status).toBe("pending");
-    // The cap is twenty, plus however many older ones are still running.
-    expect(kept).toHaveLength(MAX_CRITERIA + 1);
+    // Every one of them, and the one just begun.
+    expect(kept).toHaveLength(PAST_THE_OLD_CAP + 1);
     // And the retry can still land its answer.
     const landed = await store.finish(SLUG, oldest.row.id, { status: "done", results: [] }, retry.attempt);
     expect(landed?.status).toBe("done");
@@ -537,6 +545,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
       const now = clock();
       const begun = await store.begin(
         SLUG,
+        HASH,
         "Does this cut for or against?",
         { kind: "diverging", poles: { against: "against", favour: "for" }, scale: "rg" },
         "spya-crtd22",
@@ -607,6 +616,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
        the two agreeing here is part of what is being checked. */
     await criteria.begin(
       SLUG,
+      HASH,
       "Are the controls adequate?",
       {
         kind: "diverging",
@@ -821,7 +831,7 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
   });
 
   it("writes the shared sentence over a swept criterion", async () => {
-    await pgRefereeCriteriaStore.begin(SLUG, "Abandoned", { kind: "single" }, "spya-crte22");
+    await pgRefereeCriteriaStore.begin(SLUG, HASH, "Abandoned", { kind: "single" }, "spya-crte22");
     const swept = await pgRefereeCriteriaStore.sweepPending(SLUG, {
       keep: new Set<string>(),
       graceMs: -1000,

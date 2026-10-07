@@ -45,20 +45,17 @@
  */
 import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import {
-  BookA,
   ChevronLeft,
   ChevronRight,
   Lightbulb,
-  RotateCw,
   Route,
   TriangleAlert,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import type { UseSkim } from "./useSkim.js";
 import type { PublicSkim } from "../public-types.js";
+import type { SkimDepth } from "../types.js";
 import type { DoorView, SkimView } from "./modes/skim/SkimMode.js";
 import { FOLLOW_ATTR, useFollow } from "./follow.js";
-import { entryProse } from "./GlossaryPanel.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -66,12 +63,18 @@ import { PurposeLine } from "./SkimPurpose.js";
 import { useRenderCount } from "./perf.js";
 import { snippet } from "./citations.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { StepTip } from "./StepTip.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { type CardTarget, cardIsEmpty, type StopCard } from "./stop-card.js";
+import { TermCard, type TermActions } from "./ProseHoverCard.js";
+import type { GlossaryEntry } from "../types.js";
 import { sparkline, sparkWidth } from "./route-spark.js";
 import type { WhereRow } from "./where.js";
 import { WhereCard } from "./WhereCard.js";
 import { type Voice, voiceClass } from "./voice.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** One title on a row's section path, and whose words it is — tree.ts § `titleVoice`. */
 export interface PlaceStep {
@@ -82,6 +85,15 @@ export interface PlaceStep {
 /** A path as one line of text: what a screen reader hears, and what "same place as the row above" compares. */
 export function placeText(place: readonly PlaceStep[]): string {
   return place.map((step) => step.title).join(" › ");
+}
+
+/** One pass a row's stop could be in, and whether it is — one pip (`StopPasses`). */
+export interface SkimPass {
+  depth: SkimDepth;
+  /** *Gist*, *More*, *Most* — said, never printed. */
+  label: string;
+  /** The stop is walked in this pass — `walkedIn` (skim-route.ts). */
+  on: boolean;
 }
 
 /** One row of the list. Built by `useSkimMode`, drawn here. */
@@ -116,14 +128,26 @@ export interface SkimRow {
   words: string | null;
   /** Where it sits in the article's outline, for its position mark's card — `[]` for none (260929f § 3). */
   where: readonly WhereRow[];
+  /**
+   * Every pass the route offers, shallowest first, and whether this stop is
+   * walked in it — the pips under the number. **`null` when the pips are not
+   * drawn at all**: a route offering one depth, or one that carries no stop
+   * into a deeper pass, which is every route from before `skim/9`. All rows or
+   * none (plan 261003l § The mark).
+   */
+  passes: readonly SkimPass[] | null;
 }
 
 /**
  * **Which snippet is open on the current stop** — one at a time across the
- * card (Sol, plan 260929f F4): a term's sense or an idea's statement. Held by
+ * card (Sol, plan 260929f F4): a term's card or an idea's statement. Held by
  * the panel, not the card, because the list's follow-scroll has to re-measure
- * when one opens. `stop` ties it to the stop it was opened on, so it is hidden
- * during a step before the cleanup effect forgets it permanently.
+ * when an idea opens. `stop` ties it to the stop it was opened on, so it is
+ * hidden during a step before the cleanup effect forgets it permanently.
+ *
+ * **For a term it is the card a press opened** (a finger's tap, or Enter), and
+ * not one that hover or focus is holding open: that is `TermChip`'s own, so
+ * pointing at a term does not shut an idea the reader opened.
  */
 interface OpenSnippet {
   stop: string;
@@ -193,6 +217,54 @@ function StopPosition({ at, current }: { at: number; current: boolean }) {
 }
 
 /**
+ * **The other passes a stop is in**, for the row's accessible name — *"Also in
+ * Gist"*, *"Also in More and Most"* — or `null` for a stop in this pass only,
+ * which needs no words. It names the others, not the pass being drawn: the
+ * reader knows which pass they are in.
+ */
+export function alsoIn(passes: readonly SkimPass[], drawn: SkimDepth | null): string | null {
+  const others = passes.filter((p) => p.on && p.depth !== drawn).map((p) => p.label);
+  return others.length === 0 ? null : `Also in ${others.join(" and ")}`;
+}
+
+/**
+ * **Which passes the stop is in** — one small pip per pass the route offers,
+ * shallowest first, filled when the stop is walked there. Greg, 2026-10-03
+ * (spya-ms9d69): *"some kind of subtle visual indicator that indicates which of
+ * the three it shows up for ... if possible, we want to avoid text labels ...
+ * the visual indicator is a way for me to see whether I've probably read it or
+ * not."* On every row of a route that carries any stop, so it is one glyph to
+ * learn: one filled pip is this pass only, more than one is "also in Gist".
+ *
+ * **Not a control** (Sol, plan 261003l review F3): the number column is inside
+ * the row's own button and `.skim-where` already lies over the position line
+ * below, so a third trigger would nest or collide. Plain marks, drawn for the
+ * eye; the words go in the row's name, and the legend in the band's (i) —
+ * `pipsLegend` — because a phone has no hover.
+ */
+function StopPasses({ passes, drawn }: { passes: readonly SkimPass[]; drawn: SkimDepth | null }) {
+  const said = alsoIn(passes, drawn);
+  return (
+    <>
+      <span className="skim-pips" aria-hidden="true">
+        {passes.map((p) => (
+          <span key={p.depth} className={`skim-pip${p.on ? " on" : ""}`} />
+        ))}
+      </span>
+      {said && <span className="skim-pips-said sr-only">{said}</span>}
+    </>
+  );
+}
+
+/** What the pips mean, for the band's (i) — shown only when they are drawn. */
+export function pipsLegend(passes: readonly SkimPass[]): string {
+  return (
+    `The dots under a stop's number show which passes it is in — ${passes.map((p) => p.label).join(", ")}. ` +
+    "A stop with more than one filled is one you may have read already."
+  );
+}
+
+/**
  * **The honest promise**, in the tooltip of the head's info button — the
  * foot's first line until SPIDERYARN-READING2-52. The first half is what the
  * mode can prove — the passages are the Quotes' own, checked against the
@@ -207,9 +279,9 @@ export function skimPromise(profiled: boolean): string {
 /**
  * At Most, how much of the Quotes offered to this route the three passes walk
  * between them — *"every one of the N quotes offered to this route"*, or *"M of
- * N"*. **All three, not Most alone**: since plan 260929e each pass walks only
- * its own stops, so Most by itself is the last tranche, and "this pass" would
- * undercount. The denominator is the route's stored `offered`, not today's raw
+ * N"*. **All three, not Most alone**: since plan 260929e a pass does not
+ * contain the ones before it (it may carry some of their stops since plan
+ * 261003l), so Most by itself would undercount. The denominator is the route's stored `offered`, not today's raw
  * Quotes count: abstract quotes were deliberately never offered. `null` below
  * Most, or with no Quotes.
  */
@@ -237,23 +309,23 @@ export function emptyHint(owner: Pick<UseSkim, "quotesFirst" | "ideasFirst">): s
   if (owner.quotesFirst && owner.ideasFirst) {
     return (
       "First the article's Quotes are chosen and its key Ideas found — finding the Ideas is the " +
-      "long part, tens of seconds — then a short model pass puts the Quotes in an order that " +
+      "long part, tens of seconds — then a short model call puts the Quotes in an order that " +
       `covers the Ideas. ${kept}`
     );
   }
   if (owner.ideasFirst) {
     return (
       "First the article's key Ideas are found — the long part, tens of seconds — then a short " +
-      `model pass puts its Quotes in an order that covers them. ${kept}`
+      `model call puts its Quotes in an order that covers them. ${kept}`
     );
   }
   if (owner.quotesFirst) {
     return (
-      "The article's Quotes are chosen first, then a short model pass puts them in an order — " +
+      "The article's Quotes are chosen first, then a short model call puts them in an order — " +
       `longer than the order alone. ${kept}`
     );
   }
-  return `A short model pass puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
+  return `A short model call puts the article's Quotes in an order, and takes a few seconds. ${kept}`;
 }
 
 /**
@@ -308,6 +380,10 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
  */
 function RouteHead({ view, total }: { view: SkimView; total: number }) {
   const [sparkOpen, setSparkOpen] = useState(false);
+  const depths = useRef<HTMLFieldSetElement>(null);
+  // A refreshed route can first offer the bar without changing the chosen
+  // depth. Reattach the reveal and its observers when that fieldset appears.
+  useRevealChosen(depths, view.depths.length > 1 ? view.depth : null);
   const here = view.rows[view.position - 1]?.position ?? null;
   const said =
     `Stop ${view.position} of ${total}` +
@@ -384,12 +460,16 @@ function RouteHead({ view, total }: { view: SkimView; total: number }) {
           skim.css § .skim-head-end. */}
       <div className="skim-head-end">
         {view.depths.length > 1 && (
-          <fieldset className="skim-depths" aria-label="How deep">
+          /* The part-switcher every mode shares (mode-band.css § the
+             part-switcher, plan 261007h § F2), at the house's 36px rather
+             than its own 26 because it is this mode's main control beside the
+             44px stepper (skim.css § the depths). */
+          <fieldset ref={depths} className="skim-depths summ-views" aria-label="How deep">
             {view.depths.map((d) => (
               <button
                 key={d.depth}
                 type="button"
-                className={`skim-depth${d.depth === view.depth ? " on" : ""}`}
+                className={`skim-depth summ-view-btn${d.depth === view.depth ? " on" : ""}`}
                 aria-pressed={d.depth === view.depth}
                 onClick={() => {
                   if (d.depth !== view.depth) view.onDepth(d.depth);
@@ -469,6 +549,27 @@ export function SkimPanel({ access, view, away }: Props) {
         ? null
         : { stop: currentId, kind, id },
     );
+  /* Close, and only that: a card's own dismissal (Escape, a press elsewhere)
+     can arrive after something else took the slot, and must not reopen it. */
+  const closeTerm = (id: string) =>
+    setSnippet((was) => (was?.kind === "term" && was.id === id ? null : was));
+  /**
+   * **After a Hide, the keyboard goes to the stop's row.** The chip that held
+   * focus, or the card's own button, has just been removed with the term, and
+   * focus would fall to `<body>` (GPT Sol, plan review of 261006e, F4). Only
+   * when focus is still where the press left it: a slow answer must not pull
+   * a reader back from wherever they went meanwhile.
+   */
+  const focusCurrentRow = (from: Element | null) => {
+    const active = document.activeElement;
+    const lost =
+      from !== null &&
+      (active === from || (active === document.body && !from.isConnected));
+    if (!lost) return;
+    scroller.current
+      ?.querySelector<HTMLButtonElement>('.skim-go[aria-current="step"]')
+      ?.focus({ preventScroll: true });
+  };
   useFollow(scroller, currentId, [view.depth, view.card, away, snippet?.kind, snippet?.id]);
   /* A depth or route refresh can remove an open row, so its Tooltip unmounts
      before it can report that it closed. Do not let that stale id reopen if
@@ -501,19 +602,28 @@ export function SkimPanel({ access, view, away }: Props) {
     if (!exists) setSnippet(null);
   }, [currentId, snippetOpen, view.card]);
 
+  /* A forced run has finished and its result is not here yet: the forced
+     button gives way to a read, never to a second paid run — FaqPanel.tsx §
+     `run` is the sibling. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+
   /**
    * @param again whether this is the button beside a route already there. The
    *   empty state's must be `ensure`, the automatic run's own request, or it
    *   buys a second model call — useIdeas.ts § `ensure`.
    */
   const run = (label: string, again = false) =>
-    owner === null ? null : (
+    owner === null ? null : again && waiting && !owner.error ? (
+    <RewriteWaiting line="The new route hasn't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : (
     <JobProgress
       job={owner.job}
       starting={owner.starting}
       failed={owner.failed}
       stalled={owner.stalled}
       onRun={() => (again ? owner.regenerate() : owner.ensure())}
+      /* With `error` set the retry is `ReadError`'s; the button stays held. */
+      runDisabled={again && owner.rewriting}
       onCancel={owner.cancel}
       label={label}
       step="skim"
@@ -530,9 +640,12 @@ export function SkimPanel({ access, view, away }: Props) {
   const routed = ready && total > 0 && view.depth !== null;
   const coverage = atMost ? coverageNote(route.stops.length, route.offered) : null;
   const made = owner?.skim ?? null;
+  /* All rows carry the pips or none does (`SkimRow.passes`). */
+  const pips = routed ? (view.rows[0]?.passes ?? null) : null;
   const about = routed ? (
     <>
       <p>{promise}</p>
+      {pips && <p>{pipsLegend(pips)}</p>}
       {coverage && <p>{coverage}</p>}
       {made && (
         <AboutMade
@@ -571,30 +684,20 @@ export function SkimPanel({ access, view, away }: Props) {
         ready &&
         !owner.stale &&
         !owner.profileChanged &&
-        (owner.job || owner.starting || owner.failed) ? (
+        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
           <div className="skim-foot">
             <div className="skim-again">{run("Plan it again", true)}</div>
           </div>
         ) : null
       }
     >
-      {owner?.error && (
-        <div className="skim-read-error">
-          <p className="gloss-error" role="alert">
-            {owner.error}
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => void owner.retryRead()}>
-            <RotateCw size={13} />
-            Try again
-          </Button>
-        </div>
-      )}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the route…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the route…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has planned a route through this piece yet.</p>
+          <p>Nobody has planned a route through this one yet.</p>
           <p className="gloss-hint">{emptyHint(owner)}</p>
           {run("Plan the route")}
         </div>
@@ -644,6 +747,7 @@ export function SkimPanel({ access, view, away }: Props) {
                       >
                         <span className="skim-n">
                           {row.n}
+                          {row.passes && <StopPasses passes={row.passes} drawn={view.depth} />}
                           {row.position !== null && <StopPosition at={row.position} current={row.current} />}
                         </span>
                         <span className="skim-what">
@@ -681,7 +785,10 @@ export function SkimPanel({ access, view, away }: Props) {
                         data-stop={row.quoteId}
                         {...{ [FOLLOW_ATTR]: row.quoteId }}
                       >
-                        <div className="skim-line">
+                        {/* `piped`: the pips sit between the number and the
+                            position line, so the line and the button laid over
+                            it move down by their height (skim.css § .skim-pips). */}
+                        <div className={`skim-line${row.passes ? " piped" : ""}`}>
                         {/* Always wrapped, enabled only while the row is cut, so the
                             button is never remounted as its row becomes current.
                             Controlled, which makes it mouse-only: a tap's
@@ -726,6 +833,9 @@ export function SkimPanel({ access, view, away }: Props) {
                             card={view.card}
                             open={snippet}
                             onToggle={toggle}
+                            onCloseTerm={closeTerm}
+                            termActions={view.termActions}
+                            onHidden={focusCurrentRow}
                             onOpen={view.onOpen}
                             canOpen={view.canOpen}
                           />
@@ -748,58 +858,58 @@ export function SkimPanel({ access, view, away }: Props) {
  * something for this paragraph, in a fixed order: the words first (they are
  * what trips a skimmer), then the ideas and the study.
  *
- * **Terms and ideas are chips that open in place** — the sense of a term, the
- * statement of an idea — so the reader can stay in Skim (Greg,
+ * **Terms and ideas are chips**, so the reader can stay in Skim (Greg,
  * SPIDERYARN-READING2-59: *"can we make them be expandable as well, like the
- * glossary"*). The way to the full mode is an icon inside what opened.
+ * glossary"*). An idea opens in place to its statement, with an icon into
+ * Ideas. A term opens the glossary's own card (`TermChip`): it opened in place
+ * to one line of its sense until 2026-10-06.
  */
 function StopCardView({
   card,
   open,
   onToggle,
+  onCloseTerm,
+  termActions,
+  onHidden,
   onOpen,
   canOpen,
 }: {
   card: StopCard;
   open: OpenSnippet | null;
   onToggle(kind: OpenSnippet["kind"], id: string): void;
+  onCloseTerm(id: string): void;
+  /** `null` for a visitor. */
+  termActions: TermActions | null;
+  /** A term was hidden from its card, and its chip is gone or going. */
+  onHidden(from: Element | null): void;
   onOpen(target: CardTarget): void;
   canOpen(target: CardTarget): boolean;
 }) {
-  const term = open?.kind === "term" ? (card.terms.find((t) => t.entry.id === open.id) ?? null) : null;
+  const pinned = open?.kind === "term" ? open.id : null;
   const idea = open?.kind === "idea" ? (card.ideas.find((i) => i.id === open.id) ?? null) : null;
-  const lead = term ? entryProse(term.entry).lead : "";
   return (
     <div className="skim-card">
       {card.terms.length > 0 && (
         <section className="skim-cluster" aria-label="Terms it uses">
           <p className="skim-cluster-h">Terms it uses</p>
           <div className="skim-chips">
-            {card.terms.map(({ entry, alsoAt }) => (
-              <button
+            {card.terms.map(({ entry }) => (
+              <TermChip
                 key={entry.id}
-                type="button"
-                className={`skim-chip${entry.id === term?.entry.id ? " on" : ""}`}
-                aria-expanded={entry.id === term?.entry.id}
-                onClick={() => onToggle("term", entry.id)}
-              >
-                <span className="skim-chip-name">{entry.name}</span>
-                {alsoAt !== null && <span className="skim-also">also at stop {alsoAt}</span>}
-              </button>
+                entry={entry}
+                pinned={pinned === entry.id}
+                onPress={() => onToggle("term", entry.id)}
+                onUnpin={() => onCloseTerm(entry.id)}
+                actions={termActions}
+                onHidden={onHidden}
+                onOpen={
+                  canOpen({ kind: "term", id: entry.id })
+                    ? () => onOpen({ kind: "term", id: entry.id })
+                    : null
+                }
+              />
             ))}
           </div>
-          {term && (
-            <div className="skim-sense">
-              {lead && <p className="skim-sense-text">{lead}</p>}
-              {canOpen({ kind: "term", id: term.entry.id }) && (
-                <OpenIn
-                  label="Open in Glossary"
-                  icon={<BookA size={16} />}
-                  onOpen={() => onOpen({ kind: "term", id: term.entry.id })}
-                />
-              )}
-            </div>
-          )}
         </section>
       )}
       {card.ideas.length > 0 && (
@@ -855,6 +965,126 @@ function StopCardView({
 }
 
 /**
+ * **A term chip, and the glossary's own card on it** — `TermCard`, the card
+ * the prose draws for the same term, inside the shared `Tooltip`. Greg,
+ * 2026-10-06 (spya-se0e4v): *"they should provide/reuse the usual 'go to
+ * glossary' etc in rich tooltips"*. Plan 261006e.
+ *
+ * **Two things can hold it open, and they are kept apart.** Hover or focus
+ * (`held`, here) is a mouse's and a keyboard's way in, and ends when they
+ * leave. A press (`pinned`, the panel's one open snippet) is a finger's: a tap
+ * opens the card and it stays until a tap elsewhere, because `Tooltip` does not
+ * let hover close a controlled card a finger opened (Tooltip.tsx § `byTouch`).
+ * A mouse click does not pin: the card is already up under the pointer, and
+ * goes when the pointer does (GPT Sol, plan review F2).
+ *
+ * `onOpen` is the way into Glossary, or `null` when this reader has no
+ * Glossary control. Then the card has no *Open glossary*, and no *Dig deeper*
+ * either, since that is where a dig's answer is drawn.
+ */
+function TermChip({
+  entry,
+  pinned,
+  onPress,
+  onUnpin,
+  actions,
+  onHidden,
+  onOpen,
+}: {
+  entry: GlossaryEntry;
+  pinned: boolean;
+  onPress(): void;
+  onUnpin(): void;
+  actions: TermActions | null;
+  onHidden(from: Element | null): void;
+  onOpen: (() => void) | null;
+}) {
+  const [held, setHeld] = useState(false);
+  const pointerType = useRef<string | null>(null);
+  const chip = useRef<HTMLButtonElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  const open = held || pinned;
+  const close = () => {
+    setHeld(false);
+    onUnpin();
+  };
+  /* Hide, and then put the keyboard somewhere: the chip is about to go. */
+  const acts: TermActions | null = actions && {
+    look: actions.look,
+    looking: actions.looking,
+    stale: actions.stale,
+    hiding: actions.hiding,
+    setHidden: async (id, hidden) => {
+      /* Keep our actual focus owner, not the whole cluster: another term can
+         have focus by the time this write finishes. A mouse's Hide press may
+         also leave unrelated keyboard focus untouched. */
+      const active = document.activeElement;
+      const from = active === chip.current || card.current?.contains(active) ? active : null;
+      await actions.setHidden(id, hidden);
+      onHidden(from);
+    },
+  };
+  return (
+    <Tooltip
+      content={
+        /* Its own scroller, with a height tied to the window, so the row of
+           buttons under a long entry can be reached on a short screen
+           (skim.css § .skim-term-card; plan review F3). */
+        <div className="skim-term-card" ref={card}>
+          <TermCard
+            entry={entry}
+            actions={acts}
+            onClose={close}
+            onOpen={
+              onOpen
+                ? () => {
+                    close();
+                    onOpen();
+                  }
+                : undefined
+            }
+            onOpenTerm={onOpen ?? undefined}
+          />
+        </div>
+      }
+      /* Under the chip and kept there: a card thrown sideways would sit on
+         the chips beside this one (Tooltip.tsx § `keepSide`). */
+      placement="bottom"
+      keepSide
+      className="prose-card skim-term-tip"
+      interactive={{ label: `${entry.name}, in the glossary` }}
+      open={open}
+      onOpenChange={(next) => (next ? setHeld(true) : close())}
+    >
+      <button
+        ref={chip}
+        type="button"
+        className={`skim-chip${open ? " on" : ""}`}
+        onPointerDown={(event) => { pointerType.current = event.pointerType; }}
+        onPointerCancel={() => { pointerType.current = null; }}
+        onKeyDown={() => { pointerType.current = null; }}
+        onClick={() => {
+          const touch = pointerType.current === "touch" || pointerType.current === "pen";
+          pointerType.current = null;
+          /* Focus can precede a tap's click. A finger still owns its pin and
+             dismissal, even if focus has already held the card open. */
+          if (touch) {
+            setHeld(false);
+            onPress();
+            return;
+          }
+          /* Already up by hover or focus: a mouse click does not pin it. */
+          if (held && !pinned) return;
+          onPress();
+        }}
+      >
+        <span className="skim-chip-name">{entry.name}</span>
+      </button>
+    </Tooltip>
+  );
+}
+
+/**
  * **The door after the current stop's block** — "Next stop ›" mid-pass, and at
  * the end of a pass *More detail ›* (stop 1 of the next deeper pass), or no
  * button at all at the end of the deepest, only the line saying which pass
@@ -862,7 +1092,9 @@ function StopCardView({
  * back, and ← on stop 1 goes to its passage (SPIDERYARN-READING2-51 and 4K,
  * plan 260929b). It is there because on an iPad
  * the reader's eyes and thumb are in the prose after reading a stop, and on a
- * narrow window the band has stepped aside altogether (F4).
+ * narrow window the band has stepped aside altogether once a row is pressed
+ * (F4). Only a row does that since 2026-10-03: the head's ‹ › and depth
+ * buttons keep a covering band up (spya-kudr63, SkimMode.tsx § `moveTo`).
  *
  * Drawn by `TableView` after the block's prose, outside `.prose`, on the path
  * `PdfFigureNotes` already uses (TableView.tsx § After the prose) — so it
@@ -906,7 +1138,7 @@ export function SkimDoor({
           <button
             type="button"
             className="skim-door-btn"
-            title={`Go on to ${door.deeper}: the stops the passes before it left out`}
+            title={`Go on to ${door.deeper}: the next pass, in more detail`}
             onClick={onDeeper}
           >
             More detail ›

@@ -93,6 +93,7 @@ import type { Article, Block, BlockId, Ideas, Timeline } from "../src/types.js";
 import type { Claim, ClaimsRun } from "../src/referee-claims.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 
 /** Who `useSession` says is here — a store, so the page can be signed in. */
 const who = vi.hoisted(() => {
@@ -119,7 +120,7 @@ vi.mock("../src/web/useSession.js", async () => {
     useSession: () => ({
       session: null,
       user: useSyncExternalStore(who.subscribe, who.get, who.get),
-      loading: false,
+      loading: false, known: true,
     }),
   };
 });
@@ -611,12 +612,12 @@ async function modeAfterPress(before: string): Promise<string> {
   return modeInUrl();
 }
 
-function modeButton(label: string): HTMLButtonElement {
-  const found = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+/* The bar's button, or the mode's item under More where it is one of the
+   five gathered there (plan 261007c) — `modeDoor` opens More to find it. */
+function modeButton(label: string): HTMLElement {
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 async function press(label: string): Promise<void> {
@@ -637,7 +638,7 @@ function marked(): string[] {
 }
 
 /**
- * Which paragraphs carry a **quote's** stroke, specifically — `mark[data-quote]`
+ * Which paragraphs carry a **quote's** fill, specifically — `mark[data-quote]`
  * rather than `mark.hit`, so "the quotes are marked here" is distinguishable
  * from "something is marked here".
  */
@@ -703,7 +704,7 @@ function agree(where: string, blocks: BlockId[], ring: BlockId[], quoted = true)
      they mark their paragraph and the point is *which* paragraph. Here the kind
      is the claim: a bug that leaked, say, Search's passages into Plain would put
      a `mark.hit` on this row and satisfy the line above. GPT Sol, 2026-09-08. */
-  expect(quotedRows(), `${where}: which rows carry a quote's stroke`).toEqual(
+  expect(quotedRows(), `${where}: which rows carry a quote's fill`).toEqual(
     quoted ? [P_QUOTE] : [],
   );
   expect(barred(), `${where}: the paragraph bars`).toEqual(blocks);

@@ -45,6 +45,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { Dock } from "../src/web/Dock.js";
 import { EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { moreLabels, moreMenu, moreTrigger } from "./helpers/dock-more.js";
+import { MODES } from "../src/modes.js";
+import { MODE_LABEL } from "../src/title-text.js";
 import { RefereeViews } from "../src/web/modes/referee/RefereeMode.js";
 import type { Mode } from "../src/web/params.js";
 import { REFEREE_VIEWS, type RefereeView } from "../src/web/referee-views.js";
@@ -136,19 +139,57 @@ describe("the bottom bar's mode segment", () => {
    * thirteen of the fourteen modes cannot be reached by keyboard at all — a
    * worse outcome than the one being fixed, and invisible to a mouse.
    */
-  it("gives every mode its own tab stop", () => {
+  it("gives every mode in the bar its own tab stop, and the More button one", () => {
     paintDock();
     const found = radios();
     expect(found.length).toBeGreaterThan(1);
     for (const el of found) {
       expect(el.tabIndex, `${el.getAttribute("aria-label")} is not tabbable`).toBe(0);
     }
+    /* **Not every mode, since 2026-10-07**, and the name used to say so: five
+       are items of the More menu (plan 261007c), which is one tab stop — its
+       button — and arrow keys inside the open list, as a menu is. So the
+       radios and the menu together must still be every mode, or one has become
+       unreachable by keyboard, which is what this case is here for. */
+    const more = moreTrigger(host);
+    expect(more, "no More button").not.toBeNull();
+    expect(more?.tabIndex).toBe(0);
+    const reachable = new Set([
+      ...found.map((el) => el.getAttribute("aria-label")),
+      MODE_LABEL.marginalia,
+      ...moreLabels(host),
+    ]);
+    expect(reachable).toEqual(new Set(MODES.map((m) => MODE_LABEL[m])));
+  });
+
+  /**
+   * **The one arrow the bar does take, and only on More.** ↓ on a focused menu
+   * button opens its menu — the menu-button pattern, Radix's — and the press is
+   * `preventDefault`ed, which is the signal `keynav.ts` already stands down
+   * for, so the article does not step as well. It changes no mode and spends
+   * nothing: opening a list is not selecting from it, which was the whole
+   * objection to arrows on the radios. The other three arrows pass through.
+   */
+  it("↓ on More opens its menu and changes no mode; the other arrows pass through", () => {
+    const { changes } = paintDock();
+    const more = moreTrigger(host) as HTMLElement;
+    for (const key of ARROWS.filter((k) => k !== "ArrowDown")) {
+      expect(press(more, key), `${key} was swallowed by More`).toBe(true);
+      expect(moreMenu(), `${key} opened the menu`).toBeNull();
+    }
+    const down = new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+    act(() => {
+      more.dispatchEvent(down);
+    });
+    expect(moreMenu(), "↓ on More opens the menu").not.toBeNull();
+    expect(down.defaultPrevented, "keynav would step the article as well").toBe(true);
+    expect(changes).toEqual([]);
   });
 
   /* The claim the group still makes, and it is the one worth keeping: exactly
      one of these is on. Fourteen buttons where only one ever lights up read as
-     fourteen toggles you could turn on together — styles.css § the modes
-     segment says the same thing about the hairline frame. */
+     fourteen toggles you could turn on together — dock-fit.css § the mode
+     switch says the same thing about the hairline frame. */
   it("is still a radiogroup with exactly one checked", () => {
     paintDock();
     /* The radios' own box since 2026-10-01, inside the segment beside

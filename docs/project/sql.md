@@ -1,7 +1,11 @@
 # How we use SQL here
 
+Up: [architecture.md](architecture.md)
+
 What to reach for when you add a column or a table. [database.md](database.md) is the operating
-manual — which store is live, how migrations are applied, and the traps that have cost a day each.
+manual — which store is live, how migrations are applied, and the traps that have cost a day each;
+[§ A new migration, in five lines](database.md#a-new-migration-in-five-lines) is how one is named,
+generated and applied.
 This file is shorter and is about **taste**: the shape we want the schema to have.
 
 Greg, 2026-08-31, when the experimental-features switch needed somewhere to live:
@@ -107,11 +111,54 @@ disagree with the first.
 The same shape is worth reaching for anywhere a boolean is really an event: archived, published,
 confirmed, dismissed.
 
+## Store when it happened
+
+Every table says when its rows happened — the rule and Greg's words for it are in
+[AGENTS.md § Writing code](../../AGENTS.md) ("Store when it happened"). In practice that is a
+`created_at timestamptz default now()` which no store names, so the database stamps every writer,
+including the next one, and an upsert's `do update` cannot move it.
+[`tests/action-tables-have-created-at.test.ts`](../../tests/action-tables-have-created-at.test.ts)
+holds it: a table with no `created_at` fails unless it is listed there with the timestamp column
+that plays that part, or with the reason it needs none.
+
+**A stand-in has to be a time that stays put, and the test cannot tell.** It reads the column's
+name and type. `upload_source_guesses.claimed_at` was listed as that table's "when" until
+2026-10-07, and it is the claim's eligibility clock: every reclaim re-stamps it and a release sets
+it to the Unix epoch. Before listing a column there, read every writer of it; if any moves it,
+the table needs a `created_at` of its own.
+
+**Adding one to a table that already has rows is two statements, not the one drizzle generates:**
+
+```sql
+ALTER TABLE … ADD COLUMN "created_at" timestamp with time zone;
+ALTER TABLE … ALTER COLUMN "created_at" SET DEFAULT now();
+```
+
+`ADD COLUMN … DEFAULT now()` writes the migration's own time into every existing row — an invented
+time, indistinguishable afterwards from a real one. Added bare, the old rows stay `null`, which
+means "before we kept this", and the column stays nullable for good. Hand-edit the generated `.sql`
+and leave the snapshot alone (it should say nullable, default `now()`); the same test refuses the
+one-statement form in any migration. Because nothing fails when such a default goes missing — the
+insert succeeds and writes `null` — `npm run db:check` reports a lost default on a nullable column
+too ([`src/db/schema-drift.ts`](../../src/db/schema-drift.ts)). The audit that started this is
+[261003j](../plans/261003j-store-when-it-happened-timestamp-audit.md).
+
+**A later event gets a column of its own, and the store writes it** — `finished_at`, `colour_at`,
+`renamed_at`, `cancel_requested_at`, `chat_messages.hint_opened_at`, `articles.updated_at`. These have no default, because no default
+can know the event happened, so each is only as good as the write sites that name it:
+[`tests/event-times.test.ts`](../../tests/event-times.test.ts) holds every one. Three rules they
+share. Name the event rather than reaching for a catch-all `updated_at`: `comments.updated_at` means
+"the words were edited" and `chat_threads.updated_at` is what the panel sorts by, so a recolour or a
+rename moving either would be a bug. Write a `finished_at` inside the attempt-fenced update, so a
+stale attempt that loses its fence stamps nothing. And null it on every path back to `pending`, or
+the last attempt's time sits under the next one's spinner. Null otherwise means "has not happened",
+or "before 2026-10-03".
+
 ## Columns, not JSON — with an exception that has to argue for itself
 
 A field you filter, sort, join or constrain on is a column. JSON is what you reach for when the
 value is **one opaque thing the database has no business reading**, and the schema has a few of
-those on purpose: `article_revisions.summary`, `.ideas`, `.sketch`, `glossary_lookups.citations`.
+those on purpose: `article_revisions.ideas`, `.sketch`, `.simple_summary`, `glossary_lookups.citations`.
 Each is an artefact that only means anything against the article it was written for, and
 [src/db/schema.ts](../../src/db/schema.ts) states the case beside each one.
 
@@ -187,6 +234,7 @@ caught, in review, in a statement written specifically to prevent that failure.
 
 ## See also
 
-- [database.md](database.md) — the store, the migrations, and the traps.
+- [database.md](database.md) — the store, the migrations ([how a new one is named and
+  applied](database.md#a-new-migration-in-five-lines)), and the traps.
 - [experimental-features.md](experimental-features.md) — the switch this file's example is about.
 - [`src/db/schema.ts`](../../src/db/schema.ts) — every table, with the reasoning beside it.

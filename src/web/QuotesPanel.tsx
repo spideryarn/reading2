@@ -50,7 +50,9 @@
  */
 import { useLayoutEffect, useRef, useState, type ReactElement } from "react";
 import { ChevronLeft, ChevronRight, Info, Pencil, Quote as QuoteIcon, RotateCcw, TriangleAlert } from "lucide-react";
-import { MAX_QUOTES_TOTAL, type BlockId, type Job, type Quote, type QuoteDrops, type Quotes, type QuoteStroke, type QuoteTier } from "../types.js";
+import type { BlockId, Job, Quote, QuoteDrops, Quotes, QuoteStroke, QuoteTier } from "../types.js";
+import { quotesAppendOnOffer, quotesFindMoreOffered } from "./find-more.js";
+import { useFindMoreHandOff } from "./useFindMoreHandOff.js";
 import type { QuoteRank } from "./params.js";
 import type { UseQuotes } from "./useQuotes.js";
 import type { StepFailure } from "./useStepJob.js";
@@ -63,6 +65,8 @@ import { builtButEmpty } from "../messages.js";
 import { JobProgress } from "./JobProgress.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { AboutMade } from "./BandAbout.js";
+import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { useRenderCount } from "./perf.js";
 import { applyThreshold, floorToGateStep, hiddenNote, type ThresholdResult } from "./threshold.js";
@@ -73,6 +77,7 @@ import {
   withYours,
   type ReaderRowComment,
 } from "./quote-band-rows.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -314,22 +319,22 @@ export function priorityOf(quote: Quote): number | undefined {
  *
  * What the two controls still agree on is **order**: raising the bar removes
  * scored light quotes before scored heavy ones, because both read `priorityOf`.
- * Not "what survives is exactly the heavy strokes" — the bar snaps to real
+ * Not "what survives is exactly the heavy fills" — the bar snaps to real
  * scores, so there may be no stop at `0.80`, and an unscored quote survives
- * every bar while drawing light. docs/project/quotes.md § The stroke.
+ * every bar while drawing light. docs/project/quotes.md § A highlighter pen.
  */
 export const QUOTE_HEAVY_AT = 0.8;
 
 /**
  * How heavily this quote is drawn in the prose — the priority the reader can see
- * without opening the panel. docs/project/quotes.md § The stroke.
+ * without opening the panel. docs/project/quotes.md § A highlighter pen.
  *
  * **`priorityOf`, not `importance`.** Greg asked for *"an indicator of the Quote
  * priority"*, and `priorityOf` is what `?bar=` already thresholds on. Driving the
- * stroke from `importance` alone would let the two disagree — raising the bar
- * could hide a heavy stroke and leave a light one on the page, which reads as a
+ * fill from `importance` alone would let the two disagree — raising the bar
+ * could hide a heavy fill and leave a light one on the page, which reads as a
  * bug in the feature whose whole job is to say what matters. On this the bar and
- * the stroke are the same statement.
+ * the fill are the same statement.
  *
  * **A quote with no score at all is light, not absent.** It has earned no
  * emphasis, but it must still be drawn: a quote scored on neither axis survives
@@ -343,13 +348,14 @@ export function quoteTier(quote: Quote): QuoteTier {
 }
 
 /**
- * The faintest a quote's outline is ever drawn. **This is where "even
- * low-priority quotes should still be clearly visible" is kept** — Greg,
- * SPIDERYARN-READING2-2W — and it is checked rather than felt:
- * tests/quote-stroke-fade.test.ts composites the 1px stroke at this alpha over
- * `--page` and requires 3:1, WCAG's floor for a non-text mark. It comes out
- * well above that; the margin is on purpose, because a 1px line needs more than
- * a floor written for thicker components.
+ * The faintest a quote is ever drawn. **This is where "even low-priority
+ * quotes should still be clearly visible" is kept** — Greg,
+ * SPIDERYARN-READING2-2W — and it is checked rather than felt.
+ * tests/quote-fill.test.ts composites the quote colour at this alpha over
+ * `--page`, in both themes, twice: as the spine's thin strip, which must clear
+ * 3:1, WCAG's floor for a non-text mark; and, times the light tier's strength,
+ * as the faintest fill in the prose, which must still differ from the page.
+ * (Until 2026-10-03 the mark in the prose was a 1px outline at this alpha.)
  */
 export const QUOTE_ALPHA_FLOOR = 0.7;
 
@@ -357,23 +363,24 @@ export const QUOTE_ALPHA_FLOOR = 0.7;
 const QUOTE_FADE_FROM = 0.5;
 
 /**
- * **How brightly this quote is outlined: 0.70 to 1.00, with priority.** The
- * second channel on the stroke, and the fine one — Greg, 2026-09-10:
+ * **How brightly this quote is drawn: 0.70 to 1.00, with priority.** The
+ * fine channel beside the tier's coarse one. It scales the fill's strength
+ * since 2026-10-03, and the outline's alpha before that — Greg, 2026-09-10:
  *
  * > perhaps slightly fade the border based on the priority-score (but even
  * > low-priority quotes should still be clearly visible)
  *
- * **Weight and fade move the same way, so they reinforce rather than
- * cancel.** A higher priority is thicker *and* brighter; nothing is ever
- * thick-but-faint or thin-but-bright. `quoteTier` keeps the coarse step — two
- * weights, because the blind test found a third indistinguishable — and this is
+ * **Tier and fade move the same way, so they reinforce rather than
+ * cancel.** A higher priority has a stronger tier *and* a brighter fade;
+ * `quoteTier` keeps the coarse step — two levels, because the earlier stroke
+ * test found a third indistinguishable — and this is
  * the continuous one inside and across them, which nobody has to identify
  * pairwise: it is an impression across a page. 260907c's acceptance pass had
  * already found that *"the priority does help skimming — but through
  * brightness more than thickness"*, and this spends that finding.
  *
  * `priorityOf`, like the weight and the bar, so raising the bar still takes
- * away the faintest and thinnest first. Unscored is the floor: visible,
+ * away the faintest and lightest first. Unscored is the floor: visible,
  * claiming nothing — the argument `quoteTier` makes for drawing it light.
  * docs/plans/260911a-quotes-find-more-and-a-fade-that-carries-priority.md § 1.
  */
@@ -384,7 +391,7 @@ export function quoteAlpha(quote: Quote): number {
   return Math.round((QUOTE_ALPHA_FLOOR + (1 - QUOTE_ALPHA_FLOOR) * along) * 100) / 100;
 }
 
-/** The whole stroke — `QuoteStroke` in src/types.ts — which is what crosses into the marks. */
+/** Tier and brightness together — still named `QuoteStroke` — which is what crosses into the marks. */
 export function quoteStroke(quote: Quote): QuoteStroke {
   return { tier: quoteTier(quote), alpha: quoteAlpha(quote) };
 }
@@ -705,8 +712,8 @@ export function QuotesPanel({
      *changed*. It needs a replace intent in the job contract first. Plan
      261002b § Deferred. */
   const badge =
-    quotes && owner?.profiled ? (
-      <WrittenForYou written changed={owner.profileChanged} slug={owner.slug} compact />
+    quotes && owner ? (
+      <WrittenForYou written={owner.profiled} changed={owner.profileChanged} slug={owner.slug} />
     ) : null;
   /* **`markedQuotes` and not `rankQuotes(all, rank, bar)`**, although the two
      compute the same list from the same three lines. The prose marks this list
@@ -792,19 +799,32 @@ export function QuotesPanel({
    *   identical request the automatic run makes, or the two carry different
    *   `work_key`s and the reader pays twice. useQuotes.ts § `ensure`.
    */
-  const rerun = (label: string, again = false) => (
-    <div className="quotes-run">
-      <Progress
-        job={owner?.job ?? null}
-        starting={owner?.starting ?? false}
-        failed={owner?.failed ?? null}
-        stalled={owner?.stalled ?? false}
-        onRun={() => (again ? owner?.regenerate() : owner?.ensure()) ?? Promise.resolve()}
-        onCancel={(id) => owner?.cancel(id)}
-        label={label}
-      />
-    </div>
-  );
+  /* A forced run has finished and its list is not here yet: the forced button
+     gives way to a read, never to a second paid run — GlossaryPanel.tsx §
+     `MoreRow` is the sibling for the appending verb. rewrite-hold.ts. */
+  const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
+  const newList =
+    owner && waiting && !owner.error ? (
+      <RewriteWaiting line="The new quotes haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
+    ) : null;
+  const rerun = (label: string, again = false) =>
+    again && newList ? (
+      newList
+    ) : (
+      <div className="quotes-run">
+        <Progress
+          job={owner?.job ?? null}
+          starting={owner?.starting ?? false}
+          failed={owner?.failed ?? null}
+          stalled={owner?.stalled ?? false}
+          onRun={() => (again ? owner?.regenerate() : owner?.ensure()) ?? Promise.resolve()}
+          /* With `error` set the retry is `ReadError`'s; the button stays held. */
+          runDisabled={again && (owner?.rewriting ?? false)}
+          onCancel={(id) => owner?.cancel(id)}
+          label={label}
+        />
+      </div>
+    );
 
   /**
    * **Find more** — the forced run on a list written from this same article,
@@ -822,14 +842,29 @@ export function QuotesPanel({
    * (docs/plans/260913a-drop-the-use-your-profile-checkbox.md, GPT Sol's
    * review).
    */
-  const findMore = (
+  const pressFindMore = () => owner?.regenerate(owner.profiled) ?? Promise.resolve();
+  /* **The command bar's *Quotes › Find more*** (plan 261004k) opens this band
+     and leaves a press for it. It is made through `pressFindMore`, the
+     button's own function, only if a fresh Find more is what the foot is
+     offering now — and used up either way (useFindMoreHandOff.ts). */
+  useFindMoreHandOff({
+    slug: owner?.slug ?? null,
+    mode: "quotes",
+    /* The list and the job list must both have answered. Until the first job
+       poll, `job === null` means “not known”, not “none” (code review F10). */
+    settled: owner !== null && owner.status !== "loading" && owner.loaded,
+    offered: owner !== null && quotesFindMoreOffered(owner),
+    press: () => void pressFindMore(),
+  });
+  const findMore = newList ?? (
     <div className="quotes-run">
       <Progress
         job={owner?.job ?? null}
         starting={owner?.starting ?? false}
         failed={owner?.failed ?? null}
         stalled={owner?.stalled ?? false}
-        onRun={() => owner?.regenerate(owner.profiled) ?? Promise.resolve()}
+        onRun={pressFindMore}
+        runDisabled={owner?.rewriting ?? false}
         onCancel={(id) => owner?.cancel(id)}
         label="Find more"
         runningLabel="Finding more…"
@@ -915,6 +950,7 @@ export function QuotesPanel({
           2026-10-02 (plan 261002e), so this row holds nothing of its own.
           Still a fragment rather than `null`, for the reason above: the row
           holds its place while the list loads, and the corner sits in it. */
+      // biome-ignore lint/complexity/noUselessFragments: an empty fragment is the point — a head that is not null keeps its row, and the note above says why
       head={ranks.length > 0 ? null : <></>}
       /* Pinned under the list rather than at the end of it. Same guard it had
           as a trailing child of the band — and **not on a stale or an outdated
@@ -938,7 +974,27 @@ export function QuotesPanel({
             />
           )}
           {quotes && owner?.status === "ready" && owner.quotes && !owner.stale && !owner.outdated ? (
-          <Foot list={owner.quotes} running={owner.job !== null || owner.starting} findMore={findMore} />
+          <Foot
+            list={owner.quotes}
+            loaded={owner.loaded}
+            running={owner.job !== null || owner.starting}
+            /* The one answer to *can this list be added to* — the gate on the
+               command bar's row too (find-more.ts). Under this guard it is
+               false only at the ceiling. */
+            addable={quotesAppendOnOffer(owner)}
+            findMore={findMore}
+            /* A job at the ceiling was not started by Find more, which is not
+               offered there: it is a forced re-run from Metadata. So its
+               status, and the way to ask again when it never became a job,
+               are the rewrite's (`rerun`), as on an outdated list below.
+               `rewriting` too: a run that has ended with its list unread is
+               the hold's waiting line, which `rerun` draws (rewrite-hold.ts). */
+            elsewhere={
+              owner.job || owner.starting || owner.failed || owner.rewriting
+                ? rerun("Choose them again", true)
+                : null
+            }
+          />
         ) : /* **Status only, on an outdated list.** Its banner went on
                2026-09-29 (SPIDERYARN-READING2-55, plan 260929c), and that banner
                was where a rewrite's progress, Stop and failure showed; a run
@@ -948,7 +1004,7 @@ export function QuotesPanel({
           owner?.status === "ready" &&
           owner.outdated &&
           !owner.stale &&
-          (owner.job || owner.starting || owner.failed) ? (
+          (owner.job || owner.starting || owner.failed || newList) ? (
           <div className="quotes-foot">{rerun("Choose them again", true)}</div>
         ) : null}
         </>
@@ -978,9 +1034,9 @@ export function QuotesPanel({
         <div className="quotes-list quotes-list-yours-only">{rowList}</div>
       )}
 
-      {owner?.error && <p className="quotes-error">{owner.error}</p>}
+      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="quotes-quiet">Looking for quotes…</p>}
+      {owner?.status === "loading" && <BandWaiting className="quotes-quiet">Looking for quotes…</BandWaiting>}
 
       {/* **A visitor's list is already here or it is not**, so there is no
           loading state and no offer to build one — a piece with no quotes never
@@ -1128,7 +1184,7 @@ function RankBar({
   onRank(rank: QuoteRank): void;
 }) {
   return (
-    <div className="quotes-rank">
+    <div className="gloss-sort">
       <OrderGroup label="Order the quotes by" selected={rank}>
         {/* No "order" word in front since 2026-10-01, as in Glossary; the
             group's `aria-label` still says it to a screen reader. */}
@@ -1136,7 +1192,7 @@ function RankBar({
           <button
             key={option.key}
             type="button"
-            className={`quotes-rank-btn${rank === option.key ? " on" : ""}`}
+            className={`gloss-sort-btn${rank === option.key ? " on" : ""}`}
             aria-pressed={rank === option.key}
             title={option.title}
             onClick={() => onRank(option.key)}
@@ -1197,12 +1253,12 @@ function BarSlider({
   const count = `${visible.length} of ${quotes.length}`;
 
   return (
-    <div className="quotes-bar">
-      <div className="quotes-bar-row">
-        <label className="quotes-bar-label" htmlFor="quotes-bar">
+    <div className="gloss-gate">
+      <div className="gloss-gate-row">
+        <label className="gloss-gate-label" htmlFor="quotes-bar">
           bar
         </label>
-        <span className="quotes-bar-value">
+        <span className="gloss-gate-value">
           {bar.toFixed(2)} · {withYours(count, yours)}
         </span>
         {/* Only once there is something to undo. A reset that is always there is
@@ -1210,7 +1266,7 @@ function BarSlider({
         {moved && (
           <button
             type="button"
-            className="quotes-bar-reset"
+            className="gloss-gate-reset"
             title={`Back to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             aria-label={`Reset the bar to ${QUOTE_BAR_DEFAULT.toFixed(2)}`}
             onClick={() => onBar(null)}
@@ -1227,7 +1283,7 @@ function BarSlider({
           meaningless against a re-run list, where a score is still a score. */}
       <input
         id="quotes-bar"
-        className="quotes-bar-range"
+        className="gloss-gate-range"
         type="range"
         min={0}
         max={Math.max(stops.length - 1, 0)}
@@ -1244,7 +1300,7 @@ function BarSlider({
       {/* Always, never conditionally: present wherever the slider is, absent
           wherever it is not. A line that is sometimes missing for a *different*
           reason teaches the reader nothing. */}
-      <p className="quotes-bar-note">{note}</p>
+      <p className="gloss-gate-note">{note}</p>
     </div>
   );
 }
@@ -1356,7 +1412,7 @@ function QuoteRow({
         >
           <button
             type="button"
-            className={`quotes-why${why ? " on" : ""}`}
+            className={`quotes-why tap-target${why ? " on" : ""}`}
             aria-label={quote.reason ? "Why this one" : "Who chose this, and when"}
             aria-expanded={why}
             onClick={() => setWhy((was) => !was)}
@@ -1429,7 +1485,7 @@ function YoursRow({
         >
           <button
             type="button"
-            className={`quotes-why${about ? " on" : ""}`}
+            className={`quotes-why tap-target${about ? " on" : ""}`}
             aria-label="About your highlight"
             aria-expanded={about}
             onClick={() => setAbout((was) => !was)}
@@ -1561,27 +1617,44 @@ function QuoteStepper({
  */
 function Foot({
   list,
+  loaded,
   running,
+  addable,
   findMore,
+  elsewhere,
 }: {
   list: Quotes;
+  /** False until the first job poll; neither a button nor the cap claim is true yet. */
+  loaded: boolean;
   /** A run is in flight, so the last one's answer is about to be superseded. */
   running: boolean;
+  /**
+   * The list can be added to — `quotesAppendOnOffer`. The caller draws this
+   * foot only for a current list, so `false` here is the ceiling
+   * (`MAX_QUOTES_TOTAL`).
+   */
+  addable: boolean;
   findMore: ReactElement;
+  /**
+   * The progress, Stop or failure of a run that is going or has failed (or
+   * the line that says its new list has not loaded), or null when there is
+   * none. Drawn at the ceiling **in place of** its
+   * sentence, which until 2026-10-07 stood where a running job's Stop and a
+   * failed one's Retry would have been (plan 261007a § K4). Under the
+   * ceiling `findMore` already carries the same status.
+   */
+  elsewhere: ReactElement | null;
 }) {
   /* **Said, because otherwise a Find more that found nothing looks exactly
      like a button that did nothing** — the job finishes, the list is the same
      length, and nothing on screen changed. docs/reusable/silent-success.md.
      Absent on a first pass (`passes` 1, or a list from before the field). */
   const foundNothing = !running && (list.passes ?? 1) > 1 && list.lastAdded === 0;
-  const full = list.quotes.length >= MAX_QUOTES_TOTAL;
   return (
     <div className="quotes-foot">
       {foundNothing && <p className="quotes-quiet">Nothing more worth keeping turned up.</p>}
-      {full ? (
-        <p className="quotes-quiet">That is as many as we keep for one article.</p>
-      ) : (
-        findMore
+      {addable ? (loaded ? findMore : null) : (
+        elsewhere ?? <p className="quotes-quiet">That is as many as we keep for one article.</p>
       )}
     </div>
   );
@@ -1593,6 +1666,8 @@ function Progress(props: {
   failed: StepFailure | null;
   stalled: boolean;
   onRun(): Promise<void>;
+  /** `JobProgress.runDisabled`: the forced run is held (rewrite-hold.ts). */
+  runDisabled?: boolean;
   onCancel(id: string): void;
   label: string;
   /** What the button says while its run is going. *Choosing…* unless said. */

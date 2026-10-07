@@ -13,6 +13,20 @@ plus a hook, tested in [`tests/page-title.test.ts`](../../tests/page-title.test.
 >
 > — Greg, 2026-08-27
 
+## In this doc
+
+- [§ What it said before](#what-it-said-before) — (history) the title this replaced
+- [§ The one rule](#the-one-rule) — what goes first in a tab, and why the app name goes last
+- [§ What each page says](#what-each-page-says) — the title of a given page, and the cases that are deliberately not in it
+- [§ The separator](#the-separator-is-) — why ` · `
+- [§ The clamp](#the-clamp-and-why-it-is-not-a-character-limit) — how a long article title is shortened
+- [§ Setting the title is not the same as announcing it](#setting-the-title-is-not-the-same-as-announcing-it) — the live region for screen readers
+- [§ Where the title is set](#where-the-title-is-set) — adding a page, and why `ArticlePage` hands over
+- [§ The server writes the title first now](#the-server-writes-the-title-first-now-and-both-sides-use-one-function) — why a shared page's title must match what React sets (and the ten ways they once disagreed — history)
+- [§ What would go wrong quietly](#what-would-go-wrong-quietly) — the mistakes that look fine on any one page
+- [§ Still open](#still-open) — favicon state, error titles, no real screen-reader run
+- [§ See also](#see-also)
+
 ## What it said before
 
 `<title>Spideryarn — granularity zoom</title>`, in [`index.html`](../../index.html), on every page.
@@ -20,7 +34,7 @@ plus a hook, tested in [`tests/page-title.test.ts`](../../tests/page-title.test.
 Two things wrong with that, and the second is the expensive one.
 
 It **named one feature as though it were the product**. Granularity zoom is the first feature
-([granularity-zoom.md](granularity-zoom.md)) and there are now seven modes beside it
+([granularity-zoom.md](granularity-zoom.md)) and there were already seven modes beside it (there are more now, and the zoom columns themselves are gone)
 ([diagram.md](diagram.md), [glossary.md](glossary.md), [search.md](search.md),
 [summaries.md](summaries.md), [ideas.md](ideas.md), [chat-tools.md](chat-tools.md)).
 
@@ -75,8 +89,9 @@ you are looking at it.
 | An article that failed to load | `Couldn’t open · Spideryarn` | — |
 
 The mode and view names are the words the bottom bar uses ([`Dock.tsx`](../../src/web/Dock.tsx)), so
-the tab and the button you pressed to get there agree. `Tweets`, not `Thread`; `Metadata`, not
-`Details`.
+the tab and the button you pressed to get there agree: `MODE_LABEL` and `VIEW_LABEL` in
+[`src/title-text.ts`](../../src/title-text.ts). `Metadata`, not `Details`. (The thread has no label of
+its own since 2026-10-03: it is Summary's Thread view, so its tab says `Summary`.)
 
 ### The two homepages are the pages that lead with the app's name
 
@@ -271,7 +286,7 @@ it goes wrong by waiting. The table below is the ones worth a note, not an inven
 | [`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx) — `ArticlePage` | loading and error, **and nothing else** |
 | [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — `Reader` | the reading view, with its mode |
 | [`Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata` |
-| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the Tweets mode's band — `?mode=tweets` on the reading view (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode; the old address redirects), so its title is the ordinary any-other-mode one |
+| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the thread's band — Summary's Thread view, `?mode=summary&summary=thread` (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode, and a mode until 2026-10-03, [261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md); both old addresses redirect), so it sets no title of its own: `Reader`'s stands, with Summary as the mode |
 | [`AddPage.tsx`](../../src/web/AddPage.tsx) | both `/add/` routes |
 | [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx) | `/profile` |
 | [`DesignPage.tsx`](../../src/web/DesignPage.tsx) | `/design` |
@@ -339,6 +354,38 @@ and clamp hard at 120 with no ellipsis. That is a difference between *a tab* and
 sinks, read by different things — rather than between two copies of one rule. A card already carries
 `og:site_name`, so repeating the app's name spends the visible half of it saying one word twice, and
 an `…` in published metadata is a claim that the title contained one.
+
+**Since 2026-10-05 the card also says who wrote it and carries a picture**
+([261005f](../plans/261005f-link-previews-and-seo-for-shared-links.md); Greg, 2026-10-04: *"Probably
+the article title and/or authors first in the title"*). `og:title` ends ` · Jane Doe`, ` · Jane Doe
+and John Smith` or ` · Jane Doe et al.` (`cardTitle` in `page-head.ts`), from the names a visitor is
+already shown (`publicAuthorNames`, [`src/public/dto.ts`](../../src/public/dto.ts)). The tab does
+not: the client rewrites it a second later, and a name there would be a tab that changes. The
+picture is one static image for the whole site, `public/og-card.png`, drawn by
+`scripts/make-og-card.ts`. And every page that is not a shared article has a card too, written
+by hand in `index.html`, with **no `og:url`**: that tag is now the only thing that says a head was
+composed for an article, which `articleWaitTitle` below and `scripts/check-public-shell.ts` both
+read. The research is
+[261005b](../research/261005b-link-previews-and-seo-for-republished-articles.md).
+
+**Later that day, two more things, both Greg's answers to that plan's questions.**
+
+*A shared article's card may show the article's own first picture.* Greg: *"hmmm, not sure. go with
+the lead image for now"*. Only when we hold a copy: the address is our own
+`/api/public/asset/<slug>/<hash>.<ext>`, never the publisher's, chosen by `leadImageOf` in
+[`src/asset-delivery.ts`](../../src/asset-delivery.ts) (the first stored PNG or JPEG between 20 KB
+and 5 MB; the manifest records no dimensions, so bytes stand in for them, and a small photograph is
+passed over while a heavy icon is not). Otherwise the brand image. **`LEAD_IMAGE_ON_CARDS` in
+`page-head.ts` is the one switch.**
+
+*Each of our own pages has a head of its own, written by the build.* The nine pages in
+[`src/site-pages.ts`](../../src/site-pages.ts) are served a static file whose `<title>` is the
+string `pageTitle` sets a moment later (`tests/site-pages.test.ts` holds the two equal, page by
+page), with a description, a canonical and an `og:url` naming the page, and no robots tag. So the
+sentence above needs a second half: those pages **do** carry an `og:url` now, and
+`serverComposedHead` is not misled, because it wants one ending `/read/<slug>`. Every other path is
+still the default head, with none. [deployment.md](deployment.md), under "Our own pages may be
+listed", has the serving.
 
 `tests/page-head.test.ts` § *the one title rule, applied by both sides* is the check, and its expected
 strings are written out rather than computed from either side — an expectation spelled

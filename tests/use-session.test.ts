@@ -29,7 +29,11 @@ import { createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-/** The listener the hook registers, so a test can be the SDK. */
+/**
+ * The SDK's one listener, so a test can be the SDK. Registered once, when
+ * lib/session.ts is first imported, and not by the hook: the hook subscribes
+ * to that module (it did subscribe to the SDK itself until 2026-10-06).
+ */
 let announce: ((event: string, session: unknown) => void) | null = null;
 const getSession = vi.fn();
 const unsubscribe = vi.fn();
@@ -49,6 +53,7 @@ vi.mock("../src/web/lib/supabase.js", () => ({
 }));
 
 const { useSession } = await import("../src/web/useSession.js");
+const { resetSessionForTests } = await import("../src/web/lib/session.js");
 
 /** Render the hook and hand back whatever it last returned. */
 function drive(): { state: () => ReturnType<typeof useSession>; stop: () => void } {
@@ -75,7 +80,8 @@ function drive(): { state: () => ReturnType<typeof useSession>; stop: () => void
 
 beforeEach(() => {
   vi.useFakeTimers();
-  announce = null;
+  /* A tab that has heard nothing yet: the listener is kept, what it held is not. */
+  resetSessionForTests();
   getSession.mockReset();
   unsubscribe.mockReset();
   /* A promise that never settles: the SDK hanging, which is the whole subject. */
@@ -136,6 +142,22 @@ describe("while the SDK is starting up", () => {
     stop();
   });
 
+  /**
+   * Giving up is not an answer. Whoever would treat the answer that arrives
+   * afterwards as a change of reader asks `known`, not `loading`
+   * (tests/last-view-late-session.test.tsx).
+   */
+  it("says the session is not known when the deadline ends the wait, and known once the SDK answers", () => {
+    const { state, stop } = drive();
+    expect(state().known).toBe(false);
+    act(() => vi.advanceTimersByTime(9_000));
+    expect(state().loading).toBe(false);
+    expect(state().known).toBe(false);
+    act(() => announce?.("INITIAL_SESSION", null));
+    expect(state().known).toBe(true);
+    stop();
+  });
+
   /** And it is a deadline, not a delay: a fast answer is not made to wait for it. */
   it("does not hold a fast answer back until the deadline", () => {
     const { state, stop } = drive();
@@ -175,10 +197,25 @@ describe("signing out", () => {
 });
 
 describe("tidying up", () => {
-  it("unsubscribes when the component goes away", () => {
-    const { stop } = drive();
+  /* From lib/session.ts, not from the SDK: that one subscription is for the
+     life of the page, and is never given up. */
+  it("stops listening when the component goes away, and leaves the SDK subscribed", () => {
+    const { state, stop } = drive();
+    act(() => announce?.("INITIAL_SESSION", null));
     stop();
-    expect(unsubscribe).toHaveBeenCalled();
+    act(() => announce?.("SIGNED_IN", { access_token: "t", user: { id: "x", email: "a@b.test" } }));
+    expect(state().user, "a session heard after unmount reached the dead hook").toBeNull();
+    expect(unsubscribe).not.toHaveBeenCalled();
+  });
+
+  /* The SDK tells each of its subscribers once on arrival; this module has
+     one, so a hook that mounts later has to be told what is already known. */
+  it("a hook that mounts after the session is known is told at once, not left loading", () => {
+    act(() => announce?.("INITIAL_SESSION", { access_token: "t", user: { id: "x", email: "a@b.test" } }));
+    const { state, stop } = drive();
+    expect(state().loading).toBe(false);
+    expect(state().user).toMatchObject({ email: "a@b.test" });
+    stop();
   });
 
   /** A timer left running after unmount sets state on a dead tree. */

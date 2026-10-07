@@ -3,8 +3,8 @@
  *
  *     npx vite build --config vite.fleet.config.ts
  *
- * Output: `tools/fleet/web/dist/`, containing `index.html` and an `assets/`
- * directory. `tools/fleet/server.ts` serves that directory as static files at
+ * Output: `tools/fleet/web/dist/`, containing `index.html`, an `assets/`
+ * directory, `build-stamp.json` and `build-files.json`. `tools/fleet/server.ts` serves that directory as static files at
  * `/`, and answers `/api/state` beneath it.
  *
  * ## Deliberately its own config, sharing nothing with vite.config.ts
@@ -53,12 +53,15 @@
  * across watch rebuilds, so every rebuild would carry the first build's stamp.
  * Run `npm run build:fleet` once per build.
  */
+import { renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 
+import { BUILD_FILES_FILE, buildFilesManifest } from "./tools/fleet/build-files.js";
 import { BUILD_STAMP_FILE, buildStamp } from "./tools/fleet/build-stamp.js";
 
 /** Paths relative to THIS FILE, not to `process.cwd()`. Which tree is being
@@ -90,10 +93,51 @@ function emitBuildStamp(): Plugin {
   };
 }
 
+/**
+ * Writes `build-files.json` once everything else is on disk: every file the
+ * build emitted, with its length and sha256 (`tools/fleet/build-files.ts` says
+ * what reads it and why).
+ *
+ * **From the bundle rollup hands this hook, not from the directory.** A list
+ * made by reading `dist/` back would agree with a truncated write, which is the
+ * thing it exists to catch. And in `writeBundle`, ordered last, because that
+ * hook runs after rollup has written every file: the manifest's presence then
+ * means the build finished. It goes to a temporary name and is renamed into
+ * place so that a half-written manifest is never the file a reader finds.
+ *
+ * It lists what rollup emitted. A file vite copies from a `public/` directory
+ * never passes through here — there is no such directory for this client, and
+ * the reader refuses a `dist/` holding a file this did not list, so adding one
+ * would fail loudly rather than go unhashed.
+ */
+function emitBuildFiles(): Plugin {
+  return {
+    name: "fleet-build-files",
+    writeBundle: {
+      order: "post",
+      sequential: true,
+      handler(options, bundle) {
+        if (options.dir === undefined) {
+          throw new Error("vite.fleet.config.ts: the build has no output directory to write build-files.json into");
+        }
+        const manifest = buildFilesManifest(
+          Object.values(bundle).map((file) => ({
+            path: file.fileName,
+            content: file.type === "chunk" ? file.code : file.source,
+          })),
+        );
+        const target = join(options.dir, BUILD_FILES_FILE);
+        writeFileSync(`${target}.tmp`, `${JSON.stringify(manifest, null, 2)}\n`);
+        renameSync(`${target}.tmp`, target);
+      },
+    },
+  };
+}
+
 export default defineConfig({
   root: here("./tools/fleet/web"),
   base: "./",
-  plugins: [react(), tailwindcss(), emitBuildStamp()],
+  plugins: [react(), tailwindcss(), emitBuildStamp(), emitBuildFiles()],
   define: {
     __FLEET_BUILD__: JSON.stringify(stamp),
   },

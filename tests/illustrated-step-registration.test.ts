@@ -195,6 +195,7 @@ function ctxFor(illustrationNote?: string): StepContext {
     power: "standard",
     slug: SLUG,
     report: () => undefined,
+    preview: () => undefined,
     signal: new AbortController().signal,
     cacheArticle: false,
     ...(illustrationNote ? { illustrationNote } : {}),
@@ -429,22 +430,35 @@ describe("the step refuses rather than illustrating the wrong argument", () => {
     await script();
     const ctx = { ...ctxFor(), profile: "I am a different reader" };
     expect(await shownFor(() => STEPS.illustrated.run(ctx, store, nullCheckpointStore()))).toMatch(
-      /different reader profile/,
+      /before your reader profile said what it says now/,
     );
     expect(briefCalls).toBe(0);
   });
 
-  it("does not refuse a Sketch drawn deliberately without a profile", async () => {
-    /* The negative control for the case above, and it is the three-state rule
-       rather than an equality: `null` means *written deliberately without a
-       profile*, which is not a mismatch with anything. Refusing it would make
-       every unprofiled Sketch unpaintable by a reader who has a profile — which
-       is most of them. src/profile.ts § `profileIsStale`. */
+  it("refuses a Sketch drawn when the reader had no profile, once they have one", async () => {
+    /* Greg, 2026-10-05: "B treat a first profile as a change". Until then this
+       test said the opposite — `null` meant *written deliberately without a
+       profile* and was a mismatch with nothing. It has to be refused now for
+       the loop's reason above: the route calls such a picture
+       `profileChanged`, and a paint that inherited `null` again would be
+       offered again. The panel's one press redraws the Sketch first
+       (§ "redraws a Sketch drawn before the reader had a profile" below).
+       src/profile.ts § `profileIsStale`. */
     writeSketch(sketchFixture());
     await script();
     const ctx = { ...ctxFor(), profile: "I am a reader with a profile" };
+    expect(await shownFor(() => STEPS.illustrated.run(ctx, store, nullCheckpointStore()))).toMatch(
+      /before your reader profile said what it says now/,
+    );
+    expect(briefCalls).toBe(0);
+  });
+
+  it("does not refuse a Sketch drawn with no profile while the reader still has none", async () => {
+    /* The negative control for the two above: nothing on either side. */
+    writeSketch(sketchFixture());
+    await script();
     await expect(
-      STEPS.illustrated.run(ctx, store, nullCheckpointStore()),
+      STEPS.illustrated.run(ctxFor(), store, nullCheckpointStore()),
     ).resolves.toBeTruthy();
   });
 
@@ -516,6 +530,25 @@ describe("what the store records when the illustrated step has run", () => {
     const written = result.parts?.illustrated as Illustrated | undefined;
     expect(written?.profileHash).toBe("abc123");
   });
+
+  it("preserves an absent Sketch profile stamp through painting and storage", async () => {
+    const { profileHash: _absent, ...legacy } = sketchFixture();
+    writeSketch(legacy as Sketch);
+    expect(await readSketch()).not.toHaveProperty("profileHash");
+    await script();
+    const ctx = { ...ctxFor(), profile: "I am a reader with a profile" };
+    const result = await STEPS.illustrated.run(ctx, store, nullCheckpointStore());
+    const illustrated = result.parts?.illustrated as Illustrated;
+    expect(illustrated).not.toHaveProperty("profileHash");
+    const stamp = await STEPS.illustrated.stamp?.(ctx, store);
+    expect(stamp).not.toHaveProperty("profileHash");
+    if (!stamp) throw new Error("no stamp for a usable legacy Sketch");
+    await store.write(SLUG, "illustrated", { illustrated }, stamp);
+    const saved = await store.read(SLUG, "illustrated", "illustrated");
+    expect(saved).not.toHaveProperty("profileHash");
+    expect(profileIsStale(saved?.profileHash, hashProfile(ctx.profile))).toBe(false);
+    expect(await stepIsDone(STEPS.illustrated, ctx, store)).toBe(true);
+  });
 });
 
 /* ------------------------------------------------------------- the bytes -- */
@@ -541,6 +574,83 @@ describe("the plates", () => {
     /* **And no bytes in the artefact.** Base64 here would be dragged along by
        every read of the revision that named the column. */
     expect(JSON.stringify(illustrated)).not.toMatch(/[A-Za-z0-9+/]{500}/);
+  });
+
+  /**
+   * **A Stop part-way through the plates hands back no product.**
+   *
+   * Since 2026-10-07 the queue keeps and publishes whatever a job's last step
+   * returns after a Stop (src/jobs.ts § `transitionAfter`), and this step is
+   * always a job's last. `drawPlates` already stops at the abort and says so
+   * (`IllustratedRun.cancelled`); returning that set would publish a half-painted
+   * illustration, stamped current, over the reader's last good one. So the step
+   * throws the abort instead, which is what the queue did with it before: the
+   * job ends `cancelled` and the published painting stays.
+   * docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md.
+   */
+  it("throws rather than return a half-painted set when the reader stops it between plates", async () => {
+    const stop = new AbortController();
+    const call = await import("../src/ai-call.js");
+    const images = await import("../src/illustrated-image.js");
+    const storeSpy = vi.spyOn(images, "storePlateImage");
+    const spy = vi.spyOn(call, "openRouterImage").mockImplementation(() => {
+      plateCalls++;
+      /* The reader presses Stop while the first plate is being drawn, and the
+         plate arrives anyway. */
+      stop.abort();
+      return Promise.resolve({ image: PLATE, mediaType: "image/jpeg" } as Awaited<
+        ReturnType<typeof call.openRouterImage>
+      >);
+    });
+    try {
+      await script();
+      const before = plateCalls;
+      await expect(
+        STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore()),
+      ).rejects.toBeDefined();
+      expect(plateCalls - before, "the second plate is never asked for").toBe(1);
+      expect(storeSpy, "keep the paid first plate's bytes as before, even though the draft is discarded").toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+      storeSpy.mockRestore();
+    }
+  });
+
+  it.each([false, true])("a provider-cancelled set with Stop during storage=%s preserves the Stop rule", async (stopDuringStorage) => {
+    const stop = new AbortController();
+    const call = await import("../src/ai-call.js");
+    const images = await import("../src/illustrated-image.js");
+    const realStorePlateImage = images.storePlateImage;
+    let draws = 0;
+    const drawSpy = vi.spyOn(call, "openRouterImage").mockImplementation(async () => {
+      plateCalls++;
+      if (++draws === 2) throw new DOMException("provider timed out", "AbortError");
+      return { image: PLATE, mediaType: "image/jpeg" } as Awaited<ReturnType<typeof call.openRouterImage>>;
+    });
+    let stored = 0;
+    const storeSpy = vi.spyOn(images, "storePlateImage").mockImplementation(async (...args) => {
+      if (stopDuringStorage) stop.abort();
+      const image = await realStorePlateImage(...args);
+      stored++;
+      return image;
+    });
+    try {
+      await script();
+      const result = STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore());
+      if (stopDuringStorage) {
+        await expect(result).rejects.toBeDefined();
+      } else {
+        const product = await result;
+        expect(product.discardOnAbort, "the runner must also check any later Stop before commit").toBe(true);
+        const partial = product.parts?.illustrated as Illustrated;
+        expect(partial.plates.filter((plate) => plate.image)).toHaveLength(1);
+      }
+      expect(draws).toBe(2);
+      expect(stored).toBe(1);
+    } finally {
+      drawSpy.mockRestore();
+      storeSpy.mockRestore();
+    }
   });
 
   it("records the failure on the plate rather than throwing the run away", async () => {
@@ -812,9 +922,9 @@ describe("one press that draws and then paints", () => {
 
   it("redraws a Sketch the panel calls profile-changed", async () => {
     /* **The reader has a profile now, and it is not the one the Sketch was
-       drawn for.** Both halves of that matter: `profileIsStale` answers false
-       when *either* side is null (src/profile.ts), so a case with no current
-       profile is a case the panel never shows this refusal for. */
+       drawn for.** `profileIsStale` answers false when the reader has none
+       now (src/profile.ts), so a case with no current profile is a case the
+       panel never shows this refusal for. */
     const ctx = { ...ctxFor(), profile: "I read for the evidence, not the history." };
     const sketch = {
       ...(await stampedNow(ctx)),
@@ -840,6 +950,22 @@ describe("one press that draws and then paints", () => {
     /* And it is the profile that made it re-run, not the article. */
     const { blocks, tree, meta } = await articleNow();
     expect(sketchIsStale(sketch, blocks, tree, meta), "the article moved too").toBe(false);
+  });
+
+  it("redraws a Sketch drawn before the reader had a profile", async () => {
+    /* The first-profile case (Greg, 2026-10-05). The panel now calls this
+       Sketch profile-changed, so the same press must redraw it: were the
+       Sketch half to skip, the painting would inherit `null` and the step
+       would refuse it, every time. */
+    const ctx = { ...ctxFor(), profile: "I read for the evidence, not the history." };
+    const sketch = { ...(await stampedNow(ctx)), profileHash: null } as Sketch;
+    writeSketch(sketch);
+    expect((await store.read(SLUG, "sketch", "sketch"))?.profileHash).toBeNull();
+    expect(profileIsStale(sketch.profileHash, hashProfile(ctx.profile))).toBe(true);
+    expect(
+      await stepIsDone(STEPS.sketch, ctx, store),
+      "the Sketch half would skip — and the paint would be refused for ever",
+    ).toBe(false);
   });
 
   /**

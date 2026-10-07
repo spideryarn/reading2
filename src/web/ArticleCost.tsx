@@ -28,8 +28,10 @@ import {
   formatSpendNanos,
 } from "../admin.js";
 import { CARD } from "./card.js";
+import { taskOf } from "../cost-cube.js";
 import { currentStepName } from "../step-order.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 export type ArticleCostLoad =
   | { kind: "loading" }
@@ -39,12 +41,11 @@ export type ArticleCostLoad =
 /** What a line is called: the pipeline step for step work, the job otherwise. */
 export function lineName(line: ArticleCostLine): string {
   // The append-only ledger keeps old names; only their presentation changes.
-  const step = line.stepName === null ? null : currentStepName(line.stepName);
+  const name = taskOf(line);
   const job = currentStepName(line.job);
-  const name = step ?? job;
   /* Historical labels calls ran inside the structure step. Keep that detail
      so the two kinds of calls remain distinguishable. */
-  const detail = step && job !== step ? ` · ${job}` : "";
+  const detail = line.stepName && job !== name ? ` · ${job}` : "";
   return `${name.replaceAll("_", " ")}${detail.replaceAll("_", " ")}`;
 }
 
@@ -75,7 +76,9 @@ export function useArticleCost(slug: string): ArticleCostLoad {
         const cost = await readJson<ArticleCost>(res);
         if (live) setState({ slug, load: { kind: "ready", cost } });
       } catch (e) {
-        if (live) setState({ slug, load: { kind: "failed", message: (e as Error).message } });
+        /* The server's refusal passes through; a lost connection or a bug is
+           said in our words, not its own (lib/describe-failure.ts). */
+        if (live) setState({ slug, load: { kind: "failed", message: describeFetchFailure(e as Error) } });
       }
     })();
     return () => {
@@ -169,7 +172,11 @@ function CostTable({ cost }: { cost: ArticleCost }) {
                 <th className="tw:py-1 tw:pr-3 tw:font-normal">Work</th>
                 <th className="tw:py-1 tw:pr-3 tw:font-normal">Kind</th>
                 <th className="tw:py-1 tw:pr-3 tw:text-right tw:font-normal">Calls</th>
-                <th className="tw:py-1 tw:text-right tw:font-normal">Cost</th>
+                {/* "Total", because "Calls, Cost" can be read as so many calls
+                    at so much each, and Greg asked for a total-cost column
+                    here (2026-10-06, spya-h2dzab). Kept on one line:
+                    at 390px the two words broke over two. */}
+                <th className="tw:py-1 tw:text-right tw:font-normal tw:whitespace-nowrap">Total cost</th>
               </tr>
             </thead>
             <tbody>

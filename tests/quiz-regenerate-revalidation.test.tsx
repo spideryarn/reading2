@@ -30,7 +30,7 @@ vi.mock("../src/web/useJobs.js", () => ({
 }));
 vi.mock("../src/web/useAutoRun.js", () => ({ useAutoRun: () => {} }));
 vi.mock("../src/web/useDictationField.js", () => ({
-  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, toggle: () => {} }),
+  useDictationField: () => ({ dictation: { supported: false }, readOnly: false, busy: false, toggle: () => {} }),
 }));
 vi.mock("../src/web/DictationStrip.js", () => ({
   DictationButton: () => null, DictationStrip: () => null,
@@ -40,7 +40,7 @@ const batch = (batchId: string) => ({
   batchId, slug: "a-piece", profileHash: "the-old-profile", questions: [],
 }) as unknown as Quiz;
 const response = (batchId: string, stale = false): Response => Response.json({
-  quiz: batch(batchId), stale, outdated: false, profileChanged: batchId === "old-batch",
+  quiz: batch(batchId), stale, outdated: false, profileChanged: batchId === "old-batch", attempts: [],
 } satisfies QuizResponse);
 let openingStale = false;
 let nextRead: Promise<Response> | null = null;
@@ -54,7 +54,11 @@ vi.mock("../src/web/lib/api.js", () => ({
     return nextRead ?? response("old-batch", openingStale);
   },
   readJson: async (res: Response) => {
-    if (!res.ok) throw new Error("Couldn't read the questions.");
+    /* Declared for a reader, as the real `readJson`'s `HttpError` is. */
+    if (!res.ok) {
+      const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
+      throw new ReaderFacingError("Couldn't read the questions.");
+    }
     return res.json();
   },
 }));
@@ -139,7 +143,8 @@ it.each([false, true])("holds a completed rewrite across a delayed and failed GE
 });
 
 /* GPT Sol's remaining P1 on 261002f: the band unmounts on Recall or any other
-   mode while the paid job runs on. The hold lives in the read, so it survives;
+   mode while the paid job runs on. The hold lives outside the band (it was on the read until
+   2026-10-04; src/web/rewrite-hold.ts now), so it survives;
    docs/postmortems/261002f-a-band-local-hold-cannot-protect-a-job-that-outlives-the-band.md. */
 it("keeps the hold when the band is closed and reopened while the replacement is still being read", async () => {
   await paint();
@@ -179,9 +184,15 @@ it("lets go when the rewrite failed while the band was closed, once a read shows
   showBand = false;
   await paint();
   /* The job errored while away: a fresh mount's `useStepJob` does not know it
-     was ours, so `failed` stays null. No job running and a read that lands
-     with the old batch is the server saying nothing replaced it. */
-  jobs = [];
+     was ours, so `failed` stays null. The job listed as over and a read that
+     lands with the old batch is the server saying nothing replaced it.
+
+     The list carries the failed job, as the real one does (`KEEP_FINISHED`,
+     src/jobs.ts). It was `[]` here until 2026-10-04, and an empty list is also
+     what a job not polled yet looks like — which is how a band reopened before
+     the poll released the hold on a rewrite that was about to run (F9,
+     rewrite-hold.ts § Why the hold carries the job's id). */
+  jobs = [job("error")];
   showBand = true;
   await paint();
   await act(async () => {});

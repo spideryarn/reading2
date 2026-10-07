@@ -36,7 +36,7 @@ import {
   isStructural,
 } from "../src/block-policy.js";
 import { splitIntoBlocks } from "../src/blocks.js";
-import { deriveLibraryScalars } from "../src/library-scalars.js";
+import { deriveLibraryScalars, describeArticle } from "../src/library-scalars.js";
 import { articleStats } from "../src/web/stats.js";
 import { canonicaliseNotes } from "../src/notes.js";
 import { readingMinutes } from "../src/reading-time.js";
@@ -253,6 +253,34 @@ describe("the shelf card and the masthead", () => {
     expect(masthead.minutes).toBe(readingMinutes(2300));
   });
 
+  it("both multiply the minutes by the same rating, to a number that is not the flat one", () => {
+    /* By hand (plan 261005j): 2,300 body words is 9.66 minutes flat, shown as
+       10; language 5 and ideas 5 multiply to 1.404, so 13.6, shown as 14. Two
+       sides that both ignored the rating would agree on 10. */
+    const meta = {
+      slug: "s",
+      title: "T",
+      readingDifficulty: { language: 5 as const, ideas: 5 as const, reason: "Dense." },
+    };
+    const card = describeArticle({
+      slug: "s",
+      revisionId: "r1",
+      meta,
+      scalars: deriveLibraryScalars({ blocks: withNotes, tree }),
+      comments: 0,
+      addedAt: "2026-10-05T00:00:00.000Z",
+      sourceReusable: true,
+      tags: [],
+    });
+    const masthead = articleStats({
+      slug: "s", meta, blocks: withNotes, tree,
+    } as unknown as Parameters<typeof articleStats>[0]);
+
+    expect(card.minutes).toBe(14);
+    expect(masthead.minutes).toBe(14);
+    expect(masthead.difficulty).toEqual(meta.readingDifficulty);
+  });
+
   it("agree with each other, whatever the article is made of", () => {
     /* The property, not the number: two implementations of one derivation is
        the divergence this pair of modules exists to make impossible. */
@@ -352,13 +380,14 @@ describe("the clock, over the real corpus", () => {
    * every block's words, which is what both callers summed until now.
    */
   const cases: { fixture: string; before: number; after: number }[] = [
-    { fixture: "gwern", before: 73, after: 55 },
-    { fixture: "wiki_transformer", before: 50, after: 35 },
-    { fixture: "acx_footnotes", before: 28, after: 23 },
-    { fixture: "tufte", before: 10, after: 9 },
+    { fixture: "gwern", before: 71, after: 53 },
+    { fixture: "wiki_transformer", before: 48, after: 34 },
+    { fixture: "acx_footnotes", before: 27, after: 23 },
+    // Moved a minute (10 → 9) at 230 a minute; at 238 both sides round to 9.
+    { fixture: "tufte", before: 9, after: 9 },
     // The control, and the reason the other four are evidence: a fixture with
     // no notes must not move by a minute.
-    { fixture: "ar5iv", before: 24, after: 24 },
+    { fixture: "ar5iv", before: 23, after: 23 },
   ];
 
   for (const { fixture, before, after } of cases) {

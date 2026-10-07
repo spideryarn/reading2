@@ -56,8 +56,18 @@ import { createElement, Fragment, useMemo, type ReactElement, type ReactNode } f
 import { fromMarkdown } from "mdast-util-from-markdown";
 import type { Nodes, PhrasingContent, Root, RootContent, Text } from "mdast";
 import { BlockRef } from "./BlockRef.js";
+import { MAX_BLOCK_DEPTH } from "../citable.js";
+import { chipFor } from "./chat-commands.js";
 import { quotesBefore, splitCitations, splitLinks } from "./citations.js";
+import { CommandChip } from "./CommandChip.js";
+import type { CommandExecutor } from "./command-proposal.js";
 import type { JumpAim } from "./flash.js";
+import {
+  splitCommandTokens,
+  tokensOnOwnLine,
+  unfinishedTokenAt,
+  unsettledTokenLineAt,
+} from "../command-token.js";
 import type { BlockId } from "../types.js";
 import { hasCredentials, hostOf, isWebUrl } from "../urls.js";
 
@@ -101,6 +111,14 @@ interface Props {
    * can reach. Raised by a GPT Sol review, 2026-08-27.
    */
   links?: boolean;
+  /**
+   * Draw command tokens as buttons, pressed through this executor. **Absent by
+   * default**, and for `links`' reason: a button built from model output is
+   * allowed only where a prompt governs it (converse.ts § OFFERING AN ACTION)
+   * and a page has runners to give — chat, for the article's owner. Everywhere
+   * else a `[cmd:…]` is the characters the model wrote. CommandChip.tsx.
+   */
+  commands?: CommandExecutor | undefined;
   /** Class for the chip wrapper, so each band can size its own. */
   className?: string;
 }
@@ -110,6 +128,7 @@ interface Ctx {
   blocks: Map<string, string>;
   onJump(id: BlockId, aim?: JumpAim): void;
   links: boolean;
+  commands: CommandExecutor | undefined;
   className: string | undefined;
   /** The source, for drawing a node as the characters the model wrote. */
   source: string;
@@ -150,6 +169,7 @@ function Drawn({
   onJump,
   partial = false,
   links = false,
+  commands,
   className,
   flat,
 }: Props & { flat: boolean }): ReactElement {
@@ -162,6 +182,7 @@ function Drawn({
     blocks,
     onJump,
     links,
+    commands,
     className,
     source: text,
     tail: partial ? lastText(tree, text) : null,
@@ -182,14 +203,22 @@ function Drawn({
  */
 function lastText(tree: Root, source: string): Text | null {
   let last: Text | null = null;
-  const walk = (node: Nodes) => {
+  // Streaming inspects the whole tree, including blocks past the render cap.
+  // Keep that inspection off the call stack too.
+  const todo: Nodes[] = [tree];
+  for (let node = todo.pop(); node; node = todo.pop()) {
     if (node.type === "text") {
       if (!last || (node.position?.end.offset ?? 0) > (last.position?.end.offset ?? 0)) last = node;
-      return;
+      continue;
     }
-    if ("children" in node) for (const child of node.children) walk(child);
-  };
-  walk(tree);
+    // Reverse insertion preserves the old traversal's tie-breaking order.
+    if ("children" in node) {
+      for (let i = node.children.length - 1; i >= 0; i--) {
+        const child = node.children[i];
+        if (child) todo.push(child);
+      }
+    }
+  }
   /* **Only if it really is the end of the answer.** An answer whose last block
      is a code fence has its greatest-offset `text` node somewhere above it —
      that text has finished arriving, and suppressing a link in it left a
@@ -237,11 +266,14 @@ function sourceOf(node: Nodes, ctx: Ctx): string {
  * the shape of mistake a rewrite makes — the guard lived in the thing being
  * replaced rather than in the thing that needed it. GPT Sol, 2026-08-31.
  *
- * Twelve is past anything a model writes and nowhere near the stack.
- * `citableText` (src/citable.ts) stops at the same depth, so the server counts
- * citations in exactly the text the reader is shown chips in.
+ * Twelve is past anything a model writes and nowhere near the stack — the
+ * number is `MAX_BLOCK_DEPTH` in src/citable.ts, which says what counts as a
+ * level. `citableText` there stops where this does, so the server counts
+ * citations in exactly the text the reader is shown chips in; sharing the
+ * number is not what makes that true, and
+ * tests/chat-markdown-render.test.tsx § agrees at the depth cap is what checks it.
  */
-const MAX_DEPTH = 12;
+const MAX_DEPTH = MAX_BLOCK_DEPTH;
 
 /**
  * A run of blocks.
@@ -311,7 +343,7 @@ function drawBlock(node: RootContent, ctx: Ctx, flat: boolean, depth = 0): React
   // Past the cap nothing is structure — see MAX_DEPTH.
   if (depth >= MAX_DEPTH) return sourceOf(node, ctx);
   if (node.type === "paragraph") {
-    const inner = inline(node.children, ctx);
+    const inner = inline(node.children, ctx, false, true);
     /* In flat mode a paragraph is its own contents; the blank line between one
        paragraph and the next is `drawBlocks`'s, which `.quiz-reply`'s
        `pre-wrap` shows. */
@@ -335,9 +367,13 @@ function drawBlock(node: RootContent, ctx: Ctx, flat: boolean, depth = 0): React
     case "list":
       return drawList(node, ctx, depth);
     case "blockquote":
+      /* A quote is evidence the model is repeating, not its own offer. In
+         particular a fetched page may contain an exact token on its own line;
+         leaving the executor in scope would turn quoted hostile text into a
+         button. Links and citations still draw as before. */
       return (
         <blockquote className="fmt-quote">
-          {drawBlocks(node.children, ctx, false, depth + 1)}
+          {drawBlocks(node.children, { ...ctx, commands: undefined }, false, depth + 1)}
         </blockquote>
       );
     case "code":
@@ -378,7 +414,7 @@ function drawList(node: RootContent & { type: "list" }, ctx: Ctx, depth: number)
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
       <li key={`i${i}`}>
         {only?.type === "paragraph"
-          ? inline(only.children, ctx)
+          ? inline(only.children, ctx, false, true)
           : drawBlocks(item.children, ctx, false, depth + 1)}
       </li>
     );
@@ -392,18 +428,40 @@ function drawList(node: RootContent & { type: "list" }, ctx: Ctx, depth: number)
   );
 }
 
-/** The marks inside a block. `label` renders a link's own words — see `drawLink`. */
-function inline(nodes: PhrasingContent[], ctx: Ctx, label = false): ReactNode[] {
+/**
+ * **Whether a text node's first and last characters sit at a line's edge** —
+ * what a command token needs to know to be a button (src/command-token.ts §
+ * `tokensOnOwnLine`). Only a paragraph's own children can: a node inside a
+ * bold run, a heading or a link's label is never a line.
+ */
+interface Edges {
+  readonly starts: boolean;
+  readonly ends: boolean;
+}
+const MID_LINE: Edges = { starts: false, ends: false };
+
+/**
+ * The marks inside a block. `label` renders a link's own words — see
+ * `drawLink`. `lines` says these are a paragraph's own children, so the first,
+ * the last, and whatever sits beside a hard break is at a line's edge.
+ */
+function inline(nodes: PhrasingContent[], ctx: Ctx, label = false, lines = false): ReactNode[] {
+  const edge = (i: number): boolean => {
+    const beside = nodes[i];
+    return beside === undefined || beside.type === "break";
+  };
   return nodes.map((node, i) => (
     // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
-    <Fragment key={`p${i}`}>{drawPhrase(node, ctx, label)}</Fragment>
+    <Fragment key={`p${i}`}>
+      {drawPhrase(node, ctx, label, lines ? { starts: edge(i - 1), ends: edge(i + 1) } : MID_LINE)}
+    </Fragment>
   ));
 }
 
-function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean): ReactNode {
+function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean, edges: Edges): ReactNode {
   switch (node.type) {
     case "text":
-      return label ? node.value : leaf(node, ctx);
+      return label ? node.value : leaf(node, ctx, edges);
     case "strong":
       return <strong>{inline(node.children, ctx, label)}</strong>;
     case "emphasis":
@@ -433,15 +491,21 @@ function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean): ReactNode 
  * `splitCitations` matches a bare run of ids by *shape*, and
  * `https://example.com/notes/spya-k3m9qt` carries that shape inside its path.
  */
-function leaf(node: Text, ctx: Ctx): ReactNode {
-  if (!ctx.links) return cited(node.value, ctx);
-  return splitLinks(node.value, node === ctx.tail).map((run, i) =>
+function leaf(node: Text, ctx: Ctx, edges: Edges): ReactNode {
+  const tail = node === ctx.tail;
+  if (!ctx.links) return cited(node.value, ctx, edges, tail);
+  const runs = splitLinks(node.value, tail);
+  const last = runs.length - 1;
+  return runs.map((run, i) =>
     run.kind === "link" ? (
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
       <Fragment key={`l${i}`}>{anchor(run.text, run.url)}</Fragment>
     ) : (
       // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
-      <Fragment key={`t${i}`}>{cited(run.text, ctx)}</Fragment>
+      <Fragment key={`t${i}`}>
+        {/* A run beside a link is mid-line on that side, whatever the node is. */}
+        {cited(run.text, ctx, { starts: edges.starts && i === 0, ends: edges.ends && i === last }, tail && i === last)}
+      </Fragment>
     ),
   );
 }
@@ -502,7 +566,58 @@ function anchor(label: ReactNode, url: string): ReactElement {
 }
 
 /**
- * The citation chips and the prose between them — one link-free run of text.
+ * One link-free run of text: the command tokens in it, and the citations
+ * between them.
+ *
+ * **Tokens come out before citations, and the order is load-bearing** for the
+ * reason links come out before both: `[cmd:bookmark:spya-k3m9qt]` carries the
+ * shape of a block id, and citations-first would tear it into a chip and two
+ * scraps of syntax. `citableText` (src/citable.ts) blanks the same span, so the
+ * server's counters agree.
+ *
+ * A token is a button only where the caller handed in an executor, it stands
+ * **on a line of its own** (src/command-token.ts § `tokensOnOwnLine` — a token
+ * mid-sentence is one being talked about, not offered) **and** `chipFor`
+ * accepts it (chat-commands.ts). Otherwise it is the characters the model
+ * wrote, whole — an invalid token's id is still not a citation.
+ *
+ * `end` says this run is the tail of an answer still arriving. A half-arrived
+ * token there, or a complete one on the still-open final line, is left undrawn
+ * until a newline or the end of the stream settles what it is
+ * (src/command-token.ts § `unfinishedTokenAt`, `unsettledTokenLineAt`).
+ */
+function cited(text: string, ctx: Ctx, edges: Edges, end: boolean): ReactNode {
+  const commands = ctx.commands;
+  /* The current end of a stream is not an established line edge. Hold a
+     complete token-only final line as well as a half token: a later delta may
+     append prose and prove it was a quotation in the middle of a sentence.
+     A newline settles the line before the stream itself finishes. */
+  const openStreamLine = end && !/[\r\n][ \t]*$/.test(ctx.source);
+  let cut = openStreamLine && commands !== undefined ? unfinishedTokenAt(text) : -1;
+  if (cut === -1 && openStreamLine && commands !== undefined) {
+    cut = unsettledTokenLineAt(text, edges.starts);
+  }
+  const runs = splitCommandTokens(cut === -1 ? text : text.slice(0, cut));
+  const ownLine = tokensOnOwnLine(runs, edges.starts, edges.ends);
+  let token = 0;
+  return runs.map((run, i) =>
+    run.kind === "text" ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`r${i}`}>{citations(run.text, ctx)}</Fragment>
+    ) : ownLine[token++] === true &&
+      commands !== undefined &&
+      chipFor(run.raw, commands, ctx.blocks) !== null ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <CommandChip key={`k${i}`} raw={run.raw} commands={commands} blocks={ctx.blocks} />
+    ) : (
+      // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
+      <Fragment key={`k${i}`}>{run.raw}</Fragment>
+    ),
+  );
+}
+
+/**
+ * The citation chips and the prose between them — one run with no link and no token in it.
  *
  * **A chip carries the quotations of its own sentence**, so pressing it paints
  * those words in the block rather than the whole paragraph (a reader's report,
@@ -513,7 +628,7 @@ function anchor(label: ReactNode, url: string): ReactElement {
  * not say which of the two the words are from: each block paints what it has,
  * and one that has none washes whole, as before.
  */
-function cited(text: string, ctx: Ctx): ReactNode {
+function citations(text: string, ctx: Ctx): ReactNode {
   const segs = splitCitations(text, ctx.blocks);
   return segs.map((seg, i) => {
     if (seg.kind === "text") {
@@ -524,7 +639,7 @@ function cited(text: string, ctx: Ctx): ReactNode {
     const quotes = before?.kind === "text" ? quotesBefore(before.text) : [];
     return (
       <span
-        className={["cite", ctx.className].filter(Boolean).join(" ")}
+        className={["cite-chips", ctx.className].filter(Boolean).join(" ")}
         // biome-ignore lint/suspicious/noArrayIndexKey: one immutable answer, rebuilt whole
         key={`c${i}`}
       >

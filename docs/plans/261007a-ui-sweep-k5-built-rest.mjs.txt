@@ -1,0 +1,20 @@
+/* The other half of the built-stylesheet witness: every rule that does NOT
+   name a slider or order-row class, in cascade order, one per line. Two trees'
+   listings must be the same text. Comments are dropped by the build already.
+     node k5-built-rest.mjs <built.css> */
+import { readFileSync } from "node:fs";
+import postcss from "/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/node_modules/postcss/lib/postcss.mjs";
+
+const NAMES = /(gloss-gate|srch-gate|quotes-bar|dbt-bar|gloss-sort|quotes-rank|srch-sort)/;
+const root = postcss.parse(readFileSync(process.argv[2], "utf8"));
+const lines = [];
+root.walkRules((rule) => {
+  const keep = rule.selectors.filter((s) => !NAMES.test(s));
+  if (!keep.length) return;
+  const at = [];
+  for (let p = rule.parent; p && p.type !== "root"; p = p.parent) if (p.type === "atrule") at.unshift(`@${p.name} ${p.params}`);
+  const decls = [];
+  rule.each((d) => d.type === "decl" && decls.push(`${d.prop}:${d.value}${d.important ? "!important" : ""}`));
+  lines.push(`${at.join(" ")} | ${keep.join(",")} { ${decls.join(";")} }`);
+});
+console.log(lines.join("\n"));

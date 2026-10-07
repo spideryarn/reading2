@@ -1,48 +1,133 @@
-# Spideryarn is a private beta. None of it is meant to be listed yet — with one
-# deliberate hole, at the bottom of this file, for link previews.
+# Spideryarn's own pages may be listed by a search engine. Nothing a reader
+# put here may: no article, shelf, profile, admin page or API path.
+#
+# Greg, 2026-10-05, on our own pages: "yes definitely we want those to be
+# visible". On a shared article ever being listed: "no".
+#
+# The list of our own pages is src/site-pages.ts, and tests/site-pages.test.ts
+# holds this file to it, line by line. scripts/check-public-shell.ts fails a
+# deploy that serves anything else.
 #
 # Why this file exists at all: Vercel puts `x-robots-tag: noindex` on the
 # generated *.vercel.app addresses automatically and does NOT put it on a custom
-# domain. So the day spideryarn.com moved to this project (2026-08-27) the app
-# quietly became crawlable, having never been so before. See
-# docs/project/deployment.md.
+# domain. See docs/project/deployment.md.
 #
-# Note the pairing with the X-Robots-Tag header in vercel.json, and the trap in
-# it: a crawler that obeys the Disallow below never fetches a page, so it never
-# sees that header. The two do not reinforce each other. Disallow stops the
-# crawl; the header is for whatever crawls anyway. If you ever need a URL
-# *removed* from an index rather than merely uncrawled, you have to delete the
-# Disallow so the crawler can get far enough to read the noindex.
+# Two different things keep a page out of search, and they do not reinforce
+# each other:
+#
+#   Disallow, here        stops a crawler FETCHING a page. It does not stop the
+#                         address being LISTED: a search engine lists a linked
+#                         address it may not fetch, as a bare URL.
+#   noindex, on the page  stops it being listed. It is the `X-Robots-Tag` header
+#                         (vercel.json, on every path that is not one of our own
+#                         pages) and the matching <meta name="robots">. A
+#                         crawler has to be let in to read it.
+#
+# That is why `/read/` is allowed below. Our own pages link to shared articles,
+# so a crawler finds those addresses; it is let in so that it reads the noindex
+# on every one. What it is sent there is a title, a one-sentence description
+# and a link to the original. The article's text comes from /api/public/, which
+# stays shut. Taking the `Allow: /read/` line out again is the way back, and it
+# trades this for the bare listing.
+#
+# `/read/` covers the list of shared articles at /read/public too. It carries
+# the same noindex. `/login` is let in for the same reason: every one of our
+# pages links to it, and it carries the noindex. So is `/help/`: /help is the
+# contents of Help and links to every page under it, and each of those carries
+# the noindex too. (`/help/` does not match /help itself, which is one of our
+# own pages and has its two lines.) Nothing a crawler can reach links to
+# /profile, the admin pages or the API, and those stay shut.
+#
+# Each of our own pages has two lines. `$` ends the match, so `/pricing$` is
+# that page and nothing under it; `/pricing?` is the same page with a query
+# string on it, which is how a link from a newsletter arrives. `/assets/` is
+# the script and the stylesheet, which a crawler needs to draw a page at all,
+# and the five files after it are our own icons and card picture, which a
+# search result shows beside a page.
 
 User-agent: *
+Allow: /$
+Allow: /?
+Allow: /features$
+Allow: /features?
+Allow: /features/public-readable-sharing$
+Allow: /features/public-readable-sharing?
+Allow: /pricing$
+Allow: /pricing?
+Allow: /changelog$
+Allow: /changelog?
+Allow: /help$
+Allow: /help?
+Allow: /privacy$
+Allow: /privacy?
+Allow: /contact$
+Allow: /contact?
+Allow: /opensource$
+Allow: /opensource?
+Allow: /assets/
+Allow: /favicon.ico
+Allow: /favicon-32x32.png
+Allow: /favicon-16x16.png
+Allow: /apple-touch-icon.png
+Allow: /og-card.png
+Allow: /sitemap.xml
+Allow: /read/
+Allow: /login$
+Allow: /login?
+Allow: /help/
 Disallow: /
 
-# The hole, and it is only wide enough for a card.
+# The link-preview fetchers, which draw the card when a link is pasted.
 #
-# Pasting a shared /read/<slug> link into a chat should show its title and gist.
-# The services that draw those cards fetch the page like any other crawler, so a
-# blanket Disallow means no card — a bare URL, which is what slice 2 exists to
-# fix. Slack unfurls anyway (Slackbot honours only rules addressed to it by
-# name); Meta's crawler obeys the `*` group above, so before this it showed
-# nothing in WhatsApp, Messenger, Facebook or Instagram.
+# Pasting a link into a chat should show a title, a description and a picture.
+# The services that draw those cards fetch the page like any other crawler.
+# Slack unfurls anyway (its fetchers ignore robots.txt:
+# https://api.slack.com/robots); Meta's obeys this file.
 #
-# **This is not permission to index.** These two fetch a page to draw a card,
-# and neither puts it in a search result. Every response still carries
-# `X-Robots-Tag: noindex, nofollow` (vercel.json) and every page still carries
-# the matching `<meta name="robots">` (src/public/page-head.ts) — that pair is
-# what actually keeps this out of search, and it is untouched.
+# A bot obeys exactly one group, the most specific one naming it, and inherits
+# nothing from the `*` group above. So this group repeats what it needs and
+# carries its own Disallow. It is let in to:
+#   our own pages           the same lines as above
+#   /read/                  a shared article's page, for its title and description
+#   /og-card.png            our picture, on any card that has no other
+#   /api/public/asset/      a shared article's own first picture, from the copy
+#                           we host, when its card shows one. The route answers
+#                           only for an article that is shared at that moment.
 #
-# Nothing new is exposed. A head is composed only for an article whose owner set
-# `visibility = 'public'`, and anybody holding the link can already fetch it.
-# A private slug answers with the plain shell, to these two as to anyone else.
+# The list of names is also `PREVIEW_BOTS` in scripts/check-public-shell.ts, and
+# the platforms are named to authors on /features/public-readable-sharing.
 #
-# A bot obeys exactly one group — the most specific one naming it — so each
-# needs its own Disallow as well; they do not inherit the `*` group above.
+# **This is not permission to index.** These fetch a page to draw a card, and
+# none puts it in a search result.
 
 User-agent: facebookexternalhit
+User-agent: Twitterbot
+User-agent: LinkedInBot
+User-agent: WhatsApp
+User-agent: TelegramBot
+User-agent: Discordbot
+User-agent: Slackbot
+Allow: /$
+Allow: /?
+Allow: /features$
+Allow: /features?
+Allow: /features/public-readable-sharing$
+Allow: /features/public-readable-sharing?
+Allow: /pricing$
+Allow: /pricing?
+Allow: /changelog$
+Allow: /changelog?
+Allow: /help$
+Allow: /help?
+Allow: /privacy$
+Allow: /privacy?
+Allow: /contact$
+Allow: /contact?
+Allow: /opensource$
+Allow: /opensource?
 Allow: /read/
+Allow: /og-card.png
+Allow: /api/public/asset/
 Disallow: /
 
-User-agent: Twitterbot
-Allow: /read/
-Disallow: /
+Sitemap: https://www.spideryarn.com/sitemap.xml

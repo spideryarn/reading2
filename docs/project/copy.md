@@ -2,6 +2,18 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ Who is reading this](#who-is-reading-this) — the design constraint
+- [§ The four rules](#the-four-rules) — what happened, whose problem (`retry` / `ours` / `bug` / `blocked`), what next, never echo the provider
+- [§ The bracketed code](#the-bracketed-code) — code prefixes, stability, and which families live outside `src/messages.ts` (`mic-`, import states, boundaries, picker)
+- [§ Writing a new one](#writing-a-new-one) — adding a message: `CODE_KINDS` and `FROM_FACTORIES`
+- [§ The seam between the two audiences](#the-seam-between-the-two-audiences) — why a thrown `Error.message` never reaches the reader (`stageFailure`, `sayToReader`)
+- [§ The same seam in the browser](#the-same-seam-in-the-browser) — `describeFetchFailure`, `ReaderFacingError`, `PAGE_FAULT`
+- [§ The one control that cannot be undone](#the-words-on-the-one-control-that-cannot-be-undone) — *Delete permanently* wording
+- [§ What this does not cover yet](#what-this-does-not-cover-yet) — copy still written where it is used
+- [§ See also](#see-also)
+
 The words the reader sees, and the rules they follow. Mostly this is about
 **error messages**, because those are where writing badly costs the most: an
 empty state that reads oddly is a shrug, but a failure the reader misreads sends
@@ -126,7 +138,9 @@ dictation — the microphone, the recorder, or the transcription round trip; see
 [dictation.md](dictation.md). `db-` is this app's own database, and there are two
 of them: `[db-busy]` for a connection that
 dropped or a deadlock that lost, `[db-failed]` for a database that answered "no"
-and will answer "no" again. A reader quoting four characters, and whoever they
+and will answer "no" again. (A third, `[db-updating]`, is the minutes of a deploy
+in which the database holds a kind of conversation the running code has no name
+for yet: `CHAT_BEING_UPDATED`.) A reader quoting four characters, and whoever they
 quote them to, can tell those apart without looking anything up — which was the
 argument for not folding a failed write in with `[ai-unexpected]`.
 `jb-` is a job. `gl-` is the glossary's *Dig deeper* (was *Check the web*) refusing —
@@ -136,11 +150,21 @@ older version of the piece
 `up-` is the upload record — a file the server took delivery of and then refused — and `pick-` is
 the file picker in the browser refusing before anything is sent, which is the distinction that
 matters when somebody quotes one at you
-([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `pdf-` is a document the
+([ingest-queue.md § Uploading a PDF](ingest-queue.md#uploading-a-pdf)). `fetch-` is a document
+asked for by address that did not arrive: one code for each way the fetch can fail, from
+`[fetch-not-found]` and `[fetch-login]`, which are `blocked` and say what to do instead, to
+`[fetch-slow]` and `[fetch-unreachable]`, which are `retry`. The map is `fetchFailed` in
+`src/messages.ts`, total over the fetcher's own codes, and no sentence in it names the address, the
+host or the status
+([ingest-queue.md § The failures Retry is not offered under](ingest-queue.md#the-failures-retry-is-not-offered-under)).
+`[fetch-paper-missing]` is the one `fetch-` code outside that map: a paper source's PDF was not
+where the source usually keeps it
+([fetching.md § A paper that is not where the rule says](fetching.md#a-paper-that-is-not-where-the-rule-says)).
+`pdf-` is a document the
 pipeline could not read: too long, locked, or damaged. `web-` is the page in the reader's browser
 failing on its own account — `[web-unexpected]`, below — and `net-` is the browser not reaching the
-server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is a citation's *Find it* refusing
-(`[cite-resting]`, its daily allowance spent). `dig-` is *Dig deeper*'s shared half:
+server at all (`[net-down]`, `COULD_NOT_REACH`). `cite-` is Citations' *Dig deeper* refusing
+([citations.md](citations.md#dig-deeper-a-closer-look-at-one-work-on-demand)). `dig-` is *Dig deeper*'s shared half:
 `[dig-no-search]` when the web search it promises did not run, in any of its three modes, and
 `[dig-resting]` when the glossary's and comments' shared daily allowance is spent across every
 reader — Citations' own is `[cite-investigate-resting]`
@@ -205,14 +229,13 @@ vector art" would be a confident guess. What we can say is that we looked and co
 that there is an original to open — so the sentence says that, and *view the original* sits beside
 it.
 
-**The paragraph-label sentences are the fourth exception**, and they follow the import-state family
-exactly: *"Paragraph labels are still arriving."* / *"Paragraph labels aren't available."*, in
-[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts) beside the rule that decides which one applies,
-and **no bracketed code**. Not in `src/messages.ts` because that file is about failures a model call
-can return, and a label pass that has not finished yet is not one; no code because neither sentence
-is a problem the reader could report or act on. The `failed` one is where rule 4 bites hardest — a
-labels run fails for whatever reason a provider gives, and none of that reaches the reader or the
-DTO: the enum is the whole of what crosses.
+**The paragraph-label sentences were the fourth exception, and are gone.** *"Paragraph labels are
+still arriving."* / *"Paragraph labels aren't available."* followed the import-state family exactly
+(no bracketed code, because neither was a problem the reader could act on) until 2026-09-29, when
+they went with Hierarchy mode. The layer is now **withheld without a word**, by the one rule in
+[`src/web/nav-labels.ts`](../../src/web/nav-labels.ts). What stays true is rule 4's half: a labels
+run fails for whatever reason a provider gives, and none of that reaches the reader or the DTO —
+the enum is the whole of what crosses.
 [granularity-zoom.md § the paragraph outline](granularity-zoom.md#both-at-once-the-paragraph-outline-beside-the-prose).
 
 **The three error boundaries are the fifth exception.** `[render]` is the whole
@@ -227,7 +250,10 @@ rather than in `src/messages.ts`, because that file is about
 **failures a model call can return** and a component that threw while being drawn is not one; and
 none of them has anything to say to `worthRetrying`, which is why `[render]` says outright that
 reloading will probably hit it again, `[chunk]` says reloading usually fixes it — the commonest
-cause is a deploy replacing the assets under an open tab — and `[mode-render]` offers a retry the
+cause is a deploy replacing the assets under a copy of the app that was already open, which since
+2026-10-03 reloads by itself where it can and otherwise offers a Reload button, because the app
+opened from a home-screen icon has no other
+([`stale-shell.ts`](../../src/web/stale-shell.ts)) — and `[mode-render]` offers a retry the
 boundary itself performs. What
 they take from this section is the part about the reader: a code, last, in brackets. And, like every
 message here, **no `error.message`** — its text can be a provider's body, a model's output or the
@@ -433,7 +459,8 @@ working when somebody rewrote one — [`src/jobs.ts`](../../src/jobs.ts) §
 
 The client has one place that turns a caught failure into the sentence a reader
 sees — `describeFetchFailure` in [`lib/describe-failure.ts`](../../src/web/lib/describe-failure.ts),
-used by comments, chat, search, criteria, claims, the mirror and the source scan
+used by comments, chat, search, criteria, claims, the mirror, the source scan and,
+since 2026-10-04, the fourteen artefact read hooks (`tests/read-error-matrix.test.tsx`)
 — and until 2026-09-24 it had the pipeline's old shape: any `Error`'s message
 went through, on a comment's word that "an Error we threw ourselves already
 carries a real message from the server". On 2026-09-12 React's own *"Minified
@@ -463,6 +490,30 @@ reaches them as `PAGE_FAULT`. That is the cost, and the fix is one word at the
 throw site; `tests/describe-fetch-failure.test.ts` refuses one in any file that
 calls `describeFetchFailure`.
 
+**Eleven more catches joined on 2026-10-07**
+([261007a K4](../plans/261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)): the four
+kept-answer streams (Glossary's two, Citations' *Investigate*, the quiz's mark), Diagram's two
+reads, Skim's purpose box, *View the original*, the bar's tag commands, the admin's cost read and
+the export download. Three things that work settled:
+
+- **`readAnswerStream` says who each throw is for**: the `error` frame and a body that ends early
+  are `ReaderFacingError`s; a `done` frame its caller refuses is a `MalformedReply`, so the reader
+  gets `PAGE_FAULT` and not an invitation to pay for a second answer when the first was kept.
+- **A body read that is not `readJson` marks its own lost connection.** `res.blob()` dying
+  part-way rejects with a bare `TypeError`; *View the original* and the export mark it where it
+  happens, as `readJson` does.
+- **One code, last.** A control that appends its own code (`[source-open]`, `[export-failed]`) does
+  so only when the reason carries none, so a lost connection under Export ends `[net-down]`.
+
+**And a save that rejected is not a save that failed.** The server answers a PATCH after the
+write, so a reply lost on the way back rejects over a sentence that was stored. Skim's purpose box
+reads what is stored before it says which (`storedPurpose` in
+[`purpose.ts`](../../src/web/purpose.ts), a fresh server 200 only): there, it carries on; not
+there, *These words are not what is saved for this article…* with the reason (what the read
+showed, never "that was not saved": another tab can replace a save that landed); no answer,
+*Couldn't tell whether that was saved…*, with no code, as the delete control below says it. The other purpose boxes still say
+*Not saved — …* for every rejection.
+
 **The server's half, for streams.** The client trusts the server's two reader
 channels — the `{ error }` of a refused request and the `error` frame of a
 stream — as sentences for a reader, because that is what they are for. Until
@@ -485,8 +536,8 @@ Since 2026-09-24 a 5xx's message must pass the same `authoredSentence` test the
 streams use, or the reader gets `UNEXPECTED_FAILURE`; the error is in
 `logRequest`'s line either way. **Below 500 nothing changed**: a 4xx is a
 refusal a route chose to send, and many of those are deliberate uncoded
-sentences. The two deliberate uncoded 5xx sentences the audit found were given
-codes (`[jb-slot-held]`, `[cite-resting]`); a new one needs a code too, or it
+sentences. The surviving deliberate uncoded 5xx sentence the audit found was given
+`[jb-slot-held]`; the other went with the retired *Find it* route. A new one needs a code too, or it
 arrives as the generic sentence.
 [The plan](../plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md) § Stage 2c.
 

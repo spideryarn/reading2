@@ -147,6 +147,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-chat.js", "pgChatStore", "chat"],
     ["../src/store/pg-searches.js", "pgSearchStore", "searches"],
     ["../src/store/pg-comments.js", "pgCommentStore", "comments"],
+    ["../src/store/pg-share-link.js", "pgShareLinkStore", "share-link"],
     ["../src/store/pg-shelf.js", "pgShelfStore", "shelf"],
     ["../src/store/pg-shelf.js", "pgLibrarySearch", "library"],
     ["../src/store/pg-shelf-terms.js", "pgShelfTermsStore", "shelf-terms"],
@@ -162,6 +163,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-source-guesses.js", "pgSourceGuessStore", "source-guesses"],
     ["../src/store/pg-reading-time.js", "pgReadingTimeStore", "reading-time"],
     ["../src/store/pg-glossary-hidden.js", "pgGlossaryHiddenStore", "glossary-hidden"],
+    ["../src/store/pg-quiz-attempts.js", "pgQuizAttemptStore", "quiz-attempts"],
     ["../src/store/pg-admin.js", "pgAdminStore", "admin"],
     ["../src/store/pg-visibility.js", "pgVisibilityStore", "visibility"],
     ["../src/store/pg-high-power.js", "pgHighPowerStore", "high-power"],
@@ -350,6 +352,9 @@ describe("no Postgres store is selected without a guard", () => {
       "pgBibliographicStore",
       "pgChatStore",
       "pgCitationFindStore",
+      /* Reception's *Cited by* cache, 2026-10-04 (261004h): public bibliographic
+         rows, guarded because every adapter is. */
+      "pgCitationIndexStore",
       /* Citations' *Investigate*, 2026-09-30: its parameters are an answer
          about what somebody's article cites. */
       "pgCitationInvestigationStore",
@@ -377,12 +382,17 @@ describe("no Postgres store is selected without a guard", () => {
          bound parameters in `pgLinkSummaryStore` are a URL somebody hovered
          *and* a model's paragraph about what they are reading. */
       "pgLinkSummaryStore",
+      /* Kept quiz answers, 2026-10-05 (plan 261005b): its parameters are the
+         reader's answer and the mark it was given. */
+      "pgQuizAttemptStore",
       "pgReaderStore",
       "pgReadingTimeStore",
       "pgRealtimeSessionStore",
       "pgRefereeClaimsStore",
       "pgRefereeCriteriaStore",
       "pgSearchStore",
+      /* The private link, 2026-10-05: its parameters are the link's key. */
+      "pgShareLinkStore",
       "pgShelfStore",
       /* The shelf's filter topics, 2026-09-28: its parameters are the
          reader's own articles' phrases. */

@@ -1,0 +1,178 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "v3-3",
+  "promptVersion": "glossary/9",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [
+        "Lemoine"
+      ],
+      "background": "Former Google engineer who publicly claimed in 2022 that the company's LaMDA chatbot was conscious and had feelings, a claim that led to his dismissal."
+    },
+    {
+      "name": "LaMDA",
+      "kind": "work",
+      "aliases": [],
+      "background": "A Google conversational AI chatbot that engineer Blake Lemoine claimed showed signs of sentience in 2022."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [
+        "Hinton"
+      ],
+      "background": "A pioneering AI researcher and Nobel Prize winner, sometimes called a 'godfather of AI,' who has publicly stated he believes some AI systems may already be conscious."
+    },
+    {
+      "name": "David Chalmers",
+      "kind": "person",
+      "aliases": [
+        "Chalmers"
+      ],
+      "background": "Philosopher well known for work on consciousness, including the 'hard problem of consciousness' and the neural replacement thought experiment used to argue minds could run on non-biological substrates."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [
+        "Nagel"
+      ],
+      "background": "Philosopher famous for the formulation that an organism is conscious if there is 'something it is like' to be that organism, a widely used definition of subjective experience."
+    },
+    {
+      "name": "Anthropocentrism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The habit of judging everything by the human example, treating the human case as the definition of a property rather than just one instance of it. The author lists this as one of three biases that make people assume machines sharing human traits like language must also be conscious."
+    },
+    {
+      "name": "Human exceptionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The tendency to rank humans above all other beings, sometimes closer to gods than to animals. The author treats this as one of three psychological biases that push people toward believing smart machines must be conscious."
+    },
+    {
+      "name": "Anthropomorphism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Projecting human-like qualities such as feeling or understanding onto non-human things based on surface resemblance. The author names this as the third bias driving overattribution of consciousness to AI."
+    },
+    {
+      "name": "Computational functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The assumption that running the right kind of computation or information processing is enough, by itself, to produce consciousness. The author argues this assumption is widely taken for granted rather than defended, and may be false."
+    },
+    {
+      "name": "Turing machine",
+      "kind": "concept",
+      "aliases": [
+        "universal Turing machine",
+        "Turing world",
+        "Turing computation"
+      ],
+      "senseHere": "An abstract device, formalized by Alan Turing, that manipulates symbols step by step according to fixed rules; a universal version can simulate any such machine, which is why software can run on many different hardwares. The author uses 'Turing world' to mean the view that brains are just such symbol-processing machines made of neurons instead of silicon, which he argues badly underestimates real biology."
+    },
+    {
+      "name": "Turing complete",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Describes a system capable, in principle, of carrying out any computation a universal Turing machine could, given enough memory and time. The author notes that simple artificial neuron networks, once given a memory tape, have this property."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A living system's continuous process of maintaining and regenerating itself and the conditions for its own existence. The author treats this self-producing activity as a defining feature of life that resists being reduced to abstract computation."
+    },
+    {
+      "name": "Neural replacement thought experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "senseHere": "A thought experiment, associated with David Chalmers, imagining brain parts swapped one by one for silicon equivalents that behave identically, used to argue consciousness must be substrate-independent. The author argues this fails because no silicon part could truly replicate everything a biological neuron does, such as clearing its own metabolic waste."
+    },
+    {
+      "name": "Mortal computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A proposed form of computing, introduced by Geoffrey Hinton, where the program is inseparably tied to its specific physical hardware, so it effectively 'dies' if that hardware is destroyed. The author cites it as an example of computation pulled closer to its material basis than ordinary software."
+    },
+    {
+      "name": "4E cognitive science",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A family of approaches holding that mind depends on being embodied, embedded, enactive and extended into the world, not just on internal computation. The author cites this tradition as rejecting the idea that mind can be fully captured by algorithms."
+    },
+    {
+      "name": "Biological naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The view that being alive, in the biological sense, is necessary (though maybe not sufficient) for consciousness to exist. The author takes this position seriously, noting every agreed-conscious being is also a living organism."
+    },
+    {
+      "name": "John Searle",
+      "kind": "person",
+      "aliases": [
+        "Searle"
+      ],
+      "background": "American philosopher known for the 'Chinese Room' argument against machine understanding and for coining the term biological naturalism about consciousness."
+    },
+    {
+      "name": "Predictive processing",
+      "kind": "concept",
+      "aliases": [
+        "controlled hallucination"
+      ],
+      "senseHere": "A theory that the brain constantly generates predictions about the causes of its sensory input and treats incoming signals mainly as corrections to those predictions, rather than passively reading the world off the senses. The author calls conscious experience built this way a 'controlled hallucination,' continuously checked against incoming signals."
+    },
+    {
+      "name": "Interoception",
+      "kind": "term",
+      "aliases": [
+        "interoceptive inference"
+      ],
+      "senseHere": "The perception of the body's own internal physiological state, such as heart rate or oxygen levels, from within. The author ties this kind of perception to feelings of emotion and mood as the brain predicts and regulates bodily condition."
+    },
+    {
+      "name": "Simulation hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea, associated with Nick Bostrom, that our entire reality might itself be a computer simulation run by a future civilization. The author shows this idea secretly assumes computational functionalism is true, since it requires that a simulated brain would actually be conscious."
+    },
+    {
+      "name": "Nick Bostrom",
+      "kind": "person",
+      "aliases": [
+        "Bostrom"
+      ],
+      "background": "Philosopher known for arguing we may statistically be more likely to be living inside a simulation than in original, 'base' reality."
+    },
+    {
+      "name": "Cerebral organoids",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Small brain-like structures grown in labs from human stem cells. The author suggests these pose a more plausible risk of accidentally creating real consciousness than today's AI language models do."
+    },
+    {
+      "name": "Müller-Lyer illusion",
+      "kind": "term",
+      "aliases": [],
+      "background": "A classic visual illusion in which two lines of equal length appear different because of arrowhead-like fins added to their ends, an illusion that persists even once you know the lines are equal."
+    },
+    {
+      "name": "Garland test",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A test, named after the scene in 'Ex Machina' written by Alex Garland, for whether a human can still feel a machine is conscious after being shown explicitly that it is a machine. The author stresses this tests human persuasion, not actual machine consciousness."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 /**
- * **The wall.** Whether this reader may add another article, asked at the two
- * routes that add one, and the slot given back when no job comes of it.
+ * **The wall.** Whether this reader may spend points on an ingest or upgrade,
+ * and the slot given back when no job comes of it.
  *
  * The ledger underneath is src/store/pg-billing.ts; this is the half that knows
  * about HTTP, about Stripe, and about which requests spend money.
@@ -15,8 +15,7 @@
  * away — a re-run's job carries a URL, filled in from the article's own metadata.
  * Only the route still knows whether the reader asked for a **new** ingest.
  *
- * So there are exactly three admitting call sites, and all three are in
- * src/routes.ts:
+ * For a full ingest, the admitting paths in src/routes.ts are:
  *
  * | | |
  * |---|---|
@@ -25,6 +24,9 @@
  * | `POST /api/jobs/:id/retry` of a job that **carried** a slot | reserves |
  * | `POST /api/jobs {slug, steps}` | free — a re-run |
  * | `POST /api/jobs/:id/retry` of a job that carried none | free |
+ *
+ * Minimal papers and upgrades use `withMinimalSlot` and `withUpgradeSlot`;
+ * `withRetrySlot` preserves the original reservation's kind when retrying.
  *
  * The retry route is a second front door: it goes straight to `retryJob` →
  * `enqueue()` and never passes through the `POST /api/jobs` handler, so a check
@@ -73,10 +75,8 @@
  * Quota is a Postgres feature (docs/project/billing.md § *Billing is a Postgres
  * feature*): the settlement joins the Postgres publish transaction, which has no
  * filesystem counterpart, and a second ledger would be two implementations of
- * one count. Under the filesystem store every function here is inert — it admits
- * without reserving, and nothing it would have called is reached. That cannot
- * leak into production, because src/store/index.ts refuses to boot there on a
- * filesystem store.
+ * one count. The filesystem store, which went on 2026-09-05, was the case in
+ * which every function here was inert.
  */
 
 import { isAdmin } from "../admin.js";
@@ -100,7 +100,7 @@ import {
   runUnderBillingLock,
   switchOnHighPower,
 } from "../store/pg-billing.js";
-import type { HighPowerSwitch, InLock, MinimalRefused, Refused, Stale } from "../store/pg-billing.js";
+import type { InLock, MinimalRefused, Refused, Stale } from "../store/pg-billing.js";
 import { ingestProvenanceOf } from "../store/pg-jobs.js";
 import { syncSubscriptionFromStripe } from "./sync.js";
 
@@ -109,7 +109,7 @@ const logger = log("store");
 /**
  * The slot, shaped to be spread straight into an `EnqueueRequest`.
  *
- * **Empty whenever nothing was reserved** — a filesystem store, an
+ * **Empty whenever nothing was reserved** — an
  * administrator, a request that was never a new ingest — so the caller has one
  * expression rather than a branch, and cannot forget to carry it. An empty one
  * leaves `jobs.ingest_event_id` null, which is what "spends no quota" is.
@@ -486,7 +486,7 @@ export async function refuseUploadWithoutQuota(ownerId: OwnerId): Promise<void> 
  * throw what the reader should see — docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
  *
  * `switchOnHighPower` (src/store/pg-billing.ts) is the transaction; this is the
- * policy around it, shaped like `admitIngest`: a stale entitlement resyncs from
+ * policy around it, `admitOrResync` like `admitIngest`: a stale entitlement resyncs from
  * Stripe once, *after* the transaction has committed, and asks again; still
  * stale is a 503 rather than a guess. A refusal is a 402 of its own
  * (`highPowerNoRoom`), with no sharing offer — see that function.
@@ -505,16 +505,12 @@ export async function chargeAndSwitchOnHighPower(
       "the administrator's High-powered AI is never charged; use the store's switchOnForAdmin",
     );
   }
-  let answer: HighPowerSwitch = await switchOnHighPower(ownerId, slug);
-  if (answer.kind === "stale") {
-    answer =
-      (await resyncAndRetry(
-        ownerId,
-        answer.customerId,
-        deps.sync ?? syncSubscriptionFromStripe,
-        () => switchOnHighPower(ownerId, slug),
-      )) ?? answer;
-  }
+  const answer = await admitOrResync(
+    ownerId,
+    () => switchOnHighPower(ownerId, slug),
+    deps,
+    "High-powered AI",
+  );
   switch (answer.kind) {
     case "on":
       if (answer.charged) {
@@ -534,12 +530,6 @@ export async function chargeAndSwitchOnHighPower(
           answer.entitlement.tier === "paid" ? { resetAt: answer.entitlement.periodEnd } : {},
         ).message,
       );
-    case "stale":
-      logger.error(
-        { ownerId, subscriptionId: answer.subscriptionId },
-        "refusing High-powered AI: the stored subscription period does not contain now, after a resync",
-      );
-      throw httpError(503, BILLING_NOT_AVAILABLE.message);
     default: {
       const never: never = answer;
       throw new Error(`unhandled High-powered AI answer ${JSON.stringify(never)}`);

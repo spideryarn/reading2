@@ -7,7 +7,7 @@ shrinks a security problem to nothing. It doesn't, because a reader is targeted 
 the app at somebody else's article. "Don't open untrusted documents" was never available as a
 mitigation: opening them is the product.
 
-[security.md](security.md) counts four untrusted parties, and it is worth being able to name them
+[security.md](security.md) counts six untrusted parties, and it is worth being able to name them
 before you touch anything:
 
 1. **The content** — a stranger's HTML, or a stranger's PDF, rendered into our own origin.
@@ -21,9 +21,13 @@ before you touch anything:
    2025. [`src/injection-scan.ts`](../../src/injection-scan.ts) looks for it in the raw source before
    any model call, and [security.md § the manuscript](security.md#hidden-instructions) says what it
    cannot see — starting with PDFs, which it does not read.
+6. **The bibliographic registries** — Crossref, DataCite and OpenAlex send titles, authors and
+   venues that end up on the page. Rendered as text only, and every link is built by us from an
+   identifier. Lower risk than the five above (Greg, 2026-10-04: *"probably they're slightly lower
+   risk"*). [security.md § registries](security.md#registries).
 
-Whoever signs in is a fifth party and is *not* untrusted. **There is no allowlist** — `isAllowed()`
-returns true for anybody Supabase will vouch for, which is Greg's call and an accepted risk — and
+Whoever signs in is a seventh party and is *not* untrusted. **There is no allowlist** — `requireUser`
+admits anybody Supabase will vouch for, which is Greg's call and an accepted risk — and
 **every reader gets their own shelf**, which is a separate guarantee that had not been built when
 that risk was accepted. [auth.md](auth.md) has both halves, and the contradiction between them that
 stood until 2026-08-27.
@@ -31,6 +35,13 @@ stood until 2026-08-27.
 **This file is the map; [security.md](security.md) is the territory** — a long deep-dive with the
 payload tables, the reasoning behind every policy line, and the honest gap list. Open it when you are
 changing a defence; read this one when you want to know which defence you are standing on.
+
+## In this doc
+
+- [§ The one habit](#the-one-habit) — the rule to apply when no table row covers what you are doing
+- [§ The docs](#the-docs) — which security doc to open: the deep dive, auth, admin, billing
+- [§ Where the defences physically live](#where-the-defences-physically-live) — the file that enforces a given boundary, before you render, route, fetch or read on a stranger's behalf
+- [§ The fleet dashboard, which is a different product on the same box](#the-fleet-dashboard-which-is-a-different-product-on-the-same-box) — touching the dashboard or anything else served from the box
 
 ## The one habit
 
@@ -49,7 +60,9 @@ A shallow path-traversal probe that lands on the fixture article looks exactly l
 - **[auth.md](auth.md)** — the gate. Why auth here is about an open proxy and an open wallet rather
   than user accounts, why Supabase Auth won, the four things to know before touching it (a 401 is
   not "the session is gone"; JWKS unreachable is a 503), **whose data is whose** now the shelf is no
-  longer shared, and the one test that has to exist.
+  longer shared, and the one test that has to exist. And the browser half of that last one, for two
+  accounts in one browser:
+  [§ A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another).
 - **[admin.md](admin.md)** — the one request that reads across owners, and how narrow the exception
   is: one route, one path prefix, one address. Which of its three refusals is a gate and which two
   are courtesies, why the check is on the prefix rather than the route, and what the page
@@ -89,12 +102,13 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
 | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
-| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, and `isAllowed` |
+| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser` |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) + [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where a sign-in returns the reader to: same-origin only (no `//evil.example`), never the callback itself, ten minutes at most, and **forgotten on every callback failure** — AuthCallback has one `fail()` exit, the only caller of `setError`, and a test pins that ([261001i](../plans/261001i-password-reset.md)). The callback's own address is always the bare `/auth/callback`, so a one-time code cannot ride into another URL ([auth.md](auth.md), point 4) |
-| [`src/store/pg.ts`](../../src/store/pg.ts) | `ownedSlug()` — keeps one reader's shelf out of another's |
+| [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — every request is bound to the reader the tab held as it was made, and is not sent with a token known to be another reader's (`NotThisReader`). The server cannot see this one: reader B's token on reader A's words is a valid request. [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another) |
+| [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts) (re-exported from `pg.ts`) | `ownedSlug()` — keeps one reader's shelf out of another's |
 | [`src/asset-delivery.ts`](../../src/asset-delivery.ts) | `storedAssetFor()` — **the storage key is rebuilt from this article's own manifest entry, never from the caller's string.** The bucket is content-addressed and shared by every article and every reader, so a route that concatenated a caller's hash into a key would be an arbitrary-object read. A hash absent from this article's manifest is a 404 **even for its owner**. Both `GET /api/asset/…` and its public twin go through it. See below |
 | [`src/db/ssl.ts`](../../src/db/ssl.ts) | `sslDecisionFor` — **the database connection verifies Supabase's certificate or does not happen.** Against the remote there is no unverified answer: a missing CA, or a TLS key in `DATABASE_URL` that `pg` would let override ours (`?sslmode=no-verify` turned checking off while we said "verified"), is a thrown error saying what to fix. Local is untouched. Every pool and script goes through it. [security.md § verified or refused](security.md#database-tls) |
-| [`src/fetch.ts`](../../src/fetch.ts) | scheme allowlist, `isBlockedAddress`, redirect limit, size cap |
+| [`src/fetch.ts`](../../src/fetch.ts) | scheme allowlist, `isBlockedAddress`, redirect limit, size cap — 50 MiB, the upload's own `MAX_UPLOAD_BYTES`, counted off the stream and stopped on the first chunk over by [`src/read-capped.ts`](../../src/read-capped.ts), which the store's read shares. [fetching.md § Size](fetching.md#size-and-the-header-that-lies-about-it) |
 | [`src/ingest.ts`](../../src/ingest.ts) | `normaliseUrl` — refuses literal private and loopback hosts before queueing |
 | [`src/chat-tools.ts`](../../src/chat-tools.ts) | `isSlug` on the model's slug, URL-length cap on the model's URL |
 | [`src/urls.ts`](../../src/urls.ts) | `isWebUrl` — what model output must pass to become an `href`; `carriesCredential` — what may not be written into an ownerless cache; `requestTarget` — what a GET actually asks for, and never `urlKey` |
@@ -104,6 +118,9 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/public/routes.ts`](../../src/public/routes.ts) | **the one namespace with no gate in front of it** — dispatched before `requireUser`, read-methods only, no owner ever set. See below |
 | [`src/public/dto.ts`](../../src/public/dto.ts) | **the allowlist, as code** — every key a stranger receives, constructed rather than filtered. See below |
 | [`src/store/public-slug.ts`](../../src/store/public-slug.ts) | `publicSlug()` — slug **and** `visibility = 'public'`, the one ownerless *lookup* |
+| [`src/store/link-shared-slug.ts`](../../src/store/link-shared-slug.ts) | `linkSharedSlug()` — slug **and** `share_token = ?`, the lookup for somebody holding a private link's key. Its own leaf, never OR-ed into `publicSlug`. See below |
+| [`src/store/public-access.ts`](../../src/store/public-access.ts) | `publicAccessWhere()` — the one place the two ownerless lookups meet: public, or *public or this key*. Every read in `public-reader.ts` takes it; the listing does not import it |
+| [`src/share-key.ts`](../../src/share-key.ts) | `parseShareKey()` — what counts as a key (22 base64url characters), so nothing else reaches a query or a request; `withoutShareKey()` — the key taken off an address before it is stored or sent |
 | [`src/store/public-library.ts`](../../src/store/public-library.ts) | `publicLibraryQuery()` — the one ownerless *listing*. See below |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the page that draws it — **the only defence it holds is which route it asks**. See below |
 
@@ -186,8 +203,9 @@ with a 5,000-character title, gist, site name, byline and `<h1>` measures them. 
 (`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
 listing's exact order, so `limit` bounds the database's work and not only the reply.
 
-It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
-misconfigured dev server cannot serve a half-implemented public path.
+It used to refuse to work at all on the filesystem store — a `requirePostgres()` that answered 501.
+That store was deleted on 2026-09-05 and the check went with it: there is one store now, so there is
+no half-implemented public path for a misconfigured dev server to serve.
 
 #### And since 2026-09-06 there is a third ownerless read, which hands back bytes
 
@@ -210,6 +228,55 @@ weight:
   answers are the same bytes under different rules about who may keep them.
   `tests/asset-route.test.ts` fetches one slug, un-shares it and fetches again, which is the shape a
   memoised public projection would have quietly broken.
+
+#### And since 2026-10-05 there is a second way in, which is a key
+
+A **private link** is `/read/<slug>?key=<key>`: an article that is not public, readable by anybody
+who holds the key its owner made. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md). It is the
+same three public routes and the same reads, with one more predicate, and no new path. A
+link-shared article is a private article with a token on it: `visibility` keeps its two values.
+
+Four things keep it closed:
+
+- **Its own leaf, never OR-ed into `publicSlug`.** `linkSharedSlug` is the fourth sanctioned
+  `eq(articles.slug, …)` in `tests/owner-isolation.test.ts`. The two leaves meet only in
+  `publicAccessWhere`, which the listing does not import, so the shelf, and the examples the
+  marketing pages draw from the same listing, cannot see a link-shared article.
+  `tests/public-imports.test.ts` holds that.
+- **Only a parsed key reaches a query.** The dispatcher hands a handler one named field, `key`,
+  and bounds it with `parseShareKey` before any route is matched. A malformed key is no key. A
+  wrong key, a revoked one, an absent article and a private one are the same 404.
+- **Compared in the `where`, never fetched and compared.** One statement in `src/` selects
+  `share_token`: the owner's read in [`pg-share-link.ts`](../../src/store/pg-share-link.ts), scoped
+  by `ownedSlug`. `tests/share-link-token-stays-home.test.ts` greps for a second.
+- **Public wins.** The link arm is *public or this key*, so a public article reads the same with
+  any key or none, and `PublicArticle.sharedBy` says `"public"` of it. Turning a link off takes
+  effect on the next request, as un-sharing does.
+
+Since 2026-10-06 the article read has one answer that is not a 404 or a 200: 409
+`still-being-added`, for a request that may read an article whose import has not published.
+What it gives away and what it does not:
+[public-readable-sharing.md § While the article is still importing](public-readable-sharing.md#while-the-article-is-still-importing).
+
+**Where the key may travel, and where it may not.** It is in the page's address and in the query
+string of the two public requests a visitor's page makes for that article, the payload and its
+pictures ([`public-api.ts`](../../src/web/public-api.ts), [`rehost.ts`](../../src/web/rehost.ts)),
+both still without a token or cookies. The owner's requests never carry it
+(`tests/private-link-access.test.tsx`). It is in the owner's card, read from
+`GET /api/article/:slug/share-link`, which answers `no-store` and is the one path under
+`/api/article/` the browser's offline store never keeps (`lib/api.ts` § `NEVER_KEPT`).
+
+It is not in our request log, which drops the query string, nor in a Sentry event. It is not in a
+feedback report: the browser takes it off the address and the server takes it off again
+(`withoutShareKey`). It is not in the remembered-view store, which writes an allowlist of
+parameters (`last-view.ts`). It is not in the article payload, the shelf, or the page's `og:` tags:
+the HTML page for a link share is the plain shell. **The reader's export drops the token**
+([export.md](export.md)), because a zip gets forwarded. The audit table,
+`article_share_link_events`, records who made or turned off a link and when, without the key.
+
+What stage 1 accepts is in the plan: the key is in a URL, so it is in the browser history of
+whoever opens it and in Vercel's own access log, and anyone who has the link can pass it on.
 
 #### And since 2026-09-04 there is a page over it, which holds one defence
 
@@ -297,7 +364,7 @@ on an already-shared article publishes it and asks nobody. The list is *derived*
 month appears on the withheld side whether or not its author opens the file. Only the rows that are
 not modes at all are prose — the text, the pictures, the provenance and, since 2026-09-04, **the
 owner's comments**; the lookups, profile, rename, uploaded file and the cost of it all; and the
-**arc**, which crosses like an artefact but has no mode to be swept. (The tweet thread was here too until 2026-09-29, when it became a mode; it is now swept through `POLICY.tweets` in `src/web/visitor.ts`.)
+**arc**, which crosses like an artefact but has no mode to be swept. (The tweet thread is the second: a mode from 2026-09-29 to 2026-10-03, swept through `POLICY.tweets`, and now Summary's Thread view, with a fixed row of its own again — `SHARED_THREAD`.)
 
 **The comments row moved from the withheld side to the shared side**, and it is the only row that
 ever has ([260904c](../plans/260904c-more-modes-on-a-shared-link.md) § Stage 3). Two kinds of
@@ -383,6 +450,35 @@ excess-property check does not inspect keys contributed through a spread, and an
 does not repair it. In the one file where a mis-named field means "this silently stops crossing",
 the compiler was blind to exactly that mistake. `opt<T, K extends keyof T>` makes the name a checked
 literal. Do not reintroduce the spread form.
+
+**`PublicMeta` has ten fields, and three of them were added on 2026-10-04.** It had seven: `slug`,
+`title`, `byline`, `siteName`, `lang`, `excerpt` and `url`. (The type's own comment said six; `url`
+arrived on 2026-08-30 and the count was not moved.) The three are where and when the piece was
+published:
+
+> Q-visitor-page yes
+>
+> — Greg, 2026-10-04
+
+The question was whether a visitor's Metadata page should show the journal and the publication
+date, those two facts only
+([261004h](../plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md)).
+What crosses, and what does not:
+
+- `journal`, copied from `article_revisions.journal` through `optNull`, which is `opt` for a row
+  whose empty columns are `null`.
+- `published`, **the calendar day and not the stored string**. The owner's `publishedAt` is the
+  publisher's own text and may carry a time of day and an offset. `publicMeta` sends its first ten
+  characters when they are a real day, and nothing otherwise. It has a different name from the
+  owner's field so neither is mistaken for the other.
+- `publishedYear`, for a paper whose registry record states a year and no whole day. It is the
+  publication date at the precision we hold it, so it was treated as inside the same yes. It is
+  sent only when there is no day.
+- **`doi` and `abstract` do not cross.** They sit in the same row and were not asked for. The public
+  projection in [`public-reader.ts`](../../src/store/public-reader.ts) does not select them, and
+  `tests/public-visibility-pg.test.ts` reads the real response for both.
+
+The public shelf's eight columns (`/read/public`) are a separate allowlist and were not changed.
 
 ## The fleet dashboard, which is a different product on the same box
 

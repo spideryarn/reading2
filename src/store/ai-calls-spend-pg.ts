@@ -58,28 +58,44 @@
  * there. [pg-admin.ts](pg-admin.ts) was the first; this is the second, added
  * 2026-09-02 with the same justification and under the same rule:
  *
- * - `/admin/users` reads it through the `/api/admin` gate in `src/routes.ts`,
- *   which is the whole of the enforcement (docs/project/admin.md).
- * - `npm run cost -- --owners` reads it from a CLI on Greg's own machine.
- * - **It returns money and an owner id and nothing else** — no title, no URL, no
- *   slug, no sentence of anybody's reading. That is the rule admin.md states for
- *   the page, and it is the reason a second entry on that list is a widening
- *   rather than a hole.
+ * - `/admin/users` and `/admin/costs` read it through the `/api/admin` gate in
+ *   `src/routes.ts`, which is the whole of the enforcement
+ *   (docs/project/admin.md).
+ * - `npm run cost -- --owners` reads it from a CLI on Greg's own machine, and
+ *   so does `npm run cost:analyse` (`spendCube` and `spendDetail`), which
+ *   writes its report to a file only its owner can read.
+ * - **What it returns across owners**: money, an owner id, an opaque article
+ *   id, and the names of jobs, steps and models — and a slug only for the
+ *   administrator's own articles. For a failed attempt, where it failed, a
+ *   label from a closed list and an HTTP status (src/call-failure.ts: never
+ *   text from an error). No title, no URL, no other owner's slug, no
+ *   sentence of anybody's reading.
+ *
+ * Until 2026-10-05 that list was "money and an owner id and nothing else".
+ * `spendCube` widened it because Greg asked for it on 2026-10-04 (report
+ * spya-mykvhz): a page that *"breaks down by user (and then within user, by
+ * article) or mode or model"*. Which articles an account has spent on, and on
+ * what, is now visible to the administrator; what any of them is called is not.
  *
  * A third would be a decision about who may see across owners, which is why the
  * list is in the test rather than a per-file opt-out somewhere quieter.
  *
  * ## What may be logged from this file
  *
- * Nothing. It returns numbers and owner ids to one CLI and one admin route, and
- * the insert path's `guardDbStore` reasoning applies to the callers rather than
- * here — these statements bind two timestamps.
+ * Nothing. It returns what the section above lists to one CLI and the admin
+ * routes, and the insert path's `guardDbStore` reasoning applies to the callers
+ * rather than here — these statements bind two timestamps and, in `spendCube`,
+ * the asker's own id.
  */
+
+import { createHmac } from "node:crypto";
 
 import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 
-import { getDb } from "../db/client.js";
+import type { CostCubeGroup } from "../cost-cube.js";
+import { type Db, getDb } from "../db/client.js";
 import { aiCalls } from "../db/schema.js";
+import { TRANSPORT_ATTEMPTS } from "../transport-retry.js";
 
 /**
  * One `(owner, scope, job, step)` bucket. The four keys are what the ledger
@@ -211,6 +227,28 @@ const UNPRICED_CALLS = sql<number>`count(*) filter (
 )`.mapWith(Number);
 
 /**
+ * **Attempts, retries and give-ups**, as measures rather than a grouping by
+ * `attempt` — GPT Sol's F4 on plan 261006b: the ordinal would multiply the
+ * cube's groups for nothing a table needs.
+ *
+ * `counted` is the attempts a retry loop of ours numbered; a retry is any go
+ * after the first; a give-up is the last go allowed failing before its answer
+ * began. The limit is written into the statement as a literal, from the one
+ * constant the two wires share, so the cube still binds nothing but its window
+ * and the asker's id. `tests/admin-costs-store.test.ts` holds all three against
+ * the rows.
+ */
+const COUNTED_ATTEMPTS = sql<number>`count(*) filter (where ${aiCalls.attempt} is not null)`.mapWith(
+  Number,
+);
+const RETRIES = sql<number>`count(*) filter (where ${aiCalls.attempt} > 1)`.mapWith(Number);
+const GAVE_UP = sql<number>`count(*) filter (
+  where ${aiCalls.outcome} = 'error'
+    and ${aiCalls.failurePhase} = 'before_answer'
+    and ${aiCalls.attempt} = ${sql.raw(String(TRANSPORT_ATTEMPTS))}
+)`.mapWith(Number);
+
+/**
  * **Every owner's spend over `[since, until)`, split by what the work was.**
  *
  * Arbitrary bounds rather than a calendar month, because **Stripe billing
@@ -295,6 +333,294 @@ export async function productSpendByOwner(
       },
     ]),
   );
+}
+
+/** The most groups `spendCube` will return. Measured 2026-10-05: production groups to 660. */
+export const SPEND_CUBE_MAX_GROUPS = 20_000;
+
+/** The window groups to more than the cap. Thrown rather than truncating. */
+export class SpendCubeTooLarge extends Error {
+  constructor(readonly maxGroups: number) {
+    super(`the cost cube for this window has more than ${maxGroups} groups`);
+    this.name = "SpendCubeTooLarge";
+  }
+}
+
+/* `at time zone 'UTC'`, never the session's zone: the ledger's day is UTC. No
+   bound parameter, so the select and the `group by` render the same text. */
+const UTC_DAY = sql<string>`to_char(${aiCalls.startedAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+
+/**
+ * **The cost cube**: the ledger over `[since, until)`, grouped by everything
+ * `/admin/costs` and `npm run cost:analyse` break spend down by. One query;
+ * every table, pivot and chart is a fold of its rows (src/cost-cube.ts).
+ * docs/plans/261005a-admin-costs-page-cost-analysis-report-and-a-cost-tracking-audit.md.
+ *
+ * ## No other owner's slug leaves the database
+ *
+ * A slug is usually made from the title, so it says what somebody reads.
+ * `adminOwnerId` is whoever is asking, and only that owner's rows carry
+ * `articleSlug`. Anybody else's article is its opaque `articleId`; a row of
+ * theirs with a slug and no id gets `recordedSlugHash`, which keeps two
+ * recorded slugs apart and names neither.
+ *
+ * **Grouped by the underlying columns**, not by the two `case` expressions, so
+ * two slugs can never merge into one group — and because the bound owner id is
+ * a different parameter each time it is written, which `group by` would not
+ * recognise as the selected expression.
+ *
+ * A row with an `articleId` is that article. One with only a recorded slug is
+ * not claimed to be: a deleted article's slug can be minted again (`belongsTo`
+ * below). No token or duration measure — the wires disagree about what an
+ * input token is, and summed duration is not elapsed time.
+ */
+export async function spendCube(
+  since: string | undefined,
+  until: string | undefined,
+  adminOwnerId: string,
+  privacyKey: string,
+  maxGroups: number = SPEND_CUBE_MAX_GROUPS,
+  /* The database to ask. `npm run cost:analyse -- --prod` passes production's,
+     over its own read-only connection (src/db/client.ts § `drizzleOver`). */
+  db: Db = getDb(),
+): Promise<CostCubeGroup[]> {
+  if (privacyKey.length === 0) throw new Error("the cost cube needs a privacy key");
+  const ownSlug = ownSlugOf(adminOwnerId);
+  const recordedSlugDigest = RECORDED_SLUG_DIGEST;
+  const rows = await db
+    .select({
+      day: UTC_DAY,
+      ownerId: aiCalls.ownerId,
+      articleId: aiCalls.articleId,
+      articleSlug: ownSlug,
+      recordedSlugDigest,
+      scopeKind: aiCalls.scopeKind,
+      job: aiCalls.purpose,
+      stepName: aiCalls.stepName,
+      wire: aiCalls.wire,
+      requestedModel: aiCalls.requestedModel,
+      answeredModel: aiCalls.answeredModel,
+      upstream: aiCalls.upstream,
+      providerAccount: aiCalls.providerAccount,
+      costSource: aiCalls.costSource,
+      isByok: aiCalls.isByok,
+      outcome: aiCalls.outcome,
+      failurePhase: aiCalls.failurePhase,
+      failureClass: aiCalls.failureClass,
+      failureStatus: aiCalls.failureStatus,
+      calls: CALLS,
+      creditsNanos: CREDITS,
+      byokNanos: BYOK,
+      computedNanos: COMPUTED,
+      unpricedCalls: UNPRICED_CALLS,
+      computedCalls: COMPUTED_CALLS,
+      settledCalls: SETTLED_CALLS,
+      counted: COUNTED_ATTEMPTS,
+      retries: RETRIES,
+      gaveUp: GAVE_UP,
+    })
+    .from(aiCalls)
+    .where(window(since, until))
+    .groupBy(
+      UTC_DAY,
+      aiCalls.ownerId,
+      aiCalls.articleId,
+      aiCalls.articleSlug,
+      aiCalls.scopeKind,
+      aiCalls.purpose,
+      aiCalls.stepName,
+      aiCalls.wire,
+      aiCalls.requestedModel,
+      aiCalls.answeredModel,
+      aiCalls.upstream,
+      aiCalls.providerAccount,
+      aiCalls.costSource,
+      aiCalls.isByok,
+      aiCalls.outcome,
+      /* Null on nearly every row, so these three barely add groups. */
+      aiCalls.failurePhase,
+      aiCalls.failureClass,
+      aiCalls.failureStatus,
+    )
+    /* One past the cap, so "exactly the cap" and "more than it" can be told apart. */
+    .limit(maxGroups + 1);
+  if (rows.length > maxGroups) throw new SpendCubeTooLarge(maxGroups);
+  return rows.map(({ recordedSlugDigest: digest, ...row }) => ({
+    ...row,
+    recordedSlugHash: recordedSlugHashOf(digest, privacyKey),
+  }));
+}
+
+/* ---- the slug masking, shared by the cube and the detail rows ------------ */
+
+/** The asker's own slug; null on anybody else's row. */
+function ownSlugOf(adminOwnerId: string) {
+  return sql<string | null>`case when ${aiCalls.ownerId} = ${adminOwnerId}
+    then ${aiCalls.articleSlug} end`;
+}
+
+/* The database works on the real slug but lets only a one-way digest cross
+   the boundary. Node keys that digest with a secret (`recordedSlugHashOf`):
+   unlike the old bare MD5, the value that leaves cannot be checked against a
+   dictionary of likely title-derived slugs. */
+const RECORDED_SLUG_DIGEST = sql<string | null>`case
+    when ${aiCalls.articleId} is null
+     and ${aiCalls.articleSlug} is not null
+    then encode(sha256(convert_to(${aiCalls.ownerId}::text || ':' || ${aiCalls.articleSlug}, 'UTF8')), 'hex') end`;
+
+function recordedSlugHashOf(digest: string | null, privacyKey: string): string | null {
+  return digest === null
+    ? null
+    : createHmac("sha256", privacyKey)
+        .update(`spideryarn/admin-costs/recorded-slug\0${digest}`)
+        .digest("hex");
+}
+
+/* ---- one row per call, for the analysis script --------------------------- */
+
+/** The most rows `spendDetail` will return. Production held 2,245 on 2026-10-05. */
+export const SPEND_DETAIL_MAX_ROWS = 200_000;
+
+/** The window holds more calls than the cap. Thrown rather than truncating. */
+export class SpendDetailTooLarge extends Error {
+  constructor(readonly maxRows: number) {
+    super(`this window has more than ${maxRows} calls; ask for a shorter period`);
+    this.name = "SpendDetailTooLarge";
+  }
+}
+
+/**
+ * One ledger row, as `npm run cost:analyse` reads it. The article is masked
+ * exactly as a `CostCubeGroup`'s is, so `articleKeyOf` reads both.
+ */
+export interface SpendDetailRow {
+  id: string;
+  /** One collector: one execution of a step, or one request. */
+  runId: string;
+  jobId: string | null;
+  /** OpenRouter's id for the call, when the response carried one. */
+  generationId: string | null;
+  /** ISO, UTC. */
+  startedAt: string;
+  ownerId: string;
+  articleId: string | null;
+  /** **The asker's own articles only.** */
+  articleSlug: string | null;
+  recordedSlugHash: string | null;
+  scopeKind: string;
+  /** `ai_calls.purpose`. */
+  job: string;
+  stepName: string | null;
+  wire: string;
+  requestedModel: string;
+  answeredModel: string | null;
+  upstream: string | null;
+  providerAccount: string;
+  costSource: string;
+  isByok: boolean | null;
+  outcome: string;
+  /**
+   * Which go this row was, 1-based; null when no retry loop of ours numbered
+   * it. The cube turns it into three counts and the analysis checks them
+   * against this (src/cost-analysis.ts § `assertReadsAgree`).
+   */
+  attempt: number | null;
+  failurePhase: string | null;
+  failureClass: string | null;
+  failureStatus: number | null;
+  eventKind: string | null;
+  /* The three pockets as the row holds them. **Null is "reported nothing"**,
+     which is not zero — `UNPRICED_CALLS` above is the rule that reads them. */
+  creditsUsedNanos: number | null;
+  byokUpstreamNanos: number | null;
+  computedCostNanos: number | null;
+  /**
+   * **Means two things.** On the Messages wire it excludes cached tokens; on
+   * the chat wire it includes them (docs/investigations/261005a-…, check 1).
+   * Never add it across wires.
+   */
+  reportedInputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheWriteTokens: number | null;
+  reasoningTokens: number | null;
+  webSearches: number | null;
+  /** One call's own duration. Summed, it is not elapsed time. */
+  durationMs: number | null;
+}
+
+/**
+ * **Every call in `[since, until)`, one row each** — what the cube cannot
+ * hold: a call's own cost, its `run_id` and `job_id`, its tokens. The cost
+ * analysis builds its leads from these (GPT Sol's plan review, F1) and checks
+ * them against the cube before it reports anything.
+ *
+ * The same privacy rule as `spendCube`, through the same three helpers: no
+ * other owner's slug leaves the database. **This table and no other** — it
+ * holds no prompt and no response, and nothing here joins to one that does.
+ *
+ * Not grouped, so it is not a question asked across owners in the sense
+ * tests/owner-isolation.test.ts greps for; it is still one, and it is reached
+ * only by a CLI on the administrator's own machine.
+ */
+export async function spendDetail(
+  since: string | undefined,
+  until: string | undefined,
+  adminOwnerId: string,
+  privacyKey: string,
+  opts: { maxRows?: number; db?: Db } = {},
+): Promise<SpendDetailRow[]> {
+  if (privacyKey.length === 0) throw new Error("the cost detail needs a privacy key");
+  const maxRows = opts.maxRows ?? SPEND_DETAIL_MAX_ROWS;
+  const rows = await (opts.db ?? getDb())
+    .select({
+      id: aiCalls.id,
+      runId: aiCalls.runId,
+      jobId: aiCalls.jobId,
+      generationId: aiCalls.generationId,
+      startedAt: aiCalls.startedAt,
+      ownerId: aiCalls.ownerId,
+      articleId: aiCalls.articleId,
+      articleSlug: ownSlugOf(adminOwnerId),
+      recordedSlugDigest: RECORDED_SLUG_DIGEST,
+      scopeKind: aiCalls.scopeKind,
+      job: aiCalls.purpose,
+      stepName: aiCalls.stepName,
+      wire: aiCalls.wire,
+      requestedModel: aiCalls.requestedModel,
+      answeredModel: aiCalls.answeredModel,
+      upstream: aiCalls.upstream,
+      providerAccount: aiCalls.providerAccount,
+      costSource: aiCalls.costSource,
+      isByok: aiCalls.isByok,
+      outcome: aiCalls.outcome,
+      attempt: aiCalls.attempt,
+      failurePhase: aiCalls.failurePhase,
+      failureClass: aiCalls.failureClass,
+      failureStatus: aiCalls.failureStatus,
+      eventKind: aiCalls.eventKind,
+      creditsUsedNanos: aiCalls.creditsUsedNanos,
+      byokUpstreamNanos: aiCalls.byokUpstreamNanos,
+      computedCostNanos: aiCalls.computedCostNanos,
+      reportedInputTokens: aiCalls.reportedInputTokens,
+      outputTokens: aiCalls.outputTokens,
+      cacheReadTokens: aiCalls.cacheReadTokens,
+      cacheWriteTokens: aiCalls.cacheWriteTokens,
+      reasoningTokens: aiCalls.reasoningTokens,
+      webSearches: aiCalls.webSearches,
+      durationMs: aiCalls.durationMs,
+    })
+    .from(aiCalls)
+    .where(window(since, until))
+    .orderBy(aiCalls.startedAt, aiCalls.id)
+    /* One past the cap, so "exactly the cap" and "more than it" can be told apart. */
+    .limit(maxRows + 1);
+  if (rows.length > maxRows) throw new SpendDetailTooLarge(maxRows);
+  return rows.map(({ recordedSlugDigest: digest, startedAt, ...row }) => ({
+    ...row,
+    startedAt: startedAt.toISOString(),
+    recordedSlugHash: recordedSlugHashOf(digest, privacyKey),
+  }));
 }
 
 /** Which credentials paid for the window's rows, and how many each. */

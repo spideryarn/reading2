@@ -78,8 +78,31 @@ import { urlKey } from "../ingest.js";
 import { isWebUrl } from "../urls.js";
 import type { LibraryEntry, LinkPreviewResponse, PagePreview } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 import { readEvents, STREAM_STALL_MS } from "./lib/sse.js";
+import { CHAT_CARD_HOST_ATTR } from "./layout.js";
 import type { LinkPreview } from "./link-preview.js";
+
+/**
+ * **Which paragraph a link is in, for `useLinkFacts`' `inBlock`** — read the
+ * way `onFollowNote` and TableView's own link handler read it: the row is the
+ * block, and `data-block` is the id every feature here addresses text by
+ * (docs/project/block-ids.md). `null` for a link that is in no paragraph.
+ *
+ * **A row is not always the answer.** Since plan 261004k the block chat can be
+ * drawn as a card in a host inside its anchor block's own cell, so a link in a
+ * chat answer has that row for an ancestor and is still not the paragraph's:
+ * read as one, it would be handed the paragraph-relative summary of a passage
+ * it is not in — the wrong answer the `inBlock === null` rule below exists to
+ * withhold. Inside the host it is `null`, as it is for the floating panel.
+ * **Only the provenance changes**: the card's links keep their hover cards
+ * (GPT Sol on the plan, F7). tests/no-block-no-summary.test.tsx.
+ */
+export function blockOfLink(anchorEl: Element | null | undefined): string | null {
+  if (!anchorEl) return null;
+  if (anchorEl.closest(`[${CHAT_CARD_HOST_ATTR}]`)) return null;
+  return anchorEl.closest("tr[data-block]")?.getAttribute("data-block") ?? null;
+}
 
 /** The fields of Wikipedia's summary response this card actually uses. */
 export interface WikiSummary {
@@ -328,6 +351,24 @@ function applyShelf(): Promise<boolean> {
   });
 }
 
+/**
+ * **Forget the shelf, because it was the last reader's.** Called when the
+ * tab's reader changes (the bottom of this file).
+ *
+ * A fence as well as a clear, as `forgetSummaries` is: a read still out for
+ * the last reader was sent with their token, and landing late it would
+ * install their shelf for the next one. Moving `shelfInstalled` past every
+ * read already started refuses those; the next read started is level with it
+ * and installs.
+ */
+function forgetShelf(): void {
+  shelf = undefined;
+  shelfPending = null;
+  shelfFailed = false;
+  shelfInstalled = shelfRead + 1;
+  for (const wake of [...shelfWatchers]) wake();
+}
+
 function loadShelf(): Promise<void> {
   if (shelf || shelfFailed) return Promise.resolve();
   /* **A failure is recorded rather than dressed up as an empty shelf**, and
@@ -340,11 +381,17 @@ function loadShelf(): Promise<void> {
      offline for one hover keeps the plain card until they reload, which is
      the cost of not having a card that re-asks on every hover of every
      link in a long article. */
-  shelfPending ??= applyShelf().then((ok) => {
+  if (shelfPending) return shelfPending;
+  const mine: Promise<void> = applyShelf().then((ok) => {
+    /* Only while this is still the load in hand: one overtaken by
+       `forgetShelf` was refused on purpose, and must not tell the next
+       reader that their shelf could not be read. */
+    if (shelfPending !== mine) return;
     if (!ok && shelf === undefined) shelfFailed = true;
     for (const wake of [...shelfWatchers]) wake();
   });
-  return shelfPending;
+  shelfPending = mine;
+  return mine;
 }
 
 /**
@@ -650,6 +697,13 @@ const summaryPartial = new Map<string, string>();
 const summaryPending = new Map<string, Promise<void>>();
 
 /**
+ * How many times the summaries have been thrown away. A `loadSummary` run
+ * remembers the number it started under, and one that has been overtaken is
+ * answering a question nobody is asking any more.
+ */
+let summaryGeneration = 0;
+
+/**
  * Told on every token, so a card that is on screen grows as the answer does.
  *
  * A bare listener set rather than a store, for `shelfWatchers`' reason: the
@@ -698,12 +752,26 @@ function summaryKey(slug: string, url: string, blockId: string | null): string {
  * profile is true of every article — and because a map of a few dozen strings is
  * not worth a selective delete and the risk of getting the selection wrong.
  *
- * It is deliberately not a subscription to anything: the two places a reader
- * can change these call it directly, which is a line a reviewer sees at the
- * write, where the alternative is a listener somebody has to know exists.
+ * It is deliberately not a subscription to anything: the places a reader can
+ * change these call it directly, which is a line a reviewer sees at the write,
+ * where the alternative is a listener somebody has to know exists. Those are
+ * the ordinary saves and the `keepalive` ones beside them — `saveProfile` and
+ * `leaveProfile` in useProfile.ts, `savePurpose` and `leavePurpose` in
+ * purpose.ts.
+ *
+ * **And it is a fence, not only a clear** (2026-10-04). Emptying the finished
+ * answers left a stream already in flight free to write its answer back in a
+ * second later, and left its partial text and its pending entry where a
+ * re-hovered card would join them — old words arriving on a card opened after
+ * the save. So this bumps `summaryGeneration` and drops all three maps, and
+ * `loadSummary` writes nothing once the generation it started under has
+ * passed. tests/link-summary-forget.test.tsx.
  */
 export function forgetSummaries(): void {
+  summaryGeneration += 1;
   summaryCache.clear();
+  summaryPartial.clear();
+  summaryPending.clear();
   wakeSummaryWatchers();
 }
 
@@ -747,6 +815,12 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
   const existing = summaryPending.get(key);
   if (existing) return existing;
 
+  /* Every write below is behind `current()`: after a `forgetSummaries` the maps
+     belong to whoever asked since, and that may be a newer run under this very
+     key. */
+  const mine = summaryGeneration;
+  const current = () => mine === summaryGeneration;
+
   const run = (async () => {
     /* **No `deadline()` here**, and it is the one lookup in this file without
        one. The eight-second clock is right for a metadata lookup that either
@@ -782,6 +856,8 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
       let text = "";
       let settled = false;
       for await (const event of readEvents(res.body, { stallMs: STREAM_STALL_MS })) {
+        /* Overtaken: stop reading. Leaving the loop releases the stream. */
+        if (!current()) return;
         if (event.name === "delta") {
           const piece = (event.data as { text?: unknown }).text;
           if (typeof piece === "string" && piece !== "") {
@@ -815,15 +891,19 @@ function loadSummary(slug: string, url: string, blockId: string | null): Promise
       }
       /* No terminal frame: the route hit an error and framed nothing rather
          than manufacturing a fact about this link. Cached as nothing. */
-      if (!settled) summaryCache.set(key, null);
+      if (!settled && current()) summaryCache.set(key, null);
     } catch {
       /* A transport failure, a stall, an offline moment. `apiFetch` has already
          put it in the console. */
-      summaryCache.set(key, null);
+      if (current()) summaryCache.set(key, null);
     } finally {
-      summaryPartial.delete(key);
-      summaryPending.delete(key);
-      wakeSummaryWatchers();
+      /* Only its own entries. An overtaken run's were dropped by
+         `forgetSummaries`, and what is under this key now is a newer run's. */
+      if (current()) {
+        summaryPartial.delete(key);
+        summaryPending.delete(key);
+        wakeSummaryWatchers();
+      }
     }
   })();
 
@@ -877,6 +957,10 @@ export function useLinkFacts(
   // the effect on every mouse move across the same link.
   const lang = wiki?.lang ?? null;
   const title = wiki?.title ?? null;
+  /* A save can settle while this card is still open (the profile panel's
+     autosave). The watcher schedules a render; this dependency then restarts
+     its lookup under the new generation instead of leaving the card empty. */
+  const generation = summaryGeneration;
 
   /* **Derived during render, not held in state**, and that is the fix for a
      real bug rather than a preference.
@@ -894,6 +978,7 @@ export function useLinkFacts(
      it carries nothing. */
   const [, bump] = useReducer((n: number) => n + 1, 0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `generation` restarts the lookup after a save clears the shared summary maps.
   useEffect(() => {
     if (!url) return;
     let live = true;
@@ -1003,7 +1088,7 @@ export function useLinkFacts(
       unwatch();
       unwatchSummaries();
     };
-  }, [url, lang, title, slug, sourceUrl, inBlock]);
+  }, [url, lang, title, slug, sourceUrl, inBlock, generation]);
 
   if (!url) return NOTHING;
   const asked = lang && title ? wikiCacheKey({ lang, title }) : null;
@@ -1047,3 +1132,11 @@ export function useLinkFacts(
         : null,
   };
 }
+
+/* **Both are one reader's**: which pages are on their shelf, and summaries
+   written from their profile. Wikipedia and the fetched preview are about the
+   address and are kept. docs/plans/261006f-every-request-is-bound-to-the-reader-at-its-start.md § Stage 2. */
+forgetOnReaderChange(() => {
+  forgetShelf();
+  forgetSummaries();
+});

@@ -1,0 +1,955 @@
+{
+ "add a tag of neuroscience to this paper": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "tag-add",
+    "words": "neuroscience"
+   }
+  ]
+ },
+ "do they talk about predictive coding?": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "predictive coding"
+   }
+  ]
+ },
+ "redo the glossary with the good model": {
+  "rows": 0,
+  "argument": []
+ },
+ "reprocess the glossary with more powerful AI": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "what do the technical words in this mean": {
+  "rows": 0,
+  "argument": []
+ },
+ "give me a quick summary": {
+  "rows": 0,
+  "argument": []
+ },
+ "explain it like I'm five": {
+  "rows": 0,
+  "argument": []
+ },
+ "draw me a picture of the argument": {
+  "rows": 0,
+  "argument": []
+ },
+ "quiz me on this": {
+  "rows": 0,
+  "argument": []
+ },
+ "test whether I understood it": {
+  "rows": 0,
+  "argument": []
+ },
+ "what do other people think of this paper": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me the references": {
+  "rows": 0,
+  "argument": []
+ },
+ "table of contents": {
+  "rows": 1,
+  "argument": []
+ },
+ "turn this into a twitter thread": {
+  "rows": 0,
+  "argument": []
+ },
+ "what are the best lines in it": {
+  "rows": 0,
+  "argument": []
+ },
+ "when did all of this happen": {
+  "rows": 0,
+  "argument": []
+ },
+ "what is the author taking for granted": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'm peer reviewing this for a journal": {
+  "rows": 0,
+  "argument": []
+ },
+ "does the paper deliver what it promises": {
+  "rows": 0,
+  "argument": []
+ },
+ "take me back to my articles": {
+  "rows": 0,
+  "argument": []
+ },
+ "change my account settings": {
+  "rows": 0,
+  "argument": []
+ },
+ "make this article public so a colleague can read it": {
+  "rows": 0,
+  "argument": []
+ },
+ "download a copy of everything for this article": {
+  "rows": 0,
+  "argument": []
+ },
+ "get this off my shelf": {
+  "rows": 0,
+  "argument": []
+ },
+ "I want to report a bug": {
+  "rows": 0,
+  "argument": []
+ },
+ "show my bookmarks": {
+  "rows": 0,
+  "argument": []
+ },
+ "how long will this take to read": {
+  "rows": 0,
+  "argument": []
+ },
+ "regenerate the timeline": {
+  "rows": 0,
+  "argument": []
+ },
+ "the quotes are rubbish, have another go": {
+  "rows": 0,
+  "argument": []
+ },
+ "use a better model for this article": {
+  "rows": 0,
+  "argument": []
+ },
+ "find mentions of dopamine": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "dopamine"
+   }
+  ]
+ },
+ "search for free energy principle": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "free energy principle"
+   }
+  ]
+ },
+ "does it mention Friston": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "Friston"
+   }
+  ]
+ },
+ "um can you like open the summary thing": {
+  "rows": 0,
+  "argument": []
+ },
+ "okay go back to just the text": {
+  "rows": 0,
+  "argument": []
+ },
+ "hey so I've got a question about section three": {
+  "rows": 0,
+  "argument": []
+ },
+ "where in this do they talk about uh working memory": {
+  "rows": 0,
+  "argument": []
+ },
+ "glosary": {
+  "rows": 0,
+  "argument": []
+ },
+ "shwo me the timline": {
+  "rows": 0,
+  "argument": []
+ },
+ "regenrate the faq": {
+  "rows": 0,
+  "argument": []
+ },
+ "delete this article": {
+  "rows": 0,
+  "argument": []
+ },
+ "what's the weather tomorrow": {
+  "rows": 0,
+  "argument": []
+ },
+ "translate this into French": {
+  "rows": 0,
+  "argument": []
+ },
+ "email this to my boss": {
+  "rows": 0,
+  "argument": []
+ },
+ "remind me to finish this tomorrow": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me where they define entropy": {
+  "rows": 0,
+  "argument": []
+ },
+ "the summary is too long": {
+  "rows": 0,
+  "argument": []
+ },
+ "this summary is too dumbed down": {
+  "rows": 0,
+  "argument": []
+ },
+ "make the sketch prettier": {
+  "rows": 0,
+  "argument": []
+ },
+ "who has responded to this online": {
+  "rows": 0,
+  "argument": []
+ },
+ "what papers does this build on": {
+  "rows": 0,
+  "argument": []
+ },
+ "redo the thread": {
+  "rows": 0,
+  "argument": []
+ },
+ "the cross references look wrong, make them again": {
+  "rows": 0,
+  "argument": []
+ },
+ "make this private again": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'm done with this one": {
+  "rows": 0,
+  "argument": []
+ },
+ "how much am I paying for this": {
+  "rows": 0,
+  "argument": []
+ },
+ "where was this originally published": {
+  "rows": 0,
+  "argument": []
+ },
+ "add a note to this paragraph": {
+  "rows": 0,
+  "argument": []
+ },
+ "read it aloud to me": {
+  "rows": 0,
+  "argument": []
+ },
+ "compare this with the paper I read yesterday": {
+  "rows": 0,
+  "argument": []
+ },
+ "highlight the bit about consciousness": {
+  "rows": 0,
+  "argument": []
+ },
+ "open the margin notes": {
+  "rows": 0,
+  "argument": []
+ },
+ "skim it for me": {
+  "rows": 0,
+  "argument": []
+ },
+ "regenerate everything for this article": {
+  "rows": 0,
+  "argument": []
+ },
+ "make the glossary again but better": {
+  "rows": 0,
+  "argument": []
+ },
+ "go to the articles other people have shared": {
+  "rows": 0,
+  "argument": []
+ },
+ "buy more articles": {
+  "rows": 0,
+  "argument": []
+ },
+ "print this": {
+  "rows": 0,
+  "argument": []
+ },
+ "what dates are mentioned": {
+  "rows": 0,
+  "argument": []
+ },
+ "summarise section two for me": {
+  "rows": 0,
+  "argument": []
+ },
+ "turn on dark mode": {
+  "rows": 0,
+  "argument": []
+ },
+ "I want to see what's changed on this site since yesterday": {
+  "rows": 0,
+  "argument": []
+ },
+ "search for predictive processing": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "predictive processing"
+   }
+  ]
+ },
+ "is consciousness mentioned anywhere": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me every place they bring up the hippocampus": {
+  "rows": 0,
+  "argument": []
+ },
+ "are there any bits about reward prediction error": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'm looking for the part on sleep spindles": {
+  "rows": 0,
+  "argument": []
+ },
+ "anything in here on Bayesian inference": {
+  "rows": 0,
+  "argument": []
+ },
+ "can you look for the word homeostasis": {
+  "rows": 0,
+  "argument": []
+ },
+ "where do they first bring up dopamine": {
+  "rows": 0,
+  "argument": []
+ },
+ "take me to the first time it mentions Karl Friston": {
+  "rows": 0,
+  "argument": []
+ },
+ "go to where free energy first comes up": {
+  "rows": 0,
+  "argument": []
+ },
+ "when does the author first talk about attention": {
+  "rows": 0,
+  "argument": []
+ },
+ "skip to the earliest mention of surprise": {
+  "rows": 0,
+  "argument": []
+ },
+ "what's a Markov blanket": {
+  "rows": 0,
+  "argument": []
+ },
+ "I don't know what variational free energy is": {
+  "rows": 0,
+  "argument": []
+ },
+ "remind me what precision weighting means here": {
+  "rows": 0,
+  "argument": []
+ },
+ "explain the term active inference": {
+  "rows": 0,
+  "argument": []
+ },
+ "what do they mean by generative model": {
+  "rows": 0,
+  "argument": []
+ },
+ "meaning of allostasis": {
+  "rows": 0,
+  "argument": []
+ },
+ "file this under neuroscience": {
+  "rows": 0,
+  "argument": []
+ },
+ "label it machine learning": {
+  "rows": 0,
+  "argument": []
+ },
+ "mark this one as to read": {
+  "rows": 0,
+  "argument": []
+ },
+ "stick a philosophy tag on this": {
+  "rows": 0,
+  "argument": []
+ },
+ "this is a methods paper, tag it that way": {
+  "rows": 0,
+  "argument": []
+ },
+ "take the tag draft off": {
+  "rows": 0,
+  "argument": []
+ },
+ "this isn't about psychology, lose that tag": {
+  "rows": 0,
+  "argument": []
+ },
+ "drop the to read label": {
+  "rows": 0,
+  "argument": []
+ },
+ "get rid of the neuroscience tag": {
+  "rows": 0,
+  "argument": []
+ },
+ "it shouldn't be tagged urgent any more": {
+  "rows": 0,
+  "argument": []
+ },
+ "um so can you like show me the the summary but the short one": {
+  "rows": 0,
+  "argument": []
+ },
+ "okay uh I think I want to I want to see the the timeline thing": {
+  "rows": 0,
+  "argument": []
+ },
+ "right so where where does it uh mention the the cerebellum": {
+  "rows": 0,
+  "argument": []
+ },
+ "hmm can we go back to to the the library please": {
+  "rows": 0,
+  "argument": []
+ },
+ "so like what's what's new in the app lately": {
+  "rows": 0,
+  "argument": []
+ },
+ "er could you do the the quiz again no sorry make a new quiz": {
+  "rows": 0,
+  "argument": []
+ },
+ "I I want to um tell you about a bug I found": {
+  "rows": 0,
+  "argument": []
+ },
+ "yeah so tag this as as um reinforcement learning": {
+  "rows": 0,
+  "argument": []
+ },
+ "uh what does what does um epistemic value mean": {
+  "rows": 0,
+  "argument": []
+ },
+ "let me see who's who's cited in this": {
+  "rows": 0,
+  "argument": []
+ },
+ "how does this app work": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'm stuck, is there a manual": {
+  "rows": 0,
+  "argument": []
+ },
+ "hide the unfinished features": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me other people's articles": {
+  "rows": 0,
+  "argument": []
+ },
+ "who would be a good reviewer for this": {
+  "rows": 0,
+  "argument": []
+ },
+ "check my review comments for tone": {
+  "rows": 0,
+  "argument": []
+ },
+ "what questions would a sceptic ask about this": {
+  "rows": 0,
+  "argument": []
+ },
+ "walk me through it a bit at a time and ask me things": {
+  "rows": 0,
+  "argument": []
+ },
+ "I want to write down what I remember and see if I got it right": {
+  "rows": 0,
+  "argument": []
+ },
+ "upgrade my plan": {
+  "rows": 0,
+  "argument": []
+ },
+ "back up this article to my computer": {
+  "rows": 0,
+  "argument": []
+ },
+ "see all the sections with their summaries": {
+  "rows": 0,
+  "argument": []
+ },
+ "run the debate again": {
+  "rows": 0,
+  "argument": []
+ },
+ "start again from scratch on this article": {
+  "rows": 0,
+  "argument": []
+ },
+ "make this public": {
+  "rows": 0,
+  "argument": []
+ },
+ "share this with everyone right now": {
+  "rows": 0,
+  "argument": []
+ },
+ "remove this from the public shelf": {
+  "rows": 0,
+  "argument": []
+ },
+ "cancel my subscription": {
+  "rows": 0,
+  "argument": []
+ },
+ "why does the author think entropy matters": {
+  "rows": 0,
+  "argument": []
+ },
+ "what is the main argument of section 4": {
+  "rows": 0,
+  "argument": []
+ },
+ "do you agree with the conclusion": {
+  "rows": 0,
+  "argument": []
+ },
+ "delete my account": {
+  "rows": 0,
+  "argument": []
+ },
+ "erase all my notes": {
+  "rows": 0,
+  "argument": []
+ },
+ "sign me out": {
+  "rows": 0,
+  "argument": []
+ },
+ "make the text bigger": {
+  "rows": 0,
+  "argument": []
+ },
+ "send this to my kindle": {
+  "rows": 0,
+  "argument": []
+ },
+ "play some music": {
+  "rows": 0,
+  "argument": []
+ },
+ "add this to my calendar": {
+  "rows": 0,
+  "argument": []
+ },
+ "undo": {
+  "rows": 0,
+  "argument": []
+ },
+ "merge this with my other article": {
+  "rows": 0,
+  "argument": []
+ },
+ "asdf jkl": {
+  "rows": 0,
+  "argument": []
+ },
+ "thanks that's all": {
+  "rows": 0,
+  "argument": []
+ },
+ "archive everything on my shelf": {
+  "rows": 0,
+  "argument": []
+ },
+ "delete the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "throw away the quiz and don't make another": {
+  "rows": 0,
+  "argument": []
+ },
+ "make all my articles public": {
+  "rows": 0,
+  "argument": []
+ },
+ "run everything again on every article I have": {
+  "rows": 0,
+  "argument": []
+ },
+ "archive this for good so it can never come back": {
+  "rows": 0,
+  "argument": []
+ },
+ "regenerate the timeline for all my papers": {
+  "rows": 0,
+  "argument": []
+ },
+ "remove every tag from everything": {
+  "rows": 0,
+  "argument": []
+ },
+ "stop sharing all of my articles": {
+  "rows": 0,
+  "argument": []
+ },
+ "just the text please, nothing else on screen": {
+  "rows": 0,
+  "argument": []
+ },
+ "um, I want to see how the paper is organised, like the sections and sub-sections": {
+  "rows": 0,
+  "argument": []
+ },
+ "give me the very short, dead simple version": {
+  "rows": 0,
+  "argument": []
+ },
+ "does the author keep going in circles or actually move forward?": {
+  "rows": 0,
+  "argument": []
+ },
+ "what are the best lines in this, the ones I should highlight": {
+  "rows": 0,
+  "argument": []
+ },
+ "what would a skeptical reader ask about this paper": {
+  "rows": 0,
+  "argument": []
+ },
+ "which hard words does this paper use in a weird way": {
+  "rows": 0,
+  "argument": []
+ },
+ "what does the author take for granted, what premises do I have to accept": {
+  "rows": 0,
+  "argument": []
+ },
+ "when did all this happen, put the events in order": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'm peer reviewing this, I need to check it against my own checklist": {
+  "rows": 0,
+  "argument": []
+ },
+ "what papers does it lean on, with links": {
+  "rows": 0,
+  "argument": []
+ },
+ "is anyone online arguing about this paper": {
+  "rows": 0,
+  "argument": []
+ },
+ "I want to ask it a question about the argument": {
+  "rows": 0,
+  "argument": []
+ },
+ "help me actually remember this stuff, quiz me on it": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me every paragraph as a dot drifting down the page by topic": {
+  "rows": 0,
+  "argument": []
+ },
+ "where did this come frm and how long is it": {
+  "rows": 0,
+  "argument": []
+ },
+ "make this one public so I can send my friend the link": {
+  "rows": 0,
+  "argument": []
+ },
+ "get this out of my shelf, I'm done with it but don't delete it": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'd like to download all of it as files": {
+  "rows": 0,
+  "argument": []
+ },
+ "um, the, the thread looks bad, can you redo it from scratch": {
+  "rows": 0,
+  "argument": []
+ },
+ "how do I use this thing, I'm lost": {
+  "rows": 0,
+  "argument": []
+ },
+ "take me to my bookmarks and notes": {
+  "rows": 0,
+  "argument": []
+ },
+ "somethin is broken, I want to report a bug": {
+  "rows": 0,
+  "argument": []
+ },
+ "where does the article mention qualia": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me everywhere it brings up Chalmers": {
+  "rows": 0,
+  "argument": []
+ },
+ "scroll to the first time it says global workspace": {
+  "rows": 0,
+  "argument": []
+ },
+ "um, take me to where it first talks about, uh, predictive coding": {
+  "rows": 0,
+  "argument": []
+ },
+ "what's intentionality supposed to mean here": {
+  "rows": 0,
+  "argument": []
+ },
+ "I don't get what they mean by supervenience, explain that one": {
+  "rows": 0,
+  "argument": []
+ },
+ "label this article consciousness": {
+  "rows": 0,
+  "argument": []
+ },
+ "so, uh, I want to file this under, hmm, to-read-later, yeah to-read-later": {
+  "rows": 0,
+  "argument": []
+ },
+ "get rid of the label philosophy from this one": {
+  "rows": 0,
+  "argument": []
+ },
+ "that tag, wrong-shelf, it shouldn't be on this, take it off": {
+  "rows": 0,
+  "argument": []
+ },
+ "permanently delete this article and everything about it": {
+  "rows": 0,
+  "argument": []
+ },
+ "post this to my twitter account": {
+  "rows": 0,
+  "argument": []
+ },
+ "translate the article into French": {
+  "rows": 0,
+  "argument": []
+ },
+ "read the whole thing out loud to me in a nice voice": {
+  "rows": 0,
+  "argument": []
+ },
+ "um, can you, can you cancel my subscription, actually no, delete my account": {
+  "rows": 0,
+  "argument": []
+ },
+ "make the text bigger and switch to a dark theme": {
+  "rows": 0,
+  "argument": []
+ },
+ "can you find some more terms for the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "the glossary is missing a few words, add some more to it": {
+  "rows": 0,
+  "argument": []
+ },
+ "keep the definitions I have and look for extra ones": {
+  "rows": 0,
+  "argument": []
+ },
+ "um I think there's there's more jargon in here than you've got, find the rest": {
+  "rows": 0,
+  "argument": []
+ },
+ "extend the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "pull out a few more good lines": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'd like some more quotes on top of these ones": {
+  "rows": 0,
+  "argument": []
+ },
+ "there must be other passages worth keeping, go and look": {
+  "rows": 0,
+  "argument": []
+ },
+ "uh can you can you get me some extra quotations please": {
+  "rows": 0,
+  "argument": []
+ },
+ "add to the quotes, don't replace them": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me the table of contents": {
+  "rows": 0,
+  "argument": []
+ },
+ "what's the tldr": {
+  "rows": 0,
+  "argument": []
+ },
+ "just give me the gist of it": {
+  "rows": 0,
+  "argument": []
+ },
+ "is there a mind map of this": {
+  "rows": 0,
+  "argument": []
+ },
+ "let me see the key terms": {
+  "rows": 0,
+  "argument": []
+ },
+ "what are the main ideas here": {
+  "rows": 0,
+  "argument": []
+ },
+ "open the q and a for this piece": {
+  "rows": 0,
+  "argument": []
+ },
+ "I need to revise this for an exam": {
+  "rows": 0,
+  "argument": []
+ },
+ "where's the further reading": {
+  "rows": 0,
+  "argument": []
+ },
+ "show me the pull quotes": {
+  "rows": 0,
+  "argument": []
+ },
+ "what criticism has this had": {
+  "rows": 0,
+  "argument": []
+ },
+ "these quotes are no good, start over with new ones": {
+  "rows": 0,
+  "argument": []
+ },
+ "throw out the glossary and write it again from scratch": {
+  "rows": 0,
+  "argument": []
+ },
+ "redo the key terms": {
+  "rows": 0,
+  "argument": []
+ },
+ "the excerpts need regenerating": {
+  "rows": 0,
+  "argument": []
+ },
+ "give me a different set of quotes instead of these": {
+  "rows": 0,
+  "argument": []
+ },
+ "add more detail to the summary": {
+  "rows": 0,
+  "argument": []
+ },
+ "find more articles like this one": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "more articles like this one"
+   }
+  ]
+ },
+ "add a definition of my own to the glossary": {
+  "rows": 0,
+  "argument": []
+ },
+ "delete the last three quotes": {
+  "rows": 0,
+  "argument": []
+ },
+ "find more quotes in all my articles": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "more quotes in all my articles"
+   }
+  ]
+ },
+ "stop looking for more terms": {
+  "rows": 0,
+  "argument": []
+ },
+ "tell me more about the second experiment": {
+  "rows": 0,
+  "argument": []
+ },
+ "I'd like more articles like this one": {
+  "rows": 0,
+  "argument": []
+ },
+ "get more quotes out of all my articles": {
+  "rows": 0,
+  "argument": []
+ },
+ "find more good quotes for me": {
+  "rows": 0,
+  "argument": [
+   {
+    "kind": "find",
+    "words": "more good quotes for me"
+   }
+  ]
+ }
+}

@@ -23,7 +23,7 @@
  * **There was a fourth, and it went on 2026-09-05.** `th.text .th-measure` put
  * the `Text verbatim` heading on the prose's left edge by the same arithmetic.
  * The column-header row lost its height that day and its labels became
- * `.sr-only` spans (styles.css § the head with no row), so there is no heading
+ * `.sr-only` spans (table.css § the head with no row), so there is no heading
  * to align: both the rule and the two spans it needed are gone.
  * docs/plans/260905d-declutter-the-reading-view-top-bars.md § Stage 3.
  *
@@ -195,7 +195,7 @@ describe("the reading column is centred in its cell", () => {
        became equal, the term cancelled, and it was dropped. That was correct
        arithmetic and the wrong move: it turned an identity into a precondition,
        and the very next fix needed the two sides *unequal* — a phone's title
-       wants the left gutter its prose has (styles.css § a narrow window). The
+       wants the left gutter its prose has (narrow-window.css § A NARROW WINDOW). The
        long form is true for any pair, so nothing two hundred lines away has to
        stay in step with it.
        docs/plans/260905g-move-the-wordmark-and-feedback-button-into-the-dock.md

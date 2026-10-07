@@ -84,7 +84,7 @@ await pgReady({
  * tests/store-comments.test.ts for the same fixture and the same reason.
  * Returns the attempt token, which the fence cases below need.
  */
-async function nowPending(id: string): Promise<string | undefined> {
+async function nowPending(id: string): Promise<string> {
   await pgCommentStore.create(SLUG, { id, blockId: BLOCK_ID, quote: "the question", start: 3 });
   await getDb()
     .update(commentsTable)
@@ -307,12 +307,19 @@ describe("the Postgres comment sweep", () => {
      * The consequence assertions below stay regardless, and are the half no
      * wording stands in for. */
     const attempt = await nowPending("spya-swp223");
+    /* The store as a caller the compiler did not see. Both calls below are
+       refused by `CommentStore.patch`'s type since 2026-10-04
+       (tests/store-contracts-require-attempts.test.ts); these are the run-time
+       refusals behind it, which a cast or an `any` still reaches. */
+    const untyped = pgCommentStore as unknown as {
+      patch: (...args: unknown[]) => Promise<unknown>;
+    };
     await expect(
-      pgCommentStore.patch(SLUG, "spya-swp223", { status: "done", answer: "x" }),
+      untyped.patch(SLUG, "spya-swp223", { status: "done", answer: "x" }),
     ).rejects.toThrow(/needs the attempt/);
     // And a patch that would leave the row `pending` while releasing the fence.
     await expect(
-      pgCommentStore.patch(SLUG, "spya-swp223", { answer: "x" }, attempt),
+      untyped.patch(SLUG, "spya-swp223", { answer: "x" }, attempt),
     ).rejects.toThrow(/must end an answer/);
     /* The harm the two refusals exist to prevent, which no wording stands in
        for: neither write reached the row. It is still pending, still fenced,

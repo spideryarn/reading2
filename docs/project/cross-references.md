@@ -1,5 +1,7 @@
 # Cross-references: the article linked to itself
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 A phrase in the prose that sums up something the piece shows in detail elsewhere is underlined as a
 link. Two examples:
 
@@ -50,14 +52,17 @@ true, and the prose has nowhere to say "out of date".
 
 ## When it runs
 
-- **After an import**, when the add page's *generate the main modes* box is ticked
-  ([260930c](../plans/260930c-auto-generate-the-main-modes-after-import.md)). It is added to that
-  list by hand, because the list is derived from modes and this is not one. It runs in the first,
-  parallel group.
+- **After an import**, queued by its publication unless the reader has switched *generate the main
+  modes* off ([ingest-queue.md § The add page](ingest-queue.md#the-add-page)). It is added to that
+  list by hand, because the list is derived from modes and this is not one. It reads nothing, so
+  its job is one step and is stamped ahead of Skim's.
 - **On demand**, from Metadata's *AI processing* (`METADATA_RERUN_STEPS`).
 
 Not in the import itself, which stays as fast as it can be. The prose picks the links up as soon as
-the job finishes, with no reload (`useCrossrefs` refreshes on the job's completion).
+the job finishes, with no reload (`useCrossrefs` refreshes on the job's completion). A re-read that
+fails changes nothing: the links already drawn stay, silently, and only a read that answered — none,
+stale, another article's — takes them away
+([`tests/crossrefs-revalidate.test.tsx`](../../tests/crossrefs-revalidate.test.tsx)).
 
 **Cost, measured**: $0.05–0.17 an article on the local corpus. The plan has the token counts.
 
@@ -87,7 +92,7 @@ cross-reference: it cannot know the nonce.
   It was a 2px dotted line in the link colour until then. `mark.xref` in
   [`annotations.css`](../../src/web/styles/annotations.css),
   [261001r](../plans/261001r-reading-time-line-gets-a-rich-card-and-grows-lighter-cross-references-quieter-than-the-glossary.md).
-- **Precedence**: an xref wins over a glossary term, a citation mark, a comment and a search wash on
+- **Precedence**: an xref wins over a glossary term, a citation mark, a comment and a search hit on
   the same words. The one exception is an author's own `<a>`: an xref crossing one is dropped,
   and the author's link keeps its card and its click.
 - **Keyboard**: one Tab stop per link, on the first piece of a phrase that marking split. Enter
@@ -109,6 +114,12 @@ defence edits:
    article may carry, so an article cannot forge `xref` or `data-block-*` markup
    ([261001a](../plans/261001a-article-markup-keeps-only-what-we-allow-of-data-attributes-and-classes.md)).
 2. **Visitors see the links** ([261001b](../plans/261001b-public-article-visitors-see-debate-threads-relevance-citation-entry-and-cross-references.md)).
+
+Tests: [`crossrefs.test.ts`](../../tests/crossrefs.test.ts) (the validation rules),
+[`crossrefs-revalidate.test.tsx`](../../tests/crossrefs-revalidate.test.tsx),
+[`xref-marks.test.ts`](../../tests/xref-marks.test.ts), [`xref-prose.test.tsx`](../../tests/xref-prose.test.tsx).
+The card itself is [tooltips.md](tooltips.md)'s block-link card; the fetch plumbing is `useCrossrefs`
+in [`src/web/useCrossrefs.ts`](../../src/web/useCrossrefs.ts).
 
 ## Deferred
 

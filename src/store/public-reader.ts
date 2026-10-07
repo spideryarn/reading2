@@ -14,11 +14,18 @@
  * > owned and public predicates have the same Drizzle SQL type; swapping them
  * > compiles and leaks or hides data.
  *
- * So `publicCurrentRevisionQuery` below takes a slug and a projection and
- * **nothing else**. There is no `where`, no `predicate`, no `scope`, no
- * `{ kind: "owned" | "public" }`. The only way to make this reader return a
- * private article is to edit the one `.where(publicSlug(slug))` in this file,
- * which is a change a reviewer can see rather than a call site that compiles.
+ * So `publicCurrentRevisionQuery` below takes a slug, a projection and a
+ * `PublicAccess`, and **no predicate**. There is no `where`, no `scope`, no
+ * `{ kind: "owned" | "public" }`. The only way to make this reader return an
+ * article that is neither public nor opened with its own key is to edit
+ * `publicAccessWhere` or one of its two leaves, which is a change a reviewer
+ * can see rather than a call site that compiles.
+ *
+ * **The access value arrived on 2026-10-05, with the private link**
+ * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md),
+ * and [public-access.ts](public-access.ts) says why it is not the parameter
+ * this paragraph refuses: it has no arm that can name an owner, and what a
+ * caller chooses with it is only whether a key came with the request.
  *
  * The cost is duplication, and it is the point rather than a regret: the owner
  * reader's mappings are *wrong here on purpose*. It runs the meta through
@@ -40,18 +47,24 @@
  * that takes no predicate, and `currentOwnerId()` still throwing as the runtime
  * tripwire.
  *
+ * **Since 2026-10-06 it also names the `jobs` table**, in one query that
+ * selects a constant (`publicPendingImportQuery`), with the lease predicate
+ * from `job-fence.ts`. Not the job store: tests/public-imports.test.ts permits
+ * the table in those two files and still forbids `src/jobs.ts`.
+ *
  * See docs/plans/260827ai-public-read-only-access.md.
  */
 
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import type { Assets } from "../assets.js";
-import { storedAssetFor } from "../asset-delivery.js";
+import { type LeadImage, leadImageOf, storedAssetFor } from "../asset-delivery.js";
 import { getDb } from "../db/client.js";
 import {
   articleRevisions,
   articles,
   comments,
+  jobs,
   revisionBlocks,
   searchRuns,
   uploadSourceGuesses,
@@ -60,17 +73,20 @@ import { relocateEntries } from "../glossary-occurrences.js";
 import { headingTitleOf } from "../library-scalars.js";
 import { log } from "../log.js";
 import { STORAGE_FAILED } from "../messages.js";
-import type { PublicArticle, PublicBlock } from "../public-types.js";
+import type { PublicArticle } from "../public-types.js";
 import { isSearchKind, type HighlightColour } from "../types.js";
 import { sanitizeStoredBlocks } from "../sanitize.js";
 import { isStale } from "../search-stale.js";
 import { citedMetaFingerprintOf, hashBlocks } from "../source-hash.js";
 import { isStale as crossrefsIsStale } from "../crossrefs-fingerprint.js";
 import { isSlug } from "../ingest.js";
+import { StillBeingAdded } from "../still-being-added.js";
+import { publicBlockOf } from "./block-rows.js";
 import { blobStore } from "./blobs.js";
+import { leaseIsLive } from "./job-fence.js";
 import { canonicalKey } from "../source.js";
-import { publicSlug } from "./public-slug.js";
-import { publicArticle } from "../public/dto.js";
+import { type PublicAccess, publicAccessWhere } from "./public-access.js";
+import { publicArticle, publicAuthorNames } from "../public/dto.js";
 
 /**
  * What a public reader can be asked for.
@@ -120,10 +136,26 @@ export interface PublicHead {
    * always has one.
    */
   title: string | null;
+  /**
+   * **The authors' names a visitor is already shown**, for the end of a card's
+   * title, and no others.
+   *
+   * `publicAuthorNames` in src/public/dto.ts decides which, and says why.
+   */
+  authors: string[];
   /** The description, from `root_gist` — already the gist/summary/excerpt fallback. */
   gist: string | null;
   /** The address the fetcher finally landed on. A candidate canonical, unsanitised. */
   canonical: string | null;
+  /**
+   * **The article's own first picture, when we hold a copy fit for a card**, or
+   * `null` for our brand image.
+   *
+   * Which stored object, and never an address: `leadImageOf` in
+   * src/asset-delivery.ts chooses it, and src/public/page-head.ts spells the
+   * URL, on our own origin, and holds the switch that turns it off.
+   */
+  image: LeadImage | null;
 }
 
 /**
@@ -139,9 +171,23 @@ export interface PublicAsset {
   contentType: string;
 }
 
+/**
+ * **What the head read found, and which way the visitor got in.**
+ *
+ * Two arms, and the second carries no head on purpose. A private article
+ * opened with its key is served as a page, and that page says nothing about
+ * the article in its `<head>`: a chat app that unfurls a private link must not
+ * learn the title. With no `head` on the `link` arm there is nothing for a
+ * caller to put in a tag by mistake.
+ *
+ * A **public** article opened with a key is the `public` arm, like one opened
+ * with none. Public wins.
+ */
+export type PublicHeadFound = { sharedBy: "public"; head: PublicHead } | { sharedBy: "link" };
+
 export interface PublicArticleReader {
-  loadArticle(slug: string): Promise<PublicArticle>;
-  loadHead(slug: string): Promise<PublicHead>;
+  loadArticle(slug: string, access: PublicAccess): Promise<PublicArticle>;
+  loadHead(slug: string, access: PublicAccess): Promise<PublicHeadFound>;
 
   /**
    * **One picture of a shared article** — the public twin of
@@ -162,16 +208,22 @@ export interface PublicArticleReader {
    * reaches the bucket is `canonicalKey` rebuilt from the manifest entry. GPT
    * Sol, I-5, and src/asset-delivery.ts states the rule at length.
    */
-  loadAsset(slug: string, sha256: string, ext: string): Promise<PublicAsset | null>;
+  loadAsset(
+    slug: string,
+    sha256: string,
+    ext: string,
+    access: PublicAccess,
+  ): Promise<PublicAsset | null>;
 }
 
 /**
  * A 404 shaped like every other one here, and the **only** answer a public read
  * has to a slug it cannot serve.
  *
- * Three quite different situations collapse into it, deliberately: there is no
- * such article, there is one and it is private, and there is one and it has no
- * readable revision. Telling them apart would tell a stranger whether a
+ * Four quite different situations collapse into it, deliberately: there is no
+ * such article, there is one and it is private, there is one and the key sent
+ * with the request is not its key, and there is one and it has no readable
+ * revision. Telling them apart would tell a stranger whether a
  * document exists — the same rule that makes a slug you do not own a 404 rather
  * than a 403 (docs/project/auth.md § Whose data is it).
  */
@@ -182,7 +234,7 @@ function notShared(slug: string): Error {
 /** The same 400 the owner routes give, so a bad slug reads the same everywhere. */
 function requireSlug(slug: string): void {
   if (isSlug(slug)) return;
-  throw Object.assign(new Error(`Not a slug: ${JSON.stringify(slug)}`), { status: 400 });
+  throw Object.assign(new Error("Not a slug"), { status: 400 });
 }
 
 /**
@@ -260,8 +312,8 @@ end`;
  * stops being able to tell a selected column from an unselected one — which is
  * most of what a projection is for.
  *
- * Read the absences. No `fetched_at`, no `note`, and none of the six PDF
- * provenance columns. `articles.title_override` is not selected either, so there
+ * Read the absences. No `fetched_at`, no `note`, no `doi`, no `abstract`, and
+ * none of the six PDF provenance columns. `articles.title_override` is not selected either, so there
  * is nothing here for a `titleFor()` to be called on.
  *
  * **`final_url` is selected, since 2026-08-30, and does not reach the wire as
@@ -282,6 +334,19 @@ const PUBLIC_PROJECTIONS = {
     siteName: articleRevisions.siteName,
     lang: articleRevisions.lang,
     excerpt: articleRevisions.excerpt,
+    /* Where and when the piece was published, since 2026-10-04 (plan 261004h).
+       `published_at` does not reach the wire as itself: `publicMeta` sends its
+       calendar day. `doi` and `abstract` are not selected. */
+    journal: articleRevisions.journal,
+    publishedAt: articleRevisions.publishedAt,
+    publishedYear: articleRevisions.publishedYear,
+    /* How hard a model judged the piece to read, since 2026-10-05 (plan
+       261005j): the two levels and its one sentence, so a visitor's minutes
+       are the owner's. `reading_difficulty_model` and `…_rated_at` are not
+       selected. */
+    readingLanguage: articleRevisions.readingLanguage,
+    readingIdeas: articleRevisions.readingIdeas,
+    readingDifficultyReason: articleRevisions.readingDifficultyReason,
     finalUrl: articleRevisions.finalUrl,
     tree: articleRevisions.tree,
     arc: articleRevisions.arc,
@@ -454,9 +519,17 @@ const PUBLIC_PROJECTIONS = {
   head: {
     id: articleRevisions.id,
     title: articleRevisions.title,
+    /* For the names on a card, and only those the byline already shows:
+       `PublicHead.authors`. */
+    byline: articleRevisions.byline,
+    authors: articleRevisions.authors,
     headingTitle: PUBLIC_HEADING_TITLE.as("heading_title"),
     rootGist: articleRevisions.rootGist,
     finalUrl: articleRevisions.finalUrl,
+    /* The image manifest, for the one picture a card may show:
+       `PublicHead.image`. The same column the `asset` projection reads, and the
+       route that serves the bytes reads it again for itself. */
+    assets: articleRevisions.assets,
     hasTree: sql<boolean>`${articleRevisions.tree} is not null`.as("has_tree"),
     /* `exists`, not a count: the question is whether there is at least one, and
        counting every block of a long article to learn that it is more than zero
@@ -485,6 +558,13 @@ export type PublicRead = keyof typeof PUBLIC_PROJECTIONS;
  * up `owner_id`, `title_override` and `purpose` in one careless line. Only
  * `slug` comes off that table, and it is the one the caller already knows.
  *
+ * **And one yes-or-no computed from it, since 2026-10-05: `isPublic`.** With a
+ * key in the request a row can match either way, and the caller has to know
+ * which: a private article opened by its link gets a different notice and no
+ * preview card. It is `visibility = 'public'` asked in SQL, so the column's
+ * value does not cross and `share_token` is never in the select list at all —
+ * tests/public-reads.test.ts reads the statement for both.
+ *
  * **Every public read goes through here, and that is the rule rather than a
  * convenience.** A read that builds its own `select` gets its predicate from
  * itself, and the SQL test goes on reading this helper — which is exactly what
@@ -496,17 +576,104 @@ export type PublicRead = keyof typeof PUBLIC_PROJECTIONS;
 export function publicCurrentRevisionQuery<K extends PublicRead>(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
   read: K,
 ) {
   return db
-    .select({ slug: articles.slug, revision: PUBLIC_PROJECTIONS[read] })
+    .select({
+      slug: articles.slug,
+      isPublic: sql<boolean>`${articles.visibility} = 'public'`.as("is_public"),
+      revision: PUBLIC_PROJECTIONS[read],
+    })
     .from(articles)
     /* The same join the owner read uses, and it carries the same guarantee for
        free: `current_revision_id` only ever points at a published revision, so
        there is no `status` clause to remember here. */
     .innerJoin(articleRevisions, eq(articleRevisions.id, articles.currentRevisionId))
-    .where(publicSlug(slug))
+    .where(publicAccessWhere(slug, access))
     .limit(1);
+}
+
+/**
+ * **A job that may still publish this article**: queued, or running inside its
+ * lease.
+ *
+ * `running` alone is not enough. A claimant that died stays `running` until
+ * its owner's next request sweeps it (`settleExpired`, src/store/pg-jobs.ts),
+ * and a visitor's request sweeps nothing, so without the lease the answer
+ * below would be *still being added* for ever. GPT Sol's F5 on the stage 2
+ * plan. The lease is `leaseIsLive` itself, from [job-fence.ts](job-fence.ts),
+ * so this agrees with the fence and the sweep to the microsecond and on the
+ * same clock: the database's `clock_timestamp()`.
+ *
+ * **A read, and only a read.** Nothing here settles, requeues or claims.
+ *
+ * The two statuses are spelled out and not taken from `ACTIVE` in
+ * src/store/jobs.ts: that module is the job store's contract, and the public
+ * graph stays clear of it. A queued job promises nothing about *when*; it may
+ * be waiting on its owner's browser.
+ */
+const PENDING_JOB = sql`(${jobs.status} = 'queued' or (${jobs.status} = 'running' and ${leaseIsLive}))`;
+
+/**
+ * **Is an import under way for an article this request may read, which has no
+ * published revision yet?** Plan
+ * docs/plans/261005l-permalink-and-share-while-an-article-is-importing.md § 2c,
+ * on Greg's instruction of 2026-10-06: the holder of a shared address is told
+ * *still being added* where they used to be told nothing.
+ *
+ * Asked only by `loadArticle`, and only after the current-revision read found
+ * nothing. It selects a constant: a row back means yes, and nothing about the
+ * article or the job is in it. No title, owner, url, error or progress.
+ *
+ * **Three conditions, and each is in this statement's own `where`**, for the
+ * reason `publicCommentsQuery` gives: nothing is taken on trust from an earlier
+ * statement.
+ *
+ *  - **`publicAccessWhere(slug, access)`**, the same predicate every read in
+ *    this file carries. A private article, a wrong key, a turned-off key and an
+ *    absent slug all match no row, so each is still the one `notShared` 404.
+ *  - **`current_revision_id is null`.** A published article never reaches this
+ *    through a mode job running on it, and a published revision that cannot be
+ *    drawn stays a 404 and is not called an import.
+ *  - **A pending job for the same slug *and* the same owner.** `jobs` has no
+ *    article id. Slug alone would let anybody make a stranger's unpublished
+ *    public article answer *still being added* by queueing work under its
+ *    slug. `owner_id` is compared between two rows and never with a value: no
+ *    owner comes into this file, and none is selected.
+ *
+ * **Not `draft_revision_id`**: a queued job may not have a draft yet.
+ *
+ * `jobs` is the eighth table this file names, and
+ * tests/public-imports.test.ts permits it here and in job-fence.ts only.
+ * tests/public-reads.test.ts reads this SQL;
+ * tests/public-still-being-added-pg.test.ts proves what it returns.
+ */
+export function publicPendingImportQuery(
+  db: Pick<ReturnType<typeof getDb>, "select">,
+  slug: string,
+  access: PublicAccess,
+) {
+  return db
+    .select({ pending: sql<boolean>`true`.as("pending") })
+    .from(articles)
+    .where(
+      and(
+        publicAccessWhere(slug, access),
+        isNull(articles.currentRevisionId),
+        sql`exists (
+          select 1 from ${jobs}
+          where ${jobs.slug} = ${articles.slug}
+            and ${jobs.ownerId} = ${articles.ownerId}
+            and ${PENDING_JOB})`,
+      ),
+    )
+    .limit(1);
+}
+
+/** Which way a matched row let the visitor in. Public wins: see public-access.ts. */
+function sharedByOf(found: { isPublic: boolean }): "public" | "link" {
+  return found.isPublic ? "public" : "link";
 }
 
 /**
@@ -564,6 +731,7 @@ const PUBLIC_COMMENTS_WHERE = sql`${comments.criterionId} is null and ${comments
 export function publicCommentsQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
 ) {
   return db
     .select({
@@ -579,7 +747,7 @@ export function publicCommentsQuery(
     })
     .from(comments)
     .innerJoin(articles, eq(articles.id, comments.articleId))
-    .where(and(publicSlug(slug), PUBLIC_COMMENTS_WHERE))
+    .where(and(publicAccessWhere(slug, access), PUBLIC_COMMENTS_WHERE))
     .orderBy(asc(comments.createdAt), asc(comments.id));
 }
 
@@ -619,6 +787,7 @@ const PUBLIC_SEARCHES_WHERE = sql`${searchRuns.status} = 'done'`;
 export function publicSearchesQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
 ) {
   return db
     .select({
@@ -632,7 +801,7 @@ export function publicSearchesQuery(
     })
     .from(searchRuns)
     .innerJoin(articles, eq(articles.id, searchRuns.articleId))
-    .where(and(publicSlug(slug), PUBLIC_SEARCHES_WHERE))
+    .where(and(publicAccessWhere(slug, access), PUBLIC_SEARCHES_WHERE))
     .orderBy(asc(searchRuns.createdAt), asc(searchRuns.id));
 }
 
@@ -665,6 +834,7 @@ const PUBLIC_SOURCE_GUESS_WHERE = sql`${uploadSourceGuesses.status} = 'found'`;
 export function publicSourceGuessQuery(
   db: Pick<ReturnType<typeof getDb>, "select">,
   slug: string,
+  access: PublicAccess,
 ) {
   return db
     .select({
@@ -674,7 +844,7 @@ export function publicSourceGuessQuery(
     })
     .from(uploadSourceGuesses)
     .innerJoin(articles, eq(articles.id, uploadSourceGuesses.articleId))
-    .where(and(publicSlug(slug), PUBLIC_SOURCE_GUESS_WHERE))
+    .where(and(publicAccessWhere(slug, access), PUBLIC_SOURCE_GUESS_WHERE))
     .limit(1);
 }
 
@@ -725,12 +895,19 @@ export function publicBlocksQuery(
 
 
 export const pgPublicReader: PublicArticleReader = {
-  async loadArticle(slug: string): Promise<PublicArticle> {
+  async loadArticle(slug: string, access: PublicAccess): Promise<PublicArticle> {
     requireSlug(slug);
     return scrubbed("article", async () => {
       const db = getDb();
-      const [found] = await publicCurrentRevisionQuery(db, slug, "article");
-      if (!found) throw notShared(slug);
+      const [found] = await publicCurrentRevisionQuery(db, slug, access, "article");
+      if (!found) {
+        /* **The one place a public read says anything but 404 about an article
+           it cannot serve**, and only this read: the head, the pictures and the
+           listings have no such arm. See `publicPendingImportQuery`. */
+        const [pending] = await publicPendingImportQuery(db, slug, access);
+        if (pending) throw new StillBeingAdded();
+        throw notShared(slug);
+      }
 
       const rows = await publicBlocksQuery(db, found.revision.id);
       const tree = found.revision.tree;
@@ -746,34 +923,7 @@ export const pgPublicReader: PublicArticleReader = {
          and absent reads as stale, which cleans — the safe direction.
          docs/project/security.md § There are two stores. */
       const blocks = sanitizeStoredBlocks(
-        rows.map(
-          (row): PublicBlock => ({
-            id: row.blockId,
-            tag: row.tag,
-            /* The one cast, and the same one the owner reader makes: `kind` is a
-               `text` column with a CHECK on it, so Postgres guarantees the value
-               and TypeScript cannot see the guarantee. */
-            kind: row.kind as PublicBlock["kind"],
-            /* Conditional spreads, because `exactOptionalPropertyTypes` is on:
-               Postgres hands back `null` where the shape simply has no key. */
-            ...(row.level === null ? {} : { level: row.level }),
-            text: row.text,
-            words: row.words,
-            html: row.html,
-            gistable: row.gistable,
-            /* The same cast `kind` gets, and for the same reason: `role` and
-               `treatment` are `text` columns with a CHECK on them, so Postgres
-               guarantees the value and TypeScript cannot see the guarantee. */
-            ...(row.role === null ? {} : { role: row.role as NonNullable<PublicBlock["role"]> }),
-            ...(row.treatment === null
-              ? {}
-              : { treatment: row.treatment as NonNullable<PublicBlock["treatment"]> }),
-            ...(row.noteId === null ? {} : { noteId: row.noteId }),
-            ...(row.contextId === null || row.contextType === null
-              ? {}
-              : { context: { id: row.contextId, type: row.contextType as "callout" } }),
-          }),
-        ),
+        rows.map((row) => publicBlockOf(row.blockId, row)),
         undefined,
       ).blocks;
 
@@ -789,9 +939,9 @@ export const pgPublicReader: PublicArticleReader = {
          article that fails the tree-and-blocks bar below is a 404, and there is
          no point reading anybody's comments for a page that will not be
          served. */
-      const commentRows = await publicCommentsQuery(db, slug);
-      const searchRows = await publicSearchesQuery(db, slug);
-      const [guessRow] = await publicSourceGuessQuery(db, slug);
+      const commentRows = await publicCommentsQuery(db, slug, access);
+      const searchRows = await publicSearchesQuery(db, slug, access);
+      const [guessRow] = await publicSourceGuessQuery(db, slug, access);
 
       /**
        * **The article's fingerprint, from the rows this read already has.**
@@ -852,11 +1002,18 @@ export const pgPublicReader: PublicArticleReader = {
 
       return publicArticle({
         slug: found.slug,
+        sharedBy: sharedByOf(found),
         title: found.revision.title,
         byline: found.revision.byline,
         siteName: found.revision.siteName,
         lang: found.revision.lang,
         excerpt: found.revision.excerpt,
+        journal: found.revision.journal,
+        publishedAt: found.revision.publishedAt,
+        publishedYear: found.revision.publishedYear,
+        readingLanguage: found.revision.readingLanguage,
+        readingIdeas: found.revision.readingIdeas,
+        readingDifficultyReason: found.revision.readingDifficultyReason,
         headingTitle: headingTitleOf(blocks),
         finalUrl: found.revision.finalUrl,
         blocks,
@@ -911,10 +1068,15 @@ export const pgPublicReader: PublicArticleReader = {
           ...(row.citations === null ? {} : { citations: row.citations }),
           /* `comments_colour` keeps the column to the four names. */
           ...(row.colour === null ? {} : { colour: row.colour as HighlightColour }),
-          /* Required by `Comment` and constant by construction: the query
-             refuses every other value (PUBLIC_COMMENTS_WHERE), and the public
-             DTO drops the field. Written out rather than cast so that a change
-             to the predicate has somewhere obvious to disagree. */
+          /* Required by `Comment`, and **not what every row says**: the
+             query admits `'none'` as well as `'done'` (PUBLIC_COMMENTS_WHERE)
+             — a reader's own note has had no model call — and this writes
+             `done` for both. That is harmless only because the public DTO
+             drops the field (`publicComments`, src/public/dto.ts). Anything
+             that starts reading `status` off this needs the row's own value
+             first. (This said "constant by construction: the query refuses
+             every other value" until 2026-10-07, which was true of the
+             searches below and never of this.) */
           status: "done" as const,
         })),
         searches: searchRows.map((row) => ({
@@ -969,15 +1131,21 @@ export const pgPublicReader: PublicArticleReader = {
    * stranger can tell those apart — a 404 whose `<title>` differs is as much of
    * a disclosure as a 403.
    */
-  async loadHead(slug: string): Promise<PublicHead> {
+  async loadHead(slug: string, access: PublicAccess): Promise<PublicHeadFound> {
     requireSlug(slug);
     return scrubbed("head", async () => {
       const db = getDb();
-      const [found] = await publicCurrentRevisionQuery(db, slug, "head");
+      const [found] = await publicCurrentRevisionQuery(db, slug, access, "head");
       if (!found) throw notShared(slug);
       if (!found.revision.hasTree || !found.revision.hasBlocks) throw notShared(slug);
 
-      return {
+      /* **A private article opened by its link has no head to give.** The page
+         is served, with the plain shell: see `PublicHeadFound`. Decided after
+         the readability bar, so a link to an unreadable revision is the same
+         404 its public twin would be. */
+      if (sharedByOf(found) === "link") return { sharedBy: "link" };
+
+      const head: PublicHead = {
         slug: found.slug,
         /* **The slug is the last resort, and it is not optional.** `metaFrom`
            in src/public/dto.ts is `title ?? headingTitle ?? slug`, and that is
@@ -998,7 +1166,10 @@ export const pgPublicReader: PublicArticleReader = {
         title: found.revision.title ?? found.revision.headingTitle ?? found.slug,
         gist: found.revision.rootGist,
         canonical: found.revision.finalUrl,
+        authors: publicAuthorNames(found.revision.authors, found.revision.byline),
+        image: leadImageOf(found.revision.assets as Assets | null),
       };
+      return { sharedBy: "public", head };
     });
   },
 
@@ -1020,10 +1191,15 @@ export const pgPublicReader: PublicArticleReader = {
    * is misconfigured is the wrong sentence. `scrubbed` lets it through because
    * it carries its own `status`.
    */
-  async loadAsset(slug: string, sha256: string, ext: string): Promise<PublicAsset | null> {
+  async loadAsset(
+    slug: string,
+    sha256: string,
+    ext: string,
+    access: PublicAccess,
+  ): Promise<PublicAsset | null> {
     requireSlug(slug);
     return scrubbed("asset", async () => {
-      const [found] = await publicCurrentRevisionQuery(getDb(), slug, "asset");
+      const [found] = await publicCurrentRevisionQuery(getDb(), slug, access, "asset");
       if (!found) throw notShared(slug);
 
       const entry = storedAssetFor((found.revision.assets as Assets | null) ?? undefined, sha256, ext);

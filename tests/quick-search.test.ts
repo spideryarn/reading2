@@ -14,6 +14,8 @@ import { collectSpend } from "../src/ai-spend.js";
 import { MAX_HITS, type SearchEvent } from "../src/search.js";
 import {
   CHUNK_TOKEN_BUDGET,
+  QUICK_FALLBACK_FLOOR,
+  QUICK_FALLBACK_HITS,
   QUICK_FLOOR,
   chunkBlocks,
   estimateTokens,
@@ -149,10 +151,48 @@ describe("turning probabilities into hits", () => {
     ]);
   });
 
-  it("puts the floor at 0.7, inclusive", () => {
-    expect(QUICK_FLOOR).toBe(0.7);
-    expect(hitsFrom({ [a.id]: 0.7 }, [a]).hits).toHaveLength(1);
-    expect(hitsFrom({ [a.id]: 0.6999 }, [a]).hits).toHaveLength(0);
+  /* 0.65 since 2026-10-04 (Greg: "a more permissive threshold, so that more
+     shows up"), down from 0.7. Investigation 261004d. */
+  it("puts the floor at 0.65, inclusive: a block under it is dropped when another clears it", () => {
+    expect(QUICK_FLOOR).toBe(0.65);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.65, [b.id]: 0.6499 }, [a, b]);
+    expect(hits.map((h) => h.blockId)).toEqual([a.id]);
+    expect(fallback).toBe(false);
+  });
+
+  /* Feedback spya-jp5nxn: "results" on a paper scored its best paragraphs 0.52
+     to 0.57 and the reader saw nothing (investigation 261003f). 0.4 since
+     2026-10-04, down from 0.5 (investigation 261004d). */
+  it("falls back to the lower floor when nothing clears the floor, best first", () => {
+    expect(QUICK_FALLBACK_FLOOR).toBe(0.4);
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.4, [b.id]: 0.3999, [c.id]: 0.62 }, [a, b, c]);
+    expect(hits).toEqual([
+      { blockId: c.id, quote: c.text, confidence: 62, reasoning: "", start: 0 },
+      { blockId: a.id, quote: a.text, confidence: 40, reasoning: "", start: 0 },
+    ]);
+    expect(fallback).toBe(true);
+  });
+
+  it("keeps the fallback floor below the ordinary floor", () => {
+    expect(QUICK_FALLBACK_FLOOR).toBeLessThan(QUICK_FLOOR);
+  });
+
+  it("still finds nothing when nothing clears the lower floor either", () => {
+    const { hits, fallback } = hitsFrom({ [a.id]: 0.3999, [b.id]: 0.12 }, [a, b]);
+    expect(hits).toEqual([]);
+    expect(fallback).toBe(false);
+  });
+
+  it("caps a fallback list at QUICK_FALLBACK_HITS and counts what the cap threw away", () => {
+    expect(QUICK_FALLBACK_HITS).toBe(8);
+    const many = Array.from({ length: 10 }, (_, i) => block(`weak passage ${i}`));
+    const { hits, dropped } = hitsFrom(
+      Object.fromEntries(many.map((m, i) => [m.id, 0.55 + i / 100])),
+      many,
+    );
+    expect(hits).toHaveLength(8);
+    expect(dropped.truncated).toBe(2);
+    expect(hits[0]?.blockId).toBe(many[9]?.id);
   });
 
   it("breaks a tie in the article's order, so the list does not shuffle", () => {
@@ -214,6 +254,21 @@ describe("quickPassagesStream", () => {
     expect(done.result.hits.map((h) => h.blockId)).toEqual([b.id]);
     expect(done.result.model).toBe("typesafe/jev-1.13");
     expect(done.result.usage?.promptTokens).toBe(1000);
+  });
+
+  it("yields the fallback's hits when no block reaches the floor", async () => {
+    const a = block("We reach 71% accuracy on the held-out tasks.");
+    const b = block("A thermostat has no interior.");
+    stubJudge(scoring((id) => (id === a.id ? 0.55 : 0.1)));
+    const { result: events } = await collectSpend(() =>
+      drain(quickPassagesStream({ meta, blocks: [a, b], criterion: "results" })),
+    );
+    expect(events.map((e) => e.type)).toEqual(["hit", "done"]);
+    const done = events.at(-1);
+    if (done?.type !== "done") throw new Error("no done");
+    expect(done.result.hits).toEqual([
+      { blockId: a.id, quote: a.text, confidence: 55, reasoning: "", start: 0 },
+    ]);
   });
 
   it("sends the chunks of a long article in parallel and writes one ledger row each", async () => {
@@ -302,13 +357,17 @@ describe("quickPassagesStream", () => {
     expect((err as Error).cause).toBe("no-answers");
   });
 
+  /* **403 in the tests below, where it was 502 until 2026-10-05.** They are
+     about what quick search does once a chunk *has* failed, and since plan
+     261005j the gateway asks again after a 502 before it lets one fail
+     (tests/ai-call-transport-retry.test.ts). A 403 is a verdict, refused once. */
   it("fails when one chunk fails, and stops the others rather than paying for them", async () => {
     const blocks = Array.from({ length: 5 }, () => block("x".repeat(32_000)));
     let call = 0;
     const aborted: boolean[] = [];
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
       const mine = call++;
-      if (mine === 0) return Promise.resolve(reply("{}", 502));
+      if (mine === 0) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           aborted.push(true);
@@ -345,7 +404,7 @@ describe("quickPassagesStream", () => {
       const body = JSON.parse(String(init.body)) as Sent["body"];
       const ids = Object.keys(body.questions);
       if (ids.length === 2) return Promise.resolve(reply(OVERFLOW, 400));
-      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 502));
+      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           // Real cancellation still has asynchronous body/transport cleanup.
@@ -377,7 +436,7 @@ describe("quickPassagesStream", () => {
       const body = JSON.parse(String(init.body)) as Sent["body"];
       const ids = Object.keys(body.questions);
       if (ids.length === 2) return Promise.resolve(reply(OVERFLOW, 400));
-      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 502));
+      if (ids[0] === blocks[0]!.id) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           const delay = ids[0] === blocks[1]!.id ? 20 : 0;
@@ -388,7 +447,7 @@ describe("quickPassagesStream", () => {
     const { report } = await collectSpend(async () => {
       await expect(
         drain(quickPassagesStream({ meta, blocks, criterion: "q" })),
-      ).rejects.toMatchObject({ status: 502 });
+      ).rejects.toMatchObject({ status: 403 });
     });
     expect(report.pending).toEqual([]);
     expect(report.calls.map((c) => c.outcome).sort()).toEqual([
@@ -435,7 +494,7 @@ describe("quickPassagesStream", () => {
     const blocks = Array.from({ length: 3 }, () => block("x".repeat(32_000)));
     let call = 0;
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
-      if (call++ === 0) return Promise.resolve(reply("{}", 502));
+      if (call++ === 0) return Promise.resolve(reply("{}", 403));
       return new Promise((_resolve, reject) => {
         init.signal?.addEventListener("abort", () => {
           setTimeout(() => reject(init.signal?.reason), 60);
@@ -445,7 +504,7 @@ describe("quickPassagesStream", () => {
     const { report } = await collectSpend(async () => {
       await expect(
         drain(quickPassagesStream({ meta, blocks, criterion: "q", timeoutMs: 30 })),
-      ).rejects.toMatchObject({ status: 502 });
+      ).rejects.toMatchObject({ status: 403 });
     });
     expect(report.pending).toEqual([]);
     expect(report.calls.map((c) => c.outcome).sort()).toEqual(["aborted", "error"]);

@@ -62,7 +62,7 @@
 .sk-scene.on { color: var(--ink); border-color: var(--rule-strong); background: var(--surface-raised); max-width: none; }
 .sk-scene:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
-.sk-up, .sk-crumb, .sk-zoom {
+.sk-up, .sk-zoom {
   display: inline-flex; align-items: center; gap: 0.2rem;
   border: 1px solid var(--rule); border-radius: 4px;
   padding: 0.15rem 0.4rem;
@@ -70,12 +70,12 @@
   font-family: inherit; font-size: inherit;
 }
 .sk-zoom { margin-left: auto; }
-/* The owner's *written for you* badge (since 2026-10-02, plan 261002b) sits
+/* The owner's profile icon (since 2026-10-02, plan 261002b) sits
    beside Enlarge at the bar's end, so it takes the push and Enlarge follows. */
 .sk-bar > .prof-badge { margin-left: auto; flex: none; }
 .sk-bar > .prof-badge + .sk-zoom { margin-left: 0; }
-.sk-up:hover, .sk-crumb:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
-.sk-up:focus-visible, .sk-crumb:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.sk-up:hover, .sk-zoom:hover { background: var(--surface-raised); color: var(--ink); }
+.sk-up:focus-visible, .sk-zoom:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 /* Up sits before the scene row, not after it: it is the way out of where you
    are, and the row is a list of where you could be. */
 .sk-up { flex: none; }
@@ -223,7 +223,10 @@
 .sk-in-full .sk-card { height: 7.5rem; }
 .sk-in-full .sk-card-detail { -webkit-line-clamp: 3; }
 .sk-in-full .sk-bar { padding: 0.5rem 0.8rem; font-size: 0.88rem; }
-.sk-in-full .sk-scene { max-width: 20rem; }
+/* Closed chips only. A bare `.sk-in-full .sk-scene` ties `.sk-scene.on` on
+   specificity and comes later, so it put a cap back on the open chip: the one
+   label § the open one is not truncated says must be readable. */
+.sk-in-full .sk-scene:not(.on) { max-width: 20rem; }
 /* Stops a trackpad flick inside a tall picture scrolling the article behind it
    — the case that actually happens. Lightbox.tsx § two things `<dialog>` does
    not do has the reasoning, including why locking `body` was rejected. */
@@ -417,9 +420,7 @@ a.sk-card-jump.block-ref:hover { color: var(--highlight-text); text-decoration: 
    **The same grey as every other failure in this band**, not a red. Both of the
    diagram panel's failures — `.diag-wait`'s and the Force strip's — say what
    went wrong in `--ink-faint` and let the words carry it, and a red here would
-   be the one message in the band shouting. It would also have to name
-   `--destructive`, which this stylesheet references six times and defines
-   nowhere: bare, the declaration is simply dropped. */
+   be the one message in the band shouting. */
 .sk-failed {
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;
@@ -427,6 +428,9 @@ a.sk-card-jump.block-ref:hover { color: var(--highlight-text); text-decoration: 
   font-size: 0.81rem;
   color: var(--ink-faint);
 }
+/* The shared read-error markup belongs to both pictures in Diagram. Keep the
+   band's failure colour when its sentence also carries a retry button. */
+.mode-band.diag .read-error .gloss-error { color: var(--ink-faint); }
 .sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
 .sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }

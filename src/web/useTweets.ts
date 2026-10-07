@@ -7,7 +7,7 @@
  * The shape is `useFaq`'s: `useOrderedRead` for the ordering, `useStepJob` for
  * the job — and not `useAutoRun` for the first open.
  *
- * **Opening it writes the thread, however the owner arrived** — the one mode
+ * **Opening it writes the thread, however the owner arrived** — the one view
  * that breaks *a press spends, arriving does not*, and it breaks it on Greg's
  * word rather than by accident:
  *
@@ -18,11 +18,15 @@
  *
  * As a page that was `useAutoRunOnArrival` (260915e), because a reload or a
  * pasted link had shown him the button. Becoming a mode did not revoke that, so
- * the rule came across with it (GPT Sol, plan review, 2026-09-29). The one
- * arrival that is *not* intent — the shelf restoring the last view — is closed
- * by `NEEDS_AN_EXPLICIT_PRESS` in last-view.ts, which drops `?mode=tweets` from
- * a restore. src/web/useAutoRun.ts § `useAutoRunOnArrival` has what it spends
- * on and why that is bounded.
+ * the rule came across with it (GPT Sol, plan review, 2026-09-29) — and again
+ * on 2026-10-03, when the mode became Summary's Thread view and Greg said
+ * *"keep all of the tweet thread. Functionality and UI"*
+ * (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md
+ * § Decision 6). The one arrival that is *not* intent — the shelf restoring
+ * the last view — is closed in last-view.ts § `opensTheThread`, which drops
+ * the mode from a restore that would open the thread.
+ * src/web/useAutoRun.ts § `useAutoRunOnArrival` has what it spends on and why
+ * that is bounded.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { THREAD_RECHECK_FAILED } from "../messages.js";
@@ -32,6 +36,9 @@ import { useOrderedRead } from "./useOrderedRead.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRunOnArrival } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { MalformedReply } from "./lib/reader-facing.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 
 export type TweetsStatus = "loading" | "none" | "ready" | "error";
 
@@ -52,6 +59,11 @@ export interface UseTweets {
   failed: StepFailure | null;
   stalled: boolean;
   starting: boolean;
+  /**
+   * A forced run was pressed on the thread still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
   /** Repeat only the GET after a failed read. Never spends. */
   retryRead(): Promise<void>;
   /** Read again after the profile panel saved — useSimple.ts § `refresh`. Never spends. */
@@ -67,12 +79,15 @@ export function useTweets(slug: string): UseTweets {
   const [status, setStatus] = useState<TweetsStatus>("loading");
   const [loaded, setLoaded] = useState<ThreadResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
   /**
    * Whether a read has ever answered for this slug — a thread or a clean 404.
    * Read by the catch, which is a stable callback and cannot see state; after
    * an answer, a failed read keeps what is on screen and says so.
    */
   const answered = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate reset trigger — read history belongs to this slug
   useEffect(() => {
     answered.current = false;
   }, [slug]);
@@ -84,19 +99,36 @@ export function useTweets(slug: string): UseTweets {
    */
   const load = useCallback(
     async (current: () => boolean) => {
+      const started = begin();
       try {
         const res = await apiFetch(`/api/tweets/${encodeURIComponent(slug)}`);
         if (!current()) return;
-        if (res.status === 404) {
+        /* **Checked before anything is published** (plan 261007e, WCO4):
+           `readJson` checks no shape, and an empty 200 is `{}`. A 404 is
+           "none yet", and so is `200 null`, which this route does not send
+           today and a route under `NONE_YET_AS_NULL_HEADER` does. */
+        const found = res.status === 404 ? null : await readJson<ThreadResponse | null>(res);
+        if (!current()) return;
+        if (found === null) {
           setLoaded(null);
+          landed(started, res, null);
           setError(null);
           answered.current = true;
           setStatus("none");
           return;
         }
-        const found = await readJson<ThreadResponse>(res);
-        if (!current()) return;
+        /* A reply without a thread is published nowhere: a `MalformedReply`,
+           caught below like any failed read, so a thread already on screen
+           stays and an opening read says `PAGE_FAULT`
+           (tests/read-error-matrix.test.tsx). The writer and legacy fixtures
+           store objects. `loadTweets` (src/store/pg.ts) checks only truthiness,
+           so a hand-stored primitive could pass the server and fail here. */
+        const thread = (found as Partial<ThreadResponse> | undefined)?.thread;
+        if (typeof thread !== "object" || thread === null) {
+          throw new MalformedReply("the thread reply has no thread");
+        }
         setLoaded(found);
+        landed(started, res, thread.generatedAt ?? null);
         setError(null);
         answered.current = true;
         setStatus("ready");
@@ -118,13 +150,20 @@ export function useTweets(slug: string): UseTweets {
            fall back on. */
         if (answered.current) {
           setError(THREAD_RECHECK_FAILED.message);
+          /* **This read is over, so it is not `loading`.** `retryRead` goes to
+             `loading` when nothing is loaded, and after a clean 404 that is
+             true *and* `answered` is — so the earlier answer kept the view and
+             nothing ended the wait. Only a 404 gets here loading, and `none` is
+             what it said.
+             docs/postmortems/261004f-a-previous-404-cannot-settle-the-next-failed-retry.md. */
+          setStatus((was) => (was === "loading" ? "none" : was));
         } else {
-          setError((err as Error).message);
+          setError(describeFetchFailure(err as Error));
           setStatus("error");
         }
       }
     },
-    [slug],
+    [slug, begin, landed],
   );
 
   /* An ordinary `reload` joins the read in flight, a post-job `refresh` trails
@@ -149,9 +188,19 @@ export function useTweets(slug: string): UseTweets {
   const ensure = useCallback(async () => {
     await queue.start({});
   }, [queue]);
+  /* The thread's clock is its identity: a forced run replaces it and re-stamps it. */
+  const hold = useRewriteHold({
+    slug,
+    step: "tweets",
+    identity: loaded?.thread?.generatedAt ?? null,
+    queue,
+    fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
 
   /* Arrival spends, once per page load — see the header. `reload` is the way
      out of a failed read: useAutoRun.ts § A failed read is not an answer. */
@@ -164,9 +213,10 @@ export function useTweets(slug: string): UseTweets {
     profileChanged: loaded?.profileChanged ?? false,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
     retryRead,
     refresh,
     ensure,

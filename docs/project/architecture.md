@@ -24,6 +24,19 @@ content hash is whichever declare a `stamp()` in [`src/pipeline.ts`](../../src/p
 one at first" is a design constraint, not an apology — keep it boring while the ideas are still
 moving.
 
+## In this doc
+
+- [§ Intent](#intent) — Greg's brief, and the one design constraint it sets
+- [§ The docs](#the-docs) — finding the doc for a pipeline stage, a model call, or where data lives
+- [§ Pipeline](#pipeline) — the stage diagram: what runs in what order and what each writes
+- [§ What a block is](#what-a-block-is) — the fields on a block, before reading or writing one
+- [§ Stage ownership](#stage-ownership) — which files a stage may touch, before reaching into another's
+- [§ Storage](#storage) — where an artefact lives, and whether a step's cache can be trusted (the fingerprints)
+- [§ Server and client](#server-and-client) — where a request goes, and adding a route
+- [§ Shared code (server)](#shared-code-server) — check here before writing a helper
+- [§ Conventions](#conventions) — adding or re-running a step: hashing, freshness, and
+  [adding an artefact-backed mode](#adding-an-artefact-backed-mode)
+
 ## The docs
 
 One line each on when you would open it. The pipeline's stages come first, then the calls to models,
@@ -35,7 +48,8 @@ then where the data lives.
 - **[fetching.md](fetching.md)** — stage 1: a URL fails to fetch, or fetches something that is not
   what it looks like, or you are changing what we ask other people's servers for.
 - **[content-extraction.md](content-extraction.md)** — stage 2 for a web page: Readability dropped
-  or kept the wrong part of an article. (A PDF is the other extractor, in
+  or kept the wrong part of an article, or a page is refused (no article, too little text, or a
+  bot-check page — and how to add a bot-check provider). (A PDF is the other extractor, in
   [260826c-pdf-ingestion.md](../plans/260826c-pdf-ingestion.md).)
 - **[structure-step.md](structure-step.md)** — stage 4: the tree, its gists and the paragraph labels, and why
   labels are a separate step that a plain add does not run.
@@ -48,13 +62,17 @@ then where the data lives.
   that fail without saying so.
 - **[cost-tracking.md](cost-tracking.md)** — a new piece of AI work, to get its cost recorded
   without extra plumbing; or a figure on the metadata or admin page looks wrong.
+- **[admin-costs.md](admin-costs.md)** — Greg asks where the money went, or you are adding a
+  breakdown to `/admin/costs`: the one cube both the page and `npm run cost:analyse` read, and the
+  rules its figures keep.
 - **[prompt-caching.md](prompt-caching.md)** — a stage's bill went up, or you are changing what
   comes before the article in a prompt: the caches that stop us paying for the article twice.
 - **[prompting-guide.md](prompting-guide.md)** — writing or changing a prompt that puts words in
   front of a reader: the shared plain-words rule, and how to measure the change.
 - **[email.md](email.md)** — anything that sends mail, or auth mail that did not arrive.
-- **[database.md](database.md)** — the operating manual for Postgres: migrations, which database a
-  command really reaches, checkpoints, and the traps that have each cost a day.
+- **[database.md](database.md)** — the operating manual for Postgres: how a new migration is named
+  and applied ([five lines](database.md#a-new-migration-in-five-lines)), which database a command
+  really reaches, checkpoints, and the traps that have each cost a day.
 - **[sql.md](sql.md)** — adding a column or a table: the shape we want the schema to have.
 - **[export.md](export.md)** — a reader's data leaving: the per-article zip, and the `db:export`
   rollback that shares its queries.
@@ -90,8 +108,8 @@ then where the data lives.
    ├─────────────────────┐
    ▼                     ▼
  ┌──────────┐        ┌──────────────┐
- │ 4 hier-  │        │ 5 summarize  │   gist per node, bottom-up — asked
- │ archy    │───────►│              │──►  for in the same call as 4, not a
+ │ 4 struc- │        │ 5 summarize  │   gist per node, bottom-up — asked
+ │ ture     │───────►│              │──►  for in the same call as 4, not a
  └──────────┘        └──────────────┘     step of its own:  tree (+ labels,
    │                                       an empty manifest until 4b)
    ▼
@@ -121,6 +139,10 @@ above are those artefact kinds ([`src/store/artifacts.ts`](../../src/store/artif
 abstract and DOI off its first pages, in the two-step job `["fetch", "metadata"]` a bulk-added
 file gets. It publishes a revision with no blocks and no tree, which only a `'minimal'` article may
 — [ingest-queue.md § A minimal upload, and Read this](ingest-queue.md#a-minimal-upload-and-read-this).
+
+**A first import from the browser opens before `structure` runs**, on a temporary outline cut from
+the headings, and the real tree is swapped in live by a second job —
+[ingest-queue.md § A first import opens before its structure](ingest-queue.md#a-first-import-opens-before-its-structure).
 
 Stages 4 and 5 are drawn separately but produce **one structure**. See
 [the tree](granularity-zoom.md#the-tree): a deeply-nested table of contents that goes "all the way
@@ -279,15 +301,15 @@ The layout the pipeline used to write, one directory per article, until 2026-09-
 Anything expensive is cached on a content hash. `tree.json` is keyed on
 `hash(blocks.json) + prompt version + model id` — change any of those and it regenerates.
 
-**That was aspirational until 2026-08-25, and six artefacts really do it now.** `tweets.json` was
+**That was aspirational until 2026-08-25, and the article-reading artefacts really do it now.** `tweets.json` was
 first, and the pipeline reads its hash (`isDone` on a step, see
 [ingest-queue.md](ingest-queue.md#a-step-can-now-say-whether-its-artefact-is-current-not-just-present));
 `arc.json` joined on 2026-08-29 with the first fingerprint that covered everything its prompt reads.
 
-**Since 2026-08-31 the six article-reading stages are fingerprinted against everything their prompt
+**Since 2026-08-31 the article-reading stages are fingerprinted against everything their prompt
 reads** — the blocks, the tree, *and the head* — in
-[`src/source-hash.ts`](../../src/source-hash.ts). Before that, four of the six hashed the blocks
-alone and two omitted the metadata, so the sections could be re-cut, or the page re-extracted under a
+[`src/source-hash.ts`](../../src/source-hash.ts). Before that, four of the six there were then hashed
+the blocks alone and two omitted the metadata, so the sections could be re-cut, or the page re-extracted under a
 new headline, and every one of them went on reporting itself current.
 
 **One function per prompt head**, and one function for all of them was the first attempt. Three
@@ -295,11 +317,11 @@ heads exist today and the list grows as stages arrive:
 
 | function | stages | what its head prints |
 |---|---|---|
-| `articleFingerprint` | `arc`, `tweets`, `glossary`, `summary`, `quotes` | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
-| `articleWithIdsFingerprint` | `ideas`, `sketch`, `quiz` | those three **and `URL:`** (`articleWithIds`) |
+| `articleFingerprint` | `arc`, `glossary`, `quotes` (and a `tweets` thread stored before its prompt sent block ids) | `TITLE:`, `BY:`, `PUBLISHED IN:` (`articleText`) |
+| `articleWithIdsFingerprint` | `tweets`, `ideas`, `sketch`, `quiz`, `faq`, `debate`, `citations` | those three **and `URL:`** (`articleWithIds`) |
 | `datedArticleFingerprint` | `timeline` | those four **and the publication date**, which is its reference frame |
 
-The last two also hash the synthetic `TITLE: <tree.slug>` those two stages fall back to when there is
+The last two also hash the synthetic `TITLE: <tree.slug>` their stages fall back to when there is
 no `meta.json`, through the shared `fallbackHeadTitle` — `structureHash` does not cover `tree.slug`,
 so re-slugging a metadata-less article moved the prompt and nothing else. Widening the first function
 instead would have spent four model calls on a `URL:` line the model was never shown. GPT Sol found
@@ -388,16 +410,26 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
 - **`src/ai-call.ts` § `openRouterJson` / `openRouterStream`** (and `openRouterImage`,
   `openRouterTranscription`) — any paid call on the chat wire. It meters and records the cost; a
   `fetch` to a provider would do neither ([ai-gateway.md](ai-gateway.md)).
-- **`src/messages-stream.ts` § `streamMessage`, `wasRefused`** — a pipeline stage on the Messages
-  wire. Each stage still writes the same sequence around it — progress line, `finalMessage()`,
-  refusal, truncation, text, JSON — copied from a neighbour; there is no helper for that sequence
-  yet.
+- **`src/messages-stream.ts` § `streamMessage`, `finishedText`** — a pipeline stage on the Messages
+  wire. `finishedText` is the ending: a refusal throws, a truncation throws, otherwise it returns
+  the answer's text. A stage that answers a truncation itself (`labels`, `structure-deepen`,
+  `simple-summary`) keeps its own checks and takes `messageText`; `tests/stop-details.test.ts`
+  guards literal content reads in modules importing the Messages gateway or SDK. Each stage still
+  writes its own progress line and `finalMessage()` call, copied from a neighbour; there is no
+  helper for those.
 - **`src/stream-run.ts` § `runStream`** — a streamed answer a reader is waiting for: the deadline,
   the stall clock, and the verdict on how the stream ended. Most streaming routes predate it and
   hand-roll the same loop; [comments.md § streaming](comments.md#streaming) says which are copies.
 - **`src/ai-call.ts` § `classifyEnd`** — deciding whether a stream finished or merely stopped
   ([ai-gateway.md § How a stream ends](ai-gateway.md#stream-end)).
 - **`src/routes.ts` § `sse`** — writing server-sent events from a route, with the heartbeat.
+- **[`src/answer-opening.ts`](../../src/answer-opening.ts) § `answerOpening`, `withoutBlockIds`** —
+  an answer's words where they are drawn as plain text and not as a chat answer: how it begins,
+  as one readable line with markdown formatting and prose citations removed, and prose with the
+  block references taken out. Literal code, link labels and image alt text retain their words.
+  Pure, so the browser imports it too.
+- **[`src/live-keys.ts`](../../src/live-keys.ts) § `liveKeys`** — count the requests holding a
+  key so abandonment sweeps spare a row while any of its handlers is still running.
 - **`src/parse-json.ts` § `parseJsonAnswer`** — a model's JSON answer, fences and trailing commas
   included. **`src/anthropic-call.ts` § `anthropicCallFailed`** — an SDK error turned into a stage
   failure.
@@ -406,12 +438,27 @@ of. The client's list is [web-client.md § Shared code (client)](web-client.md#s
   `src/labels.ts` still exports an older `allOrStop` with a different contract, and `src/pdf-read.ts`
   and `src/embeddings.ts` each have their own abortable sleep (the embeddings one resolves on abort
   rather than rejecting).
-- **`src/ai-call.ts` § `retryAfterMs`** — a `Retry-After` header. `src/fetch.ts` has a second parser
-  that disagrees with it about zero and decimals.
+- **`src/db/insert-batches.ts` § `inBatches`** — a many-row insert, cut so no statement passes
+  Postgres' 65,535 parameters. An unbatched one fails at a row count nobody chose, with an error
+  that reads like a network blip.
+- **[`src/store/block-rows.ts`](../../src/store/block-rows.ts) § `blockOf`, `publicBlockOf`** — one
+  `revision_blocks` row as a `Block`. Every read that selects block rows calls one of the two; the
+  visitor's has no `note` and its row type has no such column. A new block column is an edit to
+  each SELECT and one edit here.
+- **`src/retry-after.ts` § `parseRetryAfter`** — a `Retry-After` header, as milliseconds or `null`.
+  The only parser: the gateway, the page fetcher and the deepening wave all call it. A wait that is
+  not positive (`0`, a date already past) is `null`, so the caller's own backoff applies.
 - **`src/source-hash.ts` § `hashBlocks`, `articleFingerprint` and its siblings, `checkpointKey`** —
   the content hash a step caches on ([§ Conventions](#conventions)).
 - **`src/html.ts` § `escapeHtml`, `plainTitle`** — untrusted text becoming markup. `src/pdf-read.ts`
   still has a private `escapeHtml` that misses `'`.
+- **`src/paper-sources.ts` § `resolvePaperSource`, `arxivIdOf`, `ARXIV_ID_PATTERN`** — whether an
+  address names a paper a source knows (arXiv today), its one key and slug, and the addresses to
+  fetch it from. The one copy of the arXiv id pattern for addresses; a new source is one object in
+  `SOURCES` ([fetching.md § A paper source](fetching.md#a-paper-source-one-paper-several-addresses)).
+- **`src/doi-url.ts` § `doiUrl`, `doiOfUrl`, `doiPath`** — a DOI becoming a doi.org link or a
+  registry API path, and a link read back to its DOI. Never paste a DOI into an address by hand
+  ([postmortem 261004m](../postmortems/261004m-an-encoder-is-not-reversible-until-every-consumer-agrees-on-the-boundary.md)).
 - **`src/after-response.ts` § `afterResponse`** — work that must outlive the response on a
   serverless host.
 - **`src/process-state.ts` § `processSingleton`** — process-wide state that must survive Vite

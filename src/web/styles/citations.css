@@ -114,6 +114,23 @@
   font-size: 0.77rem;
 }
 .cite-scores { font-variant-numeric: tabular-nums; }
+/* *influence unknown*, where the influence bar would be: the app's own words
+   in the line's own faint ink and UI face, kept on one line so it wraps as a
+   piece. A button so the explanation can be opened by touch or keyboard too.
+   *from the web*, beside a bar whose number Dig deeper read off a page, is the
+   same thing said the other way round, and drawn the same. So is *cited 357
+   times · Crossref*: a count beside the bars, with its day in the card. */
+.cite-influence-unknown,
+.cite-influence-web,
+.cite-cited-by {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: help;
+}
 /* A search is not the work's address, and it should not look like one: the one
    link on a searched row, in the faint ink of the line it sits on. */
 .cite-search { color: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
@@ -135,12 +152,6 @@
    than as the last row's — the browser check read the capped sentence as the
    last visible row's own, at both widths. */
 .cite-foot { padding: 0.4rem 0.7rem 0; border-top: 1px solid var(--rule); }
-.cite-note {
-  margin: 0 0 0.3rem;
-  color: var(--ink-faint);
-  font-size: 0.77rem;
-  line-height: 1.35;
-}
 
 /* ---- after *Look it up* ----------------------------------------------------
    Under an assessed row (CitationsPanel.tsx § LookupReading): the verdict, each
@@ -190,6 +201,8 @@
    list stays a list. Labels reuse `.cite-lookup-label`. Every long thing wraps
    anywhere: a source's title or host at 288px must not push the band wide. */
 .cite-investigate { font-size: 0.74rem; }
+/* *Ask in chat*, beside it and the same size (OriginChat.tsx; plan 261006d). */
+.cite-ask-chat { font-size: 0.74rem; }
 
 .cite-inv { margin: 0.3rem 0 0; }
 .cite-inv-wait,
@@ -287,6 +300,7 @@
    narrow-window.css gives. */
 @media (pointer: coarse) {
   .cite-investigate,
+  .cite-ask-chat,
   .cite-inv-toggle,
   .cite-inv-again { min-height: var(--control-h); }
 }

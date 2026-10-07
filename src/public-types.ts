@@ -90,14 +90,20 @@ import type {
   Tweet,
   SourceGuess,
 } from "./types.js";
+import type { RatedDifficulty } from "./reading-time.js";
 
 /**
  * The masthead, for somebody who is not the owner.
  *
- * Six fields out of `Meta`'s twenty. Every one of them is a fact about the
- * article as the world can see it: the title the page itself carried, who wrote
- * it, where it was published, what language it is in, and the publication's own
- * one-line excerpt.
+ * Eleven fields. Every one of them is a fact about the article as the world can
+ * see it: the title the page itself carried, who wrote it, where and when it
+ * was published, what language it is in, the publication's own one-line
+ * excerpt, its published address, and how hard a model judged it to read
+ * (the eleventh, 2026-10-05).
+ *
+ * (This said "six" while there were seven: `url` arrived on 2026-08-30 and the
+ * count was not moved. `journal`, `published` and `publishedYear` are the
+ * three added on 2026-10-04.)
  */
 export interface PublicMeta {
   slug: string;
@@ -115,6 +121,29 @@ export interface PublicMeta {
   /** Readability's own one-or-two sentences, from the page. */
   excerpt?: string;
   /**
+   * **The journal the piece appeared in, and when it was published.** Greg,
+   * 2026-10-04: "Q-visitor-page yes" — these two facts, and no others. Both
+   * are public facts about a published work, and for a paper they come from
+   * its public registry record (src/article-registry.ts). `Meta.doi` and
+   * `Meta.abstract` were not asked for and stay out.
+   * docs/plans/261004h-year-only-publication-dates-journal-and-date-for-visitors-and-the-registry-backfill.md.
+   */
+  journal?: string;
+  /**
+   * **The calendar day of publication, `YYYY-MM-DD`, and never
+   * `Meta.publishedAt` itself.** The owner's field is the publisher's own
+   * string and may carry a time of day and an offset; `publicMeta` sends its
+   * first ten characters when they are a real day and nothing otherwise. A
+   * different name from the owner's, so neither is mistaken for the other.
+   */
+  published?: string;
+  /**
+   * The year alone, for a paper whose registry record states no whole day:
+   * the publication date at the precision we hold it. Never beside
+   * `published`.
+   */
+  publishedYear?: number;
+  /**
    * **Where the article came from, for whoever can read it.** Greg, 2026-08-30:
    * *"I think Public-readable articles should show their provenance-url to all
    * reader[s]."*
@@ -131,6 +160,15 @@ export interface PublicMeta {
    * src/web/Masthead.tsx is the one place that does, and says so.
    */
   url?: string;
+  /**
+   * **How hard the piece is to read**: the two levels and the model's one
+   * sentence, so a visitor's minutes and card are the owner's
+   * (`Meta.readingDifficulty`, and the same type, which is what keeps
+   * `PublicArticle` assignable to `Article`). A judgement about the published
+   * text and nothing about its owner. Which model made it, and when, are not
+   * sent. Plan 261005j.
+   */
+  readingDifficulty?: RatedDifficulty;
 }
 
 /**
@@ -178,6 +216,9 @@ export interface PublicBlock {
   context?: BlockContext;
 }
 
+/** How a visitor reached an article. `PublicArticle.sharedBy` says what each means. */
+export type PublicSharedBy = "public" | "link";
+
 /**
  * What `GET /api/public/article/:slug` returns.
  *
@@ -189,6 +230,24 @@ export interface PublicBlock {
  * field's sake.
  */
 export interface PublicArticle extends PublicArtefactSet {
+  /**
+   * **Which way this visitor was let in**: the article is public, or the
+   * request carried the key of its private link
+   * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
+   *
+   * It is here so the notice under the masthead can say the right thing. Greg,
+   * 2026-10-05: *"When they open a page with a private link, it should say
+   * that it's a private link, i.e. not visible to anyone without the link"*.
+   *
+   * **`"public"` whenever the article is public, whatever key came with the
+   * request.** Public wins, so a public article opened through an old private
+   * link shows the public notice. `"link"` means the article is private and
+   * the key was right.
+   *
+   * Required, so a projection that forgot it does not compile. It says nothing
+   * about a person, and the key itself is never in this payload.
+   */
+  sharedBy: PublicSharedBy;
   meta: PublicMeta;
   blocks: PublicBlock[];
   tree: Tree;
@@ -493,9 +552,11 @@ export interface PublicTimeline {
  * nothing; only planning one spends, and nothing in a visitor's client can.
  * docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md.
  *
- * **The stops cross field by field** — `{ quoteId, depth, role, cue }`, all of
- * them about the article: a quote id the payload's `quotes` resolves, a pass,
- * and the model's one line on what to look for there.
+ * **The stops cross field by field** — `{ quoteId, depth, role, cue, again }`,
+ * all of them about the article: a quote id the payload's `quotes` resolves, a
+ * pass, the model's one line on what to look for there, and the deeper passes
+ * the stop is walked in again (`skim/9`, plan 261003l — without it a visitor
+ * would walk a different pass from the owner).
  *
  * **`offered` crosses** for `PublicQuotes.discarded`'s reason: the panel prints
  * it at the deepest pass (*"stops at 12 of the 15 quotes offered to this
@@ -553,7 +614,9 @@ export interface PublicFaq {
  * carries whole, at every level. And `sentences` when `usableSentences` says
  * they are that paragraph's text exactly (plan 261002e): the same words, cut
  * at sentence ends, each with one of the paragraph's own ids or none, so
- * nothing new is disclosed.
+ * nothing new is disclosed. Since plan 261004b a sentence may carry `key`, a
+ * phrase of its own text to draw bold, and a paragraph `list: true`; neither
+ * adds a word.
  *
  * **What does not cross** is the pipeline, as everywhere in this file:
  * `version`, `generator`, `slug`, `sourceHash`, `generatedAt`, `elapsedMs` —
@@ -802,8 +865,8 @@ export interface PublicSketch {
  *
  * **Operational** — `error`, `attemptId`, `leaseExpiresAt`, `model`,
  * `searches`, `status`. How our machine got on, not what the reader said. The
- * public read filters to finished rows in SQL, so `status` would be a constant
- * on the wire as well as an internal fact.
+ * public read admits bare notes (`none`) and answered notes (`done`) in SQL;
+ * the visitor needs neither operational status.
  *
  * **Somebody else's feature** — `criterionId` and `valence`. A comment with a
  * criterion is a **referee's** placement of a passage on a scale, not a reading

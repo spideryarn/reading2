@@ -62,6 +62,8 @@
  * by the delegation id they carry.
  */
 
+import { backendReport } from "./meter.js";
+
 /** A delegation gets this many continuations. Calls after that are answered without running. */
 export const MAX_TOOL_ROUNDS = 4;
 /** The output for a call past the cap. */
@@ -117,9 +119,18 @@ export type DelegationEffect =
       type: "usage";
       delegationId: string;
       responseId: string;
+      /** How the response ended. A failed or cut-short one is billed too, and must not be counted as finished. */
+      status: BackendStatus;
       model: string | null;
       usage: Record<string, unknown>;
     };
+
+/**
+ * The three ways a backend response ends on this wire, in OpenAI's words. Read
+ * off the event's type (`response.completed`, `.failed`, `.incomplete`), which
+ * is what this reducer branches on; a nested `error` counts as `failed`.
+ */
+export type BackendStatus = "completed" | "failed" | "incomplete";
 
 /**
  * Where one backend response is.
@@ -133,6 +144,12 @@ interface BackendResponse {
   id: string;
   state: ResponseState;
   calls: string[];
+  /**
+   * Whether reportable usage has gone to the meter. Kept apart from `state`,
+   * which is about tools: a repeat of the terminal event can supply missing
+   * totals without reopening tools or reporting another final.
+   */
+  billed: boolean;
 }
 
 interface Call {
@@ -168,6 +185,7 @@ type Wire =
       kind: "ended";
       delegationId: string;
       responseId: string | null;
+      status: Exclude<BackendStatus, "completed">;
       model: string | null;
       usage: Record<string, unknown> | null;
       message: string;
@@ -233,7 +251,7 @@ export class DelegationLoop {
   private response(delegation: Delegation, id: string): BackendResponse {
     let response = delegation.responses.get(id);
     if (!response) {
-      response = { id, state: "open", calls: [] };
+      response = { id, state: "open", calls: [], billed: false };
       delegation.responses.set(id, response);
     }
     return response;
@@ -252,7 +270,7 @@ export class DelegationLoop {
        seen. Held under a nameless response, which the next completion for this
        delegation takes over (`adopt`). */
     if (!response) {
-      response = { id: "", state: "open", calls: [] };
+      response = { id: "", state: "open", calls: [], billed: false };
       delegation.responses.set("", response);
       delegation.active = response;
     }
@@ -275,9 +293,12 @@ export class DelegationLoop {
 
   private completed(delegation: Delegation, wire: Extract<Wire, { kind: "completed" }>, now: number): DelegationEffect[] {
     const response = this.adopt(delegation, wire.responseId);
-    if (response.state !== "open") return [];
+    /* A repeated completion may supply usage the first one lacked, but a
+       response ended by an error must not be reported as completed. */
+    if (response.state === "dead") return [];
+    const effects: DelegationEffect[] = usageOf(delegation, response, wire, "completed");
+    if (response.state !== "open") return effects;
     if (delegation.active === response) delegation.active = null;
-    const effects: DelegationEffect[] = usageOf(delegation, response, wire);
     if (response.calls.length === 0) {
       response.state = "final";
       effects.push({
@@ -297,7 +318,11 @@ export class DelegationLoop {
     const response = wire.responseId ? this.adopt(delegation, wire.responseId) : delegation.active;
     /* A repeat of an ending already handled, or a failure report for a
        response that was already continued or was the final. */
-    if (response && response.state !== "open" && response.state !== "waiting") return [];
+    if (response && response.state !== "open" && response.state !== "waiting") {
+      /* An error with no reportable usage is still owed its bill when a
+         failed or incomplete event supplies the totals. */
+      return response.state === "dead" ? usageOf(delegation, response, wire, wire.status) : [];
+    }
     const closed: string[] = [];
     const effects: DelegationEffect[] = [];
     if (response) {
@@ -308,7 +333,7 @@ export class DelegationLoop {
            and goes nowhere. */
         if (this.calls.get(callId)?.output === null) closed.push(callId);
       }
-      effects.push(...usageOf(delegation, response, wire));
+      effects.push(...usageOf(delegation, response, wire, wire.status));
     }
     effects.push({ type: "failed", delegationId: delegation.id, message: wire.message, at: now, callIds: closed });
     return effects;
@@ -351,9 +376,16 @@ function usageOf(
   delegation: Delegation,
   response: BackendResponse,
   wire: { model: string | null; usage: Record<string, unknown> | null },
+  status: BackendStatus,
 ): DelegationEffect[] {
-  if (!wire.usage || response.id === "") return [];
-  return [{ type: "usage", delegationId: delegation.id, responseId: response.id, model: wire.model, usage: wire.usage }];
+  if (!wire.usage || response.id === "" || response.billed) return [];
+  /* An object is not yet a bill: the meter rejects missing or invalid
+     totals. Use its own reader before consuming the once-only marker. */
+  if (!backendReport(response.id, wire.usage, status)) return [];
+  response.billed = true;
+  return [
+    { type: "usage", delegationId: delegation.id, responseId: response.id, status, model: wire.model, usage: wire.usage },
+  ];
 }
 
 function parse(event: Record<string, unknown>): Wire | null {
@@ -407,6 +439,7 @@ function parse(event: Record<string, unknown>): Wire | null {
         kind: "ended",
         delegationId,
         responseId,
+        status: nested.type === "response.incomplete" ? "incomplete" : "failed",
         model,
         usage,
         message: `The delegated response did not finish: ${reason}`,

@@ -51,6 +51,18 @@ describe("the shipped map", () => {
     ]);
   });
 
+  it("reads the map with its comments beside it, and the older map without (261007d)", () => {
+    /* The deploy hands this the file as it was at a commit, so both shapes are live. */
+    const endings = new Map<string, FeedbackEnding>([["spya-aaaaaa", "shipped"], ["spya-bbbbbb", "declined"]]);
+    const comment = 'Declined. "spya-cccccc": "shipped", is only a sentence here';
+    const withComments = renderModule(endings, new Map([["spya-bbbbbb", comment]]));
+    expect(withComments).toContain("FEEDBACK_NOTE_COMMENTS");
+    expect(shippedIdsIn(withComments)).toEqual(["spya-aaaaaa"]);
+    const older = withComments.slice(0, withComments.indexOf("\nexport const FEEDBACK_NOTE_COMMENTS"));
+    expect(older).not.toContain("FEEDBACK_NOTE_COMMENTS");
+    expect(shippedIdsIn(older)).toEqual(["spya-aaaaaa"]);
+  });
+
   it("refuses a map it cannot read rather than answer none", () => {
     expect(() => shippedIdsIn("export const FEEDBACK_NOTE_ENDINGS = {};\n")).toThrow(/no report endings/);
     /* Partial drift: one line in a new shape among good ones still throws. */

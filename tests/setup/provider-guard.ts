@@ -214,7 +214,21 @@ export function providerHostOf(input: unknown): string | null {
  * real inbox. src/email.ts refuses to send outside production anyway; this is
  * the net under that.
  */
-const ALSO_REFUSED: readonly string[] = ["api.stripe.com", "api.resend.com"];
+/* **Crossref and DataCite** (261004a): free, but a step that asks a registry
+   about an article would otherwise do it for real from inside the suite, slowly
+   and with an answer that changes. A test hands the step a lookup instead.
+
+   **OpenAlex** (261004h), for the same reason and one more: anonymous access is
+   1,000 credits a day for the whole box, and a suite that spent them would
+   leave Reception's *Cited by* answering `unavailable` to real readers. A test
+   hands `citersOf` a `fetchJson`. */
+const ALSO_REFUSED: readonly string[] = [
+  "api.stripe.com",
+  "api.resend.com",
+  "api.crossref.org",
+  "api.datacite.org",
+  "api.openalex.org",
+];
 
 function methodOf(input: unknown, init: unknown): string {
   const fromInit = (init as { method?: unknown } | undefined)?.method;

@@ -22,7 +22,7 @@
  * docs/plans/260831aj-feedback-button-and-bug-reports-to-sentry.md.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
@@ -44,9 +44,20 @@ import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_BODY_CHARS,
+  MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_SCREENSHOT_BYTES,
   MAX_FEEDBACK_URL_CHARS,
 } from "../src/types.js";
-import type { FeedbackReport, FeedbackSubmission, NewFeedback } from "../src/store/contracts.js";
+import type {
+  FeedbackAnswerSubmission,
+  FeedbackReport,
+  FeedbackSubmission,
+  LinkedFeedbackReport,
+  NewFeedback,
+  NewFeedbackAnswer,
+  StoredFeedbackAnswer,
+} from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 
@@ -68,6 +79,20 @@ let listAnswer: unknown = { reports: [], more: false };
 let counted: { ids: readonly string[]; owner: string }[] = [];
 /** The counts the fake `listMine` adds to its answer. */
 let countAnswer: unknown = { all: 0, in: 0 };
+/** Each `listMineByStatus` the admin route made: its limit, the endings it bound, the filter, the owner. */
+let statusListed: { limit: number; endings: unknown; show: string; owner: string }[] = [];
+/** What the fake `listMineByStatus` answers with, or an Error to throw. */
+let statusAnswer: unknown = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
+/** Every `submitAnswer` the route made, with the owner in force (261007d stage 2). */
+let answersSubmitted: { input: NewFeedbackAnswer; owner: string }[] = [];
+/** What the fake `submitAnswer` answers with; null means "created, echoing the input". */
+let answerOutcome: FeedbackAnswerSubmission | null = null;
+/** The question ids each `newestAnswers` asked about, and the replies it hands back. */
+let newestAsked: { ids: readonly string[]; owner: string }[] = [];
+let newestAnswer: StoredFeedbackAnswer[] = [];
+/** The report ids each `linkedReports` asked about, and what it hands back. */
+let linkedAsked: { ids: readonly string[]; owner: string }[] = [];
+let linkedAnswer: LinkedFeedbackReport[] = [];
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -99,8 +124,14 @@ let notices: { id: string; ownerId: string; afterResponse: boolean; mirroredYet:
 /** Set by the fake response's `end`, read by the fake notice. */
 let responseEnded = false;
 
+/** The whole report each notice was handed, for the one case that renders the email from it. */
+let noticedReports: FeedbackReport[] = [];
+/** What each `captureFeedback` was given: the event's own fields, tags included. */
+let sentryCaptures: unknown[] = [];
+
 vi.mock("../src/feedback-notice.js", () => ({
   noticeFeedback: async (report: FeedbackReport, ownerId: string) => {
+    noticedReports.push(report);
     notices.push({ id: report.id, ownerId, afterResponse: responseEnded, mirroredYet: mirrored.length > 0 });
     return { kind: "sent" };
   },
@@ -115,6 +146,29 @@ vi.mock("../src/feedback-endings.generated.js", () => ({
     "spya-wa1t00": "awaiting",
     "spya-sh1pd2": "shipped",
   },
+  FEEDBACK_NOTE_COMMENTS: {
+    "spya-dec1ne": "Set aside: the browser gives us no way to do this.",
+    "spya-wa1t00": "Waiting on you: one switch or two?",
+    /* A comment for a report this reader never filed: it must go nowhere. */
+    "spya-n0tm1n": "about somebody else's report",
+  },
+}));
+
+/* The questions, fixed here for the same reason. One open about the admin's
+   own report, one open about nothing, one open about a report the admin did
+   not file, and one already answered: known to the POST, never sent by the GET. */
+vi.mock("../src/feedback-questions.generated.js", () => ({
+  FEEDBACK_QUESTION_STATUS: {
+    "q-aaaaaa": "open",
+    "q-bbbbbb": "open",
+    "q-cccccc": "open",
+    "q-dddddd": "answered",
+  },
+  FEEDBACK_OPEN_QUESTIONS: [
+    { id: "q-aaaaaa", title: "One switch or two?", report: "spya-wa1t00", asked: "2026-10-05", body: "Background.\n\nA. One.\nB. Two." },
+    { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
+    { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
+  ],
 }));
 
 vi.mock("../src/store/index.js", async (importActual) => {
@@ -137,6 +191,28 @@ vi.mock("../src/store/index.js", async (importActual) => {
         counted.push({ ids: countIds, owner: currentOwnerId() });
         if (listAnswer instanceof Error) throw listAnswer;
         return { counts: countAnswer, ...(listAnswer as object) };
+      },
+      listMineByStatus: async (limit: number, endings: unknown, show: string) => {
+        statusListed.push({ limit, endings, show, owner: currentOwnerId() });
+        if (statusAnswer instanceof Error) throw statusAnswer;
+        return statusAnswer;
+      },
+      submitAnswer: async (input: NewFeedbackAnswer) => {
+        answersSubmitted.push({ input, owner: currentOwnerId() });
+        return (
+          answerOutcome ?? {
+            kind: "created",
+            answer: { id: input.id, questionId: input.questionId, body: input.body, createdAt: "2026-10-07T09:00:00.000Z" },
+          }
+        );
+      },
+      newestAnswers: async (ids: readonly string[]) => {
+        newestAsked.push({ ids, owner: currentOwnerId() });
+        return newestAnswer;
+      },
+      linkedReports: async (ids: readonly string[]) => {
+        linkedAsked.push({ ids, owner: currentOwnerId() });
+        return linkedAnswer;
       },
       markMirrorAttempted: async (id: string) => {
         attempted.push(id);
@@ -187,7 +263,8 @@ vi.mock("@sentry/node-core/light", async (importActual) => {
      * whatever the transport says about it **later**. Anything that resolves
      * both at once would be a mock of the bug rather than of the SDK.
      */
-    captureFeedback: () => {
+    captureFeedback: (params: unknown) => {
+      sentryCaptures.push(params);
       const id = captureBehaviour();
       queueMicrotask(() => {
         for (const callback of hooks.get("afterSendEvent") ?? []) {
@@ -288,7 +365,11 @@ const PNG = Buffer.from(
  */
 function bigPng(): Buffer {
   const width = 1000;
-  const height = 95;
+  /* 99% of the cap, in rows of 4,001 bytes. Derived rather than written down:
+     it was a literal 95 for a 400,000 cap, and when the cap went to two
+     megabytes on 2026-10-03 the "largest" picture would have gone on being
+     380 KB and this helper's name would have gone on saying otherwise. */
+  const height = Math.floor((MAX_FEEDBACK_SCREENSHOT_BYTES * 0.99) / (width * 4 + 1));
   const raster = Buffer.alloc(height * (width * 4 + 1));
   /* An xorshift, so the bytes really are incompressible. A tidy arithmetic
      pattern deflates to nothing, and the first version of this helper did
@@ -316,6 +397,13 @@ function bigPng(): Buffer {
     pngChunk("IDAT", deflateSync(raster, { level: 9 })),
     pngChunk("IEND", Buffer.alloc(0)),
   ]);
+}
+
+/** The inflated raster of a PNG that has exactly one `IDAT`, straight after `IHDR`. */
+function pixelsOf(png: Buffer): Buffer {
+  /* 8 of signature, 25 of IHDR, 8 of IDAT length and type; then 4 of IDAT CRC
+     and 12 of IEND at the far end. */
+  return inflateSync(png.subarray(41, png.length - 16));
 }
 
 /** One chunk, length and CRC included. */
@@ -352,11 +440,21 @@ beforeEach(() => {
   listAnswer = { reports: [], more: false };
   counted = [];
   countAnswer = { all: 0, in: 0 };
+  statusListed = [];
+  statusAnswer = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
+  answersSubmitted = [];
+  answerOutcome = null;
+  newestAsked = [];
+  newestAnswer = [];
+  linkedAsked = [];
+  linkedAnswer = [];
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
   sendResponse = { statusCode: 200 };
   notices = [];
+  noticedReports = [];
+  sentryCaptures = [];
   responseEnded = false;
 });
 
@@ -365,15 +463,15 @@ afterEach(() => {
 });
 
 /**
- * **The Earlier tab's read** — the reader's own reports, and only five fields
+ * **The Earlier tab's read** — the reader's own reports, and only six fields
  * of each from the store. docs/plans/260916c-your-earlier-feedback-tab-in-the-feedback-dialog.md.
  *
- * The fake store hands back rows carrying *more* than the five — an email, an
+ * The fake store hands back rows carrying *more* than the six — an email, an
  * address, diagnostics — which is what makes "the route picks, it does not
  * spread" a thing this file can see rather than a thing the store happens to do.
  */
 describe("GET /api/feedback", () => {
-  it("answers the reader's own list, five fields a report, and never caches it", async () => {
+  it("answers the reader's own list, seven fields a report, and never caches it", async () => {
     listAnswer = {
       reports: [
         {
@@ -382,6 +480,7 @@ describe("GET /api/feedback", () => {
           kind: "suggestion",
           body: "A tab of what I sent before",
           page: "/add",
+          at: "spya-tgnssb",
           reporterEmail: "someone@example.invalid",
           url: "https://www.spideryarn.com/add/https://user:secret@example.com/",
           diagnostics: { version: 2, payload: {} },
@@ -402,6 +501,8 @@ describe("GET /api/feedback", () => {
           body: "A tab of what I sent before",
           /* The store's label, passed on. The `url` beside it in the row is not. */
           page: "/add",
+          /* And the paragraph beside it, passed on the same way (261006b). */
+          at: "spya-tgnssb",
           shipped: true,
         },
       ],
@@ -414,7 +515,7 @@ describe("GET /api/feedback", () => {
   });
 
   it("says shipped only for a report whose note says shipped — not declined, not waiting, not unknown", async () => {
-    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null });
+    const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null });
     listAnswer = {
       reports: [row("spya-k3m9qt"), row("spya-dec1ne"), row("spya-wa1t00"), row("spya-unkn0w")],
       more: false,
@@ -496,6 +597,326 @@ describe("GET /api/feedback", () => {
        alone would pass with no route at all. Signed in, the same request reads. */
     expect((await call(undefined, { method: "GET" })).status).toBe(200);
     expect(listed).toEqual([EARLIER_FEEDBACK_LIMIT]);
+  });
+});
+
+/**
+ * `GET /api/admin/feedback/earlier` — an admin's own list, with what became of
+ * each report. docs/plans/261007d-…. `acceptAny` signs in as the local
+ * administrator, which is why every test above this one already passes the
+ * namespace gate without knowing it.
+ */
+describe("GET /api/admin/feedback/earlier", () => {
+  const PATH = "/api/admin/feedback/earlier";
+  const get = (path = PATH, verify?: Parameters<typeof handleApi>[2]) =>
+    call(undefined, { method: "GET", path, ...(verify ? { verify } : {}) });
+  const acceptSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
+    ok: true,
+    claims: {
+      sub: "0000f5e1-0000-4000-8000-00000000beef",
+      email: "somebody-else@example.test",
+      role: "authenticated",
+      is_anonymous: false,
+    },
+  });
+  const row = (id: string, number: number, status: string, over: object = {}) => ({
+    id,
+    createdAt: "2026-09-12T10:45:00.000Z",
+    kind: null,
+    body: "x",
+    page: null,
+    at: null,
+    number,
+    status,
+    ignoredAt: null,
+    ...over,
+  });
+
+  it("answers the admin's own list: ten fields a report, the comment from the note, never cached", async () => {
+    statusAnswer = {
+      reports: [
+        {
+          ...row("spya-dec1ne", 212, "aside", { kind: "suggestion", body: "Could it do this?", page: "/add", at: "spya-tgnssb" }),
+          /* What a store that one day hands back more must not get through. */
+          reporterEmail: "someone@example.invalid",
+          url: "https://www.spideryarn.com/add/https://user:secret@example.com/",
+        },
+        row("spya-k3m9qt", 211, "shipped"),
+        row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }),
+      ],
+      more: true,
+      counts: { open: 3, waiting: 2, aside: 5, shipped: 60 },
+    };
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+    expect(reply.body).toEqual({
+      reports: [
+        {
+          id: "spya-dec1ne",
+          createdAt: "2026-09-12T10:45:00.000Z",
+          kind: "suggestion",
+          body: "Could it do this?",
+          page: "/add",
+          at: "spya-tgnssb",
+          number: 212,
+          status: "aside",
+          comment: "Set aside: the browser gives us no way to do this.",
+          ignoredAt: null,
+        },
+        { ...row("spya-k3m9qt", 211, "shipped"), comment: null },
+        { ...row("spya-unkn0w", 210, "aside", { ignoredAt: "2026-10-05T09:00:00.000Z" }), comment: null },
+      ],
+      more: true,
+      /* Report counts, and the four sum to All. */
+      counts: { all: 70, open: 3, waiting: 2, aside: 5, shipped: 60 },
+      questions: expect.any(Array),
+    });
+    expect(JSON.stringify(reply.body)).not.toContain("somebody else's report");
+    expect(statusListed).toEqual([
+      {
+        limit: EARLIER_FEEDBACK_LIMIT,
+        endings: {
+          shipped: ["spya-k3m9qt", "spya-sh1pd2"],
+          declined: ["spya-dec1ne"],
+          awaiting: ["spya-wa1t00"],
+        },
+        show: "all",
+        owner: TEST_OWNER,
+      },
+    ]);
+    expect(listed, "the plain list is not read as well").toEqual([]);
+  });
+
+  it("hands each ?show= to the store, so the cap applies after the filter", async () => {
+    for (const show of ["all", "open", "waiting", "aside", "shipped"]) {
+      expect((await get(`${PATH}?show=${show}`)).status, show).toBe(200);
+    }
+    expect(statusListed.map((one) => one.show)).toEqual(["all", "open", "waiting", "aside", "shipped"]);
+    expect(statusListed.every((one) => one.limit === EARLIER_FEEDBACK_LIMIT && one.owner === TEST_OWNER)).toBe(true);
+  });
+
+  it("refuses a show it does not know, the plain tab's `unshipped` included, and a limit changes nothing", async () => {
+    expect((await get(`${PATH}?show=unshipped`)).status).toBe(400);
+    expect((await get(`${PATH}?show=done`)).status).toBe(400);
+    expect(statusListed).toEqual([]);
+    await get(`${PATH}?limit=100000`);
+    expect(statusListed.map((one) => one.limit)).toEqual([EARLIER_FEEDBACK_LIMIT]);
+  });
+
+  it("is a 403 for a signed-in reader who is not an admin, and reaches no store", async () => {
+    const reply = await get(PATH, acceptSomebodyElse);
+    expect(reply.status).toBe(403);
+    expect(statusListed).toEqual([]);
+    expect(listed).toEqual([]);
+    /* The positive control: the same request as the admin reads. */
+    expect((await get()).status).toBe(200);
+    expect(statusListed).toHaveLength(1);
+  });
+
+  it("is a 401 signed out, and private when the read fails", async () => {
+    expect((await call(undefined, { method: "GET", path: PATH, headers: {} })).status).toBe(401);
+    expect(statusListed).toEqual([]);
+    statusAnswer = new Error("the feedback read failed");
+    const reply = await get();
+    expect(reply.status).toBe(500);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+  });
+
+  it("is not the one-report route: `earlier` alone is one segment, and that route takes two", async () => {
+    /* `/api/admin/feedback/<owner>/<id>` would answer 400 "ownerId must be a uuid". */
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    expect(reply.body).toHaveProperty("counts");
+  });
+
+  it("leaves the plain route as it was for the same admin: seven fields, three counts", async () => {
+    listAnswer = {
+      reports: [{ id: "spya-dec1ne", createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null }],
+      more: false,
+    };
+    countAnswer = { all: 1, in: 0 };
+    const reply = await call(undefined, { method: "GET" });
+    expect(reply.body).toEqual({
+      reports: [
+        { id: "spya-dec1ne", createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null, shipped: false },
+      ],
+      more: false,
+      counts: { all: 1, shipped: 0, unshipped: 1 },
+    });
+    expect(statusListed).toEqual([]);
+  });
+});
+
+/**
+ * **The questions an agent has put to the admin**, sent with every answer of
+ * `GET /api/admin/feedback/earlier`, and `POST /api/admin/feedback/answers`,
+ * which stores a reply. 261007d stage 2.
+ */
+describe("questions for the admin, and replies to them", () => {
+  const EARLIER = "/api/admin/feedback/earlier";
+  const ANSWERS = "/api/admin/feedback/answers";
+  const get = (path = EARLIER, verify?: Parameters<typeof handleApi>[2]) =>
+    call(undefined, { method: "GET", path, ...(verify ? { verify } : {}) });
+  const post = (body: unknown, verify?: Parameters<typeof handleApi>[2]) =>
+    call(body, { method: "POST", path: ANSWERS, ...(verify ? { verify } : {}) });
+  const acceptSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
+    ok: true,
+    claims: {
+      sub: "0000f5e1-0000-4000-8000-00000000beef",
+      email: "somebody-else@example.test",
+      role: "authenticated",
+      is_anonymous: false,
+    },
+  });
+  type Sent = { questions: Record<string, unknown>[] };
+
+  it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {
+    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?" }];
+    newestAnswer = [{ id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }];
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    expect((reply.body as Sent).questions).toEqual([
+      {
+        id: "q-aaaaaa",
+        title: "One switch or two?",
+        body: "Background.\n\nA. One.\nB. Two.",
+        asked: "2026-10-05",
+        report: { id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?" },
+        answer: null,
+      },
+      {
+        id: "q-bbbbbb",
+        title: "A question about nothing filed",
+        body: "Stands alone.",
+        asked: "2026-10-06",
+        report: null,
+        answer: { id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
+      },
+      /* Its report is not this admin's, so the store found none: nothing of it is sent. */
+      { id: "q-cccccc", title: "About a reader's report", body: "The body says it all.", asked: "2026-10-07", report: null, answer: null },
+    ]);
+    /* Both lookups ran as the signed-in admin, for the open questions only. */
+    expect(newestAsked).toEqual([{ ids: ["q-aaaaaa", "q-bbbbbb", "q-cccccc"], owner: TEST_OWNER }]);
+    expect(linkedAsked).toEqual([{ ids: ["spya-wa1t00", "spya-n0tm1n"], owner: TEST_OWNER }]);
+  });
+
+  it("never sends an answered question, whatever the store says about it", async () => {
+    /* A store that handed back a reply to the answered one must not bring it in. */
+    newestAnswer = [{ id: "spya-repzyy", questionId: "q-dddddd", body: "late", createdAt: "2026-10-07T08:00:00.000Z" }];
+    const sent = (await get()).body as Sent;
+    expect(sent.questions.map((question) => question.id)).toEqual(["q-aaaaaa", "q-bbbbbb", "q-cccccc"]);
+    expect(JSON.stringify(sent)).not.toContain("q-dddddd");
+    expect(newestAsked[0]?.ids).not.toContain("q-dddddd");
+  });
+
+  it("sends the same questions under every show, and exactly six fields of each", async () => {
+    for (const show of ["all", "open", "waiting", "aside", "shipped"]) {
+      const sent = (await get(`${EARLIER}?show=${show}`)).body as Sent;
+      expect(sent.questions.map((question) => question.id), show).toEqual(["q-aaaaaa", "q-bbbbbb", "q-cccccc"]);
+      for (const question of sent.questions) {
+        expect(Object.keys(question).sort()).toEqual(["answer", "asked", "body", "id", "report", "title"]);
+      }
+    }
+  });
+
+  it("does not let a linked report from the store name a question that did not ask for it", async () => {
+    /* The store is asked for two ids; one it should never return is ignored. */
+    linkedAnswer = [{ id: "spya-0ther0", number: 9, firstLine: "unrelated" }];
+    const sent = (await get()).body as Sent;
+    expect(sent.questions.every((question) => question.report === null)).toBe(true);
+  });
+
+  it("stores a reply: 201, the server's own environment, the signed-in owner, never cached", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "  1A, please  " });
+    expect(reply.status).toBe(201);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+    expect(reply.body).toEqual({ answer: { id: "spya-repzyy", body: "1A, please", createdAt: "2026-10-07T09:00:00.000Z" } });
+    expect(answersSubmitted).toEqual([
+      {
+        input: { id: "spya-repzyy", questionId: "q-aaaaaa", body: "1A, please", environment: "test" },
+        owner: TEST_OWNER,
+      },
+    ]);
+    /* A reply is not a report: nothing is filed, mirrored or mailed. */
+    expect(submitted).toEqual([]);
+    expect(attempted).toEqual([]);
+    expect(notices).toEqual([]);
+  });
+
+  it("answers a retry of the same reply 200 with the stored row, and a reused id 409 (F15)", async () => {
+    const body = { id: "spya-repzyy", question: "q-aaaaaa", body: "1A" };
+    answerOutcome = {
+      kind: "duplicate",
+      answer: { id: "spya-repzyy", questionId: "q-aaaaaa", body: "1A", createdAt: "2026-10-07T08:59:00.000Z" },
+    };
+    const again = await post(body);
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual({ answer: { id: "spya-repzyy", body: "1A", createdAt: "2026-10-07T08:59:00.000Z" } });
+
+    answerOutcome = { kind: "conflict" };
+    const reused = await post({ ...body, body: "2B" });
+    expect(reused.status).toBe(409);
+    expect(reused.body).not.toHaveProperty("answer");
+    expect(JSON.stringify(reused.body)).not.toContain("2B");
+  });
+
+  it("accepts a reply to a question already marked answered: a late reply is not lost (F14)", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-dddddd", body: "I had more to say" });
+    expect(reply.status).toBe(201);
+    expect(answersSubmitted.map((one) => one.input.questionId)).toEqual(["q-dddddd"]);
+  });
+
+  it("refuses a question this build has no file for, and reaches no store", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-zzzzzz", body: "1A" });
+    expect(reply.status).toBe(400);
+    expect(await post({ id: "spya-repzyy", question: "constructor", body: "1A" })).toMatchObject({ status: 400 });
+    expect(await post({ id: "spya-repzyy", question: "spya-wa1t00", body: "1A" })).toMatchObject({ status: 400 });
+    expect(answersSubmitted).toEqual([]);
+  });
+
+  it("refuses a body with any field but the three, in fixed prose", async () => {
+    const SECRET = "thaumaturgical";
+    for (const extra of [{ environment: "production" }, { ownerId: TEST_OWNER }, { [SECRET]: 1 }, { createdAt: "2020-01-01" }]) {
+      const reply = await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "1A", ...extra });
+      expect(reply.status).toBe(400);
+      expect(JSON.stringify(reply.body)).not.toContain(SECRET);
+    }
+    expect(answersSubmitted).toEqual([]);
+  });
+
+  it("refuses a bad id, an empty reply, a reply over the cap, and a body that is not an object", async () => {
+    const good = { id: "spya-repzyy", question: "q-aaaaaa", body: "1A" };
+    expect((await post({ ...good, id: "212" })).status).toBe(400);
+    expect((await post({ ...good, id: undefined })).status).toBe(400);
+    expect((await post({ ...good, body: "   " })).status).toBe(400);
+    expect((await post({ ...good, body: 7 })).status).toBe(400);
+    expect((await post({ ...good, body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1) })).status).toBe(400);
+    expect((await post([good])).status).toBe(400);
+    expect(answersSubmitted).toEqual([]);
+    /* The positive control: exactly the cap is stored. */
+    expect((await post({ ...good, body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) })).status).toBe(201);
+    /* And a cap's worth of four-byte characters still fits the request limit. */
+    expect((await post({ ...good, body: "é".repeat(MAX_FEEDBACK_ANSWER_CHARS) })).status).toBe(201);
+  });
+
+  it("is a 403 for a signed-in reader who is not an admin, on both routes, and reaches no store", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "1A" }, acceptSomebodyElse);
+    expect(reply.status).toBe(403);
+    expect((await get(EARLIER, acceptSomebodyElse)).status).toBe(403);
+    expect(answersSubmitted).toEqual([]);
+    expect(newestAsked).toEqual([]);
+    expect(linkedAsked).toEqual([]);
+    /* Signed out: 401. */
+    expect((await call({ id: "spya-repzyy", question: "q-aaaaaa", body: "1A" }, { method: "POST", path: ANSWERS, headers: {} })).status).toBe(401);
+  });
+
+  it("logs the reply's length, never its words", async () => {
+    const logged = await logLinesWhile(async () => {
+      await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "a thaumaturgical decision" });
+    });
+    expect(logged).toContain("spya-repzyy");
+    expect(logged).not.toContain("thaumaturgical");
   });
 });
 
@@ -595,9 +1016,10 @@ describe("POST /api/feedback", () => {
   });
 
   it("answers 413 for a body past its own limit", async () => {
-    /* Two megabytes, which is past the feedback route's limit and five figures
-       past the shared one. Raw, because the point is the byte count. */
-    const raw = Buffer.alloc(2 * 1024 * 1024, "x");
+    /* Four megabytes, which is past the feedback route's limit (a little under
+       three, since the screenshot cap went to two) and far past the shared
+       one. Raw, because the point is the byte count. */
+    const raw = Buffer.alloc(4 * 1024 * 1024, "x");
     const reply = await call(undefined, { raw });
     expect(reply.status).toBe(413);
     expect(submitted).toHaveLength(0);
@@ -625,9 +1047,9 @@ describe("POST /api/feedback", () => {
       /* Six bytes per unit once escaped, at the cap, three times over — the
          *legacy* shape, because that is the largest body this route still takes
          and therefore the one the outer limit has to clear. */
-      steps: "\u0001".repeat(MAX_FEEDBACK_ANSWER_CHARS),
-      expected: "\u0002".repeat(MAX_FEEDBACK_ANSWER_CHARS),
-      actual: "\u0003".repeat(MAX_FEEDBACK_ANSWER_CHARS),
+      steps: "\u0001".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+      expected: "\u0002".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+      actual: "\u0003".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
       body: undefined,
       /* `isSlug` caps a slug at 60 characters — src/ingest.ts. */
       slug: `a${"b".repeat(59)}`,
@@ -678,10 +1100,36 @@ describe("POST /api/feedback", () => {
        out small — a screenshot helper whose "random" pixels deflated to nothing,
        say, which is exactly what the first draft of `bigPng` did — would pass
        the 201 below while proving nothing at all about the limit. */
-    expect(bytes).toBeGreaterThan(550_000);
+    expect(bytes).toBeGreaterThan(2_700_000);
     const reply = await call(body);
     expect(reply.status).toBe(201);
     expect(submitted).toHaveLength(1);
+  });
+
+  /**
+   * **A real picture at the ceiling, through the route and into the store.**
+   *
+   * The test above is about the *body*; this one is about the picture. When the
+   * cap went from 400,000 to two megabytes, 2026-10-03, nothing here decoded a
+   * PNG anywhere near the new number, and the server's re-encode had only ever
+   * been run on rasters a fifth the size (GPT Sol's review of 261003k, F1 and
+   * F2). So: incompressible pixels, 99% of the cap, taken apart and written
+   * again, and what reaches the store is still that picture.
+   */
+  it("takes a real screenshot just under the cap, and stores it rebuilt", async () => {
+    const png = bigPng();
+    expect(png.length).toBeGreaterThan(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.98);
+    expect(png.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
+
+    const reply = await call(minimal({ screenshot: png.toString("base64") }));
+    expect(reply.status).toBe(201);
+    const stored = Buffer.from(submitted[0]!.screenshot!);
+    expect(stored.length).toBeGreaterThan(MAX_FEEDBACK_SCREENSHOT_BYTES * 0.98);
+    expect(stored.length).toBeLessThanOrEqual(MAX_FEEDBACK_SCREENSHOT_BYTES);
+    /* Same header and inflated pixels: dimensions and byte count alone would
+       let a different raster of similar compressed size pass. */
+    expect(stored.subarray(0, 33).equals(png.subarray(0, 33))).toBe(true);
+    expect(pixelsOf(stored).equals(pixelsOf(png))).toBe(true);
   });
 
   it("takes a report with no kind at all", async () => {
@@ -758,8 +1206,38 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(0);
   });
 
+  /* Fifteen minutes of dictation is about 13,000 characters at an even pace,
+     and the box used to stop taking them at 4,000 — Greg, spya-n8cuqq, was cut
+     off in this box. Plan 261007b. The database's CHECK already admits 12,072. */
+  it("takes a report as long as a fifteen-minute dictation", async () => {
+    expect(MAX_FEEDBACK_ANSWER_CHARS).toBe(12_000);
+    expect(MAX_FEEDBACK_ANSWER_CHARS).toBeLessThanOrEqual(MAX_FEEDBACK_BODY_CHARS);
+    const reply = await call(minimal({ body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) }));
+    expect(reply.status).toBe(201);
+    expect(submitted).toHaveLength(1);
+  });
+
+  /* A stale client's three answers are glued into one `body`. Each kept its old
+     4,000 cap when the single box's went up, because three at the new one would
+     pass this route, fail the column's CHECK, and reach the reader as a database
+     error with no sentence. */
+  it("holds an old client's three answers to the cap they were written under", async () => {
+    const over = await call(
+      minimal({ body: undefined, steps: "x".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS + 1) }),
+    );
+    expect(over.status).toBe(400);
+    expect(String(over.body.error)).toMatch(/\[fb-long\]/);
+    expect(submitted).toHaveLength(0);
+
+    const full = "x".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+    const reply = await call(minimal({ body: undefined, steps: full, expected: full, actual: full }));
+    expect(reply.status).toBe(201);
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0]?.body.length).toBe(MAX_FEEDBACK_BODY_CHARS);
+  });
+
   it("refuses an answer past the cap, and never quotes it back", async () => {
-    const prose = "The unbearable lightness of a very long paragraph. ".repeat(200);
+    const prose = "The unbearable lightness of a very long paragraph. ".repeat(300);
     const reply = await call(minimal({ body: prose }));
     expect(reply.status).toBe(400);
     expect(String(reply.body.error)).toMatch(/\[fb-long\]/);
@@ -802,6 +1280,70 @@ describe("POST /api/feedback", () => {
          refusal here follows, so a log line cannot become the payload. */
       expect(String(reply.body.error)).not.toContain(url);
     }
+  });
+
+  /**
+   * **A report filed from a private link does not carry the link's key out.**
+   * Plan 261005e, and GPT Sol's F1 on it.
+   *
+   * The Feedback button records the page's whole address, and on
+   * `/read/<slug>?key=…` that address is the credential. Stage 1b removes it in
+   * the browser; this is the server's half, for a bundle that does not. The
+   * report's address goes to four places, and each is read here: the row, the
+   * Sentry event, the admin email, and our own log line.
+   *
+   * Everything else in the address stays, because where the reader was is the
+   * point of recording it.
+   */
+  it("takes a private link's key off the address before it is stored, mirrored, mailed or logged", async () => {
+    const KEY = "AbCdEfGhIjKlMnOpQrStU_";
+    const sent = `https://www.spideryarn.com/read/an-article?mode=glossary&key=${KEY}&at=spya-k3m9qt`;
+    const kept = "https://www.spideryarn.com/read/an-article?mode=glossary&at=spya-k3m9qt";
+
+    let reply: Reply | undefined;
+    const written = await logLinesWhile(async () => {
+      reply = await call(minimal({ url: sent }));
+      /* The mirror and the notice run after the response; let both finish
+         inside the capture. */
+      await vi.waitFor(() => {
+        expect(sentryCaptures).toHaveLength(1);
+        expect(noticedReports).toHaveLength(1);
+      });
+    });
+    expect(reply?.status).toBe(201);
+
+    /* The row. */
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0]?.url).toBe(kept);
+    expect(JSON.stringify(submitted[0])).not.toContain(KEY);
+
+    /* The Sentry event: the tag, and nothing else in it either. */
+    expect((sentryCaptures[0] as { tags: { url: string } }).tags.url).toBe(kept);
+    expect(JSON.stringify(sentryCaptures[0])).not.toContain(KEY);
+
+    /* The admin email, rendered by the real composer from the report the route
+       handed the notice. */
+    const { feedbackNoticeMessage } =
+      await vi.importActual<typeof import("../src/feedback-notice.js")>("../src/feedback-notice.js");
+    const mail = feedbackNoticeMessage(noticedReports[0] as FeedbackReport, "reader@example.test");
+    expect(JSON.stringify(mail)).toContain(kept);
+    expect(JSON.stringify(mail)).not.toContain(KEY);
+
+    /* Our own log. The control first: the accepted line is there, with the
+       address in it, so the absence below is about the key. */
+    expect(written).toContain("feedback report accepted");
+    expect(written).toContain("mode=glossary");
+    expect(written).not.toContain(KEY);
+
+    /* And the reply to the reader does not echo it back. */
+    expect(JSON.stringify(reply?.body)).not.toContain(KEY);
+  });
+
+  /** An address with no key is stored exactly as it was sent, as it always was. */
+  it("stores an address without a key byte for byte", async () => {
+    const url = "https://www.spideryarn.com/read/an-article?q=the monkey&find=a#spya-k3m9qt";
+    expect((await call(minimal({ url }))).status).toBe(201);
+    expect(submitted[0]?.url).toBe(url);
   });
 
   it("refuses an address past the cap, and takes one exactly at it", async () => {
@@ -849,7 +1391,14 @@ describe("POST /api/feedback", () => {
   it("takes a screenshot as bytes and gives a caller nowhere to type a MIME", async () => {
     await call(minimal({ screenshot: PNG.toString("base64") }));
     expect(submitted[0]?.screenshot).toBeInstanceOf(Uint8Array);
-    expect(Buffer.from(submitted[0]!.screenshot!).equals(PNG)).toBe(true);
+    /* The same picture, not the same file: the server writes its own deflate
+       stream, and the fixture's was written at another level (the two differ in
+       one byte of zlib header). So the header chunk and the *inflated* pixels
+       are compared — this asserted byte equality until the level moved from 9
+       to 6 on 2026-10-03, which was true only by coincidence of settings. */
+    const stored = Buffer.from(submitted[0]!.screenshot!);
+    expect(stored.subarray(0, 33).equals(PNG.subarray(0, 33))).toBe(true);
+    expect(pixelsOf(stored).equals(pixelsOf(PNG))).toBe(true);
 
     for (const field of ["screenshotType", "screenshotName", "contentType", "filename"]) {
       const reply = await call(minimal({ screenshot: PNG.toString("base64"), [field]: "image/svg+xml" }));
@@ -921,7 +1470,7 @@ describe("POST /api/feedback", () => {
   });
 
   it("refuses a screenshot past the decoded cap", async () => {
-    const big = Buffer.concat([PNG, Buffer.alloc(400_001)]);
+    const big = Buffer.concat([PNG, Buffer.alloc(MAX_FEEDBACK_SCREENSHOT_BYTES + 1)]);
     const reply = await call(minimal({ screenshot: big.toString("base64") }));
     expect(reply.status).toBe(413);
     expect(submitted).toHaveLength(0);

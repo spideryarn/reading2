@@ -72,8 +72,18 @@ describe("the tools, in the shape realtime actually takes", () => {
     expect(names).toHaveLength(9);
   });
 
+  it("is not offered reader_notes, and the server will not run it for a live session", () => {
+    /* The ninth chat tool is not in `CHAT_TOOLS`, which is the list this file's
+       two exports are built from: Live's tool endpoint has no thread to leave
+       out of that tool's list. `toolsFor` in src/chat-tools.ts; GPT Sol's plan
+       review of 261003l, PR-3. If somebody moves it into `CHAT_TOOLS`, the
+       length above goes to ten and these two go red with it. */
+    expect(tools.map((t) => t.name)).not.toContain("reader_notes");
+    expect(LIVE_SERVER_TOOLS.has("reader_notes")).toBe(false);
+  });
+
   it("offers article_citations and lets the server run it — deliberately", () => {
-    /* `CHAT_TOOLS` is shared by typed Chat, Remember, Candidates and Live, and
+    /* `CHAT_TOOLS` is shared by typed Chat, Learn, Candidates and Live, and
        the citations tool reaches all four on purpose: read-only, article-local,
        the reader's own derived data. A per-kind tool list was weighed and was
        more machinery than that warrants. docs/plans/260913b-…-citations-list.md

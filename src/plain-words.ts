@@ -104,15 +104,21 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "src/pdf-authors.ts":
     "copies names and affiliations off the page verbatim, and the code stores the page's characters, not the model's",
   "src/pdf-figure-locate.ts": "writes a page number and a box for a figure",
+  "src/title-tidy-model.ts":
+    "gives a title back with its capitals, spacing and a site's name tidied; code refuses an answer that changes a word",
   "src/paper-metadata.ts":
     "copies a paper's title, authors, abstract and DOI off its first pages exactly as printed",
   "src/citation-paper-passages.ts":
     "copies up to three passages from a paper verbatim and picks one of three words for each; the code stores the paper's characters, not the model's",
+  "src/citation-influence.ts":
+    "writes a number, the number of a page, and words copied from that page verbatim; the code stores the page's characters, not the model's",
   "src/crossrefs.ts":
     "writes two block ids and a phrase copied from the article, and the code stores the article's characters, not the model's",
   "src/relations.ts":
     "writes a block id and one of ten fixed words per paragraph; the words a reader sees for them are the app's own",
   "src/pdf-read.ts": "transcribes a PDF verbatim; a transcriber told to prefer common words is invited to tidy",
+  "src/command-pick-call.ts":
+    "picks one of the command bar's own rows, then copies words out of the reader's sentence verbatim; neither call writes prose",
   "src/transcribe.ts": "speech to text, verbatim, with no prompt at all",
   "src/messages-stream.ts": "the wire every Messages call goes through, not a prompt",
   "src/ai-call.ts": "the wire every OpenRouter call goes through, not a prompt",
@@ -126,12 +132,12 @@ export const PLAIN_WORDS_EXEMPT: Record<string, string> = {
   "scripts/spike-expand-section.ts": "a one-off spike that sends production's own expansion prompt",
   "scripts/probes/260930d-quote-stop-repro.ts":
     "a one-off reproduction; it sends production's own INVESTIGATE_SYSTEM, which carries plainWords(\"explain\")",
-  "scripts/probes/260930a-investigate-probe.ts":
-    "a one-off probe; its prompt, in scripts/probes/260930a-investigate-prompt.ts, carries plainWords(\"explain\")",
   "scripts/probes/261001a-paper-read-probe.ts":
     "a one-off probe; it runs production's own Investigate press, whose prompts are production's (INVESTIGATE_SYSTEM carries plainWords(\"explain\"); the passages call is exempt above)",
   "scripts/probes/261001h-fidelity-guard-probe.ts":
     "a one-off measurement; it asks for per-paragraph verdicts in JSON, which no reader sees",
+  "scripts/eval-big-imports.ts":
+    "calls no model: it runs the real PDF reader over a fake wire that answers from the PDF's own text layer",
   "scripts/gjd-remote-envpolicy.ts": "an internal tool's reason for Greg, not text for a reader",
   "evals/dig-deeper/answer.ts":
     "an eval that sends production's own Dig deeper prompts (explain's SYSTEM and INVESTIGATE_SYSTEM carry plainWords(\"explain\")) to other models, and production's search step, which is exempt as src/dig-deeper.ts",

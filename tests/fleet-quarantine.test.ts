@@ -394,7 +394,13 @@ function fleetRow(over: Partial<FleetRow> = {}): FleetRow {
 }
 
 function snapshot(rows: FleetRow[] = [fleetRow()]): FleetSnapshot {
-  return { rows, collectedAt: "2026-09-09T00:00:00.000Z", tookMs: 13_000, tmuxServerPid: TMUX };
+  return {
+    rows,
+    collectedAt: "2026-09-09T00:00:00.000Z",
+    tookMs: 13_000,
+    tmuxServerPid: TMUX,
+    selfCheck: { kind: "cannot-check", why: "a fixture" },
+  };
 }
 
 /** The body the page posts to steer one session. */

@@ -26,7 +26,7 @@
  * established server-side against the real Sketch at the time it was written,
  * so **for a stored artefact its own plate order is the Sketch's order**. What
  * that costs is the unknown-scene check, which has nothing left to say about
- * our own file; what it keeps is the check the browser is actually here to make
+ * our own stored artefact; what it keeps is the check the browser is here to make
  * — every vignette's block id against *this* article's ids, and every quote
  * against that block's own text, so no row in the *what it depicts* list can
  * jump somewhere that does not contain what the reader just read.
@@ -48,8 +48,10 @@ import {
 } from "../illustrated-plate.js";
 import type { Block, BlockId, IllustratedResponse, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 
 export type IllustratedStatus = "loading" | "ready" | "none" | "error";
@@ -107,6 +109,11 @@ export interface UseIllustrated {
   /** The run in flight was started automatically. */
   automatic: boolean;
   /**
+   * *Paint again* was pressed on the painting still on screen, and has neither
+   * replaced it nor failed — the repaint waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /**
    * **Paint it if nobody has** — unforced, for the automatic run and for the
    * button in the empty state.
    *
@@ -122,6 +129,8 @@ export interface UseIllustrated {
    * change nothing. Safe to force because `illustrated` is in
    * `FORCE_ONLY_WHEN_NAMED` and is last in `STEP_ORDER`, so nothing else is
    * swept in with it.
+   * When the picture's profile has changed, includes an unforced Sketch first
+   * so the painting does not repeatedly refuse its old profile stamp.
    */
   regenerate(note?: string): Promise<void>;
   /**
@@ -170,6 +179,10 @@ export interface UseIllustrated {
    * sentence it replaces, and true.
    */
   drawThenPaint(note?: string): Promise<void>;
+  /** Read again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
+  /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
+  retryRead(): Promise<void>;
   cancel(id: string): void;
 }
 
@@ -193,15 +206,44 @@ function withNote(note: string | undefined): { illustrationNote?: string } {
   return note?.trim() ? { illustrationNote: note } : {};
 }
 
+/**
+ * **The painting on screen and everything that arrived with it, as one
+ * value**, so the facts about a painting cannot outlive it — useSketch.ts §
+ * `SketchShown` has the reasoning, and why `faults` is not in here.
+ */
+interface IllustratedShown {
+  /** Checked and safe to draw. */
+  illustrated: Illustrated;
+  /**
+   * **Which stored painting this is**, for *Paint again*'s hold
+   * (rewrite-hold.ts). `Illustrated` has no clock of its own, so this is the
+   * stored value itself, as the server sent it — useSketch.ts § `drawn` says
+   * why it is never the response beside it, nor the checked plates.
+   */
+  painted: string;
+  stale: boolean;
+  outdated: boolean;
+  profiled: boolean;
+  profileChanged: boolean;
+}
+
 export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllustrated {
   const [status, setStatus] = useState<IllustratedStatus>("loading");
-  const [illustrated, setIllustrated] = useState<Illustrated | null>(null);
+  const [shown, setShown] = useState<IllustratedShown | null>(null);
   const [faults, setFaults] = useState<IllustratedFault[]>([]);
-  const [stale, setStale] = useState(false);
-  const [outdated, setOutdated] = useState(false);
-  const [profiled, setProfiled] = useState(false);
-  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const illustrated = shown?.illustrated ?? null;
+  const profileChanged = shown?.profileChanged ?? false;
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * **Keyed on the ids, and the prose is read through a ref.**
@@ -222,19 +264,18 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `order` is the trigger and not an input — the ids decide WHEN to re-read, and `latest.current` supplies what to read against. Removing it, as the rule suggests, would leave the picture validated against the article it arrived with for ever.
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       const res = await apiFetch(`/api/illustrated/${encodeURIComponent(slug)}`);
       if (!current()) return;
       if (res.status === 404) {
         // The ordinary case: `illustrated` is off DEFAULT_INGEST_STEPS, so most
         // articles have never had one painted. This is what the button is for.
-        setIllustrated(null);
+        setShown(null);
         setFaults([]);
-        setStale(false);
-        setOutdated(false);
-        setProfiled(false);
-        setProfileChanged(false);
+        landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -254,34 +295,45 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
          empty plate list and the step refuses to write one, so reaching here
          means something got past both — an import, a hand-edited column, a
          schema from before the union existed. A panel that took it as `ready`
-         would draw an empty band and report success. */
+         would draw an empty band and report success.
+
+         **No painting, so no facts about one** — `shown` is null and the four
+         flags go with it. The faults stay: they say why there is nothing. */
       if (checked.plates.length === 0) {
-        setIllustrated(null);
+        setShown(null);
         setFaults(report.faults);
+        landed(started, res, null);
+        saidNoneFor.current = slug;
         setStatus("none");
         setError(null);
         return;
       }
 
-      setIllustrated(checked);
+      const identity = JSON.stringify(loaded.illustrated);
+      landed(started, res, identity);
+      setShown({
+        illustrated: checked,
+        painted: identity,
+        stale: loaded.stale,
+        outdated: loaded.outdated,
+        /* `!= null` rather than truthiness: the field is `string | null |
+           undefined` and only `null` and absent mean "painted from a Sketch
+           that had no profile". */
+        profiled: checked.profileHash != null,
+        profileChanged: loaded.profileChanged,
+      });
       setFaults(report.faults);
-      setStale(loaded.stale);
-      setOutdated(loaded.outdated);
-      /* `!= null` rather than truthiness: the field is `string | null |
-         undefined` and only `null` and absent mean "painted from a Sketch that
-         had no profile". */
-      setProfiled(checked.profileHash != null);
-      setProfileChanged(loaded.profileChanged);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
-      setError((err as Error).message);
+      setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
-  }, [slug, order]);
+  }, [slug, order, begin, landed]);
 
   const { reload, refresh } = useOrderedRead(load);
 
@@ -289,34 +341,69 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     void reload();
   }, [reload]);
 
+  /* The way out of a failed read, and never a generation verb — useFaq.ts §
+     `retryRead`. A painting already on screen stays there while a failed
+     revalidation is tried again; only the opening error returns to loading. */
+  const retryRead = useCallback(async () => {
+    setError(null);
+    if (illustrated === null) setStatus("loading");
+    await reload();
+  }, [illustrated, reload]);
+
   const queue = useStepJob(slug, "illustrated", refresh, "watches-queue");
+
+  /* A refused start has no job id. Count occurrences locally: identical words
+     are still new evidence, and `queue.failed` is rebuilt on every render. */
+  const [refusals, setRefusals] = useState(0);
+  const start = useCallback(async (run: Parameters<typeof queue.start>[0]) => {
+    const made = await queue.start(run);
+    if (made === null) setRefusals((n) => n + 1);
+    return made;
+  }, [queue.start]);
 
   const ensure = useCallback(
     async (note?: string) => {
-      await queue.start(withNote(note));
+      await start(withNote(note));
     },
-    [queue],
+    [start],
   );
+  /* **The forced verb holds the painting it was pressed on** (rewrite-hold.ts),
+     as useSketch.ts § `regenerate` does, and for the dearest run there is. The
+     two unforced verbs are offered only with nothing painted, so there is no
+     painting for them to hold. */
+  const hold = useRewriteHold({ slug, step: "illustrated", identity: shown?.painted ?? null, queue, fresh, refresh });
+  const held = hold.run;
   const regenerate = useCallback(
     async (note?: string) => {
-      await queue.start({ force: true, ...withNote(note) });
+      await held(() =>
+        start({
+          force: true,
+          ...(profileChanged ? { precededBy: ["sketch"] as const } : {}),
+          ...withNote(note),
+        }),
+      );
     },
-    [queue],
+    [start, held, profileChanged],
   );
   const drawThenPaint = useCallback(
     async (note?: string) => {
-      await queue.start({ precededBy: ["sketch"], ...withNote(note) });
+      await start({ precededBy: ["sketch"], ...withNote(note) });
     },
-    [queue],
+    [start],
   );
 
   /* Asked only when there is nothing to show — see the header. Re-asked when an
      Illustrated job ends, because a refusal is itself evidence the Sketch is
-     not what this hook last thought it was. */
+     not what this hook last thought it was.
+
+     Refused starts use the occurrence count above; accepted jobs use their
+     active id and failure message. A message alone cannot identify a new
+     refused start.
+     tests/illustrated-reasks-the-sketch-after-a-refusal.test.tsx. */
   const sketch = useSketchReadiness(
     slug,
     status === "none",
-    `${queue.failed ?? ""}\u0000${queue.job?.id ?? ""}`,
+    `${refusals}\u0000${queue.failed?.message ?? ""}\u0000${queue.job?.id ?? ""}`,
   );
 
   /**
@@ -370,21 +457,24 @@ export function useIllustrated(slug: string, blocks: readonly Block[]): UseIllus
     status,
     illustrated,
     faults,
-    stale,
-    outdated,
-    profiled,
+    stale: shown?.stale ?? false,
+    outdated: shown?.outdated ?? false,
+    profiled: shown?.profiled ?? false,
     profileChanged,
     sketch,
     slug,
     error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    rewriting: hold.rewriting,
     ensure,
     regenerate,
     drawThenPaint,
+    refresh,
+    retryRead,
     cancel: queue.cancel,
   };
 }

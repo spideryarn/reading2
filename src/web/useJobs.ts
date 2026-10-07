@@ -20,8 +20,10 @@
  *
  * The queue itself is src/jobs.ts; the routes are in src/routes.ts.
  */
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Job, ResetResponse, StepName } from "../types.js";
+import { retireAddSharing } from "./add-sharing-session.js";
+import { handOverAutoModesChoice } from "./auto-modes-setting.js";
 import { jobEngine, send } from "./jobEngine.js";
 import { batchUpload } from "./batchUpload.js";
 import { uploadEngine } from "./uploadEngine.js";
@@ -208,7 +210,9 @@ export interface UseJobs {
  *   and not on the session object, or it would fire on every alt-tab.
  */
 export function useJobSession(readerId: string | null, accessToken: string | null): void {
-  useEffect(() => {
+  // Bind before child passive effects can auto-post from an add page. At boot
+  // a passive parent effect runs after those children and leaves send unfenced.
+  useLayoutEffect(() => {
     if (!readerId) return;
     jobEngine.start(readerId);
     /* **The upload engine is bound here too**, and for the same reason rather
@@ -225,10 +229,25 @@ export function useJobSession(readerId: string | null, accessToken: string | nul
     /* And the batch (batchUpload.ts), for the same reason: it holds a reader's
        files and posts their jobs. */
     batchUpload.start(readerId);
+    /* **An old "off" for *generate the main modes*, handed to the server.** It
+       lived in this browser until plan 261004h; the server decides now, and
+       cannot see a browser's storage. Here rather than on the add page because
+       an import can start from a link's hover card without visiting it. The
+       signal binds the request to this reader (auto-modes-setting.ts). */
+    const handOver = new AbortController();
+    void handOverAutoModesChoice(handOver.signal, readerId);
     return () => {
+      handOver.abort();
       jobEngine.stop();
       uploadEngine.stop();
       batchUpload.stop();
+      /* **And the add page's sharing controllers**, the third thing in the
+         tab that outlives a mount and is one reader's: one of them holds a
+         private link's key. Retired, they forget it, and an answer still on
+         its way to one is drawn nowhere (add-sharing-session.ts; GPT Sol's
+         stage 2 plan review of 261005l, F1). No `start` beside the two
+         above: a controller is made for a reader by the page that shows it. */
+      retireAddSharing();
     };
   }, [readerId]);
 

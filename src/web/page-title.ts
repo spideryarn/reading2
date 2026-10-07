@@ -75,6 +75,7 @@ const ADMIN_PAGE_TITLE: Record<AdminPage, string> = {
   users: "Users",
   feedback: "Feedback",
   vouchers: "Gift vouchers",
+  costs: "Costs",
 };
 
 /**
@@ -187,8 +188,11 @@ export type TitleSpec =
   | { kind: "contact" }
   /** Every release since launch, newest first — ChangelogPage.tsx. */
   | { kind: "changelog" }
-  /** How to use it, section by section — help/HelpPage.tsx. */
-  | { kind: "help" }
+  /**
+   * How to use it — help/HelpPage.tsx. `page` is the heading of the one page
+   * of Help being read, absent for the contents at `/help`.
+   */
+  | { kind: "help"; page?: string }
   /** Where the code lives and what it is licensed under — OpenSourcePage.tsx. */
   | { kind: "opensource" }
   /**
@@ -317,11 +321,14 @@ function segments(spec: TitleSpec): string[] {
     case "changelog":
       return [CHANGELOG_LABEL, APP_NAME];
 
-    /* One word, the footer's word and the page's heading. Not the section the
-       fragment names: the tab is the page, and the fragment changes under it
-       with every contents click, which would make the title flicker. */
+    /* One word for the contents, the footer's word and the page's heading:
+       exactly what src/site-pages.ts pre-renders for `/help`, and
+       tests/site-pages.test.ts holds the two equal. A page of Help leads with
+       its own heading, most specific part first like `admin` below, so six
+       Help tabs can be told apart. Never the question a fragment names on
+       `/help/questions`: the tab is the page. */
     case "help":
-      return ["Help", APP_NAME];
+      return spec.page === undefined ? ["Help", APP_NAME] : [spec.page, "Help", APP_NAME];
 
     /* Two words, and the same two the footer uses — the tab is where somebody
        who opened this page to check whether the code is public looks to find it
@@ -541,7 +548,7 @@ export function host(text: string): string {
  * ## What is announced, and when
  *
  * **Everything but the app's name.** Not just the leading segment: switching
- * mode changes the tab from `… · Hierarchy` to `… · Glossary`, and announcing
+ * mode changes the tab from `… · Structure` to `… · Glossary`, and announcing
  * the first segment alone would repeat the article's title and say nothing
  * about what the reader had just pressed. And not the app's name either —
  * hearing *"· Spideryarn"* after every navigation is the audible version of the

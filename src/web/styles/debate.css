@@ -1,6 +1,6 @@
 /* debate.css — Debate mode (DebatePanel.tsx): the host, the quotation from a
    stranger's page, the fenced-off block of things a model guessed, and the
-   identification bar the reader sets over the whole list. The rest is
+   relevance bar the reader sets over Claims' list. The rest is
    `.gloss`'s, unchanged.
 
    **It must stay after glossary.css.** `.dbt-empty` below resets the padding
@@ -26,16 +26,16 @@
    there is deliberately nothing here that draws a *proportion* — no width driven
    by a value, no gradient, no `--heat-*`.
 
-   **The exception, and why it is not one.** `.dbt-bar` below is a threshold the
-   reader drags, and it stands on the same ground as `.gloss-gate`, `.srch-gate`
-   and `.quotes-bar`: it is a **control**, not a reading. What it moves over is a
-   row's identification level — *linked*, *quoted*, *named* — which is the name
-   of the strongest evidence found that a page is about this article, and the
-   three are drawn **identically**: ordered, but not coloured or sized along that
-   order. A ramp over one fact would be the composite
-   docs/project/quotes.md refuses, drawn instead of computed. Its value reads in
-   words rather than digits for the same reason. Adding a proportion to any of
-   this is a change to the design rather than to this file. */
+   **The exception, and why it is not one.** Claims' relevance bar is a
+   threshold the reader drags, and it is the same control every other band's
+   slider is (`.gloss-gate`, glossary.css): a **control**, not a reading. What
+   it moves over is how directly the AI judged a claim row to bear on its claim
+   — *loosely*, *partly*, *directly* — and the three are drawn **identically**: ordered, but
+   not coloured or sized along that order. A ramp over one judgment would be the
+   composite docs/project/quotes.md refuses, drawn instead of computed. Its
+   value reads in words rather than digits for the same reason. Adding a
+   proportion to any of this is a change to the design rather than to this
+   file. */
 
 /* The same three properties every band's scroller has, for the reason § timeline
    mode records: `.mode-band` is a fixed column between the controls bar and the
@@ -50,87 +50,45 @@
   padding: 0 0.7rem 0.7rem;
 }
 
-/* What the order on screen is, over the list — said once here rather than on
-   every row, like `.tl-frame` next door. When it was searched, and what the
-   quotations were checked against, are in the band's (i) since 2026-10-01. */
-.dbt-frame {
-  margin: 0;
-  padding: 0.3rem 0.7rem 0.45rem;
-  border-bottom: 1px solid var(--rule);
+/* ---- Reception | Claims ----
+   Debate's two sub-modes (DebatePanel.tsx § DebateViews), drawn with Summary's
+   own row (`.summ-controls`, summary.css) and the part-switcher every mode
+   shares (`.summ-views`, `.summ-view-btn`, mode-band.css § the
+   part-switcher), so the segmented controls cannot drift apart. What is here is only what differs: this row sits *under* the band's
+   head rather than being its top row, so it does not need the room Summary's
+   leaves for the (i) in the corner; and each segment carries a count. */
+.mode-band.has-about > .dbt-controls { padding-right: 0.6rem; }
+/* Spaced from its label by the part-switcher's own gap. */
+.dbt-view-count {
   color: var(--ink-faint);
-  font-size: 0.79rem;
-  line-height: 1.4;
+  font-size: 0.9em;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ---- the debate panel's identification bar ----
-   How firmly a page has to identify this article to stay on the list
-   (DebatePanel.tsx § NameBar). Deliberately the same rules as `.gloss-gate`,
-   `.srch-gate` and `.quotes-bar` above — one idea in the reader's hands, one
-   look, whichever band it is in — and grouped by selector rather than merged
-   into one class for the reason recorded there: the four panels' paddings differ
-   and always have.
+/* ---- the debate panel's relevance bar ----
+   How directly a page has to bear on its claim to stay on Claims' list
+   (DebatePanel.tsx § RelevanceBar). It is drawn with the glossary's slider
+   classes, `.gloss-gate*` in glossary.css — one idea in the reader's hands, one
+   look, whichever band it is in — and has no rule of its own here. Until
+   2026-10-07 it had a copy of all ten under `.dbt-bar*` (plan 261007a § K5).
 
    The one visual difference is the value, which is **words rather than a
-   number**, so it is not mono: a proportional face is what stops
-   *"quotes it · 2 of 3"* reading as a reading off an instrument. The count after
-   it is short enough to live in the same run of text. */
-.dbt-bar {
-  padding: 0.4rem 0.7rem 0.5rem;
-  border-bottom: 1px solid var(--rule);
-}
-.dbt-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.dbt-bar-label {
-  color: var(--ink-faint);
-  font-size: 0.83rem;
-  text-transform: lowercase;
-}
-.dbt-bar-value {
-  margin-left: auto;
-  color: var(--ink-soft);
-  font-size: 0.79rem;
-  white-space: nowrap;
-}
-.dbt-bar-reset {
-  display: flex;
-  align-items: center;
-  padding: 0.1rem;
-  border: none;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.dbt-bar-reset:hover { color: var(--ink); }
-.dbt-bar-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.dbt-bar-range {
-  display: block;
-  width: 100%;
-  margin: 0.3rem 0 0;
-  accent-color: var(--highlight-text);
-  cursor: pointer;
-}
-.dbt-bar-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-/* Said in words, because a bar that is hiding every response looks exactly like
-   a search that found none — which on this panel is a real and common answer,
-   and the one thing it must never be confused with. */
-.dbt-bar-note {
-  margin: 0.3rem 0 0;
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.35;
-}
+   number**, so it is not mono: `.gloss-gate-value.in-words`, beside the rule it
+   modifies. The count after it is short enough to live in the same run of
+   text.
 
-/* **Headings only in *by claim*, and only ones we can stand behind**
-   (DebatePanel.tsx § One list): *About this piece*, and each claim in the
-   article's own words with the way to it. The two searches are not headings —
-   that split was our epistemics, and drawn as two sections it produced two
-   headings, two blurbs and two foot lines over zero rows — and stance is never
-   one, because a heading saying *Critical* would be the model's reading in our
-   voice. Small and quiet, so a heading reads as a label on the rows under it
-   rather than as a section of a document. */
+   Its foot line is printed only when the bar is hiding something, because a bar
+   that is hiding every response looks exactly like a search that found none —
+   which on this panel is a real and common answer, and the one thing it must
+   never be confused with. */
+
+/* **Only headings we can stand behind** (DebatePanel.tsx § Two sub-modes):
+   *Names this piece by its title only* over Reception's title-only rows, and in
+   Claims each claim in the article's own words with the way to it. Stance is
+   never one, because a heading saying *Critical* would be the model's reading
+   in our voice. Small and quiet, so a heading reads as a label on the rows
+   under it rather than as a section of a document. */
 .dbt-group + .dbt-group { margin-top: 0.3rem; }
 .dbt-group-head {
   margin: 0;
@@ -144,9 +102,17 @@
   text-transform: uppercase;
 }
 /* A claim heading is a quotation of the article, so it is set as one — in the
-   reading face, sentence case, the dotted rule `.dbt-claim` uses — not in
-   capitals, which would turn the piece's words into a label of ours. */
+   reading face, sentence case, behind a dotted rule — not in capitals, which
+   would turn the piece's words into a label of ours.
+
+   It is the `<summary>` of a native `<details>` (DebatePanel.tsx § ClaimsList),
+   so the browser's own disclosure marker leads it and the whole line folds the
+   claim's rows away. A flex row: the quotation takes the width and wraps, the
+   way to the passage and the count sit after it and do not shrink. */
 .dbt-group-claim {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
   padding-left: 0.55rem;
   border-left: 2px dotted var(--rule-strong);
   margin-top: 0.35rem;
@@ -156,15 +122,203 @@
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
+  cursor: pointer;
+}
+/* `display: flex` drops the list-item marker a `<summary>` draws by default,
+   so the disclosure triangle is drawn here instead — the house's own, pointing
+   down while the group is open. */
+.dbt-group-claim::before {
+  content: "▸";
+  flex: none;
+  color: var(--ink-faint);
+}
+.dbt-claim-group[open] > .dbt-group-claim::before { content: "▾"; }
+.dbt-group-claim::-webkit-details-marker { display: none; }
+.dbt-group-claim:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+.dbt-group-quote { flex: 1; min-width: 0; }
+.dbt-group-claim > :not(.dbt-group-quote) { flex: none; }
+.dbt-group-count {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
 }
 
-/* **The lead sentence is drawn like an answer, not like a gap.** Finding no
+/* **A claim's chat** (DebatePanel.tsx § ClaimsList, plan 261005i): the owner's
+   button that starts one, and the mark that reopens one already started.
+
+   The button is the shared ghost icon button, as the Summary paragraph's is
+   (summary.css § `.simple-ask`), so its box, hover wash and focus ring are
+   that component's. Two things are set here: it is centred on the heading's
+   first line, since an icon has no baseline to sit on, and it gives back the
+   height it adds, so a claim's heading is no taller for having it. Quiet until
+   the pointer is on the claim or the keyboard is on the button; where nothing
+   can hover it is drawn at a strength a finger can find. Its size on a coarse
+   pointer is at the call site (`tw:pointer-coarse:size-10`). */
+.dbt-claim-check {
+  align-self: center;
+  margin-block: -0.25rem;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.dbt-claim-check:focus-visible { opacity: 1; }
+@media (hover: hover) {
+  .dbt-group-claim:hover .dbt-claim-check { opacity: 1; }
+}
+@media (hover: none) {
+  .dbt-claim-check { opacity: 0.8; }
+}
+/* The mark is the shared one (origin-chat.css § `.origin-chat`, since
+   2026-10-06), and **only its placement is set here**: a line of its own
+   under the claim, so the opening of the chat's latest answer has the width.
+   The heading wraps for it and for nothing else, since the quotation has no
+   minimum width and its neighbours are small. Indented past the disclosure
+   triangle, and with no gap above: the heading's own row gap is enough. */
+.dbt-group-claim { flex-wrap: wrap; }
+.dbt-group-claim > .dbt-claim-chat {
+  flex: 0 1 100%;
+  width: auto;
+  margin: 0 0 0 1.2rem;
+}
+
+/* **Look at the debate from an angle** (DebatePanel.tsx § Angles, plan
+   261005k): the owner's box at the top of the panel and *Your angles* under
+   it.
+
+   The box, its row and its button are Glossary's *Look up a term*
+   (footnotes.css § `.gloss-ask`), which rules it off below and leaves room for
+   the band's (i) (glossary.css). Set here: the button keeps its words on one
+   line and gives the box the rest, and on a coarse pointer the button and each
+   line of the list are a finger tall (docs/project/touch.md). The field's 1rem
+   floor on a touch screen is narrow-window.css's, for every field.
+
+   A line of the list is the claim's mark again (origin-chat.css): an
+   icon, the words on one line cut with an ellipsis, and a count. The words are
+   the reader's and take their face from voices.css (`.voice-reader`); the
+   quotation marks and the count are ours. */
+.dbt-lens-send { flex: none; white-space: nowrap; }
+/* In a narrow band the button goes under the box, not beside it: side by side
+   on an iPad the box was 117px and its placeholder read "Look at the d…"
+   (seen in the browser, 2026-10-06). The box asks for 12rem before it shares
+   its line. */
+.dbt-lens-row { flex-wrap: wrap; }
+.dbt-lens-row .gloss-ask-input { flex: 1 1 12rem; }
+.dbt-angles { margin-top: 0.35rem; }
+.dbt-angles-head { padding-top: 0.15rem; }
+.dbt-angles-list { margin: 0; padding: 0; list-style: none; }
+.dbt-angle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.15rem 0;
+  border: 0;
+  background: none;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.dbt-angle > svg { flex: none; color: var(--ink-faint); }
+.dbt-angle:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.dbt-angle:active { color: var(--ink); }
+@media (hover: hover) {
+  .dbt-angle:hover { color: var(--ink); }
+}
+.dbt-angle-quoted {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dbt-angle-count {
+  flex: none;
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+@media (pointer: coarse) {
+  .dbt-lens-send,
+  .dbt-angle,
+  .dbt-angles-more { min-height: 2.5rem; }
+}
+
+/* **The empty sentence is drawn like an answer, not like a gap.** Finding no
    page that responds to a piece is this mode's commonest correct output, so it
    gets the ordinary quiet ink and ordinary padding — dimming it further, or
    setting it in italics as an aside, would teach the reader that the honest
-   answer is a failure. After the list it sits below a rule, like the foot. */
+   answer is a failure. */
 .dbt-empty { padding: 0.4rem 0 0.7rem; font-size: 0.86rem; line-height: 1.45; }
-.dbt-empty.dbt-after { margin-top: 0.5rem; border-top: 1px dotted var(--rule); }
+
+/* **The way to Claims, under Reception's empty sentence**, and Reception's one
+   link out, under its rows: the same quiet text-link `.dbt-out` is, since each
+   is a way on rather than a control on the list. */
+.dbt-handoff,
+.dbt-scholar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--highlight-ink);
+  font: inherit;
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+.dbt-handoff { margin: 0 0 0.6rem; }
+.dbt-scholar { margin-top: 0.8rem; }
+.dbt-handoff:hover,
+.dbt-scholar:hover { text-decoration: underline; text-underline-offset: 2px; }
+.dbt-handoff:focus-visible,
+.dbt-scholar:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+.dbt-scholar svg { flex: none; }
+@media (any-pointer: coarse) {
+  .dbt-handoff, .dbt-scholar { min-height: var(--control-h-lg); }
+}
+
+/* **Cited by** — the papers that cite the piece, from OpenAlex, at the end of
+   the owner's Reception (DebatePanel.tsx § `CitedBy`). A group like *Names this
+   piece by its title only*: the same small-caps heading, then a sentence, then
+   rows. Set apart from the web search's rows above by a rule, because it is a
+   different list from a different source and is not counted with them. */
+.dbt-citers { margin-top: 0.9rem; border-top: 1px solid var(--rule); }
+.dbt-citers-note {
+  margin: 0 0 0.35rem;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.dbt-citers-note .cmt-spinner { display: inline; vertical-align: -2px; }
+.dbt-citers-retry { margin: 0 0 0.4rem; }
+.dbt-citers-list { margin: 0; padding: 0; list-style: none; }
+.dbt-citer { padding: 0.4rem 0; border-top: 1px solid var(--rule); }
+.dbt-citer:first-child { border-top: none; }
+/* A citing paper's title: the link out, in the row title's colour and face but
+   a step lighter and smaller — it is one line in a list we have not read, not a
+   source we checked. Whole rather than clamped: there is no `more` to open. */
+.dbt-citer-title {
+  color: var(--highlight-ink);
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-decoration: none;
+}
+span.dbt-citer-title { color: var(--ink); }
+a.dbt-citer-title:hover { text-decoration: underline; text-underline-offset: 2px; }
+a.dbt-citer-title:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
+.dbt-citer-title svg { display: inline; margin-left: 0.25rem; vertical-align: -1px; opacity: 0.7; }
+.dbt-citers-all { margin: 0.2rem 0 0; }
+.dbt-citers .dbt-scholar { display: flex; margin-top: 0.6rem; }
 
 /* **The chip on a row about this piece**, on the small line under the title.
 
@@ -375,42 +529,6 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
   line-clamp: none;
   overflow: visible;
 }
-
-/* A claim row outside *by claim*: the article's own words for the claim it
-   answers, on **one** line, with the jump to its block kept whole at the end —
-   so the text truncates rather than the whole line, and the block reference
-   never falls off. Same dotted rule as the claim heading, because it is the
-   same thing. */
-.dbt-claim {
-  display: flex;
-  align-items: baseline;
-  gap: 0.3rem;
-  min-width: 0;
-  margin: 0.25rem 0 0;
-  padding: 0 0 0 0.55rem;
-  border-left: 2px dotted var(--rule-strong);
-  color: var(--ink-soft);
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-.dbt-claim-text {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dbt-claim > :not(.dbt-claim-text) { flex: none; }
-.dbt-item.open .dbt-claim-text { white-space: normal; }
-.dbt-claim-label {
-  color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-.dbt-group-claim .dbt-claim-label { margin-right: 0.15rem; }
 
 /* **`more`** — the disclosure that replaced the ⓘ card. Quiet, like
    `.gloss-sort-btn`, because the row is readable without it; a real button, so a
@@ -655,7 +773,7 @@ button.dbt-mark:focus-visible { outline: 2px solid var(--highlight-text); outlin
 }
 .dbt-key-star { flex: none; color: var(--highlight-ink); }
 /* Where the box would be when the call failed: one quiet line, the
-   `.dbt-frame` register, so it reads as provenance rather than an error. */
+   quiet provenance register, so it reads as provenance rather than an error. */
 .dbt-thread-failed {
   margin: 0.2rem 0 0.4rem;
   color: var(--ink-faint);

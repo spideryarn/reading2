@@ -12,14 +12,19 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, isAdmin } from "../src/admin.js";
+import { ADMIN_EMAIL, ADMIN_EMAIL_LOCAL, ADMIN_USER_ID_LOCAL, ADMIN_USER_IDS, isAdmin } from "../src/admin.js";
 import { DEV_OWNER_ID } from "../src/owner.js";
+import { devCredentials, parseSeededReader } from "../scripts/browser-sign-in.js";
 import { mkdtempSync, chmodSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
   adminEmailPath,
+  readAdminEmail,
+  recordSignedIn,
+  SECOND_READER_EMAIL_LOCAL,
+  SECOND_READER_ID_LOCAL,
   SEEDED_ACCOUNTS,
   adminPasswordPath,
   planAccountEmail,
@@ -54,6 +59,25 @@ describe("what gets seeded", () => {
     /* Nothing signs in as the row-owner, so a credential on it would be one that
        exists for no reason. */
     expect(owner?.signsIn).toBe(false);
+  });
+
+  /**
+   * **A second reader who signs in**, since 2026-10-06: with one, a change of
+   * reader in one browser profile could not be driven anywhere, here or on the
+   * box (plan 261006h). It has to be nobody special, or the check it exists
+   * for would be made as an administrator.
+   */
+  it("seeds a second reader who signs in and is not an administrator", () => {
+    const second = SEEDED_ACCOUNTS.find((a) => a.id === SECOND_READER_ID_LOCAL);
+    expect(second).toBeDefined();
+    expect(second?.email).toBe(SECOND_READER_EMAIL_LOCAL);
+    expect(second?.signsIn).toBe(true);
+    expect(isAdmin(second?.id)).toBe(false);
+    expect(ADMIN_USER_IDS).not.toContain(SECOND_READER_ID_LOCAL);
+    expect(SEEDED_ACCOUNTS.filter((a) => a.signsIn).map((a) => a.id)).toEqual([
+      ADMIN_USER_ID_LOCAL,
+      SECOND_READER_ID_LOCAL,
+    ]);
   });
 
   it("has no two accounts sharing an id or an address", () => {
@@ -266,6 +290,49 @@ describe("readAdminCredentials", () => {
        password file behind would make the SECOND run succeed, against an account
        that still does not exist. */
     expect(existsSync(adminPasswordPath(dir))).toBe(false);
+  });
+
+  it("records the administrator's address once it has signed in, and nobody else's", () => {
+    /* The seed proves every account that signs in, and until 2026-10-06 it
+       recorded each one's address as it went. With a second such account the
+       last one proved would be what `db:admin-password` printed and what the
+       browser signed in as: a reader the admin pages refuse. */
+    const dir = home();
+    const admin = SEEDED_ACCOUNTS.find((a) => a.id === ADMIN_USER_ID_LOCAL)!;
+    const second = SEEDED_ACCOUNTS.find((a) => a.id === SECOND_READER_ID_LOCAL)!;
+    const owner = SEEDED_ACCOUNTS.find((a) => a.id === DEV_OWNER_ID)!;
+
+    recordSignedIn(dir, second);
+    recordSignedIn(dir, owner);
+    expect(readAdminEmail(dir), "nothing recorded for anybody but the administrator").toBeUndefined();
+
+    recordSignedIn(dir, admin);
+    expect(readAdminEmail(dir)).toBe(ADMIN_EMAIL_LOCAL);
+
+    // In the seed's own order: the second reader is proved after the administrator.
+    for (const account of SEEDED_ACCOUNTS) recordSignedIn(dir, account);
+    expect(readAdminEmail(dir)).toBe(ADMIN_EMAIL_LOCAL);
+  });
+
+  it("the browser signs in as the administrator unless told the second reader, with the one password", () => {
+    const dir = home();
+    const { password } = readOrCreateAdminPassword(dir);
+    recordSignedIn(dir, SEEDED_ACCOUNTS.find((a) => a.id === ADMIN_USER_ID_LOCAL)!);
+
+    expect(devCredentials(dir)).toMatchObject({ email: ADMIN_EMAIL_LOCAL, id: ADMIN_USER_ID_LOCAL, password });
+    expect(devCredentials(dir, "admin")).toEqual(devCredentials(dir));
+    /* `toEqual`, so no `alsoTry`: an address to fall back to would be the
+       administrator's, typed with the second reader's id expected. */
+    expect(devCredentials(dir, "second")).toEqual({
+      email: SECOND_READER_EMAIL_LOCAL,
+      id: SECOND_READER_ID_LOCAL,
+      password,
+    });
+
+    expect(parseSeededReader(undefined)).toBe("admin");
+    expect(parseSeededReader("admin")).toBe("admin");
+    expect(parseSeededReader("second")).toBe("second");
+    expect(() => parseSeededReader("b")).toThrow(/"admin" or "second"/);
   });
 
   it("prefers the address this MACHINE recorded over this checkout's constant", () => {

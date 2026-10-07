@@ -36,7 +36,7 @@ import {
   ColourNeedsWords,
   CommentIdTaken,
   NotAnExplanation,
-  type AnswerPatch,
+  type AnswerFinish,
   type MarkPatch,
   type NewComment,
 } from "../comments.js";
@@ -46,9 +46,14 @@ import { comments as commentsTable } from "../db/schema.js";
 import { isSpideryarnId, mintUniqueId } from "../ids.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
+import {
+  COMMENTS_CRITERION_FK,
+  CRITERION_NOT_ON_ARTICLE,
+  criterionRefusal,
+} from "../referee-criteria-store.js";
 import type { Comment, HighlightColour } from "../types.js";
 import { MissingAttempt, type CommentStore } from "./contracts.js";
-import { guardDbStore } from "./db-errors.js";
+import { guardDbStore, violatesForeignKey } from "./db-errors.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { articleIdForOwned } from "./pg.js";
 
@@ -129,6 +134,26 @@ async function listFor(articleId: string): Promise<Comment[]> {
     .where(eq(commentsTable.articleId, articleId))
     .orderBy(asc(commentsTable.createdAt), asc(commentsTable.id));
   return rows.map(toComment);
+}
+
+/**
+ * **A placement whose criterion is not there when the write lands.**
+ *
+ * The route looks first (`tidyMark`, src/routes.ts) and answers a 400 for a
+ * criterion that is not the reader's on this article. But the look and the
+ * write are two statements, so a criterion deleted in another tab in between —
+ * legitimately: nothing was placed on it yet — leaves `comments_criterion_fk`
+ * to refuse the row, and until 2026-10-07 that was a 500. It is the same fact
+ * the early check reports, so it gets the same status and the same words.
+ *
+ * By name: `comments_identity_fk` raises the same SQLSTATE from the same
+ * statement and is a real failure — see `violatesForeignKey`.
+ */
+function rethrowPlacementError(err: unknown): never {
+  if (violatesForeignKey(err, COMMENTS_CRITERION_FK)) {
+    throw criterionRefusal(400, CRITERION_NOT_ON_ARTICLE);
+  }
+  throw err;
 }
 
 const rawPgCommentStore: CommentStore = {
@@ -228,7 +253,9 @@ const rawPgCommentStore: CommentStore = {
         .insert(commentsTable)
         .values({ articleId, id, ownerId: currentOwnerId(), ...fields })
         .onConflictDoNothing({ target: [commentsTable.articleId, commentsTable.id] })
-        .returning();
+        .returning()
+        // The minted-id caller rolls back its transaction; supplied ids use one statement.
+        .catch(rethrowPlacementError);
       return row === undefined ? undefined : toComment(row);
     };
 
@@ -267,8 +294,7 @@ const rawPgCommentStore: CommentStore = {
         /* The placement is part of what "the same Save" means, for the reason
            the body is: a second POST under a stored id carrying a *different*
            valence is a re-score, not a retry, and `create` overwriting it would
-           delete a judgement the referee already made. `sameMark` in
-           src/comments.ts is the filesystem half of this. */
+           delete a judgement the referee already made. */
         stored.criterionId === input.criterionId &&
         stored.valence === input.valence &&
         /* And the colour, for the same reason: the same id resent with a
@@ -285,41 +311,41 @@ const rawPgCommentStore: CommentStore = {
 
     /* No usable id from the client, so mint one. This half still has to look
        before it writes — you cannot ask Postgres for "an id nothing is using" —
-       so it keeps the transaction, and it retries on a key collision.
+       so it keeps the transaction, and it mints again on a key collision.
 
        Minting needs the ids already taken FOR THIS ARTICLE. Block ids are
        unique only within an article and so are these; the primary key is
        `(article_id, id)`. Passing every comment id in the database would be
-       both wrong and slower. */
+       both wrong and slower.
+
+       **A collision is no row, never an error**, so there is no `catch` here.
+       The insert is `on conflict (article_id, id) do nothing` and that primary
+       key is the table's only unique index, so two requests minting one id in
+       the same instant leave the loser with `undefined`, which is minted again
+       below. Until 2026-10-07 a second retry sat in a `catch` for SQLSTATE
+       23505; it could not run, and it tested a `.code` Drizzle's wrapper does
+       not carry (db-errors.ts § `violatesConstraint`). Anything that does throw
+       leaves at once, through `write`'s placement-error translation. An
+       unmapped foreign-key failure must be seen; the block identity FK can
+       expose stage 3 breaking identity preservation.
+       tests/store-comments.test.ts § "a minted id that is already a row". */
     for (let attempt = 0; ; attempt++) {
-      try {
-        const stored = await db.transaction(async (tx) => {
-          const takenRows = await tx
-            .select({ id: commentsTable.id })
-            .from(commentsTable)
-            .where(eq(commentsTable.articleId, articleId));
-          return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
-        }, READ_COMMITTED);
-        /* `undefined` means the insert conflicted on an id we had just proved
-           was free, which is the collision the retry below is for. */
-        if (!stored) {
-          if (attempt >= 2) throw new CommentIdTaken("(minted)");
-          continue;
-        }
-        logger.info(
-          { slug, id: stored.id, blockId: stored.blockId, repeat: false },
-          "comment created",
-        );
-        return stored;
-      } catch (err) {
-        /* 23505 is unique_violation, and here it means two requests minted the
-           same random id in the same instant — one chance in a billion, which
-           at enough requests is a Tuesday. Anything else is a real failure and
-           must not be swallowed: 23503 in particular is the block identity FK,
-           which means stage 3 re-minted ids and has to be seen. */
-        const code = (err as { code?: string }).code;
-        if (code !== "23505" || attempt >= 2) throw err;
+      const stored = await db.transaction(async (tx) => {
+        const takenRows = await tx
+          .select({ id: commentsTable.id })
+          .from(commentsTable)
+          .where(eq(commentsTable.articleId, articleId));
+        return write(mintUniqueId(new Set(takenRows.map((r) => r.id))), tx as typeof db);
+      }, READ_COMMITTED);
+      if (!stored) {
+        if (attempt >= 2) throw new CommentIdTaken("(minted)");
+        continue;
       }
+      logger.info(
+        { slug, id: stored.id, blockId: stored.blockId, repeat: false },
+        "comment created",
+      );
+      return stored;
     }
   },
 
@@ -372,6 +398,9 @@ const rawPgCommentStore: CommentStore = {
            top of the retry the reader is watching arrive. GPT Sol, 2026-09-01. */
         attemptId: sql`gen_random_uuid()`,
         leaseExpiresAt: sql`clock_timestamp() + make_interval(secs => ${COMMENT_ANSWER_LEASE_MS} / 1000.0)`,
+        /* A new attempt has not finished. Left in place, the last answer's time
+           would sit under a spinner saying this one had. */
+        finishedAt: null,
       })
       /* **`in ('done','error')` is a claim; `<> 'none'` was not.**
          The first version excluded only bookmarks, so a row already `pending`
@@ -489,7 +518,8 @@ const rawPgCommentStore: CommentStore = {
       .update(commentsTable)
       .set({ criterionId: mark.criterionId, valence: mark.valence, updatedAt: new Date() })
       .where(and(eq(commentsTable.articleId, articleId), eq(commentsTable.id, id)))
-      .returning();
+      .returning()
+      .catch(rethrowPlacementError);
     if (!row) throw new NotAnExplanation(id, "missing");
     /* The criterion is an id and `placed` is a flag. Whether a referee scored a
        passage is a fact about the app; the number they chose is their judgement
@@ -517,7 +547,9 @@ const rawPgCommentStore: CommentStore = {
     const articleId = await articleIdForOwned(slug);
     const [row] = await db
       .update(commentsTable)
-      .set({ colour })
+      /* `colour_at` beside it, cleared colour included: taking a colour away is
+         as much the reader's act as picking one. */
+      .set({ colour, colourAt: sql`clock_timestamp()` })
       .where(
         and(
           eq(commentsTable.articleId, articleId),
@@ -621,16 +653,16 @@ const rawPgCommentStore: CommentStore = {
   async patch(
     slug: string,
     id: string,
-    patch: AnswerPatch,
-    attempt?: string,
+    patch: AnswerFinish,
+    attempt: string,
     opts: { quiet?: boolean } = {},
   ): Promise<Comment[] | undefined> {
     const db = getDb();
 
     /* **Refused without an attempt, rather than falling back to identity.**
-       The token is optional in the interface because the filesystem store has
-       none. Accepting `undefined` *here* would mean a caller that simply forgot
-       to carry it through got the whole race back, with nothing anywhere
+       The interface requires the token; this is the same rule for a caller the
+       compiler did not see. Accepting `undefined` *here* would mean one that
+       dropped it got the whole race back, with nothing anywhere
        reporting it — the reasoning `pgSearchStore.finish` sets out at length. */
     if (attempt === undefined) {
       throw new MissingAttempt("CommentStore.patch", "beginAnswer()");
@@ -639,7 +671,8 @@ const rawPgCommentStore: CommentStore = {
        released below whatever the patch says, so a patch leaving the comment
        `pending` would strip the fence off a row still waiting for an answer,
        after which anybody's late write can land on it. */
-    if (patch.status !== "done" && patch.status !== "error") {
+    const status: string | undefined = patch.status;
+    if (status !== "done" && status !== "error") {
       /* **`status`, so the guard lets the sentence through.** A fence violation
          is a caller's bug that never reached the database, and its whole
          content is which invariant broke — scrubbed, it arrives as *"this app
@@ -659,7 +692,7 @@ const rawPgCommentStore: CommentStore = {
          is the sibling refusal in this same family. */
       throw Object.assign(
         new Error(
-          `CommentStore.patch must end an answer: status was ${JSON.stringify(patch.status)}, ` +
+          `CommentStore.patch must end an answer: status was ${JSON.stringify(status)}, ` +
             'expected "done" or "error".',
         ),
         { status: 500 },
@@ -675,10 +708,10 @@ const rawPgCommentStore: CommentStore = {
     const written = await db
       .update(commentsTable)
       .set({
-        /* The anchor is no longer settable here either. `AnswerPatch` is the
+        /* The anchor is no longer settable here either. `AnswerFinish` is the
            type-level half of the same rule; this is the half that survives a
            caller with an `as never` in it. */
-        ...(patch.status === undefined ? {} : { status: patch.status }),
+        status: patch.status,
         ...(patch.answer === undefined ? {} : { answer: patch.answer }),
         ...(patch.citations === undefined ? {} : { citations: patch.citations }),
         ...(patch.searches === undefined ? {} : { searches: patch.searches }),
@@ -694,6 +727,12 @@ const rawPgCommentStore: CommentStore = {
            clears its pair in `finish` for the same reason. */
         attemptId: null,
         leaseExpiresAt: null,
+        /* **When the answer landed, or failed** — in this statement, so the
+           fence below decides it with everything else: a superseded attempt
+           matches no row and stamps nothing. Unconditional because the guard
+           above has already refused any patch that does not end the answer.
+           The database's clock, like the lease it replaces. */
+        finishedAt: sql`clock_timestamp()`,
       })
       .where(
         and(
@@ -786,7 +825,15 @@ const rawPgCommentStore: CommentStore = {
          row keeps a lease nobody holds, and the next reader of this table finds
          an `error` comment that still names a live attempt. `pg-chat.ts` clears
          its pair for the same reason. */
-      .set({ status: "error", error: COMMENT_SWEPT, attemptId: null, leaseExpiresAt: null })
+      /* `finished_at` is when the sweep ended the attempt, not when its process
+         died — nobody recorded that. */
+      .set({
+        status: "error",
+        error: COMMENT_SWEPT,
+        attemptId: null,
+        leaseExpiresAt: null,
+        finishedAt: sql`clock_timestamp()`,
+      })
       .where(
         and(
           eq(commentsTable.articleId, articleId),

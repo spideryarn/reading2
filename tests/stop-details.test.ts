@@ -70,6 +70,8 @@ import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse } from "@babel/parser";
+import { type Node, VISITOR_KEYS } from "@babel/types";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 
@@ -450,6 +452,40 @@ function stripComments(source: string): string {
   return out;
 }
 
+/**
+ * A bounded architecture guard: modules importing the Messages gateway or SDK leave
+ * content reads to its helper. Inspect syntax, not an optional TextBlock type
+ * annotation. Request objects' content keys and strings are not reads.
+ * This deliberately does not trace types, indirect imports or dynamic keys.
+ */
+function readsMessagesContent(code: string): boolean {
+  const tree = parse(code, { sourceType: "module", plugins: ["typescript", "jsx", "decorators-legacy"] });
+  const importsGateway = tree.program.body.some(
+    (node) => node.type === "ImportDeclaration" &&
+      (/\/messages-stream\.[jt]s$/.test(node.source.value) || node.source.value === "@anthropic-ai/sdk"),
+  );
+  if (!importsGateway) return false;
+
+  const contentKey = (node: Node, computed: boolean): boolean =>
+    (!computed && node.type === "Identifier" && node.name === "content") ||
+    (node.type === "StringLiteral" && node.value === "content");
+  const readsContent = (node: Node): boolean => {
+    if ((node.type === "MemberExpression" || node.type === "OptionalMemberExpression") &&
+        contentKey(node.property, node.computed)) return true;
+    if (node.type === "ObjectPattern" && node.properties.some(
+      (property) => property.type === "ObjectProperty" && contentKey(property.key, property.computed),
+    )) return true;
+    const fields = node as unknown as Record<string, unknown>;
+    return (VISITOR_KEYS[node.type] ?? []).some((key) => {
+      const child = fields[key];
+      return Array.isArray(child)
+        ? child.some((item) => item != null && readsContent(item as Node))
+        : child != null && readsContent(child as Node);
+    });
+  };
+  return readsContent(tree.program);
+}
+
 /** Every `.ts`/`.tsx` file under `src/`, as absolute paths. */
 async function sourceFiles(): Promise<string[]> {
   const root = path.join(ROOT, "src");
@@ -460,6 +496,26 @@ async function sourceFiles(): Promise<string[]> {
 }
 
 describe("the source itself", () => {
+  it.each([
+    'const raw = reply.content.filter(b => b.type === "text").map(b => b.text).join("");',
+    'const raw = reply.content.map(b => b.type === "text" ? b.text : "").join("");',
+    'const raw = reply.content[0].text;',
+    'const raw = reply["content"].reduce((s, b) => s + b.text, "");',
+    'const { content: blocks } = reply; const raw = blocks.map(b => b.text).join("");',
+    'for (const block of reply?.content ?? []) { raw += block.text; }',
+  ])("detects an untyped Messages content read: %s", (body) => {
+    expect(readsMessagesContent(`import { streamMessage } from "./messages-stream.js";\n${body}`)).toBe(true);
+  });
+
+  it("allows request content, prose, and other modules' content properties", () => {
+    const imported = 'import { streamMessage } from "./messages-stream.js";\n';
+    expect(readsMessagesContent(`${imported}const request = { content: "text" };`)).toBe(false);
+    expect(readsMessagesContent(`${imported}const note = "reply.content"; // reply.content`)).toBe(false);
+    expect(readsMessagesContent(String.raw`${imported}const pattern = /https?:\/\//;`)).toBe(false);
+    expect(readsMessagesContent(`${imported}const note = "Anthropic.TextBlock";`)).toBe(false);
+    expect(readsMessagesContent('const raw = document.content;')).toBe(false);
+  });
+
   it("strips comments without eating code", () => {
     /* The scan below is only as good as this function, and a stripper that
        returned "" would make it pass for ever. So it is checked against the
@@ -498,6 +554,123 @@ describe("the source itself", () => {
     /* And the function's contract is a boolean, so nothing downstream can widen
        it by accident. */
     expect(code).toContain("export function wasRefused(message: Anthropic.Message): boolean");
+  });
+
+  /**
+   * **Every refusal is thrown through `stageFailure`, so the reader's sentence
+   * is declared.** `new Error(MODEL_REFUSED.message)` looks equivalent and is
+   * not: the bracketed code still marks the job `blocked`, and the sentence is
+   * dropped for the generic one (src/job-failure.ts § `readerFailureOf`).
+   * src/illustrated.ts did exactly that from 2026-09-03 to 2026-10-04 while two
+   * comments in job-failure.ts said every site was declared.
+   * docs/plans/261004b-sweep-clusters-7-and-10-link-summary-fence-and-illustrated-refusal.md.
+   */
+  it("uses MODEL_REFUSED only as the failure stageFailure declares", async () => {
+    /* **The rule is about the name, not about one spelling of the mistake.**
+       Banning `new Error(MODEL_REFUSED.message)` would miss `Error(…)` without
+       `new`, another error class, an alias, and `stageFailure(MODEL_REFUSED, {
+       generic })`, which drops the sentence just as well. So: outside its
+       definition and the imports, every mention of the name is the first
+       argument of an `authored` `stageFailure`. GPT Sol, 2026-10-04, PL-4. */
+    const stray = (code: string): number => {
+      /* Match the import clause's syntax, including side-effect imports.
+         An arbitrary span up to `from` can swallow executable code between
+         a side-effect import and the next named import. */
+      const body = code.replace(
+        /^\s*import\s+(?:(?:type\s+)?(?:\{[^}]*\}|\*\s+as\s+[\w$]+|[\w$]+(?:\s*,\s*(?:\{[^}]*\}|\*\s+as\s+[\w$]+))?)\s+from\s*)?["'][^"']+["'];?/gm,
+        /* Keep a stray mention for an aliased import: otherwise its uses
+           under the alias evade this name-based checker altogether. */
+        (statement) => /\bMODEL_REFUSED\s+as\b/.test(statement) ? "MODEL_REFUSED" : "",
+      );
+      const all = body.match(/\bMODEL_REFUSED\b/g) ?? [];
+      const declared = body.match(/stageFailure\(\s*MODEL_REFUSED\s*,\s*\{\s*authored\b/g) ?? [];
+      return all.length - declared.length;
+    };
+    /* The checker against the forms it has to tell apart, or a clean result
+       below is a checker that sees nothing. */
+    const imported = 'import {\n  MODEL_REFUSED,\n} from "./messages.js";\n';
+    expect(stray(`${imported}throw stageFailure(MODEL_REFUSED, { authored: "x" });`)).toBe(0);
+    expect(stray(`${imported}throw stageFailure(\n  MODEL_REFUSED,\n  {\n    authored: "x" });`)).toBe(0);
+    expect(stray(`${imported}throw new Error(MODEL_REFUSED.message);`)).toBe(1);
+    expect(stray(`${imported}throw Error(MODEL_REFUSED.message);`)).toBe(1);
+    expect(stray(`${imported}throw stageFailure(MODEL_REFUSED, { generic: "x" });`)).toBe(1);
+    expect(stray(`${imported}const refusal = MODEL_REFUSED;`)).toBe(1);
+    expect(stray(
+      'import { MODEL_REFUSED as refusal } from "./messages.js";\nthrow new Error(refusal.message);',
+    )).toBe(1);
+    expect(stray(`import "./setup.js";
+throw new Error(MODEL_REFUSED.message);
+${imported}`)).toBe(1);
+    expect(stray(`import "./setup.js";
+throw stageFailure(MODEL_REFUSED, { authored: "x" });
+${imported}`)).toBe(0);
+
+    const files = await sourceFiles();
+    const offenders: string[] = [];
+    let sites = 0;
+    for (const file of files) {
+      const rel = path.relative(ROOT, file);
+      /* Where it is defined. */
+      if (rel === path.join("src", "messages.ts")) continue;
+      const code = stripComments(await readFile(file, "utf8"));
+      sites += (code.match(/stageFailure\(\s*MODEL_REFUSED\b/g) ?? []).length;
+      if (stray(code) !== 0) offenders.push(rel);
+    }
+    /* Non-vacuity. Eighteen sites on the day this was written; four since
+       2026-10-04, when fifteen stages moved onto `finishedText`
+       (src/messages-stream.ts), which is one of the four. The one that matters
+       is named, so that the scan cannot pass by having stopped seeing it. */
+    expect(sites).toBeGreaterThan(0);
+    const reader = stripComments(await readFile(path.join(ROOT, "src", "messages-stream.ts"), "utf8"));
+    expect(stray(reader)).toBe(0);
+    expect(reader).toMatch(/stageFailure\(\s*MODEL_REFUSED\s*,\s*\{\s*authored\b/);
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * **A stage reads its answer through `finishedText`, not by hand.**
+   *
+   * The rule above checks that a refusal is declared wherever one is thrown. It
+   * cannot see a stage that throws nothing: one that joins `message.content`
+   * itself and parses whatever came back, refusal sentence included. Until
+   * 2026-10-04 every stage wrote the refusal, the truncation and the join out
+   * by hand, 32 copies of the text-block filter in 18 files, and the next stage
+   * was written by copying a neighbour.
+   * docs/plans/261004d-fifth-sweep-cluster-19-one-helper-for-reading-a-messages-result.md.
+   *
+   * Modules importing the Messages gateway or SDK leave content reads to that one
+   * file, including the three stages with their own ending. Their refusal and
+   * truncation checks remain allowed. This checks literal syntax, not types or
+   * indirect imports; the detector's examples above pin that boundary.
+   */
+  it("reads a Messages result by hand only where the ending is the stage's own", async () => {
+    const HELPER = path.join("src", "messages-stream.ts");
+    /* simple-summary returns its failures with the call's usage; labels retries
+       a truncated batch; structure-deepen shrinks one. */
+    const OWN_ENDING = new Set(
+      [HELPER, "src/simple-summary.ts", "src/labels.ts", "src/structure-deepen.ts"].map((f) =>
+        path.normalize(f),
+      ),
+    );
+    const filters: string[] = [];
+    const checks: string[] = [];
+    for (const file of await sourceFiles()) {
+      const rel = path.relative(ROOT, file);
+      const source = await readFile(file, "utf8");
+      const code = stripComments(source);
+      if (readsMessagesContent(source) && rel !== HELPER) filters.push(rel);
+      if (/stop_reason\s*===?\s*["']max_tokens["']|\bwasRefused\s*\(/.test(code) && !OWN_ENDING.has(rel)) {
+        checks.push(rel);
+      }
+    }
+    expect(filters).toEqual([]);
+    expect(checks).toEqual([]);
+    /* Non-vacuity: the detectors still find the one place each is allowed. */
+    const helperSource = await readFile(path.join(ROOT, HELPER), "utf8");
+    const helper = stripComments(helperSource);
+    expect(readsMessagesContent(helperSource)).toBe(true);
+    expect(helper).toMatch(/stop_reason\s*===?\s*["']max_tokens["']/);
+    expect(helper).toMatch(/\bwasRefused\s*\(/);
   });
 
   it("reads no stop_details anywhere in src/", async () => {

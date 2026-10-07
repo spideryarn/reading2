@@ -80,6 +80,7 @@ import path from "node:path";
 
 import { TRUNK_BRANCH } from "./deploy-checks.js";
 import { listWorktrees, type WorktreeEntry } from "./worktree-admin.js";
+import { GIT_LOCATION_ENV } from "../tools/fleet/readiness-git.js";
 import { blockers, fetchTrunkSha, gather as checkGather, primaryRoot } from "./worktree-check.js";
 import {
   ancestry,
@@ -822,6 +823,15 @@ function isMain(): boolean {
 }
 
 if (isMain()) {
+  /* **This command is about the directory it stands in**, and git would rather
+     believe `GIT_DIR` and `GIT_WORK_TREE` when they are set — a git hook sets
+     them. Inherited, they made "which tree is this?" answer with a different
+     tree from the one the caller had just checked, and that tree was the one
+     removed (GPT Sol, code review of 261005n; reproduced in
+     tests/worktree-remove.test.ts). Dropped here, once, before anything asks git
+     anything, rather than at each of the nine places below that spawn it. */
+  for (const name of GIT_LOCATION_ENV) delete process.env[name];
+
   const argv = process.argv.slice(2);
   const at = argv.indexOf("--branch");
   const named = at === -1 ? undefined : argv[at + 1];

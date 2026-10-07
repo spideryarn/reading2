@@ -15,9 +15,10 @@ how it leaves.
 >
 > — Greg, 2026-09-01
 
-Parent: [architecture.md](architecture.md). The work is
+Up: [architecture.md](architecture.md). The work is
 [260901h-export-article-data.md](../plans/260901h-export-article-data.md), and it is built: the
-bundle, `GET /api/export/:slug`, and the button on the Metadata page.
+bundle, `GET /api/export/:slug` (the `/api/export/` pattern in [`src/routes.ts`](../../src/routes.ts)),
+and the button on the Metadata page.
 
 ## What comes out
 
@@ -32,9 +33,14 @@ file-by-file list, and the thing to edit when the layout changes.
     README.md         the above, for whoever writes an importer
     content/          revision.json, stamped.html, extracted.html, blocks.json,
                       block-identities.json, assets.json
-    augmentations/    tree, glossary, glossary-lookups, ideas, quotes, timeline, quiz, sketch, arc,
-                      tweets, labels, comments, chat, searches, referee-claims, referee-criteria,
-                      tags (your own, since 261003d)
+    augmentations/    tree, glossary, glossary-lookups, glossary-hidden, ideas, quotes, timeline,
+                      quiz, sketch, illustrated, arc, tweets, labels, citations, citation-finds,
+                      citation-investigations, faq, relations, skim, crossrefs, simple-summary,
+                      reading-time, comments, chat, searches, referee-claims, referee-criteria,
+                      tags (your own, since 261003d), quiz-attempts (your answers and the
+                      mark each was given, since 261005b — every one, including answers to
+                      questions that have since been rewritten; each row carries its
+                      question's words for that reason)
 
 **Every file is optional and absent when there is nothing in it** — an article nobody chatted about
 has no `chat.json` — except `index.html`, `manifest.json`, `article.json`, `README.md`,
@@ -206,10 +212,21 @@ than leaving an importer to discover it.
 Earlier revisions: they
 exist and carry lineage, so this is a product decision, not an impossibility. `ai_calls`, whose
 `article_id` is nullable, so a per-article total would be quietly **wrong** rather than merely
-absent. And the pipeline tables — `checkpoints`, `jobs`, `queue_state`, `revision_step_runs` —
-machinery rather than reader data. Plus `raw_sources` and `uploads`, which describe *how the
+absent. And the pipeline tables — `checkpoints`, `jobs`, `revision_step_runs` — machinery rather
+than reader data. (`queue_state` was on that list until 2026-10-07, reachable only through an
+unused column that was dropped that day; it is out of scope now, so the manifest no longer names
+it.) Plus `raw_sources` and `uploads`, which describe *how the
 document arrived* rather than the article: the bucket object the fetch stored, and the upload
 attempt that produced it.
+
+**The key of a private link is dropped, since 2026-10-05.** `articles.share_token` is a credential:
+with the slug, which is in the same file, it opens the article until the owner turns the link off,
+and a zip gets forwarded. `articleJson` in
+[`src/store/export-bundle.ts`](../../src/store/export-bundle.ts) names the column among the ones it
+leaves out, and `tests/store-export-bundle.test.ts` looks for the key across the whole zip.
+`shareTokenAt` stays, because that a link was made, and when, is sharing state like `publicAt`. The
+audit table `article_share_link_events` is not exported, like the visibility log. The plan is
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md).
 
 `manifest.json` states all of this machine-readably under `omitted`, and that list is **derived from
 `ARTICLE_TABLE_COVERAGE`** rather than written out beside it, so the manifest cannot drift from the

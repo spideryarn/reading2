@@ -2,6 +2,30 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+Code: [`link-preview.ts`](../../src/web/link-preview.ts) (the free card), [`link-facts.ts`](../../src/web/link-facts.ts) (the async half), [`src/link-previews.ts`](../../src/link-previews.ts) and [`src/link-summary.ts`](../../src/link-summary.ts) (the server's two routes); tests start at [`link-preview.test.ts`](../../tests/link-preview.test.ts).
+
+- [§ What is actually in an article](#what-is-actually-in-an-article) — the corpus measurement behind the feature
+- [§ Two things over one phrase](#two-things-over-one-phrase) — a link whose text is also a glossary term
+- [§ What a card can say for free](#what-a-card-can-say-for-free) — the card built from the href alone, with no fetch
+- [§ The one destination we can show](#the-one-destination-we-can-show) — hover on an in-article `#anchor`
+- [§ Every link that leaves the app opens a new tab](#every-link-that-leaves-the-app-opens-a-new-tab) — the home-screen report; `target="_blank"` rule
+- [§ A footnote marker](#a-footnote-marker-is-one-of-those-links-and-it-gets-the-note-instead) — why a superscript gets the note, not the paragraph card
+- [§ What the reader meets at the note](#what-the-reader-meets-at-the-note) — the way back from a footnote
+- [§ The identifier the path is carrying](#the-identifier-the-path-is-carrying) — DOIs and catalogue keys in a card
+- [§ What a browser can and cannot reach](#what-a-browser-can-and-cannot-reach) — why the reader's browser cannot fetch the destination
+- [§ The three things somebody can tell us](#the-three-things-somebody-can-tell-us) — the sections added under a card by `link-facts.ts`
+- [§ The full address](#the-full-address-and-why-it-is-there-at-all) — the quiet URL at the foot of the card
+- [§ Add it to Spideryarn](#add-it-to-spideryarn) — the card's second control, for ingesting a link
+- [§ What our own server can reach](#what-our-own-server-can-reach) — `GET /api/link-preview`, the server-side fetch behind the card
+- [§ And what it has to do with the piece in your hands](#and-what-it-has-to-do-with-the-piece-in-your-hands) — `/api/link-summary`, the streamed summary
+- [§ What is deliberately not built yet](#what-is-deliberately-not-built-yet) — the rejected and skipped ideas, incl. prefetch
+- [§ What a card actually says](#what-a-card-actually-says) — the six card shapes, verbatim
+- [§ What is tested, and what is deliberately not](#what-is-tested-and-what-is-deliberately-not) — the test files and their gaps
+- [§ The links chat writes](#the-links-chat-writes) — the same card over a link in a chat answer
+- [§ See also](#see-also) — neighbouring docs
+
 Hover a hyperlink in the prose and a card says something about the destination. Greg, 2026-08-27:
 
 > add hover-tooltips for hyperlinks (including anchor links) that show something about the
@@ -791,6 +815,11 @@ Five things about it are worth knowing before touching it:
 - **The tab's own cache is keyed on the block too.** It sits in front of the server and never asks
   twice, so leaving it keyed on `(slug, url)` would have kept the bug alive on the client after the
   server was right.
+- **Saving the profile or the purpose empties it, and `forgetSummaries()` is a fence rather than a
+  clear.** It bumps a generation in [`src/web/link-facts.ts`](../../src/web/link-facts.ts), so a
+  stream already in flight cannot write its answer back in afterwards. What that guarantees is *no
+  stale summary survives the save settling*, not that none is ever shown: between a keepalive save
+  leaving and landing, a hover can still be answered from the old profile (`bddf8c0c8`, 2026-10-04).
 - **And where there is no block, the client does not ask at all.** A link in a chat answer, in the
   sources under one, or in a figure's lightbox sits in no paragraph; the server's `"first"` fallback
   would hand it a fluent paragraph about a passage the reader is nowhere near. The free card and the

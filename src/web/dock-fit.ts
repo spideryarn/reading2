@@ -3,10 +3,10 @@
  * rather than guessed.
  *
  * The bar drops its labels when the row will not fit — see Dock.tsx and
- * styles.css § the bar's fit ladder. It used to decide that at a pixel
+ * dock-fit.css § the bar's fit ladder. It used to decide that at a pixel
  * breakpoint (`@media (max-width: 1100px)`), and that number was measured once,
- * when there were six modes. There are thirteen. The row now wants **1416px**
- * with every label spelled out, so between 1101px and 1416px the bar showed its
+ * when there were six modes. By 2026-09-02 there were thirteen, and the row
+ * wanted **1416px** with every label spelled out, so between 1101px and 1416px the bar showed its
  * labels *and* ran off the right-hand end of the window — which is where Greg
  * found it, at two thirds of a laptop screen, 2026-09-02:
  *
@@ -15,7 +15,7 @@
  * > that we don't have to keep tweaking some constant)?
  *
  * So the constant is gone. The bar asks the browser whether it overflows, and
- * steps down the ladder until it does not. Mode fourteen moves the threshold by
+ * steps down the ladder until it does not. Each added mode moves the threshold by
  * itself and nobody has to notice.
  *
  * ## The one measurement, and why it is the only honest one
@@ -44,7 +44,7 @@
  *    pointed out was the part I had waved through as cosmetic. It is a real
  *    child now (`.dock-tail`), so the measurement counts it.
  *  - **`flex-grow` does not fool it.** On a coarse pointer the buttons grow to
- *    share the bar (styles.css § a coarse pointer), so a fitting row fills its
+ *    share the bar (narrow-window.css § a coarse pointer), so a fitting row fills its
  *    content box exactly. A "needed width" computed from `scrollWidth` would
  *    then read as full and compact a tablet that has room to spare; the
  *    overflow question does not care, because growth only happens when there
@@ -81,10 +81,11 @@ import { onFontsChanged } from "./fonts.js";
  *    Feedback's (`.dock-home`, `.dock-feedback`). Every mode keeps its label.
  *  - `dock-fit-2`: the modes lose their labels too (all but `keepLabel`), and
  *    keep 0.6rem of icon padding. The old `max-width: 1100px` rule.
- *  - `dock-fit-3`: *every* button loses its label and closes to 0.55rem. What
+ *  - `dock-fit-3`: labels go except `keepLabel`, and buttons close to 0.55rem. What
  *    § a narrow window did at 731px. The quick-search box stays, compact.
- *  - `dock-fit-4`: rung 3, plus the quick-search box becomes the ⚡ button
- *    (styles/dock-quick-search.css). **Added at the bottom on 2026-10-02, so
+ *  - `dock-fit-4`: rung 3, less the quick-search box — the whole control
+ *    goes, and since 2026-10-05 no ⚡ is drawn in its place (plan 261005h;
+ *    styles/dock-quick-search.css). **Added at the bottom on 2026-10-02, so
  *    nothing renumbered**: an owner's reading view is already on rung 3 at
  *    1440×900, and while rung 3 drew the ⚡ a laptop never saw the search bar
  *    Greg asked for (docs/plans/261002h-quick-search-bar-in-the-dock.md).
@@ -120,7 +121,7 @@ import { onFontsChanged } from "./fonts.js";
  *  | 14 — experimental on   | 1838px | 1702px | 1048px | ≤ 740px |
  *
  * Two words cost rung 0 about 190px, close to the ~1420 predicted, and the new
- * rung needs 1263 — so a **1280 and a 1366 laptop keep every mode label** and
+ * rung needed 1263 — so in that measurement **1280 and 1366 laptops kept every mode label** and
  * give up only `Spideryarn` and `Feedback`, which is exactly the band the rung
  * was put in for. The mode rung moved by ~57px (815→872, 992→1048), which is
  * the two extra glyphs, and the last rung did not move at all: it is the floor,
@@ -130,14 +131,14 @@ import { onFontsChanged } from "./fonts.js";
  * decision rather than a consequence of how the selectors happened to be
  * written: rung 1 exists precisely because they are the words worth losing
  * first, so a rung below it that showed them again would be undoing its own
- * argument. styles.css § the bar's fit ladder spells every rung out.
+ * argument. dock-fit.css § the bar's fit ladder spells every rung out.
  *
  * Past the last rung the row simply overflows, and § a narrow window makes it
  * scroll rather than clip — the floor under this ladder, and deliberately so:
- * fifteen buttons cannot share a phone in portrait at a pressable size, and
- * Greg chose scrolling over shrinking further (styles.css § a coarse pointer).
+ * a crowded bar cannot share a phone in portrait at a pressable size, and
+ * Greg chose scrolling over shrinking further (narrow-window.css § a coarse pointer).
  *
- * A new rung goes here and gets a rule in styles.css — **and if it goes in
+ * A new rung goes here and gets a rule in styles/dock-fit.css — **and if it goes in
  * anywhere but the bottom, that is a rename and it gets a rename's sweep.**
  * Adding rung 1 on 2026-09-06 shifted two class names and every prose mention
  * of a rung by number, in this file, in styles.css and in tests/dock-fit.test.ts.
@@ -194,7 +195,7 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
  *
  *  - **When `content` changes.** The bar's width is not a function of the
  *    window alone: it has a different button set on the metadata page, the
- *    Comments button is a drawer trigger there and a link here, and its count
+ *    Comments button is a link on metadata and a drawer trigger on the reading view, and its count
  *    grows a digit. `content` is a string the caller builds out of exactly
  *    those things — **if a future change makes the row wider without changing
  *    that string, this is the line to add it to.** A dependency-free layout
@@ -223,9 +224,9 @@ export function chooseDockFit(el: HTMLElement, current: number): number {
  *    Measured, 2026-09-02 — pushing a three-digit count into the bar by hand,
  *    bypassing React, leaves 26px of overflow until something else re-measures.
  *    What makes that survivable rather than a second silent clip is the floor:
- *    `.dock` scrolls at every width now (styles.css § the floor under the fit
- *    ladder), so the worst case is a row you can drag rather than buttons that
- *    are not there.
+ *    `.dock` scrolls at every width now (dock.css § `.dock`, horizontal
+ *    overflow), so the worst case is a row you can drag rather than buttons
+ *    that are not there.
  *  - **When the fonts land.** Labels first measured in a fallback face are
  *    remeasured in the real one; without this the bar can settle a rung too
  *    narrow (or too wide) for the first paint and stay there.

@@ -25,6 +25,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { normaliseTag, TAGS_PER_ARTICLE } from "../tags.js";
 import type { TagChange } from "./article-tags.js";
 import { loadReaderTags } from "./article-tags.js";
+import { isImeComposing } from "./key-chord.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { voiceClass, withVoice } from "./voice.js";
 
@@ -160,9 +161,11 @@ export function TagEditor({
 
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: one keyboard protocol, kept together so its precedence is visible
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    // Preserve the open list's Escape ownership, including a composing key.
+    if (!busy && e.key === "Escape" && shown) e.stopPropagation();
     /* Enter is how an IME accepts its current composition. Treating that same
        event as our submit would save a partial CJK tag. */
-    if (e.nativeEvent.isComposing) return;
+    if (isImeComposing(e)) return;
     if (busy) {
       if (e.key === "Enter" || e.key === ",") e.preventDefault();
       return;
@@ -190,7 +193,6 @@ export function TagEditor({
       /* Close the list, and stop there: a popover around this box closes on
          the next Escape, not on this one. */
       e.preventDefault();
-      e.stopPropagation();
       setOpen(false);
     }
   }
@@ -262,7 +264,7 @@ export function TagEditor({
         role="listbox"
         aria-label="Suggested tags"
         hidden={!shown}
-        className="tw:absolute tw:left-0 tw:right-0 tw:z-[110] tw:mt-1 tw:max-h-64 tw:list-none tw:overflow-auto tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+        className="tw:absolute tw:left-0 tw:right-0 tw:z-[110] tw:mt-1 tw:max-h-64 tw:list-none tw:overflow-auto tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[var(--shadow-pop)]"
       >
         {options.map((o, i) => (
           // biome-ignore lint/a11y/useFocusableInteractive: focus stays on the combobox and aria-activedescendant identifies this option

@@ -55,7 +55,7 @@ export const MODES = [
      docs/plans/260831an-referee-mode-for-peer-reviewers.md.
 
      **`referee` and not `reviewer`, because `review` was already in this list**
-     further down (since renamed `remember`), and it is a different thing:
+     further down (renamed `remember`, and `learn` since 2026-10-06), and it is a different thing:
      there the reader says what
      they took from a piece they have read for themselves. A `reviewer` mode
      beside a `review` mode is one word meaning two things, which is the exact
@@ -91,20 +91,22 @@ export const MODES = [
      mode; that mode then arrived as **Referee** rather than Reviewer (see
      above), so the collision he feared never happened. The rename went ahead
      anyway on the weaker but real case: *Review* still reads ambiguously
-     sitting beside a tool whose whole subject is peer review; *Remember* names
-     what the product is *for* — vision.md's "internalise and interrogate" —
-     where *Review* named only the mechanism; and it works as an umbrella over
-     the sub-modes that now live under it, Recall and Quiz (and Tutorial since 2026-10-02).
+     sitting beside a tool whose whole subject is peer review; *Remember*
+     named what the product was *for* — vision.md's "internalise and
+     interrogate" — where *Review* named only the mechanism.
 
-     The cost, named rather than hidden: *Remember* can suggest saved memories
-     or spaced repetition, and this mode does neither. Its description
-     (`MODE_CATALOG` in src/mode-catalog.ts, and a `blurb` on a `MODES_UI` row
-     in src/web/Dock.tsx until 2026-09-07) carries the weight of correcting
-     that, so it has to stay accurate.
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md. */
-  "remember",
+     Renamed for the reader to **Learn** on 2026-10-05, and the identifier
+     followed on 2026-10-06 (`remember` until then; `?mode=remember` still
+     opens it, through `RETIRED_MODES` below). It is the umbrella over Recall, Tutorial, Explore and
+     Quiz. The catalogue description now distinguishes that whole from a
+     course or flashcards. The rename plans hold the reasons and costs:
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md,
+     docs/plans/261005l-remember-becomes-learn-and-explore-covers-critiques.md and
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
+  "learn",
   /* **`outline` was the eighth, 2026-08-28 to 2026-09-10, and it is not a mode
-     any more** — the whole document as one nested list that never scrolls. It
+     any more** — the whole document as one nested list that never scrolled (it may
+     since 2026-10-03, plan 261003k). It
      became `structure`'s narrow face: where the band is too narrow for
      Structure's two columns, Structure draws Outline's list instead, and the
      word left this vocabulary. `?mode=outline` still works, through
@@ -216,12 +218,10 @@ export const MODES = [
      docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md,
      docs/project/skim.md. */
   "skim",
-  /* 2026-09-29: the article as a numbered thread, each post linked to the
-     passages it came from. A page of its own at `/read/<slug>/tweets` from
-     2026-08-25 until Greg asked for it as a normal mode with a wide band beside
-     the text (SPIDERYARN-READING2-5A); the old address redirects here.
-     docs/plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md. */
-  "tweets",
+  /* `tweets` stood here from 2026-09-29 to 2026-10-03 — the article as a
+     numbered thread. It is Summary's Thread view now (`?summary=thread`), and
+     the word is in `RETIRED_MODES` below.
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
   /* **Marginalia, 2026-10-01** (called Annotations until later that day) — the
      first mode drawn to the RIGHT of the prose: notes level with the blocks
      they belong to, scrolling with the page, and no left band at all. Greg
@@ -330,6 +330,21 @@ export const RETIRED_MODES: Readonly<Record<string, BandMode>> = {
   /* `trajectory` was the mode's name until 2026-10-01, when it became Skim
      (docs/plans/261001r-trajectory-becomes-skim-and-marginalia-rename-audit.md). */
   trajectory: "skim",
+  /* The thread, a mode of its own from 2026-09-29 to 2026-10-03, is Summary's
+     Thread view. **This row alone opens Summary at Brief**: the word has to
+     become `?mode=summary&summary=thread`, which is `liftLegacyTweets` in
+     src/web/router.ts, on boot, on a client navigation and on Back. This row
+     is what the frame before that rewrite, the tab title and a feedback
+     report's mode read.
+     docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md. */
+  tweets: "summary",
+  /* `remember` was this mode's id until 2026-10-06, a day after the reader's
+     word for it became Learn. The one alias that rename kept: `?remember=<view>`
+     and `?chatfrom=remember` were let go. A conversation mode, so
+     src/web/last-view.ts § `NEEDS_AN_EXPLICIT_PRESS` asks about the mode this
+     word means rather than the word.
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
+  remember: "learn",
 };
 
 /**

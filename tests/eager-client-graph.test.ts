@@ -488,6 +488,11 @@ const SHARED_WITH_READER = [
   "src/mode-catalog.ts",
   "src/modes.ts",
   "src/monitoring-scrub.ts",
+  /* Arrived 2026-10-05 behind src/ingest.ts, which was already here: `urlKey`
+     and `slugFromUrl` ask it which paper an address names, so the add box and
+     the server cannot disagree about an arXiv link (plan 261005l § Caller 1).
+     A leaf with no imports of its own: two regular expressions and a list. */
+  "src/paper-sources.ts",
   "src/quote-match.ts",
   "src/read-address.ts",
   "src/referee-criteria.ts",
@@ -499,7 +504,8 @@ const SHARED_WITH_READER = [
      (docs/plans/260929c-…). `BackLink` is the arrow-and-tooltip every page's
      way back now uses: the eager pages (Masthead, Tweets, Profile, Contact,
      Privacy, OpenSource, the visitor pages) each typed that link inline before,
-     and `/admin` now shares it. `LogoGlyphs` is the wordmark's letters and
+     and `/admin` now shares it. (The masthead's went on 2026-10-07, plan
+     261007b; `App.tsx` and the visitor pages still import the module.) `LogoGlyphs` is the wordmark's letters and
      spider, lifted out of HomeLogo and Dock — both eager — so `/design`'s
      gallery draws the same markup rather than a copy. The reader downloaded
      all of this already; what is new is only that the lazy routes reach the
@@ -546,21 +552,11 @@ const SHARED_WITH_READER = [
   "src/web/Tooltip.tsx",
   "src/web/build-stamp.ts",
   "src/web/components/ui/button.tsx",
-  /* Arrived 2026-09-06 with debate's `?name=` bar, by the *first* of the two
-     zero-cost routes this list's header predicts, and it is the same shape as
-     `referee-views.ts` below: a categorical URL parameter needs its vocabulary
-     in one place, so `params.ts` — already here — imports it, and `params.ts` is
-     in both closures. The reader downloaded it already, through
-     `DebatePanel.tsx`; what is new is only that the lazy routes reach it.
-
-     **`threshold.ts` follows it in**, which is this list's second predicted
-     case: a module here gaining an import of its own. It is the one threshold
-     rule Glossary, Quotes and Search already share, so it has been in the
-     reader's eager closure since long before this — three eager panels import
-     it — and nothing about the admin closure reaching it costs a byte. Keeping
-     it out would mean splitting the ordering from the filtering it exists to
-     drive, which is the seam this module was made to close. */
-  "src/web/debate-levels.ts",
+  /* `debate-levels.ts` and `threshold.ts` were here from 2026-09-06 to
+     2026-10-03: `params.ts` imported the first for `?name=`'s vocabulary, and
+     the second followed it in. `?name=` retired with Debate's identification
+     slider (plan 261003o), `params.ts` no longer imports either, and the lazy
+     routes stopped reaching them. */
   "src/web/diagram.ts",
   "src/web/experimental-copy.ts",
   "src/web/experimental-store.ts",
@@ -572,7 +568,19 @@ const SHARED_WITH_READER = [
      `modes.ts` and `router.ts`. */
   "src/web/help/help-anchors.ts",
   "src/web/jump-history.ts",
+  /* Arrived 2026-10-07 behind `TitleEditor` and `TagEditor`, both already
+     here: each now asks `isImeComposing` whether a key belongs to an input
+     method (plan 261007a-ui-sweep-k2). The reader had it already, through the
+     Dock; a leaf with no imports of its own, so nothing follows it in. */
+  "src/web/key-chord.ts",
   "src/web/lib/DataTable.tsx",
+  /* Arrived 2026-10-06 by the second predicted route: `DataTable.tsx`, already
+     here, gained an import of it for its `sidewaysCue` prop (plan 261006g
+     § Stage 2). Only `/admin/costs` turns the shade on, but since plan 261006h
+     the shelf's table runs it too: it is what makes the table's scroll box a
+     tab stop while it overflows. Small, most of it comment, importing nothing
+     but React. */
+  "src/web/lib/SidewaysScrollBox.tsx",
   /* Arrived 2026-09-24 by the first predicted route: the admin pages
      (`useAdminUsers`, `useAdminFeedback`) started using `describeFetchFailure`,
      which the reader's shelf and comments already download — and `sse.ts`
@@ -590,6 +598,14 @@ const SHARED_WITH_READER = [
      A leaf of two dozen lines the reader already downloads through `api.ts`;
      docs/plans/260924a-only-a-sentence-the-server-wrote-reaches-the-reader.md. */
   "src/web/lib/reader-facing.ts",
+  /* Arrived 2026-10-06 the same way, with `lib/session.ts` below: `lib/api.ts`,
+     already here, imports the tab's one held session, which tells this module
+     when the reader changes. A leaf with no imports. Plan 261006f. */
+  "src/web/lib/reader-change.ts",
+  /* The one subscription to the SDK for identity, which `lib/api.ts` binds
+     requests to and `useSession` draws from. It must be eager for the reason
+     `api.ts` is: every request needs it. About a hundred lines. Plan 261006f. */
+  "src/web/lib/session.ts",
   /* With `describe-failure.ts`, above. */
   "src/web/lib/sse.ts",
   "src/web/lib/supabase.ts",
@@ -613,6 +629,11 @@ const SHARED_WITH_READER = [
      (DesignPage.tsx § LogoAnimations). Costs the reader nothing: it is a leaf
      whose only imports are React's own. */
   "src/web/logo-animation.ts",
+  /* Arrived 2026-10-07 at no cost: two class strings and one small hook that
+     were inline in `ShelfEntry.tsx` (here already) until the bottom bar's More
+     menu became the second user of them (plan 261007c). It imports only
+     `react`. */
+  "src/web/menu.ts",
   "src/web/monitoring.ts",
   "src/web/offline.ts",
   "src/web/page-title.ts",
@@ -620,10 +641,18 @@ const SHARED_WITH_READER = [
   "src/web/referee-views.ts",
   "src/web/relative-time.ts",
   "src/web/router.ts",
-  /* See `debate-levels.ts` above, which is what brought it here. */
-  "src/web/threshold.ts",
   "src/web/useNow.ts",
+  /* Arrived 2026-10-04 (plan 261004e) by the second predicted route:
+     `ShelfEntry`, here already, copies a link through it instead of writing to
+     the clipboard itself. The reader downloaded the same code inline in eight
+     components before; it is a leaf whose only import is React. */
+  "src/web/useCopy.ts",
   "src/web/useExperimental.ts",
+  /* Arrived 2026-10-04 (plan 261004g): `BandAbout`, here already, takes its
+     open state from it, and so does Referee's *How to read this*. The reader
+     downloaded the same few lines inline in `RefereeMode` before; it is a
+     leaf whose only import is React. */
+  "src/web/usePressToggle.ts",
   "src/web/useSession.ts",
   /* Arrived 2026-10-02 (plan 261002f) by the second predicted route:
      `TitleEditor`, `ShelfEntry` and `library-columns`, all here already, now

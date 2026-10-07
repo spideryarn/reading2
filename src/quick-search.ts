@@ -8,7 +8,8 @@
  * Plan: docs/plans/261002e-quick-search-v1.md. Every number in this file — the
  * request shape, the floor, the chunk budget — was measured in
  * docs/investigations/261002o-quick-search-spike.md, with the wording and floor
- * rechecked in investigation 261003c. Read those before changing one.
+ * rechecked in investigation 261003c and the fallback floor measured in
+ * 261003f. Read those before changing one.
  *
  * ## What it asks
  *
@@ -27,7 +28,8 @@
  *
  * ## What it gives back, and what it cannot
  *
- * Blocks scoring at least `QUICK_FLOOR`, best first, capped at `MAX_HITS`, each
+ * Blocks scoring at least `QUICK_FLOOR`, best first, capped at `MAX_HITS` —
+ * or, when none does, the best few at `QUICK_FALLBACK_FLOOR` or more — each
  * as a `SearchHit` whose `quote` is the whole block — Jev scores blocks, so
  * there is no sentence inside one to point at — with `confidence` its
  * probability × 100 and no `reasoning`. That is what *thorough* (a meaning
@@ -81,8 +83,59 @@ import type { Block, Meta, SearchHit } from "./types.js";
  * missed, with more junk and unjudged hits. The six absent-topic controls top
  * out at 0.04–0.11, so the floor returns nothing for them; a floor relative
  * to the top score would not. Investigation 261003c.
+ *
+ * **0.65 since 2026-10-04, down from 0.7**, at Greg's request for "a more
+ * permissive threshold, so that more shows up". Every passage the chosen lower floors
+ * would show on the three fixture articles was judged blind, by score band
+ * (docs/investigations/261004d-quick-search-lower-floors-precision-by-score-band.md).
+ * On phrase, question and topic searches 86% of what scores 0.7 or more is
+ * right, 62% of the 0.65–0.7 band, and 38% of 0.6–0.65. The 0.65–0.7 band
+ * is majority right in all three query groups; the next band is majority wrong on working and
+ * request searches, though bare queries remain 61% right there. It shows about
+ * 11% more passages on a search that already worked.
  */
-export const QUICK_FLOOR = 0.7;
+export const QUICK_FLOOR = 0.65;
+
+/**
+ * The floor used **only when nothing reaches `QUICK_FLOOR`**, and the most a
+ * search may show when it is. Inclusive, best first.
+ *
+ * Feedback `spya-jp5nxn`, 2026-10-03: "results" on a paper found nothing. Its
+ * best paragraphs scored 0.52–0.57 and were the right ones. A bare word that
+ * names a kind of passage or a field ("results", "examples", "linear algebra")
+ * scores the passages that are instances of it under 0.7: on 37 such queries
+ * over four articles, 62 of 111 searches came back empty. With this fallback
+ * 50 of the 62 show something; 71% of what they show was judged right, blind,
+ * by the stricter of two judges, and the top result on 36 of 50.
+ * docs/investigations/261003f-quick-search-category-words-score-under-the-floor.md.
+ *
+ * - **Only when empty**, so it cannot change a search that finds anything:
+ *   none of the 150 runs investigation 261003c saved is touched. A lower floor
+ *   for everybody, and topping up a short list, both add known wrong blocks to
+ *   searches that already work.
+ * - **0.5, not 0.55**: at 0.55, 28 of the 62 stay empty (80% right); at 0.45,
+ *   64% right. Of 25 absent and near-miss topics (75 searches), 71 still
+ *   return nothing at 0.5; the rest show 1–4 wrong blocks.
+ * - **8, not `MAX_HITS`**: the cap buys no precision (73% right at three, 71%
+ *   at eight, 69% at twenty), so it is set where a weak list stays short.
+ *
+ * **0.4 since 2026-10-04, down from 0.5** (the numbers above are 0.5's, with
+ * the floor at 0.7). Investigation 261004d: on bare-word searches with nothing
+ * at the old 0.7 floor, what scores 0.4–0.5 is right about as often (52%) as what
+ * scores 0.5–0.55 (55%), which 0.5 already showed, and 107 of the 111 searches
+ * now show something, against 99. Not lower: 0.35–0.4 is right 47% of the
+ * time, and at 0.3 three more searches for a topic the article does not cover
+ * show a wrong passage (7 of 93, against 4 at every floor from 0.5 to 0.35).
+ * What 0.4 costs is on the one absent topic that already showed something
+ * ("human memory"): its list grows from 1–4 wrong passages to 8.
+ *
+ * **Lowering `QUICK_FLOOR` moved the cliff, it did not remove it.** A search
+ * whose best block scores 0.65–0.7 used to get the fallback's eight and now
+ * gets the one or two that clear the floor: 6 of 111 bare-word searches show
+ * fewer than before (81 show more). The same happened at 0.7 before.
+ */
+export const QUICK_FALLBACK_FLOOR = 0.4;
+export const QUICK_FALLBACK_HITS = 8;
 
 /**
  * How long the whole search may take, every chunk included.
@@ -133,7 +186,7 @@ export interface QuickSearchRequest {
 export interface QuickDropped {
   /** Answers naming a block that was not asked about. */
   unknownIds: number;
-  /** Hits beyond `MAX_HITS`. */
+  /** Hits beyond whichever cap applied: `MAX_HITS` or `QUICK_FALLBACK_HITS`. */
   truncated: number;
 }
 
@@ -197,39 +250,53 @@ function questionFor(id: string): DecisionQuestion {
 /**
  * Probabilities to hits: at or above `QUICK_FLOOR`, best first (ties in the
  * article's order, so a re-render does not shuffle them), capped at
- * `MAX_HITS`. `asked` is every block a question was sent about; an answer for
- * anything else is ignored and counted. A block with no answer is simply not a
- * hit here — `askChunk` has already refused a reply that left one unanswered,
- * so on the real path there is none.
+ * `MAX_HITS`. **When none reaches it**, those at or above
+ * `QUICK_FALLBACK_FLOOR` instead, capped at `QUICK_FALLBACK_HITS`, and
+ * `fallback` says so. `asked` is every block a question was sent about; an
+ * answer for anything else is ignored and counted. A block with no answer is
+ * simply not a hit here — `askChunk` has already refused a reply that left one
+ * unanswered, so on the real path there is none.
  */
 export function hitsFrom(
   noul: Record<string, number>,
   asked: Block[],
-): { hits: SearchHit[]; dropped: QuickDropped } {
+): { hits: SearchHit[]; dropped: QuickDropped; fallback: boolean } {
   const dropped: QuickDropped = { unknownIds: 0, truncated: 0 };
   const order = new Map(asked.map((b, i) => [b.id, i]));
   for (const id of Object.keys(noul)) if (!order.has(id)) dropped.unknownIds++;
 
-  const kept: { block: Block; p: number; i: number }[] = [];
-  asked.forEach((block, i) => {
-    const p = noul[block.id];
-    if (p !== undefined && p >= QUICK_FLOOR) kept.push({ block, p, i });
-  });
+  const atOrAbove = (floor: number) => {
+    const out: { block: Block; p: number; i: number }[] = [];
+    asked.forEach((block, i) => {
+      const p = noul[block.id];
+      if (p !== undefined && p >= floor) out.push({ block, p, i });
+    });
+    return out;
+  };
+  let kept = atOrAbove(QUICK_FLOOR);
+  let cap = MAX_HITS;
+  let fallback = false;
+  if (kept.length === 0) {
+    kept = atOrAbove(QUICK_FALLBACK_FLOOR);
+    cap = QUICK_FALLBACK_HITS;
+    fallback = kept.length > 0;
+  }
   kept.sort((x, y) => y.p - x.p || x.i - y.i);
-  if (kept.length > MAX_HITS) {
-    dropped.truncated = kept.length - MAX_HITS;
-    kept.length = MAX_HITS;
+  if (kept.length > cap) {
+    dropped.truncated = kept.length - cap;
+    kept.length = cap;
   }
   const hits = kept.map(({ block, p }) => ({
     blockId: block.id,
-    /* The block's own text, so `findQuote` places it at 0 and the wash covers
-       the paragraph — the honest extent of what was judged. */
+    /* The block's own text, so the client resolves the whole-paragraph hit at
+       0. A quick run then renders it as a bare paragraph bar and spine mark,
+       without washing the words (src/web/search-hits.ts § `Found.bare`). */
     quote: block.text,
     confidence: Math.round(p * 100),
     reasoning: "",
     start: 0,
   }));
-  return { hits, dropped };
+  return { hits, dropped, fallback };
 }
 
 /** A reply that left questions unanswered. Carries a count and nothing else. */
@@ -431,7 +498,7 @@ export async function* quickPassagesStream({
     throw err;
   }
 
-  const { hits, dropped } = hitsFrom(noul, asked);
+  const { hits, dropped, fallback } = hitsFrom(noul, asked);
   const model = tally.answeredBy ?? QUICK_SEARCH_MODEL;
   try {
     line.info(
@@ -444,6 +511,7 @@ export async function* quickPassagesStream({
         inputTokens: tally.inputTokens,
         outputTokens: tally.outputTokens,
         hits: hits.length,
+        fallback,
         criterionChars: criterion.length,
         blocks: asked.length,
         ...dropped,

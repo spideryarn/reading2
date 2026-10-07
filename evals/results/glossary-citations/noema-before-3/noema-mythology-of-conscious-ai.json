@@ -1,0 +1,141 @@
+{
+  "slug": "noema-mythology-of-conscious-ai",
+  "arm": "noema-before-3",
+  "promptVersion": "glossary/8",
+  "sourceSha256": {
+    "glossary.ts": "9e370f1957c45e8c927f32508c66f62c6ae83d9d4b8a9fd14f89c09e0e5c892e",
+    "paperwork.ts": "b3a6a71a5497eff8534ff30174d2e6c5b08c296e487f2f632d1259f165c2b5d4",
+    "plain-words.ts": "1170448d933b335baff85bec1bb396821686959d6bffc4937f68c5deb172f4a0"
+  },
+  "entries": [
+    {
+      "name": "Blake Lemoine",
+      "kind": "person",
+      "aliases": [],
+      "background": "A Google engineer who claimed in 2022 that the company's chatbot LaMDA was conscious. His claim drew wide media coverage, and Google soon dismissed him."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "kind": "person",
+      "aliases": [],
+      "background": "A pioneering computer scientist often called a 'godfather' of deep learning. He won a Nobel Prize for foundational work on neural networks and has said he believes some AI systems may already be conscious."
+    },
+    {
+      "name": "Thomas Nagel",
+      "kind": "person",
+      "aliases": [],
+      "background": "A philosopher known for asking what it's like to be a bat. His 1974 essay proposed that consciousness means there is something it feels like, subjectively, to be a given creature."
+    },
+    {
+      "name": "Pareidolia",
+      "kind": "term",
+      "aliases": [],
+      "background": "The mind's tendency to see familiar patterns in random shapes. A common example is spotting a face in clouds or in a piece of toast."
+    },
+    {
+      "name": "Computational Functionalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The idea that running the right computation is enough, by itself, to create consciousness. The author treats this as the hidden assumption behind most claims that AI could become conscious."
+    },
+    {
+      "name": "Turing Machine",
+      "kind": "concept",
+      "aliases": [
+        "Turing computation",
+        "Turing world"
+      ],
+      "senseHere": "The essay uses 'Turing world' for anything reducible to this step-by-step symbol-manipulation. It's used as the measuring stick for what ordinary digital computers and AI systems can do.",
+      "background": "A simple theoretical device invented by Alan Turing in the 1930s. It reads and writes symbols on an endless tape by following fixed rules, forming the basis of what we call an algorithm."
+    },
+    {
+      "name": "Universal Turing Machine",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A theoretical computer able to imitate any other such machine. It does this by taking a description of the other machine's rules as part of its own input, which is why one general-purpose computer can run any program."
+    },
+    {
+      "name": "McCulloch-Pitts Neuron",
+      "kind": "concept",
+      "aliases": [
+        "McCulloch-Pitts"
+      ],
+      "background": "A 1940s mathematical model of a nerve cell, built by Walter Pitts and Warren McCulloch. It sums weighted inputs and produces an output, and simple networks of these units can perform logical operations, making it the ancestor of today's artificial neurons."
+    },
+    {
+      "name": "Autopoiesis",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "The continual process by which a living thing builds and maintains its own body. The author treats this self-sustaining activity, found in every cell, as a mark of life that computers lack."
+    },
+    {
+      "name": "Generative Entrenchment",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "How a system's different scales become so tightly linked during development that no part can be swapped out alone. The author uses it to argue a living brain cell can't simply be swapped for a silicon part without changing what the brain does."
+    },
+    {
+      "name": "Neural Replacement Thought Experiment",
+      "kind": "concept",
+      "aliases": [
+        "neural replacement"
+      ],
+      "senseHere": "A hypothetical scenario where brain cells are swapped one by one for identical artificial parts. It's commonly used to argue minds could run on silicon, but the author says it fails since no silicon part could truly replicate a living neuron."
+    },
+    {
+      "name": "Halting Problem",
+      "kind": "term",
+      "aliases": [],
+      "background": "A result proven by Alan Turing about computer programs. It shows there's no general method to tell, for every program and input, whether that program will ever finish running or keep going forever."
+    },
+    {
+      "name": "Mortal Computation",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "Geoffrey Hinton's term for a computation so tied to one physical device that it dies with it. This differs from ordinary software, which can be copied and run on any suitable machine."
+    },
+    {
+      "name": "Biological Naturalism",
+      "kind": "concept",
+      "aliases": [],
+      "senseHere": "Here it names the view that being alive, not just processing information correctly, may be necessary for consciousness.",
+      "background": "A position, linked to philosopher John Searle, that consciousness comes specifically from biological processes."
+    },
+    {
+      "name": "Predictive Processing",
+      "kind": "concept",
+      "aliases": [],
+      "background": "A family of neuroscience theories holding that the brain constantly predicts the causes of its sensory input. Perception then becomes a matter of correcting these predictions using the mismatch, called prediction error, between what's expected and what arrives."
+    },
+    {
+      "name": "Controlled Hallucination",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The author's term for ordinary conscious perception as the brain's best guess about the world. This guess is continuously checked and corrected by incoming sensory signals rather than read directly off the senses."
+    },
+    {
+      "name": "Interoceptive Inference",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "The brain's best guess about the body's internal state, such as heart rate or hunger. The essay uses this to explain why emotions and moods feel the way they do."
+    },
+    {
+      "name": "Simulation Hypothesis",
+      "kind": "concept",
+      "aliases": [],
+      "background": "An idea developed by philosopher Nick Bostrom that we might be living inside a computer simulation. He argues that advanced civilizations could run vast numbers of such simulations, making it statistically likely that simulated minds would outnumber those in original, 'base' reality."
+    },
+    {
+      "name": "Müller-Lyer Illusion",
+      "kind": "term",
+      "aliases": [],
+      "background": "A classic visual illusion where two equal lines look like different lengths. Arrowhead shapes added to each line's ends cause this, and the effect persists even once you know the lines are equal."
+    },
+    {
+      "name": "Garland Test",
+      "kind": "term",
+      "aliases": [],
+      "senseHere": "A test, named after the screenwriter of 'Ex Machina,' for whether a person still feels a machine is conscious. It checks this even after the person is told plainly that it's just a machine."
+    }
+  ]
+}

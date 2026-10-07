@@ -1,5 +1,7 @@
 /**
- * **Where an ingest job is written down**, as a contract with two adapters.
+ * **Where an ingest job is written down**, as a contract. It has one
+ * implementation, `pgJobStore` (src/store/pg-jobs.ts); a filesystem adapter
+ * shared it until 2026-09-05.
  *
  * A job used to live in one process's `Map` and a JSON file beside it. That is
  * exactly right for one process and there is more than one: `POST /api/jobs`
@@ -20,9 +22,10 @@
  * ## A claim covers a whole job, and there are three ways to put it down
  *
  * `claim` → run every step → `finish`. It covered **one step** until
- * 2026-08-30, and that shape cannot finish an ingest on a serverless host at
- * all: the next request lands on a different instance and step 2 finds nothing
- * step 1 wrote. `walkClaim` (src/jobs.ts) is where the argument lives.
+ * 2026-08-30, and while artefacts were files that shape could not finish an
+ * ingest on a serverless host at all: the next request landed on a different
+ * instance and step 2 found nothing step 1 wrote. `walkClaim` (src/jobs.ts) is
+ * where the argument lives, and what is left of it now that they are rows.
  *
  * What survives from the one-step design is that a claim must never *outlive*
  * the claimant. A claim held open by a process that has stopped leaves the job
@@ -35,15 +38,21 @@
  *
  * ## What an expired lease means, and what it deliberately does not
  *
- * It means *nobody is coming back*, and the job is settled so a reader can
- * press Retry — as `error` ordinarily, or as `cancelled` if they had already
- * pressed Stop (`settleExpired`). It does **not** mean another claimant may
- * take the job over. That
- * would be safe only if every durable write were fenced, and the artefacts are
- * still files: a stage writes its output and *then* calls `finishStep`, so a
- * stale claimant's files land before its token is refused, and `beginStep`'s own
- * comment says it is not a lock. Auto-takeover becomes available the day the
- * artefact writes are transactional and not before.
+ * `settleExpired` cancels a row whose reader pressed Stop, regardless of its
+ * remaining budget. Otherwise it moves the row back to `queued` with its draft
+ * kept while requeue budget remains; once spent, it ends `error` for Retry.
+ *
+ * Handing a lapsed job to another claimant is safe because artefact rows,
+ * step completion and the job's release or ending commit in one transaction
+ * that checks the live attempt (src/store/pg-session.ts, src/store/job-fence.ts).
+ * A claimant whose lease has lapsed cannot commit those; checkpoints and ledger
+ * writes have separate lifetimes.
+ *
+ * This section said the opposite until 2026-10-07: that an expired lease does
+ * **not** let another claimant take the job, because "the artefacts are still
+ * files" and a stale claimant's files land before its token is refused. That
+ * was true until the transactional session (2026-09-01); the requeue followed
+ * on 2026-09-03, and the files went on 2026-09-05.
  *
  * See docs/plans/260827h-durable-queue-and-uploads.md.
  */
@@ -240,14 +249,15 @@ export interface EnqueueTicket {
    *
    * On the **ticket** rather than on `Job`, deliberately. `Job` is serialised to
    * the browser by `publicJob` (src/jobs.ts), and a ledger id is not the
-   * reader's business — putting it there would mean stripping it at that seam
-   * and carrying a Postgres-only, billing-only field through the filesystem
-   * adapter and the parity suite for nothing.
+   * reader's business — putting it there would mean stripping it at that seam.
+   * When this was designed it would also have widened the filesystem adapter
+   * and the parity suite for nothing.
    *
    * The Postgres adapter writes it into the job's own INSERT — that atomicity is
    * the whole provenance argument, src/db/schema.ts § `ingest_events`. The
-   * filesystem adapter keeps the ticket and never reads this: quota is a
-   * Postgres feature (docs/project/billing.md), and there is no second ledger.
+   * filesystem adapter, until 2026-09-05, kept the ticket and never read this:
+   * quota is a Postgres feature (docs/project/billing.md), and there is no
+   * second ledger.
    */
   ingestEventId?: string;
   /**
@@ -323,10 +333,12 @@ export interface EnqueueTicket {
    * would then queue a job on a slug with nothing under it — which the worker
    * would helpfully create. GPT Sol's F41, same plan.
    *
-   * So the store re-asks, under the article lock and **only when the article is
-   * absent**: is that exact job still `queued` or `running`? A holder that
-   * finished normally leaves an article behind, and adopting it then is an
-   * ordinary shelf adoption rather than a resurrection.
+   * So the store re-asks, under the article lock and **only when no published
+   * article is there**: is that exact job still `queued` or `running`? A holder
+   * that finished normally leaves a published article behind, and adopting it
+   * then is an ordinary shelf adoption rather than a resurrection. An article
+   * row with nothing published into it does not excuse the question — GPT Sol's
+   * F14, at `lockAdoptedHolder` in ./pg-jobs.ts.
    *
    * **A miss buys one restart rather than a refusal**, because *"the article is
    * absent"* is itself a fact nothing was holding — the holder can create it and
@@ -500,13 +512,13 @@ export interface JobEnding {
 /**
  * A fresh attempt token.
  *
- * **A uuid, not a `spya-` id**, and it lives here so that the one caller and
- * the two adapters cannot disagree about that. `jobs.attempt_id` is a `uuid`
+ * **A uuid, not a `spya-` id**, and it lives here so callers and the store
+ * cannot disagree about that. `jobs.attempt_id` is a `uuid`
  * column (src/db/schema.ts), so a `mintId()` token is rejected by Postgres with
- * `22P02` on the *claim* — the first statement of every advance.
+ * `22P02` on the *claim*.
  *
  * Which is exactly what `advanceJob` passed until 2026-08-27, and the reason
- * nothing caught it is worth more than the fix. The filesystem adapter takes any
+ * nothing caught it is worth more than the fix. The filesystem adapter took any
  * string, so the whole job suite was green. The parity suite exercised both
  * adapters, but it minted its own tokens with `crypto.randomUUID()` — so the
  * store was tested, the caller was tested, and *the value that travels between
@@ -637,10 +649,13 @@ export interface JobStore {
   /**
    * A step ran, the job is not over: record it and **let the claim go**.
    *
-   * Fenced on all three of id, attempt and `status = 'running'`. The third is
-   * the one this project has now dropped twice — a terminal row keeps its
-   * token, so id-and-attempt alone lets a job already marked `error` accept its
-   * own former claimant's write and report one row affected.
+   * Fenced on `liveAttempt` (src/store/job-fence.ts), which is four
+   * conditions: id, attempt, `status = 'running'`, and a lease that has not
+   * expired. The third is the one this project has dropped twice — a terminal
+   * row keeps its token, so id-and-attempt alone lets a job already marked
+   * `error` accept its own former claimant's write and report one row
+   * affected. The fourth was missing everywhere until 2026-09-01, and this
+   * comment went on saying "all three" after it was added.
    */
   releaseStep(id: string, attempt: string, steps: JobStep[], outcome: StepOutcome): Promise<Job>;
 
@@ -699,21 +714,25 @@ export interface JobStore {
    * A step is **still running**: write what the card should say, keep the claim.
    *
    * The one write that is neither a release nor a finish, and it exists for the
-   * reader rather than for the queue. A step is one HTTP request and a model
-   * call inside it can take half a minute; without this, a poll during that
-   * half-minute sees the step still `pending` and the card says nothing is
-   * happening. `ingest-queue.md` spends a section on why the label is in the
+   * reader rather than for the queue. One HTTP request walks several steps
+   * and a step can take minutes; without this, a poll during those minutes
+   * sees the step still `pending` and the card says nothing is happening. `ingest-queue.md` spends a section on why the label is in the
    * present tense — "Extracting the article" — and a label nobody is shown is
    * not a label.
    *
-   * Same three-condition fence as `releaseStep`, and deliberately **does not
-   * touch the lease**. Renewing here would be a heartbeat, and a heartbeat is
-   * what makes an expired lease mean "probably dead" instead of "definitely
-   * over its own deadline" — see the header on why takeover is out. The
+   * Same fence as `releaseStep` (`liveAttempt`, four conditions), and
+   * deliberately **does not touch the lease**. Renewing here would be a
+   * heartbeat, and a heartbeat is what makes an expired lease mean "probably
+   * dead" instead of "definitely over its own deadline", which is the reading
+   * the requeue in `settleExpired` depends on (the header, above). The
    * claimant's own timer is the thing that has to fire first, and it cannot if
    * progress keeps pushing the lease away from it.
+   *
+   * A nonblank `title` is written with the steps; absent or blank, the row keeps
+   * the one it has. It is here because a pause and a lapsed-lease requeue answer
+   * from the row, and a title the claimant held only in memory was lost to both.
    */
-  noteProgress(id: string, attempt: string, steps: JobStep[]): Promise<Job>;
+  noteProgress(id: string, attempt: string, steps: JobStep[], title?: string): Promise<Job>;
 
   /** The job is over. Same fence, and it clears the token and the lease. */
   finish(id: string, attempt: string, ending: JobEnding): Promise<Job>;
@@ -721,8 +740,9 @@ export interface JobStore {
   /**
    * Settle every job whose lease has run out, and say **which, and how**.
    *
-   * **Not a takeover.** Retry is the reader's to press — which costs a click and
-   * removes the whole class of two-claimants-one-article. See the header.
+   * **No new claimant takes over a live lease.** An expired claim may be
+   * requeued within the budget below; the job fence rejects the old claimant's
+   * writes. Once that budget is spent, Retry is the reader's to press.
    *
    * **It does not always fail, which is why it is no longer called
    * `failExpired`.** A row carrying `cancelling` is a reader who pressed Stop
@@ -731,19 +751,19 @@ export interface JobStore {
    * as `cancelled` instead, which makes three mechanisms agree rather than
    * adding a fourth: `releaseStepIn` already settles a live claimant's release
    * on a `cancelling` job as cancelled, and the filesystem adapter's
-   * `sweepStopped` does the same on restart.
+   * `sweepStopped` did the same on restart, until 2026-09-05.
    *
    * **The outcomes, not a count.** A sweep is the only account there is of a
    * claimant that stopped answering — the process that was inside the job is
    * gone and logged nothing on its way out — and `failed 1 job(s)` cannot be
-   * joined to anything, nor is it true of every row it counted. Both stores
-   * already have both fields in hand: the `UPDATE` returns them, and the
-   * filesystem adapter is looping over them. GPT Sol, 2026-08-30,
+   * joined to anything, nor is it true of every row it counted. The store
+   * already has both fields in hand: the `UPDATE` returns them (and the
+   * filesystem adapter, until 2026-09-05, was looping over them). GPT Sol, 2026-08-30,
    * docs/plans/260830a-v1-imports-review-sol.md § Remaining operational points,
    * and 2026-09-01 on the rename.
    *
-   * **`now` is for tests only.** With nothing passed, both adapters compare the
-   * lease against their own store's clock — SQL `now()` on Postgres — because a
+   * **`now` is for tests only.** With nothing passed, Postgres compares the
+   * lease against `clock_timestamp()` through `leaseIsOver`, because a
    * lease written by one instance and read by another is only a deadline if
    * both are reading the same clock.
    *
@@ -757,7 +777,7 @@ export interface JobStore {
    * would be one reader's page load ending another reader's import.
    *
    * **A parameter rather than a second method.** One method is one contract,
-   * so tests/store-jobs-parity.test.ts goes on holding both adapters to it —
+   * so tests/store-jobs-parity.test.ts holds the store to it —
    * GPT Sol's answer 7 on the built stage 2, which also asked by name for the
    * case proving that listing as one owner cannot settle another's. Omitted,
    * the sweep is table-wide, which is what the advance path still wants: it is
@@ -769,11 +789,11 @@ export interface JobStore {
    * `queued` on its own row instead of ending**, and comes back in the answer
    * with `status: "queued"`.
    *
-   * That is what the filesystem adapter's `sweepStopped` has always done at
+   * That is what the filesystem adapter's `sweepStopped` had always done at
    * restart — running steps back to `pending`, the job back to `queued`, the row
-   * otherwise untouched — so a dev-server restart is a pause rather than an
+   * otherwise untouched — so a dev-server restart was a pause rather than an
    * abandoned ingest. Postgres had no equivalent and ended the job, which on the
-   * store we ship means a deploy landing mid-ingest costs the reader their job.
+   * store we ship meant a deploy landing mid-ingest cost the reader their job.
    * **The same row is the whole point**: the slug does not move, so the article
    * does not move, so the article's checkpoints (checkpoints.ts) are still
    * reachable. A new job could not have that.

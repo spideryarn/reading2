@@ -60,7 +60,6 @@
  */
 import {
   providerCost,
-  type SpendRecord,
   beginSpend,
   keyFingerprint,
   recordSpend,
@@ -74,6 +73,16 @@ import { imageDimensions, sniffImage } from "./assets.js";
    exists — so this closes no cycle, and taking the type rather than restating
    it means the gateway cannot be handed a container the browser never
    validated. */
+import {
+  type AbortClass,
+  type CallFailure,
+  type FailureClass,
+  abortClass,
+  isErrorEnvelope,
+  networkClass,
+  stoppedByOurClock,
+  thrownClass,
+} from "./call-failure.js";
 import type { AudioFormat } from "./dictation-limits.js";
 /* `log.ts` imports only pino and its redaction list, so this closes no cycle. */
 import { log } from "./log.js";
@@ -89,16 +98,19 @@ import { NOT_CONFIGURED, providerHttpFailure } from "./messages.js";
    something the next file to import embeddings might. `import type` is erased,
    so it creates no edge at all. */
 import type { AiJob, Wire } from "./models.js";
+import { parseRetryAfter } from "./retry-after.js";
 import { isHighPowerModel } from "./high-power-model.js";
 import {
   type StreamChunk,
   readerAborted,
   type StreamEnd,
+  spokeNonsense,
   sseChunks,
   type Usage,
   whereSearchCountCameFrom,
 } from "./openrouter-stream.js";
 import { type Nanos, providerCostToNanos } from "./pricing.js";
+import { TRANSIENT_STATUSES, TRANSPORT_ATTEMPTS, backoffMs, waitOrStop } from "./transport-retry.js";
 
 /**
  * **How a stream ended**, as one value with one true answer.
@@ -286,8 +298,8 @@ export type OpenRouterPath =
      and `dictation` is the only job routed to it. */
   | "/v1/audio/transcriptions"
   /* Decisions — typed probabilities rather than text. `openRouterDecisions`
-     below is the only thing that sends here, and `search-quick` is the only
-     job routed to it. **Not under `/v1`**: OpenRouter serves it only as
+     below is the only thing that sends here, and `search-quick` and
+     `command-pick` are the jobs routed to it. **Not under `/v1`**: OpenRouter serves it only as
      `POST /api/alpha/decisions` (spike 261002o), so the base's `/api` is all
      it shares with the others. */
   | "/alpha/decisions";
@@ -316,13 +328,14 @@ export type ImageJob = "illustrate";
 export type TranscriptionJob = "dictation";
 
 /**
- * **The job whose answer is a set of probabilities** — one member, excluded
- * from `ChatJob` for `illustrate`'s reason: the Decisions answer is
- * `{answers: {<key>: {noul}}}` with no `choices`, so every chat parser would
- * read it as an empty reply. `openRouterDecisions` takes this and nothing else
- * takes it.
+ * **The jobs whose answer is a set of probabilities** — excluded from
+ * `ChatJob` for `illustrate`'s reason: the Decisions answer is
+ * `{answers: {<key>: {…}}}` with no `choices`, so every chat parser would
+ * read it as an empty reply. `openRouterDecisions` takes these and nothing
+ * else takes them. Quick search asks `noul` questions; the command bar's
+ * pick asks one `choice` (since 2026-10-03, plan 261003k).
  */
-export type DecisionJob = "search-quick";
+export type DecisionJob = "search-quick" | "command-pick";
 
 /** Every job with a row in `AI_JOB_ROUTE`: everything this file can send. */
 export type RoutedJob = ChatJob | ImageJob | TranscriptionJob | DecisionJob;
@@ -676,6 +689,16 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { order: ["anthropic"], require_parameters: true },
   },
+  /* **A cited work's influence, from the press's own search results**
+     (src/citation-influence.ts) — the passages call's route for the passages
+     call's reason. `require_parameters` matters here: the answer is read
+     through a strict `response_format`, and an upstream that dropped it would
+     answer in prose. */
+  "citation-influence": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["anthropic"], require_parameters: true },
+  },
   /* **The one job with no `provider` block, and it used to be the one job whose
      `provider` block mattered most.**
 
@@ -723,6 +746,34 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     path: "/alpha/decisions",
     wire: "decisions",
     provider: null,
+  },
+  /* **The command bar's sentence, picked** (src/command-pick-call.ts, plan
+     261003k). `search-quick`'s row for its reason: the eval's 600-odd calls
+     carried `model`, `state` and `questions` and nothing else. */
+  "command-pick": {
+    path: "/alpha/decisions",
+    wire: "decisions",
+    provider: null,
+  },
+  /* **And its words, copied out** by the quick tier's model. The policy the
+     eval's `luna` arm was measured with (evals/command-pick/run.ts §
+     `CHAT_ARMS`), and nothing more: an upstream that dropped `reasoning` or
+     `response_format` would think for a second or answer in prose. No
+     `order`: nothing here is cached. */
+  "command-pick-words": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
+  },
+  /* **The bar's short list from why you are reading** (src/command-suggest-call.ts,
+     plan 261005k). `command-pick-words`'s policy for its reason: the answer
+     is a strict JSON schema with reasoning off, and an upstream that dropped
+     either would answer in prose or think while the reader watches the bar.
+     No `order`: nothing here is cached. */
+  "command-suggest": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { require_parameters: true },
   },
   pdf: {
     path: "/v1/chat/completions",
@@ -779,11 +830,46 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
        strict JSON schema, and an upstream that dropped `response_format`
        would answer in a shape the parser refuses.
 
-     The gateway does not retry a 429 on this wire; a refusal that survives
+     The gateway never retries a 429 (`worthAskingAgain`); a refusal that survives
      the fallbacks reaches the caller as `ProviderRefused`, and the job layer
      decides whether to try again. tests/paper-metadata.test.ts asserts these
      bytes on the wire. */
   "paper-metadata": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: {
+      order: ["fireworks", "deepinfra", "together"],
+      only: ["fireworks", "deepinfra", "together"],
+      zdr: true,
+      require_parameters: true,
+      allow_fallbacks: true,
+    },
+  },
+  /* **How hard a piece is to read** (src/reading-difficulty.ts) — the same
+     model as `paper-metadata` and the same promise, for the same reason: what
+     it sends is up to about 3,000 words of an article a reader added. Every
+     field is `paper-metadata`'s and that row says why each is what it is.
+     Written out, not shared through a constant, so a change to one job's
+     route is a decision about that job. tests/reading-difficulty.test.ts
+     asserts these bytes on the wire. */
+  "reading-difficulty": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: {
+      order: ["fireworks", "deepinfra", "together"],
+      only: ["fireworks", "deepinfra", "together"],
+      zdr: true,
+      require_parameters: true,
+      allow_fallbacks: true,
+    },
+  },
+  /* **An imported title, lightly tidied** (src/title-tidy-model.ts).
+     `paper-metadata`'s route above, copied for its reasons: what it sends is
+     the title of something a reader may have uploaded, so every endpoint is a
+     zero-retention one, and the answer is a strict JSON schema. A refusal that
+     survives the fallbacks costs nothing but the model's tidy: the caller
+     falls back to the rule. */
+  "title-tidy": {
     path: "/v1/chat/completions",
     wire: "chat",
     provider: {
@@ -1001,6 +1087,11 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
       "Not measured. About 5,000 words of one paper and one claim, three short quotes out; " +
       "its ceiling is src/citation-paper-passages.ts § PASSAGES_ANSWER_TOKENS.",
   },
+  "citation-influence": {
+    providerDefault:
+      "Not measured. Up to five search extracts and one work's title, a number and a short quote out; " +
+      "its ceiling is src/citation-influence.ts § INFLUENCE_ANSWER_TOKENS.",
+  },
   pdf: {
     providerDefault:
       "Not measured on this wire's terms. Reads a whole PDF into structured blocks with a " +
@@ -1025,6 +1116,24 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      judged DeepSeek against Luna ran at this setting:
      evals/results/paper-metadata-2026-10-01.md. */
   "paper-metadata": { effort: "none" },
+  /* Two numbers and a sentence, with a 300-token answer ceiling that thinking
+     would spend before the answer began. `none` is `paper-metadata`'s setting
+     on the same model, and the one the ratings were measured at:
+     evals/reading-time-difficulty/rate.ts. */
+  "reading-difficulty": { effort: "none" },
+  /* Recasing one line needs no thinking, and import waits on it. The setting
+     the eval ran at:
+     docs/investigations/261005b-title-tidying-rule-against-a-small-model.md. */
+  "title-tidy": { effort: "none" },
+  /* Copying two words out of one sentence needs no thinking, and the reader
+     is watching the bar. The setting every chat arm of the eval ran at, with
+     no reasoning token spent on any of 600 answers
+     (docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md). */
+  "command-pick-words": { effort: "none" },
+  /* A handful of short items from two short lines, with the reader watching
+     the bar. The setting the eval ran at
+     (docs/investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md). */
+  "command-suggest": { effort: "none" },
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +
@@ -1153,6 +1262,9 @@ export type ChatJob = Exclude<
      must be a compile error rather than a set of probabilities read as an
      empty reply. Its entry point is `openRouterDecisions`. Plan 261002e. */
   | "search-quick"
+  /* The command bar's pick, on the same wire for the same reason. Its words
+     (`command-pick-words`) are a chat completion and stay in. Plan 261003k. */
+  | "command-pick"
 >;
 
 /**
@@ -1200,54 +1312,38 @@ export class ProviderRefused extends Error {
    * 400 too, and halving that would only spend twice.
    */
   readonly kind: "no-endpoints" | "context-exceeded" | null;
-  /** `Retry-After`, parsed to milliseconds, or `null` if it was absent or nonsense. */
+  /**
+   * `Retry-After`, parsed to milliseconds (src/retry-after.ts), or `null` if it
+   * was absent, nonsense or not a wait at all: `0` and a date already past are
+   * `null` too, so a caller's own backoff applies. Never clamped; how long a
+   * wait is affordable is the caller's to decide.
+   */
   readonly retryAfterMs: number | null;
-  constructor(status: number, body: string, headers: Headers) {
+  /**
+   * **Did this refusal's body carry a cost?** — the meter's answer, at the
+   * moment it was thrown. A refusal that was billed is not bought again, and a
+   * caller with its own retry loop cannot see the meter, so the verdict travels
+   * with the error. Read through `worthAskingAgain`, not on its own.
+   *
+   * Required, so every construction site has to say. A site that cannot know
+   * (src/pdf-read.ts § `refuseBodyError`, a refusal found inside a `200`) says
+   * `true`: a `200` is work the provider accepted, and the careful answer to
+   * "was it billed" is yes.
+   */
+  readonly priced: boolean;
+  constructor(status: number, body: string, headers: Headers, priced: boolean) {
     super(providerHttpFailure(status).message);
     this.name = "ProviderRefused";
     this.status = status;
+    this.priced = priced;
     this.kind =
       status === 404 && body.includes("No endpoints available")
         ? "no-endpoints"
         : status === 400 && body.includes("max_tokens_exceeded")
           ? "context-exceeded"
           : null;
-    this.retryAfterMs = headers ? retryAfterMs(headers) : null;
+    this.retryAfterMs = headers ? parseRetryAfter(headers.get("retry-after"), Date.now()) : null;
   }
-}
-
-/**
- * `Retry-After` as a number of milliseconds. Seconds or an HTTP date; both are
- * legal.
- *
- * **What the provider actually said, not what a caller can afford.** This
- * clamped to 30 s until 2026-09-04, which meant a header saying *ten minutes*
- * and one saying *thirty seconds* arrived here indistinguishable — so the only
- * caller that wanted to *decide* about a long wait could not tell there had been
- * one, and asked again well inside a window the provider had just told it was
- * closed. Truncating an instruction and then obeying the truncation is the
- * dishonest shape ⟨GPT Sol, 2026-09-04⟩; how long a wait is affordable is a
- * property of the caller's deadline, and the callers have one each
- * (src/pdf-read.ts § `MAX_RETRY_AFTER_MS`, src/embeddings.ts § `backoffMs`).
- *
- * Still a parsed number and never a string: nothing a provider wrote leaves
- * this function — see `ProviderRefused`.
- *
- * **Exported since 2026-09-05** for the deepening wave
- * (src/structure-deepen.ts), which meets its 429s on the Anthropic SDK's road
- * rather than this one and so has an `APIError` with a `Headers` on it instead
- * of a `ProviderRefused`. The header is the same header; a second parser for it
- * would be a second opinion about what "a minute" means, and the two would
- * disagree the day one of them learned about the HTTP-date form.
- */
-export function retryAfterMs(headers: Headers): number | null {
-  const header = headers.get("retry-after");
-  if (!header) return null;
-  const seconds = Number(header);
-  const ms = Number.isFinite(seconds)
-    ? seconds * 1000
-    : Date.parse(header) - Date.now();
-  return Number.isFinite(ms) && ms > 0 ? ms : null;
 }
 
 /* ---------------------------------------------------------------- the meter -- */
@@ -1298,6 +1394,72 @@ interface WireUsage {
 }
 
 /**
+ * **How one attempt ended, as the meter is told it.** A union rather than an
+ * outcome and an optional failure beside it, so an `error` that does not say
+ * where and why does not compile, and an `ok` cannot carry a failure.
+ *
+ * **Nor does an `aborted` that does not say who stopped it.** The signal a
+ * seam is handed is the caller's composite — its own, its deadline, its stall
+ * clock — and until 2026-10-06 a provider that went silent and a reader who
+ * left were one row here. The signal's reason now tells them apart
+ * (`abortClass` in call-failure.ts), so an `aborted` end carries the class,
+ * and how far the call had got. `Meter.stopped` is the one place it is made.
+ * Plan docs/plans/261006d-count-stalls-and-deadlines-apart-from-a-reader-s-stop.md.
+ */
+type CallEnd =
+  | { outcome: "ok" }
+  | { outcome: "aborted"; failure: CallFailure & { class: AbortClass } }
+  | { outcome: "error"; failure: CallFailure };
+
+/** Who is calling, for a log line: the three names a failure is counted under. */
+interface Caller {
+  job: AiJob;
+  wire: Wire;
+  model: string;
+}
+
+/**
+ * The failure for an error from an attempt **that no response was accepted
+ * for**: a refusal, or `fetch` itself rejecting. One function, because two
+ * things ask it — the failed attempt's row (`Meter.failed`) and the line
+ * logged as the next attempt starts (`warnRetry`) — and a retry counted under
+ * one label and logged under another could not be joined back up.
+ *
+ * The network is recognised the way `worthAskingAgain` recognises it, a
+ * `TypeError` that `send` saw `fetch` reject with. Anything else `fetch` threw
+ * is a test double or a guard, and is `other`.
+ */
+function unansweredFailure(err: unknown): CallFailure {
+  if (err instanceof ProviderRefused) {
+    /* A `2xx` can only be here from `refuse` on a streamed `200` that came with
+       no body: nothing was refused, and there was nothing to read. */
+    const accepted = err.status >= 200 && err.status < 300;
+    return { phase: "before_answer", class: accepted ? "unreadable" : "refused", status: err.status };
+  }
+  return {
+    phase: "before_answer",
+    class: err instanceof TypeError && neverAnswered.has(err) ? networkClass(err) : "other",
+    status: null,
+  };
+}
+
+/** What each of this file's log lines about a failure carries, and nothing else. */
+function failureFields(who: Caller, attempt: number | null, failure: CallFailure): Record<string, unknown> {
+  return { job: who.job, wire: who.wire, model: who.model, attempt, class: failure.class, status: failure.status };
+}
+
+/**
+ * **One line as a retry's attempt starts** — not when the failure is seen,
+ * because a Stop during the backoff means the retry never happens, and the
+ * line has to agree with the ledger, where a retry is a row with
+ * `attempt > 1`. `after` is the failure that caused it. Labels and numbers
+ * only: docs/project/logging.md.
+ */
+function warnRetry(who: Caller, attempt: number, after: CallFailure): void {
+  log("model").warn(failureFields(who, attempt, after), "ai transport retry");
+}
+
+/**
  * One call's accounting, from before the request to after the last byte.
  *
  * Not exported, and that is the design rather than tidiness: a meter a caller
@@ -1308,6 +1470,17 @@ class Meter {
   private readonly startedAt = Date.now();
   private readonly callId: number | null;
   private done = false;
+  /**
+   * Where this attempt has got to, which is what decides a failure's phase.
+   * `status` is `null` until a response arrives; `accepted` is the seam's own
+   * boundary (see `answered`); `verdict` is what a body that *was* read turned
+   * out to be, when that was not an answer.
+   */
+  private responded = false;
+  private status: number | null = null;
+  private accepted = false;
+  private bodyRead = false;
+  private verdict: FailureClass | null = null;
   costNanos: Nanos | null = null;
   upstreamCostNanos: Nanos | null = null;
   generationId: string | null = null;
@@ -1326,10 +1499,101 @@ class Meter {
     private readonly model: string,
     private readonly wire: Wire,
     private readonly credentialFingerprint: string,
+    /**
+     * Which go this is in the seam's retry loop, or `null` where the caller
+     * owns the loop. Required, so a seam cannot open a meter without saying:
+     * `SpendRecord.attempt`.
+     */
+    private readonly attempt: number | null,
   ) {
     /* Registered *before* the network call, so a request that never comes back
        leaves a trace. See `PendingCall` in ai-spend.ts. */
     this.callId = beginSpend(job, model);
+  }
+
+  /**
+   * **A response arrived.** Its status is kept now, before the body is read,
+   * so that 503 headers followed by a body that will not read is still a 503
+   * on the row: `ProviderRefused` is never built on that path, and taking the
+   * status from it alone would lose the one thing known.
+   *
+   * `accepted` is whether this crossed the seam's acceptance boundary, and the
+   * seam says, because the two kinds differ: `response.ok` on a whole call, a
+   * `2xx` with a body in hand on a stream.
+   */
+  answered(response: Response, accepted: boolean): void {
+    this.responded = true;
+    this.generationId = generationIdOf(response);
+    /* The guard is for the hand-built doubles `generationIdOf` describes. */
+    this.status = typeof response.status === "number" ? response.status : null;
+    this.accepted = accepted;
+  }
+
+  /**
+   * **The whole body was read**, and this is what it was: `parsed` is whether
+   * it was JSON at all, `json` the value. An accepted body that would not
+   * parse, or that is an error envelope, is noted here for whichever of the
+   * seam's two ways out comes next: a reader that throws, or `openRouterJson`
+   * handing the body back for its caller to judge.
+   */
+  read(parsed: boolean, json: unknown): void {
+    this.bodyRead = true;
+    this.verdict = !parsed ? "unreadable" : isErrorEnvelope(json) ? "in_band" : null;
+  }
+
+  /** What an accepted body that was read turned out to be, when it was not an answer. `null` otherwise. */
+  notAnAnswer(): CallEnd | null {
+    return this.accepted && this.verdict ? this.died(this.verdict) : null;
+  }
+
+  /** A failure after the acceptance boundary that nothing threw: the stream said so, or simply stopped. */
+  died(why: FailureClass): CallEnd {
+    return { outcome: "error", failure: { phase: "mid_answer", class: why, status: this.status } };
+  }
+
+  /**
+   * **An attempt that was stopped rather than failed**: who stopped it, from
+   * the signal's reason, and how far it had got, by the same acceptance
+   * boundary an error is placed by.
+   *
+   * A signal that has not fired, or none, is `abort`: the consumer closed the
+   * stream early and nobody's clock did it. The reason is read only off a
+   * signal that has fired, and only to pick a label.
+   */
+  stopped(signal: AbortSignal | undefined): CallEnd {
+    return {
+      outcome: "aborted",
+      failure: {
+        phase: this.accepted ? "mid_answer" : "before_answer",
+        class: abortClass(signal?.aborted ? signal.reason : undefined),
+        status: this.status,
+      },
+    };
+  }
+
+  /**
+   * **How an attempt that threw ended**, from how far it had got.
+   *
+   * The phase is the acceptance boundary and nothing else: not whether the
+   * retry would ask again, and not the class of the error, which is a
+   * `TypeError` for a connection that never opened and for a `200` whose body
+   * was cut off alike.
+   *
+   * - No response: whatever `send` threw (`unansweredFailure`).
+   * - A response that was not accepted: `before_answer`, with its status,
+   *   whether the refusal was thrown cleanly or its body broke first.
+   * - Accepted, body not yet read: the body broke. `mid_answer`.
+   * - Accepted and read: what threw was our own reading of it, so the body was
+   *   not an answer. `unreadable`, or `in_band` where it was an error envelope.
+   */
+  failed(err: unknown, signal: AbortSignal | undefined): CallEnd {
+    if (abortedBy(err, signal)) return this.stopped(signal);
+    if (!this.responded || err instanceof ProviderRefused) return { outcome: "error", failure: unansweredFailure(err) };
+    if (!this.accepted) {
+      return { outcome: "error", failure: { phase: "before_answer", class: "refused", status: this.status } };
+    }
+    if (this.bodyRead) return this.died(this.verdict ?? "unreadable");
+    return this.died(spokeNonsense(err) ? "unreadable" : thrownClass(err));
   }
 
   saw(usage: unknown): void {
@@ -1403,9 +1667,21 @@ class Meter {
    * were trying to measure. The same bug was found on the other wire by a GPT
    * Sol review, where `finalMessage()` could be awaited twice.
    */
-  finish(outcome: SpendRecord["outcome"]): void {
+  finish(end: CallEnd): void {
     if (this.done) return;
     this.done = true;
+    const failure = end.outcome === "ok" ? null : end.failure;
+    /* **One line for a call that died after its answer began** — the event the
+       retry does not cover, and the one plan 261006b exists to count. An
+       error only: a call somebody stopped part-way did not die. */
+    if (end.outcome === "error" && end.failure.phase === "mid_answer") {
+      log("model").warn(failureFields(this.caller(), this.attempt, end.failure), "ai call died part-way");
+    }
+    /* **And one for a call our own clock stopped**, at either phase. Not for
+       `abort`: a reader pressing Stop is not news. Plan 261006d. */
+    if (end.outcome === "aborted" && stoppedByOurClock(end.failure)) {
+      log("model").warn(failureFields(this.caller(), this.attempt, end.failure), "ai call stopped by our clock");
+    }
     recordSpend(
       {
         job: this.job,
@@ -1450,10 +1726,16 @@ class Meter {
         serviceTier: null,
         inferenceGeo: null,
         ms: Date.now() - this.startedAt,
-        outcome,
+        outcome: end.outcome,
+        attempt: this.attempt,
+        failure,
       },
       this.callId,
     );
+  }
+
+  private caller(): Caller {
+    return { job: this.job, wire: this.wire, model: this.model };
   }
 }
 
@@ -1576,8 +1858,11 @@ function outgoing(
  * `NOT_CONFIGURED.message` rather than the variable's name, for the split
  * docs/project/logging.md describes: the name of an environment variable is
  * useful to whoever runs the server and useless to a reader, who has not got the
- * repository. Callers log the operator's half themselves, because they know
- * which feature just failed.
+ * repository. The operator's half is logged here, once, in fixed words with
+ * nothing interpolated. Until 2026-10-04 seven runners each logged their own
+ * version first, from a pre-check of a key they never used; those are gone
+ * (plan 261004c § R3), so this is the only place a missing key is said. Which
+ * feature it was is on the caller's own failure line.
  *
  * **`loadEnvLocal()` is deliberately not called here** — same reason as
  * [`messagesClient`](messages-stream.ts), which learned it the expensive way: a
@@ -1596,7 +1881,10 @@ function apiKey(override: string | undefined): string {
      names the key prefix, which is the fastest way to tell two OpenRouter
      accounts apart. */
   const key = override ?? process.env.OPENROUTER_API_KEY;
-  if (!key) throw new Error(NOT_CONFIGURED.message);
+  if (!key) {
+    log("model").error("OPENROUTER_API_KEY is not set, so every model call on this wire will fail");
+    throw new Error(NOT_CONFIGURED.message);
+  }
   return key;
 }
 
@@ -1608,9 +1896,12 @@ function apiKey(override: string | undefined): string {
  * an inverse the first version got wrong: **no attempt, no record.** The meter
  * used to be constructed first, so a missing key or an unserialisable body — a
  * `BigInt`, a circular reference — produced a spend row for a call that never
- * left the process. Every caller happens to validate its own key first today,
- * which is exactly why nothing caught it. Raised by a GPT Sol review of the
- * code.
+ * left the process. Every caller validated its own key first at the time, which
+ * is exactly why nothing caught it. Raised by a GPT Sol review of the code.
+ *
+ * Since 2026-10-04 the streaming runners no longer check the key themselves, so
+ * `apiKey` below is the only check on their road and this order is what stands
+ * between a missing key and a phantom row (tests/no-key-runners.test.ts).
  */
 function prepare(
   job: ChatJob,
@@ -1653,21 +1944,150 @@ function wireOf(job: RoutedJob): Wire {
   return routeFor(job).wire;
 }
 
-function send(
+/**
+ * The one `fetch` on this wire. **An error `fetch` itself rejected with is
+ * remembered as never answered**, because this is the only place that can tell
+ * it from a `200` whose body broke later: both are a `TypeError` by the time a
+ * caller catches one. `worthAskingAgain` reads the mark.
+ */
+async function send(
   prepared: { key: string; payload: string; url: string; headers?: Record<string, string> },
   signal: AbortSignal | undefined,
 ): Promise<Response> {
-  return fetch(prepared.url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${prepared.key}`,
-      "Content-Type": "application/json",
-      ...ATTRIBUTION,
-      ...prepared.headers,
-    },
-    ...(signal ? { signal } : {}),
-    body: prepared.payload,
-  });
+  try {
+    return await fetch(prepared.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${prepared.key}`,
+        "Content-Type": "application/json",
+        ...ATTRIBUTION,
+        ...prepared.headers,
+      },
+      ...(signal ? { signal } : {}),
+      body: prepared.payload,
+    });
+  } catch (err) {
+    /* Only an object can go in a `WeakSet`, and anything can be thrown. */
+    if (typeof err === "object" && err !== null) neverAnswered.add(err);
+    throw err;
+  }
+}
+
+/* ------------------------------------------------------ the transport retry -- */
+
+/** Errors `fetch` rejected with: no response existed. Written only by `send`. */
+const neverAnswered = new WeakSet<object>();
+
+/**
+ * **Is this failure eligible for another identical request?** The one rule for
+ * this wire, used by the retry below
+ * and by the callers that keep a loop of their own (src/pdf-read.ts,
+ * src/embeddings.ts), so an opt-out cannot bypass it.
+ *
+ * Yes for exactly two things:
+ *
+ * - **`fetch` itself failed with a `TypeError`** — what undici throws for a
+ *   network failure ("fetch failed"). A `TypeError` from anywhere else is not
+ *   one: a `200` whose body would not read is a response, and OpenRouter may
+ *   have billed it. A plain `Error` from `fetch` is not one either; in this
+ *   repo it is a test double or a guard.
+ * - **A refusal with one of `TRANSIENT_STATUSES` that priced nothing.** Never a
+ *   429 (see that set), and never a refusal whose body carried a cost.
+ *
+ * It does not look at a signal. An abort is the caller's to check first.
+ */
+export function worthAskingAgain(err: unknown): boolean {
+  if (err instanceof ProviderRefused) return !err.priced && TRANSIENT_STATUSES.has(err.status);
+  return err instanceof TypeError && neverAnswered.has(err);
+}
+
+/** What every seam's options carry for the retry. */
+interface RetryOptions {
+  signal?: AbortSignal;
+  /**
+   * `false` for a caller that already owns this decision: it has its own loop,
+   * or it counts its asks as a spend cap, or a fallback beats two seconds of
+   * waiting. Without it the loops multiply. The five that pass it, and why, are
+   * in docs/project/ai-gateway.md § "A transport blip is retried".
+   */
+  retryTransport?: false;
+}
+
+/** After attempt `attempt` failed with `err`: is another one due? An abort and an opt-out both say no. */
+function mayAskAgain(err: unknown, attempt: number, options: RetryOptions | undefined): boolean {
+  if (options?.retryTransport === false || options?.signal?.aborted) return false;
+  return attempt < TRANSPORT_ATTEMPTS && worthAskingAgain(err);
+}
+
+/**
+ * The wait between two attempts. **A Stop or a deadline during it ends the call
+ * as the abort it is**: the signal's own `reason` is thrown, which is what
+ * `abortedBy` here and `stoppedByReader` / `explainAbort` in
+ * [`openrouter-stream.ts`](openrouter-stream.ts) test for by identity. No
+ * `Meter` exists during the wait, so the wait writes no row.
+ */
+async function backOff(attempt: number, signal: AbortSignal | undefined): Promise<void> {
+  try {
+    await waitOrStop(backoffMs(attempt), signal);
+  } catch {
+    /* `waitOrStop` rejects only when the signal fired, so there is one. */
+    throw (signal as AbortSignal).reason;
+  }
+}
+
+/**
+ * **Run one whole call up to `TRANSPORT_ATTEMPTS` times** — plan 261005j. Until
+ * 2026-10-05 no seam here asked twice, so one dropped connection failed a
+ * pipeline step, a plate, or a reader's dictation.
+ *
+ * `attempt` is a seam's whole body from its `new Meter` to its `finally`, so
+ * **each attempt is its own meter and its own row**: a call that blipped once
+ * is two rows, `error` then `ok`, and *one record, one network attempt* still
+ * holds. It is handed its ordinal, which is the row's `attempt`. When no further attempt is due the attempt's own error is rethrown
+ * unchanged, so a `ProviderRefused` keeps its status for the caller.
+ *
+ * The streamed seam does not use this: its retry stops at the response headers,
+ * not at the end of the call. See `acceptedStream`.
+ */
+async function asTransportAttempts<T>(
+  who: Caller,
+  options: RetryOptions | undefined,
+  attempt: (n: number | null) => Promise<T>,
+): Promise<T> {
+  /* What the previous attempt failed with, for the line logged as the next
+     one starts. Only a failure `mayAskAgain` passed gets here, so it is always
+     one `unansweredFailure` can place. */
+  let after: CallFailure | null = null;
+  for (let n = 1; ; n++) {
+    /* Cancellation can arrive after the wait resolves. Check before the retry
+       creates a meter: an already-aborted fetch sends no network request. */
+    if (n > 1) options?.signal?.throwIfAborted();
+    if (after) warnRetry(who, n, after);
+    try {
+      return await attempt(ordinal(n, options));
+    } catch (err) {
+      if (!mayAskAgain(err, n, options)) throw err;
+      after = unansweredFailure(err);
+      await backOff(n, options?.signal);
+    }
+  }
+}
+
+/**
+ * **The number an attempt's row carries**: its place in the loop, or `null`
+ * when the caller opted out of the loop. Not `1`, though an opted-out seam
+ * does make exactly one request: its caller is looping around it
+ * (src/pdf-read.ts, src/embeddings.ts), so its third go would be a third row
+ * saying `1`, and a count of `attempt > 1` would read those retries as none.
+ */
+function ordinal(n: number, options: RetryOptions | undefined): number | null {
+  return options?.retryTransport === false ? null : n;
+}
+
+/** A whole (non-streamed) seam's options. */
+export interface CallOptions extends RetryOptions {
+  /** A key to use instead of `OPENROUTER_API_KEY`. See `apiKey` for why this is allowed. */
+  apiKey?: string;
 }
 
 /**
@@ -1710,14 +2130,78 @@ function abortedBy(err: unknown, signal: AbortSignal | undefined): boolean {
 }
 
 /**
- * Drain a failed response and throw the status, never the words.
+ * **A chat-wire response body, parsed once, with whatever it says about money
+ * handed to the meter.** The parsed value, or `null` where it was not JSON;
+ * which of the two a `null` was is told to the meter (`Meter.read`).
  *
- * The body **has** to be consumed or the connection leaks; nothing here wants to
- * know what it said.
+ * Shared by the two seams that used to judge the status first:
+ * `openRouterJson`, and `refuse` for a stream that was refused. It is called
+ * **before the status is judged** in both, the order the image seam has had
+ * since 2026-09-03 (`openRouterImage`, which says why at length): a `429` or a
+ * `5xx` whose body carries `usage` is a call the provider priced, and rejecting
+ * it on the status before parsing leaves an unpriced error row. Nothing about a
+ * non-2xx makes its `usage` less true.
+ *
+ * No refusal on this wire has been observed carrying usage (plan 261004c §
+ * F11). This is a proof about our code and a guess about the provider: if one
+ * ever does, the row is right.
+ *
+ * `Meter.saw` overwrites its figures and does not add to them, and a refused
+ * stream never reaches the SSE loop, so nothing here can count a call twice.
+ *
+ * The parse error is swallowed and never rethrown: V8 puts the first characters
+ * of the offending input into a `SyntaxError`'s message, so a mangled response
+ * can carry a prefix of what we sent it, which on this wire is an article, a
+ * reader's question or their voice. See `providerSpokeNonsense` in
+ * openrouter-stream.ts. And nothing from the body is quoted by this function:
+ * it reads numbers, a model id and a provider name into the meter and returns.
  */
-async function refuse(response: Response): Promise<never> {
+function meterBody(meter: Meter, text: string): unknown {
+  let json: unknown = null;
+  let parsed = true;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    /* Left as `null`. See above for why the error goes nowhere. */
+    parsed = false;
+  }
+  /* The caller is still handed `null` for a body that was not JSON, and cannot
+     tell that from a body that was the JSON `null`. The meter can, and it is
+     the row that has to: until 2026-10-06 a `200` that would not parse was an
+     `ok` row. */
+  meter.read(parsed, json);
+  /* Only a JSON object can carry any of these. `null`, an array, a string and a
+     number all parse, and none of them is a body to read fields off. */
+  const record =
+    json !== null && typeof json === "object" && !Array.isArray(json)
+      ? (json as { usage?: unknown; model?: unknown; provider?: unknown; openrouter_metadata?: unknown })
+      : null;
+  if (record?.usage) meter.saw(record.usage);
+  meter.sawModel(record?.model);
+  meter.sawUpstream(record?.provider);
+  meter.sawRoute(record?.openrouter_metadata);
+  return json;
+}
+
+/**
+ * Drain a failed response, meter anything it priced, and throw the status,
+ * never the words.
+ *
+ * The body **has** to be consumed or the connection leaks. Until 2026-10-04
+ * nothing here looked at what it said; now `meterBody` reads any `usage` out of
+ * it first, so a refusal the provider charged for is not an unpriced row.
+ *
+ * **The `.catch(() => "")` is kept on purpose**, and it is the one place this
+ * differs from the image seam, which awaits `response.text()` bare. A refused
+ * stream whose body fails to read is still a refusal, with a status, a
+ * classification and a `Retry-After` the caller acts on. Without the catch it
+ * would surface as a transport error and lose all three ⟨GPT Sol, reviewing the
+ * plan, F3⟩. An unreadable body simply meters nothing.
+ */
+async function refuse(response: Response, meter: Meter): Promise<never> {
   const body = await response.text().catch(() => "");
-  throw new ProviderRefused(response.status, body, response.headers);
+  meterBody(meter, body);
+  throw new ProviderRefused(response.status, body, response.headers, meter.costNanos !== null);
 }
 
 export interface StreamOptions {
@@ -1731,55 +2215,38 @@ export interface StreamOptions {
   end: StreamEnd;
   /** What to do with a `data:` frame that is not valid JSON — see `SseChunksOptions`. */
   malformedFrames?: "skip" | "throw";
+  /** `false` to make exactly one request. See `RetryOptions`. */
+  retryTransport?: false;
 }
 
 /**
- * **A streamed call, from the fetch to the spend record, in one frame.**
+ * **Send a streamed request until a `200` with a body is in hand**, up to
+ * `TRANSPORT_ATTEMPTS` times, and hand back that body with its open meter.
  *
- * Lazy: nothing is sent until the first `next()`. From then the `finally` below
- * owns the call, so every way out — the consumer breaking early, the consumer
- * throwing, an abort, a provider dying mid-answer, a 429, a body that will not
- * read — records what was spent.
+ * The retry on this seam ends here, at the response headers. Once a `200`
+ * arrives nothing is asked again — not a body that breaks before its first
+ * frame, not a stream that dies mid-answer. That is deliberately tighter than
+ * the Messages wire, which retries up to `message_start`: a `200` on this wire
+ * means OpenRouter has accepted the work and may be billing it.
  *
- * The caller's per-chunk loop does not change. It gets the same `StreamChunk`s
- * `sseChunks` yields; what it loses is the fetch, the status check, and the
- * ability to forget the accounting.
- *
- * `signal.aborted` decides `"aborted"` against `"error"`. That is a coarser
- * question than the one [`stoppedByReader`](openrouter-stream.ts) answers — that
- * one separates a reader pressing Stop from our own deadline, which matters to
- * the reader and does not matter to the bill.
+ * **Each attempt is its own `Meter`.** A failed one is finished here, before
+ * the wait, so no call is pending while nothing is in flight; the accepted one
+ * is returned unfinished, and `openRouterStream`'s `finally` finishes it. This
+ * is an `async` function rather than part of the generator so that a
+ * consumer's `return()` cannot land between a meter and its `finish`.
  */
-export async function* openRouterStream(
+async function acceptedStream(
   job: ChatJob,
   body: AiRequestBody,
+  prepared: ReturnType<typeof prepare>,
   options: StreamOptions,
-): AsyncGenerator<StreamChunk> {
-  /* Before the meter — see `prepare`: no attempt, no record. */
-  const prepared = prepare(job, body, true, options.apiKey);
-  const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint);
-  meter.trustFrameProvider = frameProviderTrusted(body);
-  let outcome: SpendRecord["outcome"] = "ok";
-  /**
-   * Whether the loop below ran to its own end.
-   *
-   * **The subtlety this exists for is invisible in the code without it.** When a
-   * consumer throws inside its `for await`, or `break`s out, the async-iteration
-   * protocol closes this generator by calling its `return()`. A `return()` runs
-   * the `finally` and **does not run the `catch`** — the consumer's error is
-   * never thrown *into* here. So `outcome` stayed `"ok"`, and a turn that blew
-   * up on `chunk.error`, or a caller that gave up halfway, was recorded as a
-   * clean successful call. Found by a GPT Sol review of the code; the test meant
-   * to cover it asserted only the *number* of records, which is the check that
-   * shares an assumption with the bug.
-   *
-   * A `break` and a consumer's throw are indistinguishable from in here — the
-   * protocol hands us the same `return()` for both — so both record as
-   * `"aborted"`, meaning *this call did not run to completion*. That is weaker
-   * than the truth, and it is not wrong, which `"ok"` was.
-   */
-  let ranToEnd = false;
-  try {
+): Promise<{ stream: ReadableStream<Uint8Array>; meter: Meter }> {
+  /* The failure the next attempt is a retry of — see `asTransportAttempts`. */
+  let after: CallFailure | null = null;
+  for (let attempt = 1; ; attempt++) {
+    /* The wait and the activity callback can both precede an abort. Neither
+       authorizes a new meter after the caller has stopped. */
+    if (attempt > 1) options.signal.throwIfAborted();
     /* **Reset, so a reused `end` cannot carry a stale verdict into a new
        attempt.** `converse` runs up to four requests in a turn; it builds a
        fresh object for each, so nothing depends on this today — which is exactly
@@ -1799,15 +2266,104 @@ export async function* openRouterStream(
        at EOF with nothing to say why classified as `finished`, and — since F5 —
        the stale `true` would also suppress the clock checks. A promise in a
        comment that the code does not keep is worse than no promise, because the
-       next caller reads the comment. GPT Sol, finding F7. */
+       next caller reads the comment. GPT Sol, finding F7.
+
+       **And once per attempt, not once per call**, since 2026-10-05: a retry
+       is a new attempt, and the same rule applies to it. */
     options.end.terminated = false;
     options.end.finishReason = null;
     options.end.answered = false;
-    const response = await send(prepared, options.signal);
-    meter.generationId = generationIdOf(response);
-    if (!response.ok || !response.body) await refuse(response);
-    /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
-    const stream = response.body as ReadableStream<Uint8Array>;
+    const who = { job, wire: wireOf(job), model: body.model };
+    if (after) warnRetry(who, attempt, after);
+    const meter = new Meter(job, body.model, who.wire, prepared.fingerprint, ordinal(attempt, options));
+    meter.trustFrameProvider = frameProviderTrusted(body);
+    try {
+      const response = await send(prepared, options.signal);
+      /* **This seam's acceptance boundary: a `2xx` with a body in hand.** A
+         failure on this side of it is `before_answer`; from the `return` below
+         onwards it is `mid_answer`, and `openRouterStream` records it. */
+      meter.answered(response, response.ok && !!response.body);
+      if (!response.ok || !response.body) await refuse(response, meter);
+      /* Non-null: `refuse` throws, but TypeScript cannot see through the `await`. */
+      return { stream: response.body as ReadableStream<Uint8Array>, meter };
+    } catch (err) {
+      const end = meter.failed(err, options.signal);
+      meter.finish(end);
+      if (!mayAskAgain(err, attempt, options)) throw err;
+      after = end.outcome === "error" ? end.failure : null;
+      /* **Twice, around the wait.** Before it, so a failure that landed just
+         short of the caller's stall clock does not have the backoff counted as
+         provider silence; after it, so the next request starts with a full
+         allowance. The caller's overall deadline is untouched. */
+      options.onActivity();
+      await backOff(attempt, options.signal);
+      options.onActivity();
+    }
+  }
+}
+
+/**
+ * **A streamed call, from the fetch to the spend record, in one frame.**
+ *
+ * Lazy: nothing is sent until the first `next()`. From then every way out —
+ * the consumer breaking early, the consumer throwing, an abort, a provider dying
+ * mid-answer, a 429, a body that will not read — records what was spent. An
+ * attempt that never reached a `200` is recorded by `acceptedStream`, which may
+ * then ask again; the one that did is recorded by the `finally` below.
+ *
+ * The caller's per-chunk loop does not change. It gets the same `StreamChunk`s
+ * `sseChunks` yields; what it loses is the fetch, the status check, and the
+ * ability to forget the accounting.
+ *
+ * A thrown failure is `aborted` only when it is the abort itself; a clean
+ * loop end also checks `signal.aborted` for the cancelled-read race. An
+ * observed in-band error wins over both. For an abort, the signal's reason
+ * says who stopped it (`Meter.stopped`). [`stoppedByReader`](openrouter-stream.ts)
+ * asks much the same of the caller's separate signals for the reader's message.
+ */
+export async function* openRouterStream(
+  job: ChatJob,
+  body: AiRequestBody,
+  options: StreamOptions,
+): AsyncGenerator<StreamChunk> {
+  /* Before the meter — see `prepare`: no attempt, no record. */
+  const prepared = prepare(job, body, true, options.apiKey);
+  /* Everything up to a `200` with a body, retried there and nowhere later. From
+     here the meter is the accepted attempt's, and the `finally` below owns it. */
+  const { stream, meter } = await acceptedStream(job, body, prepared, options);
+  let end: CallEnd = { outcome: "ok" };
+  /**
+   * **The provider said, inside the stream, that it had failed.** Noted here
+   * because this loop is the only thing that sees it as what it is. Every
+   * consumer throws on `chunk.error`, and a consumer's throw reaches this
+   * generator as a `return()` (see `ranToEnd` below), so until 2026-10-06 a
+   * provider failing mid-answer was recorded as `aborted` — the outcome nobody
+   * investigates, and the one a count of part-way deaths leaves out.
+   */
+  let sawErrorChunk = false;
+  /**
+   * Whether the loop below ran to its own end.
+   *
+   * **The subtlety this exists for is invisible in the code without it.** When a
+   * consumer throws inside its `for await`, or `break`s out, the async-iteration
+   * protocol closes this generator by calling its `return()`. A `return()` runs
+   * the `finally` and **does not run the `catch`** — the consumer's error is
+   * never thrown *into* here. So `outcome` stayed `"ok"`, and a turn that blew
+   * up on `chunk.error`, or a caller that gave up halfway, was recorded as a
+   * clean successful call. Found by a GPT Sol review of the code; the test meant
+   * to cover it asserted only the *number* of records, which is the check that
+   * shares an assumption with the bug.
+   *
+   * A `break` and a consumer's throw are indistinguishable from in here — the
+   * protocol hands us the same `return()` for both — so both record as
+   * `"aborted"`, meaning *this call did not run to completion*. That is weaker
+   * than the truth, and it is not wrong, which `"ok"` was.
+   *
+   * One throw is no longer in that bucket: the one every consumer makes on an
+   * in-band error chunk. See `sawErrorChunk`.
+   */
+  let ranToEnd = false;
+  try {
     for await (const chunk of sseChunks(
       stream,
       options.signal,
@@ -1827,6 +2383,9 @@ export async function* openRouterStream(
          work in that sentence, and overwriting with each one costs nothing and
          cannot be wrong about which was last. */
       if (chunk.usage) meter.saw(chunk.usage);
+      /* Only that it is there. Its `message` is the provider's words and goes
+         nowhere from here. */
+      if (chunk.error) sawErrorChunk = true;
       /* **The finish reason is recorded here, once, for everybody.** It used to
          be scraped by each of the seven consumers with the same line, and a
          consumer that forgot simply had `null` for ever — which reads exactly
@@ -1841,26 +2400,32 @@ export async function* openRouterStream(
     }
     ranToEnd = true;
   } catch (err) {
-    outcome = abortedBy(err, options.signal) ? "aborted" : "error";
+    /* Past the acceptance boundary, so anything but an abort is `mid_answer`. */
+    end = meter.failed(err, options.signal);
     throw err;
   } finally {
-    if (outcome === "ok") {
+    /* The provider's error remains evidence even if a later body read throws
+       or aborts. Keep the thrown error for the caller, but record the observed
+       in-band failure rather than replacing it with its subsequent cleanup. */
+    if (sawErrorChunk) end = meter.died("in_band");
+    else if (end.outcome === "ok") {
       /* **An abort can end the loop cleanly**, because `sseChunks` cancels the
          reader on abort and a cancelled read resolves `{done: true}` rather than
          throwing. Both streaming callers carry a guard for exactly that race in
          their own logging; this is its equivalent for the bill. */
-      if (options.signal.aborted) outcome = "aborted";
-      /* The consumer closed us early — see `ranToEnd` above. */
-      else if (!ranToEnd) outcome = "aborted";
+      if (options.signal.aborted) end = meter.stopped(options.signal);
+      /* The consumer closed us early — see `ranToEnd` above. No signal fired,
+         so `stopped` says `abort`: nobody's clock did this. */
+      else if (!ranToEnd) end = meter.stopped(undefined);
       /* **The stream stopped without saying it had finished.** `[DONE]` is the
          only clean end there is, and every caller already treats its absence as
          a failure (`ENDED_UNFINISHED`). Recording that call as `"ok"` made the
          spend row and the feature's own verdict disagree about the same event —
          the kind of disagreement nobody notices until they are reconciling a
          bill. Raised by a GPT Sol review. */
-      else if (!options.end.terminated) outcome = "error";
+      else if (!options.end.terminated) end = meter.died("unfinished");
     }
-    meter.finish(outcome);
+    meter.finish(end);
     warnIfThinkingAteTheCeiling(job, body, options.end, meter);
   }
 }
@@ -1920,7 +2485,8 @@ export interface JsonCall {
  *
  * Same lifecycle guarantee as the streaming one — the meter is finished on every
  * path, including a refusal, because the call is what cost money and it has
- * happened whatever the caller decides next.
+ * happened whatever the caller decides next. A transport blip is asked again,
+ * each attempt with a meter of its own (`asTransportAttempts`).
  *
  * Two deliberate refusals in the return type, both from a GPT Sol review:
  *
@@ -1936,59 +2502,56 @@ export interface JsonCall {
 export async function openRouterJson(
   job: ChatJob,
   body: AiRequestBody,
-  options?: { signal?: AbortSignal; apiKey?: string },
+  options?: CallOptions,
 ): Promise<JsonCall> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const prepared = prepare(job, body, false, options?.apiKey);
-  const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint);
-  meter.trustFrameProvider = frameProviderTrusted(body);
-  let outcome: SpendRecord["outcome"] = "ok";
-  try {
-    const response = await send(prepared, options?.signal);
-    meter.generationId = generationIdOf(response);
-    /* Read once, before the status is judged. A failed body still has to be
-       consumed or the connection leaks, and reading it twice throws. */
-    const text = await response.text();
-    /* **The images seam does this the other way round on purpose**, parsing the
-       body and metering any `usage` in it *before* judging the status, because
-       a `429` there arrives carrying the cost of a plate that was already drawn
-       (`openRouterImage` below). It has not been changed here, and that is a
-       gap rather than a decision: no non-2xx on this wire has been *observed*
-       carrying usage, and nobody has looked. If you are here because a chat
-       call's money went missing, this is the line. */
-    if (!response.ok) {
-      outcome = "error";
-      throw new ProviderRefused(response.status, text, response.headers);
-    }
-    let json: unknown = null;
+  /* One attempt, one meter, one row. See `asTransportAttempts`. */
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+    const meter = new Meter(job, body.model, wireOf(job), prepared.fingerprint, n);
+    meter.trustFrameProvider = frameProviderTrusted(body);
+    let end: CallEnd = { outcome: "ok" };
     try {
-      json = JSON.parse(text);
-    } catch {
-      /* Left as `null`, and the parse error is never rethrown from here: V8 puts
-         the first characters of the offending input into the `SyntaxError`
-         message, so a mangled response can carry a prefix of what we sent it —
-         which on this wire is an article, a reader's question, or their voice.
-         See `providerSpokeNonsense` in openrouter-stream.ts. */
+      const response = await send(prepared, options?.signal);
+      /* The acceptance boundary of a whole call: `2xx` headers. */
+      meter.answered(response, response.ok);
+      /* Read once, before the status is judged. A failed body still has to be
+         consumed or the connection leaks, and reading it twice throws. */
+      const text = await response.text();
+      /* **Metered before the status is judged**, the same order as the images
+         seam below and for its reason: a `429` whose body carries `usage` is a
+         call the provider priced. Until 2026-10-04 this seam judged first, and
+         its comment called that "a gap rather than a decision"; `meterBody` says
+         the rest. A body that is not JSON comes back `null`, which is what a
+         caller has always been handed for one. */
+      const json = meterBody(meter, text);
+      if (!response.ok) {
+        /* The raw text, not the parsed value: `ProviderRefused` classifies by
+           matching fixed strings in it, and keeps none of it. */
+        throw new ProviderRefused(response.status, text, response.headers, meter.costNanos !== null);
+      }
+      /* **A `200` that is not an answer is not an `ok` row**, though it is
+         still returned. Two shapes: a body that would not parse, and an error
+         envelope (`{ error }` and no `choices`). Both were `ok` rows until
+         2026-10-06, because the caller is what rejects them and the meter had
+         finished by then (src/pdf-read.ts § `refuseBodyError`).
+
+         **Only the row changes.** The caller gets the same `null` or the same
+         envelope, throws what it always threw, and its own retry decides what
+         it always decided. */
+      end = meter.notAnAnswer() ?? end;
+      return {
+        json,
+        answeredBy: meter.answeredBy,
+        generationId: meter.generationId,
+      };
+    } catch (err) {
+      end = meter.failed(err, options?.signal);
+      throw err;
+    } finally {
+      meter.finish(end);
     }
-    const record = json as
-      | { usage?: unknown; model?: unknown; provider?: unknown; openrouter_metadata?: unknown }
-      | null;
-    if (record?.usage) meter.saw(record.usage);
-    meter.sawModel(record?.model);
-    meter.sawUpstream(record?.provider);
-    meter.sawRoute(record?.openrouter_metadata);
-    return {
-      json,
-      answeredBy: meter.answeredBy,
-      generationId: meter.generationId,
-    };
-  } catch (err) {
-    if (outcome === "ok")
-      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
-    throw err;
-  } finally {
-    meter.finish(outcome);
-  }
+  });
 }
 
 /* --------------------------------------------------------------- pictures -- */
@@ -2240,7 +2803,7 @@ function readPlate(body: ImageBody | null): { image: Uint8Array; mediaType: stri
 export async function openRouterImage(
   job: ImageJob,
   body: ImageRequest,
-  options?: { signal?: AbortSignal; apiKey?: string },
+  options?: CallOptions,
 ): Promise<ImageCall> {
   /* Before the meter — see `prepare`: no attempt, no record. A missing key
      must not leave a spend row for a call that never left the process. */
@@ -2250,57 +2813,61 @@ export async function openRouterImage(
     payload: outgoingImage(job, body),
     url: `${OPENROUTER_BASE}${routeFor(job).path}`,
   };
-  const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key));
-  let outcome: SpendRecord["outcome"] = "ok";
-  try {
-    const response = await send(prepared, options?.signal);
-    meter.generationId = generationIdOf(response);
-    /* Read once, before the status is judged: a failed body still has to be
-       consumed or the connection leaks, and reading it twice throws. */
-    const text = await response.text();
-    let json: unknown = null;
+  /* One attempt, one meter, one row. See `asTransportAttempts`. */
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+    const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key), n);
+    let end: CallEnd = { outcome: "ok" };
     try {
-      json = JSON.parse(text);
-    } catch {
-      /* Swallowed and never rethrown: V8 puts a prefix of the offending input
-         into the `SyntaxError`, and the input here wraps a prompt quoted from
-         the article. `readPlate` throws our own sentence a line below. */
+      const response = await send(prepared, options?.signal);
+      meter.answered(response, response.ok);
+      /* Read once, before the status is judged: a failed body still has to be
+         consumed or the connection leaks, and reading it twice throws. */
+      const text = await response.text();
+      let json: unknown = null;
+      let parsed = true;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        /* Swallowed and never rethrown: V8 puts a prefix of the offending input
+           into the `SyntaxError`, and the input here wraps a prompt quoted from
+           the article. `readPlate` throws our own sentence a line below. */
+        parsed = false;
+      }
+      meter.read(parsed, json);
+      const record = json as ImageBody | null;
+      /* **The usage is read before the status is judged, and before the picture
+         is read.** Both orders were wrong once and in the same direction — money
+         the provider told us about, thrown away because of what we decided to do
+         next:
+           - a `200` that generated a plate and then refused to hand it over is
+             still billed for the plate it generated;
+           - a **`429` whose body carries `usage`** is a call the provider priced,
+             and rejecting it on the status before parsing recorded an unpriced
+             error row for a plate that had already cost $0.013 (GPT Sol,
+             2026-09-03). Nothing about a non-2xx makes its `usage` less true.
+         The body is still never quoted: `ProviderRefused` gets the text and
+         decides what may be said about it, and nothing from it reaches a message
+         of ours. */
+      if (record?.usage) meter.saw(record.usage);
+      meter.sawModel(record?.model);
+      meter.sawUpstream(record?.provider);
+      if (!response.ok) {
+        throw new ProviderRefused(response.status, text, response.headers, meter.costNanos !== null);
+      }
+      const plate = readPlate(record);
+      return {
+        image: plate.image,
+        mediaType: plate.mediaType,
+        answeredBy: meter.answeredBy,
+        generationId: meter.generationId,
+      };
+    } catch (err) {
+      end = meter.failed(err, options?.signal);
+      throw err;
+    } finally {
+      meter.finish(end);
     }
-    const record = json as ImageBody | null;
-    /* **The usage is read before the status is judged, and before the picture
-       is read.** Both orders were wrong once and in the same direction — money
-       the provider told us about, thrown away because of what we decided to do
-       next:
-         - a `200` that generated a plate and then refused to hand it over is
-           still billed for the plate it generated;
-         - a **`429` whose body carries `usage`** is a call the provider priced,
-           and rejecting it on the status before parsing recorded an unpriced
-           error row for a plate that had already cost $0.013 (GPT Sol,
-           2026-09-03). Nothing about a non-2xx makes its `usage` less true.
-       The body is still never quoted: `ProviderRefused` gets the text and
-       decides what may be said about it, and nothing from it reaches a message
-       of ours. */
-    if (record?.usage) meter.saw(record.usage);
-    meter.sawModel(record?.model);
-    meter.sawUpstream(record?.provider);
-    if (!response.ok) {
-      outcome = "error";
-      throw new ProviderRefused(response.status, text, response.headers);
-    }
-    const plate = readPlate(record);
-    return {
-      image: plate.image,
-      mediaType: plate.mediaType,
-      answeredBy: meter.answeredBy,
-      generationId: meter.generationId,
-    };
-  } catch (err) {
-    if (outcome === "ok")
-      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
-    throw err;
-  } finally {
-    meter.finish(outcome);
-  }
+  });
 }
 
 /* ----------------------------------------------------------------- voices -- */
@@ -2543,7 +3110,7 @@ function readTranscript(body: unknown): string {
 export async function openRouterTranscription(
   job: TranscriptionJob,
   body: TranscriptionRequest,
-  options?: { signal?: AbortSignal; apiKey?: string },
+  options?: CallOptions,
 ): Promise<TranscriptionCall> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const key = apiKey(options?.apiKey);
@@ -2562,52 +3129,56 @@ export async function openRouterTranscription(
     payload: outgoingTranscription(job, body),
     url: `${OPENROUTER_BASE}${routeFor(job).path}`,
   };
-  const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key));
-  let outcome: SpendRecord["outcome"] = "ok";
-  try {
-    const response = await send(prepared, options?.signal);
-    meter.generationId = generationIdOf(response);
-    /* Read once, before the status is judged: a failed body still has to be
-       consumed or the connection leaks, and reading it twice throws. */
-    const text = await response.text();
-    let json: unknown = null;
+  /* One attempt, one meter, one row. See `asTransportAttempts`. */
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+    const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key), n);
+    let end: CallEnd = { outcome: "ok" };
     try {
-      json = JSON.parse(text);
-    } catch {
-      /* Swallowed and never rethrown. V8 puts a prefix of the offending input
-         into the `SyntaxError`, and the input here is base64 of somebody
-         talking. `readTranscript` throws our own sentence below. */
+      const response = await send(prepared, options?.signal);
+      meter.answered(response, response.ok);
+      /* Read once, before the status is judged: a failed body still has to be
+         consumed or the connection leaks, and reading it twice throws. */
+      const text = await response.text();
+      let json: unknown = null;
+      let parsed = true;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        /* Swallowed and never rethrown. V8 puts a prefix of the offending input
+           into the `SyntaxError`, and the input here is base64 of somebody
+           talking. `readTranscript` throws our own sentence below. */
+        parsed = false;
+      }
+      meter.read(parsed, json);
+      const record = json as
+        | { usage?: unknown; model?: unknown; provider?: unknown }
+        | null;
+      /* Usage before the status, for the reason `openRouterImage` sets out: a
+         non-2xx carrying a priced `usage` is still a call somebody billed, and
+         nothing about the status makes that number less true. */
+      if (record?.usage) meter.saw(unpriceZero(record.usage));
+      meter.sawModel(record?.model);
+      meter.sawUpstream(record?.provider);
+      if (!response.ok) {
+        throw new ProviderRefused(response.status, text, response.headers, meter.costNanos !== null);
+      }
+      const usage = isRecord(record?.usage) ? record.usage : {};
+      return {
+        text: readTranscript(record),
+        answeredBy: meter.answeredBy,
+        generationId: meter.generationId,
+        seconds:
+          typeof usage.seconds === "number" && Number.isFinite(usage.seconds) && usage.seconds > 0
+            ? usage.seconds
+            : null,
+      };
+    } catch (err) {
+      end = meter.failed(err, options?.signal);
+      throw err;
+    } finally {
+      meter.finish(end);
     }
-    const record = json as
-      | { usage?: unknown; model?: unknown; provider?: unknown }
-      | null;
-    /* Usage before the status, for the reason `openRouterImage` sets out: a
-       non-2xx carrying a priced `usage` is still a call somebody billed, and
-       nothing about the status makes that number less true. */
-    if (record?.usage) meter.saw(unpriceZero(record.usage));
-    meter.sawModel(record?.model);
-    meter.sawUpstream(record?.provider);
-    if (!response.ok) {
-      outcome = "error";
-      throw new ProviderRefused(response.status, text, response.headers);
-    }
-    const usage = isRecord(record?.usage) ? record.usage : {};
-    return {
-      text: readTranscript(record),
-      answeredBy: meter.answeredBy,
-      generationId: meter.generationId,
-      seconds:
-        typeof usage.seconds === "number" && Number.isFinite(usage.seconds) && usage.seconds > 0
-          ? usage.seconds
-          : null,
-    };
-  } catch (err) {
-    if (outcome === "ok")
-      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
-    throw err;
-  } finally {
-    meter.finish(outcome);
-  }
+  });
 }
 
 /* ------------------------------------------------------------- decisions -- */
@@ -2635,15 +3206,35 @@ export async function openRouterTranscription(
  *    (`"context-exceeded"`), and the body goes no further than that, for this
  *    file's usual reason: it may echo the article back.
  *
- * Only `noul` (a yes/no answered as a probability) is typed here, because it
- * is the only question the app asks. `choice` and `score` exist on the wire and
- * were ruled out by the spike; adding one is a member of `DecisionQuestion` and
- * a branch in `readDecisions`.
+ * Two kinds of question are typed here, because they are the two the app
+ * asks: `noul` (a yes/no answered as a probability — quick search) and, since
+ * 2026-10-03, `choice` (one of several named options, with a probability for
+ * each — the command bar's pick, plan 261003k; its answer's shape is the one
+ * evals/command-pick/ saved 600 of). `score` exists on the wire and was ruled
+ * out by the spike; adding it is a member of `DecisionQuestion` and a branch in
+ * `readDecisions`.
  */
-export interface DecisionQuestion {
-  type: "noul";
-  /** The question, in words, naming the part of `state` it is about. */
-  instructions: string;
+export type DecisionQuestion =
+  | {
+      type: "noul";
+      /** The question, in words, naming the part of `state` it is about. */
+      instructions: string;
+    }
+  | {
+      type: "choice";
+      instructions: string;
+      /** Each option's key, and the words that say when to choose it. */
+      criteria: Record<string, string>;
+    };
+
+/** One `choice` question's answer. */
+export interface DecisionChoice {
+  /** The key the model chose — **not checked against `criteria` here**; the caller knows what it offered. */
+  choice: string;
+  /** How sure, in [0, 1]. */
+  confidence: number;
+  /** Every option the model gave a probability in [0, 1], by key. */
+  probabilities: Record<string, number>;
 }
 
 /** What a caller asks for. Named fields, for `ImageRequest`'s reason. */
@@ -2664,6 +3255,11 @@ export interface DecisionCall {
    * caller can count the gap against what it asked.
    */
   noul: Record<string, number>;
+  /**
+   * Each `choice` question's answer, keyed as asked — and absent, for the
+   * reason above, unless it named a choice and a confidence in [0, 1].
+   */
+  choice: Record<string, DecisionChoice>;
   answeredBy: string | null;
   generationId: string | null;
   /** The meter's own reading of `usage`, so a caller logs the figure the ledger holds. */
@@ -2671,7 +3267,10 @@ export interface DecisionCall {
   outputTokens: number | null;
 }
 
-function readDecisions(body: unknown): Record<string, number> {
+const isProbability = (p: unknown): p is number =>
+  typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1;
+
+function readDecisions(body: unknown): Pick<DecisionCall, "noul" | "choice"> {
   const answers = (body as { answers?: unknown } | null)?.answers;
   /* Its own class, for `readTranscript`'s reason: "answered nonsense" and
      "never answered" are different failures, and a `{}` read as "nothing
@@ -2679,18 +3278,30 @@ function readDecisions(body: unknown): Record<string, number> {
      body. */
   if (!isRecord(answers))
     throw new UnreadableAnswer("the decisions answer had no answers object");
-  const out: Record<string, number> = {};
+  const noul: Record<string, number> = {};
+  const choice: Record<string, DecisionChoice> = {};
   for (const [key, answer] of Object.entries(answers)) {
-    const p = isRecord(answer) ? answer.noul : undefined;
-    if (typeof p === "number" && Number.isFinite(p) && p >= 0 && p <= 1) out[key] = p;
+    if (!isRecord(answer)) continue;
+    if (isProbability(answer.noul)) noul[key] = answer.noul;
+    /* A choice with no confidence is not read as a sure one, or as an unsure
+       one: it is left out, and the caller sees the gap. */
+    if (typeof answer.choice === "string" && isProbability(answer.confidence)) {
+      const probabilities: Record<string, number> = {};
+      if (isRecord(answer.probabilities)) {
+        for (const [option, p] of Object.entries(answer.probabilities)) {
+          if (isProbability(p)) probabilities[option] = p;
+        }
+      }
+      choice[key] = { choice: answer.choice, confidence: answer.confidence, probabilities };
+    }
   }
-  return out;
+  return { noul, choice };
 }
 
 export async function openRouterDecisions(
   job: DecisionJob,
   body: DecisionRequest,
-  options?: { signal?: AbortSignal; apiKey?: string },
+  options?: CallOptions,
 ): Promise<DecisionCall> {
   /* Before the meter — see `prepare`: no attempt, no record. */
   const key = apiKey(options?.apiKey);
@@ -2713,47 +3324,51 @@ export async function openRouterDecisions(
     }),
     url: `${OPENROUTER_BASE}${route.path}`,
   };
-  const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key));
-  let outcome: SpendRecord["outcome"] = "ok";
-  try {
-    const response = await send(prepared, options?.signal);
-    meter.generationId = generationIdOf(response);
-    /* Read once, before the status is judged — `openRouterTranscription`. */
-    const text = await response.text();
-    let json: unknown = null;
+  /* One attempt, one meter, one row. See `asTransportAttempts`. */
+  return asTransportAttempts({ job, wire: wireOf(job), model: body.model }, options, async (n) => {
+    const meter = new Meter(job, body.model, wireOf(job), keyFingerprint(key), n);
+    let end: CallEnd = { outcome: "ok" };
     try {
-      json = JSON.parse(text);
-    } catch {
-      /* Swallowed and never rethrown: V8 quotes a prefix of the input, and the
-         input here may be the article echoed back. `readDecisions` throws our
-         own sentence below. */
+      const response = await send(prepared, options?.signal);
+      meter.answered(response, response.ok);
+      /* Read once, before the status is judged — `openRouterTranscription`. */
+      const text = await response.text();
+      let json: unknown = null;
+      let parsed = true;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        /* Swallowed and never rethrown: V8 quotes a prefix of the input, and the
+           input here may be the article echoed back. `readDecisions` throws our
+           own sentence below. */
+        parsed = false;
+      }
+      meter.read(parsed, json);
+      const record = json as
+        | { usage?: unknown; model?: unknown; provider?: unknown }
+        | null;
+      /* Usage before the status, for `openRouterImage`'s reason: a non-2xx that
+         carries a priced `usage` is still a call somebody billed. `unpriceZero`
+         for its own reason: Jev's input is priced, so a `cost: 0` would be a
+         row claiming to be free rather than one saying it was not told. */
+      if (record?.usage) meter.saw(unpriceZero(record.usage));
+      meter.sawModel(record?.model);
+      meter.sawUpstream(record?.provider);
+      if (!response.ok) {
+        throw new ProviderRefused(response.status, text, response.headers, meter.costNanos !== null);
+      }
+      return {
+        ...readDecisions(record),
+        answeredBy: meter.answeredBy,
+        generationId: meter.generationId,
+        inputTokens: meter.inputTokens,
+        outputTokens: meter.outputTokens,
+      };
+    } catch (err) {
+      end = meter.failed(err, options?.signal);
+      throw err;
+    } finally {
+      meter.finish(end);
     }
-    const record = json as
-      | { usage?: unknown; model?: unknown; provider?: unknown }
-      | null;
-    /* Usage before the status, for `openRouterImage`'s reason: a non-2xx that
-       carries a priced `usage` is still a call somebody billed. `unpriceZero`
-       for its own reason: Jev's input is priced, so a `cost: 0` would be a
-       row claiming to be free rather than one saying it was not told. */
-    if (record?.usage) meter.saw(unpriceZero(record.usage));
-    meter.sawModel(record?.model);
-    meter.sawUpstream(record?.provider);
-    if (!response.ok) {
-      outcome = "error";
-      throw new ProviderRefused(response.status, text, response.headers);
-    }
-    return {
-      noul: readDecisions(record),
-      answeredBy: meter.answeredBy,
-      generationId: meter.generationId,
-      inputTokens: meter.inputTokens,
-      outputTokens: meter.outputTokens,
-    };
-  } catch (err) {
-    if (outcome === "ok")
-      outcome = abortedBy(err, options?.signal) ? "aborted" : "error";
-    throw err;
-  } finally {
-    meter.finish(outcome);
-  }
+  });
 }

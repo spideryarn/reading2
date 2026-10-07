@@ -56,6 +56,21 @@ Greg's authorisation"* whenever it changes content, whether or not the item was 
 (`scripts/overseer-queue.ts` § `lapses`); on a proposal nothing lapses, and `show <id>`'s
 `authority:` line before the edit is what says which case it was.
 
+**And `list` shows none of an item's body.** It cuts each title at 66 characters
+(`scripts/overseer-queue.ts` § `describeItem`), so whatever earlier runs appended to an entry, and
+its `History:` lines with their timestamps, appear only in `show <id>`. On 2026-09-20 a sweep
+re-derived a measurement that a sibling sweep had appended to the same entry four hours earlier:
+`git log` and `gjd-remote ls` both looked untouched, because the earlier sweep changed nothing in
+the repo and its session had ended. It happened again on 2026-09-23, on an entry by then 154 lines
+long with six dated appendices: the opening and the newest appendix were read, and the fact was in
+an older one. Each author appends rather than revises, so the newest section is the least likely
+to hold a fact recorded earlier.
+
+So before a sweep investigates a standing question, read the entry that owns it whole with
+`npx tsx scripts/overseer-queue.ts show <id>`, history timestamps included. If a sibling has
+already measured and nothing has changed since, say so in the debrief and append nothing: another
+"measured again, same" section is noise in a record Greg still has to read.
+
 **How to use it.** Take an item only when the current focus has nothing dispatchable — every live
 stage is either running or blocked on Greg — and the box and usage window have room. Move the item to
 [the decision log](../plans/260908i-overseer-decision-log-for-the-two-astra-plans.md) when it is
@@ -91,7 +106,6 @@ Four clusters wait on a product answer as well as a lull; the Overseer put the d
 | H — one binary-response writer | six header set-sites, six deliberate differences to keep | a relevant route slice |
 | I — retire the obsolete revision alias | 13 test imports to repoint, then delete | a lull; XS |
 | J — one retry predicate for Search and criteria | share the decision, not the row | the next retry-rule edit |
-| K — one missing-key check for seven readers | leave the five distinct contracts alone | the next gateway edit |
 | L — unknown-throw mapper investigation | XS, may end with no change | a lull |
 | M — keyboard access to a passage's terms | try jumping to the glossary row before building a list | Greg: which interaction, or defer M |
 | N — retain PDF item boundaries through scoring | fidelity experiment before any heuristic change | a lull; L-sized |
@@ -131,9 +145,6 @@ Greg promotes one by saying so, and then it moves up into a plan.
 - **`tests/fleet-health-wiring.test.ts` mount guard passes with the mount commented out** — the needle
   survives inside the `//`. Assert against comment-stripped lines, as `fleet-deploys-route` now does.
   It stands behind a feature that shipped dead once. 2026-09-09.
-- **`.dock-modes { flex: 3 0 auto }` under `@media (pointer: coarse)` hard-codes the mode count** as a
-  share weight, wrong since the fourth tab landed; no type or test can see it and the symptom is
-  proportion, not breakage. Found by GPT Sol reviewing `fleet-dashboard-modes.md`. 2026-09-09.
 - **A merge commit carrying code of its own is invisible to the changelog.** Every range in
   `scripts/changelog/` is `--no-merges`, and so is the deploy's `changelog` gate, on the belief that
   every merge here is a plain `Merge … origin/dev`; a conflict resolution that adds code is in no

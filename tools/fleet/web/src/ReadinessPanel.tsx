@@ -33,7 +33,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Explain, type Tip } from "./Tooltip";
-import { httpReadinessApi, type ReadinessApi } from "./readiness-client";
+import { failingFilesOverDay, httpReadinessApi, type ReadinessApi } from "./readiness-client";
 import type {
   DiagnosticsView,
   EvidenceView,
@@ -298,12 +298,112 @@ function DayBand({
                 : provenance === "nosha"
                   ? " · reconstructed from a log, no commit"
                   : " · another commit, a dirty tree, or a narrowed run"
-            }${reading.durationMs === null ? "" : ` · ${describeDuration(reading.durationMs)}`}${
+            }${reading.durationMs === null ? "" : ` · ${describeDuration(reading.durationMs)}`}${failingInTitle(reading)}${
               hidden === 0 ? "" : ` · and ${hidden} other run${hidden === 1 ? "" : "s"} at this minute`
             }`}
           />
         );
       })}
+    </div>
+  );
+}
+
+/** How many names a mark's tooltip carries before it says "and N more". A `title` is one line. */
+const TITLE_NAMES = 5;
+
+/** ` · failing: a, b and 3 more` for a failed run that named its files; nothing otherwise. */
+function failingInTitle(reading: ReadingView): string {
+  const named = reading.failedTestFiles;
+  if (named === null) return "";
+  const more = named.total - Math.min(named.files.length, TITLE_NAMES);
+  return ` · failing: ${named.files.slice(0, TITLE_NAMES).join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
+}
+
+/** How many files the card lists before it says how many it left out. */
+const FAILING_ROWS_SHOWN = 12;
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * **"Red for hours, or a flake?"** — each test file that failed today, with how
+ * many of the day's failed runs it failed in.
+ *
+ * docs/plans/261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md.
+ * Until 2026-10-06 a record held a count and no names, and answering this
+ * meant finding the run's 14 MB log in another worktree.
+ *
+ * ## What it must not say
+ *
+ * **That nothing failed.** The card is absent on a day with no failed wrapper
+ * run, and on a day whose failures named nothing it says exactly that — the
+ * names are *not recorded* — because an empty list under this heading would
+ * read as a clean bill.
+ *
+ * **That this is about dev.** It pools every failed wrapper run in the window,
+ * on any commit and any branch, which is the opposite of the headline's rule
+ * and is said in the card's first line.
+ *
+ * **More than it counted.** Runs that named nothing are counted beside the
+ * ones that did, and a run whose list was cut turns every "N of M" into "at
+ * least N".
+ */
+function FailingFiles({
+  readings,
+  formatTime,
+}: {
+  readings: ReadingView[];
+  formatTime: (ms: number) => string;
+}): ReactNode {
+  const summary = failingFilesOverDay(readings);
+  if (summary.namedRuns + summary.unnamedRuns === 0) return null;
+  const shown = summary.rows.slice(0, FAILING_ROWS_SHOWN);
+  const atLeast = summary.cappedRuns > 0 ? "at least " : "";
+  return (
+    /* The wrapper carries the test id and the gap the panel's own flex column
+       would have put between a heading and its card. */
+    <div className="tw:flex tw:flex-col tw:gap-1" data-testid="readiness-failing-files">
+      <SectionHeading>Failing test files</SectionHeading>
+      <Card className="tw:p-3">
+        <p className="tw:text-[11px] tw:text-ink-faint">
+          Every failed run readiness-run.ts recorded in this window, on any commit — history, not a claim about dev.
+        </p>
+        {shown.length === 0 ? null : (
+          <ul className="tw:flex tw:flex-col tw:gap-1 tw:pt-2">
+            {shown.map((row) => (
+              <li key={row.file} className="tw:flex tw:flex-wrap tw:items-baseline tw:gap-x-2 tw:text-[12px]">
+                <span className="tw:min-w-0 tw:break-all tw:font-mono tw:text-ink">{row.file}</span>
+                <span className="tw:text-[11px] tw:text-ink-faint">
+                  {atLeast}
+                  {row.runs} of {plural(summary.namedRuns, "failed run", "failed runs")} with recorded names ·{" "}
+                  {row.firstAtMs === row.lastAtMs
+                    ? `listed ${formatTime(row.lastAtMs)}`
+                    : `first listed ${formatTime(row.firstAtMs)}, last listed ${formatTime(row.lastAtMs)}`}
+                  {row.inLatest ? " · in the latest" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {summary.rows.length > shown.length ? (
+          <p className="tw:pt-2 tw:text-[11px] tw:text-ink-faint">
+            and {plural(summary.rows.length - shown.length, "more file", "more files")} listed.
+          </p>
+        ) : null}
+        {summary.cappedRuns > 0 ? (
+          <p className="tw:pt-2 tw:text-[11px] tw:text-ink-faint">
+            {plural(summary.cappedRuns, "run", "runs")} failed in more files than a record lists (
+            {summary.unlistedFiles} more), so each count is “at least”.
+          </p>
+        ) : null}
+        {summary.unnamedRuns > 0 ? (
+          <p className="tw:pt-2 tw:text-[11px] tw:text-ink-faint">
+            {summary.namedRuns > 0
+              ? plural(summary.unnamedRuns, "other failed run", "other failed runs")
+              : plural(summary.unnamedRuns, "failed run", "failed runs")}{" "}
+            did not record which files — their names are unavailable.
+          </p>
+        ) : null}
+      </Card>
     </div>
   );
 }
@@ -349,6 +449,63 @@ function Diagnostics({ d }: { d: DiagnosticsView }): ReactNode {
   );
 }
 
+/**
+ * **It polls, and the first version did not.**
+ *
+ * The panel fetched on mount and on Refresh only, and `refreshMs` was parsed and never
+ * used — so a page left open on a phone, which is what this dashboard is for,
+ * would say *dev is green* indefinitely while dev moved and a check failed
+ * underneath it. GPT Sol, Stage 2 review.
+ *
+ * The interval comes from the server rather than a constant here, because the
+ * server is the thing that knows how often it recollects; polling faster than
+ * that fetches the same snapshot repeatedly, and slower shows a stale one for
+ * no reason. It is clamped because a bad number from a future build must not
+ * turn this into a busy loop.
+ *
+ * **Two effects, because the fetch and the timer restart for different
+ * reasons.** One effect did both until 2026-10-06, and left the interval out
+ * of its dependencies: it ran before the first answer, set the 120-second
+ * fallback, and never ran again, so the server's number went unused until
+ * Refresh was pressed. (GPT Sol, with a fake-timer test. The note that
+ * justified it feared a timer leak, and there was none to fear: the cleanup
+ * clears the timer, and a number re-runs an effect only when its value
+ * changes.) Putting the interval into that one effect would have fetched
+ * again each time the number changed. Apart, a new number restarts the timer
+ * and fetches nothing. tests/fleet-readiness-poll.test.tsx.
+ */
+function useReadinessView(api: ReadinessApi, refreshNonce: number): ReadinessView | null {
+  const [view, setView] = useState<ReadinessView | null>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal — re-running when it changes is the point.
+  useEffect(() => {
+    let live = true;
+    void api.fetch().then((next) => {
+      if (live) setView(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [api, refreshNonce]);
+
+  const everyMs = Math.min(10 * 60_000, Math.max(15_000, view?.kind === "readiness" ? view.refreshMs : 120_000));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Refresh restarts the timer and invalidates pending polls from before Refresh.
+  useEffect(() => {
+    let live = true;
+    const timer = setInterval(() => {
+      void api.fetch().then((next) => {
+        if (live) setView(next);
+      });
+    }, everyMs);
+    return () => {
+      live = false;
+      clearInterval(timer);
+    };
+  }, [api, everyMs, refreshNonce]);
+
+  return view;
+}
+
 export function ReadinessPanel({
   api = httpReadinessApi,
   nowMs,
@@ -362,46 +519,7 @@ export function ReadinessPanel({
   /** Bumped by the Dock's Refresh button. */
   refreshNonce?: number;
 }): ReactNode {
-  const [view, setView] = useState<ReadinessView | null>(null);
-
-  /**
-   * **It polls, and the first version did not.**
-   *
-   * This ran on mount and on Refresh only, and `refreshMs` was parsed and never
-   * used — so a page left open on a phone, which is what this dashboard is for,
-   * would say *dev is green* indefinitely while dev moved and a check failed
-   * underneath it. GPT Sol, Stage 2 review.
-   *
-   * The interval comes from the server rather than a constant here, because the
-   * server is the thing that knows how often it recollects; polling faster than
-   * that fetches the same snapshot repeatedly, and slower shows a stale one for
-   * no reason. It is clamped because a bad number from a future build must not
-   * turn this into a busy loop.
-   */
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshNonce is the refresh signal.
-  useEffect(() => {
-    let live = true;
-    const load = (): void => {
-      void api.fetch().then((next) => {
-        if (live) setView(next);
-      });
-    };
-    load();
-    const everyMs = Math.min(
-      10 * 60_000,
-      Math.max(15_000, view?.kind === "readiness" ? view.refreshMs : 120_000),
-    );
-    const timer = setInterval(load, everyMs);
-    return () => {
-      live = false;
-      clearInterval(timer);
-    };
-    /* `view?.refreshMs` deliberately NOT in the deps: it would tear down and
-       rebuild the interval on every successful poll, which is a slow leak of
-       timers and a drifting cadence. The first answer's interval is good enough
-       for the life of the mount. */
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, refreshNonce]);
+  const view = useReadinessView(api, refreshNonce);
 
   const formatTime = (ms: number): string =>
     new Date(shiftMsToBrowserClock(ms, skew)).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -519,6 +637,8 @@ export function ReadinessPanel({
           <span>now · {formatTime(view.collectedAtMs)}</span>
         </div>
       </Card>
+
+      <FailingFiles readings={view.readings} formatTime={formatTime} />
 
       <SectionHeading>The tree</SectionHeading>
       <Card className="tw:p-3 tw:text-[12px]">

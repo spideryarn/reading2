@@ -54,17 +54,24 @@ import {
   markerNumbers,
   generateCitations,
   idsByKey,
+  keysOf,
   linkFor,
+  locateInArticle,
   MAX_CITATIONS,
   noScoreDrops,
   noteMarkers,
   PROMPT_VERSION,
   scholarUrl,
   systemPrompt,
+  toDrafts,
+  verifyEntry,
 } from "../src/citations.js";
 import { plainWords } from "../src/plain-words.js";
+import { validateAnthropicJsonSchema, validateOpenAiJsonSchema } from "../src/messages-structured-output.js";
 import { type NumberedReferenceList, referenceListFrom } from "../src/citation-reference-list.js";
 import type { Block, Tree } from "../src/types.js";
+import { REF_ATTR } from "../src/notes.js";
+import { replayGuard } from "../evals/citations-say-less.js";
 
 function block(id: string, text: string, over: Partial<Block> = {}): Block {
   return {
@@ -108,6 +115,107 @@ function build(
 
 const scored = { relevance: 0.8, influence: 0.5 };
 
+/* ------------------------------------ authors and a year, from the article --
+   Greg, spya-zmdb7y (plan 261003j): a row says nothing about a work beyond
+   what the article gives. The prompt asks for authors and year "as the article
+   gives them"; one stored row in 194 carried an author from the model's memory
+   (*The Bitter Lesson · Sutton*, in an essay that never names Sutton). */
+
+describe("an author or year the article never gives is dropped", () => {
+  const body = block("spya-b00001", "The bitter lesson is the harder and bigger, the better, as Müller's (1963) book said.");
+  const lesson = { title: "The Bitter Lesson", why: "x", ...scored, mentions: [{ block: body.id, quote: "The bitter lesson" }] };
+
+  it("drops an author who is nowhere in the article, and counts it", () => {
+    const { rows, drops } = build([{ ...lesson, authors: "Sutton" }], [body]);
+    expect(rows[0]?.title).toBe("The Bitter Lesson");
+    expect(rows[0]?.authors).toBeUndefined();
+    expect(drops.authorsUnfound).toBe(1);
+  });
+
+  it("drops a year that is nowhere in the article, and counts it", () => {
+    const { rows, drops } = build([{ ...lesson, year: "2019" }], [body]);
+    expect(rows[0]?.year).toBeUndefined();
+    expect(drops.yearUnfound).toBe(1);
+  });
+
+  it("keeps an author and year the article gives, through a possessive, an accent and 'et al.'", () => {
+    const { rows, drops } = build([{ ...lesson, authors: "Müller et al.", year: "1963" }], [body]);
+    expect(rows[0]?.authors).toBe("Müller et al.");
+    expect(rows[0]?.year).toBe("1963");
+    expect(drops.authorsUnfound).toBe(0);
+    expect(drops.yearUnfound).toBe(0);
+  });
+
+  it("keeps a year the article glues to other characters", () => {
+    const glued = block("spya-b00002", "Anscombe 196363ya, An Introduction to the bitter lesson.");
+    const { rows } = build(
+      [{ ...lesson, mentions: [{ block: glued.id, quote: "Anscombe 1963" }], authors: "Anscombe", year: "1963" }],
+      [glued],
+    );
+    expect(rows[0]?.year).toBe("1963");
+    expect(rows[0]?.authors).toBe("Anscombe");
+  });
+
+  it.each([
+    ["Porter, D.", "Porter, D. (2017)"],
+    ["van der Meer, García", "van der Meer and García (2017)"],
+    ["Smith & Jones", "Smith and Jones (2017)"],
+    ["Chen et al.", "Chen (2017)"],
+    ["Vahdat & Kautz", "Vahdat and Kautz (2017)"],
+    ["O'Brien", "O’Brien’s work (2017)"],
+    ["Jean-Paul", "Jean-Paul’s work (2017)"],
+    ["王小明", "王小明 (2017)"],
+  ])("keeps the supported by-line %s", (authors, source) => {
+    const byId = new Map([[body.id, block(body.id, source)]]);
+    expect(locateInArticle({ title: "Work", authors }, byId, null, emptyDrops()).authors).toBe(authors);
+  });
+
+  it.each([
+    ["2017b", "Chen (2017a)"],
+    ["c. 300 BC", "Chen dates it to 300 AD; BC is discussed elsewhere."],
+    ["in press", "In this work Chen studies a printing press."],
+  ])("drops the unsupported year %s even if its pieces occur elsewhere", (year, source) => {
+    const byId = new Map([[body.id, block(body.id, source)]]);
+    const drops = emptyDrops();
+    expect(locateInArticle({ title: "Work", year }, byId, null, drops).year).toBeUndefined();
+    expect(drops.yearUnfound).toBe(1);
+  });
+
+  it.each(["2017a", "n.d.", "in press", "c. 300 BC"])("keeps the supported date %s", (year) => {
+    const byId = new Map([[body.id, block(body.id, `Chen (${year})`)]]);
+    expect(locateInArticle({ title: "Work", year }, byId, null, emptyDrops()).year).toBe(year);
+  });
+
+  it("reads each supplied reference list even with the same block map", () => {
+    const byId = new Map([[body.id, body]]);
+    const fields = { title: "Work", authors: "Sutton", year: "2019" };
+    expect(locateInArticle(fields, byId, null, emptyDrops()).authors).toBeUndefined();
+    const list = { entries: new Map([[1, "1. Sutton (2019). Work."]]) };
+    expect(locateInArticle(fields, byId, list, emptyDrops())).toEqual(fields);
+    expect(locateInArticle(fields, byId, null, emptyDrops()).authors).toBeUndefined();
+  });
+
+  it("the eval replays the guard even on a stored HTML entry", () => {
+    const ref = block("spya-bib001", "The Bitter Lesson.", { role: "reference" });
+    const { rows } = build([{ ...lesson, reference: { block: ref.id, quote: ref.text } }], [body, ref]);
+    const stored = { ...rows[0]!, authors: "Sutton", year: "2019" };
+    expect(stored.entry).toBe(ref.text);
+    const replay = replayGuard([stored], [body, ref], null);
+    expect(replay.drops.authorsUnfound).toBe(1);
+    expect(replay.drops.yearUnfound).toBe(1);
+  });
+
+  it("the eval includes the PDF list for a work without a verified entry", () => {
+    const { rows } = build([lesson], [body]);
+    const stored = { ...rows[0]!, authors: "Sutton", year: "2019" };
+    const list = { entries: new Map([[1, "1. Sutton (2019). The Bitter Lesson."]]) };
+    const replay = replayGuard([stored], [body], list);
+    expect(replay.drops.authorsUnfound).toBe(0);
+    expect(replay.drops.yearUnfound).toBe(0);
+    expect(replay.kept[0]?.authors).toBe("Sutton");
+  });
+});
+
 /* ------------------------------------------------------------------ links */
 
 describe("the link comes from the article, by code", () => {
@@ -135,6 +243,64 @@ describe("the link comes from the article, by code", () => {
       new Map([[ref.id, 1]]),
     );
     expect(link).toEqual({ url: "https://doi.org/10.1021/ma0507995", linkFrom: "doi" });
+  });
+
+  it("rule 1: the doi.org link names the DOI the reference printed, whatever characters it holds (qi-thwhkxxh)", () => {
+    /* A backslash in the DOI: pasted in unencoded, a browser reads it as a slash. */
+    const ref = block("spya-ref001", 'Sapede, D. (2005). "Nanofibrillar structure". doi:10.1021/ma\\0507995.', {
+      html:
+        '<li>Sapede, D. (2005). "Nanofibrillar structure". doi:' +
+        '<a href="https://doi.org/10.1021%2Fma%5C0507995">10.1021/ma\\0507995</a>.</li>',
+    });
+    const link = linkFor(
+      draft({ reference: { blockId: ref.id, quote: "Sapede", start: 0 } }),
+      byId([ref]),
+      new Map([[ref.id, 1]]),
+    );
+    expect(link).toEqual({ url: "https://doi.org/10.1021/ma%5C0507995", linkFrom: "doi" });
+    expect(new URL(link.url).pathname).toBe("/10.1021/ma%5C0507995");
+  });
+
+  it("does not manufacture a different DOI from malformed Unicode in a reference", () => {
+    for (const doi of ["10.1234/a\uD800b", "10.1234/a\uDC00b"]) {
+      const ref = block("spya-ref001", `Sapede (2005). Nanofibrillar structure. doi:${doi}`);
+      const link = linkFor(
+        draft({ reference: { blockId: ref.id, quote: "Sapede", start: 0 } }),
+        byId([ref]),
+        new Map([[ref.id, 1]]),
+      );
+      expect(link.linkFrom).toBe("search");
+    }
+  });
+
+  it("a work's key is its DOI, not the DOI's encoded spelling in the link (qi-thwhkxxh)", () => {
+    const key = (url: string) => keysOf({ title: "T", authors: "A", year: "2005", url, linkFrom: "doi" }).idKey;
+    expect(key("https://doi.org/10.1234/a%252Fb")).toBe("doi:10.1234/a%2fb");
+    expect(key("https://doi.org/10.1234/a%5Cb")).toBe("doi:10.1234/a\\b");
+    /* A row stored before DOIs were encoded keeps its key, so a re-run inherits its id. */
+    expect(key("https://doi.org/10.1023/A:1010933404324")).toBe("doi:10.1023/a:1010933404324");
+  });
+
+  it("a work linked to a page about an arXiv paper has the arXiv work's key (plan 261005m)", () => {
+    const key = (url: string, linkFrom: "arxiv" | "article" | "search" | "doi") =>
+      keysOf({ title: "T", authors: "A", year: "2020", url, linkFrom }).idKey;
+    const arxiv = key("https://arxiv.org/abs/2001.08361", "arxiv");
+    expect(arxiv).toBe("arxiv:2001.08361");
+    for (const url of [
+      "https://huggingface.co/papers/2001.08361",
+      "https://huggingface.co/papers/2001.08361v2",
+      "https://alphaxiv.org/abs/2001.08361",
+      "https://www.alphaxiv.org/overview/2001.08361",
+    ]) {
+      expect(key(url, "article"), url).toBe(arxiv);
+    }
+    /* Old-style, and upper case: the registry's lower-cased work id. */
+    expect(key("https://arxiv.org/abs/math.gt/0309136", "arxiv")).toBe("arxiv:math.gt/0309136");
+    expect(key("https://huggingface.co/papers/math.GT/0309136", "article")).toBe("arxiv:math.gt/0309136");
+    /* What does not change: any other article-given address, a Scholar search, and a DOI link. */
+    expect(key("https://huggingface.co/blog/openai", "article")).toBe("url:huggingface.co/blog/openai");
+    expect(key("https://huggingface.co/papers/2001.08361", "search")).toBeNull();
+    expect(key("https://doi.org/10.48550/arXiv.2001.08361", "doi")).toBe("doi:10.48550/arxiv.2001.08361");
   });
 
   it("rule 2: no DOI and one arXiv id — found in gwern's data-url-original — becomes arxiv.org/abs", () => {
@@ -462,6 +628,29 @@ describe("footnotes are expanded in code", () => {
 /* ---------------------------------------------------- dedupe and ids -- */
 
 describe("one row per work, and ids that survive a re-run", () => {
+  it("does not merge two distinct works merely because unsupported by-lines were dropped", () => {
+    const body = block("spya-b00001", "Two works called Shared title are cited here.");
+    const raw = { title: "Shared title", why: "x", ...scored, mentions: [{ block: body.id, quote: "Shared title" }] };
+    const { rows } = build([{ ...raw, authors: "Sutton" }, { ...raw, authors: "Jones" }], [body]);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((w) => w.authors)).toEqual([undefined, undefined]);
+    expect(new Set(rows.map((w) => w.id)).size).toBe(2);
+  });
+
+  it("still folds a shorthand into its entry when only the latter loses an unsupported co-author", () => {
+    const body = block("spya-b00001", "Chen (2017) used Shared title.");
+    const ref = block("spya-bib001", "Chen (2017). Shared title.", { role: "reference" });
+    const raw = { title: "Shared title", year: "2017", why: "x", ...scored };
+    const { rows } = build([
+      { ...raw, authors: "Chen", mentions: [{ block: body.id, quote: "Chen (2017)" }] },
+      { ...raw, authors: "Chen, Smith", reference: { block: ref.id, quote: ref.text } },
+    ], [body, ref]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.entry).toBe(ref.text);
+    expect(rows[0]?.authors).toBe("Chen");
+    expect(rows[0]).not.toHaveProperty("foldKey");
+  });
+
   const shorthand = {
     title: "Predicting the mechanical properties of spider silk",
     authors: "Porter",
@@ -507,6 +696,50 @@ describe("one row per work, and ids that survive a re-run", () => {
     const fresh = second.citations.find((c) => c.title === "Elements of Episodic Memory")!;
     expect(fresh.id).not.toBe(first.citations[0]!.id);
   });
+
+  it("a mirror citation stored under its old URL key keeps its id when its metadata changes", () => {
+    const body = block("spya-b00006", "The revised name is the work used here.", {
+      html: '<p><a href="https://huggingface.co/papers/1706.03762">The revised name</a> is the work used here.</p>',
+    });
+    const raw = {
+      title: "The revised name",
+      why: "The work used here.",
+      ...scored,
+      mentions: [{ block: body.id, quote: "The revised name" }],
+    };
+    const first = build([raw], [body]).citations;
+    const row = first.citations[0]!;
+    expect(row.key).toBe("arxiv:1706.03762");
+
+    /* This is the artefact the build before plan 261005m wrote: the mirror was
+       an ordinary article URL. The model changing the title on the same re-run
+       must not orphan Find/Investigate rows attached to this id. */
+    const previous = {
+      ...first,
+      citations: [
+        {
+          ...row,
+          title: "The earlier name",
+          key: "url:huggingface.co/papers/1706.03762",
+        },
+      ],
+    };
+    const inherit = idsByKey(previous, { blocks: [body], referenceList: null });
+    const second = buildCitations(
+      { works: [raw] },
+      {
+        power: "standard",
+        slug: "t",
+        blocks: [body],
+        sourceHash: "moved",
+        elapsedMs: 1,
+        inherit,
+        drops: emptyDrops(),
+        scores: noScoreDrops(),
+      },
+    );
+    expect(second.citations[0]?.id).toBe(row.id);
+  });
 });
 
 /* ------------------------------------------------------------- scores -- */
@@ -523,8 +756,113 @@ describe("scores the prompt required and did not get", () => {
       [body],
     );
     expect(rows).toHaveLength(3);
-    expect(scores).toEqual({ relevanceAbsent: 1, relevanceRejected: 2, influenceAbsent: 0, influenceRejected: 1 });
+    expect(scores).toEqual({
+      relevanceAbsent: 1,
+      relevanceRejected: 2,
+      influenceAbsent: 0,
+      influenceRejected: 1,
+      influenceUnknown: 0,
+    });
     expect(rows.find((r) => r.title === "Jones")?.relevance).toBeUndefined();
+  });
+});
+
+/* Plan 261003m stage 1. Greg, 2026-10-03: "Maybe if the model is confident
+   (e.g. because it's well-known), but if in doubt default to Unknown." */
+describe("influence: a number when the model is confident, null when it is not", () => {
+  const body = block("spya-body07", "Smith (2019) and Jones (2020) and Lee (2021) and Park (2022).");
+  const at = (quote: string) => ({ mentions: [{ block: body.id, quote }] });
+
+  it("null is unknown: absent on the row, and counted apart from left-out and out-of-range", () => {
+    const { rows, scores } = build(
+      [
+        { title: "Smith", why: "a", relevance: 0.6, influence: null, ...at("Smith (2019)") },
+        { title: "Jones", why: "b", relevance: 0.6, influence: 0.9, ...at("Jones (2020)") },
+        { title: "Lee", why: "c", relevance: 0.6, influence: 1.5, ...at("Lee (2021)") },
+        { title: "Park", why: "d", relevance: 0.6, ...at("Park (2022)") },
+      ],
+      [body],
+    );
+    expect(rows).toHaveLength(4);
+    const smith = rows.find((r) => r.title === "Smith")!;
+    expect("influence" in smith, "unknown is an absent field, not a stored null or zero").toBe(false);
+    expect(smith.relevance).toBe(0.6);
+    expect(rows.find((r) => r.title === "Jones")?.influence).toBe(0.9);
+    expect("influence" in rows.find((r) => r.title === "Lee")!).toBe(false);
+    expect(scores).toEqual({
+      relevanceAbsent: 0,
+      relevanceRejected: 0,
+      influenceAbsent: 1,
+      influenceRejected: 1,
+      influenceUnknown: 1,
+    });
+  });
+
+  it("a null relevance is still a rejected score: only influence may be unknown", () => {
+    const { scores } = build(
+      [{ title: "Smith", why: "a", relevance: null, influence: null, ...at("Smith (2019)") }],
+      [body],
+    );
+    expect(scores.relevanceRejected).toBe(1);
+    expect(scores.influenceUnknown).toBe(1);
+    expect(scores.influenceRejected).toBe(0);
+  });
+
+  it("zero is a number the model gave, not unknown", () => {
+    const { rows, scores } = build(
+      [{ title: "Smith", why: "a", relevance: 0.6, influence: 0, ...at("Smith (2019)") }],
+      [body],
+    );
+    expect(rows[0]?.influence).toBe(0);
+    expect(scores.influenceUnknown).toBe(0);
+  });
+
+  it("two drafts of one work fold to the known influence, whichever comes first", () => {
+    for (const order of [
+      [null, 0.7],
+      [0.7, null],
+    ] as const) {
+      const { rows, scores } = build(
+        order.map((influence, i) => ({
+          title: "Smith on memory",
+          authors: "Smith",
+          year: "2019",
+          why: "a",
+          relevance: 0.6,
+          influence,
+          ...at(i === 0 ? "Smith (2019)" : "Smith"),
+        })),
+        [body],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.influence).toBe(0.7);
+      expect(scores.influenceUnknown).toBe(1);
+    }
+  });
+});
+
+describe("the list's answer schema", () => {
+  const work = CITATIONS_OUTPUT_SCHEMA.properties.works.items;
+
+  it("requires influence on every row, as a number or null", () => {
+    expect(work.required).toContain("influence");
+    expect(work.required).toContain("relevance");
+    expect(work.properties.influence).toEqual({ type: ["number", "null"] });
+    expect(work.properties.relevance, "relevance is never unknown").toEqual({ type: "number" });
+  });
+
+  it("passes Anthropic's validator whole, and the required-nullable field passes OpenAI's stricter one", () => {
+    expect(() => validateAnthropicJsonSchema(CITATIONS_OUTPUT_SCHEMA)).not.toThrow();
+    /* The list schema has optional fields (authors, year, …) and goes on the
+       Messages wire, so only the new field's shape is put to the chat subset. */
+    expect(() =>
+      validateOpenAiJsonSchema({
+        type: "object",
+        properties: { influence: work.properties.influence },
+        required: ["influence"],
+        additionalProperties: false,
+      }),
+    ).not.toThrow();
   });
 });
 
@@ -616,6 +954,18 @@ function tree(): Tree {
 }
 
 describe("generateCitations", () => {
+  it("inherits a unique legacy search row's id after dropping its unsupported author and year", async () => {
+    const body = block("spya-b00001", "The Bitter Lesson is cited here.");
+    const raw = { title: "The Bitter Lesson", authors: "Sutton", year: "2019", why: "x", ...scored, mentions: [{ block: body.id, quote: "The Bitter Lesson" }] };
+    const previous = build([raw], [block(body.id, `${body.text} Sutton (2019).`)]).citations;
+    answer = JSON.stringify({ works: [raw] });
+    stop = "end_turn";
+    const run = await generateCitations({ power: "standard", article: { blocks: [body], tree: tree(), meta: null } as never, previous, referenceList: null });
+    expect(run.citations.citations[0]?.id).toBe(previous.citations[0]?.id);
+    expect(run.citations.citations[0]?.authors).toBeUndefined();
+    expect(run.citations.citations[0]?.year).toBeUndefined();
+  });
+
   it("writes the artefact, stamped, from a stubbed answer", async () => {
     stop = "end_turn";
     answer = JSON.stringify({
@@ -630,6 +980,58 @@ describe("generateCitations", () => {
     expect(sent?.output_config?.format).toEqual({ type: "json_schema", schema: CITATIONS_OUTPUT_SCHEMA });
   });
 
+  describe("SPIDERYARN_PIPELINE_EFFORT at this call site", () => {
+    /* One of the three places that read the variable, each with its own
+       fallback (here `medium`). All three go through `pipelineEffortOverride`
+       in src/models.ts since 2026-10-04; before that this one cast the raw
+       string, so an empty value or a typo went to the provider as the effort.
+       tests/pipeline-effort-override.test.ts has the parser's own table. */
+    const NAME = "SPIDERYARN_PIPELINE_EFFORT";
+    const run = () => {
+      stop = "end_turn";
+      sent = null;
+      answer = JSON.stringify({
+        capped: false,
+        works: [{ title: "Silk", why: "Its model.", ...scored, reference: { block: "spya-n00001", quote: "Porter, D. (2005)" } }],
+      });
+      return generateCitations({ power: "standard", article: { blocks: BLOCKS, tree: tree(), meta: null } as never, previous: null, referenceList: null });
+    };
+    const withEnv = async (value: string | undefined, body: () => Promise<void>) => {
+      const before = process.env[NAME];
+      if (value === undefined) delete process.env[NAME];
+      else process.env[NAME] = value;
+      try {
+        await body();
+      } finally {
+        if (before === undefined) delete process.env[NAME];
+        else process.env[NAME] = before;
+      }
+    };
+
+    it("keeps its own medium when the variable is unset or empty", async () => {
+      for (const value of [undefined, ""]) {
+        await withEnv(value, async () => {
+          await run();
+          expect(sent?.output_config?.effort, String(value)).toBe("medium");
+        });
+      }
+    });
+
+    it("takes a valid override", async () => {
+      await withEnv("high", async () => {
+        await run();
+        expect(sent?.output_config?.effort).toBe("high");
+      });
+    });
+
+    it("refuses a typo before anything is sent", async () => {
+      await withEnv("hgih", async () => {
+        await expect(run()).rejects.toThrow(NAME);
+        expect(sent).toBeNull();
+      });
+    });
+  });
+
   it("a truncated answer is a truncation failure, not a short list", async () => {
     stop = "max_tokens";
     answer = '{"works": [{"title": "Si';
@@ -641,6 +1043,20 @@ describe("generateCitations", () => {
 });
 
 describe("the prompt", () => {
+  it("is citations/6, and asks for influence only when the model is confident it knows the work", () => {
+    expect(PROMPT_VERSION).toBe("citations/6");
+    const said = systemPrompt().replace(/\s+/g, " ");
+    expect(said).toMatch(/"influence"[^.]*\bnull\b/);
+    expect(said).toMatch(/in doubt[^.]*null/i);
+    /* citations/5's instruction, which made "I do not know it" and "it is
+       obscure" the same number. */
+    expect(said).not.toMatch(/say so with a low number/i);
+    expect(said).not.toMatch(/or you do not know it/i);
+    expect(said).not.toMatch(/Both scores are required/i);
+    /* The example must not teach a number for it: 0.0 was the old placeholder. */
+    expect(said).toMatch(/"influence": null/);
+  });
+
   it("carries the shared plain-words rule, and forbids addresses", () => {
     expect(systemPrompt()).toContain(plainWords("explain"));
     expect(systemPrompt()).toMatch(/Never write a URL, a DOI/);
@@ -939,6 +1355,24 @@ describe("a DOI or arXiv id in a PDF's reference-list entry", () => {
     expect(linkOf(`${CHEN}. https://doi.org/10.1038/nn.4450`).url).toBe("https://doi.org/10.1038/nn.4450");
   });
 
+  it("keeps a search for malformed Unicode in a PDF entry instead of repairing its DOI", () => {
+    expect(linkOf(`${CHEN}. doi:10.1234/a\uD800b`).linkFrom).toBe("search");
+  });
+
+  it("inherits a legacy percent DOI by its stored key even though reading its old URL is ambiguous", () => {
+    const entry = `${CHEN}. doi:10.1234/a%2Fb`;
+    const previous = run(entry);
+    const old = previous.citations[0]!;
+    /* The old writer pasted the literal DOI; its persisted key recorded that
+       DOI, even though decoding its URL now reads a/b. */
+    old.url = "https://doi.org/10.1234/a%2Fb";
+    expect(old.key).toBe("doi:10.1234/a%2fb");
+    expect(keysOf(old).idKey).toBe("doi:10.1234/a/b");
+    const current = run(entry, idsByKey(previous)).citations[0]!;
+    expect(current.url).toBe("https://doi.org/10.1234/a%252Fb");
+    expect(current.id).toBe(old.id);
+  });
+
   it("one arXiv id, either shape, becomes arxiv.org/abs", () => {
     expect(linkOf(`${CHEN}. arXiv:1706.03762v5.`)).toEqual({
       url: "https://arxiv.org/abs/1706.03762",
@@ -1152,6 +1586,257 @@ describe("numbered cites", () => {
   it("keeps a citation before a page locator and ignores years and figure labels", () => {
     expect([...markerNumbers(["the result [8, p. 12]"])]).toEqual([8]);
     expect([...markerNumbers(["the 2019 sample [2019]", "the apparatus [Fig. 3]"])]).toEqual([]);
+  });
+});
+
+/* Plan 261004j: a biomedical / Nature-style paper cites with a superscript
+   number, which the PDF transcription stores glued to the word — as superscript
+   characters or as plain digits. Read only when the article has no notes. */
+describe("glued and superscript cites", () => {
+  const glued = (...quotes: string[]) => [...markerNumbers(quotes, true)].sort((a, b) => a - b);
+
+  it("are not read unless asked — the bracket rule alone, as before", () => {
+    expect([...markerNumbers(["reduced mortality.¹", "in a number of previous studies15"])]).toEqual([]);
+  });
+
+  it("reads a superscript run glued to a word or to sentence punctuation", () => {
+    expect(glued("reduced mortality.¹")).toEqual([1]);
+    expect(glued("effective in prevention.²")).toEqual([2]);
+    expect(glued("role in metastatic disease.³⁻⁵")).toEqual([3, 4, 5]);
+    expect(glued("ischemia.²⁸,²⁹")).toEqual([28, 29]);
+  });
+
+  it("reads plain digits glued to a lower-case word, with the list and range after them", () => {
+    expect(glued("lesions disrupt this pattern5,51")).toEqual([5, 51]);
+    expect(glued("in a number of previous studies15")).toEqual([15]);
+    expect(glued("a model of the environment15,24")).toEqual([15, 24]);
+    expect(glued("Wells et al.18")).toEqual([18]);
+    expect(glued("(from23)")).toEqual([23]);
+    expect(glued("as shown before17, 19–21")).toEqual([17, 19, 20, 21]);
+    expect(glued("as Smith (2020) found)4 and “so it goes”7")).toEqual([4, 7]);
+  });
+
+  it("does not read a name, a formula, a quantity or a year as a cite", () => {
+    expect(glued("activation of p38 and of p53")).toEqual([]);
+    expect(glued("CO2 and BRCA1 and H2O2 and IL6")).toEqual([]);
+    expect(glued("published in 2020.")).toEqual([]);
+    expect(glued("a ratio of 3.5", "rose by 12.5%", "version.3.5")).toEqual([]);
+    expect(glued("about 1,000 cells", "in 12 patients")).toEqual([]);
+    expect(glued("the 1990s", "since 2019", "the sample2019")).toEqual([]);
+    expect(glued("an area of 5 cm² and 3 m2", "at mol⁻¹", "R² = 0.4")).toEqual([]);
+    expect(glued("the dose5mg", "rose12%", "types3a and 3b", "a ratio of 3:1")).toEqual([]);
+    expect(glued("see Fig.3 and Eq.2")).toEqual([]);
+  });
+
+  it("does not read the numbers inside delimited maths as cites", () => {
+    expect(glued(String.raw`Use \(\log2(x)\) before the transformation.`)).toEqual([]);
+    expect(glued(String.raw`The exponent is \(f(x)2\), not an entry.`)).toEqual([]);
+    expect(glued(String.raw`The claim \(f(x)2\) follows earlier studies15.`)).toEqual([15]);
+  });
+
+  it("keeps the cite and leaves a quantity that follows a prose comma", () => {
+    expect(glued("in earlier studies15, 20 patients were")).toEqual([15]);
+    expect(glued("in earlier studies15, 20 mg daily")).toEqual([15]);
+  });
+
+  it("reads a quote that has a bracketed cite by the bracket rule only", () => {
+    expect(glued("earlier studies15 and TV episodes [8]")).toEqual([8]);
+  });
+
+  describe("pairing an entry", () => {
+    const ENTRY_8 =
+      "8. Chen, J. et al. (2017) Shared memories reveal shared structure in neural activity across individuals. Nat. Neurosci. 20, 115–125";
+    const ENTRY_9 =
+      "9. Baldassano, C. and Chen, J. (2017a) Discovering event structure in continuous narrative perception and memory. Neuron 95, 709–721";
+    const LIST: NumberedReferenceList = { entries: new Map([[8, ENTRY_8], [9, ENTRY_9]]) };
+    const BODY = block("spya-b00001", "People recall TV episodes in a number of previous studies8 in detail.");
+    const NOTED = block("spya-n00001", "8 A remark the author put at the foot of the page.", { role: "footnote" });
+
+    function paired(entry: number, blocks: Block[]) {
+      const drops = emptyDrops();
+      const citations = buildCitations(
+        {
+          capped: false,
+          works: [
+            {
+              title: "Shared memories reveal shared structure in neural activity across individuals",
+              authors: "Chen et al.",
+              year: "2017",
+              why: "Evidence that recall of a TV episode is shared across people.",
+              ...scored,
+              mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+              entry,
+            },
+          ],
+        },
+        {
+          power: "standard",
+          slug: "t",
+          blocks,
+          sourceHash: "h.h",
+          elapsedMs: 1,
+          inherit: null,
+          drops,
+          scores: noScoreDrops(),
+          referenceList: LIST,
+        },
+      );
+      return { row: citations.citations[0], drops };
+    }
+
+    it("attaches the entry a glued number cites, in an article with no notes", () => {
+      const { row, drops } = paired(8, [BODY]);
+      expect(row?.entry).toBe(ENTRY_8);
+      expect(row?.authors).toBe("Chen et al.");
+      expect(drops.entryMismatch).toBe(0);
+    });
+
+    it("still refuses the neighbour's entry — 9 for a work cited studies8", () => {
+      const { row, drops } = paired(9, [BODY]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("ignores glued numbers when the article has notes: they may be note markers", () => {
+      const { row, drops } = paired(8, [BODY, NOTED]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("ignores glued numbers when only a note id survives on a block", () => {
+      const identified = block("spya-n00002", "A note without its role.", { noteId: "spya-note-0123456789" });
+      const { row, drops } = paired(8, [BODY, identified]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    /* GPT Sol's C5 (review of 261004j): a note the extraction left out or did
+       not recognise leaves no block behind, so "no notes" cannot be read off
+       the blocks alone. A paper that really cites by glued numbers cites most
+       of its list that way; one stray glued number against a ten-entry list is
+       a footnote's marker far more often than a reference. */
+    it("ignores glued numbers that cover little of the reference list", () => {
+      const entries = new Map<number, string>();
+      for (let n = 1; n <= 10; n++) entries.set(n, `${n}. Author${n}, A. (2001) A different work number ${n}. J. Mem. ${n}, 1–9`);
+      entries.set(8, ENTRY_8);
+      const drops = emptyDrops();
+      const drafts = toDrafts(
+        [
+          {
+            title: "Shared memories reveal shared structure in neural activity across individuals",
+            authors: "Chen et al.",
+            year: "2017",
+            why: "Evidence.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+            entry: 8,
+          },
+        ],
+        [BODY],
+        drops,
+        noScoreDrops(),
+        { entries },
+      );
+      expect(drafts[0]?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+
+    it("…and reads them when the body cites at least half the list that way", () => {
+      const entries = new Map<number, string>();
+      for (let n = 1; n <= 10; n++) entries.set(n, `${n}. Author${n}, A. (2001) A different work number ${n}. J. Mem. ${n}, 1–9`);
+      entries.set(8, ENTRY_8);
+      const more = block("spya-b00003", "Earlier work1–4 and a later review6,7 agree.");
+      const drops = emptyDrops();
+      const drafts = toDrafts(
+        [
+          {
+            title: "Shared memories reveal shared structure in neural activity across individuals",
+            authors: "Chen et al.",
+            year: "2017",
+            why: "Evidence.",
+            ...scored,
+            mentions: [{ block: "spya-b00001", quote: "previous studies8" }],
+            entry: 8,
+          },
+        ],
+        [BODY, more],
+        drops,
+        noScoreDrops(),
+        { entries },
+      );
+      expect(drafts[0]?.entry).toBe(ENTRY_8);
+    });
+
+    it("…and when a body block carries a note marker", () => {
+      const marked = block("spya-b00002", "A remark.", { html: `<p>A remark.<sup ${REF_ATTR}="spya-n00009">1</sup></p>` });
+      const { row, drops } = paired(8, [BODY, marked]);
+      expect(row?.entry).toBeUndefined();
+      expect(drops.entryMismatch).toBe(1);
+    });
+  });
+
+  /* The model's quote usually stops just before the superscript: on the real
+     paper, 1 mention in about 30 ended with its marker, and nothing was kept.
+     So the marker is also read from the block, straight after the quote. */
+  describe("the marker straight after the quoted words", () => {
+    const TEXT =
+      "Adjuvant tamoxifen lowered recurrence and reduced mortality.¹ It is effective in prevention.² " +
+      "It has a role in metastatic disease.³⁻⁵ Resistance involves p38 signalling in most tumours11,15 and more. " +
+      "It was given to 12 patients. Again it was given to more, and it was given to others7 too, and to others again.";
+    const B = block("spya-b00001", TEXT);
+    const LIST: NumberedReferenceList = {
+      entries: new Map(Array.from({ length: 40 }, (_, i) => [i + 1, `${i + 1}. An entry`])),
+    };
+    const at = (quote: string, start = TEXT.indexOf(quote)) => ({ blockId: B.id, quote, start });
+    /** The entry numbers, 1–40, that these mentions verify. */
+    function verified(mentions: ReturnType<typeof at>[], blocks: Block[] = [B]): number[] {
+      const byId = new Map(blocks.map((b) => [b.id as string, b]));
+      const glued = !blocks.some((b) => b.role === "footnote");
+      return [...LIST.entries.keys()].filter(
+        (n) => verifyEntry(n, LIST, mentions, emptyDrops(), glued, byId) !== null,
+      );
+    }
+
+    it("is read when the quote stops before it", () => {
+      expect(verified([at("reduced mortality")])).toEqual([1]);
+      expect(verified([at("effective in prevention")])).toEqual([2]);
+      expect(verified([at("role in metastatic disease")])).toEqual([3, 4, 5]);
+      expect(verified([at("p38 signalling in most tumours")])).toEqual([11, 15]);
+    });
+
+    it("…and still when the quote includes it", () => {
+      expect(verified([at("reduced mortality.¹")])).toEqual([1]);
+    });
+
+    it("reads nothing that is not glued to the end of the quoted words", () => {
+      expect(verified([at("Resistance involves p")])).toEqual([]);
+      expect(verified([at("It was given to")])).toEqual([]);
+      expect(verified([at("recurrence and reduced")])).toEqual([]);
+      expect(verified([at("p38 signalling in most")])).toEqual([]);
+    });
+
+    it.each([
+      ["The earlier studies15 were conclusive.", "earlier studies1", [15]],
+      ["The prescribed dose5mg was used.", "prescribed dose5", []],
+      ["The effect rose12% overall.", "effect rose12", []],
+      ["The lesion covers area5 cm².", "lesion covers area5", []],
+    ])("reads a partial quoted number in its block context: %s", (text, quote, expected) => {
+      const body = block(B.id, text);
+      expect(verified([{ blockId: B.id, quote, start: text.indexOf(quote) }], [body])).toEqual(expected);
+    });
+
+    it("reads nothing when the offset is wrong and the quote repeats, and finds a lone quote anyway", () => {
+      expect(verified([at("it was given to others")])).toEqual([7]);
+      expect(verified([at("it was given to others", 3)])).toEqual([7]);
+      expect(verified([at("to others", 3)])).toEqual([]);
+      expect(verified([at("to others", TEXT.indexOf("to others"))])).toEqual([7]);
+      expect(verified([at("to others", TEXT.lastIndexOf("to others"))])).toEqual([]);
+    });
+
+    it("is not read in an article with notes", () => {
+      const noted = block("spya-n00001", "1 A remark at the foot of the page.", { role: "footnote" });
+      expect(verified([at("reduced mortality")], [B, noted])).toEqual([]);
+    });
   });
 });
 

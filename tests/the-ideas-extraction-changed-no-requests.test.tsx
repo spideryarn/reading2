@@ -36,12 +36,13 @@ import type { PublicArticle, PublicSketch } from "../src/public-types.js";
 /* The word on each button, so a press can be aimed at a named mode without a
    second copy of the mode-to-label mapping here. src/title-text.ts. */
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 /**
@@ -236,6 +237,7 @@ const ARTICLE: PublicArticle = {
      what the publisher-host assertions below are measured against. */
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   blocks: [
     {
       id: "spya-aaaaaa",
@@ -618,7 +620,9 @@ type Entry = { url: string; method: string; auth: string | null; repeated?: true
 type Shape = { url: string; method: string; auth: string | null };
 
 /**
- * **The only normalisation, and it is the same rule the capture ran under** —
+ * **The only normalisation here (one more is in `captured`, for reading
+ * time's read — `READING_TIME` below), and it is the same rule the capture ran
+ * under** —
  * docs/plans/260905h-traces.md § The normalisation rule.
  *
  * Consecutive `/api/jobs` polls collapse into one entry carrying
@@ -699,6 +703,24 @@ const ARRIVAL: Shape[] = [
 ];
 
 /**
+ * **Reading time's opening read: in every trace exactly once, and at no fixed
+ * place.** New for every owner on 2026-10-05, when Greg took reading time out
+ * from behind the experimental switch (docs/project/reading-time.md § Who gets
+ * it); until then it went out only with the switch on, which these traces
+ * never had. One cheap GET per owned article view and no model call.
+ *
+ * **It is the second thing this file does not hold in sequence, after the
+ * `/api/jobs` cadence, and for the same kind of reason.** The hook holds the
+ * read back behind an awaited gate (src/web/useReadingTime.ts §
+ * `waitForReadingTimeWrites`), so where it lands among the others is a fact
+ * about scheduling: with the request frozen straight after the record-open
+ * POST, the same arrival passed in one case and failed in the next. So
+ * `captured` lifts it out and asserts the count instead. Once, not twice: the
+ * StrictMode pass that is torn down never sends.
+ */
+const READING_TIME = `/api/reading-time/${SLUG}`;
+
+/**
  * The four hooks the reading view mounts for its owner, plus `useArc`.
  *
  * **`/api/quotes/` is the fourth, and it is new on 2026-09-08.** Greg asked for
@@ -764,8 +786,17 @@ const READING_VIEW: Shape[] = [
   GET(`/api/chat/${SLUG}?summary=1`),
 ];
 
+/**
+ * **The command bar's read of why you are reading**, since 2026-10-05 (plan
+ * 261005k): one `GET /api/reader?slug=` when the owner's reading view mounts,
+ * so the bar's *Suggest what to do here* row is already there, and first, when
+ * the bar opens. Added on purpose and counted here. It is not `useHasProfile`
+ * come back (below): that one read before every artefact; this is once a view.
+ */
+const WHY_READING = GET(`/api/reader?slug=${SLUG}`);
+
 /** The plain reading view, with no band open. */
-const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader")];
+const PLAIN: Shape[] = [...ARRIVAL, ...READING_VIEW, GET("/api/reader"), WHY_READING];
 
 /**
  * The same, then the Ideas artefact twice over — once per StrictMode effect
@@ -808,15 +839,21 @@ const CHAT: Shape[] = [
   GET(`/api/comments/${SLUG}?anchors=whole-block`),
   GET(`/api/chat/${SLUG}?summary=1`),
   GET("/api/reader"),
+  WHY_READING,
 ];
 
 const OWNER = { id: "owner-1", email: "greg@example.com" };
 
 /** The captured sequence, and the positive control that it captured anything. */
 function captured(): Shape[] {
-  const entries = normalise(trace).map(shape);
-  expect(entries.length, "the harness captured no requests at all").toBeGreaterThan(0);
-  return entries;
+  const all = normalise(trace).map(shape);
+  expect(all.length, "the harness captured no requests at all").toBeGreaterThan(0);
+  /* Counted here and lifted out of the sequence — `READING_TIME` above. */
+  expect(
+    all.filter((r) => r.url === READING_TIME),
+    "reading time is read once per owned article view",
+  ).toEqual([GET(READING_TIME)]);
+  return all.filter((r) => r.url !== READING_TIME);
 }
 
 describe("the request trace of a mode is the whole of it, in order", () => {
@@ -837,10 +874,10 @@ describe("the request trace of a mode is the whole of it, in order", () => {
        is what arms an activation token — the same gesture
        tests/modes-that-start-themselves.test.tsx and the owner cases in
        tests/public-network-trace.test.tsx make. */
-    const ideas = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === MODE_LABEL.ideas,
-    );
-    expect(ideas, "the bar must draw Ideas").toBeDefined();
+    /* Ideas is under More since 2026-10-07 (plan 261007c); a pick there arms
+       exactly as the bar button did. */
+    const ideas = modeDoor(host, MODE_LABEL.ideas);
+    expect(ideas, "the bar must offer Ideas").toBeDefined();
     await act(async () => ideas?.click());
     await settle();
 

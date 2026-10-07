@@ -1,0 +1,290 @@
+{
+  "arm": "high-none-brief100b",
+  "effort": "high",
+  "pitch": 15,
+  "slug": "dodo-spya-nyc4ud",
+  "version": "simple-prompt/9",
+  "sourceSha256": "b0a939a218811f37a9b2f934476a1ac1382de9813e5ac75cbb5ed80f02837d7c",
+  "at": "2026-10-05T16:58:23.725Z",
+  "bodyWords": 12143,
+  "band": "standard",
+  "bodyBlocks": 251,
+  "model": "anthropic/claude-opus-5.5",
+  "articleHash": "8cb613028679578b",
+  "systemsSha256": "a6b4a48042cd62fff6d631a84fdad452b039fe717748100fd418112070fbcf3f",
+  "power": "high",
+  "guard": true,
+  "wallMs": 37005,
+  "costUsd": 0.116602,
+  "tokens": {
+    "input": 12921,
+    "output": 4776,
+    "reasoning": 2297
+  },
+  "briefReadyMs": 25686,
+  "fullerReadyMs": 36999,
+  "ok": true,
+  "reader": "none",
+  "fullerWords": 457,
+  "briefWords": 137,
+  "fuller": [
+    {
+      "text": "This encyclopedia article is about the dodo, an extinct bird that could not fly and lived only on Mauritius, an island in the Indian Ocean. It covers how scientists classified the bird, what it looked like, how it lived, how it died out, and what remains of it. The dodo belonged to the pigeon and dove family, and its closest living relative is the Nicobar pigeon.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article is about the dodo, an extinct bird that could not fly and lived only on Mauritius, an island in the Indian Ocean.",
+          "id": "spya-yksdv0",
+          "key": "extinct bird that could not fly"
+        },
+        {
+          "text": "It covers how scientists classified the bird, what it looked like, how it lived, how it died out, and what remains of it.",
+          "id": null
+        },
+        {
+          "text": "The dodo belonged to the pigeon and dove family, and its closest living relative is the Nicobar pigeon.",
+          "id": "spya-yksdv0"
+        }
+      ]
+    },
+    {
+      "text": "The article says the dodo matters because it vanished less than a century after Dutch sailors first recorded it in 1598. That loss drew attention to a problem nobody had noticed before: humans can wipe out a whole species. It was first used as an example of human-caused extinction in 1833, and has since been called an \"icon of extinction\".",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-jnkm7z"
+      ],
+      "sentences": [
+        {
+          "text": "The article says the dodo matters because it vanished less than a century after Dutch sailors first recorded it in 1598.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "That loss drew attention to a problem nobody had noticed before: humans can wipe out a whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans can wipe out a whole species"
+        },
+        {
+          "text": "It was first used as an example of human-caused extinction in 1833, and has since been called an \"icon of extinction\".",
+          "id": "spya-jnkm7z"
+        }
+      ]
+    },
+    {
+      "text": "Our knowledge rests on three thin kinds of evidence. About twenty 17th-century pictures exist, but only sketches from the Dutch ship Gelderland are known to show living or freshly killed birds. Only a few remains of birds taken to Europe survive, and a dried head at Oxford is the only soft tissue left. Subfossil bones, meaning old bones not yet turned fully to stone, came mostly from the Mare aux Songes swamp, which held over 300 dodos.",
+      "ids": [
+        "spya-kdjnw7",
+        "spya-u26jjs",
+        "spya-ras4ad"
+      ],
+      "sentences": [
+        {
+          "text": "Our knowledge rests on three thin kinds of evidence.",
+          "id": null
+        },
+        {
+          "text": "About twenty 17th-century pictures exist, but only sketches from the Dutch ship Gelderland are known to show living or freshly killed birds.",
+          "id": "spya-kdjnw7"
+        },
+        {
+          "text": "Only a few remains of birds taken to Europe survive, and a dried head at Oxford is the only soft tissue left.",
+          "id": "spya-u26jjs"
+        },
+        {
+          "text": "Subfossil bones, meaning old bones not yet turned fully to stone, came mostly from the Mare aux Songes swamp, which held over 300 dodos.",
+          "id": "spya-ras4ad",
+          "key": "over 300 dodos"
+        }
+      ],
+      "list": true
+    },
+    {
+      "text": "Early scientists guessed the dodo was an ostrich, a rail, an albatross or a vulture. In the 1840s, studies of its skull, head and foot showed it shared features found only in pigeons. DNA tests in 2002 supported this and pointed to the Nicobar pigeon as its nearest living relative. The article warns that this DNA came from one damaged specimen, so the results still need checking.",
+      "ids": [
+        "spya-mqwjb3",
+        "spya-dbqyy9",
+        "spya-fva080"
+      ],
+      "sentences": [
+        {
+          "text": "Early scientists guessed the dodo was an ostrich, a rail, an albatross or a vulture.",
+          "id": "spya-mqwjb3"
+        },
+        {
+          "text": "In the 1840s, studies of its skull, head and foot showed it shared features found only in pigeons.",
+          "id": "spya-mqwjb3"
+        },
+        {
+          "text": "DNA tests in 2002 supported this and pointed to the Nicobar pigeon as its nearest living relative.",
+          "id": "spya-dbqyy9"
+        },
+        {
+          "text": "The article warns that this DNA came from one damaged specimen, so the results still need checking.",
+          "id": "spya-fva080"
+        }
+      ]
+    },
+    {
+      "text": "Dodos stood about 62.6–75 cm tall, and wild birds may have weighed 10.6–17.5 kg, though weight estimates are still debated. The famous fat, clumsy image may be exaggerated, since many old paintings probably showed overfed captive birds or badly stuffed ones. A 2016 brain cast suggested the dodo was probably about as intelligent as modern pigeons, against its reputation.",
+      "ids": [
+        "spya-w2anzw",
+        "spya-naj2n2",
+        "spya-rzgebh"
+      ],
+      "sentences": [
+        {
+          "text": "Dodos stood about 62.6–75 cm tall, and wild birds may have weighed 10.6–17.5 kg, though weight estimates are still debated.",
+          "id": "spya-w2anzw",
+          "key": "62.6–75 cm tall"
+        },
+        {
+          "text": "The famous fat, clumsy image may be exaggerated, since many old paintings probably showed overfed captive birds or badly stuffed ones.",
+          "id": "spya-naj2n2"
+        },
+        {
+          "text": "A 2016 brain cast suggested the dodo was probably about as intelligent as modern pigeons, against its reputation.",
+          "id": "spya-rzgebh"
+        }
+      ]
+    },
+    {
+      "text": "Hunting by sailors was not the main cause of extinction, the article says. Animals that people brought, especially pigs and monkeys, raided nests and competed for food, while forests were cut down. The last widely accepted sighting was in 1662, but a 2003 statistical study estimated extinction in 1693, likely between 1688 and 1715. Some researchers argue that later \"dodo\" reports really described another flightless bird, the red rail.",
+      "ids": [
+        "spya-rdu8bv",
+        "spya-h0vyww",
+        "spya-sm68v6"
+      ],
+      "sentences": [
+        {
+          "text": "Hunting by sailors was not the main cause of extinction, the article says.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "Animals that people brought, especially pigs and monkeys, raided nests and competed for food, while forests were cut down.",
+          "id": "spya-rdu8bv",
+          "key": "especially pigs and monkeys"
+        },
+        {
+          "text": "The last widely accepted sighting was in 1662, but a 2003 statistical study estimated extinction in 1693, likely between 1688 and 1715.",
+          "id": "spya-h0vyww"
+        },
+        {
+          "text": "Some researchers argue that later \"dodo\" reports really described another flightless bird, the red rail.",
+          "id": "spya-sm68v6"
+        }
+      ]
+    },
+    {
+      "text": "The article concludes that the dodo's exact look and behaviour remain unresolved, because the pictures disagree and records are brief. Still, it is now thought to have been well suited to its island, not a doomed, clumsy creature. It was probably gone by 1700, and its role in Alice's Adventures in Wonderland made it a lasting symbol of extinction.",
+      "ids": [
+        "spya-tre7b7",
+        "spya-nfhcvx",
+        "spya-w59b0k"
+      ],
+      "sentences": [
+        {
+          "text": "The article concludes that the dodo's exact look and behaviour remain unresolved, because the pictures disagree and records are brief.",
+          "id": "spya-tre7b7"
+        },
+        {
+          "text": "Still, it is now thought to have been well suited to its island, not a doomed, clumsy creature.",
+          "id": "spya-tre7b7"
+        },
+        {
+          "text": "It was probably gone by 1700, and its role in Alice's Adventures in Wonderland made it a lasting symbol of extinction.",
+          "id": "spya-nfhcvx"
+        }
+      ]
+    }
+  ],
+  "brief": [
+    {
+      "text": "This encyclopedia article is about the dodo, a large bird that could not fly and is now extinct. It lived only on Mauritius, an island in the Indian Ocean, and belonged to the pigeon family. It died out less than a century after people first found it. That made people notice, for the first time, that humans could wipe out whole species.",
+      "ids": [
+        "spya-yksdv0",
+        "spya-ae8a2x"
+      ],
+      "sentences": [
+        {
+          "text": "This encyclopedia article is about the dodo, a large bird that could not fly and is now extinct.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "It lived only on Mauritius, an island in the Indian Ocean, and belonged to the pigeon family.",
+          "id": "spya-yksdv0"
+        },
+        {
+          "text": "It died out less than a century after people first found it.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "That made people notice, for the first time, that humans could wipe out whole species.",
+          "id": "spya-ae8a2x",
+          "key": "humans could wipe out whole species"
+        }
+      ]
+    },
+    {
+      "text": "Sailors first wrote about the dodo in 1598, and the last widely accepted sighting was in 1662. Hunting by people was not the main cause of its end. Pigs, monkeys and other animals that people brought raided its nests and took its food, while people cut down its forests. It is often shown as fat and clumsy, but it was probably well suited to its home. Today the dodo is a famous symbol of extinction.",
+      "ids": [
+        "spya-ae8a2x",
+        "spya-rdu8bv",
+        "spya-tre7b7"
+      ],
+      "sentences": [
+        {
+          "text": "Sailors first wrote about the dodo in 1598, and the last widely accepted sighting was in 1662.",
+          "id": "spya-ae8a2x"
+        },
+        {
+          "text": "Hunting by people was not the main cause of its end.",
+          "id": "spya-rdu8bv",
+          "key": "not the main cause"
+        },
+        {
+          "text": "Pigs, monkeys and other animals that people brought raided its nests and took its food, while people cut down its forests.",
+          "id": "spya-rdu8bv"
+        },
+        {
+          "text": "It is often shown as fat and clumsy, but it was probably well suited to its home.",
+          "id": "spya-tre7b7"
+        },
+        {
+          "text": "Today the dodo is a famous symbol of extinction.",
+          "id": "spya-ae8a2x"
+        }
+      ]
+    }
+  ],
+  "dropped": {
+    "malformed": 0,
+    "empty": 0,
+    "emptySentences": 0,
+    "sentenceIds": 0,
+    "keys": 0,
+    "unknownIds": 0,
+    "duplicateIds": 0,
+    "overCap": 0,
+    "unanchored": 0
+  },
+  "check": {
+    "checker": "simple-check/1",
+    "requestedModel": "openai/gpt-5.6-luna",
+    "levels": {
+      "brief": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      },
+      "fuller": {
+        "result": "passed",
+        "attempts": 1,
+        "retriedAfterFlag": false,
+        "stored": 1
+      }
+    }
+  }
+}

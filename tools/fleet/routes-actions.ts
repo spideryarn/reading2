@@ -49,11 +49,13 @@
  * NO IMPORT SIDE EFFECTS: nothing at module scope runs a command, binds
  * anything, or reads the environment.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readlinkSync } from "node:fs";
 import type { IncomingHttpHeaders, IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { processProbeOwner, type ProbeOwner } from "./child.js";
 
 import {
   actionById,
@@ -135,6 +137,7 @@ import {
   type RateLimiter,
   type RouteErrorCode,
 } from "./routes-steer.js";
+import { externalWorktreeRoot, isWorktreeOfCheckout } from "../../scripts/worktree-roots.js";
 import type { FleetStatus } from "./status.js";
 import type { Delivery, RefusalCode, SteerTarget } from "./steer.js";
 
@@ -1133,7 +1136,7 @@ export function tailOf(text: string, lines = 4, max = 400): string {
  * Did this step pass its gate?
  *
  * The `never` on `pass.kind` is doing the same job as the one in
- * `describeAction`: a fourth kind of gate in actions.ts stops this compiling,
+ * `describeAction`: a new kind of gate in actions.ts stops this compiling,
  * rather than falling through to whichever branch happened to be last.
  *
  * **A timeout or a spawn failure is never a pass**, including for
@@ -1163,6 +1166,16 @@ export function judgeStep(step: Step, r: StepRun): { status: StepStatus; verdict
       return found
         ? { status: "passed", verdict: `its output contains '${wanted}'` }
         : { status: "failed", verdict: `its output does not contain '${wanted}'` };
+    }
+    case "stdout-has-record": {
+      if (!exitedZero) return { status: "failed", verdict: `${howItEnded}, so its output says nothing` };
+      const wanted = step.pass.record;
+      // Git's -z porcelain leaves path bytes alone. Spaces and newlines are
+      // part of a path, so neither trimming nor line splitting is safe here.
+      const found = r.stdout.split("\0").slice(0, -1).includes(wanted);
+      return found
+        ? { status: "passed", verdict: `its output contains the exact record '${wanted}'` }
+        : { status: "failed", verdict: `its output does not contain the exact record '${wanted}'` };
     }
     case "best-effort":
       return exitedZero
@@ -1343,6 +1356,22 @@ export function repoRoot(): string {
 const GRACE_MS = 5_000;
 
 /**
+ * How `listProcesses` reaches `ps`. Every field is optional and production
+ * passes none; a test passes a stand-in for `ps` that will not die, and a
+ * deadline short enough to wait for.
+ */
+export type ProcessListProbe = {
+  /** Default `processProbeOwner()` — the one registry this process shares. */
+  owner?: ProbeOwner;
+  /** Default `ps`, found on PATH. */
+  psBin?: string;
+  /** Default 10 s for each of the two `ps` calls. */
+  timeoutMs?: number;
+  /** The gap between SIGTERM and SIGKILL. Default: the owner's. */
+  graceMs?: number;
+};
+
+/**
  * The real thing.
  *
  * `execFile` with the plan's argv ARRAY, never a shell string, so a directory
@@ -1355,7 +1384,29 @@ const GRACE_MS = 5_000;
  * git holding a lock in a directory we were about to remove. So the child is
  * `detached`, and the deadline signals `-pid`.
  */
-export function realActionIo(): ActionIo {
+export function realActionIo(probe: ProcessListProbe = {}): ActionIo {
+  const psBin = probe.psBin ?? "ps";
+  const psTimeoutMs = probe.timeoutMs ?? 10_000;
+  // OWNED, NOT `execFileSync`. A synchronous call's `timeout` signals at the
+  // deadline and then goes on waiting, so a `ps` that would not die held every
+  // request this server had — on exactly the box somebody had opened this page
+  // to rescue. docs/postmortems/260910a-a-timeout-that-signals-and-then-waits-is-not-a-bound.md
+  //
+  // A `refused` here means an earlier `ps` under the same key is still
+  // unaccounted for. It is a failed scan like any other: "we do not know what
+  // is running", never an empty list.
+  const ps = async (key: string, args: readonly string[], maxBytes: number): Promise<string> => {
+    const outcome = await (probe.owner ?? processProbeOwner()).run({
+      key,
+      cmd: psBin,
+      args,
+      timeoutMs: psTimeoutMs,
+      maxBytes,
+      ...(probe.graceMs === undefined ? {} : { graceMs: probe.graceMs }),
+    });
+    if (outcome.kind !== "ok") throw new Error(outcome.why);
+    return outcome.stdout;
+  };
   return {
     runStep: (step, timeoutMs) =>
       new Promise<StepRun>((resolve) => {
@@ -1419,18 +1470,10 @@ export function realActionIo(): ActionIo {
       }),
 
     listProcesses: () =>
-      Promise.resolve().then((): ProcScan => {
+      Promise.resolve().then(async (): Promise<ProcScan> => {
         try {
-          const args = execFileSync("ps", ["-eo", "pid=,ppid=,rss=,etimes=,args="], {
-            encoding: "utf8",
-            timeout: 10_000,
-            maxBuffer: 32 * 1024 * 1024,
-          });
-          const comm = execFileSync("ps", ["-eo", "pid=,comm="], {
-            encoding: "utf8",
-            timeout: 10_000,
-            maxBuffer: 8 * 1024 * 1024,
-          });
+          const args = await ps("actions:ps-args", ["-eo", "pid=,ppid=,rss=,etimes=,args="], 32 * 1024 * 1024);
+          const comm = await ps("actions:ps-comm", ["-eo", "pid=,comm="], 8 * 1024 * 1024);
           const rows = parsePsArgs(args);
           // AN EMPTY PARSE IS AN ERROR, NOT AN EMPTY BOX. `ps` exiting 0 with
           // nothing we could read means we do not know what is running, and
@@ -1983,12 +2026,15 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
    *
    * The two plan functions get their `primaryDir` from us and everything else
    * from the row the person tapped. `worktreeDir` gets one bound this file adds
-   * on top of `planRemoveWorktree`'s: it must be under THIS checkout's
-   * `.claude/worktrees/`. `isUnderWorktreesDir` accepts that shape anywhere on
-   * the filesystem, which is right for a general-purpose guard and too loose
-   * for a route — step 2 runs `worktree:sweep` in our own checkout, so a
-   * worktree belonging to some other repo could never have been removed by it
-   * anyway, and refusing here says so instead of failing halfway.
+   * on top of `planRemoveWorktree`'s: an in-repo tree must be under THIS
+   * checkout's `.claude/worktrees/`. `isUnderWorktreesDir` accepts that shape
+   * anywhere on the filesystem, which is right for a general-purpose guard and
+   * too loose for a route. Removal runs in the checked directory, so the
+   * registration gate must prove it belongs to this repository first.
+   *
+   * The external root (`/var/tmp/spideryarn-worktrees/` on the box) gives no
+   * such bound: a path there says which tree, not whose. That is the plan's
+   * first step, which asks git — scripts/worktree-roots.ts has the list.
    */
   function planFor(req: SessionActionRequest, action: EnactedAction): { ok: true; plan: Plan } | { ok: false; code: ActionErrorCode; why: string } {
     const primaryDir = deps.primaryDir();
@@ -1996,12 +2042,11 @@ export function makeActionRoutes(overrides: Partial<ActionDeps> = {}): ActionRou
       if (req.worktreeDir === null || req.branch === null) {
         return { ok: false, code: "bad-request", why: "removing a worktree needs worktreeDir and branch, from the row you tapped" };
       }
-      const root = `${primaryDir.replace(/\/+$/, "")}/.claude/worktrees/`;
-      if (!req.worktreeDir.startsWith(root)) {
+      if (!isWorktreeOfCheckout(req.worktreeDir, primaryDir)) {
         return {
           ok: false,
           code: "plan-refused",
-          why: `'${req.worktreeDir}' is not under ${root}, and this server only removes worktrees of the checkout it is running from`,
+          why: `'${req.worktreeDir}' is not a plain path under ${primaryDir.replace(/\/+$/, "")}/.claude/worktrees/ or ${externalWorktreeRoot()}/, and this server only removes worktrees of the checkout it is running from`,
         };
       }
       const p = planRemoveWorktree(action, { dir: req.worktreeDir, branch: req.branch, primaryDir });

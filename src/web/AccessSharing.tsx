@@ -22,7 +22,7 @@
  * a reload.
  *
  * **The absence is still the important state.** `sharing` is optional and
- * absent means *this store cannot say* — the filesystem store has no column, and
+ * absent means *nobody could say* — the filesystem store had no column, and
  * `ArticleMetadata.sharing` says at length why it refuses rather than defaulting
  * to `private`. The card keeps the state it had for a failed probe: it says it
  * does not know, and offers no switch. A toggle that reads "not shared" because
@@ -32,9 +32,8 @@
  *
  * ## Why the confirmation is inline rather than a modal
  *
- * There is no dialog component in this app — `AnnotateDialog` and
- * `CommentDialog` are hand-built floating panels for the reading view — and a
- * modal is machinery (focus trap, restore, escape, scroll lock) for something
+ * Keeping this inline avoids modal machinery (focus trap, restore, escape,
+ * scroll lock) for something
  * that is not an interruption. This is a form: read three sentences, tick the
  * box, press the button. It appears in place, it cannot be skipped, and the
  * `PUT` behind it is refused by the server without `rightsConfirmed: true`
@@ -50,10 +49,13 @@ import {
   SHARING_CONFIRM_TITLE,
   SHARING_NOT_PERSONALISED,
   SHARING_OFF,
+  SHARING_OFF_LINK_UNKNOWN,
+  SHARING_OFF_WITH_LINK,
   SHARING_ON,
   SHARING_PERSONALISED,
   sharingPersonalisedList,
   SHARING_RIGHTS_CONFIRM,
+  SHARING_CHECKING,
   SHARING_UNKNOWN,
   SHARED_HEADING,
   SHARED_NOTE,
@@ -78,6 +80,7 @@ import type {
 } from "../types.js";
 import { Button } from "./components/ui/button.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { useCopy } from "./useCopy.js";
 import {
   sharedInventory,
   type InventoryItem,
@@ -96,10 +99,16 @@ type Learned =
   | { kind: "pending"; to: "private" | "public" }
   | { kind: "unknown"; because: "unread" | "write" };
 
-type CardState = Learned;
+/**
+ * `checking` is the page's state and never the card's own: the metadata request
+ * is still out. It is not `unknown`, which says *we could not check* — a
+ * sentence that is false until the request has actually failed.
+ */
+type CardState = Learned | { kind: "checking" };
 
+const CHECKING: CardState = { kind: "checking" };
 const UNREAD: CardState = { kind: "unknown", because: "unread" };
-const WRITE_UNCERTAIN: CardState = { kind: "unknown", because: "write" };
+const WRITE_UNCERTAIN: Learned = { kind: "unknown", because: "write" };
 
 /**
  * `PUT …/visibility`'s reply, **checked rather than asserted.**
@@ -213,11 +222,23 @@ export function asPublicArtefacts(value: unknown): PublicArtefacts | undefined {
   };
 }
 
+/**
+ * What the switch says of an article that is not public, given what is known
+ * about its private link. *"Only you can read this"* only when there is none.
+ */
+function notPublicLine(privateLinkOn: boolean | null): string {
+  if (privateLinkOn === true) return SHARING_OFF_WITH_LINK;
+  if (privateLinkOn === null) return SHARING_OFF_LINK_UNKNOWN;
+  return SHARING_OFF;
+}
+
 export function AccessSharing({
   slug,
   title,
   sharing,
   onVisibility,
+  privateLinkOn = false,
+  checking = false,
 }: {
   slug: string;
   title: string;
@@ -256,6 +277,18 @@ export function AccessSharing({
    * pixel: neither is a state in which it is safe to draw a switch.
    */
   sharing: ArticleSharing | undefined;
+  /**
+   * **Whether the article has a private link on**, from the control drawn
+   * above this one (PrivateLink.tsx, which is the only thing that reads it):
+   * `true`, `false`, or `null` for *it could not say*. It changes one
+   * sentence: a private article's *"Only you can read this"* is false while a
+   * link is on, and unproven while the link's state is unknown.
+   *
+   * Absent when the card is mounted on its own, and then it reads as `false`.
+   */
+  privateLinkOn?: boolean | null;
+  /** The page's read of `sharing` is still out — neither landed nor failed. */
+  checking?: boolean;
 }) {
   /**
    * What this card has learned since the page loaded, or `null` for nothing.
@@ -287,7 +320,8 @@ export function AccessSharing({
    *   after the write leaves the write standing. Saying "unchanged" here told
    *   an owner their public article was private. GPT Sol, 2026-08-28.
    */
-  const card: CardState = acted ?? (sharing ? { kind: "known", state: sharing } : UNREAD);
+  const card: CardState =
+    acted ?? (sharing ? { kind: "known", state: sharing } : checking ? CHECKING : UNREAD);
   const shared = card.kind === "known" ? card.state.visibility === "public" : null;
   const publicAt = card.kind === "known" ? card.state.publicAt : null;
   /**
@@ -463,6 +497,8 @@ export function AccessSharing({
         /* No switch while one is out. The buttons are gone rather than
            disabled, so a second press has nothing to land on. */
         <p className="tw:m-0 tw:text-ink-faint">{sharingInFlight(card.to)}</p>
+      ) : card.kind === "checking" ? (
+        <p className="tw:m-0 tw:text-ink-faint">{SHARING_CHECKING}</p>
       ) : card.kind === "unknown" ? (
         <p className="tw:m-0 tw:text-ink-faint">
           {card.because === "write" ? SHARING_WRITE_UNCERTAIN : SHARING_UNKNOWN}
@@ -488,7 +524,7 @@ export function AccessSharing({
               <span className="tw:mt-[3px] tw:shrink-0">
                 {shared ? <Globe size={14} /> : <Lock size={14} />}
               </span>
-              {shared ? SHARING_ON : SHARING_OFF}
+              {shared ? SHARING_ON : notPublicLine(privateLinkOn)}
             </p>
             {shared && publicAt && (
               <p className="tw:m-0 tw:text-xs tw:text-ink-faint">Shared since {exactly(publicAt)}.</p>
@@ -739,7 +775,7 @@ export function AccessSharing({
  * One `TooltipGroup` per card, so sweeping the row is instant after the first —
  * the same reasoning as `Metadata.tsx`'s "At a glance", and the same delays.
  */
-function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
+export function Inventory({ inventory }: { inventory: SharedInventory | undefined }) {
   if (!inventory) return null;
   const { shared, ifBuilt, withheld } = inventory;
   return (
@@ -834,7 +870,7 @@ function InventoryList({
   );
 }
 
-function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
+export function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
   const said =
     kinds === undefined
       ? SHARING_PERSONALISED
@@ -853,26 +889,39 @@ function Personalisation({ kinds }: { kinds: StepName[] | undefined }) {
  * returned, a refusal set `copied` to the `false`
  * it already was, and an owner pasted whatever they had copied before. A
  * failure now says so beside the button, in words, and names the way round —
- * the link is in the box and selects itself on focus. It stays until the next
- * press rather than timing out: it is an instruction, and a reader is part-way
- * through following it. GPT Sol, fifth sweep; plan 261003g § 5.
+ * the link is in the box and selects itself on focus. It stays until a later
+ * press settles rather than timing out: it is an instruction, and a reader is
+ * part-way through following it. GPT Sol, fifth sweep; plan 261003g § 5.
  *
  * The status line is the live region too, and is always mounted, so assistive
  * technology can observe its text changing. The success glyph alone does not
  * communicate a failure.
  *
- * The guard is a statement rather than `navigator.clipboard?.writeText(…)` —
- * where there is no clipboard object at all the optional chain evaluates to
- * `undefined` and the `.catch` never runs. `ChatPanel.tsx` § `CopyAnswer` has
- * the long version, and is the control this one now matches.
+ * The write itself is `useCopy`'s: the guard for a browser with no clipboard,
+ * the newest-press-wins token and the timer that takes the tick away again are
+ * explained once, in useCopy.ts.
+ *
+ * **Used twice on this card since 2026-10-05**: for the public address here,
+ * and for a private link in PrivateLink.tsx, which passes its own `label` and
+ * `tip` because the public tip's *"the article is already readable without
+ * it"* is false of a private link. The box is an `<input>` that can shrink
+ * (`min-w-0`), so a long address scrolls inside it and does not widen a
+ * phone's page.
  */
-function CopyLink({ link }: { link: string }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  useEffect(() => {
-    if (state !== "copied") return;
-    const timer = setTimeout(() => setState("idle"), 1500);
-    return () => clearTimeout(timer);
-  }, [state]);
+export function CopyLink({
+  link,
+  label = "The link to share",
+  tip = SHARING_COPY_TIP,
+}: {
+  link: string;
+  /** The box's accessible name. */
+  label?: string;
+  /** What the Copy button's hover says. */
+  tip?: string;
+}) {
+  /* A tick goes after 1.5 seconds. `failedMs: null` is the failure staying
+     until a later press settles, for the reason above. */
+  const { state, copy } = useCopy({ copiedMs: 1500, failedMs: null });
   return (
     <div className="tw:mb-3">
       <div className="tw:flex tw:items-center tw:gap-2">
@@ -881,23 +930,14 @@ function CopyLink({ link }: { link: string }) {
           value={link}
           onFocus={(e) => e.currentTarget.select()}
           className="tw:min-w-0 tw:flex-1 tw:rounded tw:border tw:border-rule tw:bg-background tw:px-2 tw:py-1 tw:font-mono tw:text-xs tw:text-ink"
-          aria-label="The link to share"
+          aria-label={label}
         />
-        <Tooltip placement="bottom" content={<TipNote>{SHARING_COPY_TIP}</TipNote>}>
+        <Tooltip placement="bottom" content={<TipNote>{tip}</TipNote>}>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => {
-              if (!navigator.clipboard) {
-                setState("failed");
-                return;
-              }
-              navigator.clipboard
-                .writeText(link)
-                .then(() => setState("copied"))
-                .catch(() => setState("failed"));
-            }}
+            onClick={() => copy(link)}
           >
             {state === "copied" ? <Check size={13} /> : <Copy size={13} />}
             {state === "copied" ? "Copied" : "Copy"}

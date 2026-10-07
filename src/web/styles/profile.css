@@ -46,9 +46,12 @@
   line-height: 1.5;
   resize: vertical;
 }
+/* `--highlight-text`, not the raw orange: on the light page `--highlight` as a
+   1px border is 2.7:1 against the white field, and this border is the only
+   focus mark the box has. The same colour in Dark, where the two are equal. */
 .prof-box-input:focus-visible {
   outline: none;
-  border-color: var(--highlight);
+  border-color: var(--highlight-text);
 }
 .prof-box-input:disabled { opacity: 0.5; }
 
@@ -81,10 +84,10 @@
 .prof-count.over { color: var(--highlight-text); }
 
 /* Where the save stands — `SaveStatus` in ProfileBox.tsx. A fixed height, so
-   the line changing from "Saving…" to "Saved" does not move anything below it.
+   the tick coming and going, or a refusal taking the line, moves nothing below.
    The tick is the palette's bluish green (`--cat-2`), the one green here that
    is told apart from the orange by readers who cannot tell red from green —
-   docs/project/colour-scales.md. Spinner: `.cmt-spinner`, the house one. */
+   docs/project/colour-scales.md. */
 .prof-save {
   display: flex;
   align-items: center;
@@ -96,8 +99,28 @@
   font-size: 0.79rem;
 }
 .prof-save svg { flex: none; }
-.prof-save.is-saved { color: rgb(var(--cat-2-rgb)); }
 .prof-save.is-error { color: var(--highlight-text); }
+/* The tick a save that landed leaves: faint, held for two seconds, then faded
+   and hidden — `visibility` too, so nothing invisible is left to hover or to
+   be read out. Greg, 2026-10-05.
+
+   **The hold is the delay, not part of the duration, and that is the
+   reduced-motion rule.** tailwind.css's global guard flattens every
+   `animation-duration` to 0.01ms with `!important` from a layer, which nothing
+   here can outrank. A 2.6s animation holding for its first three quarters
+   would therefore be over before the tick was ever drawn, and a reader who
+   asked for less motion would get no sign of a save at all. A delay is not
+   flattened: under the guard the tick stands for the same two seconds and then
+   goes at once, with no fade. */
+.prof-save-tick {
+  display: inline-flex;
+  color: rgb(var(--cat-2-rgb));
+  opacity: 0.75;
+  animation: prof-save-tick-out 0.6s ease-out 2s forwards;
+}
+@keyframes prof-save-tick-out {
+  to { opacity: 0; visibility: hidden; }
+}
 
 .prof-box-error {
   display: flex;
@@ -153,7 +176,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 10px;
   background: var(--surface-raised);
-  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  box-shadow: var(--shadow-sheet);
   color: var(--ink);
   font-family: var(--font-ui);
 }
@@ -190,8 +213,10 @@
 }
 /* Nothing heard for ten seconds: the same words, warm rather than faint, and a
    glyph, so it is noticed while the microphone is still on. The colour is
-   `.prof-mic-warn`'s — a fact worth knowing, not a failure. Plan 261001k. */
-.prof-listening.quiet .prof-listening-what {
+   `.prof-mic-warn`'s — a fact worth knowing, not a failure. Plan 261001k.
+   `.ending` is the last minute before the cap, counted down. Plan 261007b. */
+.prof-listening.quiet .prof-listening-what,
+.prof-listening.ending .prof-listening-what {
   color: var(--highlight-ink, var(--highlight));
   font-weight: 600;
 }
@@ -396,8 +421,12 @@
   background: transparent;
   color: var(--ink-faint);
   cursor: pointer;
+  /* A double press on Stop is two presses, not a zoom. */
+  touch-action: manipulation;
 }
-.prof-mic:hover:not(:disabled) { color: var(--highlight-ink); border-color: var(--highlight); }
+/* `.busy` and not disabled is the moment after Stop on a box that takes a
+   double press (DictationStrip.tsx § `again`): live, and not lit. */
+.prof-mic:hover:not(:disabled):not(.busy) { color: var(--highlight-ink); border-color: var(--highlight); }
 .prof-mic:disabled { opacity: 0.4; cursor: default; }
 /* Armed, but the microphone is not open yet — a measured 1.1 seconds in Chrome
    between start() and audiostart. Outlined rather than filled, because the
@@ -428,32 +457,23 @@
   50% { opacity: 0.65; }
 }
 
-/* --------------------------------------------- profile: the two controls --
-   A label that states what a piece of generated text was written with, and a
-   checkbox that decides what the next run uses. Two jobs, two controls, and
-   they deliberately do not look alike: one is a fact and the other is a
-   decision. src/web/WrittenForYou.tsx, docs/project/reader-profile.md. */
+/* ------------------------------------------- profile: provenance icon --
+   States what a piece of generated text was written with and opens the profile
+   panel. src/web/WrittenForYou.tsx, docs/project/reader-profile.md. */
 
-/* The label. Quiet — it is provenance, not a warning, which is the same call
+/* The icon. Quiet — it is provenance, not a warning, which is the same call
    the glossary already made when it chose "a label instead of a warning
    triangle". It must not compete with the heading it sits beside. */
 .prof-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.05rem 0.35rem;
-  /* A `<button>` since 2026-08-30, so the four things a button brings for free
-     and this pill does not want are turned off here: its own background, its
-     UA font, and the pointer that would make it look like the run button. It
+  /* A `<button>` since 2026-08-30, so the things a button brings for free and
+     this icon does not want are turned off here. It
      opens the profile panel — src/web/ProfilePanel.tsx. */
   background: none;
   border: 1px solid var(--rule);
   border-radius: 999px;
   color: var(--ink-faint);
-  font-family: var(--font-ui);
-  font-size: 0.74rem;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
   cursor: pointer;
 }
 .prof-badge:hover,
@@ -472,11 +492,12 @@
   border-color: color-mix(in oklab, var(--highlight) 40%, transparent);
   color: var(--highlight-ink);
 }
-/* The icon alone — Glossary's, since 2026-09-29 (WrittenForYou.tsx § compact).
-   Even padding on all four sides: a round badge, not a pill with no words. */
+/* The icon alone — Glossary's since 2026-09-29, every mode's since 2026-10-04
+   (WrittenForYou.tsx § Always an icon). Even padding on all four sides: a
+   round badge, not a pill with no words. */
 .prof-badge.icon-only { padding: 0.15rem; }
 /* What the badge was saying, said again at the top of the panel it opens —
-   the only place a compact badge's reader can read it. */
+   where a finger reads it, since a tap never opens the badge's card. */
 .prof-panel-note {
   margin: 0 0 0.4rem;
   color: var(--ink);
@@ -520,9 +541,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 5px;
   background: var(--surface-raised);
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.5),
-    0 8px 24px -6px rgb(0 0 0 / 0.65);
+  box-shadow: var(--shadow-pop);
   font-family: var(--font-ui);
 }
 /* Focus lands on the panel itself when it opens (ProfilePanel.tsx says why);

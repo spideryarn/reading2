@@ -57,10 +57,14 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Dock, visibleModes } from "../src/web/Dock.js";
+import { Dock, splitForMore, visibleModes } from "../src/web/Dock.js";
 import { MODES } from "../src/modes.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
 import { readerCss } from "./helpers/stylesheets.js";
+import { moreItems, moreLabels, openMore } from "./helpers/dock-more.js";
+
+/** Quotes, Glossary, FAQ, Ideas and Timeline: a literal, on purpose (plan 261007c, D2). */
+const GATHERED_UNDER_MORE = 5;
 import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
 
 /**
@@ -74,7 +78,8 @@ import { chooseDockFit, DOCK_FIT_CLASSES } from "../src/web/dock-fit.js";
  *
  * **Five since 2026-10-02**: rung 4 went in below the old last rung so the
  * bar's quick-search box outlives the labels (plan 261002h) — rung 3 keeps a
- * compact box, and only rung 4 turns it into the ⚡.
+ * compact box, and only rung 4 gives it up (for a ⚡ until 2026-10-05, for
+ * nothing since — plan 261005h).
  */
 const NEED = [1425, 1330, 814, 600, 557];
 
@@ -155,7 +160,7 @@ describe("the bar chooses the widest rung that fits", () => {
 
   /* Rung 4, 2026-10-02 (plan 261002h): the search box is the last thing to
      go — after every label — so a laptop still has a box to type in. */
-  it("turns the search box into the ⚡ only once every label has gone", () => {
+  it("gives up the search box only once every label has gone", () => {
     dock.setWidth(580);
     expect(chooseDockFit(dock.el, 0)).toBe(4);
     expect(wearing(dock.el)).toBe(4);
@@ -171,7 +176,7 @@ describe("the bar chooses the widest rung that fits", () => {
    * row that fits exactly both report `scrollWidth === clientWidth` — so any
    * `- slack` in the comparison is true at every width and compacts everything.
    * This is also the real behaviour of a coarse-pointer bar, where the buttons
-   * `flex-grow` to fill whatever room is going (styles.css § a coarse pointer).
+   * `flex-grow` to fill whatever room is going (narrow-window.css § a coarse pointer).
    */
   it("fits with room to spare: a bar whose buttons grow to fill it keeps its labels", () => {
     const grown = fakeDock([0, 0, 0, 0]); // content always fills exactly
@@ -271,7 +276,7 @@ describe("the stylesheet backs the ladder", () => {
   it("carries the new loose-control gap and keeps rung 3 tighter than rung 2", () => {
     expect(CSS_NO_COMMENTS).toMatch(/\.dock\s*\{[^}]*gap:\s*0\.3rem/);
     const rung2 =
-      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn,\s*\.dock\.dock-fit-2 \.dock-mode\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
+      /\.dock\.dock-fit-2 \.dock-modes \.dock-btn\s*\{[^}]*padding-inline:\s*([\d.]+)rem/.exec(
         CSS_NO_COMMENTS,
       );
     const rung3 =
@@ -299,7 +304,7 @@ describe("the stylesheet backs the ladder", () => {
    * **Rung 4 is rung 3 and then some** (2026-10-02, plan 261002h). It went in
    * at the bottom so that the quick-search box could outlive the labels: rung
    * 3 drops every label and keeps a compact box, rung 4 does all of that and
-   * turns the box into the ⚡. A rung-3 rule missing its rung-4 twin would put
+   * gives the box up (for nothing, since 2026-10-05). A rung-3 rule missing its rung-4 twin would put
    * a label (or the wide padding) *back* on a narrower bar, so every
    * `.dock-fit-3` selector must be in the same selector list as its
    * `.dock-fit-4` twin — and the check is fed the broken shape to prove it
@@ -324,16 +329,19 @@ describe("the stylesheet backs the ladder", () => {
   });
 
   /**
-   * The bar has two shapes — one `.dock-modes` segment on the reading view,
-   * fourteen loose `.dock-mode` links on the metadata and tweets pages. The
-   * mode rung knew only the first until GPT Sol found it, so on those pages it
-   * did nothing and the ladder went straight past it, taking every label with
-   * it. (Rung 1 until 2026-09-06, rung 2 since.)
+   * **One outer CSS shape, so one selector.** Until 2026-10-04 the metadata page
+   * drew loose `.dock-mode` links outside any segment, and every rule here needed a
+   * twin for them; the mode rung forgot its twin once (GPT Sol) and took every
+   * label on that page. Both arms draw `.dock-modes` now (plan 261004h), so the
+   * twin is gone, and a `.dock-mode` selector coming back would match nothing.
    */
-  it("the mode rung knows both of the bar's shapes", () => {
+  it("the mode rung is written for the segment, and no loose-link twin is left", () => {
+    const loose = /\.dock-mode(?![\w-])/;
     const hiders = labelHiders(CSS).filter((x) => x.includes("dock-fit-2"));
     expect(hiders.some((x) => x.includes(".dock-modes"))).toBe(true);
-    expect(hiders.some((x) => x.includes(".dock-mode "))).toBe(true);
+    expect(CSS_NO_COMMENTS).not.toMatch(loose);
+    expect(".dock.dock-fit-2 .dock-mode .dock-btn-label").toMatch(loose);
+    expect(".dock.dock-fit-2 .dock-modes .dock-btn-label").not.toMatch(loose);
   });
 
   /**
@@ -363,7 +371,8 @@ describe("the stylesheet backs the ladder", () => {
         `${rung} does not hide Feedback's word`,
       ).toBe(true);
       /* Help, beside Feedback since 2026-10-02 (261002b, R5): app-level, so
-         its word goes with theirs. */
+         its word goes with theirs. On every bar again since 2026-10-07
+         (261007e), after three days on a visitor's only. */
       expect(
         here.some((x) => x.includes(".dock-help") || x === `.dock.${rung} .dock-btn-label`),
         `${rung} does not hide Help's word`,
@@ -438,7 +447,7 @@ describe("the stylesheet backs the ladder", () => {
       .filter((sel) => sel.includes(".dock-btn.on") && sel.includes(".dock-btn-label"));
     expect(shows.length, "no rule keeps the active mode's label").toBeGreaterThan(0);
     expect(shows.some((sel) => sel.includes("dock-fit-2"))).toBe(true);
-    /* Rung 4 (2026-10-02) is rung 3 plus the search box gone to the ⚡, so it
+    /* Rung 4 (2026-10-02) is rung 3 less the search box, so it
        is "the rung below" too. */
     expect(
       shows.some((sel) => sel.includes("dock-fit-3") || sel.includes("dock-fit-4")),
@@ -469,9 +478,6 @@ describe("the stylesheet backs the ladder", () => {
         .dock.dock-fit-1 .dock-btn-label.always { display: inline; }
       `),
     ).toHaveLength(1);
-
-    const segmentOnly = ".dock.dock-fit-1 .dock-modes .dock-btn-label { display: none; }";
-    expect(labelHiders(segmentOnly).some((x) => x.includes(".dock-mode "))).toBe(false);
 
     expect(floorIsUnconditional("@media (max-width: 731px) {\n  .dock { overflow-x: auto; }\n}")).toBe(
       false,
@@ -531,28 +537,84 @@ describe("Dock gives the ladder something to work with", () => {
   });
 
   /**
-   * Off the reading view the modes are loose links. Both of these were missing
-   * until GPT Sol's review: without `dock-mode` the mode rung does nothing here, and
-   * without the `always` label Plain lost its word on the page you are most
-   * likely to be looking for the way back from.
+   * **Off the reading view the modes are links, in the reading view's frames.**
+   * Greg, 2026-10-04 (spya-qerga4): *"Why does the bottom bar look different in
+   * metadata mode?"* They were loose links with no frame, the half of the bar
+   * that kept being left behind; now both arms draw `.dock-modes` and its
+   * `.dock-frame`s, so one set of selectors styles both.
+   * docs/plans/261004h-metadata-page-bottom-bar-draws-the-same-frames-as-the-reading-view.md.
    *
-   * **The count is the visible set, not "more than ten".** Five modes went
-   * behind the experimental switch on 2026-09-03, so a default reader's bar has
-   * eight loose links and the old `> 10` was a statement about a bar nobody
-   * sees. Asserted against `visibleModes` rather than against `8`, so the
-   * number moves with the rule instead of pinning today's count — the point
-   * here is that the ladder has links to act on, and that count is not this
-   * file's subject. tests/dock-experimental-modes.test.tsx owns the eight.
+   * **The count is the drawn set**, asserted against `visibleModes` through
+   * `splitForMore` so the number moves with the rules;
+   * tests/dock-experimental-modes.test.tsx owns what that set is, and
+   * tests/dock-more.test.tsx which of it is under More instead (plan 261007c).
+   * **Links, not radios**: a press here leaves the page, and
+   * no mode is open on it, so nothing may claim to be the selected one.
    */
-  it("the metadata page: loose links that say they are modes", () => {
+  it("the metadata page: links, in the same frames as the reading view", () => {
     render({ view: "metadata" });
-    expect(host.querySelector(".dock-modes")).toBeNull();
-    expect(host.querySelectorAll(".dock-mode")).toHaveLength(
-      visibleModes(false, undefined).length,
-    );
-    expect(host.querySelectorAll(".dock-mode").length).toBeGreaterThan(1);
+    const links = host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn");
+    const bar = splitForMore(visibleModes(false, undefined), undefined);
+    expect(links).toHaveLength(bar.drawn.length);
+    expect(links.length).toBeGreaterThan(1);
+    /* And the rest of the visible set is under More, not lost. */
+    expect(moreLabels(host)).toHaveLength(bar.menu.length);
+    expect(bar.menu.length).toBeGreaterThanOrEqual(3);
+    expect(
+      host.querySelector('.dock-modes [role="radiogroup"], .dock-modes [role="radio"]'),
+    ).toBeNull();
+    expect(
+      host.querySelector(
+        ".dock-modes .on, .dock-modes [aria-current], .dock-modes [aria-checked], .dock-modes [aria-pressed]",
+      ),
+    ).toBeNull();
     expect(host.querySelector(".dock-tail")).not.toBeNull();
     expect(host.querySelector(".dock-btn-label.always")?.textContent).toBe("Plain");
+  });
+
+  /**
+   * **The two arms draw the same boxes.** The claim the report is about, held
+   * directly: the same visible list gives the same frames holding the same
+   * buttons in the same order, the same hairlines between runs and the same
+   * flex shares, whichever arm drew them. The reading arm's radio wrapper gets
+   * the sum of the shares inside it; the links arm gives those shares straight
+   * to the frames.
+   */
+  it("both arms: the same frames, the same lines between runs, the same shares", () => {
+    const drawn = () => ({
+      frames: [...host.querySelectorAll(".dock-modes .dock-frame")].map((f) =>
+        [...f.querySelectorAll(".dock-btn")].map((b) => b.getAttribute("aria-label")),
+      ),
+      starts: [...host.querySelectorAll(".dock-modes .dock-group-start")].map((b) =>
+        b.getAttribute("aria-label"),
+      ),
+      shares: [...host.querySelectorAll<HTMLElement>(".dock-modes, .dock-modes .dock-frame")].map(
+        (e) =>
+          e.style.getPropertyValue("--dock-mode-count") ||
+          e.style.getPropertyValue("--dock-frame-count"),
+      ),
+    });
+    const cases = [
+      { experimental: EXPERIMENTAL_OFF, margin: false, search: "" },
+      { experimental: EXPERIMENTAL_ON, margin: false, search: "" },
+      /* The margin-open case still has to give both arms the same pressed toggle. */
+      { experimental: EXPERIMENTAL_OFF, margin: true, search: "?margin=1" },
+    ];
+    for (const { experimental, margin, search } of cases) {
+      history.replaceState(null, "", "/read/x");
+      render({ mode: "plain", onMode: () => {}, experimental, margin });
+      const reading = drawn();
+      expect(reading.frames.length).toBeGreaterThan(1);
+      expect(reading.shares.every((x) => x !== "")).toBe(true);
+      const radios = host.querySelector<HTMLElement>(".dock-modes-radios");
+      const enclosedShares = [...(radios?.querySelectorAll<HTMLElement>(".dock-frame") ?? [])]
+        .map((frame) => Number(frame.style.getPropertyValue("--dock-frame-count")))
+        .reduce((sum, share) => sum + share, 0);
+      expect(radios?.style.getPropertyValue("--dock-radio-count")).toBe(String(enclosedShares));
+      history.replaceState(null, "", `/read/x/metadata${search}`);
+      render({ view: "metadata", experimental });
+      expect(drawn()).toEqual(reading);
+    }
   });
 
   /**
@@ -563,18 +625,22 @@ describe("Dock gives the ladder something to work with", () => {
    */
   it("the reading view with the switch on: every mode, one segment", () => {
     render({ mode: "plain", onMode: () => {}, experimental: EXPERIMENTAL_ON });
-    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i). */
-    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
-      visibleModes(true, undefined).length,
-    );
+    /* Marginalia is a toggle beside the radios since 2026-10-01 (261001i).
+       Five modes are under More since 2026-10-07 (plan 261007c), so the bar's
+       buttons and the menu's items together are every mode. */
+    const buttons = host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]');
+    const listed = moreLabels(host);
+    expect(listed).toHaveLength(GATHERED_UNDER_MORE);
+    expect(buttons).toHaveLength(visibleModes(true, undefined).length - GATHERED_UNDER_MORE);
+    expect(buttons.length + listed.length).toBe(MODES.length);
   });
 
   /**
-   * **And the loose arm too, which is the half that was left untested.**
+   * **And the links arm too, which is the half that was left untested.**
    *
    * The metadata assertion above is measured against `visibleModes`, which is
    * the function the component itself calls — so it holds however the filter
-   * behaves, and a loose arm that ignored the switch entirely would pass it.
+   * behaves, and a links arm that ignored the switch entirely would pass it.
    * GPT Sol's review of stage 2 named the surviving mutation: *"make the loose
    * arm always filter as Experimental off while leaving the radiogroup
    * correct"*.
@@ -582,10 +648,19 @@ describe("Dock gives the ladder something to work with", () => {
    * So this one counts against `MODES`, which is the vocabulary rather than the
    * rule — an independent number the filter cannot move. It is the only
    * assertion in this file that would notice the two arms disagreeing.
+   *
+   * **In two places since 2026-10-07**: links in the bar, and the five under
+   * More, which are links too. Both counted, against a literal rather than
+   * against `splitForMore`, for the same reason `MODES` is used.
    */
-  it("the metadata page with the switch on: every mode, as loose links", () => {
+  it("the metadata page with the switch on: every mode, as links", () => {
     render({ view: "metadata", experimental: EXPERIMENTAL_ON });
-    expect(host.querySelector(".dock-modes")).toBeNull();
-    expect(host.querySelectorAll(".dock-mode")).toHaveLength(MODES.length);
+    expect(host.querySelectorAll(".dock-modes .dock-frame > a.dock-btn")).toHaveLength(
+      MODES.length - GATHERED_UNDER_MORE,
+    );
+    openMore(host);
+    const items = moreItems();
+    expect(items).toHaveLength(GATHERED_UNDER_MORE);
+    expect(items.every((el) => el.tagName === "A" && el.hasAttribute("href"))).toBe(true);
   });
 });

@@ -380,8 +380,17 @@ function manifestJson(
 function articleJson(rows: ArticleRows): string {
   /* `id` and `currentRevisionId` are internal uuids that name nothing else in
      the zip; `fixture` says this is the shipped demo, which is about our
-     deployment rather than about the reader's article. */
-  return json(rowJson(rows.article, ["id", "currentRevisionId", "fixture"]));
+     deployment rather than about the reader's article.
+
+     **`shareToken` is a credential, and a zip gets forwarded.** It is the key
+     of the article's private link (src/db/schema.ts § `shareToken`): anybody
+     holding it and the slug can read the article until the owner turns the
+     link off, and the slug is in this same file. `rowJson` ships every column
+     it is not told to drop, so this one is named. `shareTokenAt` stays: that
+     a link was made, and when, is sharing state like `publicAt`. The owner
+     copies the link itself from the Access & Sharing card.
+     tests/store-export-bundle.test.ts looks for the key across the whole zip. */
+  return json(rowJson(rows.article, ["id", "currentRevisionId", "fixture", "shareToken"]));
 }
 
 /**
@@ -562,6 +571,9 @@ function augmentationFiles(rows: ArticleRows): Map<string, string> {
   if (rows.articleTags.length) {
     at("tags.json", { tags: rows.articleTags.map((row) => rowJson(row)) });
   }
+  if (rows.quizAttempts.length) {
+    at("quiz-attempts.json", { attempts: rows.quizAttempts.map((row) => rowJson(row)) });
+  }
   return out;
 }
 
@@ -622,6 +634,7 @@ one thing that will make the rest of these files make sense.
                            which search results it read, and what it read of each paper.
       reading-time.json    How many seconds you have spent on each block.
       tags.json            Your own tags on the article.
+      quiz-attempts.json   Your answers to the quiz questions, and the mark each was given.
       ideas.json           Propositions the article takes as given.
       quotes.json          Lines worth keeping.
       timeline.json        When the article says things happened.
@@ -811,6 +824,7 @@ const FILE_NOTES: Readonly<Record<string, string>> = {
     "What the Dig deeper action wrote about cited works you asked it to look into, which search results it read, and what it read of each paper itself.",
   "augmentations/reading-time.json": "How many seconds you have spent on each block.",
   "augmentations/tags.json": "Your own tags on the article.",
+  "augmentations/quiz-attempts.json": "Your answers to the quiz questions, and the mark each was given.",
   "augmentations/ideas.json": "Propositions the article takes as given.",
   "augmentations/quotes.json": "Lines worth keeping.",
   "augmentations/timeline.json": "When the article says things happened.",
@@ -936,9 +950,10 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "Skim stops", n: countOf(revision.skim, "stops") },
     { label: "cross-references", n: countOf(revision.crossrefs, "links") },
     /* Every level, counted apart: a `simple/1` row (one `paragraphs` list)
-       counts nothing, which is what every other read makes of it. */
+       counts nothing, which is what every other read makes of it. The middle
+       level a row from before 2026-10-04 still carries is in the bundle's
+       file and not in this count, as no read shows it (plan 261004f). */
     { label: "plain-words paragraphs (brief)", n: countOf(levelsOf(revision.simpleSummary), "brief") },
-    { label: "plain-words paragraphs (simple)", n: countOf(levelsOf(revision.simpleSummary), "simple") },
     { label: "plain-words paragraphs (fuller)", n: countOf(levelsOf(revision.simpleSummary), "fuller") },
     { label: "arc entries", n: countOf(revision.arc, "entries") },
     /* **Both collections, and only what is really named.** `assets` holds the
@@ -965,6 +980,7 @@ function bundleCounts(rows: ArticleRows): { readonly label: string; readonly n: 
     { label: "blocks with reading time", n: rows.readingTime.length },
     { label: "glossary terms you hid", n: rows.glossaryHiddenEntries.length },
     { label: "your tags", n: rows.articleTags.length },
+    { label: "quiz answers", n: rows.quizAttempts.length },
     { label: "block ids ever minted", n: rows.blockIdentities.length },
   ];
   return all.filter((count) => count.n > 0);

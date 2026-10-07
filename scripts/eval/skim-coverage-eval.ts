@@ -64,8 +64,41 @@
  *   boundaries; it is recorded too (`ideasInOrNextPm1`) but not headlined.
  * - **Content sections with a stop** — top-level sections with body words.
  * - **Words, % body words** — the stop blocks' words over non-supplement words.
+ *
+ * ## Also used for `skim/8` vs `skim/9` (plan 261003l § Stage 2)
+ *
+ * `skim/9` gave each stop `again`, the deeper passes it is also walked in. So
+ * each run also records, beside the metrics above (which count a stop once, at
+ * its `depth`, and are unchanged): every stop's `again`; `walks`, each pass as
+ * the reader walks it (`depth === d` or `again` includes d) with how many of
+ * its stops are carried; the route's `dropped` counts; and what the gateway
+ * said about the call (`model`, `reasoningTokens`). A run that throws (a
+ * failed route, a truncation) is written to `failures` with its message
+ * rather than only to stderr. `--allow-outdated-ideas` lets an article whose
+ * stored Ideas are from an older Ideas prompt in: both arms are given the same
+ * Ideas, so their age is not a variable; the snapshot names their version.
+ * scripts/eval/skim-again-pairs.ts turns the results into the tables and the
+ * blind pairs.
+ *
+ * ## Also used for `skim/9` vs `skim/10` (plan 261006e § Stage 2)
+ *
+ * `skim/10` changed what a cue is for, so the unit compared is the cue of one
+ * quote under each arm, and each stop also records its `quoteId` and the
+ * paragraph before its own (`before`), which the blind judge is shown. Three
+ * flags came with it: `--old-only` (a second control run without paying for a
+ * second NEW run), `--file=<slug>=<json>` (an article read from a file written
+ * by scripts/eval/skim-inputs-from-production.ts, where it is not in the local
+ * database) and `--tag=` (a suffix on the results file's name). Each results
+ * file names the SHA-256 of the module each arm ran. A fourth flag,
+ * `--context`, ran the NEW arm with the passage around each quote; that arm
+ * was measured and removed from src/skim.ts, and the flag went with it (commit
+ * c943494a9 has both). The first round's results files still carry
+ * `context: true` on that arm's runs.
+ * scripts/eval/skim-cue-pairs.ts turns several results files into the
+ * screens, the route comparison and the blind pairs.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadEnvLocal } from "../../src/env.js";
@@ -84,7 +117,22 @@ const NEW_VERSION = newVersionArg ? newVersionArg.slice("--new-version=".length)
 /* `--new-only`: the NEW arm alone, with no old module to write first — for
    measuring a change against an earlier run's NEW numbers. */
 const NEW_ONLY = args.includes("--new-only");
-const ARMS = NEW_ONLY ? (["new"] as const) : (["old", "new"] as const);
+const ALLOW_OUTDATED_IDEAS = args.includes("--allow-outdated-ideas");
+/* `--old-only`: the OLD arm alone — a second control run. */
+const OLD_ONLY = args.includes("--old-only");
+if (NEW_ONLY && OLD_ONLY) throw new Error("--new-only and --old-only together leave no arm to run");
+/* `--file=<slug>=<json>`: that slug is read from a file, not the database. */
+const FILES = new Map(
+  args
+    .filter((a) => a.startsWith("--file="))
+    .map((a) => {
+      const [slug, ...rest] = a.slice("--file=".length).split("=");
+      if (!slug || rest.length === 0) throw new Error(`--file wants <slug>=<json>, got ${a}`);
+      return [slug, rest.join("=")] as const;
+    }),
+);
+const sha = (path: string): string => createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 16);
+const ARMS = NEW_ONLY ? (["new"] as const) : OLD_ONLY ? (["old"] as const) : (["old", "new"] as const);
 const slugArgs = args.filter((a) => !a.startsWith("--"));
 const SLUGS = slugArgs.length > 0 ? slugArgs : ["vb-spya-vu3xen", "entropy-24-00930-spya-pywwkq", "source-spya-furjgs"];
 
@@ -95,6 +143,7 @@ const { blockIndex } = await import("../../src/section-path.js");
 const { isBody } = await import("../../src/block-policy.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
 const NEW = await import("../../src/skim.js");
+const { passRoute } = await import("../../src/web/skim-route.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
    exists only for the length of one eval. */
 type RunOut = Promise<{ skim: Skim; offered: number; inputTokens: number; outputTokens: number; elapsedMs: number }>;
@@ -245,8 +294,23 @@ interface RunResult {
   elapsedMs: number;
   inputTokens: number;
   outputTokens: number;
+  /** What validation dropped — `badAgain` is absent or 0 before `skim/9`. */
+  dropped: Skim["dropped"];
+  /**
+   * Each pass as the reader walks it: its own stops (`depth === d`) plus the
+   * earlier stops carried into it (`again` includes d). Before `skim/9` no
+   * stop has `again`, so `carried` is 0 and `length` is the own stops.
+   */
+  walks: { depth: SkimDepth; length: number; own: number; carried: number }[];
+  /** The gateway's record of the call: the model that answered and its thinking tokens (inside `outputTokens`). */
+  model: string | null;
+  reasoningTokens: number | null;
+  /** The effort the module asks for is a private constant; this is only the env override, if any. */
+  effortOverride: string | null;
   stops: {
     depth: SkimDepth;
+    /** The deeper passes this stop is also walked in (`skim/9`); `[]` when none. */
+    again: SkimDepth[];
     quote: string;
     /** The whole quote, and the whole paragraph it sits in — for the blind read. */
     quoteFull: string;
@@ -254,6 +318,10 @@ interface RunResult {
     cue: string | null;
     section: string;
     ideasIn: string[];
+    /** The quote this stop is, so the same quote can be paired across arms. */
+    quoteId: string;
+    /** The nearest body paragraph before the stop's own, whole, wherever it sits — for a judge checking a cue's scene against the text. */
+    before: string | null;
   }[];
   /** Stored quotes under an abstract heading (`NEW.inAbstract`), whichever arm — the NEW arm does not offer them. */
   abstractQuotes: number;
@@ -293,7 +361,7 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
   const stopBlocks = skim.stops.map((s) => {
     const q = byId.get(s.quoteId);
     if (!q) throw new Error(`${slug} ${arm}: stop names unknown quote ${s.quoteId}`);
-    return { blockId: q.blockId, depth: s.depth, quote: q, cue: s.cue ?? null };
+    return { blockId: q.blockId, depth: s.depth, again: s.again ?? [], quote: q, cue: s.cue ?? null };
   });
   const spent = totalSpend(report.calls);
   const isAbs = (blockId: string) => NEW.inAbstract(blockId, idx, article.tree);
@@ -306,6 +374,21 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     slug,
     arm,
     run,
+    dropped: skim.dropped,
+    walks: ([1, 2, 3] as const).map((depth) => {
+      const own = stopBlocks.filter((s) => s.depth === depth).length;
+      const carried = stopBlocks.filter((s) => s.again.includes(depth)).length;
+      /* The reader's own rule (`passRoute`, src/web/skim-route.ts) must give
+         the same walk, or this script is measuring a walk nobody takes. */
+      const drawn = passRoute(skim.stops, depth).length;
+      if (drawn !== own + carried) {
+        throw new Error(`${slug} ${arm}#${run}: pass ${depth} is ${own + carried} stops here and ${drawn} by passRoute`);
+      }
+      return { depth, length: own + carried, own, carried };
+    }),
+    model: report.calls[0]?.model ?? null,
+    reasoningTokens: report.calls[0]?.reasoningTokens ?? null,
+    effortOverride: process.env.SPIDERYARN_PIPELINE_EFFORT ?? null,
     version: skim.version,
     offered: result.offered,
     rows: measure(article, stopBlocks, ideas.ideas),
@@ -316,8 +399,13 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
     outputTokens: result.outputTokens,
     stops: stopBlocks.map((s) => {
       const at = idx.get(s.blockId) ?? -1;
+      let prev = at - 1;
+      while (prev >= 0 && !(isBody(article.blocks[prev]!) && article.blocks[prev]!.kind !== "heading")) prev--;
       return {
+        quoteId: s.quote.id,
+        before: prev >= 0 ? article.blocks[prev]!.text.replace(/\s+/g, " ") : null,
         depth: s.depth,
+        again: s.again,
         quote: s.quote.text.replace(/\s+/g, " ").slice(0, 240),
         quoteFull: s.quote.text.replace(/\s+/g, " "),
         paragraph: (article.blocks[at]?.text ?? "").replace(/\s+/g, " "),
@@ -332,16 +420,39 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
 async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   mkdirSync("evals/results", { recursive: true });
-  const out = `evals/results/skim-coverage-${stamp}.json`;
+  /* `--tag=<word>`: a suffix on the file name, so runs started in the same second do not share one. */
+  const tagArg = args.find((a) => a.startsWith("--tag="));
+  const out = `evals/results/skim-coverage-${stamp}${tagArg ? `-${tagArg.slice("--tag=".length)}` : ""}.json`;
   const results: RunResult[] = [];
+  const failures: { slug: string; arm: Arm; run: number; message: string }[] = [];
   const snapshot: Record<string, unknown> = {};
 
   await runAsOwner(environmentOwnerId(), async () => {
     const inputs: Input[] = [];
     for (const slug of SLUGS) {
+      const file = FILES.get(slug);
+      if (file !== undefined) {
+        /* Blocks, tree, Quotes and Ideas as scripts/eval/skim-inputs-from-production.ts wrote them. */
+        const read = JSON.parse(readFileSync(file, "utf8")) as {
+          blocks: Block[];
+          tree: Article["tree"];
+          quotes: Quotes;
+          ideas: Ideas;
+        };
+        inputs.push({ slug, article: { blocks: read.blocks, tree: read.tree } as Article, quotes: read.quotes, ideas: read.ideas });
+        snapshot[slug] = {
+          fromFile: sha(file),
+          ideasVersion: read.ideas.version,
+          quotesVersion: read.quotes.version,
+          quotes: read.quotes.quotes.length,
+          ideas: read.ideas.ideas.length,
+        };
+        console.log(`${slug}: ${read.ideas.ideas.length} ideas (${read.ideas.version}), ${read.quotes.quotes.length} quotes, from a file`);
+        continue;
+      }
       const article = await pgArticleReader.loadArticle(slug);
       const ideasFound = await pgArticleReader.loadIdeas(slug);
-      if (ideasFound.stale || ideasFound.outdated) {
+      if (ideasFound.stale || (ideasFound.outdated && !ALLOW_OUTDATED_IDEAS)) {
         throw new Error(`${slug}: stored Ideas are ${ideasFound.stale ? "stale" : "outdated"} — regenerate first (F65)`);
       }
       if (ideasFound.ideas.ideas.length === 0) throw new Error(`${slug}: no stored Ideas`);
@@ -350,6 +461,7 @@ async function main(): Promise<void> {
       inputs.push({ slug, article, quotes: quotesFound.quotes, ideas: ideasFound.ideas });
       snapshot[slug] = {
         ideasVersion: ideasFound.ideas.version,
+        ideasOutdated: ideasFound.outdated,
         quotesVersion: quotesFound.quotes.version,
         quotesStale: quotesFound.stale,
         quotes: quotesFound.quotes.quotes.length,
@@ -369,7 +481,9 @@ async function main(): Promise<void> {
         inputs.flatMap((inp) =>
           ARMS.map((arm) =>
             runOne(inp, arm, run).catch((err: unknown) => {
-              console.error(`${inp.slug} ${arm}#${run}: ${err instanceof Error ? err.message : String(err)}`);
+              const message = err instanceof Error ? err.message : String(err);
+              console.error(`${inp.slug} ${arm}#${run}: ${message}`);
+              failures.push({ slug: inp.slug, arm, run, message });
               return null;
             }),
           ),
@@ -382,9 +496,12 @@ async function main(): Promise<void> {
           .map((w) => `d${w.depth}: ${w.stops} stops, in ${w.ideasIn}/${w.ideasTotal}, beside ${w.ideasInOrBeside}, sec ${w.sectionsWithStop}/${w.contentSections}, ${w.wordsPct.toFixed(1)}%`)
           .join(" | ");
         console.log(`${r.slug} ${r.arm}#${r.run} (${r.version}): ${cells} — $${(r.costNanos / 1e9).toFixed(4)}, ${(r.elapsedMs / 1000).toFixed(1)}s, ${r.inputTokens} in`);
+        console.log(
+          `  walked: ${r.walks.map((w) => `d${w.depth} ${w.length} (${w.carried} carried)`).join(", ")}; badAgain ${r.dropped.badAgain ?? 0}; thinking tokens ${r.reasoningTokens ?? "?"} of ${r.outputTokens} out`,
+        );
         console.log(`  offered ${r.offered}; ${r.abstractQuotes} stored quotes in the abstract; abstract stops at d1/d2/d3: ${r.abstractStops.join("/")}`);
       }
-      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, profile: null, snapshot, results }, null, 2));
+      writeFileSync(out, JSON.stringify({ oldVersion: OLD?.PROMPT_VERSION ?? null, newVersion: NEW.PROMPT_VERSION, oldModuleSha: OLD ? sha(OLD_MODULE) : null, newModuleSha: sha("src/skim.ts"), arms: ARMS, profile: null, snapshot, results, failures }, null, 2));
     }
   });
 

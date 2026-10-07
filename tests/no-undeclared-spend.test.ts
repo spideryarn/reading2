@@ -152,12 +152,22 @@ const ALLOWED: Readonly<Record<string, string>> = {
     "The Claude subagent wrapper. It names ANTHROPIC_API_KEY and its two siblings to decide whether they cross into the child process at all — the credential list *is* the mechanism, and every other ANTHROPIC_* variable is dropped by prefix because an inherited endpoint or provider override re-points the run at another bill. It makes no request itself: it spawns `claude -p`, which is why it also has a line in UNMETERED_SPEND. Unlike scripts/run-codex.ts, this scan can see it, so it needs both.",
   "scripts/ai-cost.ts":
     "Reads GET /api/v1/key to reconcile. Costs nothing and buys no inference.",
+  "scripts/openrouter-generation.ts":
+    "Reads GET /api/v1/generation, to say what OpenRouter itself recorded for a call whose ledger row has no money — for `npm run cost:analyse -- --lookup-unpriced` and the audit scripts under evals/cost/audit-261005/, which import it rather than each naming the host and the key. Costs nothing and buys no inference.",
   "tools/overseer/accounts.ts":
     "Reads GET /api/oauth/profile and GET /api/oauth/usage with a config directory's own subscription credential, to answer which account a directory belongs to and how much of its weekly allowance is left. Costs nothing and buys no inference — the same shape as scripts/ai-cost.ts and verify-costs.ts. It is NOT a Declaration: that table's rows are a claim that money leaves and no ai_calls row appears, so an entry for a metadata read would make `npm run cost` overclaim in the one direction the register exists to prevent. It cannot use either seam either — the seams speak chat and Messages to OpenRouter, and this is an account-identity endpoint on a different host. Measured 2026-09-10: nothing else free reports per-account usage, and the local cache is one slot per config dir that only a real session refreshes. The refresh token is deliberately never used, because rotating a credential live sessions hold could invalidate the login for the whole fleet.",
   "evals/structure-whole-document/verify-costs.ts":
     "Reads GET /api/v1/generation to reconcile a finished eval run's stored ids against the provider's own cost figures. Costs nothing and buys no inference — and it cannot live in the declared file, because a metered declaration covers only what declaredFetch guards.",
   "evals/structure-whole-document/preflight.ts":
     "Reads GET /api/v1/models immediately before a paid run, to check that each arm's model really has the effort its arm asks for — OpenRouter maps an unsupported level onto the nearest one rather than refusing it, so the alternative is a results file labelled with an effort that never ran. Costs nothing and buys no inference.",
+  "evals/command-suggest/run.ts":
+    "The command-suggest eval. Every paid call in it is production's own `suggestCommands`, which goes through `openRouterJson(\"command-suggest\", …)` inside the eval's ledger scope, so it is on the seam and in the ledger. What the scan sees is the host's name in a wrapper round `fetch` that only reads the reply the seam's request got back, to keep the model's raw answer and its cost for the checks and the budget stop. It makes no request of its own.",
+  "evals/long-structure/calls.ts":
+    "The long-structure eval's metered call. Every paid call in it is `streamMessage(\"structure\", …)` inside a `collectSpend` scope of kind `eval`, so it is on the seam and in the ledger. What the scan sees is one GET /api/v1/models, read once a run for the model's context window, to refuse a top-level request whose input would not fit before it is paid for. Costs nothing and buys no inference.",
+  "evals/long-structure/key-room.ts":
+    "Reads GET /api/v1/key before a paid run and refuses to start when the key's remaining monthly limit is under the run's floor. Costs nothing and buys no inference — the same read as scripts/ai-cost.ts.",
+  "evals/long-structure/fake-model.ts":
+    "The dry run's stand-in for the provider. It replaces `fetch` under the gateway and sets a made-up OPENROUTER_API_KEY for its duration, restoring the real one after, so that nothing in a dry run can reach the real provider. Names the credential only to overwrite it; no transport of its own.",
   "evals/structure-whole-document/verify-zdr.ts":
     "Reads GET /api/v1/endpoints/zdr to check that a finished run's challenger calls were served by an upstream that retains nothing — the request asked for it, and this is the only thing that can say whether it was honoured. Costs nothing and buys no inference; same reason as verify-costs.ts for why it cannot live in the declared file.",
   "evals/declared-spend.ts":
@@ -182,7 +192,7 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "tests/no-provider-calls-guard.test.ts":
     "The positive control for tests/setup/no-provider-calls.ts. It calls `fetch` at openrouter.ai on purpose, and the whole assertion is that the guard refuses it before a byte leaves — so the capability this scan sees is exactly the capability being proved absent. Listed by name for the same reason as the two above.",
 
-  /* **Nine that only ask whether the key is configured.** Each reads
+  /* **Five that only ask whether the key is configured.** Each reads
      `OPENROUTER_API_KEY` to fail with a sentence a person can act on, and then
      makes its request through the seam; none of them names an endpoint. Listed
      one by one rather than exempted by a rule, because *another* place learning
@@ -190,22 +200,25 @@ const ALLOWED: Readonly<Record<string, string>> = {
      parse `.env.local` with a regular expression, and that is worth one line of
      friction to find out about.
 
-     It was seven, and referee mode added three: `referee-criteria-run.ts`,
-     `referee-mirror.ts` and `referee-claims-run.ts`. The second of those landed
-     in `bd2f38e` without its line here and turned this test red for about an
-     hour, which is the test doing its job — a new paying file is exactly what it
-     exists to notice. */
-  "src/converse.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/explain.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/quiz-mark.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/search.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/referee-criteria-run.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/referee-claims-run.ts": "Presence check only; the call goes through openRouterStream.",
-  "src/referee-mirror.ts": "Presence check only; the call goes through openRouterStream.",
+     **It was twelve until 2026-10-04.** The seven streaming runners
+     (`converse.ts`, `explain.ts`, `quiz-mark.ts`, `search.ts` and referee
+     mode's `referee-criteria-run.ts`, `referee-claims-run.ts` and
+     `referee-mirror.ts`) each read the key, used it for nothing and threw the
+     sentence the gateway throws anyway. Those checks were deleted (plan
+     261004c § R3), the files no longer name the variable in code, and their
+     lines here went with them: an entry for a file that names no credential is
+     a standing permission for it to start.
+
+     One of those seven, `referee-mirror.ts`, had landed in `bd2f38e` without
+     its line here and turned this test red for about an hour, which is the
+     test doing its job — a new paying file is exactly what it exists to
+     notice. */
   "src/transcribe.ts": "Presence check only; the call goes through openRouterJson.",
   "src/pdf-read.ts": "Presence check only; the call goes through openRouterJson.",
   "src/shelf-topics.ts":
     "Presence check only; the call goes through openRouterJson in src/shelf-terms/model-scores.ts.",
+  "src/shelf-topic-sets.ts":
+    "Presence check only; the calls go through openRouterJson in src/shelf-terms/model-topics.ts.",
   "src/embeddings.ts":
     "Presence check, plus a settings URL in a help message. The call goes through openRouterJson.",
 

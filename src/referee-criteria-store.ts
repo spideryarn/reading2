@@ -21,8 +21,11 @@
  * - Everything else — the fingerprint, the retry rule, the colour — is
  *   deliberately identical, and where it is identical it is *imported* from
  *   src/searches.ts rather than copied (`pg-referee-criteria.ts` imports
- *   `requireColour` from there directly). The trim is each Postgres store's
- *   own, in SQL: `MAX_CRITERIA` mirrors `MAX_RUNS`.
+ *   `requireColour` from there directly).
+ * - **Nothing is trimmed.** Searches keep `MAX_RUNS` by dropping the oldest;
+ *   criteria did the same at twenty until 2026-10-07, and now refuse an add at
+ *   `MAX_CRITERIA` instead (`CRITERIA_AT_CEILING` below). A criterion is the
+ *   referee's own words, so it goes only when they delete it.
  *
  * ## What may be logged from this file
  *
@@ -65,8 +68,8 @@ import type { SavedCriterion } from "./saved-criteria.js";
  * different statements. A store reading `status` to work it out would get it
  * wrong: both branches produce `pending`.
  *
- * **It returns the row and not the list** — `withRun` says why. The trim to
- * `MAX_CRITERIA` is the SQL one in src/store/pg-referee-criteria.ts § begin.
+ * **It returns the row and not the list** — `withRun` says why. The ceiling,
+ * `MAX_CRITERIA`, is checked in SQL in src/store/pg-referee-criteria.ts § begin.
  */
 export function withCriterion(
   criteria: SavedCriterion[],
@@ -127,3 +130,51 @@ export function withCriterion(
 
 /** What a sweep writes over an abandoned `pending` row. */
 export const CRITERION_SWEPT = "The server stopped before this criterion finished.";
+
+/**
+ * The foreign key from a comment to the criterion it is placed on
+ * (src/db/schema.ts § `comments_criterion_fk`). Named once, because three
+ * store methods ask `violatesForeignKey` about it and a misspelt name matches
+ * nothing and says nothing.
+ */
+export const COMMENTS_CRITERION_FK = "comments_criterion_fk";
+
+/**
+ * **What a referee is told when they delete a criterion their own comments are
+ * placed on.** A 409: the key refusing is the design
+ * (docs/project/database.md § `restrict` and `no action`), and until 2026-10-07
+ * its refusal reached the reader as *"That is a bug here rather than anything
+ * you did"*.
+ *
+ * In the pattern of `importRunning` (src/store/pg-shelf.ts): what is in the
+ * way, and what to do about it, in the panel's own words — *Place on a
+ * criterion* and *Clear placement* are the controls' labels. No bracketed
+ * code, on docs/project/copy.md's rule that a refusal which is an answer gets
+ * none. What Delete should do with the comments was question 3b in
+ * docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg, and
+ * the answer relayed on 2026-10-07 was to keep refusing.
+ */
+export const CRITERION_HAS_COMMENTS =
+  "Your comments are placed on this criterion, so it cannot be deleted until you clear those " +
+  "placements or delete those comments.";
+
+/* The ceiling's refusal sentence and its recogniser live in
+   src/saved-criteria.ts beside `MAX_CRITERIA`, so the browser can recognise the
+   409 without importing this server module (tests/client-imports.test.ts).
+   Re-exported so server callers keep one import. */
+export { CRITERIA_AT_CEILING, criteriaAtCeiling, isCriteriaAtCeiling } from "./saved-criteria.js";
+
+/**
+ * **What a placement is told when its criterion is not there** — a 400, and
+ * word for word what `tidyMark` in src/routes.ts answers when it looks first
+ * and finds nothing. That early check stays; this is the same answer for the
+ * placement that passed it and then lost a race with a delete in another tab,
+ * which used to be a 500. `tidyMark` imports this same sentence, and
+ * tests/referee-routes-postgres.test.ts compares the two replies.
+ */
+export const CRITERION_NOT_ON_ARTICLE = "criterionId is not one of your criteria on this article";
+
+/** A store-side refusal that crosses `guardDbStore` by door 1: it carries a `status`. */
+export function criterionRefusal(status: 400 | 409, sentence: string): Error {
+  return Object.assign(new Error(sentence), { status });
+}

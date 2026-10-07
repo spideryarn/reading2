@@ -57,6 +57,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RefereePoles } from "../src/referee-criteria.js";
+import { CRITERION_HAS_COMMENTS } from "../src/referee-criteria-store.js";
 import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { Block, BlockId } from "../src/types.js";
 
@@ -484,7 +485,7 @@ describe("the condition red ↔ green is permitted under, asserted on the panel"
     ]);
   });
 
-  it("says what the tick does, because its own label is the criterion", async () => {
+  it("leaves what the tick does to the band's how-to-read button, and prints no copy", async () => {
     /* Sol's finding 8. Claims labels its identical checkbox in visible text —
        *"Mark these passages in the paper"* — and this one's label is the
        referee's own words, so nothing on screen said that the box is what
@@ -497,10 +498,14 @@ describe("the condition red ↔ green is permitted under, asserted on the panel"
        *false*, so the literal asserted here is the corrected one — Sol's finding
        7 on the built code — and the old sentence is asserted absent, because a
        later edit that put it back would otherwise pass. */
+    /* **And it left the panel on 2026-10-03**, when Greg chose to move each
+       panel's how-to-read sentences behind a button (plan 261003m). The
+       corrected sentence is asserted as a literal where it is drawn now —
+       tests/referee-notices.test.tsx § one press away — and here the panel is
+       held to printing no second copy of it, nor the false one. */
     await paint([-80]);
     const said = flat(host.querySelector(".crit")?.textContent);
-    expect(said).toContain("A criterion marks its passages while its tick is on");
-    expect(said).toContain("New runs turn it on automatically");
+    expect(said).not.toContain("A criterion marks its passages while its tick is on");
     expect(said).not.toContain("Nothing is marked until you do");
   });
 });
@@ -522,8 +527,8 @@ describe("pressing a result rings that phrase rather than washing the block", ()
     answer = () => Promise.resolve(json({ criteria: [diverging([-80, 40])], sourceHash: "h" }));
     mount();
     await flush();
-    /* Tick it, or nothing is marked at all — which is the rule the sentence
-       above the list now states. */
+    /* Tick it, or nothing is marked at all — the rule behind the band's
+       How to read this button. */
     click(host.querySelector(".crit-tick input") as Element);
     await flush();
 
@@ -642,7 +647,9 @@ describe("a criterion deleted while the model is thinking stays deleted", () => 
       },
     ]);
     await flush();
-    expect(host.querySelector(".gloss-quiet")?.textContent).toContain("Reading the paper…");
+    /* This answers the press that started the run: the words are immediate. */
+    expect(host.querySelector('.crit-row .band-waiting[role="status"]')?.textContent)
+      .toContain("Reading the paper…");
 
     // The referee gives up on it mid-run.
     click(byLabel("Delete"));
@@ -665,6 +672,87 @@ describe("a criterion deleted while the model is thinking stays deleted", () => 
     /* And the DELETE is sent again, because the first one may have run before
        the server finished writing the row it was deleting. */
     expect(deletes.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/* ------------------------------------------------- a delete the server refused -- */
+
+describe("a criterion the server refused to delete is put back", () => {
+  /* The delete is optimistic: the row leaves the screen before the request is
+     answered. The server refuses one with the referee's own comments placed on
+     it (409, `CRITERION_HAS_COMMENTS`), and until 2026-10-07 the hook showed the
+     sentence over a list the row was missing from — *"it cannot be deleted"*
+     about a thing that had visibly been deleted, back again on reload. */
+  const first = diverging([-80], { id: "spya-crt2aa", criterion: "Are the controls adequate?" });
+  const second = diverging([40], {
+    id: "spya-crt2bb",
+    criterion: "Is the sample large enough?",
+    createdAt: "2026-09-01T10:00:00.000Z",
+  });
+
+  function refuseDeletesWith(status: number, error: string): string[] {
+    const deletes: string[] = [];
+    answer = (url, init) => {
+      const method = (init.method ?? "GET").toUpperCase();
+      if (method === "GET") {
+        return Promise.resolve(json({ criteria: [first, second], sourceHash: "h" }));
+      }
+      if (method === "DELETE") {
+        deletes.push(url);
+        return Promise.resolve(json({ error }, status));
+      }
+      return Promise.resolve(json({}));
+    };
+    return deletes;
+  }
+
+  const deleteButtons = () => [...host.querySelectorAll('[aria-label="Delete"]')];
+  /** The panel lists newest first, so the older criterion's button is the second. */
+  const deleteTheOlder = () => click(deleteButtons()[1] as Element);
+
+  it("restores the row where it was, and says why", async () => {
+    const deletes = refuseDeletesWith(409, CRITERION_HAS_COMMENTS);
+    mount();
+    await flush();
+    expect(deleteButtons()).toHaveLength(2);
+
+    deleteTheOlder();
+    await flush();
+
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]).toContain(first.id);
+    const text = host.textContent ?? "";
+    expect(text, "the refused criterion is still missing from the list").toContain(first.criterion);
+    /* Where it was, not appended: appended, it would be the newest in the
+       hook's list and so drawn above the other one. */
+    expect(text.indexOf(second.criterion)).toBeLessThan(text.indexOf(first.criterion));
+    expect(host.querySelector(".crit-error")?.textContent).toBe(CRITERION_HAS_COMMENTS);
+    expect(deleteButtons()).toHaveLength(2);
+  });
+
+  it("can be pressed again afterwards, rather than being dead until a reload", async () => {
+    const deletes = refuseDeletesWith(409, CRITERION_HAS_COMMENTS);
+    mount();
+    await flush();
+    deleteTheOlder();
+    await flush();
+    deleteTheOlder();
+    await flush();
+    expect(deletes).toHaveLength(2);
+    expect(host.textContent).toContain(first.criterion);
+  });
+
+  it("does not put a row back for a failure that is not a refusal", async () => {
+    /* A 500 says nothing about whether the row is still there, so this is
+       today's behaviour left alone: gone from the screen, with the sentence. */
+    refuseDeletesWith(500, "It has been recorded. [db-failed]");
+    mount();
+    await flush();
+    deleteTheOlder();
+    await flush();
+    expect(host.textContent).not.toContain(first.criterion);
+    expect(host.textContent).toContain(second.criterion);
+    expect(host.querySelector(".crit-error")?.textContent).toContain("[db-failed]");
   });
 });
 
@@ -817,5 +905,62 @@ describe("a criterion answered about an older paper says so on the row", () => {
        cannot be judged against a paper that has one either. */
     await paint("h", undefined);
     expect(host.textContent).toContain(WARNING);
+  });
+});
+
+/* A criterion kind a newer server sends to a copy built before it. The line
+   under the criterion is a table read by that value. docs/plans/261005h,
+   Stage A. */
+describe("a criterion kind this copy of the app was built before", () => {
+  async function kindLine(row: SavedCriterion): Promise<string | null | undefined> {
+    answer = () => Promise.resolve(json({ criteria: [row], sourceHash: "h" }));
+    mount();
+    await flush();
+    expect(host.textContent, "no criterion reached the screen at all").toContain(row.criterion);
+    return host.querySelector(".crit-kind")?.textContent;
+  }
+
+  it("labels a kind it knows (the control)", async () => {
+    expect(await kindLine(diverging([], { sourceHash: "h" }))).toBe("For / against");
+  });
+
+  it.each(["a-newer-kind", "__proto__", "constructor", "toString"])(
+    "shows %s as the server's own word, and keeps the row",
+    async (kind) => {
+      const row = { ...diverging([], { sourceHash: "h" }), config: { kind } } as unknown as SavedCriterion;
+      expect(await kindLine(row)).toBe(kind.replaceAll("-", " "));
+    },
+  );
+});
+
+/* ------------------------------------- a failure another try cannot fix -- */
+
+/* `worthRetrying` (src/messages.ts) reads the bracketed code: an account with
+   no credit refuses the same question again, and a fresh full-price call is
+   what Try again spends. Search's rows already asked; these did not until
+   2026-10-07 (plan 261007a § K4, G2-08). */
+describe("a criterion whose run failed", () => {
+  const paintFailed = async (error: string) => {
+    const failed = diverging([], { status: "error", error });
+    answer = () => Promise.resolve(json({ criteria: [failed], sourceHash: "h" }));
+    mount();
+    await flush();
+  };
+
+  it("keeps the sentence and offers no Try again when trying again cannot help", async () => {
+    await paintFailed("This app's account with the AI service has run out of credit. [ai-no-credit]");
+    expect(host.querySelector(".crit-error")?.textContent).toContain("[ai-no-credit]");
+    expect(host.querySelector(".crit-retry")).toBeNull();
+  });
+
+  it("still offers Try again when it might work", async () => {
+    await paintFailed("The AI service is busy right now. [ai-busy]");
+    expect(host.querySelector(".crit-error")?.textContent).toContain("[ai-busy]");
+    expect(host.querySelector(".crit-retry")).not.toBeNull();
+  });
+
+  it("offers it for a sentence with no code, as every other surface does", async () => {
+    await paintFailed("The model stopped talking.");
+    expect(host.querySelector(".crit-retry")).not.toBeNull();
   });
 });

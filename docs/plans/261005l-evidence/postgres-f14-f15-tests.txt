@@ -1,0 +1,23 @@
+
+ RUN  v4.1.11 /var/tmp/spideryarn-worktrees/fbayettj-arxiv-import
+
+  [private lane] spideryarn_test_261006000800_2bbb11654511402ba39e13810aa4a011 in 4.9s, leased as spideryarn-test-lease-1092228, priced reader/researcher
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > is seeded with the keys the old build really wrote 10ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > hands back the job queued from the pdf/ address when the abs/ address is pasted 173ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > hands back the job queued from the html/ address when the abs/ address is pasted 77ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > hands a paste the retry of a failed job from before the resolver 97ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > does not hand back a job that is being cancelled, and spends the paste's slot on a new one 73ms
+ ✓ |private-postgres| tests/a-paper-queued-before-the-resolver.test.ts > a paper queued before the resolver, pasted again after it > still queues a different piece of work behind it, on the same article 70ms
+ ✓ |private-postgres| tests/one-article-for-one-address.test.ts > one address, one article > makes one article out of two simultaneous pastes of one address 112ms
+ ✓ |private-postgres| tests/one-article-for-one-address.test.ts > one address, one article > does not adopt the slug of a holder that has since gone 45ms
+ ✓ |private-postgres| tests/one-article-for-one-address.test.ts > one address, one article > a retry told sourceTaken does not leave the address unreserved 28ms
+ ✓ |private-postgres| tests/one-article-for-one-address.test.ts > one address, one article > a retry told nameTaken does not leave the address unreserved 30ms
+ ✓ |private-postgres| tests/one-article-for-one-address.test.ts > an article nobody has published into > does not let a request onto the slug of a holder that ended, while another mints a second 94ms
+ ✓ |private-postgres| tests/one-article-for-one-address.test.ts > an article nobody has published into > still lets a request join a live holder whose article is unpublished 36ms
+
+ Test Files  2 passed (2)
+      Tests  12 passed (12)
+   Start at  01:07:58
+   Duration  19.65s (transform 6.63s, setup 464ms, import 11.94s, tests 875ms, environment 0ms)
+
+  [private lane] dropped spideryarn_test_261006000800_2bbb11654511402ba39e13810aa4a011

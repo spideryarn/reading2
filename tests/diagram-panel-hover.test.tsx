@@ -24,6 +24,7 @@ import type { Block, BlockId, Tree } from "../src/types.js";
 import type { DiagramKind } from "../src/web/diagram.js";
 import { DiagramPanel } from "../src/web/DiagramPanel.js";
 import { buildSummaryTree, type SummaryNode } from "../src/web/tree.js";
+import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 
 /* jsdom lays nothing out: every element is 0×0 and there is no ResizeObserver.
    The panel refuses to draw against a zero width on purpose (a diagram laid out
@@ -58,7 +59,7 @@ const TOPICS = [
 ];
 
 /** Two sections, plus an internal link from the first to the second. */
-function article(): { root: SummaryNode; blocks: Block[] } {
+function article(): { root: SummaryNode; blocks: Block[]; tree: Tree } {
   const blocks = [
     block("b0", TOPICS[0] ?? "", `<p>${TOPICS[0]} <a href="#spya-b2">the second part</a></p>`),
     block("b1", TOPICS[1] ?? ""),
@@ -80,7 +81,7 @@ function article(): { root: SummaryNode; blocks: Block[] } {
   } as unknown as Tree;
   const root = buildSummaryTree(tree, blocks);
   if (!root) throw new Error("fixture tree is unusable");
-  return { root, blocks };
+  return { root, blocks, tree };
 }
 
 /**
@@ -159,6 +160,7 @@ afterEach(() => {
   act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 function mount(
@@ -236,11 +238,22 @@ describe("a picture with no data yet", () => {
   it("shows the spinner and says what the wait is for", () => {
     // A bare spinner in a 288px band says "something". The reader has just
     // pressed a chip that costs a model call and is owed the sentence.
-    mount("drift");
-    const wait = host.querySelector(".diag-wait");
-    expect(wait, "nothing stands where the picture will be").not.toBeNull();
-    expect(wait?.querySelector(".cmt-spinner"), "no spinner").not.toBeNull();
-    expect(wait?.textContent).toContain("paragraph by paragraph");
+    // The shared wait line (BandWaiting.tsx): its box at once, holding the
+    // picture's place, and the spinner and words once 600ms have gone by.
+    vi.useFakeTimers();
+    try {
+      mount("drift");
+      const wait = host.querySelector(".diag-wait");
+      expect(wait, "nothing stands where the picture will be").not.toBeNull();
+      expect(wait?.textContent, "words before the wait is worth mentioning").toBe("");
+      act(() => {
+        vi.advanceTimersByTime(SLOW_AFTER_MS + 1);
+      });
+      expect(wait?.querySelector(".cmt-spinner"), "no spinner").not.toBeNull();
+      expect(wait?.textContent).toContain("paragraph by paragraph");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("announces the wait once, not twice", () => {
@@ -250,7 +263,7 @@ describe("a picture with no data yet", () => {
     mount("drift");
     const live = [...host.querySelectorAll('[role="status"]')];
     expect(live).toHaveLength(1);
-    expect(live[0]?.className).toBe("diag-wait");
+    expect(live[0]?.classList.contains("diag-wait")).toBe(true);
   });
 });
 
@@ -424,6 +437,79 @@ describe("hovering a bubble", () => {
         );
     });
     expect(cardText()).toContain("you are here");
+  });
+
+  it("keeps a hovered node when only the image HTML redraws", () => {
+    const original = article();
+    mount("force", () => original);
+    act(() => {
+      host
+        .querySelector('g.diag-node[data-diag-id="n3"] .diag-box')
+        ?.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+    });
+    expect(cardText()).toContain("Section n3");
+
+    const redrawnBlocks = original.blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(original.tree, redrawnBlocks)!;
+    expect(redrawnRoot).not.toBe(original.root);
+    mount("force", () => ({ root: redrawnRoot, blocks: redrawnBlocks }));
+
+    expect(cardText(), "an image redraw dropped a real hover").toContain("Section n3");
+    expect(cardText()).not.toContain("you are here");
+  });
+
+  it("lets go of a hovered node when the tree is replaced under it", () => {
+    /* An article opened before its structure is built has its tree replaced
+       live (docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md,
+       GPT Sol's F1). The builders' node ids are positional, so `n3` in the new
+       tree can be a different passage — and a node replaced under the pointer
+       fires no pointer-leave, so the held hover also stops the picture
+       following the reader (DiagramPanel.tsx § the follow-scroll effect). */
+    mount();
+    act(() => {
+      host
+        .querySelector('g.diag-node[data-diag-id="n3"] .diag-box')
+        ?.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+    });
+    expect(cardText()).toContain("Section n3");
+
+    /* The same picture kind, a new tree: `mount` builds its fixture afresh. */
+    mount();
+
+    expect(cardText(), "the card is still on a node of the tree that went").toContain(
+      "you are here",
+    );
+  });
+
+  it("keeps keyboard roving focus through images, then resets it for a new stored tree", () => {
+    const original = article();
+    mount("force", () => original);
+    const first = host.querySelector<SVGGElement>('g.diag-node[data-diag-id="n2"]')!;
+    const held = host.querySelector<SVGGElement>('g.diag-node[data-diag-id="n3"]')!;
+    act(() => first.focus());
+    act(() => first.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowDown", bubbles: true, cancelable: true,
+    })));
+    expect(document.activeElement).toBe(held);
+    expect(held.getAttribute("tabindex")).toBe("0");
+    expect(cardText()).toContain("Section n3");
+    expect(cardText()).not.toContain("you are here");
+
+    const redrawnBlocks = original.blocks.map((b) => ({ ...b, html: `${b.html}<img src="/hosted">` }));
+    const redrawnRoot = buildSummaryTree(original.tree, redrawnBlocks)!;
+    mount("force", () => ({ root: redrawnRoot, blocks: redrawnBlocks }));
+    expect(document.activeElement, "images moved actual focus out of the held node").toBe(held);
+    expect(held.getAttribute("tabindex"), "images reset the roving tabstop").toBe("0");
+    expect(first.getAttribute("tabindex")).toBe("-1");
+    expect(cardText(), "images discarded the keyboard's picked node").toContain("Section n3");
+    expect(cardText()).not.toContain("you are here");
+
+    const replacement = structuredClone(original.tree);
+    const replacedRoot = buildSummaryTree(replacement, redrawnBlocks)!;
+    mount("force", () => ({ root: replacedRoot, blocks: redrawnBlocks }));
+    expect(held.getAttribute("tabindex"), "a new stored tree retained the old roving node").toBe("-1");
+    expect(first.getAttribute("tabindex")).toBe("0");
+    expect(cardText(), "a new stored tree retained the old keyboard pick").toContain("you are here");
   });
 });
 
@@ -748,6 +834,10 @@ describe("the controls explain themselves", () => {
    * head against the control it focused.
    */
   const cardFor = async (el: Element): Promise<{ head: string; body: string }> => {
+    /* A faked clock from the first card to the end of the case (2026-10-04:
+       three real 400ms sleeps a control, until then). The cases `settle` on a
+       real timer *before* their first card, and `afterEach` hands it back. */
+    vi.useFakeTimers();
     /* Close whatever is open first. A previous control's card outliving its
        blur is what would let the query below read a neighbour's words as this
        control's, and it does outlive it across a remount — the card is
@@ -756,26 +846,25 @@ describe("the controls explain themselves", () => {
        React's, and tearing its node out from under it took the *next* mount's
        panel down with it — five seconds of timeout and an undrawn band. */
     (document.activeElement as HTMLElement | null)?.blur();
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => { vi.advanceTimersByTime(400); });
     (el as HTMLElement).focus();
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => { vi.advanceTimersByTime(400); });
     const cards = document.querySelectorAll('[role="tooltip"], [role="dialog"]');
     expect(cards, "focusing this control opened no card, or more than one").toHaveLength(1);
     const card = cards[0];
     const head = card?.querySelector(".tip-soon-head")?.textContent ?? "";
     const body = (card?.textContent ?? "").slice(head.length);
     (el as HTMLElement).blur();
-    await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+    await act(async () => { vi.advanceTimersByTime(400); });
     return { head, body };
   };
 
   /** More than the label the reader can already see, which is the whole point. */
   const isDetailed = (body: string) => body.length > 80;
 
-  /* Two 400ms waits per control — the delay group's open plus its transition —
-     so four chips is already close to vitest's 5s default, and the first run of
-     this timed out at 5007ms. Shortening the wait trades a slow test for a
-     flaky one. */
+  /* Two 400ms waits per control — the delay group's open plus its transition.
+     They were real time until 2026-10-04, which is what the 20s timeouts below
+     were for: four chips was already close to vitest's 5s default. */
   it("puts a card on every chip in the picture row", { timeout: 20000 }, async () => {
     mount("force");
     await settle();
@@ -813,8 +902,9 @@ describe("the controls explain themselves", () => {
        checked too: falling back to one would put the same words in the same
        place by another mechanism. */
     for (const button of [parts[0], parts[2]]) {
+      vi.useFakeTimers();
       (button as HTMLElement).focus();
-      await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
+      await act(async () => { vi.advanceTimersByTime(400); });
       expect(
         document.querySelectorAll('[role="tooltip"], [role="dialog"]'),
         "a step button opened a card, which was deleted",

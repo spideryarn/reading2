@@ -22,8 +22,15 @@ page is the short version: what an agent has to do, and what the tab will and wi
 
 `scripts/readiness-run.ts` runs one check (`test`, `typecheck`, `check`, `lint`, `build`) and writes
 a record to `~/.fleet-readiness/runs/` carrying the commit it ran on, the tree state at **both** ends
-of the run, how it ended and what it counted. Wrapping it in `tmux-job.ts` is the usual reason —
+of the run, how it ended, what it counted and — for a failure — which test files failed. Wrapping it in `tmux-job.ts` is the usual reason —
 the run survives a disconnect and its output is kept.
+
+**How long a run took is already recorded and already drawn.** Every record carries `durationMs`
+([`scripts/readiness-run.ts`](../../scripts/readiness-run.ts) writes it; parsed in
+[`readiness.ts`](../../tools/fleet/readiness.ts) and
+[`readiness-client.ts`](../../tools/fleet/web/src/readiness-client.ts)), and
+[`ReadinessPanel.tsx`](../../tools/fleet/web/src/ReadinessPanel.tsx) shows it on each check's row
+beside its latest reading (` · 6.2m`, from `describeDuration`) and in each mark's hover title — so a change to *how* it is shown is a panel edit, not a new datum.
 
 **A plain `npm test` leaves no record.** It will still appear in the tab's 24-hour history,
 reconstructed from its tmux log, drawn faded — and it can never make the answer green, because
@@ -50,6 +57,33 @@ And "on dev" means **this box's cached `origin/dev`**. When that was last checke
 is not knowable from the ref — `git pack-refs` touches it without fetching, and a fetch that changes
 nothing does not touch it — so a green verdict is never a claim about what is on GitHub now.
 
+## Which test files failed
+
+A failed run's record names the test files that failed, and the tab has a **Failing test files**
+card: each file, how many failed runs with recorded names listed it, and when it was first and last listed. That
+is the difference between a test that has been red since this morning and one that failed once.
+The wrapper also prints the names as its last line, and the loop puts them on its `outcome:` line.
+The design is [261006m](../plans/261006m-seventh-sweep-readiness-records-name-the-failing-test-files.md).
+
+Three things it will not say:
+
+- **That no file failed.** The field is a non-empty list or it is absent. Absent means *not known* —
+  a record from before 2026-10-06, a failure that was not a test's (typecheck, a killed run), or a
+  failure summary the scanner would not vouch for. The card counts those runs rather than dropping
+  them.
+- **That it is about dev.** The card pools every failed wrapper run in the window, on any commit.
+  The headline's five clauses do not apply to it, and it never feeds the headline.
+- **More than it kept.** A record lists at most twenty files, sorted, with the true total beside
+  them; when a list was cut, the card's counts read "at least".
+
+The names come from vitest's own failure summary — the ` FAIL  <project>  tests/x.test.ts > …`
+lines under its `Failed Suites` / `Failed Tests` headings — read as the output streams past, because
+in a full `npm run check` that summary is in the middle of a 14 MB log and in neither end the
+wrapper keeps. The scanner requires a completed summary and agreement with the streamed file tally,
+counting a path run under two projects as two executions. Ambiguous summaries, including a
+`FAIL` line quoted inside diagnostic text, leave the names unknown. A run reconstructed from a tmux log never has names: it holds two ends of the log
+and could not tell how many failures it had missed.
+
 ## What the graphs show
 
 A mark per run, at the instant it finished. **Not spans**: extending a pass rightwards to the next
@@ -65,11 +99,24 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness.ts` | the record's shape and its parser |
 | `tools/fleet/readiness-store.ts` | one atomic file per run; no lock, no rotation |
 | `tools/fleet/readiness-git.ts` | the tree stamps and the dev snapshot, bounded and off the request path |
-| `tools/fleet/readiness-parse.ts` | reading a check's own output back |
+| `tools/fleet/readiness-parse.ts` | reading a check's own output back, and the two things caught as it streams past: an admission refusal and the failing test files |
 | `tools/fleet/readiness-backfill.ts` | the tmux-log scan, recomputed per collection and never stored |
+| `tools/fleet/build-files.ts` | the fleet bundle's manifest, and the check that the bundle on disk is the one a build wrote |
 | `tools/fleet/readiness-verdict.ts` | the conjunction above, as one pure function |
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
+| `tools/fleet/web/src/readiness-client.ts` | the browser's parser of `/api/readiness`, and its types (the `durationMs` the panel draws) |
+| `tools/fleet/web/src/ReadinessPanel.tsx` | the dashboard tab: `useReadinessView` fetches on mount and on Refresh, then polls in a second effect at the server's own `refreshMs` (clamped 15s–10min) |
+
+Tests, in `tests/`: [`fleet-readiness.test.ts`](../../tests/fleet-readiness.test.ts) (records, verdict,
+parsing), [`fleet-readiness-route.test.ts`](../../tests/fleet-readiness-route.test.ts),
+[`fleet-readiness-async.test.ts`](../../tests/fleet-readiness-async.test.ts),
+[`fleet-readiness-panel.test.ts`](../../tests/fleet-readiness-panel.test.ts),
+[`fleet-readiness-poll.test.tsx`](../../tests/fleet-readiness-poll.test.tsx),
+[`fleet-readiness-failing-files.test.tsx`](../../tests/fleet-readiness-failing-files.test.tsx),
+[`readiness-failed-files-review.test.ts`](../../tests/readiness-failed-files-review.test.ts) and
+[`readiness-loop.test.ts`](../../tests/readiness-loop.test.ts) (the periodic runner,
+[`scripts/readiness-loop.ts`](../../scripts/readiness-loop.ts)).
 
 ## Three ways it nearly lied, caught in review
 
@@ -87,6 +134,20 @@ derived state up to date:
 - **Exit 0 treated as "the artefact is fresh".** An inherited `npm_config_dry_run=true` made `npm ci`
   succeed without installing, and a stale `dist/index.html` was accepted because it existed.
   [260909c](../postmortems/260909c-artifact-provenance-after-successful-commands.md).
+
+A fourth review, of the fix for that last one, found the fix had the same shape, and the answer was
+to stop guessing (2026-10-06,
+[261006h](../plans/261006h-readiness-runner-round-3-fleet-bundle-provenance-and-npm-ignore-scripts.md)):
+
+- **A list of inputs stood in for the artefact.** The fleet client was rebuilt only when a diff
+  touched a hand-kept list of paths, and the list had already missed one. The runner now builds it
+  once per commit itself, remembers that build's manifest, never reuses a bundle it found on disk,
+  and checks the result against `build-files.json` — every file the build wrote, with its hash —
+  and the stamp's sha.
+- **One environment variable pinned at a time.** `--dry-run=false` answered one inherited npm
+  setting; `ignore_scripts` and `script_shell` did the same damage. The runner's children now start
+  with every `npm_config_*` variable removed. A setting in a user-level npmrc is still not covered,
+  beyond `dry-run` and `ignore-scripts`.
 
 ## Not built
 

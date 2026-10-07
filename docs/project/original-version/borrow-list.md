@@ -20,7 +20,7 @@ sites, more prompts, or more marks on the page.
 | **Time every model call from the outside** | The SDK's own timestamp fields were empty in production, and read as zero rather than as missing | [llm-plumbing.md](llm-plumbing.md#one-real-gotcha-worth-stealing-outright) |
 | **A global `prefers-reduced-motion` rule** | Ours is a view built on motion. Retrofitting per-component is how theirs ended up covering almost nothing | [design-system.md](design-system.md#accessibility-and-motion) |
 | **The two-sided extraction ratio check** | Catches the extraction failure that errors nothing: a page that extracted *something*, but not the article | [extraction.md](extraction.md#quality-measurement-real-and-worth-rebuilding) |
-| **Adopt 238 wpm with its citation** | Ours uses an uncited 230. One number, one reference, one module already built for it | [difficulty-and-reading-time.md](difficulty-and-reading-time.md#reading-time-the-good-one) |
+| ~~**Adopt 238 wpm with its citation**~~ — **done**, 2026-10-05 | Ours used an uncited 230. One number, one reference, one module already built for it | [difficulty-and-reading-time.md](difficulty-and-reading-time.md#reading-time-the-good-one) |
 | **A fatal error on any id collision** | Their guard is the thing that would have caught their real "headings vanish after reload" bug early | [ids.md](ids.md#three-more-things-they-learned-the-hard-way) |
 | ~~**Size cap, timeout and browser-like headers on the fetch**~~ — **done**, 2026-08-25 | Taken, with none of their numbers: their 4 MB cap would have refused one of Greg's own example PDFs, and their SSL-root-CA fix depends on a package dead since 2019 | [../fetching.md](../fetching.md), [extraction.md](extraction.md#the-fetch-and-one-hard-won-fix) |
 
@@ -32,8 +32,8 @@ Real features or subsystems, worth doing properly, in this order.
 
 The single largest lever, and the one they researched and never pulled. Our shape — one long
 article, dozens of short varying instructions — is the textbook case. Break-even is about two reuses;
-we do dozens. Finish by printing a total at the end of `npm run toc` and writing it into
-[Q7](../open-questions.md#q7), because their logging existed for a year and still couldn't answer
+we do dozens. Finish by printing a total at the end of the run and writing it down
+(Q7, [closed](../ai-gateway.md#what-an-article-costs)), because their logging existed for a year and still couldn't answer
 "what does this cost".
 → [prompt-caching.md](prompt-caching.md)
 
@@ -183,3 +183,7 @@ there.
 - [overview.md](overview.md) — the map to that codebase, and every doc in this folder
 - [../open-questions.md](../open-questions.md) — where several of these decisions land
 - [../vision.md](../vision.md) — the tiebreak for anything in the "not borrowing" list
+
+---
+
+Up: [overview.md](overview.md)

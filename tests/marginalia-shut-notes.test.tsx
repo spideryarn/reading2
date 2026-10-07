@@ -8,7 +8,8 @@ import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CitedWork, FaqQuestion } from "../src/types.js";
+import type { PublicComment } from "../src/public-types.js";
+import type { BlockId, CitedWork, FaqQuestion } from "../src/types.js";
 import { MarginNotesSlot, useMarginLayout } from "../src/web/marginalia/MarginaliaColumn.js";
 import type { MarginClaim, MarginComment, MarginaliaNote } from "../src/web/marginalia/notes.js";
 
@@ -105,14 +106,138 @@ describe("a shut line", () => {
     expect(el.querySelector(".marg-shut-button")?.textContent).toContain("3 works");
   });
 
-  it("opens a reader's comment to the whole of it, its line cut at one", () => {
+  /* Greg, spya-zmdb7y (plan 261003j): nothing about a cited work beyond what
+     the article's own bibliography gives. `why` is the model's paraphrase. */
+  it("opens a citation to the article's own entry, never the model's sentence about the work", () => {
+    const cited = {
+      id: "a",
+      title: "A work",
+      authors: "Tulving",
+      year: "1983",
+      why: "THE MODEL'S SENTENCE.",
+      entry: "Tulving, E. (1983). Elements of Episodic Memory. Oxford.",
+    } as unknown as CitedWork;
+    const el = draw([{ kind: "citation", items: [cited] }]);
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    const item = el.querySelector(".marg-open-item");
+    expect(item?.textContent).not.toContain("THE MODEL'S SENTENCE.");
+    expect(item?.querySelector(".marg-cite-entry")?.textContent).toBe(cited.entry);
+  });
+
+  it("opens a lone citation with no by-line and no entry to its title, not to nothing", () => {
+    const bare = { id: "a", title: "A bare work", why: "THE MODEL'S SENTENCE." } as unknown as CitedWork;
+    const el = draw([{ kind: "citation", items: [bare] }]);
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    const item = el.querySelector(".marg-open-item");
+    expect(item?.textContent).toBe("A bare work");
+  });
+
+  /* Report spya-a0wpv4, plan 261006i: the shut line un-truncates when it opens
+     (marginalia.css), so it is already the whole comment, and the open half
+     printing the body under it said the comment twice. The question's half of
+     this class is spya-f6dpj5, below. */
+  it("says a lone comment's words once when it is opened: the line is the whole of it", () => {
     const body = "Not sure I buy this claim, and here is a long reason why that will not fit on one line.";
     const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", body, status: "none" } as unknown as MarginComment;
     const el = draw([{ kind: "comment", items: [{ as: "comment", comment }] }]);
     const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
     expect(button?.querySelector(".marg-stamp")?.textContent).toBe("Comment");
     act(() => button?.click());
-    expect(el.querySelector(".marg-open")?.textContent).toContain(body);
+    /* The full comment is already in the accessibility tree; this press only
+       changes its visual wrapping. It is not an ARIA disclosure with a
+       controlled region. Code review of plan 261006i. */
+    expect(button?.hasAttribute("aria-expanded")).toBe(false);
+    expect(el.querySelector(".marg-shut")?.hasAttribute("data-open")).toBe(true);
+    expect((el.textContent ?? "").split(body).length - 1).toBe(1);
+    expect(button?.textContent).toContain(body);
+    /* Nothing is left for an open half, so there is none: no empty box, and
+       no `aria-controls` naming one (GPT Sol, F1 on the plan). */
+    expect(el.querySelector(".marg-open")).toBeNull();
+    expect(button?.hasAttribute("aria-controls")).toBe(false);
+    act(() => button?.click());
+    expect(button?.hasAttribute("aria-expanded")).toBe(false);
+    expect(el.querySelector(".marg-shut")?.hasAttribute("data-open")).toBe(false);
+  });
+
+  /* The owner's comment as a visitor is sent it (src/public-types.ts §
+     `PublicComment`): the same words, no status and no thread. */
+  it("says a visitor's copy of a lone comment once too", () => {
+    const comment: PublicComment = { id: "c", blockId: "spya-aaaaa1" as BlockId, createdAt: "t", body: "the owner's thought" };
+    const el = document.createElement("div");
+    host = el;
+    document.body.append(el);
+    const nextRoot = createRoot(el);
+    root = nextRoot;
+    act(() => nextRoot.render(<MarginNotesSlot viewer="visitor" notes={[{ kind: "comment", items: [{ as: "comment", comment }] }]} />));
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    expect((el.textContent ?? "").split("the owner's thought").length - 1).toBe(1);
+    expect(el.querySelector(".marg-open")).toBeNull();
+  });
+
+  /* *Ask AI* with no words of the reader's: the line is our stand-in and
+     there is nothing behind it, so it is not a button that opens to nothing. */
+  it("draws a lone wordless Ask AI as plain text, with nothing to press", () => {
+    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", status: "none", threadId: "t9" } as unknown as MarginComment;
+    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
+    expect(el.querySelector(".marg-shut-button")).toBeNull();
+    expect(el.querySelector("p.marg-shut")?.textContent).toBe("Comment + AI Asked the AI about this passage");
+  });
+
+  it("takes a shut panel out of the layout despite the panel's grid display", () => {
+    const css = readFileSync("src/web/styles/marginalia.css", "utf8");
+    expect(css).toMatch(/\.marg-open\[hidden\]\s*\{[^}]*display:\s*none/);
+    const style = document.createElement("style");
+    style.textContent = css;
+    const panel = document.createElement("div");
+    panel.className = "marg-open";
+    panel.hidden = true;
+    document.head.append(style);
+    document.body.append(panel);
+    expect(getComputedStyle(panel).display).toBe("none");
+    panel.hidden = false;
+    expect(getComputedStyle(panel).display).toBe("grid");
+    panel.remove();
+    style.remove();
+  });
+
+  it("keeps a lone comment's AI answer in the open half, under words said once", () => {
+    const body = "Check this claim.";
+    const answer = "The article answers it in the next paragraph.";
+    const comment = { id: "c", blockId: "spya-aaaaa1", createdAt: "t", status: "done", body, answer } as unknown as MarginComment;
+    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
+    act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+    expect((el.textContent ?? "").split(body).length - 1).toBe(1);
+    expect(el.querySelector(".marg-open .marg-open-answer")?.textContent).toBe(answer);
+  });
+
+  it("keeps a lone answer with no reader words in a non-empty open half", () => {
+    const answer = "The next paragraph supplies the missing evidence.";
+    const comment = {
+      id: "c",
+      blockId: "spya-aaaaa1",
+      createdAt: "t",
+      status: "done",
+      answer,
+    } as unknown as MarginComment;
+    const el = draw([{ kind: "comment", items: [{ as: "comment-ai", comment }] }]);
+    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+    expect(button?.textContent).toContain("AI answer");
+    expect(button?.hasAttribute("aria-controls")).toBe(true);
+    act(() => button?.click());
+    expect(el.querySelector(".marg-open-item")?.textContent).toBe(answer);
+  });
+
+  /* The other side of the guard: among several, the line is a count, so each
+     comment's words are only in the open half and must stay there. */
+  it("still shows each comment's words in the open half when a block has several", () => {
+    const one = { id: "c1", blockId: "spya-aaaaa1", createdAt: "t", body: "first thought", status: "none" } as unknown as MarginComment;
+    const two = { id: "c2", blockId: "spya-aaaaa1", createdAt: "t", body: "second thought", status: "none" } as unknown as MarginComment;
+    const el = draw([{ kind: "comment", items: [{ as: "comment", comment: one }, { as: "comment", comment: two }] }]);
+    const button = el.querySelector<HTMLButtonElement>(".marg-shut-button");
+    expect(button?.textContent).toContain("2 comments");
+    act(() => button?.click());
+    const bodies = [...el.querySelectorAll(".marg-open .marg-cmt-body")].map((p) => p.textContent);
+    expect(bodies).toEqual(["first thought", "second thought"]);
   });
 
   /* SPIDERYARN-READING2-9H, plan 261002j: the stamp is the kind. */
@@ -165,6 +290,49 @@ describe("a shut line", () => {
     );
     act(() => open?.click());
     expect(opened).toEqual(["t1"]);
+  });
+
+  /* Report spya-f6dpj5, plan 261004k § 7: the shut line un-truncates when it
+     opens, so a lone question's open half repeating its stamp and its words
+     said *Question · About this paragraph* twice, one above the other. */
+  it("says a lone question's words once when it is opened, and still opens its conversation", () => {
+    const opened: string[] = [];
+    const drawLone = (asked: { id: string; blockId: string; createdAt: string; quote?: string }) => {
+      const el = document.createElement("div");
+      host = el;
+      document.body.append(el);
+      const nextRoot = createRoot(el);
+      root = nextRoot;
+      act(() =>
+        nextRoot.render(
+          <MarginNotesSlot
+            viewer="owner"
+            onOpenAsked={(id) => opened.push(id)}
+            notes={[{ kind: "comment", items: [{ as: "question", asked }] }]}
+          />,
+        ),
+      );
+      act(() => el.querySelector<HTMLButtonElement>(".marg-shut-button")?.click());
+      return el;
+    };
+    const count = (el: HTMLElement, words: string) => (el.textContent ?? "").split(words).length - 1;
+
+    const bare = drawLone({ id: "t1", blockId: "spya-aaaaa1", createdAt: "t" });
+    expect(bare.querySelector(".marg-shut-button")?.getAttribute("aria-expanded")).toBe("true");
+    expect(count(bare, "About this paragraph")).toBe(1);
+    expect(count(bare, "Question")).toBe(1);
+    expect(bare.querySelector(".marg-open .marg-open-head")).toBeNull();
+    const open = [...bare.querySelectorAll<HTMLButtonElement>(".marg-open button")].find(
+      (b) => b.textContent === "Open the conversation",
+    );
+    act(() => open?.click());
+    expect(opened).toEqual(["t1"]);
+    act(() => root?.unmount());
+    host?.remove();
+
+    /* And the passage it was asked from, which the shut line already quotes. */
+    const quoted = drawLone({ id: "t2", blockId: "spya-aaaaa1", createdAt: "t", quote: "the bound holds" });
+    expect(count(quoted, "the bound holds")).toBe(1);
   });
 
   it("shows the first lines of an AI answer under the reader's comment", () => {

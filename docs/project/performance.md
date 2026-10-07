@@ -18,6 +18,30 @@ nobody asked for should cost nothing. A model call, a force simulation on the fr
 `Force`, an ingest walking its five steps — all fine. A tab left open on a table doing four hundred
 things an hour to change no pixel is not, and that is what this page is about.
 
+## In this doc
+
+Most of this page is dated measurement write-ups, in the order they happened. The first four
+sections are the ones to use; the last two are the code map and the habits.
+
+- [§ Start here: the recipes](#start-here-the-recipes) — the commands to run; comparing against `main`
+- [§ Before you believe a number](#before-you-believe-a-number) — why a measurement lies; render counts
+- [§ The instruments](#the-instruments-and-which-one-answers-which-question) — which tool answers which question
+- [§ The numbers, 2026-08-27](#the-numbers-2026-08-27) — the first at-rest baseline (history)
+- [§ What was ruled out](#what-was-ruled-out-and-why-that-is-worth-writing-down) — hypotheses that died, so you skip them (history)
+- [§ What was fixed](#what-was-fixed) — the job poller, `drive`, the clock, chat anchors, the force simulation (history)
+- [§ The traps](#the-traps-all-of-which-produced-a-confident-wrong-number-first) — wrong numbers taken first
+- [§ The shelf infinite render loop](#the-shelf-was-in-an-infinite-render-loop-2026-08-27) and [§ The regression test](#the-regression-test) (history)
+- [§ The 82% tab](#the-82-tab-2026-08-27) — a tab at 82% CPU, and what a cross-family review refuted (history)
+- [§ Scrolling, 2026-08-27](#scrolling-2026-08-27) → [2026-09-03](#scrolling-rebuilt-the-whole-article-2026-09-03) → [2026-09-04](#scrolling-re-rendered-the-whole-reading-view-2026-09-04) — three rounds on scroll cost; ends with [what is still open, ranked](#still-open-ranked-with-citations) (history)
+- [§ Clicking, 2026-09-05](#clicking-2026-09-05-and-everything-above-this-line-is-about-scrolling) — what a mode switch costs; why length changes the answer
+- [§ Startup, 2026-09-05](#startup-2026-09-05-and-everything-above-this-line-is-about-a-page-already-running) — how a startup change may be reported; lazy-loading /admin and /design
+- [§ What we still do not know](#what-we-still-do-not-know) — open measurement questions
+- [§ The annotation pipeline, 2026-09-06](#the-annotation-pipeline-2026-09-06-measured-cut-and-it-did-not-fix-the-click) — cost of marks on the click (history)
+- [§ At rest again, 2026-09-12](#at-rest-again-2026-09-12-the-cost-was-requests-not-cpu) — an idle tab's cost was requests (history)
+- [§ Scrolling again, 2026-10-03](#scrolling-again-2026-10-03-most-of-the-unattributed-bucket-was-the-spines-band) — the spine's band (history)
+- [§ Where the pieces are](#where-the-pieces-are) — instruments, the tests that hold fixes down, the hot code
+- [§ If you are about to work on this](#if-you-are-about-to-work-on-this) — read this first before touching it
+
 ## Start here: the recipes
 
 Every command below is real and was run today. Article slugs live in `data/`; `constitution` is a
@@ -866,7 +890,7 @@ any change to the query string re-renders this whole tree".
 Half true, and the false half matters: **nuqs subscriptions are key-isolated.** Its adapter filters
 `location.search` down to the keys each hook watches and returns the cached snapshot when those are
 unchanged, so a parameter owned by a *child* wakes only that child. Ten reading parameters are like
-that — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`, `dx`, `dhue`, `referee`, `remember`. It never
+that — `rank`, `bar`, `run`, `conf`, `deep`, `diagram`, `dx`, `dhue`, `referee`, `learn`. It never
 bit because `?at=` re-rendered the reading view eighty-odd times a scroll and refreshed every href on
 the way past. **A memo turns a self-healing staleness into a permanent one.** Found by GPT Sol
 reviewing the plan, before it shipped.

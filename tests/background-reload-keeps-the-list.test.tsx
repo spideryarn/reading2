@@ -130,7 +130,13 @@ vi.mock("../src/web/lib/api.js", () => ({
     const body = bodyFor(input);
     const dead = fails;
     await new Promise<void>((go) => held.push(go));
-    if (dead) throw new TypeError("Failed to fetch");
+    /* Marked, as the real `apiFetch` marks what comes out of `fetch`: an
+       unmarked `TypeError` is a bug's, and the read catches say it as one
+       (src/web/lib/describe-failure.ts). */
+    if (dead) {
+      const { markUnreachable } = await import("../src/web/lib/reader-facing.js");
+      throw markUnreachable(new TypeError("Failed to fetch"));
+    }
     return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
   },
   leavingFetch: async () => undefined,
@@ -178,10 +184,15 @@ vi.mock("../src/web/useJobs.js", () => ({
 
 /* The Dock reaches Supabase and the whole visitor layer, and none of it is
    what this file is about. */
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The bar is stubbed; the module's helpers are real — Metadata.tsx calls
+   `withPanel` from it, and a factory that names only `Dock` throws on the rest. */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 
 const { useIdeas } = await import("../src/web/useIdeas.js");
-const { TweetsBand } = await import("../src/web/modes/tweets/TweetsMode.js");
+const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");
 
 /** A job for this article, landing in the hook's poll as finished. */
 function finishJob(step: string, slug = "constitution"): void {

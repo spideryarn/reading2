@@ -45,7 +45,7 @@
  * ## Confirming is allowed here; grading is not
  *
  * This is the one place quiz departs from free recall, and the distinction is
- * fault 6 in remember-mode's list. A quiz question **has** a right answer and the
+ * fault 6 in learn-mode's list. A quiz question **has** a right answer and the
  * reader asked to be told, so *"yes: the passage treats X as Y [id]"* is a fact
  * about the article and is exactly what they wanted. *"Your answer was mostly
  * correct"* is a verdict on the person, and is the sentence to delete. The line
@@ -59,18 +59,17 @@
  * finish reason only. docs/project/logging.md.
  */
 
-import { loadEnvLocal } from "./env.js";
 import { errorFields, log, since } from "./log.js";
 import { type ModelPower, modelFor } from "./models.js";
 import {
   ENDED_UNFINISHED,
   FILTER_STOPPED_IT,
   MARK_CUT_OFF,
-  NOT_CONFIGURED,
   PROVIDER_FAILED_MID_ANSWER,
   type ReaderFacingFailure,
   saidNothing,
 } from "./messages.js";
+import { StallReached } from "./call-failure.js";
 import { ProviderRefused, classifyEnd, openRouterStream } from "./ai-call.js";
 import {
   type StreamEnd,
@@ -139,9 +138,9 @@ export const MARK_MAX_TOKENS = 1_200;
 /**
  * **The marking prompt.**
  *
- * Two thirds of it is `REMEMBER_SYSTEM`'s entitlement section (src/converse.ts),
+ * Two thirds of it is `LEARN_SYSTEM`'s entitlement section (src/converse.ts),
  * carried over rather than reinvented because those rules are the fix for
- * specific failures a cross-family review found in Remember mode's first draft
+ * specific failures a cross-family review found in Learn mode's first draft
  * and every one of them applies here. The parts that are new are the two this
  * mode has and free recall does not: a reference answer that must not become an
  * answer key, and a question that genuinely has a right answer.
@@ -392,7 +391,7 @@ export interface QuizMarkResult {
  * question off. See the early return in `markAnswerStream`.
  *
  * **The client ticks a question
- * answered only on `done`** — `readMark` in src/web/useQuiz.ts is the one place
+ * answered only on `done`** — `mark` in src/web/useQuiz.ts is the one place
  * that decides, and tests/quiz-mark-stream.test.tsx is a stream that emits two
  * deltas and then closes with no terminal frame at all, because a stream that
  * stops cleanly without finishing looks exactly like one that finished.
@@ -563,15 +562,6 @@ export async function* markAnswerStream({
     ...(telemetry.slug ? { slug: telemetry.slug } : {}),
   });
 
-  loadEnvLocal();
-  const key = process.env.OPENROUTER_API_KEY;
-  if (!key) {
-    /* Two audiences, two sentences: the variable's name and the file it goes in
-       are useful only to whoever runs the server. logging.md. */
-    line.error("OPENROUTER_API_KEY is not set — every quiz mark will fail");
-    throw new Error(NOT_CONFIGURED.message);
-  }
-
   const messages = buildMarkMessages({
     meta,
     blocks,
@@ -594,7 +584,7 @@ export async function* markAnswerStream({
   let stallTimer: NodeJS.Timeout | undefined;
   const touch = () => {
     clearTimeout(stallTimer);
-    stallTimer = setTimeout(() => stall.abort(new Error("stalled")), stallMs);
+    stallTimer = setTimeout(() => stall.abort(new StallReached()), stallMs);
   };
 
   const started = Date.now();

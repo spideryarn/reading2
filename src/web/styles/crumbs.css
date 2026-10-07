@@ -3,10 +3,11 @@
    staying on screen while it holds this is shell.css § the bar that leaves
    while you read.
 
-   **One line, and the ancestors give way first.** Each crumb shrinks to an
-   ellipsis rather than wrapping, and the outer ones shrink a hundred times
-   faster than the last, so the section the reader is in keeps its words
-   longest. The whole of every title is in its card.
+   **One line in the 44px bar, and the ancestors give way first.** Each crumb
+   shrinks to an ellipsis rather than wrapping, and the outer ones take effectively
+   all of the shrinking until they have none left to give, so the section the reader
+   is in keeps its words longest. The whole of every title is in its card. **On a narrow
+   window it is three lines in a taller bar** — § a narrow window, at the end.
    docs/plans/261002h-headings-breadcrumb-at-the-top-of-the-reading-view.md */
 
 /* `.controls > .crumbs`, (0,2,0), so it beats narrow-window.css's
@@ -31,7 +32,16 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 0 100 auto;
+  /* **A million, not a hundred.** Shrinking is shared in proportion to each
+     crumb's length times this number, so at 100 the current section still
+     paid about 1% of the shortfall: 6px at 1180 wide, which is an ellipsis
+     and two letters lost from a title that otherwise fitted. At this ratio
+     its share of the worst case measured is about a thousandth of a pixel.
+     **Not 100000**: WebKit rounds a size to 1/64px, and a hundredth of a
+     pixel can round up to one unit and draw the ellipsis anyway (GPT Sol,
+     2026-10-04). Measured 2026-10-04,
+     docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+  flex: 0 1000000 auto;
 }
 
 .crumbs li:last-child {
@@ -89,4 +99,157 @@
   color: var(--ink-faint);
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------ § above the band -----
+   **Once the bar is stuck at the top, it starts at the spine, not at the band.**
+
+   > the headings rail spans the whole width of the screen, but the bit showing
+   > the headings actually only spans the middle column, and so it's wasting
+   > space either side
+   >
+   > — Greg, 2026-10-03 (spya-ft2cgg)
+
+   Measured at 1180 with Summary and the marginalia open: the bar ran from the
+   band's right edge to the window's, and the 336px above the band held
+   nothing while the current section was cut by 123px.
+
+   **Only while stuck.** The band is fixed from `--bar-bottom` at every scroll
+   position, and the bar is in flow under the masthead: at the top of an
+   article the two are level, and a bar that started at the spine would have
+   its first words behind the band. `data-bar-stuck` is scroll.ts §
+   `watchBarStuck`. The path moves sideways once as the masthead leaves; there
+   is no transition, because one on `left` and `width` would also run every
+   time a mode opened.
+
+   **The negative margin is what moves it.** `left` on a sticky box is a floor,
+   and the bar's place in flow is after `.reader`'s `--mode-w` of padding. The
+   margin and the wider `width` cancel, so the page is no wider for it.
+
+   No query: with no band beside the prose `--mode-w` is `0px` and this is
+   shell.css's own rule. (0,4,0), over `.controls` there.
+   docs/plans/261004a-headings-rail-uses-the-width-above-the-mode-band.md */
+:root[data-bar-stuck] :where(.reader) > .controls:has(> .crumbs) {
+  margin-left: calc(-1 * var(--mode-w));
+  left: calc(var(--spine-w) + var(--safe-left));
+  width: calc(var(--page-w) - var(--spine-w));
+}
+
+/* ---------------------------------------------------- § a narrow window ------
+   **Three lines in a taller bar, on a window too narrow for the path.**
+
+   > right now it's like too truncated in portrait mode on an iPhone for it to
+   > be very useful
+   >
+   > — Greg, 2026-10-03 (spya-ub4jnc)
+
+   Measured at eight widths: one line cuts crumbs at 430px and below and
+   nowhere wider; two lines still cut the current section at 320; three never
+   cut anything. So, under narrow-window.css's own query:
+
+   | line | what                 | height              |
+   |------|----------------------|---------------------|
+   | 1    | the ancestors        | 1.75rem             |
+   | 2–3  | the current section  | the rest of the bar |
+
+   **The bar's height is fixed for the width, not fitted to the path**: a bar
+   that grew as the reader crossed a heading would move the article under
+   them mid-scroll. `--bar-h` is raised only while the bar holds this, so a
+   visitor's chip-only bar keeps the default, and `--bar-bottom` and
+   `--bar-hide` follow it (tokens.css). `layoutKey` in Reader.tsx carries the
+   same effective tall-bar state for that reason.
+
+   **Each row is one press target with no dead strip between**: the ancestors'
+   line (28px), and the rest for the current section whether its text takes
+   one line or two (39px: the bar's 68, less line 1 and its own 1px rule).
+   Both are below touch.md's 44px, and the only fix is more height on the
+   screen with least.
+
+   The query is narrow-window.css § a narrow window's; its marker is checked
+   against layout.ts's constants by tests/spine-width.test.ts, and
+   tests/crumbs-narrow.test.ts checks that this is the file's only query.
+   docs/plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md */
+/* spine-width-check: GIST_MIN + PROSE_MIN + SPINE_W - 1 */
+@media (max-width: 731px) {
+  /* (0,3,0), over `:root` in tokens.css. The `:has()` argument is the one in
+     shell.css's guard that keeps this bar on screen. */
+  :root:has(:where(.reader) > .controls > .crumbs) {
+    --bar-h: 4.25rem;
+  }
+
+  /* The whole height of the bar, so the rows below are the press targets; and
+     the containing block for the current section's row. */
+  .controls > .crumbs {
+    position: relative;
+    align-self: stretch;
+  }
+
+  /* **Line 1: the ancestors, always exactly one line.** The list is still the
+     one-line flex row it is on a wide window, and it cannot wrap; the current
+     section is taken out of it (below) rather than wrapped under it, so two
+     long ancestors share the line instead of pushing it down. */
+  .crumbs ol {
+    height: 1.75rem;
+    align-items: stretch;
+  }
+
+  .crumbs li {
+    align-items: stretch;
+  }
+
+  /* The nearest ancestor takes whatever of the line is left, so the row is
+     pressable to its right-hand end. */
+  .crumbs li:nth-last-child(2) {
+    flex-grow: 1;
+  }
+
+  /* **Lines 2–3: the current section**, under the ancestors and as wide as
+     the breadcrumb. Out of flow, so nothing the ancestors do can move it. */
+  .crumbs li:last-child {
+    position: absolute;
+    inset: 1.75rem 0 0;
+  }
+
+  /* A path of one crumb has no line 1: the crumb is centred in the bar. */
+  .crumbs li:only-child {
+    top: 0;
+  }
+
+  /* The chevron ends line 1 instead of starting line 2, where it cost two
+     characters and looked orphaned. It is inside the ancestor's button (below)
+     so that the button can fill its row. */
+  .crumbs li + li::before {
+    content: none;
+  }
+
+  /* A flex box, so the text is centred in a button taller than it; the
+     ellipsis moves to `.crumb-label`, since a flex container draws none. */
+  .crumbs button {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    padding-block: 0;
+    overflow: visible;
+  }
+
+  .crumb-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .crumbs button:not([aria-current])::after {
+    content: "›" / "";
+    flex: none;
+    padding-left: 0.5rem;
+    color: var(--ink-faint);
+  }
+
+  /* The one crumb that wraps: two lines, then an ellipsis. */
+  .crumbs button[aria-current] .crumb-label {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
 }

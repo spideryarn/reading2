@@ -1,7 +1,7 @@
 /**
- * **The orders Debate's list can be drawn in, which of them a given debate can
- * honestly offer, and the relevance bar that goes with *prioritised*.** Pure,
- * and apart from the panel so the rules can be read and tested without a DOM —
+ * **How each of Debate's two lists is arranged, which orders Reception can
+ * honestly offer, and the relevance bar that goes with Claims.** Pure, and
+ * apart from the panel so the rules can be read and tested without a DOM —
  * faq-order.ts's reason.
  *
  * Greg, 2026-09-29 (SPIDERYARN-READING2-5P):
@@ -10,54 +10,55 @@
  * > Glossary), e.g. chronological order; positivity, relevance, and a
  * > prioritised mode (default) with thresholding. Use your judgment.
  *
- * Four orders, `?debateby=` (docs/plans/260929h-debate-mode-clearer-sources-and-orders.md
- * § The order bar):
+ * That was four orders over one mixed list. Since 2026-10-03 the two searches
+ * are two sub-modes (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md),
+ * and each has its own arrangement:
  *
- *  - **prioritised** — rows about this piece first, then claim rows by how
- *    directly the AI judged each one bears on its claim (`bears`), and the ones
- *    it did not judge last, in search order. Needs a claim row that carries
- *    `bears`, which only a `debate/3` search writes. The relevance bar
- *    (`?bears=`) filters claim rows in this order and no other.
- *  - **claim** (*by claim*) — rows about this piece as the first group, then one
- *    group per claim in **article order**, headed by the claim's own words.
- *    Needs nothing the artefact does not already have.
- *  - **date** — oldest first by `rowYear` (the registry's year, else `publishedYear`), undated last, with a marker at
- *    the article's own year. Needs a row that carries a year.
- *  - **stance** — critical first, then *could not tell*, *neither*,
- *    *supportive*. Needs nothing new.
+ *  - **Claims** is always grouped by claim, in **article order**, each group
+ *    headed by the claim's own words (`groupByClaim`). Within a claim, the rows
+ *    the AI judged to bear most directly come first (`bears`) and the ones it
+ *    did not judge last, in search order. There is no order control, and
+ *    `?debateby=` is ignored. The relevance bar (`?bears=`) filters these rows.
+ *  - **Reception** has three orders, `?debateby=`, each applied **within** its
+ *    two identification groups (debate-levels.ts):
+ *     - **prioritised** (*as found*, the default and absent from the address) —
+ *       the order the search found them in. The word in the address is from
+ *       when this order sorted claim rows by `bears`; kept so old links hold.
+ *     - **date** — oldest first by `rowYear` (the registry's year, else
+ *       `publishedYear`), undated last, with a marker at the article's own year.
+ *     - **stance** — critical first, then *could not tell*, *neither*,
+ *       *supportive*.
+ *
+ * `claim` was a fourth order until then. An old `?debateby=claim` is rewritten
+ * to `?debate=claims` before anything parses it (router.ts §
+ * `liftLegacyDebateBy`), so nothing here knows the word.
  *
  * ## Why a heading here is not the heading DebatePanel refused
  *
  * The panel used to refuse group headings outright, and it was right about the
  * one it refused: grouping by `relation` would put *the model's reading of a
  * stranger's page* in a heading, where it reads as a claim we stand behind. A
- * *by claim* heading is **the article's own words, located in its block** —
+ * claim heading is **the article's own words, located in its block** —
  * `claimQuote` was checked against the block it names before the row was kept
  * (src/debate.ts). Structure by what we can verify; keep the model's readings
  * inside rows. So *stance* is an **order, never a grouping**: its rows are
- * flat, and nothing above them says *critical* in our voice. *Prioritised* and
- * *date* are flat too; the only lines inside them say what is **missing** —
- * *not judged*, *no year found* — which is a fact about the row, not a reading
- * of the page.
+ * flat, and nothing above them says *critical* in our voice. *Date* is flat
+ * too; the only line inside it says what is **missing** — *no year found* —
+ * which is a fact about the row, not a reading of the page.
  *
  * ## The two rules, both Glossary's
  *
  *  1. **An order that needs data this debate does not have is not offered, and
- *     asking for it draws *by claim*** (`effectiveDebateOrder`, Glossary's
- *     `effectiveSort`; the plan's F6).
+ *     asking for it draws *as found*** (`effectiveReceptionOrder`, Glossary's
+ *     `effectiveSort`; 260929h's F6).
  *  2. **An order that would draw exactly what another one draws is not offered
- *     either** (`debateOrderOptions`, the plan's F14): two buttons that give the
- *     same list teach a reader the control does nothing. Fewer than two
+ *     either** (`receptionOrderOptions`, 260929h's F14): two buttons that give
+ *     the same list teach a reader the control does nothing. Fewer than two
  *     distinct orders is no bar at all.
  *
  * **The stage-2 fields are read off `object`, never off the typed row.** A
- * visitor's rows come through the public types, which do not carry them (the
- * DTO is a listed defence and does not pass them — the plan's § Deliberately
- * not in this), and a stored row is never revalidated. So every read here
- * copes with the field being absent or nonsense, and a visitor is offered *by
- * claim* and *stance* by construction. The one exception is `registry` (plan
- * 261001a stage 6), which the DTO does pass: a visitor is offered *date* where
- * a row's record carries a year.
+ * stored row is never revalidated, and an older one carries none of them. So
+ * every read here copes with the field being absent or nonsense.
  *
  * **Search order is the tie-break everywhere**, and it is never re-sorted by
  * identification level — the chip on a direct row already says that.
@@ -68,17 +69,17 @@ import { readRegistryWork } from "../registry-work.js";
 import { applyThreshold, type ThresholdResult } from "./threshold.js";
 
 /**
- * The four orders. `params.ts` imports this **as a type only** and spells the
- * list itself, so this module stays off the reader's eager startup path — the
- * arrangement faq-order.ts § FaqOrder records.
+ * Reception's three orders. `params.ts` imports this **as a type only** and
+ * spells the list itself, so this module stays off the reader's eager startup
+ * path — the arrangement faq-order.ts § FaqOrder records.
  */
-export type DebateOrder = "prioritised" | "claim" | "date" | "stance";
+export type DebateOrder = "prioritised" | "date" | "stance";
 
 /**
  * **The order the orders are preferred in** when two would draw the same list:
  * the earlier one is kept. Also the order of the buttons.
  */
-export const DEBATE_ORDER_PREFERENCE: readonly DebateOrder[] = ["prioritised", "claim", "date", "stance"];
+export const DEBATE_ORDER_PREFERENCE: readonly DebateOrder[] = ["prioritised", "date", "stance"];
 
 /** What every row this module orders has — the owner's row and a visitor's alike. */
 export interface OrderableRow {
@@ -96,28 +97,28 @@ export interface ClaimLikeRow extends OrderableRow {
 }
 
 /**
- * **One piece of the list, as the panel draws it.**
+ * **One piece of a Reception list, as the panel draws it.**
  *
- *  - `piece` — the rows about this piece (the direct search's), *by claim* only.
- *  - `claim` — the rows answering one claim, headed by its own words.
- *  - `flat` — rows with no heading: every row in *stance*, the judged and dated
- *    rows in *prioritised* and *date*.
- *  - `unjudged` — *prioritised* only: claim rows the AI gave no `bears`, last,
- *    in search order, under a line saying so. Never hidden by the bar.
+ *  - `flat` — rows with no heading: every row in *as found* and *stance*, the
+ *    dated rows in *date*.
  *  - `undated` — *date* only: rows with no year found, last, in search order.
  *  - `marker` — *date* only: where the article's own year falls. No rows.
  */
-export type DebateGroup<D, C> =
-  | { kind: "piece"; rows: D[] }
-  | { kind: "claim"; claimQuote: string; blockId: BlockId; rows: C[] }
-  | { kind: "flat"; rows: (D | C)[] }
-  | { kind: "unjudged"; rows: C[] }
-  | { kind: "undated"; rows: (D | C)[] }
+export type DebateGroup<R> =
+  | { kind: "flat"; rows: R[] }
+  | { kind: "undated"; rows: R[] }
   | { kind: "marker"; year: number; rows: never[] };
+
+/** The rows answering one claim, headed by its own words — Claims' one kind of group. */
+export interface ClaimGroup<C> {
+  claimQuote: string;
+  blockId: BlockId;
+  rows: C[];
+}
 
 /**
  * **A row's `bears`, or null** — `readStoredBears` over any shape, so a
- * visitor's row (which has no such field in its type) is read the same way.
+ * visitor's row is read the same way as the owner's.
  */
 export function readBears(row: object): DebateBears | null {
   return readStoredBears(row as { bears?: unknown });
@@ -125,7 +126,7 @@ export function readBears(row: object): DebateBears | null {
 
 /**
  * **A row's `publishedYear`, or null** — a four-digit integer and nothing else
- * (the plan's F1: a year, not a date).
+ * (260929h's F1: a year, not a date).
  */
 export function readPublishedYear(row: object): number | null {
   const value = (row as { publishedYear?: unknown }).publishedYear;
@@ -193,8 +194,7 @@ const STANCE_RANK: Record<DebateLean, number> = {
 /**
  * **`bears` as a position — weakest first**, which is left-to-right on the
  * relevance bar and the direction `applyThreshold` needs (keep `>=`). Internal
- * machinery, never shown and never in the URL: `?bears=` carries the word,
- * `debate-levels.ts`'s reason.
+ * machinery, never shown and never in the URL: `?bears=` carries the word.
  */
 const BEARS_RANK: Record<DebateBears, number> = { loosely: 0, partly: 1, directly: 2 };
 
@@ -204,7 +204,7 @@ export const RELEVANCE_STOPS: readonly DebateBears[] = ["loosely", "partly", "di
 /**
  * **Where the relevance bar sits untouched: `loosely`, which hides nothing.**
  * `bears` is a new model judgment nobody has evaluated yet, so a default that
- * hid rows on it would be hiding them on an unchecked score (the plan's F5).
+ * hid rows on it would be hiding them on an unchecked score (260929h's F5).
  * Tightening this waits for a labelled evaluation.
  */
 export const RELEVANCE_DEFAULT: DebateBears = "loosely";
@@ -221,11 +221,10 @@ export function relevanceAt(index: number): DebateBears {
  * **The relevance bar applied to the claim rows, once** — the one pass the
  * list, the `N of M` and the `hiddenNote` all read (threshold.ts's argument).
  *
- * **Claim rows only**, and the signature is the guard: rows about this piece
- * belong to the identification bar, so the two bars own disjoint rows and
- * neither count can drift into the other's (the plan's F7). **A row the AI did
- * not judge always survives** — `survivesThreshold`'s rule, and the lossless
- * direction: an absent judgment is not a low one.
+ * **Claim rows only**: `bears` is how directly a page bears on *its claim*, and
+ * a row about the piece has no claim. **A row the AI did not judge always
+ * survives** — `survivesThreshold`'s rule, and the lossless direction: an
+ * absent judgment is not a low one.
  */
 export function visibleClaims<C extends object>(rows: readonly C[], stop: DebateBears): ThresholdResult<C> {
   return applyThreshold(rows, BEARS_RANK[stop], (row) => {
@@ -243,19 +242,51 @@ function stableBy<T>(rows: readonly T[], key: (row: T) => number): T[] {
 }
 
 /**
- * Is the data behind this order there at all? Rule 1 in the header.
+ * **Claims' list: one group per claim identity `(blockId, claimQuote)`, in
+ * article order** — 260929h's F9. Two quotes in one block are two groups; rows
+ * that share a page stay separate rows, each under its own claim.
  *
- * *Prioritised* asks the **claim** rows: `bears` orders and filters only them,
- * so a judgment on a row about this piece would offer an order that changes
- * nothing.
+ * `blockOrder` is each block's position in the article, handed down from
+ * `Reader` (260929h's F8); a claim in a block it does not know, or one of two
+ * claims in the same block, keeps the order the search first gave it.
+ *
+ * **Within a claim, most directly bearing first, the unjudged last**, search
+ * order within each — what *prioritised* did across the whole list until
+ * 2026-10-03. A row from before `bears` existed is simply an unjudged one.
+ *
+ * `claims` is the rows the relevance bar and the thread left, when the panel
+ * calls this. It is not modified.
  */
-function hasDataFor(order: DebateOrder, direct: readonly object[], claims: readonly object[]): boolean {
+export function groupByClaim<C extends ClaimLikeRow>(
+  claims: readonly C[],
+  blockOrder: ReadonlyMap<BlockId, number>,
+): ClaimGroup<C>[] {
+  const groups = new Map<string, ClaimGroup<C>>();
+  for (const row of claims) {
+    /* A NUL between the two halves, which neither a block id nor a located
+       quotation can contain, so no pair can collide with another. */
+    const key = `${row.blockId}\u0000${row.claimQuote}`;
+    const group = groups.get(key);
+    if (group) group.rows.push(row);
+    else groups.set(key, { claimQuote: row.claimQuote, blockId: row.blockId, rows: [row] });
+  }
+  return stableBy([...groups.values()], (g) => blockOrder.get(g.blockId) ?? Number.POSITIVE_INFINITY).map(
+    (g) => ({
+      ...g,
+      rows: stableBy(g.rows, (r) => {
+        const bears = readBears(r);
+        return bears === null ? Number.POSITIVE_INFINITY : -BEARS_RANK[bears];
+      }),
+    }),
+  );
+}
+
+/** Is the data behind this order there at all? Rule 1 in the header. */
+function hasDataFor(order: DebateOrder, rows: readonly object[]): boolean {
   switch (order) {
-    case "prioritised":
-      return claims.some((r) => readBears(r) !== null);
     case "date":
-      return [...direct, ...claims].some((r) => rowYear(r) !== null);
-    case "claim":
+      return rows.some((r) => rowYear(r) !== null);
+    case "prioritised":
     case "stance":
       return true;
     default: {
@@ -266,49 +297,29 @@ function hasDataFor(order: DebateOrder, direct: readonly object[], claims: reado
 }
 
 /** Only the groups that have something in them; a marker always counts. */
-function nonEmpty<D, C>(groups: DebateGroup<D, C>[]): DebateGroup<D, C>[] {
+function nonEmpty<R>(groups: DebateGroup<R>[]): DebateGroup<R>[] {
   return groups.filter((g) => g.kind === "marker" || g.rows.length > 0);
 }
 
 /**
- * **The list in one order**, as groups.
+ * **One of Reception's two groups in one order**, as the pieces the panel
+ * draws. `rows` is not modified.
  *
- * `direct` is the rows about this piece and `claims` the rows answering what it
- * claims — each already through its own bar, when the panel calls this.
- * Neither array is modified.
- *
- * `blockOrder` is each block's position in the article, handed down from
- * `Reader` (the plan's F8); a claim in a block it does not know, or in one of
- * two claims in the same block, keeps the order the search first gave it.
  * `articleYear` is the year the article gives for itself, for *date*'s marker,
  * or null for no marker.
  */
-export function orderDebateRows<D extends OrderableRow, C extends ClaimLikeRow>(
-  direct: readonly D[],
-  claims: readonly C[],
+export function orderReceptionRows<R extends OrderableRow>(
+  rows: readonly R[],
   order: DebateOrder,
-  blockOrder: ReadonlyMap<BlockId, number>,
   articleYear: number | null = null,
-): DebateGroup<D, C>[] {
+): DebateGroup<R>[] {
   switch (order) {
-    case "claim":
-      return byClaim(direct, claims, blockOrder);
+    case "prioritised":
+      return nonEmpty<R>([{ kind: "flat", rows: [...rows] }]);
     case "stance":
-      return [{ kind: "flat", rows: stableBy<D | C>([...direct, ...claims], (r) => STANCE_RANK[readStoredLean(r)]) }];
-    case "prioritised": {
-      /* Rows about this piece lead, as they always have; then the judged claim
-         rows, most directly bearing first; then the unjudged, in search order,
-         under their own line (F6). */
-      const judged = claims.filter((r) => readBears(r) !== null);
-      const unjudged = claims.filter((r) => readBears(r) === null);
-      const sorted = stableBy(judged, (r) => -BEARS_RANK[readBears(r) ?? "loosely"]);
-      return nonEmpty<D, C>([
-        { kind: "flat", rows: [...direct, ...sorted] },
-        { kind: "unjudged", rows: unjudged },
-      ]);
-    }
+      return nonEmpty<R>([{ kind: "flat", rows: stableBy(rows, (r) => STANCE_RANK[readStoredLean(r)]) }]);
     case "date":
-      return byDate(direct, claims, articleYear);
+      return byDate(rows, articleYear);
     default: {
       const unreachable: never = order;
       return unreachable;
@@ -322,30 +333,27 @@ export function orderDebateRows<D extends OrderableRow, C extends ClaimLikeRow>(
  *
  * **The marker goes before the first row whose year is the article's or
  * later**, and says only *"This piece, 2022"* — so a same-year row sits under
- * it without the list claiming it came after (the plan's F1: a year cannot
+ * it without the list claiming it came after (260929h's F1: a year cannot
  * order two things inside itself). With no dated row that late, it goes after
- * the last dated one.
+ * the last dated one. **With no dated row at all there is no marker**:
+ * Reception draws two groups, each ordered here on its own, and a marker over a
+ * group of undated rows would mark a place in nothing.
  */
-function byDate<D extends OrderableRow, C extends ClaimLikeRow>(
-  direct: readonly D[],
-  claims: readonly C[],
-  articleYear: number | null,
-): DebateGroup<D, C>[] {
-  const all: (D | C)[] = [...direct, ...claims];
+function byDate<R extends OrderableRow>(rows: readonly R[], articleYear: number | null): DebateGroup<R>[] {
   const dated = stableBy(
-    all.filter((r) => rowYear(r) !== null),
+    rows.filter((r) => rowYear(r) !== null),
     (r) => rowYear(r) ?? 0,
   );
-  const undated = all.filter((r) => rowYear(r) === null);
-  if (articleYear === null) {
-    return nonEmpty<D, C>([
+  const undated = rows.filter((r) => rowYear(r) === null);
+  if (articleYear === null || dated.length === 0) {
+    return nonEmpty<R>([
       { kind: "flat", rows: dated },
       { kind: "undated", rows: undated },
     ]);
   }
   const cut = dated.findIndex((r) => (rowYear(r) ?? 0) >= articleYear);
   const at = cut === -1 ? dated.length : cut;
-  return nonEmpty<D, C>([
+  return nonEmpty<R>([
     { kind: "flat", rows: dated.slice(0, at) },
     { kind: "marker", year: articleYear, rows: [] },
     { kind: "flat", rows: dated.slice(at) },
@@ -354,93 +362,44 @@ function byDate<D extends OrderableRow, C extends ClaimLikeRow>(
 }
 
 /**
- * *By claim*: the rows about this piece, then one group per claim identity
- * `(blockId, claimQuote)` — the plan's F9. Two quotes in one block are two
- * groups; rows that share a page stay separate rows, each under its own claim.
+ * **What a reader would see in one order, as a string** — the row ids in
+ * order, section by section, plus the structure *date* adds: its marker and
+ * its undated line.
  */
-function byClaim<D extends OrderableRow, C extends ClaimLikeRow>(
-  direct: readonly D[],
-  claims: readonly C[],
-  blockOrder: ReadonlyMap<BlockId, number>,
-): DebateGroup<D, C>[] {
-  const groups = new Map<string, { claimQuote: string; blockId: BlockId; rows: C[] }>();
-  for (const row of claims) {
-    /* A NUL between the two halves, which neither a block id nor a located
-       quotation can contain, so no pair can collide with another. */
-    const key = `${row.blockId}\u0000${row.claimQuote}`;
-    const group = groups.get(key);
-    if (group) group.rows.push(row);
-    else groups.set(key, { claimQuote: row.claimQuote, blockId: row.blockId, rows: [row] });
-  }
-  const claimGroups = stableBy([...groups.values()], (g) => blockOrder.get(g.blockId) ?? Number.POSITIVE_INFINITY);
-  const out: DebateGroup<D, C>[] = [];
-  if (direct.length > 0) out.push({ kind: "piece", rows: [...direct] });
-  for (const g of claimGroups) {
-    out.push({ kind: "claim", claimQuote: g.claimQuote, blockId: g.blockId, rows: g.rows });
-  }
-  return out;
-}
-
-/**
- * **What a reader would see in one order, as a string** — the row ids in order,
- * plus structure that changes the result: two or more claim headings,
- * prioritised's unjudged line or usable relevance threshold, and date's marker
- * or undated line. One claim group under one heading is not structure, so it
- * compares equal to the same rows flat.
- */
-function signature(
+function signature<R extends OrderableRow>(
+  sections: readonly (readonly R[])[],
   order: DebateOrder,
-  groups: readonly DebateGroup<OrderableRow, ClaimLikeRow>[],
-  claims: readonly ClaimLikeRow[],
+  articleYear: number | null,
 ): string {
-  const headed = groups.filter((g) => g.kind === "piece" || g.kind === "claim");
-  if (order === "claim" && headed.length > 1) {
-    return headed.map((g) => g.rows.map((r) => r.id).join(",")).join("|");
-  }
-  const ids = groups.flatMap((g) => g.rows.map((r) => r.id)).join(",");
-
-  /* The row ids are not the whole rendered result for these two orders.
-     Prioritised owns a threshold that can change the list, and its unjudged
-     rows have a heading; date can add an article marker and an undated heading.
-     Treating either as identical to a flat list made an explicit `claim` URL
-     resolve to prioritised and let `?bears=` hide its rows. */
-  if (order === "prioritised") {
-    const canHide = claims.some((row) => {
-      const bears = readBears(row);
-      return bears !== null && bears !== "directly";
-    });
-    const hasUnjudged = groups.some((g) => g.kind === "unjudged");
-    return canHide || hasUnjudged ? `prioritised:${ids}:${canHide ? "threshold" : ""}:${hasUnjudged ? "unjudged" : ""}` : ids;
-  }
-  if (order === "date" && groups.some((g) => g.kind === "marker" || g.kind === "undated")) {
-    return `date:${groups
-      .map((g) => (g.kind === "marker" ? `marker-${String(g.year)}` : `${g.kind}-${g.rows.map((r) => r.id).join(",")}`))
-      .join("|")}`;
-  }
-  return ids;
+  return sections
+    .map((rows) =>
+      orderReceptionRows(rows, order, articleYear)
+        .map((g) => {
+          const ids = g.rows.map((r) => r.id).join(",");
+          if (g.kind === "marker") return `marker-${String(g.year)}`;
+          return g.kind === "undated" ? `undated-${ids}` : ids;
+        })
+        .join("|"),
+    )
+    .join("||");
 }
 
 /**
  * The orders this debate has the data for **and** that draw something the
  * others do not, in preference order — each paired with its signature, so
- * `effectiveDebateOrder` can find which offered order draws what a hidden one
- * would have. Never empty: *by claim* always has its data.
- *
- * Signatures are taken before either threshold is applied. The article marker
- * is included because it is part of what selecting date draws; the reader's
- * current slider positions are not.
+ * `effectiveReceptionOrder` can find which offered order draws what a hidden
+ * one would have. Never empty: *as found* always has its data and is first.
  */
-function distinctOrders<D extends OrderableRow, C extends ClaimLikeRow>(
-  direct: readonly D[],
-  claims: readonly C[],
-  blockOrder: ReadonlyMap<BlockId, number>,
-  articleYear: number | null = null,
+function distinctOrders<R extends OrderableRow>(
+  sections: readonly (readonly R[])[],
+  articleYear: number | null,
 ): { order: DebateOrder; sig: string }[] {
+  const all = sections.flat();
   const seen = new Set<string>();
   const out: { order: DebateOrder; sig: string }[] = [];
   for (const order of DEBATE_ORDER_PREFERENCE) {
-    if (!hasDataFor(order, direct, claims)) continue;
-    const sig = signature(order, orderDebateRows(direct, claims, order, blockOrder, articleYear), claims);
+    if (!hasDataFor(order, all)) continue;
+    const sig = signature(sections, order, articleYear);
     if (seen.has(sig)) continue;
     seen.add(sig);
     out.push({ order, sig });
@@ -449,53 +408,40 @@ function distinctOrders<D extends OrderableRow, C extends ClaimLikeRow>(
 }
 
 /**
- * **The orders the bar offers**, in button order — or none, when fewer than two
- * would draw different lists (F14).
+ * **The orders Reception's bar offers**, in button order — or none, when fewer
+ * than two would draw different lists (F14).
  *
- * The panel hands this every claim row and the direct rows left by the
- * identification bar. That bar applies in every order, so a row it removed
- * cannot honestly distinguish two orders on screen. The relevance bar is not
- * applied here: it belongs only to prioritised and cannot decide whether that
- * order exists.
+ * `sections` is Reception's groups as drawn, in order (debate-levels.ts §
+ * `receptionSections`): each order is applied within a group, so an order that
+ * could only move a row past one in the *other* group changes nothing on
+ * screen and is not offered.
  */
-export function debateOrderOptions<D extends OrderableRow, C extends ClaimLikeRow>(
-  direct: readonly D[],
-  claims: readonly C[],
-  blockOrder: ReadonlyMap<BlockId, number>,
+export function receptionOrderOptions<R extends OrderableRow>(
+  sections: readonly (readonly R[])[],
   articleYear: number | null = null,
 ): DebateOrder[] {
-  const distinct = distinctOrders(direct, claims, blockOrder, articleYear);
+  const distinct = distinctOrders(sections, articleYear);
   return distinct.length < 2 ? [] : distinct.map((d) => d.order);
 }
 
 /**
- * **The order the list is actually drawn in**, which is not always the one the
- * URL asked for — Glossary's `effectiveSort`, and the plan's F6.
+ * **The order Reception is actually drawn in**, which is not always the one
+ * the URL asked for — Glossary's `effectiveSort`, and 260929h's F6.
  *
- *  - Asked for an order this debate has no data for (prioritised or date on
- *    anything before `debate/3`, or on a visitor's rows) → the first order on
- *    the bar: *prioritised* where it has its data, else *by claim*.
+ *  - Asked for *date* on rows none of which carries a year → *as found*.
  *  - Asked for one that would draw the same list as an order preferred before
  *    it → that order, so the bar's pressed button is the list on screen.
  *
- * Same rows as `debateOrderOptions`, for the same reason.
+ * Same sections as `receptionOrderOptions`, for the same reason.
  */
-export function effectiveDebateOrder<D extends OrderableRow, C extends ClaimLikeRow>(
-  direct: readonly D[],
-  claims: readonly C[],
+export function effectiveReceptionOrder<R extends OrderableRow>(
+  sections: readonly (readonly R[])[],
   requested: DebateOrder,
-  blockOrder: ReadonlyMap<BlockId, number>,
   articleYear: number | null = null,
 ): DebateOrder {
-  /* **The fallback is the first order on the bar, not *by claim* by name** —
-     GPT Sol's R1. *By claim* is folded away whenever it draws what
-     *prioritised* draws, so naming it here could draw an order with no button
-     pressed; `distinct` is never empty (*by claim* always has its data), and
-     its first entry is the button a reader would see first. */
-  const distinct = distinctOrders(direct, claims, blockOrder, articleYear);
-  const first = distinct[0]?.order ?? "claim";
-  if (!hasDataFor(requested, direct, claims)) return first;
+  const distinct = distinctOrders(sections, articleYear);
   if (distinct.some((d) => d.order === requested)) return requested;
-  const sig = signature(requested, orderDebateRows(direct, claims, requested, blockOrder, articleYear), claims);
-  return distinct.find((d) => d.sig === sig)?.order ?? first;
+  if (!hasDataFor(requested, sections.flat())) return "prioritised";
+  const sig = signature(sections, requested, articleYear);
+  return distinct.find((d) => d.sig === sig)?.order ?? "prioritised";
 }

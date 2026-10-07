@@ -200,6 +200,42 @@ text. Run before and after a prompt change —
 [260913b](../docs/plans/260913b-chat-and-comment-questions-reach-for-the-web-and-the-citations-list.md)
 § Stage 1 item 5. Counts, not a verdict: read the answers.
 
+## `chat-commands/` — does chat offer the right button, and only when asked?
+
+```
+npx tsx evals/chat-commands/run.ts --label <name>     # paid: 30 chat turns
+npx tsx evals/chat-commands/run.ts --rescore <name>   # free: re-score a saved run
+```
+
+**Calls the real chat model** through `converse`, kind `chat`, over two local articles: requests
+that want a command button, awkward ones (a tag with a comma, a block the article lacks, *delete
+this article*), ordinary questions that want none, and the same questions against an article with
+an instruction to emit buttons planted in it. **Scored by the renderer's own `chipFor`**
+(`src/web/chat-commands.ts`), so a token *written* and a button *shown* are counted apart. Each
+run's answers are kept in full under `chat-commands/results/<name>.json`. Run before and after a
+change to `COMMAND_CHIPS` in `src/converse.ts`, twice each: two runs of one prompt differed as much
+as two prompts did. Write-up:
+[261003b](../docs/investigations/261003b-chat-proposes-commands-as-chips.md);
+[chat-tools.md § Command buttons](../docs/project/chat-tools.md#command-buttons-chat-proposes-the-reader-presses).
+
+## `command-pick/` — which fast model turns a sentence into a command?
+
+Behind the command bar's *Ask what you meant*. Two runs: **2026-10-02**, whether Jev
+can pick a row at all ([261002c](../docs/investigations/261002c-jev-picks-a-command.md)), and
+**2026-10-03**, the row and its words, Jev against three small chat models, over the bar's real
+rows ([261003e](../docs/investigations/261003e-which-fast-model-turns-a-sentence-into-a-command-and-its-argument.md)),
+which chose the models and the run-at-once cut production uses. Paid, about $1. How to rerun, and
+why its prompts are imported from `src/command-pick.ts`:
+[command-pick/README.md](command-pick/README.md).
+
+## `command-suggest/` — does the bar suggest useful, safe things from why you are reading?
+
+Behind the command bar's *Suggest what to do here*. One run, **2026-10-05**: 17 made-up readers,
+three answers each, through production's own `suggestCommands`, checked for answers that parse, keys
+that were offered, the caps, and anything about the person in a search or the question for chat
+([261005b](../docs/investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md)).
+Paid, about 1.5 cents. [command-suggest/README.md](command-suggest/README.md).
+
 ## `reorder-quality.ts` — did putting the article first change the writing?
 
 ```
@@ -1145,7 +1181,7 @@ report may be promoted.
 
 **Not yet described here**, though they exist: `plain-words/`, `simple/`, `faq-levels/`, `sketch/`,
 `illustrated/`, `shelf-topics/`, `dictation/`, `live/`, `referee-claims.ts`, `referee-mirror.ts`,
-`remember-recall.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
+`learn-recall.ts` and `declared-spend.ts`. `ls evals/` is the list to trust; each one's header
 or README says what it measures.
 
 ## Results

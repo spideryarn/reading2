@@ -71,7 +71,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SHARED_WITH_YOU } from "../src/messages.js";
+import { SHARED_BY_PRIVATE_LINK, SHARED_WITH_YOU } from "../src/messages.js";
 import type { Arc, Article, BlockId, ChatThread, SourceGuess, ThreadSummary } from "../src/types.js";
 import type { PublicArticle, PublicSketch, PublicTweets } from "../src/public-types.js";
 /* The vocabulary itself, so the sweeps below cannot fall behind it — src/modes.ts
@@ -80,12 +80,13 @@ import { DEFAULT_MODE, MODES, type Mode } from "../src/modes.js";
 /* The word on each button, so a press can be aimed at a named mode without a
    second copy of the mode-to-label mapping here. src/title-text.ts. */
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor, moreLabels } from "./helpers/dock-more.js";
 
 /** Who `useSession` says is here. Re-posed by each test before it renders. */
 const session: { user: { id: string; email: string } | null } = { user: null };
 
 vi.mock("../src/web/useSession.js", () => ({
-  useSession: () => ({ session: null, user: session.user, loading: false }),
+  useSession: () => ({ session: null, user: session.user, loading: false, known: true }),
 }));
 
 /**
@@ -205,7 +206,7 @@ const PDF_META = {
  * Written out rather than imported from SimplePanel.tsx, so a change to it is
  * a change somebody made here on purpose.
  */
-const PUBLIC_NO_SIMPLE = "Nobody has made a plain-words version of this piece yet.";
+const PUBLIC_NO_SIMPLE = "Nobody has made a plain-words version of this one yet.";
 
 /**
  * **A drawing, because the fixture's diagram band is a visitor's default now.**
@@ -299,6 +300,7 @@ const ARTICLE: PublicArticle = {
      what the publisher-host assertions below are measured against. */
   assets: undefined,
   navLabelStatus: "ready",
+  sharedBy: "public",
   blocks: [
     {
       id: "spya-aaaaaa",
@@ -460,6 +462,11 @@ const OWNED: Article = {
  */
 let owned: () => Response;
 /**
+ * How the public article route answers **a request carrying a private link's
+ * key**, by key. Empty unless a test fills it. See `reply`.
+ */
+const keyed = new Map<string, () => Response>();
+/**
  * A `/api/…/` prefix the server answers 404 for — *nobody has asked for one of
  * these yet*, which is the state the five self-starting modes act on. Null
  * unless a test sets it. See `reply`.
@@ -562,6 +569,13 @@ function json(body: unknown, status = 200): Response {
  */
 function reply(url: string, method: string): Response {
   if (url === `/api/public/article/${SLUG}`) return publicArticle();
+  /* A request carrying a private link's key. A key nobody set an answer for
+     gets the 404 the server gives a wrong one, which is also what an absent
+     article gets. */
+  if (url.startsWith(`/api/public/article/${SLUG}?key=`)) {
+    const answer = keyed.get(url.slice(url.indexOf("?key=") + "?key=".length));
+    return answer ? answer() : json({ error: "Not found" }, 404);
+  }
   if (url === `/api/article/${SLUG}`) return owned();
   /* The reader's own row, answered properly rather than with the `{}` below: a
      response that does not mention `experimentalSince` is an **error** in the
@@ -599,7 +613,9 @@ const { App } = await import("../src/web/App.js");
    `onAuthStateChange` at module load; a static import at the top of this file
    would run that before `authListeners` above had been initialised, and the
    whole suite would fail to load rather than fail a test. */
-const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
+const { resetForTests: resetExperimental, snapshot: experimentalSnapshot } = await import(
+  "../src/web/experimental-store.js"
+);
 
 let host: HTMLDivElement;
 let root: Root;
@@ -641,6 +657,7 @@ beforeEach(() => {
   /* Reads `served` at call time, so a case may still swap the payload without
      also having to restate how the route answers. */
   publicArticle = () => json(served);
+  keyed.clear();
   owned = () => json(OWNED);
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -703,6 +720,17 @@ async function open(search = "", path = ""): Promise<void> {
   await settle();
 }
 
+/** Real time, for a rewrite of the address to reach nuqs and the band it selects. */
+async function until(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 100 && !check(); i += 1) {
+    await act(async () => {
+      await new Promise((go) => setTimeout(go, 10));
+    });
+  }
+  expect(check(), "the page never got there").toBe(true);
+  await settle();
+}
+
 const outsidePublic = () => trace.filter((r) => !r.url.startsWith("/api/public/"));
 
 /**
@@ -756,6 +784,35 @@ const helpButtons = () =>
 const modeRadios = () => [
   ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]'),
 ];
+
+/**
+ * **Every band mode this reader's bar offers, by label: its radios, then what
+ * is under More.**
+ *
+ * The sweeps below looped over `modeRadios()` until 2026-10-07, which was
+ * every mode while every mode was a radio. Quotes, Glossary, FAQ, Ideas and
+ * Timeline are items of the More menu now (plan 261007c), and a loop over the
+ * radios alone presses none of them through the door a reader uses — the
+ * signed-out sweep even stayed green, because its second pass reaches the
+ * missing modes by URL (GPT Sol, PR-10). So a sweep walks this list, presses
+ * each through `pressOffered`, and asserts which went through More.
+ */
+const offeredBandLabels = (): string[] => [
+  ...modeRadios().map((b) => b.getAttribute("aria-label") ?? ""),
+  ...moreLabels(host),
+];
+
+/** Press a mode through whichever door the bar gives it, and say which. */
+async function pressOffered(label: string): Promise<"bar" | "more"> {
+  const inBar = modeRadios().some((b) => b.getAttribute("aria-label") === label);
+  const door = modeDoor(host, label);
+  expect(door, `the bar must offer ${label}`).toBeDefined();
+  await act(async () => door?.click());
+  return inBar ? "bar" : "more";
+}
+
+/** The radio the bar draws for `label` now — a gathered mode has one once it is open. */
+const radioFor = (label: string) => modeRadios().find((b) => b.getAttribute("aria-label") === label);
 
 /** Which mode the page is in, read the way a reader's URL bar would show it. */
 const modeInUrl = (): string =>
@@ -883,28 +940,24 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      band rather than the real panel. Which means this row says nothing about
      the *present*-quotes renderer; that one could break with this green, and no
      fixture in this file can reach it. */
-  quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this piece yet" },
+  quotes: { where: VISITOR_BAND, says: "Nobody has built a set of quotes for this one yet" },
   /* No timeline on the payload either, so this is the *nobody built one*
      sentence rather than the boundary — it moved out of the group below on
      2026-09-04, when the payload grew a flag to be sure with.
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 1. */
-  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this piece yet" },
+  timeline: { where: VISITOR_BAND, says: "Nobody has built a timeline for this one yet" },
   /* No route on the payload either, so the *nobody built one* sentence — it
      moved out of the owners-only group below on 2026-09-29, when the payload
      grew a flag for it, exactly as `timeline` did (SPIDERYARN-READING2-56).
      The drawn route is "draws a stored skim from the payload" below.
      docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-  skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this piece yet" },
+  skim: { where: VISITOR_BAND, says: "Nobody has built a skim route for this one yet" },
   /* And the FAQ and the Citations list, the same day and the same way: out of
      the owners-only group below once the payload grew a flag for each. The
      drawn ones are "draws a stored faq" and "draws a stored citations list"
      below. docs/plans/260929c-a-visitor-sees-every-stored-mode-on-a-public-article.md. */
-  faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this piece yet" },
-  citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this piece yet" },
-  /* A page of its own until 2026-09-29, a mode since (plan 260929f). No thread
-     on the payload, so the *nobody built one* sentence in the visitor's band;
-     the drawn thread is "renders the tweet thread the payload carries" below. */
-  tweets: { where: VISITOR_BAND, says: "Nobody has built a tweet thread for this piece yet" },
+  faq: { where: VISITOR_BAND, says: "Nobody has built an FAQ for this one yet" },
+  citations: { where: VISITOR_BAND, says: "Nobody has built a list of citations for this one yet" },
   /* **Free since 2026-09-04, and it is the only one here that draws a real
      picture for a visitor.** Force is built from the tree in the payload; the
      panel's three fetching hooks are off and the picker is hidden. The string
@@ -931,7 +984,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      docs/plans/260904c-more-modes-on-a-shared-link.md § Stage 4. */
   search: { where: ".mode-band.srch", says: PUBLIC_CRITERION },
   chat: { where: VISITOR_BAND, says: "Chat is for whoever added this article" },
-  remember: { where: VISITOR_BAND, says: "Remember is for whoever added this article" },
+  learn: { where: VISITOR_BAND, says: "Learn is for whoever added this article" },
   /* Referee reached the fall-through until 2026-09-02 and was announced by its
      raw mode id; the capital R is the assertion that it no longer does.
      docs/plans/260902j-public-read-only-access-audit-and-improvements.md § C2. */
@@ -941,7 +994,7 @@ const BAND_SAYS: Record<Mode, { where: string | null; says: string | null }> = {
      every row's address re-judged at the boundary. On the default fixture there
      is no stored debate, so the band says nobody built one. The drawn one is
      "draws a stored debate" below. */
-  debate: { where: VISITOR_BAND, says: "Nobody has built a debate for this piece yet" },
+  debate: { where: VISITOR_BAND, says: "Nobody has built a debate for this one yet" },
 };
 
 /**
@@ -1084,7 +1137,7 @@ describe("a signed-out browser on a shared document", () => {
     /* No `quotes` key on the payload — nobody built one. This is the state the
        browser pass could not reach, because the article it drove had every
        artefact. */
-    expect(host.textContent).toContain("Nobody has built a set of quotes for this piece yet");
+    expect(host.textContent).toContain("Nobody has built a set of quotes for this one yet");
     expect(host.textContent).not.toContain(PUBLIC_TERM);
 
     await remount();
@@ -1154,9 +1207,9 @@ describe("a signed-out browser on a shared document", () => {
     expect(band, "the Summary band is open").not.toBeNull();
     expect(readable(band as Element)).toContain(PUBLIC_NO_SIMPLE);
     expect(host.textContent).not.toContain("Nobody has built");
-    /* The slider, on the default level — so this cannot pass on a band that
+    /* The control, on the default view — so this cannot pass on a band that
        rendered its surface and nothing else. */
-    expect(band?.querySelector(".summ-slider input[type=range]")?.getAttribute("aria-valuetext")).toBe("Brief");
+    expect(band?.querySelector('.summ-views [role="radio"][aria-checked="true"]')?.textContent).toBe("Brief");
     expect(band?.querySelector(".summ-pill"), "no Parts | Sections").toBeNull();
     expect(outsidePublic()).toEqual([]);
   });
@@ -1326,12 +1379,13 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A stored Simple is shown to a visitor, and nothing is spent** — Summary's
-   * plain-words sub-mode (plan 260930i). The paragraphs and their doors come
-   * off the payload; there is no `/api/simple/` read, no job and no run button,
-   * and the trace is the one public GET.
+   * **A stored plain-words summary is shown to a visitor, and nothing is
+   * spent** — Summary's Fuller view (plans 260930i, 261003l). The paragraphs
+   * and their doors come off the payload; there is no `/api/simple/` read, no
+   * job and no run button, and the trace is the one public GET. The Simple
+   * level still crosses in the payload and is no longer drawn.
    */
-  it("draws a stored Simple from the payload, asking nothing", async () => {
+  it("draws a stored plain-words summary from the payload, asking nothing", async () => {
     await remount();
     served = {
       ...ARTICLE,
@@ -1341,23 +1395,19 @@ describe("a signed-out browser on a shared document", () => {
             { text: "The short one.", ids: ["spya-cccccc"] },
             { text: "Why.", ids: ["spya-cccccc"] },
           ],
-          simple: [
-            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
-            { text: "And it says why that matters to the reader.", ids: ["spya-cccccc"] },
-          ],
           fuller: [
-            { text: "The fuller version says what the piece is about.", ids: ["spya-cccccc"] },
+            { text: PUBLIC_SIMPLE, ids: ["spya-cccccc"] },
             { text: "Then why it matters.", ids: ["spya-cccccc"] },
-            { text: "Then its key idea.", ids: ["spya-cccccc"] },
           ],
         },
       },
     };
-    await open("?mode=summary&summary=simple");
+    await open("?mode=summary&summary=fuller");
 
     const band = host.querySelector(".mode-band.summ");
     expect(band, "the Summary band is open").not.toBeNull();
     expect(readable(band as Element)).toContain(PUBLIC_SIMPLE);
+    expect(readable(band as Element)).not.toContain("stored and not shown");
     expect(band?.querySelectorAll(".simple-para a.block-ref[data-block-link]").length).toBe(2);
     /* None of the owner's verbs. */
     expect(host.textContent).not.toContain("Write it");
@@ -1366,9 +1416,9 @@ describe("a signed-out browser on a shared document", () => {
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
-  it("tells a visitor no Simple has been made, and asks for none", async () => {
-    await open("?mode=summary&summary=simple");
-    expect(host.textContent).toContain("Nobody has made a plain-words version of this piece yet.");
+  it("tells a visitor no plain-words summary has been made, and asks for none", async () => {
+    await open("?mode=summary&summary=fuller");
+    expect(host.textContent).toContain("Nobody has made a plain-words version of this one yet.");
     expect(host.textContent).not.toContain("Write it");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
   });
@@ -1433,7 +1483,11 @@ describe("a signed-out browser on a shared document", () => {
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_WORK);
-    expect(text).toContain("The theory the piece argues against.");
+    /* A visitor has no verdict and no Dig deeper answer, so never the model's
+       sentence about the work (plan 261003j) — only that we have not read it. */
+    expect(text).not.toContain("The theory the piece argues against.");
+    expect(text).toContain("Tononi");
+    expect(text).toContain("We have not read this work");
     expect(text).toContain("A work whose link did not cross");
     expect(band?.querySelector('a[href="https://doi.org/10.1186/1471-2202-5-42"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Citations is for whoever added this article");
@@ -1501,6 +1555,8 @@ describe("a signed-out browser on a shared document", () => {
         },
       },
     };
+    /* `name=quoted` is the retired identification threshold (plan 261003o): a
+       link carrying it opens Reception with every row on screen. */
     await open("?mode=debate&name=quoted");
 
     const band = host.querySelector(".mode-band");
@@ -1508,8 +1564,16 @@ describe("a signed-out browser on a shared document", () => {
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
     const text = readable(band as Element);
     expect(text).toContain(PUBLIC_DEBATE_QUOTE);
-    expect(text).toContain("Somebody else answers what it claims.");
+    /* Reception draws the search about the piece; the other search's row is in
+       Claims, a press away — and the press asks the server nothing. */
+    expect(text).not.toContain("Somebody else answers what it claims.");
     expect(band?.querySelector('a[href="https://reply.example.org/a-reply"]')).not.toBeNull();
+    const claims = [...(band?.querySelectorAll<HTMLButtonElement>(".dbt-views [role='radio']") ?? [])][1];
+    expect(claims?.textContent, "the Claims segment, with its count").toBe("Claims1");
+    await act(async () => claims?.click());
+    await until(() => readable(band as Element).includes("Somebody else answers what it claims."));
+    expect(new URLSearchParams(location.search).get("debate")).toBe("claims");
+    expect(readable(band as Element)).not.toContain(PUBLIC_DEBATE_QUOTE);
     /* The row the boundary withheld is said, not silently missing — in the
        band's (i) since 2026-10-01, with Debate's other counts (plan 261001m). */
     expect(text).not.toContain("1 more result that is not shown on a shared link");
@@ -1576,7 +1640,9 @@ describe("a signed-out browser on a shared document", () => {
         },
       },
     };
-    await open("?mode=debate");
+    /* Both rows answer claims, so Claims is the sub-mode that draws them and
+       their threads (plan 261003o). */
+    await open("?mode=debate&debate=claims");
 
     const band = host.querySelector(".mode-band");
     expect(band?.matches(VISITOR_BAND), "not the owners-only boundary").toBe(false);
@@ -1614,19 +1680,19 @@ describe("a signed-out browser on a shared document", () => {
   });
 
   /**
-   * **A quiz link opens Remember's owners-only band, and asks nothing** —
+   * **A quiz link opens Learn's owners-only band, and asks nothing** —
    * Greg excluded Quiz from public articles on 2026-09-29 (plan 260929c §
-   * Decided): it is Remember's second half, `POLICY` decides per mode, and
+   * Decided): it is Learn's second half, `POLICY` decides per mode, and
    * Recall must stay private. A hostile deep link naming the quiz view gets the
    * boundary sentence, and the trace is the one public GET — no read of the
    * quiz, no mark.
    */
   it("gives a quiz deep link the owners-only band, asking nothing", async () => {
     await remount();
-    await open("?mode=remember&remember=quiz");
+    await open("?mode=learn&learn=quiz");
     const band = host.querySelector(".mode-band");
     expect(band?.matches(VISITOR_BAND), "the owners-only boundary").toBe(true);
-    expect(readable(band as Element)).toContain("Remember is for whoever added this article");
+    expect(readable(band as Element)).toContain("Learn is for whoever added this article");
     expect(trace.map((r) => r.url)).toEqual([`/api/public/article/${SLUG}`]);
     expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
@@ -1657,7 +1723,7 @@ describe("a signed-out browser on a shared document", () => {
       served = article();
       await open(`?mode=${mode}`);
 
-      expect(host.textContent, mode).toContain(`${noun} was built for this piece`);
+      expect(host.textContent, mode).toContain(`${noun} was built for this one`);
       expect(host.textContent, mode).toContain("came back with nothing in it");
       /* The whole point: not the never-built sentence. */
       expect(host.textContent, mode).not.toContain("Nobody has built");
@@ -1701,9 +1767,10 @@ describe("a signed-out browser on a shared document", () => {
    * pattern it follows.
    *
    * Asked for by accessible name rather than by class, because the name is what
-   * decides whether a reader can reach it: `.block-chat` is hidden with
-   * `opacity` and never `display: none` (styles.css § the gutter), so a button
-   * nobody can see is still in the tab order and still announced.
+   * decides whether a reader can reach it. Hover concealment uses `opacity`,
+   * leaving a fitted `.block-chat` in the tab order and accessibility tree;
+   * gutter capacity rules can also hide folded controls with `display: none`
+   * (gutter.css § the gutter).
    */
   it("draws no chat button beside a paragraph", async () => {
     await open();
@@ -1818,12 +1885,13 @@ describe("a signed-out browser on a shared document", () => {
    * Every request assertion in this file was made at `/read/:slug` with query
    * modes, so `/metadata` and `/tweets` — two of the three addresses a visitor
    * could reach — were untested for requests *and* for copy. GPT Sol,
-   * 2026-08-28. `/tweets` stopped being a page on 2026-09-29 and is lifted to
-   * `?mode=tweets` (router.ts § `liftedTweetsHref`), so what is opened now is
-   * the metadata page, the mode, and the old address a pasted link still
-   * carries — which must land in the same place and ask nothing more.
+   * 2026-08-28. `/tweets` stopped being a page on 2026-09-29 and a mode on
+   * 2026-10-03; both spellings are lifted to Summary's Thread view (router.ts
+   * § `liftedTweetsHref`), so what is opened now is the metadata page and the
+   * two old addresses a pasted link still carries — which must land in the
+   * same place and ask nothing more.
    */
-  it("stays inside the public namespace on the metadata page and in Tweets", async () => {
+  it("stays inside the public namespace on the metadata page and on the thread's old addresses", async () => {
     for (const [search, path] of [
       ["", "/metadata"],
       ["?mode=tweets", ""],
@@ -1835,12 +1903,34 @@ describe("a signed-out browser on a shared document", () => {
       expect(outsidePublic(), where).toEqual([]);
       expect(trace.filter((r) => r.method !== "GET"), where).toEqual([]);
     }
-    /* The old address really became the mode, or its row above asked about a
-       page that no longer exists. */
-    expect(new URLSearchParams(location.search).get("mode")).toBe("tweets");
-    expect(readable(host.querySelector(VISITOR_BAND) as Element)).toContain(
-      "Nobody has built a tweet thread for this piece yet",
+    /* The old address really became Summary's thread, or its row above asked
+       about a page that no longer exists. */
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+    expect(new URLSearchParams(location.search).get("mode")).toBe("summary");
+    expect(new URLSearchParams(location.search).get("summary")).toBe("thread");
+    expect(readable(host.querySelector(".mode-band.summ") as Element)).toContain(
+      "Nobody has built a tweet thread for this one yet",
     );
+  });
+
+  /**
+   * **Where and when it was published, on the visitor's Metadata page** — the
+   * journal and the publication date, out of the one payload and with no
+   * request of their own (plan 261004h). A fixture with a day and one with a
+   * year, because a paper has one or the other.
+   */
+  it.each([
+    ["a day", { published: "2024-05-31" }, /Published (31 May|May 31),? 2024/],
+    ["a year alone", { publishedYear: 2011 }, /Published 2011/],
+  ] as const)("prints the journal and %s on the metadata page, from the payload alone", async (_k, when, printed) => {
+    served = { ...ARTICLE, meta: { ...ARTICLE.meta, journal: "Entropy", ...when } };
+    await open("", "/metadata");
+
+    const facts = host.querySelector("[data-public-facts]")?.textContent ?? "";
+    expect(facts).toContain("Entropy");
+    expect(facts).toMatch(printed);
+    expect(outsidePublic()).toEqual([]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
   });
 
   /**
@@ -1850,15 +1940,27 @@ describe("a signed-out browser on a shared document", () => {
    * visitor *"There is a tweet thread for this piece"* about an article whose
    * own response said `tweets: false`. The unit test for `tweetsGap` cannot see
    * that, because the constant was in the *caller* — which is why breaking the
-   * call site left `visitor-gaps` entirely green. A page then, the mode since
-   * 2026-09-29; the gap now comes through `POLICY.tweets` like any other mode's.
+   * call site left `visitor-gaps` entirely green. A page then, a mode from
+   * 2026-09-29, and Summary's Thread view since 2026-10-03, where
+   * `VisitorSummaryBand` branches on the payload's own `tweets` key.
    */
+  /* `?mode=tweets` in both cases below, **on purpose**: it is the address a
+     visitor was sent while Tweets was a mode (2026-09-29 to 2026-10-03), and
+     it has to land on Summary's Thread view through the whole app — not on
+     Summary at Brief, where this payload, with no plain-words summary on it,
+     would say nobody has made one (GPT Sol's F4 on plan 261003l). */
   it("does not claim a tweet thread that the wire says is not there", async () => {
     await open("?mode=tweets");
+    await until(() => new URLSearchParams(location.search).get("summary") === "thread");
 
-    expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet");
+    expect(host.textContent).toContain("Nobody has built a tweet thread for this one yet");
     expect(host.textContent).not.toContain("There is a tweet thread");
     expect(host.querySelector(".mode-band.tweets")).toBeNull();
+    /* Said inside Summary's own band, under its control — not by the generic
+       visitor boundary, and not as a missing summary. */
+    const band = host.querySelector(".mode-band.summ");
+    expect(band?.querySelector('.summ-views [role="radio"][aria-checked="true"]')?.textContent).toBe("Thread");
+    expect(host.textContent).not.toContain(PUBLIC_NO_SIMPLE);
   });
 
   /**
@@ -1873,11 +1975,15 @@ describe("a signed-out browser on a shared document", () => {
   it("renders the tweet thread the payload carries, and asks nobody for it", async () => {
     served = { ...ARTICLE, tweets: THREAD };
     await open("?mode=tweets");
+    await until(() => host.querySelector(".mode-band.tweets") !== null);
 
+    expect(new URLSearchParams(location.search).getAll("mode")).toEqual(["summary"]);
+    expect(new URLSearchParams(location.search).getAll("summary")).toEqual(["thread"]);
     const band = host.querySelector(".mode-band.tweets");
-    expect(band, "the Tweets band").not.toBeNull();
+    expect(band, "the thread's band").not.toBeNull();
     expect(readable(band as Element)).toContain(PUBLIC_TWEET);
     expect(host.textContent).not.toContain("Nobody has built a tweet thread");
+    expect(host.textContent, "the old link opened Summary at Brief").not.toContain(PUBLIC_NO_SIMPLE);
     /* The owner's foot: the provenance line and the button that spends. */
     expect(host.textContent).not.toContain("Write it again");
     expect(host.textContent).not.toContain("Written by");
@@ -1911,7 +2017,7 @@ describe("a signed-out browser on a shared document", () => {
    *
    * ## Two passes since 2026-09-03, and the count is not weakened
    *
-   * Five modes are behind the experimental-features switch, and a signed-out
+   * Some modes are behind the experimental-features switch, and a signed-out
    * reader is **forcibly off** — there is no answer this test could pose that
    * would put Quotes in a stranger's bar, because the store issues no request
    * for them at all. So the sweep runs twice rather than shrinking:
@@ -1924,20 +2030,21 @@ describe("a signed-out browser on a shared document", () => {
    *
    * The union is still compared with `MODES`, in both directions, which is the
    * invariant the pre-gate version held. Dropping the second pass would have
-   * quietly stopped pressing five of the thirteen.
+   * quietly stopped pressing the modes hidden from the default bar.
    */
   it("stays inside the public namespace when the modes are pressed", async () => {
     await open();
     trace.length = 0;
 
-    const buttons = modeRadios();
-    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+    const offered = offeredBandLabels();
+    expect(offered.length, "the bar must offer its modes").toBeGreaterThan(0);
 
     const pressed: string[] = [];
-    for (const button of buttons) {
-      const label = button.getAttribute("aria-label");
+    /** The labels whose press went through the More menu rather than a bar button. */
+    const viaMore: string[] = [];
+    for (const label of offered) {
       const before = modeInUrl();
-      await act(async () => button.click());
+      if ((await pressOffered(label)) === "more") viaMore.push(label);
       await settle();
       expect(outsidePublic(), `after pressing ${label}`).toEqual([]);
       /* And no POST — the other half of this file's acceptance rule, which
@@ -1947,7 +2054,7 @@ describe("a signed-out browser on a shared document", () => {
       /* **The bar's own answer first**, because it is React state and lands with
          the click. This is the assertion that a button is live; everything below
          is about *which* mode it opened. */
-      expect(button.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
+      expect(radioFor(label)?.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
         "true",
       );
 
@@ -1959,6 +2066,14 @@ describe("a signed-out browser on a shared document", () => {
       pressed.push(mode);
       expectBandFor(mode as Mode, `after pressing ${label}`);
     }
+
+    /* **Three of those presses went through More**, and exactly these three:
+       the gathered modes a stranger has (FAQ and Timeline are behind the
+       switch as well, and are reached by address below). An empty list here
+       is the sweep having gone back to pressing radios only. */
+    expect([...viaMore].sort()).toEqual(
+      [MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.ideas].sort(),
+    );
 
     /* **The bar drew what a default reader sees, and not one button more.** The
        modes behind the switch are absent from a stranger's bar by construction;
@@ -1975,12 +2090,25 @@ describe("a signed-out browser on a shared document", () => {
     for (const mode of MODES) {
       if (pressed.includes(mode)) continue;
       /* **Marginalia is a toggle beside the radios** since 2026-10-01, and its
-         address is `?margin=1` (261001i): kept drawn and pressed while the notes
-         are on, and pressing it — which turns them off — stays public too. */
+         address is `?margin=1` (261001i). Since 2026-10-05 it is on a
+         stranger's default bar, unpressed (plan 261005d, GPT Sol's P2): so
+         both presses are made from a bare page, on and then off, and each
+         stays public and sends nothing but GETs. Until then only the press
+         that turns the notes off was reachable. */
       if (mode === "marginalia") {
         await remount();
-        await open("?margin=1");
+        await open();
         trace.length = 0;
+        const closed = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+        expect(closed?.getAttribute("aria-label"), "the notes' toggle is on a stranger's bar").toBe(
+          MODE_LABEL.marginalia,
+        );
+        expect(closed?.getAttribute("aria-pressed")).toBe("false");
+        await act(async () => (closed as HTMLButtonElement).click());
+        await settle();
+        expect(outsidePublic(), "after turning marginalia on").toEqual([]);
+        expect(trace.filter((r) => r.method !== "GET"), "after turning marginalia on").toEqual([]);
+        expect(new URLSearchParams(location.search).get("margin")).toBe("1");
         const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
         expect(toggle?.getAttribute("aria-label"), "the notes' toggle must stay drawn").toBe(
           MODE_LABEL.marginalia,
@@ -2741,14 +2869,34 @@ describe("a signed-in reader who does not own it", () => {
     await open();
     trace.length = 0;
 
-    const buttons = modeRadios();
-    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
-    for (const button of buttons) {
-      const label = button.getAttribute("aria-label");
-      await act(async () => button.click());
+    const offered = offeredBandLabels();
+    expect(offered.length, "the bar must offer its modes").toBeGreaterThan(0);
+    const viaMore: string[] = [];
+    for (const label of offered) {
+      if ((await pressOffered(label)) === "more") viaMore.push(label);
       await settle();
       expect(trace.filter((r) => r.method !== "GET"), `after pressing ${label}`).toEqual([]);
     }
+    /* **Every mode, by name** — it was *every radio*, which since 2026-10-07
+       leaves out the three under More, and those are three of the modes that
+       can start paid work for an owner (plan 261007c, PR-10). The switch is
+       off for this reader, so the set is the default bar's, less Marginalia's
+       toggle, which is not a band. */
+    expect([...offered].sort()).toEqual(
+      [
+        MODE_LABEL.plain,
+        MODE_LABEL.structure,
+        MODE_LABEL.summary,
+        MODE_LABEL.skim,
+        MODE_LABEL.quotes,
+        MODE_LABEL.glossary,
+        MODE_LABEL.ideas,
+        MODE_LABEL.search,
+        MODE_LABEL.chat,
+        MODE_LABEL.learn,
+      ].sort(),
+    );
+    expect([...viaMore].sort()).toEqual([MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.ideas].sort());
   });
 
   /**
@@ -2816,14 +2964,15 @@ describe("a signed-in reader who does not own it", () => {
        before anything is pressed. */
     trace.length = 0;
 
-    const buttons = modeRadios();
-    expect(buttons.length, "the bar must draw its modes").toBeGreaterThan(0);
+    const offered = offeredBandLabels();
+    expect(offered.length, "the bar must offer its modes").toBeGreaterThan(0);
 
     const pressed: string[] = [];
-    for (const button of buttons) {
-      const label = button.getAttribute("aria-label");
+    /** The labels whose press went through the More menu rather than a bar button. */
+    const viaMore: string[] = [];
+    for (const label of offered) {
       const before = modeInUrl();
-      await act(async () => button.click());
+      if ((await pressOffered(label)) === "more") viaMore.push(label);
       await settle();
 
       /* **`/api/jobs` filtered rather than forbidden**, and only here. The
@@ -2844,7 +2993,7 @@ describe("a signed-in reader who does not own it", () => {
         `after pressing ${label}`,
       ).toEqual([]);
 
-      expect(button.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
+      expect(radioFor(label)?.getAttribute("aria-checked"), `pressing ${label} must select it`).toBe(
         "true",
       );
       const mode = await modeAfterPress(before);
@@ -2856,6 +3005,12 @@ describe("a signed-in reader who does not own it", () => {
          covers. */
       expectBandFor(mode as Mode, `after pressing ${label}`);
     }
+
+    /* **Five of those presses went through More**: with the switch on, every
+       gathered mode is offered there and nowhere else until it is open. */
+    expect([...viaMore].sort()).toEqual(
+      [MODE_LABEL.quotes, MODE_LABEL.glossary, MODE_LABEL.faq, MODE_LABEL.ideas, MODE_LABEL.timeline].sort(),
+    );
 
     /* **And Marginalia's toggle after the radios** (261001i): the notes on and
        off again, both presses inside the public namespace. */
@@ -2960,7 +3115,7 @@ describe("when the reader's own session cannot be confirmed", () => {
       "",
       "?mode=tweets",
       ARTICLE,
-      "Nobody has built a tweet thread for this piece yet",
+      "Nobody has built a tweet thread for this one yet",
     ],
   ])("says it on %s too", async (_name, view, search, payload, canary) => {
     session.user = { id: "somebody", email: "somebody@example.com" };
@@ -3345,10 +3500,11 @@ describe("the same address, as the owner", () => {
     await open();
     trace.length = 0;
 
-    const ideas = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === "Ideas",
-    );
-    expect(ideas, "the bar must draw Ideas").toBeDefined();
+    /* Ideas is under More since 2026-10-07 (plan 261007c): this is the
+       owner's press through the menu, and it arms as the bar button did. */
+    expect(radioFor("Ideas"), "Ideas is under More, not in the bar").toBeUndefined();
+    const ideas = modeDoor(host, "Ideas");
+    expect(ideas, "the bar must offer Ideas").toBeDefined();
     await act(async () => ideas?.click());
     await settle();
 
@@ -3450,6 +3606,35 @@ describe("the same address, as the owner", () => {
     expect(host.textContent).not.toContain("View only");
     /* The fixture has a web address, so it does not look for one. */
     expect(trace.filter((r) => r.url.startsWith("/api/source-guess/"))).toEqual([]);
+  });
+
+  /**
+   * **Reading time is recorded and drawn for every owner, switch or no
+   * switch** — Greg, 2026-10-05, answering `Q-reading-time-switch` with "A"
+   * (docs/project/reading-time.md § Who gets it). Until then the opening read
+   * went out only with experimental features on, and a stretch read with the
+   * switch off looked unread for ever. Through the real `App`, because the
+   * gate was one argument in `OwnedReader` and a unit test of the hook cannot
+   * see it. The visitor half is the exactly-equal trace in "a signed-in reader
+   * who does not own it": nobody but the owner asks.
+   */
+  it("reads the owner's reading time with experimental features off", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    expect(experimentalSince, "the switch is off for this case").toBeNull();
+    await open();
+
+    const lines = () => trace.map((r) => `${r.method} ${r.url}`);
+    await vi.waitFor(() => expect(lines()).toContain(`GET /api/reading-time/${SLUG}`));
+    /* A request alone could leave the store at its unloaded off default. */
+    expect(lines()).toContain("GET /api/reader");
+    await vi.waitFor(() =>
+      expect(experimentalSnapshot()).toMatchObject({
+        loaded: true,
+        on: false,
+        since: null,
+        loadError: null,
+      }),
+    );
   });
 
   /**
@@ -3584,5 +3769,232 @@ describe("an owner's reading view, left alone", () => {
     await open("?mode=glossary");
 
     expect(await jobPollsInAMinute(), "job-list polls in a minute with Glossary open").toBeGreaterThan(3);
+  });
+});
+
+/**
+ * **A private link**: `/read/<slug>?key=<key>` on an article that is not
+ * public. docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+ *
+ * The acceptance rule of this file holds unchanged: one public request, no
+ * POST, no `Authorization`. What is new is that the request carries the key,
+ * that the key stays in the address while the reader moves about the article,
+ * that it is kept nowhere else, and that the notice says which way in this is.
+ *
+ * `publicArticle` answers 404 throughout, as the server does for a private
+ * article asked for without a key, so a page that forgot the key shows the
+ * landing page and not the article.
+ */
+describe("a visitor holding a private link", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStUv";
+  const OTHER_KEY = "ZyXwVuTsRqPoNmLkJiHgFe";
+  const LINKED: PublicArticle = { ...ARTICLE, sharedBy: "link" };
+  const PROSE = "The first paragraph of the piece.";
+  const withKey = `/api/public/article/${SLUG}?key=${KEY}`;
+
+  /* This suite's jsdom has no `localStorage`, so the rest of this file never
+     meets the remembered view. These cases are about what is written there, so
+     they get a map, and give the absence back afterwards. */
+  const local = new Map<string, string>();
+  const hadLocalStorage = Object.getOwnPropertyDescriptor(window, "localStorage");
+
+  /** Everything this origin's two stores hold, as one string to search. */
+  const stored = (): string => {
+    const session = window.sessionStorage;
+    return [
+      ...[...local].map(([k, v]) => `${k}=${v}`),
+      ...Array.from({ length: session.length }, (_, i) => {
+        const k = session.key(i) ?? "";
+        return `${k}=${session.getItem(k)}`;
+      }),
+    ].join("\n");
+  };
+
+  beforeEach(() => {
+    local.clear();
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => local.get(key) ?? null,
+        setItem: (key: string, value: string) => void local.set(key, value),
+        removeItem: (key: string) => void local.delete(key),
+      },
+    });
+    window.sessionStorage.clear();
+    publicArticle = () => json({ error: "Not found" }, 404);
+    keyed.set(KEY, () => json(LINKED));
+  });
+
+  afterEach(() => {
+    if (hadLocalStorage) Object.defineProperty(window, "localStorage", hadLocalStorage);
+    else delete (window as { localStorage?: unknown }).localStorage;
+  });
+
+  it("is the control: without the key this article is not readable", async () => {
+    await open();
+    expect(trace.map((r) => r.url)).toContain(`/api/public/article/${SLUG}`);
+    expect(host.textContent).not.toContain(PROSE);
+  });
+
+  it("makes one public request, with the key, no POST and no Authorization", async () => {
+    await open(`?key=${KEY}`);
+
+    expect(host.textContent).toContain(PROSE);
+    expect(host.textContent).toContain("View only");
+    expect(trace.map((r) => r.url)).toEqual([withKey]);
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+    expect(trace.filter((r) => r.auth !== null)).toEqual([]);
+  });
+
+  it("says it is a private link, in place of the public sentence", async () => {
+    await open(`?key=${KEY}`);
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+    expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    /* And on the details page, which draws the same notice. */
+    await remount();
+    await open(`?key=${KEY}`, "/metadata");
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+    expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    expect(trace.map((r) => r.url)).toEqual([withKey]);
+  });
+
+  /* Public wins: the server says `sharedBy: "public"` of a public article
+     whatever key came, and the notice follows the server. */
+  it("shows the public notice on a public article opened with a key", async () => {
+    keyed.set(KEY, () => json(ARTICLE));
+    await open(`?key=${KEY}`);
+    expect(host.textContent).toContain(PROSE);
+    expect(host.textContent).toContain(SHARED_WITH_YOU);
+    expect(host.textContent).not.toContain(SHARED_BY_PRIVATE_LINK);
+  });
+
+  it("shows the owner no notice, and sends the owner's requests no key", async () => {
+    session.user = { id: "owner-1", email: "greg@example.com" };
+    await open(`?key=${KEY}`);
+
+    expect(host.textContent).toContain("as its owner renamed it");
+    expect(host.textContent).not.toContain(SHARED_BY_PRIVATE_LINK);
+    expect(host.textContent).not.toContain(SHARED_WITH_YOU);
+    expect(trace.length, "the owner's page must have asked for something").toBeGreaterThan(0);
+    expect(trace.filter((r) => r.url.includes(KEY) || r.url.includes("key="))).toEqual([]);
+  });
+
+  /* Somebody with an account follows a colleague's private link. The owned
+     route is asked first, without the key, and says not yours; the public one
+     is then asked exactly as a stranger's browser asks it. */
+  it("lets a signed-in reader who is not the owner read it like a stranger", async () => {
+    session.user = { id: "somebody-else", email: "else@example.com" };
+    owned = () => json({ error: "not yours" }, 404);
+    await open(`?key=${KEY}`);
+
+    expect(host.textContent).toContain(PROSE);
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+    const asked = trace.filter((r) => r.url.includes(SLUG));
+    expect(asked.map((r) => `${r.method} ${r.url}`)).toEqual([
+      `GET /api/article/${SLUG}`,
+      `GET ${withKey}`,
+    ]);
+    expect(asked[1]?.auth, "the public request carries no token").toBeNull();
+    expect(trace.filter((r) => r.method !== "GET")).toEqual([]);
+  });
+
+  it.each([
+    ["a short one", "abc"],
+    ["an empty one", ""],
+    ["one with a character a key cannot have", `${KEY.slice(0, 21)}!`],
+    ["one that is too long", `${KEY}A`],
+  ])("forwards nothing for a malformed key: %s", async (_name, bad) => {
+    await open(`?key=${encodeURIComponent(bad)}`);
+    expect(trace.map((r) => r.url)).toContain(`/api/public/article/${SLUG}`);
+    expect(trace.filter((r) => r.url.includes("key="))).toEqual([]);
+    expect(host.textContent).not.toContain(PROSE);
+  });
+
+  it("keeps the key in the address through a mode change, and asks nothing more", async () => {
+    await open(`?key=${KEY}`);
+    trace.length = 0;
+
+    const [first] = modeRadios().filter((b) => b.getAttribute("aria-checked") !== "true");
+    expect(first, "the bar must draw a mode to press").toBeDefined();
+    const before = modeInUrl();
+    await act(async () => first?.click());
+    await settle();
+    expect(await modeAfterPress(before), "the press must have changed the mode").not.toBe(before);
+
+    expect(new URLSearchParams(location.search).get("key")).toBe(KEY);
+    expect(host.textContent).toContain(PROSE);
+    expect(trace, "a mode change is not a new load").toEqual([]);
+  });
+
+  it("keeps the key on the way to the details page and back, without loading again", async () => {
+    await open(`?key=${KEY}`);
+    trace.length = 0;
+
+    const out = host.querySelector<HTMLAnchorElement>(`a[href^="/read/${SLUG}/metadata"]`);
+    expect(out, "the bar must link to the details page").not.toBeNull();
+    expect(new URL(out?.href ?? "", location.origin).searchParams.get("key")).toBe(KEY);
+    await act(async () => out?.click());
+    await settle();
+    expect(location.pathname).toBe(`/read/${SLUG}/metadata`);
+    expect(new URLSearchParams(location.search).get("key")).toBe(KEY);
+    expect(host.textContent).toContain(SHARED_BY_PRIVATE_LINK);
+
+    const back = host.querySelector<HTMLAnchorElement>('a[aria-label="Back to the article"]');
+    expect(back, "the details page must link back").not.toBeNull();
+    await act(async () => back?.click());
+    await settle();
+    expect(location.pathname).toBe(`/read/${SLUG}`);
+    expect(new URLSearchParams(location.search).get("key")).toBe(KEY);
+    expect(host.textContent).toContain(PROSE);
+    expect(trace, "neither step is a new load").toEqual([]);
+  });
+
+  /* What makes a copied passage link open for the next person. */
+  it("keeps the key in a passage link", async () => {
+    await open(`?key=${KEY}`);
+    const { blockPermalink } = await import("../src/web/BlockRef.js");
+    const link = new URL(blockPermalink("spya-bbbbbb" as BlockId));
+    expect(link.searchParams.get("key")).toBe(KEY);
+    expect(link.searchParams.get("at")).toBe("spya-bbbbbb");
+  });
+
+  /* One slug, two keys: an answer fetched under one is never drawn under the
+     other, and the new key is asked about. */
+  it("loads again when the key changes on the same article, and never shows the old answer", async () => {
+    const { navigate } = await import("../src/web/router.js");
+    await open(`?key=${KEY}`);
+    expect(host.textContent).toContain(PROSE);
+    trace.length = 0;
+
+    await act(async () => navigate(`/read/${SLUG}?key=${OTHER_KEY}`));
+    // Before the new answer lands: the old one is already gone.
+    expect(host.textContent).not.toContain(PROSE);
+    await settle();
+    expect(trace.map((r) => r.url)).toContain(`/api/public/article/${SLUG}?key=${OTHER_KEY}`);
+    expect(trace.filter((r) => r.url === withKey)).toEqual([]);
+    expect(host.textContent, "a key the server refuses reads nothing").not.toContain(PROSE);
+
+    /* And the other way: from a refused key to the right one. */
+    trace.length = 0;
+    await act(async () => navigate(`/read/${SLUG}?key=${KEY}`));
+    await settle();
+    expect(trace.map((r) => r.url)).toEqual([withKey]);
+    expect(host.textContent).toContain(PROSE);
+  });
+
+  it("writes the key to neither of the browser's stores, whatever the reader does", async () => {
+    await open(`?key=${KEY}&mode=summary&at=spya-bbbbbb`);
+    const [first] = modeRadios().filter((b) => b.getAttribute("aria-checked") !== "true");
+    await act(async () => first?.click());
+    await settle();
+    const out = host.querySelector<HTMLAnchorElement>(`a[href^="/read/${SLUG}/metadata"]`);
+    await act(async () => out?.click());
+    await settle();
+
+    /* The control: the remembered view really was written, so an empty search
+       below is about the key and not about storage that never worked. */
+    expect(stored(), "the remembered view must have been saved").toContain(SLUG);
+    expect(stored()).not.toContain(KEY);
+    expect(stored()).not.toContain("key=");
   });
 });

@@ -134,6 +134,9 @@ describe("the article cost section", () => {
     expect(host.textContent).toContain("over 6 calls");
     const rows = [...host.querySelectorAll("tbody tr")].map((r) => r.firstChild?.textContent);
     expect(rows).toEqual(["structure", "structure · labels", "chat"]);
+    /* "Calls, Cost" can be read as so many calls at so much each (spya-h2dzab). */
+    const head = [...host.querySelectorAll("thead th")].map((th) => th.textContent);
+    expect(head).toEqual(["Work", "Kind", "Calls", "Total cost"]);
     /* The shut heading says the same total as the body. */
     expect(summary()).toBe("$0.1030 · 6 calls");
     /* Nothing is unpriced, so the total is not called a floor. */
@@ -230,6 +233,30 @@ describe("the article cost section", () => {
     /* No figure on the heading either: the section refuses to shut over a
        failure (Metadata.tsx § CostSection), so the alert is what shows. */
     expect(summary()).toBe("(none)");
+  });
+
+  /* What the read can throw besides a refusal: `apiFetch` on a lost connection
+     and anything unexpected. Both were printed raw after the colon until
+     2026-10-07 (plan 261007a § K4). */
+  it("says a lost connection in our words, not the browser's", async () => {
+    vi.stubEnv("PROD", true);
+    fetchSpy.mockRejectedValue(new TypeError("Load failed"));
+    await mount();
+    vi.unstubAllEnvs();
+    const said = host.querySelector("[role=alert]")?.textContent ?? "";
+    expect(said).toContain("Could not read what this article cost");
+    expect(said).toMatch(/\[net-down\]$/);
+    expect(said).not.toContain("Load failed");
+  });
+
+  it("does not print an exception nobody wrote for a reader", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchSpy.mockRejectedValue(new Error("Cannot read properties of undefined (reading 'ledger')"));
+    await mount();
+    vi.restoreAllMocks();
+    const said = host.querySelector("[role=alert]")?.textContent ?? "";
+    expect(said).toMatch(/\[web-unexpected\]$/);
+    expect(said).not.toContain("Cannot read");
   });
 });
 

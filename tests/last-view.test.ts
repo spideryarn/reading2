@@ -23,12 +23,65 @@ import { describe, expect, it } from "vitest";
 
 import {
   ARTICLE_PARAMS,
+  claimFirstOpen,
+  firstOpenHref,
+  firstOpenSearch,
   hasArticleState,
+  lastViewKey,
+  legacyLastViewKey,
   NEVER_REMEMBERED,
+  readLastView,
   REMEMBERED,
   rememberableSearch,
   restoredHref,
+  withoutArticleState,
+  writeLastView,
 } from "../src/web/last-view.js";
+import { SHARE_KEY_PARAM } from "../src/share-key.js";
+
+/** Two readers who share one browser profile. */
+const A = "1a1a1a1a-1111-4111-8111-000000000003";
+const B = "2b2b2b2b-2222-4222-8222-000000000003";
+
+/**
+ * **A private link's key is a credential, and this store is not where one is
+ * kept.** Plan 261005e. The store writes an allowlist, so the key is left out
+ * by not being on it; these hold that, and that a restore keeps the key the
+ * address arrived with.
+ */
+describe("a private link's key and the remembered view", () => {
+  const KEY = "AbCdEfGhIjKlMnOpQrStUv";
+
+  it("is on neither list, so it is never written", () => {
+    expect(REMEMBERED as readonly string[]).not.toContain(SHARE_KEY_PARAM);
+    expect(ARTICLE_PARAMS).not.toContain(SHARE_KEY_PARAM);
+  });
+
+  it("is dropped from what is remembered, wherever it sits in the address", () => {
+    expect(rememberableSearch(`?key=${KEY}&mode=summary&at=spya-k3m9qt`)).toBe("?mode=summary&at=spya-k3m9qt");
+    expect(rememberableSearch(`?mode=summary&key=${KEY}`)).toBe("?mode=summary");
+    expect(rememberableSearch(`?key=${KEY}`)).toBe("");
+  });
+
+  it("is not in what a visit writes to the store", () => {
+    const held = new Map<string, string>();
+    const storage = () =>
+      ({
+        getItem: (k: string) => held.get(k) ?? null,
+        setItem: (k: string, v: string) => void held.set(k, v),
+      }) as unknown as Storage;
+    expect(writeLastView("a-piece", A, rememberableSearch(`?key=${KEY}&mode=glossary`), storage)).toBe(true);
+    expect(held.size, "the control: something was written").toBe(1);
+    expect(JSON.stringify([...held])).not.toContain(KEY);
+    expect(JSON.stringify([...held])).toContain("mode=glossary");
+  });
+
+  it("stays on the address when a remembered view is put back", () => {
+    expect(restoredHref("/read/a-piece", `?key=${KEY}`, "?mode=summary")).toBe(
+      `/read/a-piece?key=${KEY}&mode=summary`,
+    );
+  });
+});
 
 describe("rememberableSearch", () => {
   it("keeps the parameters that say how you are looking at the article", () => {
@@ -57,6 +110,28 @@ describe("rememberableSearch", () => {
     expect(hasArticleState("?summary=simple")).toBe(true);
   });
 
+  /* Debate's Reception | Claims, since 2026-10-03 (plan 261003o; GPT Sol's
+     F6). Left out of `REMEMBERED`, a reader who was reading Claims comes back
+     to Reception — on a paper with no reception, an empty band. Restoring it
+     spends nothing: Debate searches on a press, never on arrival. */
+  it("keeps Debate's sub-mode, so Claims is restored as Claims", () => {
+    expect(rememberableSearch("?mode=debate&debate=claims&bears=partly")).toBe(
+      "?mode=debate&debate=claims&bears=partly",
+    );
+    expect(restoredHref("/read/x", "", "?mode=debate&debate=claims")).toBe("/read/x?mode=debate&debate=claims");
+    expect(hasArticleState("?debate=claims")).toBe(true);
+  });
+
+  it("no longer stores the retired identification threshold, or puts an old one back", () => {
+    expect(rememberableSearch("?mode=debate&name=linked")).toBe("?mode=debate");
+    expect(restoredHref("/read/x", "", "?mode=debate&name=linked")).toBe("/read/x?mode=debate");
+  });
+
+  it("lets an old link carrying only `name` win over a remembered view", () => {
+    expect(hasArticleState("?name=linked")).toBe(true);
+    expect(restoredHref("/read/x", "?name=linked", "?mode=debate&debate=claims&bears=directly")).toBeNull();
+  });
+
   it("keeps each pair byte-for-byte, so a comma list is not reserialised", () => {
     /* `URLSearchParams` would hand back `crits=spya-a%2Cspya-b`, which parses
        to the same thing and reads as somebody else's URL. Same reason
@@ -75,12 +150,12 @@ describe("rememberableSearch", () => {
 
   it("drops the four modes that start something merely by being arrived in", () => {
     /* Diagram POSTs `/api/similar` or `/api/projection` for three of its five
-       pictures, and Remember opens a conversation exactly as Chat does — both
+       pictures, and Learn opens a conversation exactly as Chat does — both
        found by GPT Sol (F1, F2) after a first survey wrongly reported all
        thirteen modes inert. last-view.ts § NEEDS_AN_EXPLICIT_PRESS. */
     expect(rememberableSearch("?mode=chat")).toBe("");
     expect(rememberableSearch("?mode=diagram")).toBe("");
-    expect(rememberableSearch("?mode=remember")).toBe("");
+    expect(rememberableSearch("?mode=learn")).toBe("");
     expect(rememberableSearch("?at=spya-a&mode=chat&thread=spya-b")).toBe("?at=spya-a");
     /* **The one that would have cost money**: the mode goes, the picture stays,
        so pressing Diagram later still returns Force — but nothing fetches while
@@ -88,10 +163,22 @@ describe("rememberableSearch", () => {
     expect(rememberableSearch("?at=spya-a&mode=diagram&diagram=force&dhue=topic")).toBe(
       "?at=spya-a&diagram=force&dhue=topic",
     );
-    expect(rememberableSearch("?mode=remember&remember=quiz")).toBe("?remember=quiz");
-    /* Tweets, since it became a mode on 2026-09-29: opening it with no thread
-       writes one on arrival (useTweets.ts § `useAutoRunOnArrival`), and a
-       restore is the one arrival nobody chose. Plan 260929f. */
+    expect(rememberableSearch("?mode=learn&learn=quiz")).toBe("?learn=quiz");
+    /* **Summary's Thread** (the Tweets mode until 2026-10-03): opening it with
+       no thread writes one on arrival (useTweets.ts § `useAutoRunOnArrival`),
+       and a restore is the one arrival nobody chose. So the mode is dropped
+       when the remembered view is the thread — and `summary=thread` itself
+       stays, dormant, as `diagram=force` does above. Plan 261003l. */
+    expect(rememberableSearch("?mode=summary&summary=thread")).toBe("?summary=thread");
+    expect(rememberableSearch("?at=spya-a&summary=thread&mode=summary")).toBe("?at=spya-a&summary=thread");
+    expect(restoredHref("/read/x", "", "?at=spya-a&mode=summary&summary=thread")).toBe(
+      "/read/x?at=spya-a&summary=thread",
+    );
+    /* The positive control: Summary at a length is restored as it stands. */
+    expect(rememberableSearch("?mode=summary&summary=fuller")).toBe("?mode=summary&summary=fuller");
+    expect(rememberableSearch("?mode=summary")).toBe("?mode=summary");
+    /* A browser that remembered the old mode word: `settleAddress` would lift
+       it to the thread, so it is dropped the same way. */
     expect(rememberableSearch("?mode=tweets")).toBe("");
     expect(rememberableSearch("?at=spya-a&mode=tweets")).toBe("?at=spya-a");
     expect(restoredHref("/read/x", "", "?at=spya-a&mode=tweets")).toBe("/read/x?at=spya-a");
@@ -270,6 +357,265 @@ describe("restoredHref", () => {
   });
 });
 
+/**
+ * **The first-open default** — Greg, 2026-10-04 (spya-ax5tmm):
+ *
+ * > When I open an article for the first time, default to Summary/Briefer in left-hand (if there's
+ * > room) and (if there's even more room) Marginalia mode in right-hand
+ *
+ * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
+ * The storage is a hand-made one handed in, because this file runs in node and
+ * the two failures that matter — a read that throws, a write that throws — are
+ * not ones a real `localStorage` can be asked to produce.
+ */
+describe("the first-open default", () => {
+  const KEY = lastViewKey("x", A);
+
+  /** A `localStorage` over a map, with either verb made to throw. */
+  function storage(initial: Record<string, string> = {}, broken: { read?: boolean; write?: boolean } = {}) {
+    const held = new Map(Object.entries(initial));
+    const source = () =>
+      ({
+        getItem(key: string) {
+          if (broken.read) throw new Error("blocked");
+          return held.get(key) ?? null;
+        },
+        setItem(key: string, value: string) {
+          if (broken.write) throw new Error("blocked");
+          held.set(key, value);
+        },
+        removeItem(key: string) {
+          if (broken.write) throw new Error("blocked");
+          held.delete(key);
+        },
+      }) as unknown as Storage;
+    return { held, source };
+  }
+
+  describe("firstOpenSearch: what the window has room for", () => {
+    it("is the article alone just below 700 usable px, and Summary from 700", () => {
+      expect(firstOpenSearch(699, 16)).toBe("");
+      expect(firstOpenSearch(700, 16)).toBe("?mode=summary");
+    });
+
+    it("adds the notes from 900, and not at 899", () => {
+      expect(firstOpenSearch(899, 16)).toBe("?mode=summary");
+      expect(firstOpenSearch(900, 16)).toBe("?mode=summary&margin=1");
+    });
+
+    it("does not ask about the experimental switch: Marginalia left it on 2026-10-05", () => {
+      /* It took a third argument, the reader's switch, and left the notes out
+         when that was off (spya-vv54j2, plan 261005d). */
+      expect(firstOpenSearch.length).toBe(2);
+      expect(firstOpenSearch(2400, 16)).toBe("?mode=summary&margin=1");
+    });
+  });
+
+  describe("readLastView: a failed read is not a missing key", () => {
+    it("tells the three answers apart", () => {
+      expect(readLastView("x", A, storage().source)).toEqual({ kind: "none" });
+      expect(readLastView("x", A, storage({ [KEY]: "" }).source)).toEqual({ kind: "stored", search: "" });
+      expect(readLastView("x", A, storage({ [KEY]: "?at=spya-a" }).source)).toEqual({
+        kind: "stored",
+        search: "?at=spya-a",
+      });
+      expect(readLastView("x", A, storage({}, { read: true }).source)).toEqual({ kind: "failed" });
+    });
+  });
+
+  /**
+   * **Two readers, one browser profile** (plan 261006h). The key had the slug
+   * alone in it until 2026-10-06, so the second reader to open a public
+   * article was put where the first had been reading.
+   */
+  describe("a view is its reader's", () => {
+    const LEGACY = legacyLastViewKey("x");
+
+    it("is not returned to another reader, and still is to the one who wrote it", () => {
+      const s = storage();
+      expect(writeLastView("x", A, "?mode=quotes&at=spya-far", s.source)).toBe(true);
+      expect(readLastView("x", B, s.source)).toEqual({ kind: "none" });
+      expect(readLastView("x", null, s.source)).toEqual({ kind: "none" });
+      expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=quotes&at=spya-far" });
+    });
+
+    it("keeps one entry each, and one for nobody, under keys an old one cannot be taken for", () => {
+      const s = storage();
+      writeLastView("x", A, "?at=spya-a", s.source);
+      writeLastView("x", B, "?at=spya-b", s.source);
+      writeLastView("x", null, "?at=spya-none", s.source);
+      expect(Object.fromEntries(s.held)).toEqual({
+        [`spya.lastViewFor.${A}.x`]: "?at=spya-a",
+        [`spya.lastViewFor.${B}.x`]: "?at=spya-b",
+        "spya.lastViewFor.signed-out.x": "?at=spya-none",
+      });
+      expect(LEGACY).toBe("spya.lastView.x");
+      expect([...s.held.keys()].some((key) => key.startsWith("spya.lastView."))).toBe(false);
+    });
+
+    it("one reader's first open is not used up by another's", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
+      expect(claimFirstOpen("x", B, "", readLastView("x", B, s.source), s.source)).toBe(true);
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
+    });
+
+    describe("a key from before 2026-10-06", () => {
+      it("is adopted by the first reader, and gone afterwards", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" });
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=glossary" });
+        expect(Object.fromEntries(s.held)).toEqual({ [lastViewKey("x", A)]: "?mode=glossary" });
+      });
+
+      it("gives a second reader nothing", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" });
+        readLastView("x", A, s.source);
+        expect(readLastView("x", B, s.source)).toEqual({ kind: "none" });
+        expect(s.held.has(lastViewKey("x", B))).toBe(false);
+      });
+
+      it("keeps an opened article from looking like a first open, even one left in Plain", () => {
+        /* Why the old keys are adopted rather than dropped: no key is how a
+           first open is recognised, so dropping them would reopen every
+           article at the first-open default on the day of the deploy. */
+        const s = storage({ [LEGACY]: "" });
+        const stored = readLastView("x", A, s.source);
+        expect(stored).toEqual({ kind: "stored", search: "" });
+        expect(claimFirstOpen("x", A, "", stored, s.source)).toBe(false);
+      });
+
+      it("does not replace a view the reader already has", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary", [lastViewKey("x", A)]: "?mode=quotes" });
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=quotes" });
+        expect(s.held.get(LEGACY), "left for a reader who has none").toBe("?mode=glossary");
+      });
+
+      it("is not adopted by nobody: a signed-out visit leaves it for the reader", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" });
+        expect(readLastView("x", null, s.source)).toEqual({ kind: "none" });
+        expect(s.held.get(LEGACY)).toBe("?mode=glossary");
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=glossary" });
+      });
+
+      it("is still answered from, and left, where the storage will not be written", () => {
+        const s = storage({ [LEGACY]: "?mode=glossary" }, { write: true });
+        expect(readLastView("x", A, s.source)).toEqual({ kind: "stored", search: "?mode=glossary" });
+        expect(Object.fromEntries(s.held)).toEqual({ [LEGACY]: "?mode=glossary" });
+      });
+    });
+
+    it("withoutArticleState takes every article parameter off and keeps what is not ours", () => {
+      expect(withoutArticleState("?utm_source=nl&mode=quotes&note=spya-a&key=k&%61t=spya-far")).toBe(
+        "?utm_source=nl&key=k",
+      );
+      expect(withoutArticleState("?mode=quotes&thread=t")).toBe("");
+      expect(withoutArticleState("")).toBe("");
+    });
+  });
+
+  describe("writeLastView: Plain is stored, not forgotten", () => {
+    it("keeps the key, empty, when there is nothing to remember", () => {
+      const s = storage({ [KEY]: "?mode=summary" });
+      expect(writeLastView("x", A, "", s.source)).toBe(true);
+      expect(s.held.get(KEY)).toBe("");
+    });
+
+    it("says so when the write did not happen", () => {
+      expect(writeLastView("x", A, "?at=spya-a", storage({}, { write: true }).source)).toBe(false);
+    });
+  });
+
+  describe("claimFirstOpen: is this the first open, and is it on record", () => {
+    it("claims a bare address with nothing stored, and leaves the marker behind", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
+      expect(s.held.get(KEY)).toBe("");
+      /* The marker is what makes it once: the same question again is a no. */
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
+    });
+
+    it("keeps a foreign parameter from counting as state", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", A, "?utm_source=nl", readLastView("x", A, s.source), s.source)).toBe(true);
+    });
+
+    it("lets a link that says anything win, and writes no marker for it", () => {
+      const s = storage();
+      expect(claimFirstOpen("x", A, "?at=spya-sent", readLastView("x", A, s.source), s.source)).toBe(false);
+      expect(claimFirstOpen("x", A, "?note=spya-a", readLastView("x", A, s.source), s.source)).toBe(false);
+      expect(s.held.has(KEY)).toBe(false);
+    });
+
+    it("does not take a stored empty view for a first open", () => {
+      const s = storage({ [KEY]: "" });
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
+    });
+
+    it("stays Plain for a reader who went back to Plain and reopens", () => {
+      const s = storage();
+      /* First open, the default lands, the reader presses Plain at the top. */
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(true);
+      writeLastView("x", A, rememberableSearch("?mode=summary&margin=1"), s.source);
+      writeLastView("x", A, rememberableSearch(""), s.source);
+      const again = readLastView("x", A, s.source);
+      expect(again).toEqual({ kind: "stored", search: "" });
+      expect(claimFirstOpen("x", A, "", again, s.source)).toBe(false);
+      expect(restoredHref("/read/x", "", again.kind === "stored" ? again.search : null)).toBe(null);
+    });
+
+    it("claims nothing when the storage cannot be read", () => {
+      const s = storage({}, { read: true });
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
+    });
+
+    it("claims nothing when the marker cannot be written", () => {
+      /* Otherwise every open would be a first one, and the default would
+         override a later choice of Plain on every visit. GPT Sol, F1. */
+      const s = storage({}, { write: true });
+      expect(claimFirstOpen("x", A, "", readLastView("x", A, s.source), s.source)).toBe(false);
+    });
+
+    it("claims nothing where there is no storage at all", () => {
+      /* The default source reads `window.localStorage`, and node has no window. */
+      expect(readLastView("x", A)).toEqual({ kind: "failed" });
+      expect(writeLastView("x", A, "")).toBe(false);
+    });
+  });
+
+  describe("firstOpenHref: the address to arrive at, once the switch has answered", () => {
+    const signedIn = { signedIn: true };
+
+    it("puts the default on a bare address", () => {
+      expect(firstOpenHref("x", "/read/x", "", signedIn, "?mode=summary&margin=1")).toBe(
+        "/read/x?mode=summary&margin=1",
+      );
+      expect(firstOpenHref("x", "/read/x", "?utm_source=nl", signedIn, "?mode=summary")).toBe(
+        "/read/x?utm_source=nl&mode=summary",
+      );
+    });
+
+    it("gives a signed-out reader no default", () => {
+      expect(firstOpenHref("x", "/read/x", "", { signedIn: false }, "?mode=summary")).toBe(null);
+    });
+
+    it("leaves the address alone where there is no room", () => {
+      expect(firstOpenHref("x", "/read/x", "", signedIn, "")).toBe(null);
+    });
+
+    it("leaves a reader who has moved since the page opened alone", () => {
+      /* On a cold load the switch answers a moment after the article draws. */
+      expect(firstOpenHref("x", "/read/x", "?at=spya-a", signedIn, "?mode=summary")).toBe(null);
+      expect(firstOpenHref("x", "/read/x", "?mode=quotes", signedIn, "?mode=summary")).toBe(null);
+    });
+
+    it("applies only to the reading view of the article it was claimed for", () => {
+      expect(firstOpenHref("x", "/read/y", "", signedIn, "?mode=summary")).toBe(null);
+      expect(firstOpenHref("x", "/read/x/metadata", "", signedIn, "?mode=summary")).toBe(null);
+      expect(firstOpenHref("x", "/", "", signedIn, "?mode=summary")).toBe(null);
+    });
+  });
+});
+
 describe("the two lists cover every parameter the client writes", () => {
   /**
    * The shelf's own parameters, which never reach an article's address:
@@ -290,6 +636,23 @@ describe("the two lists cover every parameter the client writes", () => {
     "public",
     "topicsView",
     "tags",
+    /* `/admin/costs` (plan 261005a): its period, its switch, its grouping and
+       sort, and one filter per dimension. An administrator's page, never an
+       article's address. An article parameter given one of these names later
+       would be hidden by this list, so check here first. */
+    "period",
+    "evals",
+    "thenBy",
+    "sort",
+    "user",
+    "article",
+    "task",
+    "category",
+    "model",
+    "upstream",
+    "scope",
+    "outcome",
+    "day",
   ]);
 
   function clientFiles(dir: string): string[] {
@@ -311,7 +674,7 @@ describe("the two lists cover every parameter the client writes", () => {
       }
       /* **`useQueryStates` too, and finding it is the reason this test exists.**
          The plural form takes an object of name → parser, so a parameter reached
-         only that way is invisible to the singular pattern above — `?remember=`
+         only that way is invisible to the singular pattern above — `?learn=`
          and `?thread=` are set through one of them in
          modes/conversation/ConversationModes.tsx. Both happened
          already to be in the lists, so this caught no live bug; it closes the
@@ -333,6 +696,19 @@ describe("the two lists cover every parameter the client writes", () => {
          comparing turns "I did not match it" into a failure. GPT Sol, F3,
          2026-09-05. If this fires, widen the pattern — do not delete the
          count. */
+      /* **Widened 2026-10-05 for a named map**: `useQueryStates(PARAMS, …)`,
+         where `const PARAMS = { … };` is in the same file and closes on a line
+         of its own. AdminCostsPage.tsx passes options as a second argument, so
+         its call cannot end `})`. A name with no such declaration is not
+         counted, and the comparison below still fails. */
+      for (const m of text.matchAll(/useQueryStates\(([A-Z][A-Z0-9_]*)\b/g)) {
+        const declared = new RegExp(`^const ${m[1]} = \\{([\\s\\S]*?)^\\};`, "m").exec(text);
+        if (!declared) continue;
+        matched += 1;
+        for (const k of (declared[1] ?? "").matchAll(/^\s*([A-Za-z_$][\w$]*)\s*:/gm)) {
+          if (k[1]) keys.add(k[1]);
+        }
+      }
       const calls = [...text.matchAll(/useQueryStates\(/g)].length;
       expect(matched, `${file}: a useQueryStates call this scan cannot read`).toBe(calls);
     }

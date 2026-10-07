@@ -12,7 +12,7 @@
  */
 import { supplementIndex } from "../supplement.js";
 import { articleWordCounts } from "../block-policy.js";
-import { readingMinutes } from "../reading-time.js";
+import { readingMinutes, type RatedDifficulty } from "../reading-time.js";
 import type { Article } from "../types.js";
 
 export interface Stats {
@@ -24,7 +24,15 @@ export interface Stats {
    * each summed `b.words` and agreed by coincidence.
    */
   words: number;
+  /** The apparatus's words: on the page, and not in `words` or `minutes`. */
+  supplementWords: number;
   minutes: number;
+  /**
+   * The rating `minutes` was multiplied by, or null for a piece nobody has
+   * rated. Here so the card that explains the minutes (ReadTimeCard.tsx) is
+   * handed the same rating the number was made from.
+   */
+  difficulty: RatedDifficulty | null;
   blocks: number;
   /** Depth-1 nodes: the article's top-level parts. */
   parts: number;
@@ -39,7 +47,7 @@ export interface Stats {
 }
 
 export function articleStats(article: Article): Stats {
-  const words = articleWordCounts(article.blocks).body;
+  const { body: words, supplement: supplementWords } = articleWordCounts(article.blocks);
   const byDepth = new Map<number, number>();
   let deepest = 0;
   /* **The apparatus is not part of the argument's shape.** A supplement is a
@@ -63,13 +71,18 @@ export function articleStats(article: Article): Stats {
   }
   return {
     words,
+    supplementWords,
     // Borrowed, never restated. This module used to carry its own `WPM = 230`
     // and its own `Math.max(1, ...)` — a second copy of the one number
     // src/reading-time.ts exists to keep in one place. The two agreed, so
     // nothing would ever have reported the drift: the library card would have
     // said 47 min and the masthead 54, and both would have looked reasonable on
     // their own page. See docs/reusable/silent-success.md.
-    minutes: readingMinutes(words),
+    //
+    // With the article's difficulty rating when it has one, exactly as the
+    // shelf card does (src/library-scalars.ts § describeArticle).
+    minutes: readingMinutes(words, article.meta.readingDifficulty),
+    difficulty: article.meta.readingDifficulty ?? null,
     blocks: article.blocks.length,
     parts: byDepth.get(1) ?? 0,
     sections: byDepth.get(2) ?? 0,

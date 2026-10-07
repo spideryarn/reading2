@@ -18,14 +18,17 @@
 
    -------------------------------------------------------- § structure mode --
 
-   **The panel does not scroll**, the same rule and the same reason as Outline
-   and as the gist columns' context panels: a wheel over the band moves the
-   article, and the reader's scroll is never taken off it. `overflow: hidden`,
+   **The two-column panel does not scroll**, as the gist columns' context
+   panels did not (gone 2026-09-29): a wheel over the band moves the article,
+   and the reader's scroll is never taken off it. Structure's list face can
+   scroll when expanded or at its fit floor (outline-mode.css § a list that
+   scrolls). This panel uses `overflow: hidden`,
    never `auto`. If the list overflows, the fit chose the wrong rung; the answer
    is a lower rung, never a scrollbar.
 
-   **Stage 1 draws both columns at a fixed rung.** The measured ladders, the
-   reserved-height wells and the row window on a short viewport are stage 2. */
+   **Both columns still use fixed rungs.** StructurePanel.tsx measures the
+   full lists and windows their rows to the available height; measured rung
+   ladders and reserved-height wells remain work for stage 2. */
 .mode-band.struct {
   /* **No `container-type` since 2026-09-10.** The band was the query container
      for the two-tracks-or-one switch below; that switch moved to JS
@@ -420,15 +423,37 @@
 }
 
 /* **The Fisheye / Expanded toggle** (StructureMode.tsx § `StructureViewToggle`),
-   in the head row of both faces. Referee's chips (referee.css § `.ref-view-btn`)
-   are the look; the row is the band's own `.band-head`, bled to the edges of
-   this band's padding the way outline-mode.css does for the list's. The grid
-   below takes the height that is left, and its capacities are measured from it,
-   so the row costs the columns' fit nothing to account for.
+   in the head row of both faces. It is the part-switcher every mode shares,
+   `.summ-views` / `.summ-view-btn` (mode-band.css § the part-switcher), so
+   nothing of its look is here; `.struct-views` / `.struct-view-btn` stay on it
+   as hooks. The row is the band's own `.band-head`, bled to the edges of this
+   band's padding the way outline-mode.css does for the list's. The grid below
+   takes the height that is left, and its capacities are measured from it, so
+   the row costs the columns' fit nothing to account for.
    docs/plans/261001q-structure-fisheye-expanded-and-arrow-keys.md. */
 .mode-band.struct > .band-head { margin: -0.75rem -0.75rem 0.5rem; }
-.struct-views { display: flex; flex-wrap: wrap; gap: 0.25rem; }
-.struct-view-btn {
+
+/* **The structure-arriving line** (StructureArriving.tsx), under the toggle in
+   the same head row, in all three presentations: the row wraps (the rule
+   below, shared with `.struct-notice`) and the note takes a whole line of it.
+
+   The sentence is `.struct-empty`, this band's own fixed-sentence style (the
+   app's face, `--font-ui`). Its two buttons, *Build* and *Try again*, still
+   carry `.struct-view-btn` and are drawn here as a single outlined chip: they
+   are actions, not parts, so they do not take the part-switcher's joined look.
+   The head row's own right padding already clears the corner (i)
+   (mode-band.css § `.has-about > .band-head`).
+   docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+.struct-arriving-note {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem 0.6rem;
+}
+.struct-arriving-failed { flex: 1 1 100%; }
+.struct-arriving-note > .struct-view-btn {
   padding: 0.15rem 0.5rem;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -438,11 +463,38 @@
   font-size: 0.84rem;
   cursor: pointer;
 }
-.struct-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
-.struct-view-btn.on {
-  border-color: var(--rule-strong);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-weight: 600;
+.struct-arriving-note > .struct-view-btn:hover { color: var(--ink); border-color: var(--rule-strong); }
+.struct-arriving-note > .struct-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.struct-arriving-note > .struct-view-btn:disabled { cursor: default; opacity: 0.6; }
+
+/* **The line a headings tree draws, and the owner's press under it**
+   (StructureNotice.tsx), in the same head row as the chips and under them:
+   the row wraps, and the line takes a whole row of it. Both faces, so the
+   rule names both bands. Our own sentence, so the band's own face. Soft ink
+   and the mid tier: it is a caption on the whole list, not a row in it. The
+   columns' rows are counted from where the grid starts, so the height this
+   takes comes out of them rather than off the end of the band.
+   docs/project/structure.md § When it is only the headings. */
+.mode-band:is(.struct, .outln) > .band-head { flex-wrap: wrap; }
+.struct-notice {
+  flex: 1 0 100%;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  color: var(--ink-soft);
+  font-size: var(--structure-tier-mid);
+  line-height: 1.4;
 }
-.struct-view-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.struct-notice-says { flex: 1 1 14rem; margin: 0; }
+.struct-notice-again { flex: none; max-width: 100%; }
+.struct-notice-done {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  margin: 0;
+  color: var(--ink);
+}

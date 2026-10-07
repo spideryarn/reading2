@@ -42,6 +42,18 @@ import { parseAttempt, parseObservation, type JsonValue, type ObservedAttemptClo
 import { EVENTS_FILE, readCheckpoint } from "../tools/overseer/store.js";
 import type { SourceMessage } from "../tools/overseer/source.js";
 import { editableFixture, rawFixture, rowsOf, type FixtureName } from "./overseer-fixtures.js";
+import { tickAfter, until } from "./helpers/overseer-until.js";
+
+/**
+ * Wait for `n` heartbeat ticks that ran AFTER this call — for an assertion that
+ * the watchdog did NOT fire, which must first show the watchdog was asked. The
+ * watchdog runs inside the heartbeat tick, so here the heartbeat is the callback
+ * in question; and it is called between a script's yields, when no payload is
+ * being folded, so nothing but the ticker can be writing the checkpoint.
+ */
+async function ticksAfter(root: string, n: number): Promise<void> {
+  for (let tick = 0; tick < n; tick += 1) await tickAfter(root);
+}
 
 const roots: string[] = [];
 
@@ -87,6 +99,8 @@ async function run(
      * past.
      */
     outcome?: "stopped" | "lock-lost";
+    /** Collects what the daemon logs, for the one test that waits on a line of it. */
+    lines?: string[];
   } = {},
 ): Promise<{ notes: DaemonNote[]; events: OverseerEvent[] }> {
   const controller = new AbortController();
@@ -102,7 +116,7 @@ async function run(
     signal: controller.signal,
     now: clock.now,
     tickMs: options.tickMs ?? 5,
-    log: () => undefined,
+    log: (line) => void options.lines?.push(line),
     source: () => script(),
     // Absent rather than undefined: `exactOptionalPropertyTypes` tells those
     // apart, and an ABSENT `jobs` is what makes the daemon build no scheduler.
@@ -337,7 +351,7 @@ describe("the collector, which is a third thing from the source and the payload"
         yield payload(
           fixtureWith("session-new-before", { tmuxServerPid: 132280.5, attemptedAt: new Date(clock.ms() - 5_000).toISOString() }),
         );
-        await new Promise((r) => setTimeout(r, 40));
+        await ticksAfter(root, 3);
       },
       { clock },
     );
@@ -360,9 +374,9 @@ describe("the collector, which is a third thing from the source and the payload"
         // stream is fine, the payload parses, `error` is null, and the collector
         // has not tried since.
         clock.advance(6 * 60_000);
-        await new Promise((r) => setTimeout(r, 40));
+        await tickAfter(root);
         yield payload(fixtureWith("session-new-before", { attemptedAt: frozen }));
-        await new Promise((r) => setTimeout(r, 20));
+        await tickAfter(root);
         yield payload(
           fixtureWith("session-new-after", {
             collectedAt: new Date(clock.ms() - 3_000).toISOString(),
@@ -395,13 +409,13 @@ describe("the collector, which is a third thing from the source and the payload"
         // A tick here, so the collector condition is RESTORED on the strength
         // of that reading. Without it the expectation below would be an empty
         // list, which is also what a test that never reached the case prints.
-        await new Promise((r) => setTimeout(r, 40));
+        await tickAfter(root);
         // 10:07: seven minutes on — past the five-minute deadline — and the
         // producer no longer reports the field. No sleep before the yield, so
         // the watchdog is asked about this payload rather than about the pause.
         clock.advance(7 * 60_000);
         yield payload(fixtureWith("session-new-after", { collectedAt: new Date(clock.ms() - 3_000).toISOString() }));
-        await new Promise((r) => setTimeout(r, 40));
+        await ticksAfter(root, 3);
       },
       { clock },
     );
@@ -574,9 +588,9 @@ describe("the three ways of not knowing do not collapse into one silence", () =>
         // arriving — and the collector behind it has wedged. Nothing but the
         // watchdog can see this: every transport measure says all is well.
         clock.advance(6 * 60_000);
-        await new Promise((r) => setTimeout(r, 40));
+        await tickAfter(root);
         yield payload(fixture("session-new-before"));
-        await new Promise((r) => setTimeout(r, 20));
+        await tickAfter(root);
         // The collector comes back, and this collection really is current.
         yield payload(fixtureWith("session-new-after", { collectedAt: new Date(clock.ms() - 4_000).toISOString() }));
       },
@@ -734,8 +748,8 @@ describe("refusing to be the second daemon", () => {
         })(),
     });
 
-    // Give the first one time to take the lock and write its start note.
-    await new Promise((r) => setTimeout(r, 60));
+    // The first one has taken the lock and written its start note.
+    await until("the first daemon to take the lock and write its start note", () => existsSync(join(root, "overseer.lock")) && notesIn(root).some((n) => n.kind === "daemon-started"));
     const second = await runOverseer({
       root,
       baseUrl: "http://127.0.0.1:0",
@@ -817,9 +831,6 @@ describe("stopping", () => {
 });
 
 describe("the scheduler on the daemon's clock", () => {
-  /** Real milliseconds, only so the timers under test actually fire. The daemon's own clock is still the fake one. */
-  const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
   /**
    * A RULE, since plan 260910f (scheduled dispatch): a session job starts
    * through the launch protocol, which this daemon does not hold until Stage C,
@@ -877,10 +888,13 @@ describe("the scheduler on the daemon's clock", () => {
       source: () =>
         (async function* () {
           yield payload(fixture("session-new-before"));
-          await sleep(40);
+          await until("the first dispatch", () => spawned.length >= 1);
           // Past the two-minute lease, on the daemon's own clock.
           clock.advance(180_000);
-          await sleep(40);
+          await until("the run to be reported STUCK and the job dispatched again", () => spawned.length >= 2 && lines.some((line) => line.includes("STUCK")));
+          // And a heartbeat tick after all that: it carries the occurrences to
+          // the checkpoint read below, and it is the tick the title says goes on.
+          await tickAfter(root);
         })(),
       jobs: {
         intervalMs: 5,
@@ -956,9 +970,9 @@ describe("the scheduler on the daemon's clock", () => {
       root,
       async function* () {
         yield payload(fixture("session-new-before"));
-        // Long enough for the jobs ticker to dispatch and for `observe` to be
-        // called; the source then ENDS with the rule still looking.
-        await sleep(40);
+        // The jobs ticker has dispatched and `observe` has been called; the
+        // source then ENDS with the rule still looking.
+        await until("the rule to be dispatched and looking", () => look !== null);
         look?.();
       },
       {
@@ -998,7 +1012,7 @@ describe("the scheduler on the daemon's clock", () => {
       root,
       async function* () {
         yield payload(fixture("session-new-before"));
-        await sleep(40);
+        await until("the rule to be started", () => eventsIn(root).some((event) => event.kind === "job-occurrence-started"));
       },
       {
         jobs: {
@@ -1048,11 +1062,12 @@ describe("the scheduler on the daemon's clock", () => {
     const root = tempRoot();
     const clock = fakeClock("2026-09-08T02:48:40.000Z");
     let settleRun: ((code: number) => void) | null = null;
+    const lines: string[] = [];
     const { notes } = await run(
       root,
       async function* () {
         yield payload(fixture("session-new-before"));
-        await sleep(30);
+        await until("the run to be started", () => settleRun !== null && eventsIn(root).some((event) => event.kind === "job-occurrence-started"));
         // The child finishes AFTER the lock has been taken from under the
         // daemon, so its completion append is refused for real rather than by a
         // stub — the same shape as a second daemon starting beside this one.
@@ -1061,10 +1076,14 @@ describe("the scheduler on the daemon's clock", () => {
           `${JSON.stringify({ pid: process.pid, instanceId: "somebody-else", hostname: "box", startedAt: "2026-09-08T02:00:00.000Z" })}\n`,
         );
         settleRun?.(0);
-        await sleep(40);
+        await until("the lost completion to reach daemon.jsonl", () => notesIn(root).some((note) => note.kind === "job-record-lost"));
+        // Until a write has found the lock gone and said so. It was a fixed
+        // 40 ms while the daemon stopped without a word (plan 261004g).
+        await until("the daemon to say the lock is gone", () => lines.some((line) => line.includes("the lock is gone")));
       },
       {
         clock,
+        lines,
         // Taking the lock away is what refuses the append, and it correctly
         // stops the daemon a moment later — the note has to survive that.
         outcome: "lock-lost",
@@ -1147,11 +1166,12 @@ describe("the scheduler on the daemon's clock", () => {
       root,
       async function* () {
         yield payload(fixture("session-new-before"));
-        await sleep(30);
+        await tickAfter(root);
         // NON-VACUOUS FIRST: it really did start on the capability sentence.
         headlines.push(headline());
         digest = "f".repeat(64);
-        await sleep(40);
+        // A tick that began after the edit, so its checkpoint read the new digest.
+        await tickAfter(root);
       },
       {
         jobs: {

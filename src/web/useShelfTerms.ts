@@ -33,24 +33,31 @@ import { chosenTopics, topicMembers } from "./shelf-narrow.js";
 export const PENDING_RETRY_MS = 400;
 
 /**
- * **How long to wait before asking again while the model is choosing**
- * (`refreshing: true`), and how many times. The server answers with the
- * program's list — or the model's older pick — at once and then spends 6–20 s
- * on the model; asking again after that shows the new pick without a reload.
- * Bounded, so a refresh that never lands costs this shelf four more requests
- * and then nothing: the next load shows whatever was stored.
+ * **How long to wait before asking again while the model is working**
+ * (`refreshing: true`), and how many times. The server answers at once with
+ * what is stored and then does the model's work: filing new articles takes
+ * 15 to 30 seconds, and a re-think of the whole tree one to two minutes (126 s
+ * for 172 articles in the eval). Asking again shows the result without a
+ * reload. Three minutes in all, so a re-think is seen landing; bounded, so
+ * work that never lands costs this shelf eighteen light requests and then
+ * nothing, and the next load shows whatever was stored. It was 8 s four times
+ * while the work was one 6-to-20-second scoring call (until 2026-10-03).
  * docs/project/shelf-terms.md.
  */
-export const REFRESHING_RETRY_MS = 8_000;
-export const REFRESHING_RETRIES = 4;
+export const REFRESHING_RETRY_MS = 10_000;
+export const REFRESHING_RETRIES = 18;
 
 export interface ShelfTermsState {
   /** The last answer, or `null` before the first and after a failure. */
   data: LibraryTermsResponse | null;
   /**
-   * Whether `data` answers the question being asked now — this scope, this set
-   * of articles, nothing left pending. Only then is it safe to conclude that a
-   * key missing from it is gone for good.
+   * Whether `data` is the last word on the question being asked now — this
+   * scope, this set of articles, nothing left pending, and **no model refresh
+   * still being waited for**. Only then is it safe to conclude that a key
+   * missing from it is gone for good: a refresh can rename the topics, or
+   * bring back one the older stored pick lacked. A refresh the ask-again loop
+   * has given up on (`REFRESHING_RETRIES`) counts as settled, or a stale key
+   * would sit in the URL until the next load.
    */
   settled: boolean;
   /**
@@ -61,6 +68,30 @@ export interface ShelfTermsState {
    * "Loading archived…" in its own line, Sol on plan 260930j).
    */
   loading: boolean;
+}
+
+/**
+ * **Whether the shelf's cards and rows should hold a line for topic pills**
+ * (ShelfRowTopics.tsx § `TopicsExpectedContext`; plan 261005h § C).
+ *
+ * - An answer with at least one topic: yes.
+ * - No answer yet (`loading`), or an answer with no topics that is not the
+ *   last word (articles still pending, or the model still choosing): yes when
+ *   the shelf `mightHaveTopics`, which the caller works out from its article
+ *   count (ShelfTerms.tsx § `mightHaveTopics`).
+ * - A settled answer with no topics, a failed request, or no question asked
+ *   yet: no.
+ *
+ * The middle case is one rule for both of its halves on purpose. `loading`
+ * ends at the first answer while the asking goes on, so a rule that held the
+ * line only while `loading` would drop it on an empty first answer and put it
+ * back when topics arrived: two shifts where there was one (GPT Sol's plan
+ * review, F2).
+ */
+export function topicsExpected(state: ShelfTermsState, mightHaveTopics: boolean): boolean {
+  if (state.data && state.data.terms.length > 0) return true;
+  const awaited = state.loading || (state.data !== null && !state.settled);
+  return awaited && mightHaveTopics;
 }
 
 /**
@@ -116,6 +147,8 @@ export function useShelfTerms({
     data: LibraryTermsResponse | null;
     archived: boolean;
     shelfKey: string;
+    /** Another request for this same question is scheduled. */
+    askingAgain: boolean;
   } | null>(null);
   /* Bumped to ask again while the server is still reading. State rather than a
      timer that calls the fetch itself, so the one effect below owns every
@@ -139,18 +172,21 @@ export function useShelfTerms({
       .then((body) => {
         // Asked for a scope or a shelf that is no longer the one on screen.
         if (controller.signal.aborted) return;
-        setAnswer({ data: body, archived, shelfKey });
         if (body.pending > 0) again = setTimeout(() => setRound((n) => n + 1), PENDING_RETRY_MS);
         else if (body.refreshing && refreshAsks.current.count < REFRESHING_RETRIES) {
           refreshAsks.current.count += 1;
           again = setTimeout(() => setRound((n) => n + 1), REFRESHING_RETRY_MS);
         }
+        /* Stored with the answer, so "is this the last word?" is decided where
+           the asking-again is, not re-derived from the body: `refreshing: true`
+           with no request scheduled is the loop having given up. */
+        setAnswer({ data: body, archived, shelfKey, askingAgain: again !== undefined });
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted || (e instanceof Error && e.name === "AbortError")) return;
         /* No row rather than a wrong one. Not retried: a failing route would
            otherwise be asked twice a second for as long as the shelf is open. */
-        setAnswer({ data: null, archived, shelfKey });
+        setAnswer({ data: null, archived, shelfKey, askingAgain: false });
       });
     return () => {
       controller.abort();
@@ -172,7 +208,7 @@ export function useShelfTerms({
         : null;
     return {
       data: current?.data ?? null,
-      settled: !!current?.data && current.data.pending === 0,
+      settled: !!current?.data && current.data.pending === 0 && !current.askingAgain,
       loading: shelfKey !== null && current === null,
     };
   }, [answer, archived, shelfKey]);
@@ -185,8 +221,9 @@ export function useShelfTerms({
  * have loaded (`chosenTopics`) — a stale link cannot flash an empty shelf. A key
  * missing from a **settled** answer is then removed from the URL, with
  * `replace`, because it is a correction rather than something the reader did.
- * Not from an unsettled one: while the server is still reading articles, a
- * topic can be absent now and present in the next answer.
+ * Not from an unsettled one: while the server is still reading articles, or a
+ * model refresh is under way, a topic can be absent now and present in the
+ * next answer.
  */
 export function useChosenTopics(
   requested: readonly string[],

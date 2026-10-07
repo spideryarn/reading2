@@ -22,18 +22,20 @@
  * `showModal`/`close` are stubbed below, for the reason
  * tests/feedback-dialog.test.tsx gives: jsdom implements neither.
  */
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MODES, type Mode } from "../src/modes.js";
 import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
-import { GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
-import { Dock } from "../src/web/Dock.js";
+import { ASK_LABEL, ASK_OR_ENTER, GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
+import { Dock, visibleModes } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
+import { TitleEditor } from "../src/web/TitleEditor.js";
 import { CHANGELOG_LABEL } from "../src/web/router.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { moreLabels, pressModeByLabel } from "./helpers/dock-more.js";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -182,7 +184,7 @@ const listed = (): string[] =>
  * *usually* true of it, and would go on passing if a page row started being
  * built as a mode.
  */
-type RowKind = "mode" | "page" | "action";
+type RowKind = "mode" | "submode" | "page" | "action";
 
 const rowsOfKind = (kind: RowKind): HTMLElement[] =>
   rows().filter((row) => row.dataset.kind === kind);
@@ -191,11 +193,14 @@ const listedOfKind = (kind: RowKind): string[] =>
   rowsOfKind(kind).map((row) => row.querySelector(".cmdbar-name")?.textContent ?? "");
 
 /** The mode buttons the Dock itself drew, in the order it drew them. */
-const dockLists = (): string[] =>
+const dockDraws = (): string[] =>
   /* The radios and Marginalia's toggle after them (261001i), in DOM order. */
   [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
+
+/** The modes the Dock lists under its More button, read out of the open menu. */
+const dockGathers = (): string[] => moreLabels(host);
 
 /**
  * **Typing, the way React hears it.** Setting `.value` alone is invisible to
@@ -226,13 +231,22 @@ function selected(): string {
   return (row as HTMLElement).querySelector(".cmdbar-name")?.textContent ?? "";
 }
 
-describe("the bar's mode rows are exactly what the Dock lists", () => {
+describe("the bar's mode rows are exactly what the Dock offers, directly or under More", () => {
   /**
    * The one rule, in one place. `visibleModes` in Dock.tsx decides which modes
-   * the bar draws, the Dock hands that same array down, and this asserts the
-   * two ends of it agree — with the switch in each of its two positions,
-   * because the whole risk is a second copy of the rule that is right for one
-   * of them.
+   * this reader's bar offers, the Dock hands that same array down, and this
+   * asserts the two ends of it agree — with the switch in each of its two
+   * positions, because the whole risk is a second copy of the rule that is
+   * right for one of them.
+   *
+   * **"Offers, directly or under More", since 2026-10-07.** Until then it was
+   * *exactly what the Dock lists*, read off the bar's buttons. Five modes are
+   * now items of the More menu rather than buttons, and the contract changed
+   * with them on purpose (plan 261007c, D5 and PR-9): a mode gathered under
+   * More must stay one ⌘K away. So the Dock's end of the comparison is its
+   * buttons **and** its menu, both read from the DOM, and the order is the
+   * bar's own (`visibleModes`), in which the gathered modes keep the places
+   * they had.
    *
    * **`listedOfKind("mode")` rather than every row, since 2026-09-07**, when
    * Greg added the changelog to the bar and product call 4 narrowed from *the
@@ -241,19 +255,38 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
    * about them, but the mode rows must still be the Dock's array untouched.
    * CommandBar.tsx § call 4.
    */
-  it("draws the same modes, in the same order, with the switch off", () => {
-    reading({ experimental: EXPERIMENTAL_OFF });
-    openBar();
-    expect(listedOfKind("mode")).toEqual(dockLists());
-    /* The vacuity guard: two empty lists are equal. */
-    expect(listedOfKind("mode").length).toBeGreaterThan(5);
-  });
+  for (const flip of [
+    { name: "off", experimental: EXPERIMENTAL_OFF },
+    { name: "on", experimental: EXPERIMENTAL_ON },
+  ]) {
+    it(`lists every mode the Dock offers, in the bar's order, with the switch ${flip.name}`, () => {
+      reading({ experimental: flip.experimental });
+      /* Read the Dock before the command bar opens over it. */
+      const drawn = dockDraws();
+      const gathered = dockGathers();
+      /* The vacuity guards: two empty lists are equal, and a bar with nothing
+         under More would make this the old contract again. */
+      expect(drawn.length).toBeGreaterThan(5);
+      expect(gathered.length).toBeGreaterThanOrEqual(3);
+      expect(drawn.filter((label) => gathered.includes(label)), "plain is open, so nothing is in both").toEqual([]);
 
-  it("draws the same modes, in the same order, with the switch on", () => {
-    reading({ experimental: EXPERIMENTAL_ON });
+      openBar();
+      const listed = listedOfKind("mode");
+      expect(new Set(listed)).toEqual(new Set([...drawn, ...gathered]));
+      expect(listed).toHaveLength(drawn.length + gathered.length);
+      expect(listed).toEqual(visibleModes(flip.experimental.on, "plain").map((m) => MODE_LABEL[m.mode]));
+      /* Each half keeps the order the Dock gave it. */
+      expect(listed.filter((label) => drawn.includes(label))).toEqual(drawn);
+      expect(listed.filter((label) => gathered.includes(label))).toEqual(gathered);
+      if (flip.experimental.on) expect(listed.length).toBe(MODES.length);
+    });
+  }
+
+  it("lists a gathered mode that the bar does not draw", () => {
+    reading({ experimental: EXPERIMENTAL_OFF });
+    expect(dockDraws()).not.toContain(MODE_LABEL.glossary);
     openBar();
-    expect(listedOfKind("mode")).toEqual(dockLists());
-    expect(listedOfKind("mode").length).toBe(MODES.length);
+    expect(listedOfKind("mode")).toContain(MODE_LABEL.glossary);
   });
 
   /**
@@ -401,15 +434,23 @@ describe("a query that matches nothing", () => {
    * search as a fallback row. An honest empty state was preferred to a helpful
    * guess, so a later "did you mean" or "search the article instead" has to
    * come back through him.
+   *
+   * **It came back through him on 2026-10-03** (spya-t0dg9u, plan 261003k): a
+   * signed-in reader is told Enter will ask what they meant. Still no guess —
+   * nothing is drawn, and nothing is asked, until that Enter.
+   * tests/command-bar-pick.test.tsx holds what happens then.
    */
-  it("says `No command matches.` and draws no rows", () => {
+  it("says `No command matches.`, that Enter asks, and draws no rows", () => {
     reading();
     openBar();
     type("zzzq");
     expect(rows()).toEqual([]);
     const empty = dialog().querySelector(".cmdbar-empty");
-    expect(empty?.textContent).toBe(NO_MATCH);
+    expect(empty?.textContent).toBe(`${NO_MATCH} ${ASK_LABEL} ${ASK_OR_ENTER}`);
     expect(NO_MATCH).toBe("No command matches.");
+    /* A button, since 2026-10-05 (spya-qem46c): a phone has no Enter. */
+    expect(empty?.querySelector("button.cmdbar-ask")?.textContent).toBe("Ask what you meant");
+    expect(ASK_OR_ENTER).toBe("or press Enter");
     /* Nothing else in the panel below the box: no list, no fallback row, no
        "everything" list quietly restored. */
     expect(dialog().querySelector('[role="listbox"]')).toBeNull();
@@ -571,8 +612,9 @@ describe("the backdrop", () => {
  * one level down.
  */
 const GENERATES: Record<Mode, boolean> = {
-  /* Its relation words (so, but, vs), asked for by the press that turns the
-     column on — plan 261003f. Everything else in it is read. */
+  /* Its relation words (so, but, vs), asked for when the column is shown, so
+     the row may start work — plans 261003f and 261005d. Everything else in it
+     is read. */
   marginalia: true,
   plain: false,
   /* Views of one already-built tree, in either of Structure's faces, so
@@ -584,7 +626,7 @@ const GENERATES: Record<Mode, boolean> = {
   search: false,
   chat: false,
   referee: false,
-  remember: false,
+  learn: false,
   glossary: true,
   ideas: true,
   quotes: true,
@@ -594,10 +636,6 @@ const GENERATES: Record<Mode, boolean> = {
   citations: true,
   faq: true,
   skim: true,
-  /* A mode since 2026-09-29, and it spends: the band writes the thread on
-     arrival when there is none (useTweets.ts § `useAutoRunOnArrival`). The
-     marker it wore as a page row is now the mode row's. */
-  tweets: true,
 };
 
 /**
@@ -737,14 +775,15 @@ describe("the `generates` marker", () => {
    * 2026-09-07). Tweets was that page, so the marker came to follow the row's
    * own `generates` rather than its kind (`commandGenerates`).
    *
-   * Tweets is now the mode `?mode=tweets` (plan 260929f), and no page row
-   * spends. So the claim is the pair of named rows that is still true: the
-   * Tweets row is a **mode** row and carries the marker, and the pages that
-   * only go somewhere do not. Named rather than counted, for the reason the
-   * old version gave — *some row has it and some does not* would be satisfied
-   * by the two being the wrong way round.
+   * Tweets then became a mode (plan 260929f), and on 2026-10-03 Summary's
+   * Thread view (plan 261003l), and no page row spends. So the claim is the
+   * pair of named rows that is still true: the thread's row is a **sub-mode**
+   * row and carries the marker — it arms nothing, and its band writes on
+   * arrival — and the pages that only go somewhere do not. Named rather than
+   * counted, for the reason the old version gave — *some row has it and some
+   * does not* would be satisfied by the two being the wrong way round.
    */
-  it("is on the Tweets mode row and not on the page rows that only go somewhere", () => {
+  it("is on the thread's row and not on the page rows that only go somewhere", () => {
     reading({ experimental: EXPERIMENTAL_ON });
     openBar();
     const markedOf = (kind: RowKind) =>
@@ -755,9 +794,11 @@ describe("the `generates` marker", () => {
         ]),
       );
     const modes = markedOf("mode");
+    const subModes = markedOf("submode");
     const pages = markedOf("page");
-    expect(modes.get("Tweets"), "the Tweets mode row is missing").toBe(true);
-    expect(pages.has("Tweets"), "Tweets is a mode now, not a page row").toBe(false);
+    expect(subModes.get("Thread"), "Summary's Thread row is missing").toBe(true);
+    expect(modes.has("Tweets"), "Tweets is not a mode any more").toBe(false);
+    expect(pages.has("Tweets"), "nor a page row").toBe(false);
     expect(pages.get("Metadata"), "the Metadata row is missing").toBe(false);
     expect(pages.get("Library"), "the Library row is missing").toBe(false);
     expect(pages.get(CHANGELOG_LABEL), "the changelog row is missing").toBe(false);
@@ -841,17 +882,163 @@ describe("⌘/Ctrl-K", () => {
   });
 
   /**
-   * **Not while somebody is writing.** The chat box, the comment box, the
-   * search field and the referee's criteria are all places a reader is typing,
-   * and ⌘-K is a text-editing chord in several editors.
+   * **From inside a text field too**, since 2026-10-04 — Greg, spya-szdjek:
+   * *"I want to be able to hit Command-K at more or less any time from within
+   * the reading view."* Until then this asserted the opposite, on the grounds
+   * that ⌘-K is a text-editing chord in several editors; none of ours binds it.
+   * The press starts on the field, as a real one does, and the field's own
+   * handler must not see it: the chord means the bar and nothing else.
    */
-  it("does not fire while a text field has focus", () => {
+  it.each(["textarea", "input", "contenteditable"])("opens from inside a focused %s, and the field never sees the press", (kind) => {
     reading();
-    const box = document.createElement("textarea");
+    const box = document.createElement(kind === "contenteditable" ? "div" : kind);
+    if (kind === "contenteditable") {
+      box.setAttribute("contenteditable", "true");
+      box.tabIndex = 0;
+    }
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
     document.body.append(box);
     box.focus();
-    expect(chord()).toBe(false);
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(true);
+    expect(dialog().open).toBe(true);
+    expect(seen).not.toHaveBeenCalled();
+    box.remove();
+  });
+
+  /**
+   * **From inside a container that keeps its keys to itself.** The live
+   * conversation's status and button stop every keydown from bubbling
+   * (LiveStatus.tsx, LiveButton.tsx), so a bubble listener on `window` never
+   * hears a press made in there. The chord listens in the capture phase.
+   */
+  it("opens from inside a container that stops keydown from bubbling", () => {
+    reading();
+    const section = document.createElement("section");
+    section.addEventListener("keydown", (e) => e.stopPropagation());
+    const box = document.createElement("textarea");
+    section.append(box);
+    document.body.append(section);
+    box.focus();
+    act(() => {
+      box.dispatchEvent(new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true }));
+    });
+    expect(dialog().open).toBe(true);
+    section.remove();
+  });
+
+  /**
+   * **Ctrl-K alone, in a text field, on a Mac, is the field's**: delete to the
+   * end of the line. ⌘-K opens the bar there, and Ctrl-K does off a Mac (the
+   * container test above). GPT Sol's finding 3 on plan 261004h.
+   */
+  it.each(["MacIntel", "MacPPC", "iPhone", "iPad"])("leaves a text field's Ctrl-K alone on %s, and takes ⌘-K", (name) => {
+    const platform = vi.spyOn(navigator, "platform", "get").mockReturnValue(name);
+    reading();
+    const box = document.createElement("textarea");
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
+    document.body.append(box);
+    box.focus();
+    const ctrl = new KeyboardEvent("keydown", { key: "k", ctrlKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(ctrl);
+    });
+    expect(ctrl.defaultPrevented).toBe(false);
     expect(dialog().open).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
+    const meta = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(meta);
+    });
+    expect(meta.defaultPrevented).toBe(true);
+    expect(dialog().open).toBe(true);
+    expect(seen).toHaveBeenCalledTimes(1);
+    act(() => dialog().close());
+    /* Ctrl-K with nothing being typed is still the bar's, on a Mac too. */
+    /* The close() stand-in does not return focus to the opener as a browser does. */
+    box.focus();
+    box.blur();
+    expect(chord({ metaKey: false, ctrlKey: true })).toBe(true);
+    expect(dialog().open).toBe(true);
+    platform.mockRestore();
+    box.remove();
+  });
+
+  it.each(["article", "metadata"] as const)("leaves the real title editor's ⌘-K alone on the %s page", (view) => {
+    const onDone = vi.fn();
+    act(() => {
+      root.render(
+        createElement(
+          Fragment,
+          null,
+          createElement(Dock, { slug: "a-piece", view, experimental: EXPERIMENTAL_OFF }),
+          createElement(TitleEditor, { title: "Original title", onDone }),
+        ),
+      );
+    });
+    const box = host.querySelector<HTMLInputElement>('input[aria-label="Title"]') as HTMLInputElement;
+    box.focus();
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => box.dispatchEvent(e));
+    expect(e.defaultPrevented).toBe(false);
+    expect(dialog().open).toBe(false);
+    expect(document.activeElement).toBe(box);
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it("leaves a second ⌘-K in the open command bar alone, preserving its query", () => {
+    reading();
+    expect(chord()).toBe(true);
+    type("glossary");
+    const box = input();
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => box.dispatchEvent(e));
+    expect(e.defaultPrevented).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(dialog().open).toBe(true);
+    expect(box.value).toBe("glossary");
+    expect(document.activeElement).toBe(box);
+  });
+
+  /**
+   * **A field that saves on blur asks to be left alone.** The title editor:
+   * the bar opening would blur it and save a half-typed title. Finding 5.
+   */
+  it("stands down in a field marked data-command-bar=off", () => {
+    reading();
+    const box = document.createElement("input");
+    box.setAttribute("data-command-bar", "off");
+    document.body.append(box);
+    box.focus();
+    const e = new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true, cancelable: true });
+    act(() => {
+      box.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(false);
+    expect(dialog().open).toBe(false);
+    box.remove();
+  });
+
+  /** A press it does not claim is nobody's business: the field still gets it. */
+  it("leaves a plain k in a text field to the field", () => {
+    reading();
+    const box = document.createElement("textarea");
+    const seen = vi.fn();
+    box.addEventListener("keydown", seen);
+    document.body.append(box);
+    box.focus();
+    act(() => {
+      box.dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true, cancelable: true }));
+    });
+    expect(dialog().open).toBe(false);
+    expect(seen).toHaveBeenCalledTimes(1);
     box.remove();
   });
 
@@ -1037,9 +1224,13 @@ describe("the rows that are not modes", () => {
        — and each of these is one of his six, with `Homepage` folded into
        Library per the plan's § Library and Homepage are one row. */
     const names = listed();
-    for (const label of ["Metadata", "Tweets", "Comments", "Library", "Profile", "Feedback"]) {
+    for (const label of ["Metadata", "Comments", "Library", "Profile", "Feedback"]) {
       expect(names, `no row called ${label}`).toContain(label);
     }
+    /* His sixth, Tweets, is Summary's Thread view since 2026-10-03 (plan
+       261003l): a row called Thread, which the word he used still finds first
+       — "selects the thread's row" below. */
+    expect(names, "no row for the thread").toContain("Thread");
   });
 
   /**
@@ -1129,28 +1320,31 @@ describe("the rows that are not modes", () => {
   });
 
   /**
-   * **The Tweets row is the mode now, and it says it spends.**
+   * **The word `tweets` finds Summary's Thread, and the row says it spends.**
    *
-   * It was a page row from 2026-09-08 that navigated to `/read/<slug>/tweets`;
-   * since 2026-09-29 Tweets is `?mode=tweets` (plan 260929f), so typing its
-   * name selects the mode row, and taking it opens the mode without moving the
+   * It was a page row from 2026-09-08 that navigated to `/read/<slug>/tweets`,
+   * a mode row from 2026-09-29 (plan 260929f), and since 2026-10-03 the
+   * sub-mode row *Summary › Thread* (plan 261003l). Typing the old name
+   * selects that row and **not** Summary's own, which would open Brief (GPT
+   * Sol's F3), and taking it opens Summary on the thread without moving the
    * address. The marker is still true: the band writes the thread on arrival
    * when there is none (useTweets.ts § `useAutoRunOnArrival`), which
-   * tests/tweets-press-starts-it.test.tsx holds end to end.
+   * tests/summary-thread-press.test.tsx holds end to end.
    */
-  it("selects the Tweets mode row, opens the mode in place, and wears the `generates` marker", () => {
+  it("selects the thread's row for `tweets`, opens it in place, and wears the `generates` marker", () => {
     const onMode = vi.fn();
     readingSignedIn({ onMode, experimental: EXPERIMENTAL_ON });
     openBar();
     type("tweets");
-    /* The mode first, and the thread's *Run again* row after it since
-       2026-10-02 — `tweets again` is one of its words (rerun-commands.ts), and
-       a row that ties the mode loses on order (plan 261002c). */
-    expect(listed()).toEqual(["Tweets", "Thread › Run again"]);
-    expect(rows()[0]?.dataset.kind).toBe("mode");
+    /* The sub-mode first, and the thread's *Run again* row after it —
+       `tweets again` is one of its words (rerun-commands.ts), and a typed-only
+       row comes after the sub-modes (plan 261002c). Summary's own row is not
+       offered for this word at all. */
+    expect(listed()).toEqual(["Thread", "Thread › Run again"]);
+    expect(rows()[0]?.dataset.kind).toBe("submode");
     expect(rows()[0]?.querySelector(".cmdbar-generates")?.textContent).toBe(GENERATES_MARKER);
     press("Enter");
-    expect(onMode).toHaveBeenCalledWith("tweets", undefined, false);
+    expect(onMode).toHaveBeenCalledWith("summary", { mode: "summary", view: "thread" });
     expect(wentTo()).toBeNull();
   });
 
@@ -1317,13 +1511,15 @@ describe("off the reading view", () => {
       },
       onMode,
     });
-    for (const mode of ["glossary", "summary"] as const) {
-      const button = [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].find(
-        (b) => b.getAttribute("aria-label") === MODE_LABEL[mode] || b.textContent?.trim() === MODE_LABEL[mode],
-      );
-      expect(button, `${mode}: a bar button`).toBeDefined();
-      act(() => button?.click());
-      expect(onMode).toHaveBeenCalledWith(mode, undefined, true);
+    /* Both of the bar's doors: Summary's own button, which toggles, and
+       Glossary's item under More (plan 261007c), which names a destination
+       and so does not. Neither arms for a visitor. */
+    for (const [mode, door, toggles] of [
+      ["glossary", "more", false],
+      ["summary", "bar", true],
+    ] as const) {
+      expect(pressModeByLabel(host, MODE_LABEL[mode]), `${mode}: which door`).toBe(door);
+      expect(onMode).toHaveBeenCalledWith(mode, undefined, toggles);
     }
     expect(pendingActivation("a-piece", "glossary")).toBeNull();
     expect(pendingActivation("a-piece", "simple")).toBeNull();
@@ -1380,8 +1576,10 @@ describe("off the reading view", () => {
 
 /**
  * **Help, as a row in the bar** — docs/plans/261002b-help-page.md § After GPT
- * Sol's plan review, R8: the footer, the command bar, and the Dock link are the
- * three ways in.
+ * Sol's plan review, R8: the footer, the command bar, and the Dock link were
+ * the three ways in. An owner has both the row and the Dock link (the link
+ * was a visitor's only from 2026-10-04 to 2026-10-07 — plans 261004j, 261007e);
+ * a visitor has no command bar, so only the link.
  *
  * `help` was already one of Feedback's aliases, and it stays one: somebody who
  * types it may well mean *something is wrong*. But the page whose name it is
@@ -1409,20 +1607,20 @@ describe("the help command", () => {
     }
   });
 
-  /* The same section the Dock's Help link opens at, because the two are built
+  /* The same page of Help the Dock's Help link opens, because the two are built
      from one function — a reader who learned one door has learned the other. */
-  it("goes to the section for the mode the band is in, and in Plain to the reading view", () => {
+  it("goes to the page for the mode the band is in, and in Plain to the reading view's", () => {
     reading({ mode: "glossary" });
     openBar();
     type("help");
     press("Enter");
-    expect(location.pathname + location.hash).toBe("/help#mode-glossary");
+    expect(location.pathname + location.hash).toBe("/help/mode-glossary");
 
     history.replaceState(null, "", "/read/a-piece");
     reading({ mode: "plain" });
     openBar();
     type("help");
     press("Enter");
-    expect(location.pathname + location.hash).toBe("/help#the-reading-view");
+    expect(location.pathname + location.hash).toBe("/help/the-reading-view");
   });
 });

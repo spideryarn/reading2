@@ -142,7 +142,7 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
         "Contributors to Wikimedia projects",
         "Wikimedia Foundation, Inc.",
         "11,688 words",
-        "~51 min",
+        "~49 min",
         "9 parts",
         "31 sections",
       ]);

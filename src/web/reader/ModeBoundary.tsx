@@ -28,21 +28,24 @@
  * ## Keyed on the mode, and the sub-mode is in the reset key
  *
  * `key={mode}` at the call site gives every mode its own boundary, so a broken
- * Quotes cannot follow the reader into Timeline. Within an owner's mode, the
- * sub-mode a band is showing — Diagram's picture, Referee's view, Remember's
- * half — goes in `resetKey`, which is `FeatureBoundary`'s documented extension
- * point for it: Back from broken Claims to Criteria is a different band and
- * gets a fresh start. Visitors omit it because those parameters do not select
- * their band: Diagram is pinned to Sketch and the other two show `VisitorBand`.
+ * Quotes cannot follow the reader into Timeline. Within a mode, the sub-mode a
+ * band is showing — Diagram's picture, Referee's view, Learn's part, Summary's
+ * length, Structure's layout, Debate's view — goes in `resetKey`, which is
+ * `FeatureBoundary`'s documented extension point for it: Back from broken
+ * Claims to Criteria is a different band and gets a fresh start. For three of
+ * the six a visitor's key omits it, because the parameter does not select their
+ * band. Which three, and why, is `SUB_MODE_SELECTS_A_BAND_FOR` below — a
+ * `Record` over every mode that has sub-modes, because the list was written by
+ * hand until 2026-10-06 and Debate, the sixth, was not on it.
  *
  * ## And the press it retires is the press it would have claimed
  *
  * `bandTarget` (activation.ts) answers from the same tables the presses arm
- * from. It needs the sub-mode for Diagram, Referee and Remember; Summary's one
- * job is unconditional, but its level still belongs in the boundary reset key.
+ * from. It needs the sub-mode for Diagram, Referee, Learn and Summary (whose
+ * thread arms nothing), and each also belongs in the boundary reset key.
  * This component therefore reads those parameters itself. That keeps them off
  * `Reader`'s own render, which the bands that own them each avoided for the
- * same reason (RememberBand, DiagramBand).
+ * same reason (LearnBand, DiagramBand).
  */
 import { useQueryStates } from "nuqs";
 import type { ReactNode } from "react";
@@ -50,13 +53,15 @@ import { MODE_LABEL } from "../../title-text.js";
 import { bandTarget } from "../activation.js";
 import { FeatureBoundary } from "../FeatureBoundary.js";
 import {
+  debateParam,
   diagramParam,
   type Mode,
   refereeParam,
-  rememberParam,
+  learnParam,
   structureParam,
   summaryParam,
 } from "../params.js";
+import type { ModeWithSubModes } from "../sub-modes.js";
 
 /**
  * **Whether each mode's band is inside a boundary, decided rather than fallen
@@ -85,7 +90,7 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   summary: BAND,
   diagram: BAND,
   ideas: BAND,
-  remember: BAND,
+  learn: BAND,
   quotes: BAND,
   timeline: BAND,
   debate: BAND,
@@ -93,12 +98,58 @@ export const MODE_CONTAINMENT: Record<Mode, Containment> = {
   citations: BAND,
   faq: BAND,
   skim: BAND,
-  tweets: BAND,
   /* No band, but a column of its own on the right, and that column is inside
      the same boundary at its own call site in Reader.tsx — so a throw in it
      leaves the article readable, as a band's would. */
   marginalia: BAND,
 };
+
+/**
+ * **Each sub-mode's parameter, under its mode's own name** — `?diagram=`,
+ * `?debate=` and so on, which is what lets `sub[mode]` below be the view that
+ * mode is showing. `satisfies` and not an annotation, so nuqs still sees each
+ * parser's own type and a seventh mode with sub-modes fails to compile here.
+ */
+const SUB_MODE_PARAMS = {
+  diagram: diagramParam,
+  referee: refereeParam,
+  learn: learnParam,
+  summary: summaryParam,
+  structure: structureParam,
+  debate: debateParam,
+} satisfies Record<ModeWithSubModes, unknown>;
+
+/**
+ * **Whose band a sub-mode chooses**: `anyone`'s, or only the `owner`'s.
+ *
+ * A change of sub-mode is a different band, and a different band gets a fresh
+ * start — but only for a reader whose band the parameter really selects. Where
+ * it does not, an address change is not a new band and must not retry a broken
+ * one behind the reader's back.
+ *
+ * - **`owner`**: Diagram (a visitor is pinned to Sketch), Referee and Learn
+ *   (a visitor sees `VisitorBand` whatever the parameter says).
+ * - **`anyone`**: Summary (a visitor gets the plain-words lengths and the
+ *   thread too, off the payload — SummaryMode.tsx § `VisitorSummaryBand`),
+ *   Structure (Fisheye and Expanded are two bands for anyone, off the payload)
+ *   and Debate (Reception and Claims, read by both `DebateBand` and
+ *   `VisitorDebateBand` — DebateMode.tsx).
+ *
+ * A `Record`, so a new mode with sub-modes is a compile error until somebody
+ * has said which. tests/a-broken-mode-leaves-the-article-readable.test.tsx.
+ */
+const SUB_MODE_SELECTS_A_BAND_FOR: Record<ModeWithSubModes, "anyone" | "owner"> = {
+  diagram: "owner",
+  referee: "owner",
+  learn: "owner",
+  summary: "anyone",
+  structure: "anyone",
+  debate: "anyone",
+};
+
+function hasSubModes(mode: Mode): mode is ModeWithSubModes {
+  return Object.hasOwn(SUB_MODE_SELECTS_A_BAND_FOR, mode);
+}
 
 /**
  * `FeatureBoundary` for whichever band `mode` opened.
@@ -119,35 +170,11 @@ export function ModeBoundary({
   onPlain(): void;
   children: ReactNode;
 }) {
-  const [sub] = useQueryStates({
-    diagram: diagramParam,
-    referee: refereeParam,
-    remember: rememberParam,
-    summary: summaryParam,
-    structure: structureParam,
-  });
-  /* Only an owner's band is selected by the first three modes. A Diagram visitor
-     is pinned to Sketch, and Referee/Remember visitors see `VisitorBand`, so an
-     address change there is not a new band and must not retry a broken one.
-     **Summary's is the exception**: a visitor gets the plain-words levels
-     too, off the payload (SummaryMode.tsx § `VisitorSummaryBand`), so moving
-     the slider is a new level for either reader, and retries a broken one.
-     So is Structure's, whose Fisheye and Expanded are two bands for anyone,
-     off the payload. */
+  const [sub] = useQueryStates(SUB_MODE_PARAMS);
+  /* The view this reader's band is showing, or nothing when the mode has no
+     sub-modes or its parameter does not choose this reader's band. */
   const subMode =
-    mode === "summary"
-      ? sub.summary
-      : mode === "structure"
-        ? sub.structure
-        : owner
-        ? mode === "diagram"
-          ? sub.diagram
-          : mode === "referee"
-            ? sub.referee
-            : mode === "remember"
-              ? sub.remember
-              : ""
-        : "";
+    hasSubModes(mode) && (owner || SUB_MODE_SELECTS_A_BAND_FOR[mode] === "anyone") ? sub[mode] : "";
   return (
     <FeatureBoundary
       name={MODE_LABEL[mode]}

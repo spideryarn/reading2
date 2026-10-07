@@ -32,6 +32,8 @@
 
 Produced by `scripts/probes/260930a-investigate-probe.ts` on 2026-09-30, the stage-1 gate in [the plan](260930a-citations-investigate-one-work-on-demand.md). Draft prompt: `scripts/probes/260930a-investigate-prompt.ts`. Gateway job used: `explain` (its route; `citation-investigate` does not exist yet). Tool: `openrouter:web_search`, engine exa, max_total_results 8, max_results 5. Local articles, read only.
 
+Both probe files were deleted on 2026-10-04 (plan 261004b § A5); read them with `git show 9b611dfe2:scripts/probes/260930a-investigate-probe.ts` and `…-prompt.ts`.
+
 | # | work | link | prof | 1st tok s | total s | prompt | cached | write | out | searches (from) | annots | w/ content | content min/med/max | cost $ | finish | answer ch | quote guard |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | spider-silk-spya-ge30uz / Silk feeding as an alternative foraging  | doi | y | 6.3 | 14.5 | 71881 | 33643 | 38234 | 675 | 1 (server_tool_use_details) | 5 | 5 | 135/232/9998 | 0.1161 | stop / finished | 1840 | ok (1 article quote) |

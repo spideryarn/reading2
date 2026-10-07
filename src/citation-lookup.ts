@@ -57,6 +57,7 @@
 import { createHash } from "node:crypto";
 
 import { firstAuthor } from "./citations.js";
+import { doiOfUrl } from "./doi-url.js";
 import { generationKey } from "./models.js";
 import { findQuote } from "./quote-match.js";
 import type {
@@ -71,8 +72,12 @@ import type {
  * **Bump when the lookup prompt (`LOOKUP_SYSTEM`, src/citation-find.ts), the
  * user turn, or any rule in this file changes what a lookup would say** — it is
  * inside the context fingerprint, so a bump detaches every stored lookup.
+ *
+ * `/7` is the user turn fencing the work's details, `why` and the citing
+ * passage (plan 261004i, src/citation-find.ts § `lookupPrompt`): a lookup kept
+ * from the unfenced layout is not one today's prompt would write.
  */
-export const CITATION_LOOKUP_VERSION = "citation-lookup/6";
+export const CITATION_LOOKUP_VERSION = "citation-lookup/7";
 
 /** R-7: the citing passage sent, in characters. */
 export const PASSAGE_CAP = 1_200;
@@ -112,9 +117,9 @@ export interface LookupContext {
 
 /** A row's identity anchor. `web` is a searched row we found a page for: no anchor. */
 export function anchorOf(work: Pick<CitedWork, "url" | "linkFrom">): LookupAnchor {
-  if (work.linkFrom === "doi" && work.url.startsWith("https://doi.org/")) {
-    return { kind: "doi", id: work.url.slice("https://doi.org/".length) };
-  }
+  /* Decoded: the anchor is looked for in a page's text and its decoded address. */
+  const doi = work.linkFrom === "doi" ? doiOfUrl(work.url) : null;
+  if (doi !== null) return { kind: "doi", id: doi };
   if (work.linkFrom === "arxiv" && work.url.startsWith("https://arxiv.org/abs/")) {
     return { kind: "arxiv", id: work.url.slice("https://arxiv.org/abs/".length) };
   }
@@ -307,7 +312,12 @@ export function titleNamesWork(pageTitle: string | undefined, workTitle: string)
  * **Is this result the work? (R-1)** Stricter than `pageNamesTitle`, which
  * stays *Find it*'s rule for choosing a link.
  */
-export function resultIsTheWork(page: SearchEvidence, context: LookupContext): boolean {
+export function resultIsTheWork(
+  page: SearchEvidence,
+  /* Only what identifies the work — so src/citation-influence.ts can ask the
+     same question of a page without inventing a `why` and a passage. */
+  context: Pick<LookupContext, "title" | "authors" | "year" | "anchor">,
+): boolean {
   const surname = surnameOf(context.authors);
   const seen = new Set(tokens(`${page.title ?? ""} ${page.excerpt ?? ""}`));
   const surnameSeen = surname !== null && seen.has(surname);

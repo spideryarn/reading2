@@ -7,120 +7,13 @@
  * actual work stays in src/store/index.ts, src/comments.ts and src/explain.ts; this file
  * is only routing, parsing and status codes.
  *
- *   GET    /api/library         every article on the shelf, for the homepage
- *                                `?archived=1` for the other half
- *   GET    /api/library/search   `?q=…&limit=…&archived=1` → passages from every article at once
- *   PATCH  /api/library/:slug    { archived?: boolean, title?: string | null, purpose?: string | null }
- *                                 → { entry, purpose } — see `patchShelf` for why purpose is beside it
- *   DELETE /api/library/:slug    destroy it, for good → { destroyed: slug }. 409 while an
- *                                 import is running; no body, and nothing to undo
- *   POST   /api/library/:slug/open   one more open, for the shelf's tooltip
- *   GET    /api/library/tags     every tag the reader uses → { tags: [{ tag, count }] }
- *   PATCH  /api/library/:slug/tags   { add?: string[], remove?: string[] } → { tags }
- *   GET    /api/models           which model writes what
- *                                 → { tasks: [{ task, model, id, provider, source, effort? }] }
- *   GET    /api/reader           `?slug=` → { profile, purpose, hasProfile, experimentalSince }
- *                                 — purpose is null without a slug
- *   PATCH  /api/reader           { profile?: string | null, experimental?: boolean }
- *                                 → { profile, experimentalSince }, both always
- *   GET    /api/link-preview    `?slug=&url=` → what that destination says about itself
- *   GET    /api/link-summary    `?slug=&url=&block=` → SSE: how it stands to the piece being read
- *   GET    /api/article/:slug    meta + blocks + tree, one payload
- *   GET    /api/source/:slug     the PDF an article was made from, for a reader to check it
- *   GET    /api/asset/:slug/:hash.:ext   one picture of that article, out of our own bucket
- *   GET    /api/export/:slug     everything we hold for one article, as a zip to download
- *   GET    /api/metadata/:slug   what the pipeline wrote, and whether any of it is stale
- *   GET    /api/tweets/:slug     the article as a numbered thread, and whether it is stale
- *   GET    /api/glossary/:slug   the terms this piece uses, and whether they are stale
- *   DELETE /api/glossary/:slug   throw the list away, so the next run starts over
- *   POST   /api/glossary/:slug/:id/lookup   check one term on the web, and keep the sources → SSE
- *   POST   /api/glossary/:slug/ask   find a term the reader typed, explain it and add it → SSE
- *   GET    /api/ideas/:slug      the propositions the piece needs you to hold, and staleness
- *   GET    /api/timeline/:slug   when the piece says things happened, and staleness
- *   GET    /api/quiz/:slug       the questions the piece can ask you back, and staleness
- *   GET    /api/faq/:slug        the questions a careful reader would put to the piece, where it responds, and staleness
- *   GET    /api/relations/:slug  how each paragraph bears on the one before it, and staleness (owner only)
- *   GET    /api/crossrefs/:slug  links from a phrase in one block to the block that backs it, and staleness (owner only)
- *   GET    /api/simple/:slug     a plain-words orientation to the piece, each paragraph's passages, and staleness
- *   GET    /api/skim/:slug a route through the quotes at three depths, whether it still matches them, and the profile
- *   GET    /api/debate/:slug     what the rest of the web says about this piece, and staleness
- *   GET    /api/citations/:slug  every work the piece cites, with a link the article gave, and staleness
- *   POST   /api/citations/:slug/:id/investigate   look one cited work up, then look into it on the web, and keep both → SSE
- *   POST   /api/citations/:slug/:id/find   the lookup alone; no button calls it since plan 260930d, kept one deploy for open tabs
- *   POST   /api/source-guess/:slug   an upload looks for its own page on the web, once → SourceGuess
- *   GET    /api/reading-time/:slug   → { seconds: { <block id>: n } }, the owner's time on each block
- *   POST   /api/reading-time/:slug   { seconds: { <block id>: n } } → 204, ADDED to the totals
- *   POST   /api/quiz/:slug/mark  one answer, marked against one question — SSE, stateless
- *   GET    /api/quotes/:slug     the lines worth keeping, in the article's own words, and staleness
- *   GET    /api/arc/:slug        one sentence per part, and whether it still fits the article
- *   GET    /api/comments/:slug   selection-anchored comments for compatibility;
- *                                `?anchors=whole-block` opts the current client into every comment
- *   POST   /api/comments/:slug   { blockId, quote, start, body?, criterionId?, valence?, colour? },
- *                                or { blockId } for a whole-block bookmark
- *                                → the stored comment. `criterionId` + `valence` are the referee's
- *                                  own placement of the passage — `tidyMark`; `colour` is a
- *                                  highlight's, refused on a whole-block bookmark — `tidyColour`
- *   PATCH  /api/comments/:slug/:id        { body } — the reader's words, `null` clears them.
- *                                  The key is required: a patch that never mentions the body
- *                                  is a 400, not a silent wipe
- *   PATCH  /api/comments/:slug/:id/mark   { criterionId, valence } — both keys, always, each a
- *                                  value or `null`; both `null` clears the placement
- *   PATCH  /api/comments/:slug/:id/colour { colour } — a highlight colour, or `null` to
- *                                  remove it; the key is required. 409 on a whole-block comment
- *   DELETE /api/comments/:slug/:id
- *   GET    /api/chat/:slug       every stored conversation for the article
- *   POST   /api/chat/:slug       → **a stream**, see `streamChat`. Three bodies:
- *                                  { threadId, question, at? }      ask
- *                                  { threadId, retry: messageId }   answer again
- *                                  { threadId, edit: messageId, question, at? }
- *   POST   /api/chat/:slug/:threadId/stop  { messageId } → { stopped }
- *   POST   /api/chat/:slug/live-tool  { name, args } → one chat tool, for a live session
- *   POST   /api/chat/:slug/:threadId/live  → an ephemeral realtime secret, a session
- *                                            id, the thread as seed items, and the tail
- *   POST   /api/chat/:slug/:threadId/live-session { sdp, placement?, useProfile? }
- *                                          → GPT-Live: the SDP answer, a session id, the tail
- *   POST   /api/chat/:slug/:threadId/spoken { question, answer, expectedTailId, … }
- *                                          → { thread }, one exchange appended
- *   POST   /api/live/:sessionId/connected  → the data channel opened
- *   POST   /api/live/:sessionId/usage      { kind, … } → one ledger row (four kinds, two per engine)
- *   POST   /api/live/:sessionId/close      { reason? } → the conversation ended
- *   PATCH  /api/chat/:slug/:threadId   { title }
- *   DELETE /api/chat/:slug/:threadId
- *   GET    /api/search/:slug     every saved meaning-search for the article
- *   POST   /api/search/:slug     { id?, criterion } → **a stream**, see `search`
- *   PATCH  /api/search/:slug/:id  { colour } — the reader's palette slot, or null for auto
- *   DELETE /api/search/:slug/:id
- *   GET    /api/referee/criteria/:slug      every saved criterion for the article
- *   POST   /api/referee/criteria/:slug      { id?, criterion, kind, poles?, scale? } → **a stream**,
- *                                           see `runRefereeCriterion`
- *   PATCH  /api/referee/criteria/:slug/:id  { colour } — the palette slot, or null for auto
- *   DELETE /api/referee/criteria/:slug/:id
- *   GET    /api/referee/claims/:slug        the paper's claims run, or null
- *   POST   /api/referee/claims/:slug        no body → **a stream**, see `runRefereeClaims`.
- *                                           One run per article; a second POST replaces the first
- *   POST   /api/referee/mirror/:slug        no body → **a stream**, see `runMirror`. Reads the
- *                                           referee's own comments back to them; never the paper
- *   GET    /api/referee/scan/:slug          the deterministic injection scan of the stored raw
- *                                           source — no model, no cost, and no verdict
- *   POST   /api/uploads          { filename, bytes, sha256 } → where to PUT a PDF, and for how long
- *   GET    /api/uploads/:id      what became of one upload, and whether its bytes have arrived
- *   DELETE /api/uploads/:id      the reader pressed Stop: pending → expired
- *   GET    /api/jobs             every ingest job this server knows about
- *   POST   /api/jobs             { url } | { uploadId } | { slug, steps?, force? }
- *   GET    /api/jobs/:id         one job, for the progress indicator to poll
- *   DELETE /api/jobs/:id         hide a finished job from its reader
- *   POST   /api/jobs/:id/cancel
- *   POST   /api/jobs/:id/retry   the same steps again, skipping what succeeded
- *   POST   /api/jobs/:id/advance run the next step this job has not done yet
- *   GET    /api/billing/usage    which plan, how much of it is used, what may be bought —
- *                                and, first, claims any gift voucher waiting for the
- *                                reader's confirmed address (the one write in a GET)
- *   GET    /api/admin/vouchers   (admin) every gift voucher, with each claimant's usage
- *   POST   /api/admin/vouchers   (admin) { email, articles, note? } → a voucher, waiting
- *   PATCH  /api/admin/vouchers/:id (admin) { articles?, note?, email?, revoked? }
- *   POST   /api/billing/checkout { tierId, currency? } → a hosted Checkout, or the Portal
- *   POST   /api/billing/portal   → a hosted Customer Portal session
- *   POST   /api/billing/confirm  { sessionId } → prove a finished Checkout is yours, then sync
+ * **There is no list of routes here, on purpose.** The signed-in routes are
+ * the rows of `AUTH_ROUTES` below, each with its own comment, and the inventory
+ * a test keeps true is `EXPECTED_AUTH_ROUTES` in
+ * tests/authenticated-api-route-contract.test.ts. The signed-out ones are in
+ * src/public/routes.ts. A list kept here until 2026-10-04 was a third copy that
+ * nothing checked: it had fallen a fifth of the table behind, and every
+ * new-route commit collided in it.
  *
  * The job routes return immediately; the work happens on the queue in
  * src/jobs.ts. See docs/project/comments.md, docs/project/library.md and
@@ -154,6 +47,7 @@ import {
   tagStore,
   readingTimeStore,
   glossaryHiddenStore,
+  quizAttemptStore,
   loadArticle,
   loadGlossary,
   lookUpTerm,
@@ -171,25 +65,33 @@ import {
   loadSimpleSummary,
   loadSkim,
   loadDebate,
+  loadArticleIdentity,
   loadCitations,
   citedCandidates,
-  findCitation,
   investigateCitation,
   guessSource,
   loadTimeline,
   loadTweets,
   fetchAllowanceStore,
 } from "./store/index.js";
-import { defaultShelfTopicsDeps, shelfTopics } from "./shelf-topics.js";
+import { defaultShelfTopicSetDeps, shelfTopicSet } from "./shelf-topic-sets.js";
 /* **Pure functions only**, and that is the whole reason this import survived
    step 10 while the writes beside it did not. `withRetry` and `withEdit` take a
    snapshot and return what the result would be, so they can be run as a gate
    here and thrown away; `ChatConflict` is what they throw and what this file
    turns into a 409. Nothing here touches a file, so nothing here has to know
    which store is live. Every write goes through `chatStore` above. */
-import { ChatConflict, isSpokenKind, withEdit, withRetry } from "./chat.js";
+import {
+  ANCHORED_ELSEWHERE,
+  ChatConflict,
+  HELP_NOT_FIRST,
+  isSpokenKind,
+  requireTail,
+  withEdit,
+  withRetry,
+} from "./chat.js";
 import { shortenedSpokenLabel } from "./spoken-label.js";
-import { CommentIdTaken, NotAnExplanation, type AnswerPatch, type MarkPatch } from "./comments.js";
+import { CommentIdTaken, NotAnExplanation, type AnswerFinish, type MarkPatch } from "./comments.js";
 import { findPassagesStream, SEARCH_TIMEOUT_MS } from "./search.js";
 /* Quick search (plan 261002e): the same events from Jev, so `search` below
    takes one generator or the other. */
@@ -227,6 +129,7 @@ import type { SavedCriterion } from "./saved-criteria.js";
 import { runClaimsStream } from "./referee-claims-run.js";
 /* What a claims run is stamped with: the fingerprint of the blocks it was sent. */
 import { hashBlocks } from "./source-hash.js";
+import { CRITERION_NOT_ON_ARTICLE } from "./referee-criteria-store.js";
 import type { Claim } from "./referee-claims.js";
 /* Referee mode's rule 5, and the one thing under it that costs nothing: the
    deterministic scan of the stored raw source. No model, no gateway, no spend
@@ -236,11 +139,11 @@ import { scanArticleSource } from "./source-scan.js";
 /* Referee mode's Mirror sub-mode. The generator, and only the generator: the
    waiting version beside it (`mirror`) exists for the eval, and a route that
    used it would trade the reader's first sentence for a spinner. */
-import { mirrorStream } from "./referee-mirror.js";
-/* A pure predicate, so importing it here does not drag the filesystem store
-   into a file that must work with either one — the same rule the `withEdit` /
-   `withRetry` import above states. The palette's *size* is deliberately not in
-   it: see `SearchRun.colour`. */
+import { isRefereeLeft, mirrorStream } from "./referee-mirror.js";
+/* A pure predicate. It was imported this way so as not to drag the
+   filesystem store (gone 2026-09-05) into a file that had to work with either
+   one — the same rule the `withEdit` / `withRetry` import above states. The
+   palette's *size* is deliberately not in it: see `SearchRun.colour`. */
 import { isStorableColour } from "./searches.js";
 /* Through the store, so comments and articles stay together.
    They cannot be split: a comment anchors to a block id, and leaving the
@@ -256,6 +159,7 @@ import { blobStore, CONTENT_TYPE } from "./store/blobs.js";
    straight from the store, so this file adds no data model of its own. */
 import { articleBundle } from "./store/export-bundle.js";
 import { ArticleNotFound } from "./store/article-rows.js";
+import { ArtefactNotMadeYet } from "./store/artefact-not-made-yet.js";
 /* The mechanics of every binary answer below — status, `nosniff`, a byte
    length and the body — and none of their policies. GET only: this file never
    imports the HEAD writer, because this dispatcher answers no HEAD. */
@@ -266,6 +170,7 @@ import {
   feedbackStore,
   highPowerStore,
   realtimeSessionStore,
+  shareLinkStore,
   sourceStore,
   visibilityStore,
 } from "./store/index.js";
@@ -292,7 +197,14 @@ import {
    is the part that is easy to get wrong and impossible to see wrong. */
 import { mirrorFeedback } from "./feedback.js";
 import { noticeFeedback } from "./feedback-notice.js";
-import { isFeedbackShipped, shippedFeedbackIds } from "./feedback-ending.js";
+import {
+  feedbackComment,
+  feedbackIdsByEnding,
+  isFeedbackShipped,
+  shippedFeedbackIds,
+} from "./feedback-ending.js";
+import { feedbackQuestionStatus, openFeedbackQuestions } from "./feedback-question.js";
+import { isFeedbackQuestionId } from "./feedback-question-values.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -328,16 +240,23 @@ import {
   REPORT_WINDOW_MS,
   SHOW_PASSAGE_TOOL,
 } from "./live.js";
+import { answerOpening } from "./answer-opening.js";
+import { answerAsSeen } from "./recall-hint.js";
 import { gptLiveSession } from "./live-gpt.js";
 import { vocabularyTermsFor } from "./vocabulary-sources.js";
 import { isWebUrl } from "./urls.js";
 /* The fourth thing a link card can say: what the destination says about itself,
    fetched by us once and cached for everybody. src/link-previews.ts. */
 import { linkPreview } from "./link-previews.js";
+/* Who cites the article, for Debate's Reception: OpenAlex, no model. src/citation-index.ts. */
+import { citersOf } from "./citation-index.js";
+import type { CitersResult } from "./types.js";
 /* The other half of the same card, and the half we wrote — a model call with a
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
+import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
+import { isOwnReadingPage } from "./own-reading-page.js";
 import {
   advanceJob,
   cancelJob,
@@ -350,9 +269,23 @@ import {
 } from "./jobs.js";
 import { type ArticleCost, describeAdminMiss, isAdmin } from "./admin.js";
 import { costCategoryOf } from "./cost-categories.js";
-import { silentLiveSessionsForArticle, spendForArticle } from "./store/ai-calls-spend-pg.js";
+import { type AdminCosts, costWindowLabel, parseCostWindow } from "./cost-cube.js";
+import { authAdminEndpoint, gotruePages, listAccounts } from "./store/admin-accounts.js";
+import {
+  silentLiveSessionsForArticle,
+  SpendCubeTooLarge,
+  spendCube,
+  spendForArticle,
+} from "./store/ai-calls-spend-pg.js";
 import { ownedArticleIdentity } from "./store/pg.js";
-import type { ClaimsFinish, NewFeedback, Visibility } from "./store/contracts.js";
+import type {
+  ClaimsFinish,
+  CriterionFinish,
+  NewFeedback,
+  NewFeedbackAnswer,
+  SearchFinish,
+  Visibility,
+} from "./store/contracts.js";
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
   decodeFeedbackCursor,
@@ -369,8 +302,10 @@ import {
   NOT_READ_YET,
   NOT_READ_YET_HIGH_POWER,
   placingFailed,
+  REASON_NOT_READ,
   UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
+  OWN_READING_PAGE,
   UPLOAD_STILL_ARRIVING,
   UPLOAD_UNAVAILABLE,
 } from "./messages.js";
@@ -383,6 +318,7 @@ import {
   processingOf,
 } from "./minimal-paper.js";
 import { NotProcessed } from "./not-processed.js";
+import { StillBeingAdded } from "./still-being-added.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
 import {
   confirmCheckout,
@@ -415,6 +351,7 @@ import {
   type IngestSlot,
 } from "./billing/admission.js";
 import { isPublicNamespace, servePublicApi } from "./public/routes.js";
+import { SHARE_KEY_PARAM, withoutShareKey } from "./share-key.js";
 import { currentOwnerId, runInRequest, setRequestOwner } from "./owner.js";
 import {
   collectSpend,
@@ -443,6 +380,7 @@ import {
 import { errorFields, log, since } from "./log.js";
 import { type CitedCandidate, withCitedInSpideryarn } from "./cited-in-spideryarn.js";
 import { authoredSentence, sayToReader } from "./reader-sentence.js";
+import { readerNotesDigest } from "./reader-notes.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
@@ -457,6 +395,7 @@ import {
   NON_TASK_MODELS,
   powerFor,
   type Provider,
+  type Wire,
   STAGE_EFFORT,
   TASK_TIER,
   displayName,
@@ -470,9 +409,14 @@ import {
   tooLongMessage,
   transcribe,
 } from "./transcribe.js";
+import { type PickAnswer, parsePickRequest } from "./command-pick.js";
+import { pickCommand } from "./command-pick-call.js";
+import { type SuggestAnswer, parseSuggestRequest, readFromHash } from "./command-suggest.js";
+import { suggestCommands, suggestableOptions } from "./command-suggest-call.js";
 import type {
   Block,
   ChatAnchor,
+  ThreadOrigin,
   ChatThread,
   Comment,
   FeedbackEnvironment,
@@ -495,7 +439,7 @@ import type {
   LibraryTermsResponse,
   LibraryTagsResponse,
   ArticleTagsResponse,
-  RememberStance,
+  LearnStance,
   ThreadKind,
   ThreadResponse,
   ThreadSummary,
@@ -516,11 +460,25 @@ import {
 } from "./types.js";
 /* Values again, and the same argument one field over: the three thread kinds
    and the guard that checks one off the wire. src/types.ts § THREAD_KINDS. */
-import { isThreadKind, MAX_VISIBLE_BLOCKS, THREAD_KINDS } from "./types.js";
+import {
+  isClaimOrigin,
+  isThreadKind,
+  MAX_LENS_CHARS,
+  MAX_ORIGIN_NAME_CHARS,
+  MAX_VISIBLE_BLOCKS,
+  ORIGIN_MODES,
+  sameAnchor,
+  sameOrigin,
+  THREAD_KINDS,
+} from "./types.js";
 /* Values, for the same reason: the two closed vocabularies a report's location
    is checked against, and the two caps the dialog and this route must agree on.
    src/types.ts § feedback. */
 import {
+  ADMIN_EARLIER_FEEDBACK_SHOWS,
+  type AdminEarlierFeedbackPage,
+  type AdminFeedbackAnswerReceipt,
+  type AdminFeedbackQuestion,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
   type EarlierFeedbackPage,
@@ -528,6 +486,7 @@ import {
   FEEDBACK_KINDS,
   MAX_FEEDBACK_URL_CHARS,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   /* A value, and the same number the panel's textarea counts against — one
      declaration, so the button that disables itself and the route that answers
@@ -536,8 +495,8 @@ import {
 } from "./types.js";
 /* A value, not a type — the one list a legacy stance is validated against
    (`streamChat` says why one is still accepted at all).
-   src/types.ts § REMEMBER_STANCES. */
-import { REMEMBER_STANCES } from "./types.js";
+   src/types.ts § LEARN_STANCES. */
+import { LEARN_STANCES, NONE_YET_AS_NULL_HEADER } from "./types.js";
 import type { Article, CommentAnchor, HighlightColour, ResetResponse } from "./types.js";
 
 /** Big enough for any selection, small enough that nothing can wedge the server. */
@@ -560,9 +519,9 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
 /**
  * The second one, and the same argument as the first.
  *
- * A bug report may carry a screenshot the reader pasted in, which is ~300 KB
- * downscaled and 400 KB at the ceiling the database enforces — four figures past
- * what the other forty routes need. So it is a parameter on `readBody` too, and
+ * A bug report may carry a screenshot the reader pasted in, which is a few
+ * hundred kilobytes for flat UI and two megabytes at the ceiling the database
+ * enforces — far past what the other routes need. So it is a parameter on `readBody` too, and
  * `MAX_BODY_BYTES` stays where it is: widening the shared limit to admit one
  * caller gives away the thing the limit was for.
  *
@@ -577,10 +536,11 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * So each term is the worst case of a thing that is separately capped:
  *
  * - the screenshot, base64, which is four characters per three bytes;
- * - the reader's answer at `MAX_FEEDBACK_ANSWER_CHARS`, at the six bytes per
- *   UTF-16 unit `JSON.stringify` can produce for a control character — times
- *   three, because a stale client still sends the old three answers and folding
- *   them into one `body` must not be refused before it is read;
+ * - the reader's answer, at the six bytes per UTF-16 unit `JSON.stringify` can
+ *   produce for a control character: the larger of the one box at
+ *   `MAX_FEEDBACK_ANSWER_CHARS` and a stale client's old three at
+ *   `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` each, because folding those into one
+ *   `body` must not be refused before it is read;
  * - the diagnostics blob, whose own ceiling is computed in
  *   src/feedback-payload.ts from the caps that file enforces;
  * - the rest of the envelope — the id, the slug, the build stamp, the keys.
@@ -592,7 +552,7 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  */
 const MAX_FEEDBACK_BODY_BYTES =
   Math.ceil(MAX_FEEDBACK_SCREENSHOT_BYTES / 3) * 4 +
-  3 * MAX_FEEDBACK_ANSWER_CHARS * 6 +
+  Math.max(MAX_FEEDBACK_ANSWER_CHARS, 3 * MAX_LEGACY_FEEDBACK_ANSWER_CHARS) * 6 +
   MAX_FEEDBACK_DIAGNOSTICS_JSON_BYTES +
   /* The id, the URL, the slug, the build stamp, the two booleans, every key,
      and the braces and commas around all of it. The URL replaced the route kind
@@ -625,6 +585,51 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(body));
+}
+
+/**
+ * **Read an artefact, and answer "not made yet" as `200 null` to a client that
+ * asked for that.** Returns what `load` returned, or `null` once it has
+ * answered — the handler's cue to stop.
+ *
+ * For ten artefact reads — quiz, crossrefs, citations, and since plan 261006h
+ * simple, ideas, faq, timeline, debate, glossary and quotes: "not made yet" is
+ * their ordinary answer, and as a 404 it was a red line in the console for
+ * each one an ordinary page load asked for. `NONE_YET_AS_NULL_HEADER` in
+ * src/types.ts says why it is opt-in; src/store/artefact-not-made-yet.ts
+ * names the reads not moved.
+ *
+ * - **Only `ArtefactNotMadeYet`.** "No such article" is `notFound(slug)`, a
+ *   different 404, and stays one whatever the header says; so does every other
+ *   failure. What counts as "not made" is the loader's call, not this
+ *   function's: three of them put a document they cannot use in the same
+ *   throw as no document (`loadFaq`, `loadSimpleSummary`, `loadDebate`).
+ * - **Only `load`.** Give it the store read and nothing else — whatever the
+ *   handler does next (quiz's kept answers, citations' matching) is outside
+ *   this `catch`, so a failure there is never mistaken for "none yet".
+ * - **`private, no-store` on every answer**, the 404 included: the body
+ *   depends on a request header, and this is simpler than a `Vary` that every
+ *   cache in front of us would have to honour. It is set before `load`, and
+ *   the API's one `catch` leaves it on the error it writes.
+ *
+ * The browser's offline cache is a separate matter and does not read this
+ * header: `apiFetch` declines to keep the `null` (src/web/lib/api.ts §
+ * `NONE_YET_AS_NULL`). **A route that starts calling this needs its name
+ * there too**; tests/api-fetch-offline.test.ts fails when the two differ.
+ */
+async function orNullWhenNotMadeYet<T extends object>(
+  { req, res }: { req: IncomingMessage; res: ServerResponse },
+  load: () => Promise<T>,
+): Promise<T | null> {
+  res.setHeader("Cache-Control", "private, no-store");
+  try {
+    return await load();
+  } catch (err) {
+    if (!(err instanceof ArtefactNotMadeYet)) throw err;
+    if (req.headers[NONE_YET_AS_NULL_HEADER] === undefined) throw err;
+    send(res, 200, null);
+    return null;
+  }
 }
 
 /**
@@ -1191,11 +1196,6 @@ function readingTimeBatch(body: unknown): Record<string, number> {
  * for both, and for the dead one it spins for ever.
  *
  * Only the running process can tell them apart, so it keeps the list.
- */
-const answering = new Map<string, number>();
-
-/**
- * Mark a comment as being answered right now, and hand back the release.
  *
  * **A count rather than a flag, and that is not defensive padding.** It was a
  * `Set` while the only way to re-answer a comment was the "Try again" link on a
@@ -1209,19 +1209,10 @@ const answering = new Map<string, number>();
  *
  * Chat needed `Live` and `settleThread` for the same problem. This is the small
  * version: nothing here can stop or supersede anything, it only stops the sweep
- * from lying.
+ * from lying. The count itself is src/live-keys.ts, shared with `searching`,
+ * `refereeing` and `pullingClaims` below.
  */
-function beganAnswering(key: string): () => void {
-  answering.set(key, (answering.get(key) ?? 0) + 1);
-  let released = false;
-  return () => {
-    if (released) return; // a double release must not decrement someone else's
-    released = true;
-    const left = (answering.get(key) ?? 1) - 1;
-    if (left > 0) answering.set(key, left);
-    else answering.delete(key);
-  };
-}
+const answering = liveKeys();
 
 /**
  * What this process is answering *in this article*, as bare comment ids.
@@ -1365,6 +1356,27 @@ function sse(res: ServerResponse): {
    * call, closing the tab leaves OpenRouter generating, and being paid for,
    * until it finishes on its own — and a retry then starts a second paid call
    * beside the first. A caller that wants only the frames can ignore this.
+   *
+   * **And most do. There is no rule here, only ten choices** — what each
+   * stream does when the reader leaves, read off the callers on 2026-10-04,
+   * with `runMirror` moved up a row on 2026-10-05:
+   *
+   *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
+   *                           `markOneAnswer`, `runMirror`, and `search` for a
+   *                           quick run
+   *   lets it run to the end  `answer` (comments), `streamTermLookup`,
+   *                           `streamCitationInvestigation`,
+   *                           `runRefereeCriterion`, `runRefereeClaims`, and
+   *                           `search` for a meaning run
+   *
+   * Every stream that runs on has a save path for its answer; a deleted or
+   * superseded row can refuse the save. The converse is still not a rule:
+   * `streamAskedTerm` stores its term and stops. Each caller's own comment says
+   * why. Greg was asked whether there should be one rule and chose the narrow
+   * step — stop Mirror,
+   * which stored nothing, and change nothing else
+   * (docs/plans/261003f-fifth-codebase-sweep-umbrella.md § For Greg 4). When
+   * you add a stream, choose on purpose and add it to this list.
    */
   gone: AbortSignal;
 } {
@@ -1395,7 +1407,9 @@ function sse(res: ServerResponse): {
      would be live and stay live: the paid call starts anyway, on a response
      that is already destroyed, and nothing ever cancels it. Asking the socket
      what it is rather than waiting to be told. GPT Sol's second review of the
-     quiz code found this; it applies to every streaming route here. */
+     quiz code found this. This check runs for every streaming route here;
+     what it buys is `alive()` for all of them and a cancelled call only for
+     the ones that hand `gone` on — the list above. */
   if (res.destroyed || res.writableEnded) {
     open = false;
     left.abort();
@@ -1489,9 +1503,11 @@ const MAX_BODY_CHARS = 4000;
  * article **and** to the requesting owner (`ownedSlug`, src/store/pg.ts), so a
  * criterion belonging to somebody else — or to another article, or to nothing —
  * is refused rather than stored. `comments_criterion_fk` refuses it a second
- * time, but a foreign-key error is a 500 with a Postgres message in it, and the
- * filesystem store has no constraint at all: the two stores agree only because
- * this check is above both of them.
+ * time. On `create` and `patchMark`, the store catches this key before the
+ * error guard scrubs it and returns the same 400 if the criterion disappears
+ * between this check and the write. Other foreign keys remain store failures. (The
+ * filesystem store, until 2026-09-05, had no constraint at all, and the two
+ * stores agreed only because this check was above both of them.)
  *
  * ## And it has to be a criterion with two ends
  *
@@ -1540,7 +1556,7 @@ async function tidyMark(slug: string, raw: Record<string, unknown>): Promise<Mar
     const criteria = await refereeCriteriaStore.load(slug);
     named = criteria.find((c) => c.id === id);
     if (!named) {
-      throw httpError(400, "criterionId is not one of your criteria on this article");
+      throw httpError(400, CRITERION_NOT_ON_ARTICLE);
     }
   }
 
@@ -1832,113 +1848,147 @@ async function answer(
   const { blockId } = comment;
   const quote: string = comment.quote;
   const key = `${slug}/${comment.id}`;
-  const release = beganAnswering(key);
+  const release = answering.hold(key);
 
-  const { frame } = sse(res);
-  frame("begin", comment);
-
-  /**
-   * Send the `done` frame, carrying **what the store actually holds**.
-   *
-   * `commentStore.patch` answers `undefined` when this attempt is no longer the
-   * live one — a sweep buried it and the reader has begun another. Framing our
-   * own answer then would put it back on their screen, which is the overwrite
-   * the fence exists to prevent, one layer up: `useComments.ts` calls `put` on
-   * whatever the `done` frame carries. So on a refusal the row is read back and
-   * framed instead, and the reader's panel ends up agreeing with the database.
-   *
-   * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
-   * simply stays silent. The comment client turns a stream that ends without a
-   * `done` into "The answer stopped arriving. Try again." and writes that error
-   * over the row — so silence here would clobber the newer attempt in the UI
-   * with a message about an older one.
-   *
-   * The fallback is our own patch, for the case where the read finds nothing:
-   * the comment was deleted mid-answer, and `useComments` already knows what to
-   * do with a `done` frame for an id it has deleted.
-   */
-  const settle = async (patch: AnswerPatch): Promise<void> => {
-    const kept = await commentStore.patch(slug, comment.id, patch, attempt);
-    if (kept) {
-      frame("done", { ...comment, ...patch });
-      return;
-    }
-    let stored: Comment | undefined;
-    try {
-      stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
-    } catch (readErr) {
-      // The write was refused and the read-back failed too. Say so, then fall
-      // back — a `done` frame the reader can act on beats a stream that stops.
-      log("store").error(
-        { ...errorFields(readErr), slug, id: comment.id },
-        `could not read back a superseded explanation for ${slug}`,
-      );
-    }
-    frame("done", stored ?? { ...comment, ...patch });
-  };
-
-  let text = "";
   try {
-    for await (const event of explainStream({
-      power: powerOf(article),
-      meta: article.meta,
-      blocks: article.blocks,
-      blockId,
-      quote,
-      dig,
-      profile,
-    })) {
-      if (event.type === "delta") {
-        text += event.text;
-        frame("delta", { text: event.text });
-        continue;
+    const { frame } = sse(res);
+    frame("begin", comment);
+
+    /**
+     * Send the `done` frame, using the stored row for the reader's fields.
+     *
+     * **When the write lands, that is the row out of the list `patch` returns**,
+     * read after the write. Until 2026-10-07 it was `{ ...comment, ...patch }`:
+     * this attempt's answer over the comment as `beginAnswer` had returned it,
+     * fifteen to twenty-five seconds earlier. A note the reader edited, moved or
+     * recoloured in that time was right in the database (the answer's write
+     * leaves those columns alone) and went back to the old one on screen,
+     * because the client took the frame for the row. Seventh sweep, SV2;
+     * tests/comment-answer-stream-lifetime.test.ts. The client now writes only
+     * the answer's half of whatever this carries (`putAnswer`,
+     * src/web/useComments.ts), and a tab from before that still replaces the
+     * row, which is why the frame has to be right on its own.
+     *
+     * The UPDATE and that read are separate statements. If another attempt
+     * claimed the row between them, the returned row is `pending`: this
+     * stream cannot adopt that attempt, and ending `pending` leaves a spinner
+     * with no watcher. Keep the current reader fields but frame the terminal
+     * answer this attempt successfully committed. A newer terminal row is
+     * used unchanged. tests/comment-answer-terminal-frame.test.ts.
+     *
+     * A write that landed and a list without the row in it means the comment
+     * was deleted between the two statements. Then, and for the two cases
+     * below where nothing stored can be read, the frame is our own answer over
+     * the opening snapshot: **not** what the store holds, and the one thing
+     * left to send.
+     *
+     * `commentStore.patch` answers `undefined` when this attempt is no longer the
+     * live one — a sweep buried it and the reader has begun another. Framing our
+     * own answer then would put it back on their screen, which is the overwrite
+     * the fence exists to prevent, one layer up. So on a refusal the row is read
+     * back and framed instead, and the reader's panel ends up agreeing with the
+     * database.
+     *
+     * **A frame either way**, unlike `pgSearchStore.finish`'s caller, which
+     * simply stays silent. The comment client turns a stream that ends without a
+     * `done` into "The answer stopped arriving. Try again." and writes that error
+     * over the row — so silence here would clobber the newer attempt in the UI
+     * with a message about an older one.
+     *
+     * The fallback is our own patch, for the case where the read finds nothing:
+     * the comment was deleted mid-answer, and `useComments` already knows what to
+     * do with a `done` frame for an id it has deleted.
+     */
+    const settle = async (patch: AnswerFinish): Promise<void> => {
+      const kept = await commentStore.patch(slug, comment.id, patch, attempt);
+      if (kept) {
+        const current = kept.find((c) => c.id === comment.id);
+        frame("done", current?.status === "pending"
+          ? { ...current, ...patch }
+          : current ?? { ...comment, ...patch });
+        return;
       }
-      await settle({
-        status: "done" as const,
-        answer: event.answer,
-        citations: event.citations,
-        searches: event.searches,
-        model: event.model,
-      });
-    }
-  } catch (err) {
-    /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
-       function owns the response and the outer catch never sees the error — so
-       a failure inside a stream is invisible to the seam in `serveApi`, and a
-       stream is exactly where a model call fails. Same reasoning at the two
-       other streams below. */
-    captureFailure(err, { route: "explain", slug });
-    /* The partial answer is kept, exactly as chat keeps one. Half an
-       explanation and a reason beats a spinner that turns into nothing, and the
-       reader has already read the half. */
-    const patch = {
-      status: "error" as const,
-      error: sayToReader(err, { route: "explain", slug }),
-      ...(text.trim() ? { answer: text.trim() } : {}),
+      let stored: Comment | undefined;
+      try {
+        stored = (await commentStore.load(slug)).find((c) => c.id === comment.id);
+      } catch (readErr) {
+        // The write was refused and the read-back failed too. Say so, then fall
+        // back — a `done` frame the reader can act on beats a stream that stops.
+        log("store").error(
+          { ...errorFields(readErr), slug, id: comment.id },
+          `could not read back a superseded explanation for ${slug}`,
+        );
+      }
+      frame("done", stored ?? { ...comment, ...patch });
     };
-    /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
-       error would reach the outer handler, which would try to `send` a JSON 500
-       onto a response that is already an open event stream — and the reader
-       would see the stream simply stop. A store that cannot record the failure
-       is a worse thing than a failure, and it is worth its own line. */
+
+    let text = "";
     try {
-      await settle(patch);
-    } catch (storeErr) {
-      log("store").error(
-        { ...errorFields(storeErr), slug, id: comment.id },
-        `could not record a failed explanation for ${slug}`,
-      );
-      /* The secondary failure, and worth its own issue rather than a footnote
-         on the first: one of these means a model call failed, two mean the
-         store is broken too, and only the second is an emergency. */
-      captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
-      /* `settle` frames the `done` itself, so this is the one path that still
-         has to: the store could not be told, and the reader must still be. */
-      frame("done", { ...comment, ...patch });
+      for await (const event of explainStream({
+        power: powerOf(article),
+        meta: article.meta,
+        blocks: article.blocks,
+        blockId,
+        quote,
+        dig,
+        profile,
+      })) {
+        if (event.type === "delta") {
+          text += event.text;
+          frame("delta", { text: event.text });
+          continue;
+        }
+        await settle({
+          status: "done" as const,
+          answer: event.answer,
+          citations: event.citations,
+          searches: event.searches,
+          model: event.model,
+        });
+      }
+    } catch (err) {
+      /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
+         function owns the response and the outer catch never sees the error — so
+         a failure inside a stream is invisible to the seam in `serveApi`, and a
+         stream is exactly where a model call fails. Same reasoning at the two
+         other streams below. */
+      captureFailure(err, { route: "explain", slug });
+      /* The partial answer is kept, exactly as chat keeps one. Half an
+         explanation and a reason beats a spinner that turns into nothing, and the
+         reader has already read the half. */
+      const patch = {
+        status: "error" as const,
+        error: sayToReader(err, { route: "explain", slug }),
+        ...(text.trim() ? { answer: text.trim() } : {}),
+      };
+      /* **Nothing past `sse(res)` may throw.** The headers are gone, so an escaped
+         error would reach the outer handler, which would try to `send` a JSON 500
+         onto a response that is already an open event stream — and the reader
+         would see the stream simply stop. A store that cannot record the failure
+         is a worse thing than a failure, and it is worth its own line. */
+      try {
+        await settle(patch);
+      } catch (storeErr) {
+        log("store").error(
+          { ...errorFields(storeErr), slug, id: comment.id },
+          `could not record a failed explanation for ${slug}`,
+        );
+        /* The secondary failure, and worth its own issue rather than a footnote
+           on the first: one of these means a model call failed, two mean the
+           store is broken too, and only the second is an emergency. */
+        captureFailure(storeErr, { route: "explain", slug, phase: "record-failure" });
+        /* `settle` frames the `done` itself, so this is the one path that still
+           has to: the store could not be told, and the reader must still be.
+           There is no stored row to send, so this is the opening snapshot with
+           the failure on it, and a note edited since is not in it. The client
+           keeps its own copy of the reader's fields (`putAnswer`). */
+        frame("done", { ...comment, ...patch });
+      }
+    } finally {
+      res.end();
     }
   } finally {
     release();
-    res.end();
     await freeDig?.();
   }
 }
@@ -2088,9 +2138,11 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
  * was true of the JSON route only because nothing stopped the server when the
  * tab went. Cancelling here would turn a closed band into a paid call thrown
  * away and a promise broken; letting it finish buys the stored answer the
- * reader was told they would get. The asked term cancels, because nothing it
- * produces outlives the page. `answer` above makes the same choice for the
- * same reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ * reader was told they would get. The asked term cancels (`streamAskedTerm`
+ * passes `gone`), which is a choice and not a consequence of having nothing
+ * to keep: a finished one is stored as an added term, and only an unfinished
+ * one leaves nothing. `answer` above makes this function's choice, for this
+ * function's reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
 async function streamTermLookup(slug: string, termId: string, res: ServerResponse): Promise<void> {
   const { stream, release } = await lookUpTerm(slug, termId);
@@ -2127,7 +2179,7 @@ async function streamTermLookup(slug: string, termId: string, res: ServerRespons
  * `streamTermLookup`'s shape: the 404 and the allowance's 429/503 are decided
  * by `investigateCitation` before a header is written. Then, since plan
  * 260930d, `stage` (`{ stage: "finding" }`) and one `lookup` (the stored
- * *Look it up* answer, `/find`'s body) when the press looks the work up first,
+ * *Look it up* answer, a `FindCitationResponse`) when the press looks the work up first,
  * and `stage` (`{ stage: "reading" }`); then any number of `delta` and exactly
  * one `done` (`{ investigation }`, **written only after it is stored**) or
  * `error` (`{ error }`). Every delta has already passed the
@@ -2157,8 +2209,8 @@ async function streamCitationInvestigation(slug: string, entryId: string, res: S
           frame("stage", { stage: event.stage });
           break;
         case "lookup":
-          /* The body `POST …/find` answers, unchanged — the client applies it
-             exactly as it applied that route's answer. */
+          /* A `FindCitationResponse`, the body the retired `POST …/find` answered,
+             unchanged — the client applies it exactly as it applied that route's. */
           frame("lookup", event.response);
           break;
         case "delta":
@@ -2272,7 +2324,9 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  *
  * The one case with **no** terminal frame is the reader leaving: `sse`'s `gone`
  * aborts the model call, `markAnswerStream` ends without a `done`, and there is
- * nobody on the other end of the socket to tell either way.
+ * nobody on the other end of the socket to tell either way. (Leaving later,
+ * during the verdict call, is different: the mark is already whole, the stream
+ * still yields its `done`, and only the frame has nowhere to go — see below.)
  *
  * **The client ticks a question answered only on `done`.** A stream that simply
  * stops — a dropped connection, a killed instance — produces neither frame, and
@@ -2283,10 +2337,25 @@ function refuseAMovedQuiz(found: QuizFound, batchId: string): void {
  * an ordinary JSON 400/404/409 and the thrown `httpError` never reaches a
  * half-opened stream. Everything after `sse(res)` is frames, including failure.
  *
- * **Nothing is stored.** No attempt row, no thread, no `pending` write to
- * recover — which is why this handler has none of `answer`'s three writes. A
- * reload starts the quiz fresh; the questions persist because they are an
- * artefact. docs/plans/260831al-review-quiz-sub-mode.md § Attempts are not stored.
+ * ## A finished mark is kept — one write, when the stream says `done`
+ *
+ * Nothing was stored here until 2026-10-05; Greg asked for the answers to be
+ * kept (report spya-e8ujxn, docs/plans/261005b-quiz-answers-are-kept-and-restored.md).
+ * So when `markAnswerStream` yields its `done`, one row goes into
+ * `quiz_attempts` — the answer, the mark, and the question's words — **and
+ * then** the `done` frame is sent, carrying the row's own time as `answeredAt`.
+ * Still no `pending` write and nothing to recover: a mark that did not finish
+ * leaves no row at all.
+ *
+ * - **The row is the record that a mark finished; the frame is not.** A reader
+ *   who leaves during the verdict call still gets a `done` out of the stream,
+ *   so the row is written with nobody listening, and they find the answer
+ *   there when they come back.
+ * - **A save that fails does not fail the mark.** The reader has watched it
+ *   arrive. It is reported, and `done` goes with `kept: false` and no
+ *   `answeredAt`, so the panel can say the answer will not be there later.
+ * - **The verdict is not stored**, and neither the answer nor the mark is
+ *   logged — from here or from the store.
  */
 async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const { batchId, questionId, answer } = (body ?? {}) as Record<string, unknown>;
@@ -2375,7 +2444,8 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          would ever see, and being paid for it, until it finished on its own —
          and a reader who came back and pressed Answer again started a second
          one beside the first. There is no stop button in the quiz panel and no
-         attempt row to reconcile, so this is the only cancellation there is.
+         pending row to reconcile (a row is written only for a mark that
+         finished), so this is the only cancellation there is.
          `markAnswerStream` tells this signal apart from its own deadline and
          stall clocks and ends the mark without a `done`. */
       signal: gone,
@@ -2405,10 +2475,29 @@ async function markOneAnswer(slug: string, body: unknown, res: ServerResponse): 
          screen even by accident, because nothing renders this frame's fields
          except the tick. It is often absent, which is normal: the ladder reads
          absence as *hold the band*. docs/plans/260907d-make-the-quiz-adaptive.md. */
+      /* **Kept first, then told.** In this order so that `answeredAt` is the
+         row's own time, and so that a `done` the reader receives without
+         `kept: false` is a mark that really is in the table. Not gated on
+         `alive()`: a mark that finished is kept whether or not anybody is
+         still there to hear so. The catch reports the failure and nothing
+         else — `captureFailure` gets the slug and the phase, never the words. */
+      let answeredAt: string | null = null;
+      try {
+        answeredAt = await quizAttemptStore.record(slug, {
+          batchId: found.quiz.batchId,
+          questionId: question.id,
+          question: question.question,
+          answer: written,
+          reply: event.reply,
+        });
+      } catch (keepErr) {
+        captureFailure(keepErr, { route: "quiz-mark", slug, phase: "keep-answer" });
+      }
       frame("done", {
         reply: event.reply,
         model: event.model,
         ...(event.verdict ? { verdict: event.verdict } : {}),
+        ...(answeredAt ? { answeredAt } : { kept: false }),
       });
     }
   } catch (err) {
@@ -2673,9 +2762,9 @@ if (CHAT_ORPHAN_GRACE_MS <= CHAT_TIMEOUT_MS) {
  * same 30s of room for the article read that happens after `begin`, the write
  * that happens after the model, and two processes' clocks.
  *
- * **The filesystem store ignores it entirely**, and that is today's behaviour
- * rather than an oversight: it errors any `pending` run this process did not
- * start, immediately. Only Postgres has other processes to be wrong about.
+ * **The filesystem store ignored it entirely** until it went on 2026-09-05:
+ * it errored any `pending` run this process did not start, immediately. Only
+ * Postgres has other processes to be wrong about.
  */
 export const SEARCH_ORPHAN_GRACE_MS = 90_000;
 
@@ -2807,6 +2896,65 @@ export function onScreenOf(visible: readonly string[] | undefined, blocks: reado
   return blocks.filter((b) => wanted.has(b.id)).map((b) => b.id);
 }
 
+/**
+ * **The reader's notes digest for an Explore turn**, or `null`.
+ *
+ * Explore starts from what the reader marked and discussed, so it is handed
+ * that without spending a tool round: their comments, highlights and bookmarks
+ * on this article and an index of their other conversations about it, through
+ * the same bounded formatter the `reader_notes` tool uses
+ * (`readerNotesDigest`, src/reader-notes.ts).
+ *
+ * **On every turn, not only the first** (GPT Sol's review of plan 261003l,
+ * PR-1). Only the question is stored and history is rebuilt from the rows, so
+ * a digest sent once would be gone by the second turn, and a retry or an edit
+ * of the opening question would never have had it.
+ *
+ * **The stored thread decides**, never the request: its kind says whether
+ * there is a digest at all, and its id is the conversation left out of the
+ * index. Both stores answer for the signed-in owner only (src/store/pg.ts §
+ * `ownedSlug`), and this is handed a slug, never an owner.
+ *
+ * **A failed load costs the digest, not the turn.** The answer still comes,
+ * the prompt simply has no notes section, and the tool is still offered — and
+ * says so honestly if it fails too. Logged: the slug and counts. Never a
+ * note, a quote or a title.
+ */
+async function exploreNotes(
+  slug: string,
+  thread: Pick<ChatThread, "id" | "kind">,
+  blocks: readonly Block[],
+): Promise<string | null> {
+  if (thread.kind !== "explore") return null;
+  try {
+    const [comments, threads] = await Promise.all([commentStore.load(slug), chatStore.load(slug)]);
+    const digest = readerNotesDigest({ comments, threads, blocks, currentThreadId: thread.id });
+    log("model").info(
+      {
+        slug,
+        notes: digest.notes.total,
+        notesShown: digest.notes.shown,
+        conversations: digest.conversations.total,
+        conversationsShown: digest.conversations.shown,
+        chars: digest.content.length,
+      },
+      "explore: the reader's notes go with the turn",
+    );
+    return digest.content;
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "explore: could not read the reader's notes; answering without them",
+    );
+    return null;
+  }
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -2817,6 +2965,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     expectedTailId,
     useProfile,
     anchor,
+    origin,
     kind,
     stance,
     help,
@@ -2825,17 +2974,17 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   } = (body ?? {}) as Record<string, unknown>;
   if (typeof threadId !== "string") throw httpError(400, "Expected { threadId, … }");
   /* **A stance is a legacy field: validated, then dropped.** Until 2026-10-02
-     Recall had four stances and the client sent one on every new Remember
+     Recall had four stances and the client sent one on every new Learn
      turn. There is one voice now, and nothing reads a stance — but a tab left
      open across that deploy still sends one, and it is accepted on exactly the
-     request it used to be sent with (an ordinary Remember send, checked below)
+     request it used to be sent with (an ordinary Learn send, checked below)
      so that tab's next turn does not 400. An unknown value is still a 400: a
      client sending `stance: "socratik"` has a bug, and accepting it quietly is
      how the bug survives. Kept indefinitely — the check is cheap and a tab can
      stay open for weeks.
      docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md. */
-  if (stance !== undefined && !REMEMBER_STANCES.includes(stance as RememberStance)) {
-    throw httpError(400, `stance must be one of: ${REMEMBER_STANCES.join(", ")}`);
+  if (stance !== undefined && !LEARN_STANCES.includes(stance as LearnStance)) {
+    throw httpError(400, `stance must be one of: ${LEARN_STANCES.join(", ")}`);
   }
   /* The message names the wire values, because that is what a client has to
      send, and the list is `THREAD_KINDS` rather than a chain of `!==` written
@@ -2844,11 +2993,16 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      refused by a route that had no opinion about it, with a sentence naming two
      kinds and offering no clue that a third existed.
 
-     `remember` was spelled `review` until 2026-09-01 and there is no alias: the
-     rename moved the wire value, the CHECK constraint and the rows in one step
-     (drizzle/0048_rename_review_thread_kind.sql), so an old client sending
-     `review` gets this 400 rather than a thread of the wrong kind.
-     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages. */
+     `learn` was spelled `review` until 2026-09-01 and `remember` until
+     2026-10-06, and there is no alias for either: each rename moved the wire
+     value, the CHECK constraint and the rows in one step
+     (drizzle/0048_rename_review_thread_kind.sql, then
+     drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql), so an old
+     client sending `review` or `remember` gets this 400 rather than a thread
+     of the wrong kind. A tab left open across the deploy fails its next
+     Recall turn until it reloads.
+     docs/plans/260901d-rename-review-mode-to-remember-mode-everywhere.md § Stages,
+     docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md. */
   if (kind !== undefined && !isThreadKind(kind)) {
     throw httpError(400, `kind must be one of: ${THREAD_KINDS.join(", ")}`);
   }
@@ -2930,53 +3084,57 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   if (!wantsRetry && (typeof question !== "string" || question.trim() === "")) {
     throw httpError(400, "Expected { threadId, question }");
   }
-  /* Two limits, chosen by what the box actually is — see `MAX_REMEMBER_CHARS`.
+  /* Two limits, chosen by what the box actually is — see `MAX_LEARN_CHARS`.
 
      **The request's kind is not enough**, and reading only it was a bug: an
      edit sends no kind at all (it is refused one, just above), so every edit
-     was measured against chat's 4,000 and a 4,001-character Remember turn could be
+     was measured against chat's 4,000 and a 4,001-character Learn turn could be
      created and then never rewritten. So the *thread's* kind decides whenever
      there is a thread, and the request's is the fallback for the turn that
      creates one. GPT Sol's review of the built code, finding 5.
 
      Cheap: `chatStore.load` is called a few lines down anyway. And a smuggled
-     `kind: "remember"` on a thread that is a chat buys nothing — the 409 below
+     `kind: "learn"` on a thread that is a chat buys nothing — the 409 below
      refuses it before any model call. */
   const storedKind = (await chatStore.load(slug)).find((t) => t.id === threadId)?.kind;
-  const askingRemember = (storedKind ?? wantedKind) === "remember";
-  /* Tutorial is dictated too, so it shares Remember's long cap rather than
-     chat's 4,000 — the same mistake `MAX_REMEMBER_CHARS` exists to avoid. */
-  const longInput = askingRemember || (storedKind ?? wantedKind) === "tutorial";
-  /* **Chat only.** Remember's prompt tells the model not to guess how far the
+  const askingLearn = (storedKind ?? wantedKind) === "learn";
+  /* Tutorial and Explore are dictated too, so they share Learn's long cap
+     rather than chat's 4,000 — the same mistake `MAX_LEARN_CHARS` exists to
+     avoid. */
+  const effectiveKind = storedKind ?? wantedKind;
+  const longInput = askingLearn || effectiveKind === "tutorial" || effectiveKind === "explore";
+  /* **Chat only.** Learn's prompt tells the model not to guess how far the
      reader has got, and a screenful is exactly that guess; Candidates sends no
      position at all. The thread's kind decides, as it does for the cap below. */
   if (visible !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
     throw httpError(400, "visible only applies to a chat");
   }
   /* `storedKind` was read outside `inTurnOrder`. If two first turns carrying the
-     same optimistic id arrive together, the other one can create a Remember
+     same optimistic id arrive together, the other one can create a Learn
      thread after that read. Make chat explicit on the authoritative store write
      whenever `visible` is present, so `withTurn`'s transactional kind check
      refuses the collision before inserting either message. Without this, the
-     request could append a screenful to a Remember thread even though the fast
+     request could append a screenful to a Learn thread even though the fast
      check above had correctly seen no thread yet. */
+  /* An origin is chat-only as well (checked below), so it makes chat explicit
+     here for the same reason. */
   const beginKind = !wantsRetry && !wantsEdit
-    ? (wantedKind ?? (visible !== undefined ? "chat" : undefined))
+    ? (wantedKind ?? (visible !== undefined || origin !== undefined ? "chat" : undefined))
     : undefined;
-  const cap = longInput ? MAX_REMEMBER_CHARS : MAX_QUESTION_CHARS;
+  const cap = longInput ? MAX_LEARN_CHARS : MAX_QUESTION_CHARS;
   if (typeof question === "string" && question.length > cap) {
     throw httpError(
       413,
       longInput
-        ? `What you wrote may be at most ${MAX_REMEMBER_CHARS} characters`
+        ? `What you wrote may be at most ${MAX_LEARN_CHARS} characters`
         : `A question may be at most ${MAX_QUESTION_CHARS} characters`,
     );
   }
-  /* **A stance anywhere but a Remember send is refused**, as it always was:
+  /* **A stance anywhere but a Learn send is refused**, as it always was:
      the legacy acceptance above covers the one request old tabs sent it on and
      nothing wider. GPT Sol's review, finding 7. */
-  if (stance !== undefined && !askingRemember) {
-    throw httpError(400, "A stance only applies in Remember mode");
+  if (stance !== undefined && !askingLearn) {
+    throw httpError(400, "A stance only applies in Learn mode");
   }
   /* **An anchor belongs to a turn that creates a thread, and to no other.**
      `withRetry` and `withEdit` do not go through `withTurn` at all, so an
@@ -3000,7 +3158,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, "An anchor can only be sent with a new question");
   }
   /* **Only a chat may be anchored**, and the rule is stated that way round on
-     purpose. A Remember turn is about the whole piece and a Candidates turn is
+     purpose. A Learn turn is about the whole piece and a Candidates turn is
      about the whole paper; neither has a gesture that starts one from a
      selection, because the paragraph and selection buttons both open a chat. So
      an anchor arriving with either kind is a client that has confused them.
@@ -3014,6 +3172,20 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     throw httpError(400, `A ${wantedKind} conversation is about the whole article and cannot be anchored`);
   }
   const wanted = parseAnchor(anchor);
+  /* **Where the conversation was started from** (`ThreadOrigin`): the anchor's
+     rules, one for one. It belongs to the turn that creates a thread, so a
+     retry or an edit may not carry one; only a chat has one; and the shape is
+     checked here, before a turn is written. That the block is this
+     article's is checked after `loadArticle`, and that an existing thread has
+     the same origin is checked under `inTurnOrder` and again by `withTurn`.
+     docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md, D1. */
+  if (origin !== undefined && (wantsRetry || wantsEdit)) {
+    throw httpError(400, "An origin can only be sent with a new question");
+  }
+  if (origin !== undefined && (storedKind ?? wantedKind ?? "chat") !== "chat") {
+    throw httpError(400, "Only a chat can be started from an item in another mode");
+  }
+  const wantedOrigin = parseOrigin(origin);
   /* **`help: true` has a meaning, and the meaning is checked, not just the
      shape.**
 
@@ -3021,7 +3193,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      wire; this is the contract, and it is one sentence — `ChatMessage.help` in
      src/types.ts: *the paragraph "?" button created this thread*. Without these
      three checks the flag was accepted on a later turn of an existing
-     conversation, on an unanchored one, on a selection chat, and on a Remember
+     conversation, on an unanchored one, on a selection chat, and on a Learn
      or Candidates thread. Every one of those stores a press nobody made **and**
      answers the request with the teaching prompt, so the row and the answer are
      both wrong and agree with each other.
@@ -3033,9 +3205,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      All three are checked here, before `loadArticle` and before anything is
      written, so a bad body is an ordinary JSON 400 rather than an `error` frame
      inside a 200 stream — and the first of them is stated a second time under
-     `inTurnOrder`, where the read is safe from a thread appearing between the
-     look and the write. `help === true` is the only truthy value that can reach
-     here.
+     `inTurnOrder`, and decided by `withTurn` in the store's transaction, which
+     is the only one of the three a thread cannot appear in front of.
+     `help === true` is the only truthy value that can reach here.
 
      The real client sends exactly what these allow: `helpAboutBlock` in
      src/web/reader/Reader.tsx mints a draft with `{ blockId }`, no kind, and `help: true`
@@ -3049,13 +3221,13 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
        `storedKind` is defined for exactly the threads that exist, and it was
        loaded a few dozen lines up for the character cap, so this costs nothing.
 
-       **Checked again under `inTurnOrder` below**, and that is not belt and
+       **Checked again under `inTurnOrder` below, and a third time by
+       `withTurn` inside the store's transaction**, and that is not belt and
        braces: this read is outside the lock, so a thread can be created between
-       it and the write. Here for the sentence and the fast refusal; there for
-       the guarantee — the division `withTurn`'s own kind check already
-       describes. */
+       it and the write, and the lock is this process's alone. Here for the
+       sentence and the fast refusal; `withTurn` for the guarantee. */
     if (storedKind !== undefined) {
-      throw httpError(400, 'A "?" press starts a conversation; a later question in one is not one');
+      throw httpError(400, HELP_NOT_FIRST);
     }
     /* Absent means chat — the default `withTurn` applies to a thread it is
        creating — so the effective kind is what is checked, not the field. And
@@ -3083,6 +3255,19 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      those. This is where the rest is caught — and it is done after
      `loadArticle` because it needs the blocks. */
   if (wanted) await checkAnchor(wanted, article.blocks);
+  /* A claim's block is one of this article's. The foreign key would say so
+     too, as a 500 out of a transaction. The quote is not compared with the
+     block: it is a snapshot of the item's words, kept for the list to show.
+     **Only a claim names a block.** A lens has none, and a glossary entry or
+     a cited work is an id this server never dereferences (plan 261006d, D3):
+     a made-up one gives its owner a chat with no mark, and nothing else. */
+  if (
+    wantedOrigin &&
+    isClaimOrigin(wantedOrigin) &&
+    !article.blocks.some((b) => b.id === wantedOrigin.blockId)
+  ) {
+    throw httpError(400, "origin.blockId is not a block of this article");
+  }
 
   /* Deciding and writing the turn happen together, under the conversation's
      turn order — see `inTurnOrder`. Everything after it is one answer streaming
@@ -3098,15 +3283,26 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          pressed nothing and was told they had stopped it, and no replacement
          came. Found by a GPT-5.6 review, 2026-08-26.
 
-         The check is the real rule rather than a copy of it: `withRetry` and
-         `withEdit` are pure, so they can be run against a snapshot and thrown
-         away. Whatever they would refuse, they refuse here, for free, before
-         the destructive part. The authoritative run is still the one inside
-         `chatStore.retry` / `chatStore.edit` below, which re-reads under the
-         store's own lock — this is a gate, not a substitute. */
+         The check is the real rule rather than a copy of it: `withRetry`,
+         `requireTail` and `withEdit` are pure, so they can be run against a
+         snapshot and thrown away. What the store would refuse of this
+         snapshot is refused here, for free, before the destructive part. The
+         authoritative run is still the one inside `chatStore.retry` /
+         `chatStore.edit` below, which re-reads under the store's own lock —
+         this is a gate, not a substitute, and it sees only this process.
+
+         **The edit's tail is part of that, and until 2026-10-07 it was not.**
+         `withEdit` never looks at the tail; `pgChatStore.edit` runs
+         `requireTail` before it. So a stale edit passed this gate, stopped the
+         other tab's answer (stored `done`, `stopped`, empty), and was then
+         refused: the bug in the first paragraph, by its other door. Seventh
+         sweep, SV1; tests/chat-route.test.ts. */
       const snapshot = await chatStore.load(slug);
       if (wantsRetry) withRetry(snapshot, threadId, retry as string, "");
-      else withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+      else {
+        if (typeof expectedTailId === "string") requireTail(snapshot, threadId, expectedTailId);
+        withEdit(snapshot, threadId, edit as string, (question as string).trim(), "");
+      }
 
       /* Both of these rewrite rows that a live answer in this thread may be
          halfway through writing, so the live one is stopped and *waited for*
@@ -3115,71 +3311,75 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          src/chat.ts. */
       await settleThread(slug, threadId);
     }
-    /* **A thread is anchored once.** Reached only for an ordinary send, and
-       only when one was offered — `withTurn` applies an anchor solely on the
-       branch that builds a new thread, so without this the second question of
-       an anchored conversation could carry a different passage and be accepted
-       in silence. What the reader would then have is a conversation the
-       database says is about passage A holding a question about passage B, with
-       nothing anywhere disagreeing.
+    /* **Four rules about a send that meets a thread which already exists**,
+       read off one look at it. Each is reached only for an ordinary send (a
+       retry or an edit was refused the field far above, before anything was
+       read), and only when the send carries the field, so a plain follow-up
+       reads nothing here.
 
-       Read under `inTurnOrder`, so the thread cannot be created between the
-       look and the write.
+       **These are the sentence and the fast refusal, not the guarantee.** The
+       look is under `inTurnOrder`, which orders this process's requests for
+       one conversation and nothing else. Another server can create the thread
+       after it, so `withTurn` decides all four again from the snapshot
+       `chatStore.begin` reads under the article's row lock, before it mints
+       either message. Kind has been there since Learn mode, origin since
+       2026-10-05, anchor and help since 2026-10-07 (seventh sweep, SV3). The
+       same predicates and the same statuses; the route supplies its early
+       refusal and `withTurn` enforces the invariant in the transaction.
 
-       An identical anchor is allowed through, which is what makes a retried
-       send — the same request arriving twice — harmless rather than a 409 the
-       reader has to understand. */
-    if (wanted) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && !sameAnchor(existing.anchor, wanted)) {
-        throw httpError(409, "That conversation is already about a different passage");
+       One read, where until 2026-10-07 each rule made its own (SVO9): four
+       loads of every conversation of the article for a send carrying all four.
+       Nothing is written between them, and what a single look can miss is
+       exactly what `withTurn` is there for. */
+    const existing =
+      wanted || wantedOrigin || beginKind || help === true
+        ? (await chatStore.load(slug)).find((t) => t.id === threadId)
+        : undefined;
+    if (existing) {
+      /* **A thread is anchored once.** `withTurn` applies an anchor solely on
+         the branch that builds a new thread, so without a refusal the second
+         question of an anchored conversation could carry a different passage
+         and be accepted in silence: a conversation the database says is about
+         passage A holding a question about passage B, with nothing anywhere
+         disagreeing.
+
+         An identical anchor is allowed through, which is what makes a retried
+         send (the same request arriving twice) harmless rather than a 409 the
+         reader has to understand. */
+      if (wanted && !sameAnchor(existing.anchor, wanted)) {
+        throw httpError(409, ANCHORED_ELSEWHERE);
       }
-    }
-    /* **A thread is one kind for life**, and this is the same shape as the
-       anchor check above it: read under `inTurnOrder` so the thread cannot be
-       created between the look and the write, and an *identical* kind passes so
-       that a retried send is harmless rather than a 409 nobody can act on.
+      /* **A thread's origin is set once**: the anchor's rule. A thread that
+         was started from somewhere else, or from nowhere, is refused; the
+         identical origin resent is let through. */
+      if (wantedOrigin && !(existing.origin && sameOrigin(existing.origin, wantedOrigin))) {
+        throw httpError(409, "That conversation was not started from that item");
+      }
+      /* **A thread is one kind for life**, and an *identical* kind passes for
+         the reason an identical anchor does.
 
-       Reached only on an ordinary send — a retry or an edit was refused a
-       `kind` far above, before anything was read. That ordering is the point:
-       both of those call `settleThread`, which stops a live answer in this
-       thread, and a request rejected *after* that has aborted the answer
-       another tab's reader was watching and told them they stopped it. That
-       exact bug has been fixed here once already (docs/plans/260826a-chat-mode.md).
-
-       `withTurn` refuses it again inside the store's transaction, because
-       `inTurnOrder` is per-process and this one is not. Here for the status
-       code and the sentence; there for the guarantee. */
-    if (beginKind) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing && existing.kind !== beginKind) {
+         That a retry or an edit never gets here is the point of refusing
+         their `kind` so early: both call `settleThread`, which stops a live
+         answer in this thread, and a request rejected *after* that has
+         aborted the answer another tab's reader was watching and told them
+         they stopped it (docs/plans/260826a-chat-mode.md; and again for a
+         stale tail, above). */
+      if (beginKind && existing.kind !== beginKind) {
         throw httpError(409, "That conversation is already a different kind");
       }
-    }
-    /* **And a "?" press CREATES a conversation**, read again under the lock.
+      /* **And a "?" press CREATES a conversation.** The same rule refused
+         this request far above, before `loadArticle`, off a load taken outside
+         the turn order; this one sees a thread this process created since.
 
-       The same rule refused this request far above, before `loadArticle`, off a
-       load taken outside `inTurnOrder`. That one is the sentence a reader's
-       client gets and the reason nothing was loaded for a request that was
-       never going to run; this one is the guarantee, and it is here for the
-       reason the two checks above it give — the thread cannot be created
-       between the look and the write. Same division as `kind`, whose store-side
-       twin is inside `withTurn`'s transaction.
+         A later question in an existing conversation is the reader typing. A
+         flag saying otherwise puts a press in the database that nobody made
+         **and** answers an ordinary follow-up with the teaching prompt.
 
-       A later question in an existing conversation is the reader typing. A flag
-       saying otherwise puts a press in the database that nobody made **and**
-       answers an ordinary follow-up with the teaching prompt.
-
-       400 rather than 409, unlike its two neighbours: they describe a request
-       that would have been fine against a different conversation, and this one
-       is a client sending a field it has no business sending at all. */
-    if (help === true) {
-      const existing = (await chatStore.load(slug)).find((t) => t.id === threadId);
-      if (existing) {
-        throw httpError(
-          400,
-          'A "?" press starts a conversation; a later question in one is not one',
-        );
+         400 rather than 409, unlike its neighbours: they describe a request
+         that would have been fine against a different conversation, and this
+         one is a client sending a field it has no business sending at all. */
+      if (help === true) {
+        throw httpError(400, HELP_NOT_FIRST);
       }
     }
     return wantsRetry
@@ -3199,6 +3399,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
             threadId,
             question: (question as string).trim(),
             ...(wanted ? { anchor: wanted } : {}),
+            ...(wantedOrigin ? { origin: wantedOrigin } : {}),
             ...(beginKind ? { kind: beginKind } : {}),
             /* No stance: the legacy wire field was validated and dropped
                above, so neither row receives it. `help`, below, belongs on
@@ -3214,8 +3415,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
      the answer they were watching; it never leaves this process. This one comes
      out of the store and goes back into `finish`, and it is what stops a call
      some *other* process's sweep already declared dead from landing on top of
-     the retry the reader is now watching. `undefined` from the filesystem
-     store, which has no attempts — see `Turn` in src/store/contracts.ts. */
+     the retry the reader is now watching. See `Turn` in
+     src/store/contracts.ts. */
   const storeAttempt = begun.attempt;
   /* **The question that was stored is the question that gets asked** — one rule
      for all three kinds of turn, rather than "the request's text, except on a
@@ -3318,6 +3519,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     frame("begin", {
       threadId: thread.id,
       title: thread.title,
+      /* Stored metadata, not the request's guess: the list can show its
+         source as soon as this acknowledgement arrives. */
+      ...(thread.origin ? { origin: thread.origin } : {}),
       messageId: reply.id,
       /* The *question's* id as well as the answer's, and leaving it out was a
          real bug rather than an omission.
@@ -3354,6 +3558,9 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
       // The tools need to know which article the reader has open; the prompt
       // does not, and does not get it. src/chat-tools.ts § ToolContext.
       slug,
+      /* From the thread the store wrote, like `kind` below: `reader_notes`
+         leaves the conversation it is called from out of the ones it lists. */
+      threadId: thread.id,
       /* Resolved per turn rather than once per thread, so a reader who edits
          their profile mid-conversation gets the next answer written to the new
          one. The opposite of the job path, which freezes it — and the reason
@@ -3364,6 +3571,11 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          conclusion held; the reason had rotted. Found by a GPT Sol review,
          2026-08-26.) */
       profile: wantsProfile ? await resolveProfile(slug) : null,
+      /* **What the reader has marked and discussed, on every Explore turn** —
+         send, retry and edit alike, because all three reach this one call. From
+         the stored thread's kind and id, like `kind` below. `null` for every
+         other kind, and for an Explore turn whose notes could not be read. */
+      notes: await exploreNotes(slug, thread, article.blocks),
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an
@@ -3533,6 +3745,51 @@ async function stopChat(
 }
 
 /**
+ * **The reader pressed Hint under a Recall answer.**
+ * `POST /api/chat/:slug/:threadId/hint-opened`, body `{ messageId, hint }`.
+ *
+ * Records the first press and answers with its time; a second press gets the
+ * same time back. Its own narrow route, not a general message PATCH: the press
+ * is one fact about one answer, and nothing else about a stored answer is the
+ * browser's to change.
+ *
+ * **`hint` is the hint's text as the browser drew it, and it is the fence.** A
+ * retry reuses the answer's row, so a press still on its way could otherwise
+ * mark the replacement answer as opened. `markHintOpened` stamps only when the
+ * stored answer still carries that hint, and makes the check and the write in
+ * one transaction under the article lock. The owner check is the store's, like
+ * every other chat write: the slug resolves only to the signed-in reader's own
+ * article.
+ *
+ * Never logged: the hint's text. It is the model's words about the article.
+ * docs/plans/261004h-recall-questions-link-the-passage-and-carry-a-hint-button.md.
+ */
+async function hintOpened(
+  slug: string,
+  threadId: string,
+  body: unknown,
+): Promise<{ hintOpenedAt: string }> {
+  const { messageId, hint } = objectBody(body);
+  if (typeof messageId !== "string" || typeof hint !== "string" || hint === "") {
+    throw httpError(400, "Expected { messageId, hint }");
+  }
+  const out = await chatStore.markHintOpened(slug, threadId, messageId, hint);
+  if (out.ok) return { hintOpenedAt: out.hintOpenedAt };
+  switch (out.reason) {
+    case "no-such-message":
+      throw httpError(404, "That answer is not in this conversation");
+    case "not-a-recall-answer":
+      throw httpError(400, "Only a Recall answer has a hint");
+    case "hint-changed":
+      throw httpError(409, "That answer has changed since the hint was pressed");
+    default: {
+      const unhandled: never = out.reason;
+      throw new Error(`unhandled hint refusal: ${String(unhandled)}`);
+    }
+  }
+}
+
+/**
  * **Stop the first answer of a conversation, and throw the conversation away.**
  *
  * Greg's call, 2026-08-26: a reader who selects a sentence, sees the answer
@@ -3609,9 +3866,10 @@ async function cancelChat(
 
     /* Abort and **wait**, before the delete rather than after it. A writer still
        running would otherwise `finish` into rows we are about to remove — on
-       Postgres that updates nothing, but the filesystem store would write the
-       whole thread list back from a snapshot taken before the delete, and the
-       conversation would be there again on the next read. */
+       Postgres that updates nothing, but the filesystem store (until
+       2026-09-05) wrote the whole thread list back from a snapshot taken
+       before the delete, and the conversation was there again on the next
+       read. */
     const live = streaming.get(`${slug}/${threadId}/${messageId}`);
     if (live && (typeof attempt !== "string" || attempt === live.attempt)) {
       live.stop.abort(new Error("cancelled by the reader"));
@@ -3681,11 +3939,11 @@ async function spokenChat(
   if (expectedTailId !== null && typeof expectedTailId !== "string") {
     throw httpError(400, "expectedTailId is required, and is null for an empty conversation");
   }
-  /* **Absent, `chat` or `remember`.** The kind the tab began this conversation
+  /* **Absent, `chat` or `learn`.** The kind the tab began this conversation
      as, used only if this exchange is what creates it; a contradiction with a
      stored thread is `withSpokenTurn`'s 409. `SpokenTurn.kind` in src/chat.ts. */
   if (kind !== undefined && !isSpokenKind(kind)) {
-    throw httpError(400, "kind must be chat or remember");
+    throw httpError(400, "kind must be chat or learn");
   }
   /* **Which engine spoke, and so which model the row is marked with.** The
      browser names the engine, never the model: the model id is this server's
@@ -3748,7 +4006,7 @@ async function spokenChat(
  * How long either half of one spoken exchange may be.
  *
  * Its own number rather than `MAX_QUESTION_CHARS`, and for the same reason
- * `MAX_REMEMBER_CHARS` is: 4,000 is a considered cap on a sentence somebody
+ * `MAX_LEARN_CHARS` is: 4,000 is a considered cap on a sentence somebody
  * *typed*, and speech runs three or four times longer than the same thought
  * typed. It applies to the answer as well, which is the model's own speech and
  * bounded by one realtime turn.
@@ -3963,7 +4221,7 @@ async function liveChatToken(
   return {
     ...minted,
     sessionId,
-    seed: liveSeedItems(thread?.messages ?? []),
+    seed: liveSeedItems(thread?.messages ?? [], thread?.kind),
     tailId: thread?.messages.at(-1)?.id ?? null,
   };
 }
@@ -4032,6 +4290,7 @@ async function liveChatSession(
     tree: article.tree,
     profile: useProfile === false ? null : await resolveProfile(slug),
     history: thread?.messages ?? [],
+    kind: thread?.kind,
   });
 
   /* **Journal first.** If this insert throws, OpenAI is never asked and nothing
@@ -4271,6 +4530,12 @@ async function liveClose(sessionId: string, body: unknown): Promise<{ ok: true }
  * fetches a URL this server chooses to fetch either way — a reader can already
  * ask a typed conversation to read one — so the defence is the same one, in the
  * same place. docs/project/security.md.
+ *
+ * **`reader_notes` is refused here twice.** It is not in `LIVE_SERVER_TOOLS`,
+ * which is built from the shared `CHAT_TOOLS` and not from `toolsFor`; and the
+ * context below names no `kind`, so `runTool` would call it an unknown tool
+ * even if the first check went. This endpoint has no thread to leave out of
+ * that tool's list — docs/project/chat-tools.md § The reader's notes.
  */
 async function liveTool(slug: string, body: unknown): Promise<ToolOutcome> {
   const { name, args } = (body ?? {}) as Record<string, unknown>;
@@ -4313,7 +4578,9 @@ interface LiveTicket extends LiveToken {
  * `turns` counts the reader's questions rather than all messages, because that
  * is what "three turns" means to a person looking at a tooltip.
  *
- * `lastLine` is the opening of the most recent **finished** answer. Deliberately
+ * `lastLine` is the opening of the most recent **finished** answer, in plain
+ * words: `answerOpening` takes the markdown and the block references out,
+ * because the line is drawn as text beside a claim or an entry. Deliberately
  * not the pending one: a half-written answer is not a summary of anything, and
  * an empty string in a tooltip reads as a bug. It is omitted rather than
  * blanked when there is nothing to show, so the client's test is `if
@@ -4323,20 +4590,26 @@ interface LiveTicket extends LiveToken {
  * quote is article prose, which docs/project/logging.md forbids; it travels in
  * this response body and nowhere else.
  */
-function summarise(thread: ChatThread): ThreadSummary {
+export function summarise(thread: ChatThread): ThreadSummary {
   const answers = thread.messages.filter((m) => m.role === "assistant" && m.status === "done");
-  const last = answers[answers.length - 1]?.text.trim().split(/\n/)[0]?.trim();
+  const newest = answers[answers.length - 1];
+  /* As the reader saw it: a Learn answer's unopened hint is not its opening. */
+  const last = newest ? answerOpening(answerAsSeen(newest, thread.kind)) : undefined;
   return {
     id: thread.id,
     title: thread.title,
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt,
     ...(thread.anchor ? { anchor: thread.anchor } : {}),
-    /* The reading view draws no marks for Remember — a Remember thread cannot be
+    /* Where it was started from, for the caller mode to find its own
+       conversation by. Like the anchor's quote, it travels in this response
+       body and is never logged. */
+    ...(thread.origin ? { origin: thread.origin } : {}),
+    /* The reading view draws no marks for Learn — a Learn thread cannot be
        anchored — but it still needs this. `?thread=` opens the floating
        `ChatDialog` in every mode but the two conversation modes, and that
        dialog is chat's UI asking with chat's prompt; a pasted
-       `?mode=hierarchy&thread=<a Remember thread>` would continue it as a chat. The
+       `?mode=structure&thread=<a Learn thread>` would continue it as a chat. The
        overlay is gated on this. src/web/reader/Reader.tsx § overlay. */
     kind: thread.kind,
     turns: thread.messages.filter((m) => m.role === "user").length,
@@ -4348,9 +4621,9 @@ function summarise(thread: ChatThread): ThreadSummary {
 const MAX_QUESTION_CHARS = 4000;
 
 /**
- * How long a **Remember** turn may be — its own limit, and not the question's.
+ * How long a **Learn** turn may be — its own limit, and not the question's.
  *
- * A chat question is a sentence somebody typed; a Remember turn is a paragraph or two
+ * A chat question is a sentence somebody typed; a Learn turn is a paragraph or two
  * somebody *said*, and speech runs three or four times longer than the same
  * thought typed. 4,000 characters is a considered cap on the first and an
  * accident applied to the second: a reader who talks for four minutes hits it,
@@ -4362,7 +4635,7 @@ const MAX_QUESTION_CHARS = 4000;
  * Roughly fifteen minutes of continuous speech, because the cost of a long one
  * is tokens rather than risk.
  */
-const MAX_REMEMBER_CHARS = 20_000;
+const MAX_LEARN_CHARS = 20_000;
 
 /**
  * How long a selection may be, in characters.
@@ -4423,20 +4696,97 @@ function parseAnchor(anchor: unknown): ChatAnchor | undefined {
 }
 
 /**
- * Are these the same anchor?
+ * The `origin` field of a chat request, as a `ThreadOrigin` or nothing.
  *
- * A thread with no anchor is **not** the same as one with any anchor: a send
- * offering a passage for an unanchored conversation is still trying to change
- * what that conversation is about, and it is refused. `undefined` on both sides
- * cannot reach here — the caller only asks when it has one.
+ * Shape only; whether a claim's block is the article's is checked by the
+ * caller, which has the article. A glossary or citations `itemId` is never
+ * checked against anything. A mode that is not built is a 400, including the ones
+ * the database's CHECK already lists.
+ *
+ * **No part of the quote reaches a thrown message**, for `parseAnchor`'s
+ * reason: messages are logged, and the quote is article prose.
  */
-function sameAnchor(stored: ChatAnchor | undefined, wanted: ChatAnchor): boolean {
-  if (!stored) return false;
-  if (stored.blockId !== wanted.blockId) return false;
-  const a = "quote" in stored ? stored : null;
-  const b = "quote" in wanted ? wanted : null;
-  if (!a || !b) return a === b; // both block-only, or one of each
-  return a.quote === b.quote && a.start === b.start;
+function parseOrigin(origin: unknown): ThreadOrigin | undefined {
+  if (origin === undefined || origin === null) return undefined;
+  if (typeof origin !== "object") throw httpError(400, "origin must be an object");
+  const { mode, blockId, quote, lens } = origin as Record<string, unknown>;
+  const built = ORIGIN_MODES.find((m) => m === mode);
+  if (built === undefined) {
+    throw httpError(400, `origin.mode must be one of: ${ORIGIN_MODES.join(", ")}`);
+  }
+  switch (built) {
+    case "debate": {
+      /* **Two shapes under one mode, told apart by the `lens` key** (plan
+         261005k, A): a lens, or a claim. A body carrying a lens and any part
+         of a claim is neither, and is refused, not read as whichever half
+         this code looked at first. */
+      if (lens !== undefined) {
+        if (blockId !== undefined || quote !== undefined) {
+          throw httpError(400, "origin is a lens or a claim (blockId and quote), not both");
+        }
+        return { mode: built, lens: parseLens(lens) };
+      }
+      if (typeof blockId !== "string" || !isSpideryarnId(blockId)) {
+        throw httpError(400, "origin.blockId must be a block id");
+      }
+      if (typeof quote !== "string" || quote.trim() === "") {
+        throw httpError(400, "origin.quote must be a non-empty string");
+      }
+      if (quote.length > MAX_ANCHOR_CHARS) {
+        throw httpError(413, `An origin's quote may be at most ${MAX_ANCHOR_CHARS} characters`);
+      }
+      return { mode: built, blockId, quote };
+    }
+    case "glossary":
+    case "citations":
+      return parseItemOrigin(built, origin as Record<string, unknown>);
+    /* A mode added to `ORIGIN_MODES` has to say here what it is made of. */
+    default:
+      return built satisfies never;
+  }
+}
+
+/**
+ * **A glossary entry's or a cited work's origin**: the entry's durable id,
+ * and a snapshot of its name (plan 261006d, D1 and D3).
+ *
+ * **Shape only.** The id is not looked up, so a regenerated or removed entry
+ * never refuses its own chat. The name is at most `MAX_ORIGIN_NAME_CHARS`,
+ * which every sender cuts to (`originName` in src/types.ts), so only a
+ * hand-made body meets the 413. No part of the name reaches a thrown message.
+ */
+function parseItemOrigin(mode: "glossary" | "citations", body: Record<string, unknown>): ThreadOrigin {
+  const { itemId, quote, blockId, lens } = body;
+  if (blockId !== undefined || lens !== undefined) {
+    throw httpError(400, "origin of this mode is an itemId and a quote, with no blockId and no lens");
+  }
+  if (typeof itemId !== "string" || !isSpideryarnId(itemId)) {
+    throw httpError(400, "origin.itemId must be an item id");
+  }
+  if (typeof quote !== "string" || quote.trim() === "") {
+    throw httpError(400, "origin.quote must be a non-empty string");
+  }
+  if (quote.length > MAX_ORIGIN_NAME_CHARS) {
+    throw httpError(413, `An origin's name may be at most ${MAX_ORIGIN_NAME_CHARS} characters`);
+  }
+  return { mode, itemId, quote };
+}
+
+/**
+ * A lens origin's words, as they are stored: the reader's own, **trimmed**,
+ * and never empty. One over the cap is **refused, not cut**, since a cut lens
+ * is a different question from the one the reader asked. None of it reaches a
+ * thrown message: messages are logged, and these are the reader's words.
+ */
+function parseLens(lens: unknown): string {
+  if (typeof lens !== "string" || lens.trim() === "") {
+    throw httpError(400, "origin.lens must be a non-empty string");
+  }
+  const words = lens.trim();
+  if (words.length > MAX_LENS_CHARS) {
+    throw httpError(413, `An origin's lens may be at most ${MAX_LENS_CHARS} characters`);
+  }
+  return words;
 }
 
 /**
@@ -4498,13 +4848,15 @@ async function checkAnchor(anchor: ChatAnchor, blocks: Block[]): Promise<void> {
  * running process can tell a search in flight from one that died with the
  * process that was writing it.
  */
-/* **A map to the attempt holding the key, not a set** (plan 261002h, Sol F7).
-   A revision re-asks the same run id while the superseded attempt may still be
+/* **A count per key, not a set and not one holder** (src/live-keys.ts). A
+   revision re-asks the same run id while the superseded attempt may still be
    unwinding, so two requests can hold one key at once. With a set, the old
    attempt's `finally` deleted the key out from under the newer one, and a sweep
-   could then bury a run this process is still answering. Each request releases
-   the key only if it is still the holder. */
-const searching = new Map<string, symbol>();
+   could then bury a run this process is still answering (plan 261002h, Sol F7).
+   With one holder, an older attempt whose `begin` answered late took the key
+   over and did the same (plan 261005i § C). Each request releases its own
+   hold, and the key is live while any remain. */
+const searching = liveKeys();
 
 /**
  * What this process is searching *in this article*, as bare run ids.
@@ -4529,9 +4881,7 @@ export function liveRuns(slug: string): Set<string> {
  *
  * As with `sweepChat`, the rule is the store's and only the two things a
  * running server knows are here: what this process is writing, and how long
- * another process's row may stay silent. The filesystem store ignores the
- * grace window — it has no other processes to be wrong about, and giving it
- * one would be an improvement smuggled in under a migration.
+ * another process's row may stay silent.
  */
 function sweepSearches(slug: string): Promise<SearchRun[]> {
   return searchStore.sweepPending(slug, {
@@ -4582,9 +4932,19 @@ function sweepSearches(slug: string): Promise<SearchRun[]> {
  */
 /**
  * **A 409 for a paper not yet read through, before a route writes anything** —
- * for the two streamed routes that record a row before they read the article
- * (`search`, `runRefereeCriterion`). Every other caller of `loadArticle`
- * reads it first and gets `NotProcessed` from there. One indexed read.
+ * for the two streamed routes that used to record a row before they read the
+ * article (`search`, `runRefereeCriterion`). Since plan 261005i § D they read
+ * it first, and `loadArticle` would refuse the same paper; this stays ahead of
+ * it because that refusal also carries the paper (`NotProcessed.paper`), which
+ * is a different 409 body from the one these two have always sent. Every other
+ * caller of `loadArticle` gets `NotProcessed` from there. One indexed read.
+ *
+ * **And it covers a state `loadArticle` does not.** A minimal ingest creates
+ * the article row before `metadata` publishes its first revision. In between,
+ * `loadArticle`'s revision join finds nothing and answers 404; this reads the
+ * `articles` row alone and answers 409. Deleted on 2026-10-07 as a duplicate
+ * and put back the same day for that reason: plan 261007d § 4,
+ * tests/minimal-paper.test.ts § "refuses an unpublished minimal paper".
  */
 async function refuseAPaperNotReadYet(slug: string): Promise<void> {
   if ((await processingOf(slug, currentOwnerId()))?.processing === "minimal") {
@@ -4622,27 +4982,29 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
 
   /* Before `begin`, which writes the run and opens the stream: a paper not yet
      read through is refused as an answer, not stored as a failed search and
-     reported as a fault. `loadArticle` below would refuse it too, inside the
-     stream. Plan 261001m. */
+     reported as a fault. Plan 261001m. */
   await refuseAPaperNotReadYet(slug);
+  /* Read before the row is written, and the same `article` goes to the model:
+     the run is stamped with the hash of the blocks it is answered over, not of
+     whatever is current when `begin` runs (plan 261005i § D, as
+     `runRefereeClaims`). A failed read is an HTTP error with no row. */
+  const article = await loadArticle(slug);
   const { run, attempt } = await searchStore.begin(
     slug,
+    hashBlocks(article.blocks),
     criterion.trim(),
     kind,
     typeof id === "string" ? id : undefined,
     undefined,
     { revises },
   );
-  const key = `${slug}/${run.id}`;
-  const holder = Symbol(run.id);
-  searching.set(key, holder);
+  const release = searching.hold(`${slug}/${run.id}`);
   try {
     const { frame, gone } = sse(res);
     frame("begin", run);
 
-    let patch: Partial<SearchRun>;
+    let patch: SearchFinish;
     try {
-      const article = await loadArticle(slug);
       let hits: SearchHit[] = [];
       let model = "";
       /* **The stored run's kind, not the request's.** They agree today —
@@ -4694,7 +5056,7 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
          its id across a retry — that is what makes it the same question — so
          identity alone cannot say which model call is reporting, and a call a
          sweep already buried would otherwise land on top of the retry the reader
-         is watching. `undefined` on the filesystem, which has no attempts. */
+         is watching. */
       const stored = await searchStore.finish(slug, run.id, patch, attempt);
       /* `undefined` now means one of two things and both are silence. The reader
          deleted this run while the model was thinking — see the docstring above,
@@ -4715,9 +5077,9 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
     /* Held from the moment the pending row exists until the answer is stored.
        Releasing it straight after the model call let a GET sweep the row before
        `finish`; registering it outside this finally let a failed SSE setup pin
-       it for the life of the process. Only by the holder: a revision may have
-       taken the key since (see `searching`). */
-    if (searching.get(key) === holder) searching.delete(key);
+       it for the life of the process. Only this request's own hold: a revision
+       may hold the same key (see `searching`). */
+    release();
   }
 }
 
@@ -4743,14 +5105,19 @@ async function search(slug: string, body: unknown, res: ServerResponse): Promise
  * The same job `searching` does above, for the same reason: `pending` in the
  * store does not mean "an answer is coming", because it is written *before* the
  * model call precisely so a crash leaves evidence.
+ *
+ * A count per key, as `searching` is and for its reason. A retry needs an
+ * `error` row, but deleting a pending criterion and posting its id again can
+ * overlap two requests in this process. The deleted run's answer cannot be
+ * stored, and it must not release the replacement's marker.
  */
-const refereeing = new Set<string>();
+const refereeing = liveKeys();
 
 /** What this process is running *in this article*, as bare ids — `liveRuns`. */
 function liveCriteria(slug: string): Set<string> {
   const prefix = `${slug}/`;
   const ids = new Set<string>();
-  for (const key of refereeing) {
+  for (const key of refereeing.keys()) {
     if (key.startsWith(prefix)) ids.add(key.slice(prefix.length));
   }
   return ids;
@@ -4902,7 +5269,7 @@ function requireScale(value: unknown): DivergingScale {
  *
  *   **With one exception, and it is an exception because the panel was lying
  *   without it.** An answer in which *every* row was thrown away is raised as a
- *   failure by `runCriterionStream` (`ANSWER_UNUSABLE`), so it arrives here as
+ *   failure by `runCriterionStream` (`ANSWER_UNUSABLE`, src/messages.ts), so it arrives here as
  *   an ordinary error and is stored as one. Without that, a `diverging` answer
  *   that anchored a passage and forgot its valence was stored `done` with no
  *   results, and the panel printed "the model did not find a passage for this"
@@ -4918,60 +5285,69 @@ async function runRefereeCriterion(
 ): Promise<void> {
   const { id, criterion, config } = readCriterionRequest(body);
 
-  /* Before `begin`, for `search`'s reason. */
+  /* Before `begin`, for `search`'s reason — and the article is read before it
+     too, so the row carries the hash of the blocks the model is sent. */
   await refuseAPaperNotReadYet(slug);
-  const { row, attempt } = await refereeCriteriaStore.begin(slug, criterion, config, id);
-  const key = `${slug}/${row.id}`;
-  refereeing.add(key);
-
-  const { frame } = sse(res);
-  frame("begin", row);
-
-  let patch: Partial<SavedCriterion>;
+  const article = await loadArticle(slug);
+  const { row, attempt } = await refereeCriteriaStore.begin(
+    slug,
+    hashBlocks(article.blocks),
+    criterion,
+    config,
+    id,
+  );
+  const release = refereeing.hold(`${slug}/${row.id}`);
   try {
-    const article = await loadArticle(slug);
-    let results: RefereeResult[] = [];
-    let model = "";
-    for await (const event of runCriterionStream({
-      power: powerOf(article),
-      meta: article.meta,
-      blocks: article.blocks,
-      criterion: row.criterion,
-      config: row.config,
-    })) {
-      if (event.type === "result") {
-        frame("result", { result: event.result });
-        continue;
+    const { frame } = sse(res);
+    frame("begin", row);
+
+    let patch: CriterionFinish;
+    try {
+      let results: RefereeResult[] = [];
+      let model = "";
+      for await (const event of runCriterionStream({
+        power: powerOf(article),
+        meta: article.meta,
+        blocks: article.blocks,
+        criterion: row.criterion,
+        config: row.config,
+      })) {
+        if (event.type === "result") {
+          frame("result", { result: event.result });
+          continue;
+        }
+        results = event.outcome.results;
+        model = event.outcome.model;
       }
-      results = event.outcome.results;
-      model = event.outcome.model;
+      patch = { status: "done", results, model };
+    } catch (err) {
+      captureFailure(err, { route: "referee-criteria", slug, id: row.id });
+      patch = { status: "error", error: sayToReader(err, { route: "referee-criteria", slug }) };
     }
-    patch = { status: "done", results, model };
-  } catch (err) {
-    captureFailure(err, { route: "referee-criteria", slug, id: row.id });
-    patch = { status: "error", error: sayToReader(err, { route: "referee-criteria", slug }) };
-  } finally {
-    refereeing.delete(key);
-  }
 
-  try {
-    /* The attempt goes back with the answer, and the Postgres store refuses a
-       `finish` without one rather than falling back to identity. A criterion
-       keeps its id across a retry — that is what makes it the same question —
-       so identity alone cannot say which model call is reporting. */
-    const stored = await refereeCriteriaStore.finish(slug, row.id, patch, attempt);
-    /* `undefined` means one of two things and both are silence: the referee
-       deleted this criterion while the model was thinking, or this attempt is
-       no longer the live one and a newer answer is on its way. */
-    if (stored) frame("done", stored);
-  } catch (storeErr) {
-    log("store").error(
-      { ...errorFields(storeErr), slug, id: row.id },
-      `could not record a referee criterion for ${slug}`,
-    );
-    captureFailure(storeErr, { route: "referee-criteria", slug, phase: "record-result" });
+    try {
+      /* The attempt goes back with the answer, and the Postgres store refuses a
+         `finish` without one rather than falling back to identity. A criterion
+         keeps its id across a retry — that is what makes it the same question —
+         so identity alone cannot say which model call is reporting. */
+      const stored = await refereeCriteriaStore.finish(slug, row.id, patch, attempt);
+      /* `undefined` means one of two things and both are silence: the referee
+         deleted this criterion while the model was thinking, or this attempt is
+         no longer the live one and a newer answer is on its way. */
+      if (stored) frame("done", stored);
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug, id: row.id },
+        `could not record a referee criterion for ${slug}`,
+      );
+      captureFailure(storeErr, { route: "referee-criteria", slug, phase: "record-result" });
+    } finally {
+      res.end();
+    }
   } finally {
-    res.end();
+    /* Held from the pending row to the stored answer, and only this request's
+       own hold is released — `search`'s `finally` above says why, for both. */
+    release();
   }
 }
 
@@ -4994,8 +5370,14 @@ async function runRefereeCriterion(
  * `pending` in the store does not mean "an answer is coming", because it is
  * written *before* the model call precisely so a crash leaves evidence. A slug
  * rather than a `slug/id` because there is only ever one run per article.
+ *
+ * **A count per slug, not a set and not one holder.** One run per article is
+ * what the *store* keeps; two tabs can each have a request in flight, and both
+ * hold this one key. With a set the first to finish deleted it, and a sweep
+ * could then bury the newer run while this process was still answering it;
+ * with one holder, so did an older run whose `begin` answered late.
  */
-const pullingClaims = new Set<string>();
+const pullingClaims = liveKeys();
 
 /**
  * The run a request should ask for, and a 400 saying why not.
@@ -5056,7 +5438,7 @@ function claimsProblem(blocks: Block[]): string | null {
  * The `dropped` counts come back on the outcome and are **not** sent to the
  * client, exactly as Criteria's are not — with the same exception, for the same
  * reason. An answer in which every claim was thrown away is raised as a failure
- * by `runClaimsStream` (`CLAIMS_UNUSABLE`) and stored as one, because otherwise
+ * by `runClaimsStream` (the same `ANSWER_UNUSABLE`) and stored as one, because otherwise
  * the panel would print "the model did not find" about an answer that found
  * things and could not place them. The per-claim half of that lives on the row
  * as `Claim.discarded` and *is* sent, because the sentence under an empty claim
@@ -5073,73 +5455,76 @@ async function runRefereeClaims(slug: string, res: ServerResponse): Promise<void
      store that read the revision itself could stamp a newer one than the model
      was shown, if the article was re-extracted since the line above. */
   const { run: row, attempt } = await refereeClaimsStore.begin(slug, hashBlocks(article.blocks));
-  pullingClaims.add(slug);
-
-  const { frame } = sse(res);
-  frame("begin", row);
-
-  let patch: ClaimsFinish;
+  const release = pullingClaims.hold(slug);
   try {
-    let claims: Claim[] = [];
-    let model = "";
-    /* The one `dropped` count that **is** stored, and the exception is narrow on
-       purpose. The others describe answers we threw away, which is our business
-       and the log's. This one describes claims the paper made that the referee
-       will never see, cut from the end of the document because the cap is
-       positional — so without it the list looks complete and position has
-       quietly become the ranking this sub-mode is built to have none of.
-       GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
-    let claimsOmitted = 0;
-    for await (const event of runClaimsStream({
-      meta: article.meta,
-      blocks: article.blocks,
-      power: powerOf(article),
-    })) {
-      if (event.type === "claim") {
-        frame("claim", { claim: event.claim });
-        continue;
-      }
-      claims = event.outcome.claims;
-      model = event.outcome.model;
-      claimsOmitted = event.outcome.dropped.truncated;
-    }
-    patch = { status: "done", claims, model, claimsOmitted };
-  } catch (err) {
-    captureFailure(err, { route: "referee-claims", slug });
-    patch = { status: "error", error: sayToReader(err, { route: "referee-claims", slug }), claims: [] };
-  } finally {
-    pullingClaims.delete(slug);
-  }
+    const { frame } = sse(res);
+    frame("begin", row);
 
-  try {
-    const stored = await refereeClaimsStore.finish(slug, patch, attempt);
-    /* `null` means the run is not this call's to finish any more, and what the
-       reader is told depends on what is there instead. Nothing: the article's
-       data went away, and silence is right. A finished row about the same
-       blocks: a newer run (or the sweep) got there first, so `done` carries it.
-       Different blocks: this tab still displays the original article, so the
-       newer answer's citations need a reload to resolve against its prose.
-       A `pending` row: a newer run is still out, this tab cannot
-       follow its stream, and saying so beats a stream that just stops — the
-       panel would call that a dropped connection. Never a resurrection, never
-       an overwrite. */
-    if (stored) frame("done", stored);
-    else {
-      const current = await refereeClaimsStore.load(slug);
-      if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
-        frame("done", current);
-      } else if (current) {
-        frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+    let patch: ClaimsFinish;
+    try {
+      let claims: Claim[] = [];
+      let model = "";
+      /* The one `dropped` count that **is** stored, and the exception is narrow on
+         purpose. The others describe answers we threw away, which is our business
+         and the log's. This one describes claims the paper made that the referee
+         will never see, cut from the end of the document because the cap is
+         positional — so without it the list looks complete and position has
+         quietly become the ranking this sub-mode is built to have none of.
+         GPT Sol's finding 5, 2026-09-01; tests/referee-claims-omitted.test.ts. */
+      let claimsOmitted = 0;
+      for await (const event of runClaimsStream({
+        meta: article.meta,
+        blocks: article.blocks,
+        power: powerOf(article),
+      })) {
+        if (event.type === "claim") {
+          frame("claim", { claim: event.claim });
+          continue;
+        }
+        claims = event.outcome.claims;
+        model = event.outcome.model;
+        claimsOmitted = event.outcome.dropped.truncated;
       }
+      patch = { status: "done", claims, model, claimsOmitted };
+    } catch (err) {
+      captureFailure(err, { route: "referee-claims", slug });
+      patch = { status: "error", error: sayToReader(err, { route: "referee-claims", slug }), claims: [] };
     }
-  } catch (storeErr) {
-    log("store").error(
-      { ...errorFields(storeErr), slug },
-      `could not record a claims run for ${slug}`,
-    );
-    captureFailure(storeErr, { route: "referee-claims", phase: "record-result", slug });
+
+    try {
+      const stored = await refereeClaimsStore.finish(slug, patch, attempt);
+      /* `null` means the run is not this call's to finish any more, and what the
+         reader is told depends on what is there instead. Nothing: the article's
+         data went away, and silence is right. A finished row about the same
+         blocks: a newer run (or the sweep) got there first, so `done` carries it.
+         Different blocks: this tab still displays the original article, so the
+         newer answer's citations need a reload to resolve against its prose.
+         A `pending` row: a newer run is still out, this tab cannot
+         follow its stream, and saying so beats a stream that just stops — the
+         panel would call that a dropped connection. Never a resurrection, never
+         an overwrite. */
+      if (stored) frame("done", stored);
+      else {
+        const current = await refereeClaimsStore.load(slug);
+        if (current && current.status !== "pending" && current.sourceHash === row.sourceHash) {
+          frame("done", current);
+        } else if (current) {
+          frame("done", { ...current, status: "error", claims: [], error: CLAIMS_SUPERSEDED });
+        }
+      }
+    } catch (storeErr) {
+      log("store").error(
+        { ...errorFields(storeErr), slug },
+        `could not record a claims run for ${slug}`,
+      );
+      captureFailure(storeErr, { route: "referee-claims", phase: "record-result", slug });
+    } finally {
+      res.end();
+    }
   } finally {
-    res.end();
+    /* Held from the pending row to the stored answer, and only this request's
+       own hold is released — `search`'s `finally` above says why, for both. */
+    release();
   }
 }
 
@@ -5213,7 +5598,14 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
     text: c.criterion,
   }));
 
-  const { frame } = sse(res);
+  /* **`gone` goes to the model call**, since 2026-10-05. Nothing above is
+     stored, so an answer that finishes after the referee has left has nowhere
+     to go: letting it run was a paid call nobody could ever read. Greg's
+     decision on the one stream of the ten that was pure waste —
+     docs/plans/261005i-mirror-stops-its-model-call-when-the-referee-leaves.md.
+     The gateway records the stopped call as `aborted`, and `mirrorStream` says
+     `READER_LEFT` rather than blaming the model for half an object. */
+  const { frame, gone } = sse(res);
   let chars = 0;
   try {
     for await (const event of mirrorStream({
@@ -5222,6 +5614,7 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
       criteria,
       slug,
       power: powerOf(article),
+      signal: gone,
     })) {
       if (event.type === "delta") {
         chars += event.text.length;
@@ -5234,8 +5627,12 @@ async function runMirror(slug: string, res: ServerResponse): Promise<void> {
   } catch (err) {
     /* **Reported here or nowhere.** Once `sse(res)` has sent the headers this
        function owns the response and the outer catch never sees the error —
-       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. */
-    captureFailure(err, { route: "referee-mirror", slug });
+       the same reasoning as `answer`, `markOneAnswer` and `streamChat`. A
+       referee who left is not a failure worth an issue, and `frame` below is a
+       no-op on their closed socket. **Asked of the error, not of `gone`:** a
+       provider that fails on its own just before the referee goes reaches here
+       with the signal aborted too, and that one is still a failure. */
+    if (!isRefereeLeft(err)) captureFailure(err, { route: "referee-mirror", slug });
     /* No partial text travels with it, unlike the quiz's. Half of a JSON
        object is not half of an answer: nothing in it has been checked, and a
        remark whose pointers have not been verified is exactly the
@@ -5315,10 +5712,14 @@ function part(m: RegExpExecArray, group: number): string {
  *
  * 400 rather than 404: the request is malformed, and saying "not found" would
  * send whoever sent it looking for a missing article.
+ *
+ * **Fixed words, without the value.** The message goes to the request log
+ * (§ `logRequest`: "nothing but words we chose"), and the value is already in
+ * the path the caller sent.
  */
 function slugPart(m: RegExpExecArray, group: number): string {
   const value = part(m, group);
-  if (!isSlug(value)) throw httpError(400, `Not a slug: ${JSON.stringify(value)}`);
+  if (!isSlug(value)) throw httpError(400, "Not a slug");
   return value;
 }
 
@@ -5407,7 +5808,7 @@ async function searchTheLibrary(params: URLSearchParams): Promise<LibrarySearchR
 async function patchShelf(
   slug: string,
   body: unknown,
-): Promise<{ entry: LibraryEntry; purpose: string | null }> {
+): Promise<{ entry: LibraryEntry | null; purpose: string | null }> {
   /* A JSON body that is not an object at all — `"hello"`, `42`, `null` — must
      be a 400 rather than a 500. `in` throws on a primitive, so this cannot be
      folded into the checks below. */
@@ -5443,6 +5844,9 @@ async function patchShelf(
     change.archived = archived;
   }
 
+  /* `entry` is `null` for an article still being imported: written, with no
+     card to show for it yet. The add page saves the purpose then, and reads
+     only `purpose` back (src/web/purpose.ts). */
   const entry = await shelfStore.patch(slug, change);
   /* **`purpose` is answered beside the entry, not on it.** `LibraryEntry` is the
      shelf card, and it already refuses to carry the superseded title for the
@@ -5579,6 +5983,29 @@ export function parseHighPowerRequest(body: unknown): { on: boolean } {
   if (Object.keys(rest).length) throw httpError(400, "That request had fields this endpoint does not accept");
   if (typeof on !== "boolean") throw httpError(400, "on must be true or false");
   return { on };
+}
+
+/**
+ * The body of `POST /api/article/:slug/share-link`, or a 400:
+ *
+ *     { "rightsConfirmed": true }
+ *
+ * and nothing else. A private link republishes somebody's text to the people
+ * it is sent to, so making one takes the same confirmation going public does,
+ * read the same way: `=== true`, not truthiness, and an unknown key is refused
+ * rather than ignored. `parseVisibilityRequest` below gives both reasons.
+ *
+ * It returns nothing. There is one acceptable body, so getting past this is
+ * the whole of what the caller needs to know.
+ */
+export function parseShareLinkRequest(body: unknown): void {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw httpError(400, "Expected an object with rightsConfirmed");
+  }
+  const { rightsConfirmed, ...rest } = body as Record<string, unknown>;
+  /* Not interpolated, for `parseVisibilityRequest`'s reason. */
+  if (Object.keys(rest).length) throw httpError(400, "That request had fields this endpoint does not accept");
+  if (rightsConfirmed !== true) throw httpError(400, "A private link needs rightsConfirmed: true");
 }
 
 export function parseVisibilityRequest(body: unknown): {
@@ -6061,62 +6488,18 @@ async function queueAnUpload(uploadId: string, slot: IngestSlot): Promise<Upload
      started inside the two hours and finished outside them, being told their
      file expired while we are holding it. `UploadStore.claim` has the rest. */
   const claim = await claimUpload(uploadId, { owner, arrived: true });
-  if (!claim.ok) {
-    /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
-       answered it moved out to `resolveExistingUpload`, and without this line
-       a vanished record fell through the `taken` branch to "already being
-       turned into an article" — a sentence about a record that is not there.
-       Not reachable through the route, which resolves first; reachable by
-       anything that calls this directly, which is what makes it worth stating. */
-    if (claim.why === "unknown") throw httpError(404, "No such upload");
-    if (claim.why === "expired") throw httpError(410, UPLOAD_MISSING.message);
-    /* `taken`. If the first claim got as far as a job, that job is the answer —
-       this is the same request arriving twice, not a conflict. **Reached only
-       by the genuine race now** — two fresh requests that both saw `pending`
-       before either claimed — because `resolveExistingUpload` answers the
-       common repeat before a slot is ever reserved. */
-    const already = await jobForUpload(uploadId);
-    if (already) return { kind: "job", job: already };
-    /**
-     * **And when the job has gone, the upload record still knows.**
-     *
-     * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
-     * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
-     * quiz are three more rows on one article — so fifty is a fortnight of
-     * ordinary use rather than a year of it. After that the upload is still
-     * `claimed`, the article is still on the shelf, and this answered *"That
-     * upload is already being turned into an article"* about an article the
-     * reader had finished reading. GPT Sol, reviewing the built stage 1,
-     * finding 5.
-     *
-     * **Answered from the record rather than by keeping the job alive**, and
-     * that is the choice worth writing down. Sparing an upload's job from
-     * retention only covers the ingests that never completed: a *successful*
-     * import's job is trimmed like any other success, and that is the case a
-     * reader actually comes back to. What is durable here is the **article**,
-     * and the upload record has named it since the moment `enqueue` returned —
-     * upload records are never trimmed by count, so the record outlives the job
-     * by design. (This used to add "swept on their grant", which was simply
-     * false: `sweepable` in src/source.ts has no production caller and nothing
-     * deletes an upload record or its staging object. Nothing here depends on
-     * the sweep; the claim was wrong rather than load-bearing.)
-     *
-     * Re-read rather than reusing `record` above: `noteSlug` lands after
-     * `enqueue` returns, so a second request arriving in that window would
-     * otherwise read a record from before the slug was written.
-     */
-    const fresh = await readUpload(uploadId, owner);
-    if (fresh?.slug) return { kind: "article", slug: fresh.slug };
-    /* A claim with nothing at all to show for it: `enqueue` threw between the
-       claim and `noteSlug`. The reader chooses the file again, which is cheap
-       and correct. */
-    throw httpError(409, "That upload is already being turned into an article.");
-  }
+  /* Another request claimed it first, or it is not there to claim. The five
+     answers, and why each is what it is, are `answerALostClaim`'s. */
+  if (!claim.ok) return await answerALostClaim(uploadId, claim.why);
 
   const candidate = slugFromFilename(claim.record.filename) || "document";
   const job = await enqueue({
     slug: candidate,
     upload: { id: uploadId, filename: claim.record.filename },
+    /* Open on a stand-in outline; a second job builds the structure. The other
+       sender is `POST /api/jobs` with a URL, which has the note.
+       docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
+    openEarly: true,
     /* The quota slot, spread onto the request so it rides the job's own INSERT.
        Empty when nothing was reserved — src/billing/admission.ts. Every earlier
        exit from this function leaves without a job, and none of them has to do
@@ -6192,18 +6575,61 @@ async function queueAMinimalUpload(uploadId: string): Promise<UploadOutcome> {
 }
 
 /**
- * **A claim that lost, answered** — `queueAnUpload`'s `taken` branch, which
- * the minimal path shares: the job the winner made, else the article its record
- * names, else the 409 nothing can do better than. `unknown` and `expired` are
- * the same 404 and 410 as there.
+ * **A claim that lost, answered** — for both ways of queueing an upload, the
+ * full import (`queueAnUpload`) and the minimal one (`queueAMinimalUpload`):
+ * 404 for no record, 410 for an expired grant, else the job the winner made,
+ * else the article its record names, else the 409 nothing can do better than.
+ * `queueAnUpload` spelled these out for itself until 2026-10-07;
+ * tests/uploads-api.test.ts § "a claim that lost the race" pins each.
  */
 async function answerALostClaim(uploadId: string, why: ClaimFailure): Promise<UploadOutcome> {
+  /* **`unknown` is a 404, and it used to be a 409.** The `readUpload` that
+     answered it moved out to `resolveExistingUpload`, and without this line
+     a vanished record fell through the `taken` branch to "already being
+     turned into an article" — a sentence about a record that is not there.
+     Reachable through the route if the record disappears between the
+     initial look and the claim. */
   if (why === "unknown") throw httpError(404, "No such upload");
   if (why === "expired") throw httpError(410, UPLOAD_MISSING.message);
+  /* `taken`. If the first claim got as far as a job, that job is the answer —
+     this is the same request arriving twice, not a conflict. **Reached only
+     by the genuine race now** — two fresh requests that both saw `pending`
+     before either claimed — because `resolveExistingUpload` answers the
+     common repeat before a slot is ever reserved. */
   const already = await jobForUpload(uploadId);
   if (already) return { kind: "job", job: already };
+  /**
+   * **And when the job has gone, the upload record still knows.**
+   *
+   * Finished jobs are trimmed to fifty per reader (`KEEP_FINISHED`,
+   * src/jobs.ts), and modes are jobs now — a glossary, a set of ideas and a
+   * quiz are three more rows on one article — so fifty is a fortnight of
+   * ordinary use rather than a year of it. After that the upload is still
+   * `claimed`, the article is still on the shelf, and this answered *"That
+   * upload is already being turned into an article"* about an article the
+   * reader had finished reading. GPT Sol, reviewing the built stage 1,
+   * finding 5.
+   *
+   * **Answered from the record rather than by keeping the job alive**, and
+   * that is the choice worth writing down. Sparing an upload's job from
+   * retention only covers the ingests that never completed: a *successful*
+   * import's job is trimmed like any other success, and that is the case a
+   * reader actually comes back to. What is durable here is the **article**,
+   * and `noteSlug` names it on the upload record just after `enqueue` returns —
+   * upload records are never trimmed by count, so the record outlives the job
+   * by design. (This used to add "swept on their grant", which was simply
+   * false: `sweepable` in src/source.ts has no production caller and nothing
+   * deletes an upload record or its staging object. Nothing here depends on
+   * the sweep; the claim was wrong rather than load-bearing.)
+   *
+   * Read now rather than handed in by the caller: `noteSlug` lands after
+   * `enqueue` returns, so a second request arriving in that window would
+   * otherwise read a record from before the slug was written.
+   */
   const fresh = await readUpload(uploadId, currentOwnerId());
   if (fresh?.slug) return { kind: "article", slug: fresh.slug };
+  /* A claim with no job or slug yet: the winner's `enqueue` may still be in
+     flight or may have failed. */
   throw httpError(409, "That upload is already being turned into an article.");
 }
 
@@ -6461,12 +6887,13 @@ function modelsInUse(): { tasks: ModelReport[] } {
     /* A standard article: this page reports the app's configuration, not one
        article's — High-powered AI is per article (plan 260930f). Through
        `powerFor`, so a task on Opus for every article is reported as Opus. */
-    const { id, provider, source } = resolveModel(task, powerFor(task, "standard"));
+    const { id, provider, wire, source } = resolveModel(task, powerFor(task, "standard"));
     return {
       task,
       model: displayName(id),
       id,
       provider,
+      wire,
       source,
       ...(effort ? { effort } : {}),
     };
@@ -6497,6 +6924,8 @@ type ModelReport = {
   /** The exact string sent on the wire. */
   id: string;
   provider: Provider;
+  /** Which API shape the call speaks. Absent on the rows that are not `Task`s. */
+  wire?: Wire;
   /** `"override"` when an environment variable, rather than the code, put that id there. */
   source: "default" | "override";
   effort?: string;
@@ -6588,6 +7017,8 @@ interface ReaderState {
   profile: string | null;
   /** When experimental features were switched on, ISO 8601, or `null` for off. */
   experimentalSince: string | null;
+  /** Whether an import queues the main-mode jobs. On unless switched off. */
+  autoModes: boolean;
 }
 
 /**
@@ -6611,9 +7042,9 @@ interface ReaderState {
  * unset" — the same argument the `purpose` field on the GET above makes at
  * length. The cost is one store read for the field you did not change.
  *
- * **One field per request, though — both at once is a 400.** The two writes are
- * two store operations and there is no transaction across them, so a body
- * carrying both could save the profile, fail on the switch, and answer with an
+ * **One field per request, though — two at once is a 400.** The writes are
+ * separate store operations and there is no transaction across them, so a body
+ * carrying two could save the profile, fail on the switch, and answer with an
  * error after half of it had committed. No client sends both (the two hooks own
  * one field each), so refusing costs nothing today and removes a half-committed
  * state that would be found the hard way. The day one needs to, the fix is a
@@ -6624,6 +7055,12 @@ interface ReaderState {
  * `experimental` is a **boolean on the wire and a date in the store**: the
  * client says on or off, and what comes back is when it was switched on.
  * docs/project/experimental-features.md.
+ *
+ * `autoModes` is a boolean both ways: whether an import queues the main-mode
+ * jobs, which the publication reads off the same row
+ * (src/store/pg-revisions.ts § `publishRevisionIn`). The row keeps when it was
+ * switched off; nothing shows that, so the wire does not carry it.
+ * docs/plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md.
  *
  * The **cap is enforced in the store, not here**. That is deliberate: this is
  * stored, so the rule has to hold for every writer rather than for this one
@@ -6637,12 +7074,14 @@ async function patchReader(body: unknown): Promise<ReaderState> {
   const patch = objectBody(body);
   const wantsProfile = "profile" in patch;
   const wantsExperimental = "experimental" in patch;
-  if (!wantsProfile && !wantsExperimental) {
-    throw httpError(400, "Nothing to change: expected profile or experimental");
+  const wantsAutoModes = "autoModes" in patch;
+  const wanted = [wantsProfile, wantsExperimental, wantsAutoModes].filter(Boolean).length;
+  if (wanted === 0) {
+    throw httpError(400, "Nothing to change: expected profile, experimental or autoModes");
   }
-  // See the header: two writes, no transaction across them.
-  if (wantsProfile && wantsExperimental) {
-    throw httpError(400, "Change one at a time: profile or experimental, not both");
+  // See the header: separate writes, no transaction across them.
+  if (wanted > 1) {
+    throw httpError(400, "Change one at a time: profile, experimental or autoModes");
   }
   const profile = patch.profile;
   if (wantsProfile && profile !== null && typeof profile !== "string") {
@@ -6655,9 +7094,13 @@ async function patchReader(body: unknown): Promise<ReaderState> {
   if (wantsExperimental && typeof experimental !== "boolean") {
     throw httpError(400, "experimental must be true or false");
   }
-  /* Exactly one of these is a write and the other is a read, which is what the
-     both-at-once refusal above buys: there is no order here that can leave the
-     row half-changed. */
+  const autoModes = patch.autoModes;
+  if (wantsAutoModes && typeof autoModes !== "boolean") {
+    throw httpError(400, "autoModes must be true or false");
+  }
+  /* Exactly one of these is a write and the others are reads, which is what
+     the one-at-a-time refusal above buys: there is no order here that can
+     leave the row half-changed. */
   return {
     profile: wantsProfile
       ? await readerStore.writeProfile(profile as string | null)
@@ -6665,6 +7108,9 @@ async function patchReader(body: unknown): Promise<ReaderState> {
     experimentalSince: wantsExperimental
       ? await readerStore.writeExperimental(experimental as boolean)
       : await readerStore.readExperimental(),
+    autoModes: wantsAutoModes
+      ? await readerStore.writeAutoModes(autoModes as boolean)
+      : await readerStore.readAutoModes(),
   };
 }
 
@@ -6776,6 +7222,98 @@ async function transcribeDictation(
   }
 }
 
+/* --------------------------------------------------------- command pick -- */
+
+/**
+ * **A sentence typed into the command bar, turned into one of its rows.**
+ * `POST /api/command-pick` — plan 261003k; src/command-pick-call.ts makes the
+ * two model calls and src/command-pick.ts owns the body's shape.
+ *
+ * `transcribeDictation`'s three habits, for its reasons: the body is an exact
+ * shape and a key we do not know is refused (with fixed prose — the reason
+ * reaches a log); what the caller sends is parsed rather than trusted; and the
+ * reader's disconnect aborts the model call, on `res` and not `req`.
+ *
+ * **No slug, in the path or the body**: the model reads the sentence and the
+ * bar's rows, never the article, so there is nothing here an article decides —
+ * and so nothing to attribute the spend to.
+ *
+ * **No per-reader rate limit, and that is a decision** (the plan § Stage 2):
+ * dictation and quick search have none either, and what bounds a call is that
+ * it is signed-in only, capped (300 characters, 200 keys), about $0.0002, and
+ * can only answer with a key the caller sent or words from the caller's own
+ * sentence, chosen among options whose words are ours.
+ */
+async function pickCommandForSentence(req: IncomingMessage, res: ServerResponse): Promise<PickAnswer> {
+  const parsed = parsePickRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  const gone = new AbortController();
+  const drop = () => gone.abort();
+  res.on("close", drop);
+  try {
+    const outcome = await pickCommand(parsed.request, gone.signal);
+    if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
+    return outcome.answer;
+  } finally {
+    res.off("close", drop);
+  }
+}
+
+/* ------------------------------------------------------ command suggest -- */
+
+/**
+ * **A short list of things to do, proposed from why the reader is reading.**
+ * `POST /api/command-suggest/:slug` — plan 261005k, Stage 2 (B);
+ * src/command-suggest-call.ts makes the one model call and
+ * src/command-suggest.ts owns the shapes.
+ *
+ * **The body is row keys and nothing else.** The profile is loaded here: a
+ * client that could supply profile text is a way to put an arbitrary string
+ * into a prompt (the reader route says the same of `useProfile`).
+ *
+ * **Ownership is checked here, by name, before anything is read** — not
+ * inferred from the shelf read inside `resolveProfileParts`, which swallows a
+ * not-found on purpose (it serves prompts, which go ahead on the global half).
+ * Somebody else's slug is the 404 every owner-scoped route gives.
+ *
+ * **A reason that could not be read is a failure the reader can retry, never
+ * "nothing to suggest"** (GPT Sol's F6). Only a read that succeeded and found
+ * no reason answers `nothing`, and that answer makes no model call.
+ *
+ * **No per-reader rate limit**, as for the pick, and for its reasons: signed
+ * in, the owner's own article, a body of keys, an input bounded by the
+ * profile's two caps and our own mode list, and the monthly cap behind it.
+ */
+async function suggestFromWhyReading(
+  slug: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<SuggestAnswer> {
+  await ownedArticleIdentity(slug);
+  const parsed = parseSuggestRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  const parts = await resolveProfileParts(slug);
+  if (parts.purposeFailed) throw httpError(503, REASON_NOT_READ.message);
+  const profile = normaliseProfileText(parts.profile);
+  const purpose = normaliseProfileText(parts.purpose);
+  if (purpose === null) return { kind: "nothing", why: "no-reason" };
+  if (suggestableOptions(parsed.request.rows).length === 0) return { kind: "nothing", why: "no-rows" };
+  const rendered = renderProfile({ profile, purpose });
+  /* `purpose` is not null, so neither is this; the check is for the compiler. */
+  if (rendered === null) return { kind: "nothing", why: "no-reason" };
+  const gone = new AbortController();
+  const drop = () => gone.abort();
+  res.on("close", drop);
+  try {
+    const outcome = await suggestCommands({ rendered, rows: parsed.request.rows }, gone.signal);
+    if (!outcome.ok) throw httpError(outcome.status, outcome.failure.message);
+    if (outcome.suggestions === null) return { kind: "nothing", why: "no-list" };
+    return { kind: "suggestions", readFrom: readFromHash({ profile, purpose }), ...outcome.suggestions };
+  } finally {
+    res.off("close", drop);
+  }
+}
+
 /* ------------------------------------------------------------- feedback -- */
 
 /**
@@ -6848,15 +7386,15 @@ const VERCEL_ID = /^[A-Za-z0-9]{1,12}(:[A-Za-z0-9]{1,12}){0,3}::[A-Za-z0-9-]{1,6
  * own prose. The cap is in the message because the fix depends on it; the text
  * never is. docs/project/copy.md, and the same rule as `tidyBody` above.
  */
-function feedbackAnswer(value: unknown, field: string): string | null {
+function feedbackAnswer(value: unknown, field: string, cap: number): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value !== "string") throw httpError(400, `${field} must be a string or null [fb-type]`);
   const trimmed = value.trim();
   if (!trimmed) return null;
-  if (trimmed.length > MAX_FEEDBACK_ANSWER_CHARS) {
+  if (trimmed.length > cap) {
     throw httpError(
       400,
-      `An answer can be at most ${MAX_FEEDBACK_ANSWER_CHARS} characters. ` +
+      `An answer can be at most ${cap} characters. ` +
         `Trimming it to the part that matters usually helps. [fb-long]`,
     );
   }
@@ -6890,10 +7428,13 @@ function feedbackBody(sent: Record<string, unknown>): string {
     throw httpError(400, "A report mixes two request shapes [fb-shape]");
   }
 
-  const written = feedbackAnswer(sent.body, "body");
-  const steps = feedbackAnswer(sent.steps, "steps");
-  const expected = feedbackAnswer(sent.expected, "expected");
-  const actual = feedbackAnswer(sent.actual, "actual");
+  /* **Two caps.** The one box takes `MAX_FEEDBACK_ANSWER_CHARS`. The old three
+     keep the cap they were written under, so that glued together they still
+     come to exactly what the column's CHECK admits. src/types.ts. */
+  const written = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
+  const steps = feedbackAnswer(sent.steps, "steps", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+  const expected = feedbackAnswer(sent.expected, "expected", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+  const actual = feedbackAnswer(sent.actual, "actual", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
   const legacy = [
     steps === null ? null : `Steps to reproduce:\n${steps}`,
     expected === null ? null : `What you expected to see:\n${expected}`,
@@ -7030,7 +7571,14 @@ function feedbackWhere(sent: Record<string, unknown>): {
     throw httpError(400, "buildCommit is not a build stamp [fb-build]");
   }
   return {
-    url: absent ? null : (url as string),
+    /* **Without a private link's key.** A report filed from
+       `/read/<slug>?key=…` would otherwise put that article's credential in
+       our table, a Sentry tag, the admin email and the log line below — the
+       reader told us where they were, not how to get in. The browser removes
+       it too; this is for a bundle that does not. Checked *before* this, so a
+       long address is still refused on what was sent.
+       src/share-key.ts § `withoutShareKey`, and Sol's F1 on plan 261005e. */
+    url: absent ? null : withoutShareKey(url as string),
     slug: typeof slug === "string" ? slug : null,
     buildCommit: typeof buildCommit === "string" ? buildCommit : null,
   };
@@ -7271,6 +7819,84 @@ async function fileFeedback(
   await Promise.all([mirror, notice]);
 }
 
+/* ------------------------------------------------- replies to questions -- */
+
+/**
+ * **Every open question, as the signed-in admin's Earlier tab shows it**:
+ * oldest first, each with their own newest reply and, when it names a report
+ * **of theirs**, that report's number and first line. Both lookups are
+ * owner-scoped in the store, so a question about another reader's report sends
+ * `report: null` and another admin's reply is never this one's. Only the open
+ * ones: an answered question is not sent, whatever a store hands back. Each is
+ * picked field by field; the file's `refs` and `acted` were never compiled.
+ */
+async function questionsForAdmin(): Promise<AdminFeedbackQuestion[]> {
+  const open = openFeedbackQuestions();
+  if (open.length === 0) return [];
+  const answers = await feedbackStore.newestAnswers(open.map((question) => question.id));
+  const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
+  const reports = await feedbackStore.linkedReports(named);
+  return open.map(({ id, title, body, asked, report }) => {
+    const linked = report === null ? undefined : reports.find((one) => one.id === report);
+    const answer = answers.find((one) => one.questionId === id);
+    return {
+      id,
+      title,
+      body,
+      asked,
+      report: linked === undefined ? null : { id: linked.id, number: linked.number, firstLine: linked.firstLine },
+      answer: answer === undefined ? null : { id: answer.id, body: answer.body, createdAt: answer.createdAt },
+    };
+  });
+}
+
+/** The three fields a reply may carry. **Exactly these**, for `FEEDBACK_FIELDS`' reasons. */
+const FEEDBACK_ANSWER_FIELDS = ["id", "question", "body"] as const;
+
+/**
+ * The most bytes a reply's request may be: the cap's worth of characters at
+ * JSON's worst (a six-byte `\uXXXX` escape each), and room for the envelope.
+ * The default limit is smaller than a full reply in a non-Latin script.
+ */
+const MAX_FEEDBACK_ANSWER_BODY_BYTES = MAX_FEEDBACK_ANSWER_CHARS * 6 + 1024;
+
+/**
+ * **A reply to a question, built field by field** — `POST
+ * /api/admin/feedback/answers`, and `parseFeedback`'s rules at the same seam:
+ * an unknown key is refused in fixed prose, no part of what was sent reaches a
+ * thrown message, and **the environment is this process's own**, so a caller
+ * cannot claim a reply was written in production (plan 261007d, F13).
+ *
+ * The question must be one this build has a file for, **open or answered**: a
+ * reply typed in a tab loaded before the question was marked answered is still
+ * Greg's words, and is kept (F14).
+ */
+function parseFeedbackAnswer(raw: unknown): NewFeedbackAnswer {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw httpError(400, "Expected a JSON object [fa-type]");
+  }
+  const sent = raw as Record<string, unknown>;
+  for (const key of Object.keys(sent)) {
+    if (!(FEEDBACK_ANSWER_FIELDS as readonly string[]).includes(key)) {
+      throw httpError(400, "A reply has a field this endpoint does not take [fa-field]");
+    }
+  }
+  const id = sent.id;
+  if (typeof id !== "string" || !isSpideryarnId(id)) {
+    throw httpError(400, "id must be an answer id [fa-id]");
+  }
+  const question = sent.question;
+  if (!isFeedbackQuestionId(question)) {
+    throw httpError(400, "question must be a question id [fa-question]");
+  }
+  if (feedbackQuestionStatus(question) === null) {
+    throw httpError(400, "There is no such question. [fa-unknown]");
+  }
+  const body = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
+  if (body === null) throw httpError(400, "A reply needs something written in it. [fa-empty]");
+  return { id, questionId: question, body, environment: feedbackEnvironment() };
+}
+
 
 /**
  * One line per request, on the way out, at a level the status decides.
@@ -7322,6 +7948,9 @@ function declaredFields(err: unknown): Record<string, unknown> {
   if (err instanceof DuplicateUpload) {
     return { code: err.code, ...(err.article ? { article: err.article } : {}) };
   }
+  /* The code and nothing else: this answer is given to a stranger, about an
+     article that is not published yet (src/still-being-added.ts). */
+  if (err instanceof StillBeingAdded) return { code: err.code };
   return {};
 }
 
@@ -7335,6 +7964,7 @@ function logRequest(
   status: number,
   started: number,
   err?: unknown,
+  failureStatus?: number,
 ): void {
   /* **A stack only where a stack tells you something.**
    *
@@ -7376,8 +8006,11 @@ function logRequest(
      `serveApi`'s own `finally` — inside the scope, before it closes. An ordinary
      request that called no model gets no extra fields at all. */
   Object.assign(fields, spendFields(currentSpend() ?? emptySpend()));
-  if (status >= 500) line.error(fields, msg);
-  else if (status >= 400) line.warn(fields, msg);
+  // Headers may already carry 200 when the handler fails. Keep that wire
+  // status in the fields, but keep the failure visible at its severity.
+  const severityStatus = failureStatus ?? status;
+  if (severityStatus >= 500) line.error(fields, msg);
+  else if (severityStatus >= 400) line.warn(fields, msg);
   else line.info(fields, msg);
 }
 
@@ -7476,12 +8109,14 @@ async function serveApi(
      five days, with its handler sitting a line below unreached.
      docs/postmortems/260901a-the-route-the-query-string-hid.md. */
   const path = url.split("?")[0] ?? url;
-  /* **The other half of the same split, parsed once.** Four route families read
-     a query string, and before this each parsed the URL again for itself — one
-     of them out of `req.url` directly, which is the escape hatch that made the
-     `path`/`rawUrl` distinction above a convention rather than a rule. Handing
-     the parsed parameters down means no handler below has a reason to hold a
-     URL string at all. GPT Sol's finding 1, 2026-09-01. */
+  /* **The other half of the same split, parsed once.** Every route that reads
+     a query string reads this one. Before it each parsed the URL again for
+     itself — one of them out of `req.url` directly, which is the escape hatch
+     that made the `path`/`rawUrl` distinction above a convention rather than a
+     rule. Handing the parsed parameters down means no handler below has a
+     reason to hold a URL string at all. GPT Sol's finding 1, 2026-09-01. (One
+     did anyway until 2026-10-07: the comments read parsed `req.url` again for
+     `?anchors=`.) */
   const query = new URLSearchParams(url.slice(path.length).replace(/^\?/, ""));
 
 
@@ -7491,6 +8126,7 @@ async function serveApi(
      no set of call sites to keep in step. It reads `res.statusCode`, which
      `send` has just set, so the exit points do not have to report anything. */
   let failure: unknown;
+  let failureStatus: number | undefined;
   try {
     /**
      * **The public namespace, dispatched before the gate and inside this `try`.**
@@ -7518,7 +8154,11 @@ async function serveApi(
       /* No `req`. See src/public/routes.ts — the public dispatcher is not handed
          the request object, so "the public routes ignore `Authorization`" is not a
          rule anybody has to keep. */
-      await servePublicApi({ res, path, method });
+      /* **And one value out of the query string: a private link's key.** It is
+         named here and handed over as itself, so the dispatcher still has no
+         query to read. It is a secret. `path` is what this function logs, in
+         the `catch` and the `finally` below, and `path` does not carry it. */
+      await servePublicApi({ res, path, method, key: query.get(SHARE_KEY_PARAM) });
       return true;
     }
 
@@ -7578,7 +8218,7 @@ async function serveApi(
        part of the JSON boundary: a thrown `null` must not make the catch throw
        a second time and escape without a body. Accept a status only when it is
        actually numeric, as the rest of this function assumes. */
-    const thrown = err as { status?: unknown; code?: unknown } | null | undefined;
+    const thrown = err as { status?: unknown } | null | undefined;
     const explicitStatus = typeof thrown?.status === "number" ? thrown.status : null;
     const status =
       explicitStatus ??
@@ -7607,14 +8247,19 @@ async function serveApi(
          being pushed down the retired explanation path (409). Guessing one for
          both would make a deleted comment read as "you cannot answer that". */
       (err instanceof NotAnExplanation ? (err.why === "missing" ? 404 : 409) : null) ??
-      (thrown?.code === "ENOENT" ? 404 : 500);
+      /* Anything else is a fault. **`ENOENT` used to be a 404 here**, for the
+         filesystem store that went on 2026-09-05; with no file read left that
+         means "no such article", it would have turned a missing bundled file
+         into an unreported 404 carrying the path. tests/routes.test.ts. */
+      500;
     // Handed to `logRequest`, which decides how much of it to write down — the
     // message for a failure this file chose, the whole stack for one it did
     // not. That is the point of the exercise: an unexpected throw used to be
     // mapped to a status, handed to the client and forgotten, so a production
     // 500 left nothing behind to read.
     failure = err;
-    /* **The rule is the status we answered with, not who chose it.** If this
+    failureStatus = status;
+    /* **The rule is the failure's status, not who chose it.** If this
        request logged at `error` level it goes to Sentry, and `logRequest` uses
        exactly the same threshold two lines down — so the two can never drift
        into disagreeing about what a fault is.
@@ -7651,12 +8296,31 @@ async function serveApi(
        conventions the streams use — and anything else is `UNEXPECTED_FAILURE`.
        The error itself is already in `logRequest`'s line, stack and all.
        Plan 260924a § Stage 2c. */
+    /* **A response that has already started gets no second answer.** A handler
+       that threw after `sse(res)`, or after a stream it had finished, used to
+       reach the `send` below: that set `statusCode = 500` on a response the
+       reader had received as 200, and then `setHeader` threw
+       `ERR_HTTP_HEADERS_SENT` out of this catch — so the request line said 500,
+       and src/vercel.ts's outer catch filed a second Sentry event about headers
+       in place of the fault. The fault itself is captured above, once, and
+       `failure` puts it on the request line beside the status the reader got.
+
+       All that is left to do is close a stream nobody else will: only one that
+       is neither ended nor destroyed. **This does not replace a stream's own
+       catch** — those send the terminal frame and reconcile what was stored,
+       and nothing here can do either. tests/serve-api-after-headers.test.ts,
+       which uses a real `ServerResponse` because a fake `setHeader` cannot
+       throw. */
+    if (res.headersSent) {
+      if (!res.writableEnded && !res.destroyed) res.end();
+      return true;
+    }
     const said =
       status >= 500 ? (authoredSentence(err) ?? UNEXPECTED_FAILURE.message) : (err as Error).message;
     send(res, status, { error: said, ...declaredFields(err) });
     return true;
   } finally {
-    logRequest(method, path, res.statusCode, started, failure);
+    logRequest(method, path, res.statusCode, started, failure, failureStatus);
   }
 }
 
@@ -7664,9 +8328,9 @@ async function serveApi(
  * The request, as the dispatchers below take it.
  *
  * **Three fields, three jobs, and the split is the whole point.** `path` is what
- * every route matches on. `query` is what the four route families that take
- * parameters read — the shelf's `?archived=1`, search's `?q=`, the reader's
- * `?slug=`, chat's `?summary=1`. `rawUrl` is for the 404 message, which is worth
+ * every route matches on. `query` is what the routes that take parameters
+ * read — the shelf's `?archived=1`, the reader's `?slug=`, chat's
+ * `?summary=1`, and the rest. `rawUrl` is for the 404 message, which is worth
  * printing in full. All three are computed once in `serveApi`.
  *
  * Matching a route against a URL with a query string on it cannot match
@@ -7817,6 +8481,8 @@ type AuthRoute = ExactAuthRoute | PatternAuthRoute;
  * patterns are.
  */
 const JOBS_PATH = "/api/jobs";
+/* An article's private link: GET reads it, POST makes one, DELETE turns it off. */
+const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
 /* One report, by its pair: read with GET, marked ignored with PATCH. */
@@ -8081,6 +8747,100 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The admin's own earlier reports, with what became of each** — the
+     Feedback dialog's Earlier tab, for an admin.
+     docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+
+     Under `/api/admin/`, so the namespace gate has refused everybody else
+     before this runs; nothing here asks who the caller is. **Their own list,
+     not a view across owners**: `feedbackStore`, owner-scoped like
+     `GET /api/feedback`, never `adminStore`. What the namespace buys is not
+     other people's rows but the richer account of each: its stored number,
+     whether it was ignored or its note says declined or awaiting, and the
+     sentence an agent wrote about it.
+
+     One segment after `feedback/`; the one-report routes below take two, so
+     neither can answer for the other. Picked field by field, as the plain
+     route is, and the comment is looked up only for the ids the store handed
+     back, so a comment on somebody else's report has nowhere to go. */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/feedback/earlier",
+    article: "none",
+    handler: async ({ request: { res, query } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const asked = query.get("show") ?? "all";
+      const show = ADMIN_EARLIER_FEEDBACK_SHOWS.find((known) => known === asked);
+      if (show === undefined) {
+        throw httpError(400, `show must be one of ${ADMIN_EARLIER_FEEDBACK_SHOWS.join(", ")}`);
+      }
+      const page = await feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show);
+      const { open, waiting, aside, shipped } = page.counts;
+      const answer: AdminEarlierFeedbackPage = {
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt }) => ({
+          id,
+          createdAt,
+          kind,
+          body,
+          page: filedFrom,
+          at,
+          number,
+          status,
+          comment: feedbackComment(id),
+          ignoredAt,
+        })),
+        more: page.more,
+        counts: { all: open + waiting + aside + shipped, open, waiting, aside, shipped },
+        questions: await questionsForAdmin(),
+      };
+      send(res, 200, answer);
+    },
+  },
+
+  /* **A reply to a question an agent asked** — the reply box under a question
+     in the Earlier tab. 261007d stage 2. Under `/api/admin/`, so the namespace
+     gate has refused everybody else before this runs; nothing here asks who
+     the caller is, and the row is written under the signed-in owner like every
+     other write. One segment after `feedback/`, like `earlier`, so the
+     two-segment one-report routes cannot answer for it.
+
+     Three outcomes, three statuses (F15): 201 for a new reply; 200 with the
+     stored row for the same reply again, so a retry is safe; 409 when the id
+     is already a different reply, which changes nothing. No rate limit: the
+     hourly cap is `feedback`'s own and an admin has none (`feedbackHourlyCap`). */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/feedback/answers",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const reply = parseFeedbackAnswer(await readBody(req, MAX_FEEDBACK_ANSWER_BODY_BYTES));
+      const stored = await feedbackStore.submitAnswer(reply);
+      /* Ids and a length, never the words: docs/project/logging.md. */
+      log("http").info(
+        { id: reply.id, question: reply.questionId, kind: stored.kind, chars: reply.body.length },
+        "feedback answer accepted",
+      );
+      switch (stored.kind) {
+        case "conflict":
+          throw httpError(409, "That reply's id has already been used for a different reply. [fa-reused]");
+        case "created":
+        case "duplicate": {
+          const { id, body, createdAt } = stored.answer;
+          const receipt: AdminFeedbackAnswerReceipt = { answer: { id, body, createdAt } };
+          send(res, stored.kind === "created" ? 201 : 200, receipt);
+          return;
+        }
+        default: {
+          const unreachable: never = stored;
+          throw new Error(`unknown answer outcome: ${String(unreachable)}`);
+        }
+      }
+    },
+  },
+
   /* **One report, and it takes two segments** — `feedback`'s primary key is
      `(owner_id, id)` because the id is minted by a browser, so an address with
      only the id in it can name two different people's reports. GPT Sol,
@@ -8106,7 +8866,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
   /* **Mark a report as ignored, or take the mark back** — the Ignore button on
-     the card, and the only write under `/api/admin/feedback`. Greg, 2026-10-03
+     the card, and the only write to a report under `/api/admin/feedback` (a
+     reply to a question, above, writes a row of its own). Greg, 2026-10-03
      (`spya-g95x4j`): *"I just saw feedback that I wished I could delete, and
      there wasn't a way to do it, or at least mark it as to be ignored."* It
      sets or clears one timestamp; the report itself is never changed.
@@ -8217,6 +8978,69 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The cost cube**, for `/admin/costs` — Greg, 2026-10-04 (report
+     spya-mykvhz). The ledger over `?since=&until=`, grouped by user, article,
+     task, model and day; the page filters, groups and pivots it in the browser
+     (src/cost-cube.ts). Behind the namespace gate like its siblings, which is
+     the check. docs/plans/261005a-admin-costs-page-cost-analysis-report-and-a-cost-tracking-audit.md.
+
+     **Asked as the administrator**, and that argument is the privacy rule: the
+     query names only the asker's own slugs, and anybody else's article is an
+     opaque id (src/store/ai-calls-spend-pg.ts § `spendCube`). */
+  {
+    kind: "exact",
+    method: "GET",
+    path: "/api/admin/costs",
+    article: "none",
+    handler: async ({ user, request: { res, query } }) => {
+      /* A bound we cannot read is a 400, never "everything": a total over a
+         period nobody asked for looks exactly like the one they did. */
+      const asked = parseCostWindow(query.get("since"), query.get("until"));
+      if (!asked.ok) throw httpError(400, asked.message);
+      res.setHeader("Cache-Control", "private, no-store");
+      const { url, key } = authAdminEndpoint();
+      const [groups, accounts] = await Promise.all([
+        spendCube(asked.since ?? undefined, asked.until ?? undefined, user.id, key).catch((err) => {
+          if (err instanceof SpendCubeTooLarge) {
+            throw httpError(
+              400,
+              `That window has more than ${err.maxGroups} groups of calls. Ask for a shorter period.`,
+            );
+          }
+          throw err;
+        }),
+        /* The account listing alone, for the emails — not the users page's
+           nine-query read. */
+        /* **A failed listing costs the emails, not the page**: the money is
+           the ledger's and does not need the Auth service. Only the error's
+           class is logged — its message may carry the endpoint. */
+        listAccounts(gotruePages(url, key)).catch((err: unknown) => {
+          log("http").warn(
+            { errorClass: err instanceof Error ? err.constructor.name : typeof err },
+            "admin costs: the account listing failed, so the answer carries no emails",
+          );
+          return null;
+        }),
+      ]);
+      const emails = new Map((accounts ?? []).map((a) => [a.id, a.email]));
+      /* Every owner in the rows, and only those. One the Auth service does not
+         know — a deleted account's ledger rows outlive it — has no email. */
+      const owners = [...new Set(groups.map((g) => g.ownerId))].map((id) => ({
+        id,
+        email: emails.get(id) ?? null,
+      }));
+      const costs: AdminCosts = {
+        since: asked.since,
+        until: asked.until,
+        label: costWindowLabel(asked.since, asked.until),
+        rows: groups.map((g) => ({ ...g, category: costCategoryOf(g) })),
+        owners,
+        emailsAvailable: accounts !== null,
+      };
+      send(res, 200, costs);
+    },
+  },
+
   /* An EXACT match, which is what this row has always been for: a stray
      `/api/library/anything` must 404 rather than quietly serve the whole shelf.
      The shelf takes `?archived=1`, which is why it was the first route moved
@@ -8268,18 +9092,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res, query } }) => {
       /* `=== "1"`, as `/api/library` does. Here it widens to active + archived. */
       const archived = query.get("archived") === "1";
-      const { response, refresh } = await shelfTopics(archived, defaultShelfTopicsDeps());
+      const { response, refresh } = await shelfTopicSet(archived, defaultShelfTopicSetDeps());
       const terms: LibraryTermsResponse = response;
       /* The reader's own words, derived: never a shared cache's (Sol F10). */
-      res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, terms);
       /* **After the answer, and still inside the handler** — plan 260929c R1.
-         The reader already has the program's list (or the stored pick); the
-         model call runs now and is awaited, so its spend lands in this
-         request's collector against this reader rather than as a late finish,
-         and a Vercel function stays alive until it is done. `refresh` never
-         throws. src/shelf-topics.ts. */
-      if (refresh) await refresh();
+         The reader already has the stored topics (or the phrase pills); the
+         model's work — filing new articles, or a re-think of the whole tree,
+         which can take a couple of minutes — runs now and is awaited, so its
+         spend lands in this request's collector against this reader rather
+         than as a late finish, and a Vercel function stays alive until it is
+         done. `refresh` never throws. The `finally` also spends or releases
+         the already-taken allowance and claim if serialising/sending the
+         answer itself fails. src/shelf-topic-sets.ts, plan 261003f. */
+      try {
+        res.setHeader("Cache-Control", "private, no-store");
+        send(res, 200, terms);
+      } finally {
+        if (refresh) await refresh();
+      }
     },
   },
 
@@ -8386,6 +9216,38 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
+  /* **The command bar's sentence** — asked only when the bar's own matching
+     found nothing and the reader pressed Enter. No slug: nothing about it is
+     an article's. src/command-pick-call.ts, plan 261003k. */
+  {
+    kind: "exact",
+    method: "POST",
+    /* `COMMAND_PICK_PATH` (src/command-pick.ts) is what the bar posts to; a
+       literal here because the contract test reads this table as text. */
+    path: "/api/command-pick",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      send(res, 200, await pickCommandForSentence(req, res));
+    },
+  },
+
+  /* **The bar's short list from why you are reading** — asked only when the
+     owner presses the row that says so. The slug is in the path, so the spend
+     is attributed to the article by the table (`first-capture`); the model
+     never reads the article. src/command-suggest-call.ts, plan 261005k. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/command-suggest\/([\w.%-]+)$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const answer = await suggestFromWhyReading(slugPart(captures, 1), req, res);
+      /* Words made from the reader's profile: never a shared cache's. */
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, answer);
+    },
+  },
+
   /* **The other route with a body measured in hundreds of kilobytes**, and the
      only one whose body is a person writing to us. No slug in the path even
      when the report is about an article: what the reader was looking at is a
@@ -8411,9 +9273,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      query parameter. `private, no-store` before the await, as
      `/api/admin/feedback` does, because the body is what a reader wrote to us.
      **Picked field by field** rather than passed through, so a store that one
-     day hands back more than five fields still sends five — `page` among them
+     day hands back more than six fields still sends six — `page` among them
      since 261003g, the store's label for where the report was filed and never
-     the address it was made from — and a sixth,
+     the address it was made from, and `at` since 261006b, the paragraph and
+     nothing else from that address's query — and a seventh,
      `shipped`, which is ours: whether this build carries a note saying a change
      for the report shipped. `?show=shipped|unshipped` narrows by the same map,
      in the query, so the cap applies after the filter; any other value is a
@@ -8442,12 +9305,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       );
       const counted = page.counts;
       const answer: EarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom }) => ({
+        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at }) => ({
           id,
           createdAt,
           kind,
           body,
           page: filedFrom,
+          at,
           shipped: isFeedbackShipped(id),
         })),
         more: page.more,
@@ -8503,6 +9367,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          second endpoint — and a second endpoint is how two answers to "is it
          on" come to disagree. docs/project/experimental-features.md. */
       const experimentalSince = await readerStore.readExperimental();
+      /* The add page's tick box: whether an import queues the main-mode jobs
+         (plan 261004h). On this route for the reason the switch above is. */
+      const autoModes = await readerStore.readAutoModes();
       /* Asked of the *rendered* pair rather than of `parts.profile`, which is
          what makes a reader who has written only "why you're reading this one"
          count — the case this whole `?slug=` exists for. */
@@ -8523,6 +9390,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
            free to disagree — and the one that disagreed would be the one a
            feature gate read. */
         experimentalSince,
+        autoModes,
       });
     },
   },
@@ -8688,6 +9556,56 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   /**
+   * **The private link: read it, make one, turn it off.** Three rows on one
+   * path, owner-scoped like `visibility` above: another reader's slug is a 404
+   * from `ownedSlug`, the same as a slug nobody has.
+   * docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md.
+   *
+   * **`POST` and `DELETE`, not the `PUT` its sibling uses.** Making a link is
+   * not idempotent on purpose: every `POST` makes a new key and the old one
+   * stops working, which is how an owner cuts off the people holding it. A
+   * `PUT` would promise that sending it twice changes nothing.
+   *
+   * **`private, no-store` on all three.** The answer carries the key, which is
+   * a credential, and this is the only response in the app that does.
+   *
+   * All three answer a `ShareLinkState` (src/types.ts). None calls a model.
+   */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: SHARE_LINK_PATTERN,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, await shareLinkStore.read(slugPart(captures, 1)));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: SHARE_LINK_PATTERN,
+    article: "none",
+    handler: async ({ request: { req, res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      /* The body before the store, so a request without the tick-box changes
+         nothing and records nothing. */
+      parseShareLinkRequest(await readBody(req));
+      send(res, 200, await shareLinkStore.create(slugPart(captures, 1)));
+    },
+  },
+  {
+    kind: "pattern",
+    method: "DELETE",
+    pattern: SHARE_LINK_PATTERN,
+    article: "none",
+    handler: async ({ request: { res } }, captures) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      send(res, 200, await shareLinkStore.turnOff(slugPart(captures, 1)));
+    },
+  },
+
+  /**
    * **High-powered AI, switched on or off for one article** — the owner's own
    * article, anybody's account. docs/plans/260930k-high-power-for-readers-and-cost-only-for-admins.md.
    *
@@ -8827,8 +9745,11 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
   },
 
   // Its own endpoint rather than a field on the article payload: that one is
-  // ~150KB and is fetched on every page, and stat-ing every file for it would
-  // charge every reader for a page almost nobody opens.
+  // fetched on every page, and working out every step's state for it — the
+  // step rows, and every block read, cleaned and hashed to say which steps are
+  // still current (src/store/pg.ts § `articleMetadata`) — would charge every
+  // reader for a page almost nobody opens. (Written about the filesystem
+  // store, where the cost was a `stat` of every file.)
   {
     kind: "pattern",
     method: "GET",
@@ -8864,13 +9785,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: GLOSSARY_PATTERN,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No glossary yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`, outside `withProfileChanged` as quiz has it. */
         const at = slugPart(captures, 1);
-        send(
-          res,
-          200,
-          await withProfileChanged<GlossaryResponse>(
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<GlossaryResponse>(
             at,
             () => loadGlossary(at),
             (found) => found.glossary,
@@ -8878,6 +9799,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
             (found, nowHash) => ({ panelRun: panelRunKind(found, nowHash) }),
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -8906,16 +9829,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      await withSpendAttribution({ articleSlug: at }, () =>
-        streamTermLookup(at, slugPart(captures, 2), res),
-      );
+      await streamTermLookup(at, slugPart(captures, 2), res);
     },
   },
 
-  /* **The glossary's second POST, and it writes nothing.** A reader types a term
-     into the box and this finds it in the prose and explains the passage —
-     `lookup` above with the entry replaced by a phrase, so it is the same
-     `explain` call at the same cost with the same patient deadline.
+  /* **The glossary's second POST.** A reader types a term into the box and
+     this finds it in the prose and explains the passage. Both use
+     `explainStream`, but `lookup` first searches and passes `dig` for a deeper
+     answer; Ask does neither (`src/term-lookup.ts`). **A finished answer is stored**:
+     the term is added to the glossary (`deps.lookups.addTerm`,
+     src/term-lookup.ts § `makeAskAboutTerm`, plan 261002f). An answer that
+     does not finish writes nothing. This sentence said "it writes nothing"
+     until 2026-10-07, which was true before that plan.
 
      The term is in the **body**, never the path. It is the reader's own words,
      which docs/project/logging.md keeps out of an address, and it can carry
@@ -8938,26 +9863,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          choosing. `askAboutTerm` validates and normalises it; the route does
          not pre-judge it, so there is one bound in one place.
 
-         **No rate limit, and there is none to reuse.** The sibling `lookup`
-         POST has none either, and feedback's hourly cap is the only limiter in
-         this file (`fileFeedback`). So an owner with one article of their own
+         **No rate limit here.** The sibling `lookup` POST has had one since
+         plan 261001p: it takes the shared `dig-deeper` allowance (`admitDig`,
+         src/dig-deeper.ts, through `lookUpTerm`), and this route does not.
+         Whether it should is not decided, and sharing that allowance would
+         have ordinary explanations spend what deeper searches are counted
+         against. (Until 2026-10-07 this said there was none to reuse and that
+         `lookup` had none either.) So an owner with one article of their own
          can drive paid `explain` calls as fast as they can post: ownership says
-         *which* article, not *how many* requests, and `withSpendAttribution`
-         records the spend rather than authorising it. **This request never
+         *which* article, not *how many* requests, and the row's
+         `article: "first-capture"` records the spend rather than authorising it. **This request never
          enters the job queue**, so the queue's concurrency cap is not a
          limit on it either — a first draft of this comment claimed it was, and
-         GPT Sol was right that it is false. Stated rather than fixed here
-         because it is the shape of every paid request in this file and a scheme
-         invented on the day for one endpoint would be the wrong place to put
-         one. docs/project/glossary.md § Looking a term up, and the note in
+         GPT Sol was right that it is false. The allowance decision for Ask
+         remains open; the sibling's shared limiter is in `admitDig`, rather
+         than the job queue. docs/project/glossary.md § Looking a term up, and the note in
          docs/user-feedback/ for Greg.
 
          Re-traced 2026-09-10 for the move to streaming, and still true: the
-         route has no limiter, and `withSpendAttribution` records rather than
-         gates. It wraps the whole stream, so the one model call inside it is
-         attributed to this article however it ends. `streamAskedTerm` above. */
+         route has no limiter, and spend attribution records rather than
+         gates. `dispatchAuthRoute` wraps the whole handler, so the one model
+         call inside the stream is attributed to this article however it ends.
+         `streamAskedTerm` above. */
       const askBody = (await readBody(req)) as { term?: unknown } | null;
-      await withSpendAttribution({ articleSlug: at }, () => streamAskedTerm(at, askBody?.term, res));
+      await streamAskedTerm(at, askBody?.term, res);
     },
   },
 
@@ -8973,10 +9902,16 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/ideas\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No ideas yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`. */
         const at = slugPart(captures, 1);
-        send(res, 200, await withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas));
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<IdeasResponse>(at, () => loadIdeas(at), (found) => found.ideas),
+        );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -8989,13 +9924,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/quotes\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       {
+        /* No quotes yet is `200 null` to a client that asks —
+           `orNullWhenNotMadeYet`. */
         const at = slugPart(captures, 1);
-        send(
-          res,
-          200,
-          await withProfileChanged<QuotesResponse>(
+        const found = await orNullWhenNotMadeYet({ req, res }, () =>
+          withProfileChanged<QuotesResponse>(
             at,
             () => loadQuotes(at),
             (found) => found.quotes,
@@ -9006,6 +9941,8 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
             true,
           ),
         );
+        if (!found) return;
+        send(res, 200, found);
       }
     },
   },
@@ -9019,13 +9956,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/timeline\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, unlike its five neighbours, and that is
          the decision rather than an omission: this artefact was never written
          for a profile, so there is no third staleness fact to add.
          `TimelineResponse` in src/types.ts has two fields where the others have
-         three. docs/plans/260831i-timeline-mode.md § Freshness. */
-      send(res, 200, await loadTimeline(slugPart(captures, 1)));
+         three. docs/plans/260831i-timeline-mode.md § Freshness.
+
+         No timeline yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. One with no events in it is a timeline. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadTimeline(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9036,28 +9980,50 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      `mark` below is the exception, and it is the same exception the glossary's
      `lookup` is: *writing* the questions is one call over a whole article and so
      is a job, but marking ONE answer is a single question with a reader sitting
-     in front of it. It stores nothing — see `markOneAnswer`. */
+     in front of it. It keeps each finished mark (`quiz_attempts`, since
+     2026-10-05) and changes nothing about the questions — see `markOneAnswer`. */
   {
     kind: "pattern",
     method: "GET",
     pattern: /^\/api\/quiz\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **`withProfileChanged` since 2026-10-02**, for the badge and its
          Regenerate (plan 261002f). It labels; nothing re-runs on it — the
          profile is not in this stage's stamp (src/quiz.ts § The profile).
 
          `withOldClientBands` is the bridge for tabs still running the band
          ladder; it stays until there is an enforceable client-version boundary
-         — src/quiz.ts says why. */
+         — src/quiz.ts says why.
+
+         `orNullWhenNotMadeYet` around the read and only the read: no
+         questions yet is `200 null` to a client that asks (plan 261006g). */
       const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        withOldClientBands(
-          await withProfileChanged<QuizResponse>(at, () => loadQuiz(at), (found) => found.quiz),
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<Omit<QuizResponse, "attempts">>(
+          at,
+          () => loadQuiz(at),
+          (quiz) => quiz.quiz,
         ),
       );
+      if (!found) return;
+      /* **The reader's kept answers to this batch**, since 2026-10-05 (plan
+         261005b) — on this read rather than a second endpoint, so the panel
+         gets questions and answers in one commit.
+
+         **A failed read of them does not take the questions away, and does not
+         say "none" either**: `null`, which the client reads as *keep what you
+         had* — `[]` would un-answer every question on a transient failure.
+         `QuizResponse.attempts` in src/types.ts. */
+      let attempts: QuizResponse["attempts"];
+      try {
+        attempts = await quizAttemptStore.latestForBatch(at, found.quiz.batchId);
+      } catch (err) {
+        captureFailure(err, { route: "quiz", slug: at, phase: "kept-answers" });
+        attempts = null;
+      }
+      const response: QuizResponse = { ...found, attempts };
+      send(res, 200, withOldClientBands(response));
     },
   },
 
@@ -9069,10 +10035,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/faq\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**: this artefact is not written for a
-         profile. `FaqResponse` in src/types.ts has two fields. */
-      send(res, 200, await loadFaq(slugPart(captures, 1)));
+         profile. `FaqResponse` in src/types.ts has two fields.
+
+         No FAQ yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadFaq` calls none: a
+         document without its `questions` as well as no document, and not an
+         empty list. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadFaq(slugPart(captures, 1)));
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9103,9 +10076,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/crossrefs\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      /* No `withProfileChanged`: not written for a profile. */
-      send(res, 200, await loadCrossrefs(slugPart(captures, 1)));
+    handler: async ({ request: { req, res } }, captures) => {
+      /* No `withProfileChanged`: not written for a profile. No links yet is
+         `200 null` to a client that asks — `orNullWhenNotMadeYet`. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadCrossrefs(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9119,16 +10097,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/simple\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* `withProfileChanged` since 2026-10-01: the paragraphs are written for
          the owner's profile and goal (plan 261001b). `stale` and `outdated`
-         apart, as `/api/faq/` has them. */
+         apart, as `/api/faq/` has them.
+
+         None yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadSimpleSummary` calls none,
+         a `simple/1` row included. */
       const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        await withProfileChanged<SimpleSummaryResponse>(at, () => loadSimpleSummary(at), (found) => found.simpleSummary),
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        withProfileChanged<SimpleSummaryResponse>(at, () => loadSimpleSummary(at), (found) => found.simpleSummary),
       );
+      if (!found) return;
+      send(res, 200, found);
     },
   },
 
@@ -9143,9 +10125,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      /* **Not `withProfileChanged`**, whose rule calls an artefact written
-         without a profile never stale. A route is exactly what a profile should
-         change, so none → some counts here — `routeProfileIsStale`, the same
+      /* **Not `withProfileChanged`**, whose rule does not count a cleared
+         profile. A route is exactly what a profile should change, so any
+         difference counts here — `routeProfileIsStale`, the same
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
          reads start before either is awaited. */
       const [found, now] = await Promise.all([loadSkim(at), resolveProfile(at)]);
@@ -9171,7 +10153,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/debate\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s and `quiz`'s reason: who
          is reading does not change what the web said, so there is no third
          staleness fact and offering one would be a banner about a thing that
@@ -9180,8 +10162,54 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          **And nothing here about how old the search is.** `searchedAt` travels
          on the artefact and the panel prints it; it is provenance rather than
          staleness, and a year-old shared link must not have its artefact
-         declared invalid by the clock. */
-      send(res, 200, await loadDebate(slugPart(captures, 1)));
+         declared invalid by the clock.
+
+         No debate yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`. "None" is what `loadDebate` calls none: a
+         document that fails `isDebateDocument` as well as no document, and
+         not a search that found nothing. */
+      const found = await orNullWhenNotMadeYet({ req, res }, () =>
+        loadDebate(slugPart(captures, 1)),
+      );
+      if (!found) return;
+      send(res, 200, found);
+    },
+  },
+
+  /**
+   * **The papers that cite this article, from OpenAlex** — Reception's *Cited
+   * by*. src/citation-index.ts,
+   * docs/plans/261004h-reception-lists-the-papers-that-cite-the-piece-from-openalex.md.
+   *
+   * **A `GET` that may make two outside requests and fill a cache**, which is
+   * the link preview's shape above: no model, no money, and almost every call
+   * is answered by a row a week fresh. Every outcome is a 200 carrying one
+   * `CitersResult` member, because each has its own sentence in the panel.
+   *
+   * **The owner's only, and in this table.** `loadArticleIdentity` goes through
+   * the owner filter, so somebody else's slug is the same 404 as one that does
+   * not exist, and it is thrown before anything is asked. A visitor to a public
+   * article gets no list in v1: this is not under `/api/public/`, and adding it
+   * there is a new field on the public boundary.
+   *
+   * **No experimental gate**, because Debate has none on the server: the switch
+   * hides the bar's button, and a bookmarked `?mode=debate` stays reachable
+   * (docs/project/experimental-features.md). GPT Sol's F4.
+   *
+   * **The identity is the imported one, not the shelf's**: a reader's rename
+   * would fail the title check on a correct DOI (F2).
+   */
+  {
+    kind: "pattern",
+    method: "GET",
+    pattern: /^\/api\/citers\/([\w.%-]+)$/,
+    /* No model is called, so there is no spend to attribute; the capture is
+       named anyway because the path names an article. */
+    article: "first-capture",
+    handler: async ({ request: { res } }, captures) => {
+      const identity = await loadArticleIdentity(slugPart(captures, 1));
+      const citers: CitersResult = await citersOf(identity);
+      send(res, 200, citers);
     },
   },
 
@@ -9194,12 +10222,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: /^\/api\/citations\/([\w.%-]+)$/,
     article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
+    handler: async ({ request: { req, res } }, captures) => {
       /* **No `withProfileChanged`**, for `timeline`'s reason: this artefact is
          not written for a profile, so there is no third staleness fact.
-         `CitationsResponse` in src/types.ts has two fields. */
+         `CitationsResponse` in src/types.ts has two fields.
+
+         No list yet is `200 null` to a client that asks —
+         `orNullWhenNotMadeYet`, around the read alone and not the matching
+         below. */
       const slug = slugPart(captures, 1);
-      const found = await loadCitations(slug);
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadCitations(slug));
+      if (!found) return;
       /* **Which works are already articles here** — the reader's own or a
          public one, never another reader's private article (the `where` in
          src/store/pg-cited-in-spideryarn.ts). Here and not in `loadCitations`,
@@ -9219,44 +10252,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **Find one searched work's own page on the web** — Citations mode's *Find
-     it*, docs/plans/260911g-citations-mode.md § Stage 3. The citations' one
-     POST, and the glossary `lookup`'s shape: one reader-triggered model call
-     for one entry, owner-only because `loadCitations` joins through
-     `ownedSlug`, stored per `(article, entry id)`. **JSON, not SSE**: the
-     answer is a link, not prose to start reading. Nothing is read off the body
-     — the work is found server-side by id, so this cannot be made to search
-     for text of the caller's choosing.
-
-     **Rate-limited per owner**, on `fetchAllowanceStore`'s `citation-find`
-     bucket — the limiter `link-summary-fill` spends money through, taken after
-     the 404 and 409 so a refusal for free costs nothing (GPT Sol F11). What
-     bounds one press is the deadline and the prompt; `webSearches` on the
-     ledger row is the alarm. src/citation-find.ts § `FIND_RATE_POLICY`. */
-  {
-    kind: "pattern",
-    method: "POST",
-    pattern: /^\/api\/citations\/([\w.%-]+)\/([\w.%-]+)\/find$/,
-    article: "first-capture",
-    handler: async ({ request: { res } }, captures) => {
-      const at = slugPart(captures, 1);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: at }, () =>
-          findCitation(at, slugPart(captures, 2)),
-        ),
-      );
-    },
-  },
-
   /* **Look into one cited work on the web, and keep the answer** — Citations'
      *Investigate*, docs/plans/260930a-citations-investigate-one-work-on-demand.md.
      SSE, `streamCitationInvestigation` above. Owner-only (the reader seam is
      owner-scoped), rate-limited on its own `citation-investigate` bucket after
      the free refusals (src/citation-investigate.ts § `INVESTIGATE_RATE_POLICY`).
-     Nothing is read off the body. The pattern ends `/investigate`, so it cannot
-     collide with `/find`. */
+     Nothing is read off the body. Citations' one POST: the lookup-only
+     `…/find` beside it was deleted on 2026-10-04, several deploys after the
+     last button that called it (plan 261004e § R7). */
   {
     kind: "pattern",
     method: "POST",
@@ -9264,9 +10267,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      await withSpendAttribution({ articleSlug: at }, () =>
-        streamCitationInvestigation(at, slugPart(captures, 2), res),
-      );
+      await streamCitationInvestigation(at, slugPart(captures, 2), res);
     },
   },
 
@@ -9292,7 +10293,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
       const at = slugPart(captures, 1);
-      send(res, 200, await withSpendAttribution({ articleSlug: at }, () => guessSource(at)));
+      send(res, 200, await guessSource(at));
     },
   },
 
@@ -9371,10 +10372,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          than an error frame the client would have to parse. */
       const at = slugPart(captures, 1);
       const markBody = await readBody(req);
-      /* **The article goes on every row this request writes**, or "what has
-         this piece cost me" would cover writing the questions and none of the
-         answering. src/ai-spend.ts § `withSpendAttribution`. */
-      await withSpendAttribution({ articleSlug: at }, () => markOneAnswer(at, markBody, res));
+      /* **The article goes on every row this request writes** — the row's
+         `article: "first-capture"` — or "what has this piece cost me" would
+         cover writing the questions and none of the answering. */
+      await markOneAnswer(at, markBody, res);
     },
   },
 
@@ -9524,34 +10525,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/similar\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      {
-        const at = slugPart(captures, 1);
-        /* This route pays for embeddings, so its rows carry the article like
-           chat's and explain's do. GPT Sol found both this and `projection`
-           writing owner-attributed rows with a null slug — which the report then
-           excludes from "by article" entirely, so an article's real cost would
-           have been understated by exactly the two features that embed it. */
-        return withSpendAttribution({ articleSlug: at }, async () => {
-          /* The whole article, because this needs the prose **and the tree** —
-             the tree so that two passages of one section cannot take a place in
-             the answer from two passages of different ones (src/similar.ts §
-             `sectionOfRow`). It is the same read every other artefact route
-             makes and the store caches nothing, so on a warm similarity cache
-             this load is the entire cost of the request. */
-          const loaded = await loadArticle(at);
-          try {
-            send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
-          } catch (err) {
-            /* **This used to catch everything and blame the provider**, which
-               is the bug a GPT Sol review had already found and fixed in
-               `projection` twenty lines below — and this, its sibling, was left
-               with it. A ranking bug in src/similar.ts was reported to the
-               reader, and logged, as an outage at somebody else's company.
-               ⟨Sol⟩, 2026-08-28. */
-            throw embeddingHttpError(err, at);
-          }
-          return;
-        });
+      const at = slugPart(captures, 1);
+      /* This route pays for embeddings, so its rows carry the article like
+         chat's and explain's do — `article: "first-capture"` above. GPT Sol
+         found both this and `projection` writing owner-attributed rows with a
+         null slug — which the report then excludes from "by article" entirely,
+         so an article's real cost would have been understated by exactly the
+         two features that embed it. */
+      /* The whole article, because this needs the prose **and the tree** —
+         the tree so that two passages of one section cannot take a place in
+         the answer from two passages of different ones (src/similar.ts §
+         `sectionOfRow`). It is the same read every other artefact route
+         makes and the store caches nothing, so on a warm similarity cache
+         this load is the entire cost of the request. */
+      const loaded = await loadArticle(at);
+      try {
+        send(res, 200, await similarBlocks(at, loaded.blocks, loaded.tree));
+      } catch (err) {
+        /* **This used to catch everything and blame the provider**, which
+           is the bug a GPT Sol review had already found and fixed in
+           `projection` twenty lines below — and this, its sibling, was left
+           with it. A ranking bug in src/similar.ts was reported to the
+           reader, and logged, as an outage at somebody else's company.
+           ⟨Sol⟩, 2026-08-28. */
+        throw embeddingHttpError(err, at);
       }
     },
   },
@@ -9579,19 +10576,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/projection\/([\w.%-]+)$/,
     article: "first-capture",
     handler: async ({ request: { res } }, captures) => {
-      {
-        const at = slugPart(captures, 1);
-        /* Same reason as `similar` above: this route pays for embeddings, so its
-           rows carry the article. */
-        return withSpendAttribution({ articleSlug: at }, async () => {
-          const loaded = await loadArticle(at);
-          try {
-            send(res, 200, await projectArticle(at, loaded.blocks));
-          } catch (err) {
-            throw embeddingHttpError(err, at);
-          }
-          return;
-        });
+      const at = slugPart(captures, 1);
+      /* Same reason as `similar` above: this route pays for embeddings, so its
+         rows carry the article. */
+      const loaded = await loadArticle(at);
+      try {
+        send(res, 200, await projectArticle(at, loaded.blocks));
+      } catch (err) {
+        throw embeddingHttpError(err, at);
       }
     },
   },
@@ -9601,7 +10593,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: COMMENTS_PATTERN,
     article: "first-capture",
-    handler: async ({ request: { req, res } }, captures) => {
+    handler: async ({ request: { res, query } }, captures) => {
       const slug = slugPart(captures, 1);
       const comments = await sweepOrphaned(slug);
       /* **Whole-block bookmarks go only to a client that asks for them.** A tab
@@ -9611,8 +10603,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          Such a tab simply does not see the bookmark until it reloads; the row is
          untouched. GPT Sol's plan review of 260912c. Delete the filter once no
          client can be older than the parameter. */
-      const wholeBlock =
-        new URL(req.url ?? "/", "http://local").searchParams.get("anchors") === "whole-block";
+      const wholeBlock = query.get("anchors") === "whole-block";
       send(res, 200, {
         comments: wholeBlock ? comments : comments.filter((c) => c.quote !== undefined),
       });
@@ -9651,9 +10642,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          bad request is an ordinary 400. */
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       const answerBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slug }, () =>
-        answer(slug, id, answerBody, res),
-      );
+      await answer(slug, id, answerBody, res);
     },
   },
 
@@ -9806,14 +10795,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          reads. A stream that fails *before* the headers go out throws, and the
          catch below answers it as ordinary JSON; after that, the failure is an
          `error` frame inside a 200, because the status line is long gone. */
-      /* **The article goes on every row this request writes.** Without it,
-         "what has this piece cost me" would cover the ingest and none of the
-         questions asked about it afterwards — which is the half a reader
-         actually generates. src/ai-spend.ts § `withSpendAttribution`. */
+      /* **The article goes on every row this request writes** — the row's
+         `article: "first-capture"`. Without it, "what has this piece cost me"
+         would cover the ingest and none of the questions asked about it
+         afterwards — which is the half a reader actually generates. */
       const chatBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        streamChat(slugPart(captures, 1), chatBody, res),
-      );
+      await streamChat(slugPart(captures, 1), chatBody, res);
     },
   },
 
@@ -9839,11 +10826,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          at the questions that were typed. */
       const slug = slugPart(captures, 1);
       const toolBody = await readBody(req);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: slug }, () => liveTool(slug, toolBody)),
-      );
+      send(res, 200, await liveTool(slug, toolBody));
     },
   },
 
@@ -9945,8 +10928,9 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/spoken$/,
     article: "first-capture",
     handler: async ({ request: { req, res } }, captures) => {
-      /* **The spend attribution the streaming route has, for the half of a live
-         session this server can see.** It buys nothing today: the realtime rows
+      /* **The spend attribution the streaming route has (`article:
+         "first-capture"`), for the half of a live session this server can
+         see.** It buys nothing today: the realtime rows
          are written by `/api/live/:sessionId/usage` above, which takes its
          article off the session row rather than off the ambient scope. Kept
          because this request makes model calls of its own the moment anything
@@ -9954,11 +10938,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          that knows which article it belongs to. */
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       const spokenBody = await readBody(req);
-      send(
-        res,
-        200,
-        await withSpendAttribution({ articleSlug: slug }, () => spokenChat(slug, id, spokenBody)),
-      );
+      send(res, 200, await spokenChat(slug, id, spokenBody));
     },
   },
 
@@ -9971,6 +10951,20 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       // The slug becomes a directory; the ids are only ever matched in a Map.
       const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
       send(res, 200, await stopChat(slug, id, await readBody(req)));
+    },
+  },
+
+  /* The reader pressed Hint under a Recall answer. No model call, so
+     `first-capture` attributes nothing; it is here for the reason `spoken`
+     gives, that the request knows which article it belongs to. */
+  {
+    kind: "pattern",
+    method: "POST",
+    pattern: /^\/api\/chat\/([\w.%-]+)\/([\w.%-]+)\/hint-opened$/,
+    article: "first-capture",
+    handler: async ({ request: { req, res } }, captures) => {
+      const [slug, id] = [slugPart(captures, 1), part(captures, 2)];
+      send(res, 200, await hintOpened(slug, id, await readBody(req)));
     },
   },
 
@@ -10039,9 +11033,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          still reached through `send` for its *failures*: validation throws
          before a header is written, so a bad request is an ordinary 400. */
       const searchBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        search(slugPart(captures, 1), searchBody, res),
-      );
+      await search(slugPart(captures, 1), searchBody, res);
     },
   },
 
@@ -10125,9 +11117,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          *failures*: `readCriterionRequest` throws before a header is written,
          so a bad request is an ordinary 400. */
       const criteriaBody = await readBody(req);
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        runRefereeCriterion(slugPart(captures, 1), criteriaBody, res),
-      );
+      await runRefereeCriterion(slugPart(captures, 1), criteriaBody, res);
     },
   },
 
@@ -10204,19 +11194,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          a body is not refused, it is ignored, which is the same call
          `POST /api/referee/mirror/:slug` makes.
 
-         `withSpendAttribution`, because the call inside it pays: the rows have
-         to carry the article or the cost report cannot say which paper a
+         `article: "first-capture"`, because the call inside it pays: the rows
+         have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        runRefereeClaims(slugPart(captures, 1), res),
-      );
+      await runRefereeClaims(slugPart(captures, 1), res);
     },
   },
 
-  /* The source scan, and the one route under `/api/referee/` that is not a
-     sub-mode: it belongs to the **mode**, because a hidden instruction is a fact
-     about the document that bears on Criteria, Claims, Mirror and Candidates
-     alike. GET only, and nothing to POST: the answer is a pure function of bytes
+  /* The source scan behind Referee's Hidden text sub-mode. It is fetched by the
+     band because a hidden instruction is a fact about the document, and the
+     answer must survive chip changes without another scan. GET only, and
+     nothing to POST: the answer is a pure function of bytes
      already stored, so asking for it is reading. One row, so the pattern is
      written here rather than named above. */
   {
@@ -10234,7 +11222,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          there; tests/referee-scan-route.test.ts pins it here. The answer is
          discarded — it is asked as a question. */
       await shelfStore.read(slug);
-      /* **No `withSpendAttribution`**, and its absence is the point rather than
+      /* **Nothing here spends**, which is the point rather than
          an omission: this is the one thing in Referee mode that calls no model.
          It is deterministic, free, and it reports without deciding anything —
          see src/injection-scan.ts § *It reports. It does not decide.*
@@ -10267,12 +11255,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          before a header is written, and `runMirror` reads everything it needs
          above `sse(res)` for exactly that reason.
 
-         `withSpendAttribution`, because the call inside it pays — the rows have
-         to carry the article or the cost report cannot say which paper a
+         `article: "first-capture"`, because the call inside it pays — the rows
+         have to carry the article or the cost report cannot say which paper a
          referee's session was about. src/ai-spend.ts. */
-      await withSpendAttribution({ articleSlug: slugPart(captures, 1) }, () =>
-        runMirror(slugPart(captures, 1), res),
-      );
+      await runMirror(slugPart(captures, 1), res);
     },
   },
 
@@ -10350,6 +11336,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
+      /* One of our own reading pages is not an article to import, and the
+         answer costs nothing: asked of the normalised address, before any slot.
+         src/own-reading-page.ts. */
+      if (request.url !== undefined && isOwnReadingPage(request.url)) {
+        throw httpError(400, OWN_READING_PAGE.message);
+      }
       const uploadId = request.uploadId;
       if (uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to
@@ -10403,10 +11395,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          article* and stamp a new one's artefacts with it — and under `postgres`
          it would simply throw, because the article does not exist yet.
 
-         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which stops
-         at `arc`, and no step in it takes a profile. The reader asks for a
-         glossary or a set of ideas later, by slug, and that request resolves
-         correctly. GPT Sol's review of the built code, 2026-08-26.
+         Nothing is lost. A new ingest runs `DEFAULT_INGEST_STEPS`, which ends
+         at `assets`, and no step in it takes a profile. The main-mode jobs its
+         publication queues are given the reader's profile there
+         (src/store/pg-revisions.ts § `publishRevisionIn`), and a request made
+         later, by slug, resolves it here. GPT Sol's review of the built code,
+         2026-08-26.
 
          `=== false`, so absent means yes: a client that has never heard of this
          field gets the profiled run, which is the default the panel offers. */
@@ -10422,8 +11416,18 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           ? null
           : await resolveProfile(request.slug);
       const { useProfile: _asked, ...work } = request;
+      /* `openEarly` on a pasted address only: the article opens on a stand-in
+         outline and a second job builds the structure. `enqueue` honours it
+         only for a new article. **Deleting it here and in `queueAnUpload` is the
+         whole way back** if this misbehaves; everything else is inert without it.
+         docs/plans/261005j-open-the-article-before-structure-and-swap-the-real-tree-in-live.md. */
       const queue = (slot: IngestSlot) =>
-        enqueue({ ...work, ...(profile ? { profile } : {}), ...slot });
+        enqueue({
+          ...work,
+          ...(profile ? { profile } : {}),
+          ...(request.url !== undefined ? { openEarly: true as const } : {}),
+          ...slot,
+        });
       /**
        * **A URL is a new ingest and spends a slot; a bare slug is a re-run and
        * is free.** The two shapes arrive at the same endpoint and are told apart

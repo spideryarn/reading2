@@ -1,12 +1,12 @@
 /**
  * **The conversation controller, and the two modes that compose it.** Chat is
- * `ConversationBand` on its own; Remember is `RememberBand`, which is the
- * `?remember=` switch over that same band and the quiz.
+ * `ConversationBand` on its own; Learn is `LearnBand`, which is the
+ * `?learn=` switch over that same band and the quiz.
  *
- * **One file, and deliberately not two.** `RememberBand` renders
- * `ConversationBand`, so `modes/chat/` beside `modes/remember/` would be one
+ * **One file, and deliberately not two.** `LearnBand` renders
+ * `ConversationBand`, so `modes/chat/` beside `modes/learn/` would be one
  * feature module importing another — which A1 forbids alongside importing
- * `App.tsx`. Chat and Remember are two compositions of one conversation
+ * `App.tsx`. Chat and Learn are two compositions of one conversation
  * controller rather than two features. GPT Sol's review of the plan below,
  * finding F2.
  *
@@ -16,63 +16,73 @@
  * byte-for-byte, so `App.tsx` stops knowing what is inside them. Both modes are
  * owner-only, so there are no visitor twins. See
  * docs/plans/260906c-separate-article-access-reader-composition-and-mode-controllers.md,
- * and docs/project/comments.md, docs/project/remember-mode.md and
+ * and docs/project/comments.md, docs/project/learn-mode.md and
  * docs/project/quiz.md for the modes themselves.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryState, useQueryStates } from "nuqs";
-import type { BlockId, ChatThread, SingleThreadKind, ThreadKind } from "../../../types.js";
+import type {
+  BlockId,
+  ChatAnchor,
+  ChatThread,
+  SingleThreadKind,
+  ThreadKind,
+  ThreadOrigin,
+} from "../../../types.js";
 import { isSingleThreadKind } from "../../../types.js";
-import { currentAt, rememberParam, threadParam } from "../../params.js";
+import { chatFromParam, currentAt, modeParam, learnParam, threadParam } from "../../params.js";
+import { listedInChat, sourcesIn } from "../../thread-source.js";
 import { useRenderCount } from "../../perf.js";
-import { type QuizArrival, QuizPanel, type QuizSections, RememberSubModeToggle } from "../../QuizPanel.js";
+import { type QuizArrival, QuizPanel, type QuizSections, LearnSubModeToggle } from "../../QuizPanel.js";
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
 import type { ReadSoFar } from "../../read-filter.js";
 import { useChat } from "../../useChat.js";
+import { useExperimental } from "../../useExperimental.js";
 import { softKeyboardIsUp } from "../../useVisualViewport.js";
 import { useLive } from "../../live/useLive.js";
 import { ChatPanel } from "../../ChatPanel.js";
+import { chatDraftsFor } from "../../chat-draft.js";
 
 /**
- * **Remember's three sub-modes, and the one place their URL rules live.**
+ * **Learn's four sub-modes, and the one place their URL rules live.**
  *
- * Remember is `recall` — the reader says what they took from the article and the
+ * Learn is `recall` — the reader says what they took from the article and the
  * model shows them where that comes apart — `tutorial`, where model and reader
- * take short teaching turns, or `quiz`, where the questions come from the article
- * instead. One mode, three views, and `?remember=` says which.
+ * take short teaching turns, `explore`, where the reader works out what they
+ * think and the model starts from what they marked, or `quiz`, where the
+ * questions come from the article instead. One mode, four views, and
+ * `?learn=` says which.
  * docs/plans/260831al-review-quiz-sub-mode.md.
  *
  * ## Why this is a component rather than two conditions up in `Reader`
  *
  * Two reasons, and the second is the one that matters.
  *
- * The cheap one: `?remember=` is meaningless outside Remember mode, and reading it
+ * The cheap one: `?learn=` is meaningless outside Learn mode, and reading it
  * in `Reader` would put a parameter subscription on every render of the reading
  * view for a value only this subtree uses — the same argument `ConversationBand`
  * makes about `?thread=`.
  *
- * The real one: **`?remember=` and `?thread=` collide, and the rules are
- * navigations rather than parsing.** `?mode=remember&remember=quiz&thread=<id>`
- * would otherwise leave a Remember conversation selected and invisible. Both
+ * The real one: **`?learn=` and `?thread=` collide, and the rules are
+ * navigations rather than parsing.** `?mode=learn&learn=quiz&thread=<id>`
+ * would otherwise leave a Learn conversation selected and invisible. Both
  * parameters are set through one `useQueryStates`, so switching sub-mode is one
  * history entry rather than two — two would put a half-state on the Back stack,
- * which is the bug remember-mode.md already records for opening a thread of the
+ * which is the bug learn-mode.md already records for opening a thread of the
  * other kind.
  *
  * Two rules, and both are here:
  *
- * 1. **switching to Quiz sets `remember=quiz` and clears `thread`, in one
+ * 1. **switching to Quiz sets `learn=quiz` and clears `thread`, in one
  *    navigation** — pushed, because switching sub-mode is a deliberate act on
  *    the view and Back should undo it;
  * 2. **a pasted URL carrying both: Quiz wins**, and `thread` is dropped with a
  *    *replace* — a push would put the broken combination one Back press away
  *    from the reader we have just rescued from it.
  *
- * There was a third — opening a Remember conversation from chat's list set
- * `remember=recall` with it — and it went on 2026-10-01 with the shared list:
- * chat no longer lists Remember conversations, so nothing outside this band
- * opens one (plan 261001m).
+ * Opening a Learn row from Chat sets mode, sub-mode and thread together
+ * in `ConversationBand` below; that navigation does not belong to this toggle.
  *
  * ## And the live conversation is hung up before the panel goes
  *
@@ -83,7 +93,7 @@ import { ChatPanel } from "../../ChatPanel.js";
  * why the two halves are rendered as alternatives rather than one being hidden
  * with CSS — a hidden band is a mounted band.
  */
-export function RememberBand({
+export function LearnBand({
   slug,
   quizRead,
   quizArrival,
@@ -109,9 +119,12 @@ export function RememberBand({
   /** The quiz's ← / → handler, up to `Reader` — `QuizPanel`'s `onArrowKeys`. */
   onQuizKeys?: ((handler: ((dir: -1 | 1) => boolean) | null) => void) | undefined;
 }) {
-  useRenderCount("RememberBand");
-  const [{ remember, thread }, setBoth] = useQueryStates({
-    remember: rememberParam,
+  useRenderCount("LearnBand");
+  /* Only for which chips the row draws: Explore is behind the switch
+     (QuizPanel.tsx § `LearnSubModeToggle`). */
+  const { on: experimentalOn } = useExperimental();
+  const [{ learn, thread }, setBoth] = useQueryStates({
+    learn: learnParam,
     thread: threadParam,
   });
 
@@ -119,30 +132,31 @@ export function RememberBand({
      because writing to the URL during render is what React refuses. It settles
      on the first commit and then never fires again, since `thread` is null. */
   useEffect(() => {
-    if (remember === "quiz" && thread !== null) {
+    if (learn === "quiz" && thread !== null) {
       void setBoth({ thread: null }, { history: "replace" });
     }
-  }, [remember, thread, setBoth]);
+  }, [learn, thread, setBoth]);
 
   const toggle = (
-    <RememberSubModeToggle
-      value={remember}
+    <LearnSubModeToggle
+      value={learn}
       slug={slug}
+      experimental={experimentalOn}
       onChange={(next) =>
         /* Rule 1. Both keys in one call, so this is one history entry — and
            `thread: null` on the way to Quiz rather than only on arrival, so
            there is no frame in which the URL says both. Going the other way
-           leaves `thread` alone: Recall opens the one Remember conversation
+           leaves `thread` alone: Recall opens the one Learn conversation
            whatever it says, and writes its id back (`ConversationBand`). */
         void setBoth(
-          next === "quiz" ? { remember: next, thread: null } : { remember: next },
+          next === "quiz" ? { learn: next, thread: null } : { learn: next },
           { history: "push" },
         )
       }
     />
   );
 
-  if (remember === "quiz")
+  if (learn === "quiz")
     return (
       <QuizSubBand
         slug={slug}
@@ -157,17 +171,31 @@ export function RememberBand({
         onArrowKeys={onQuizKeys}
       />
     );
-  if (remember === "tutorial")
+  if (learn === "tutorial")
     return (
       <ConversationBand
         /* Its own key, so Recall and Tutorial never share a mounted band — a
-           focus nonce, a latch or a draft carried across would belong to the
-           other conversation. */
-        key="remember-tutorial"
+           focus nonce or a latch carried across would belong to the other
+           conversation. (Their unsent words are kept apart by kind, not by
+           this key: src/web/chat-draft.ts.) */
+        key="learn-tutorial"
         slug={slug}
         blocks={blocks}
         onJump={onJump}
         kind="tutorial"
+        subMode={toggle}
+      />
+    );
+  if (learn === "explore")
+    return (
+      <ConversationBand
+        /* Its own key, for Tutorial's reason: three conversations, and none of
+           them shares a mounted band with another. */
+        key="learn-explore"
+        slug={slug}
+        blocks={blocks}
+        onJump={onJump}
+        kind="explore"
         subMode={toggle}
       />
     );
@@ -176,12 +204,12 @@ export function RememberBand({
       /* Keyed so that leaving Quiz and coming back starts clean rather than
          carrying the previous visit's focus nonce — the same reason
          `Reader` keys this component on `mode`. */
-      key="remember-recall"
+      key="learn-recall"
       slug={slug}
       blocks={blocks}
       onJump={onJump}
       /* The **persisted thread kind** — src/types.ts § ThreadKind. */
-      kind="remember"
+      kind="learn"
       subMode={toggle}
     />
   );
@@ -256,20 +284,23 @@ function QuizSubBand({
  *
  * `candidates` is a thread of Referee mode's making and belongs to
  * `CandidatesPanel`; it has no mode of its own to be followed into from here.
- * Written as an `Exclude` rather than as `"chat" | "remember"` so that a fifth
+ * Written as an `Exclude` rather than as `"chat" | "learn"` so that a fifth
  * kind arrives here as a compile error and somebody has to decide which side of
  * the line it is on.
  */
 type ConversationKind = Exclude<ThreadKind, "candidates">;
 
 /**
- * **A question another mode has handed to chat, to be put in a fresh
- * conversation's composer and not sent.**
+ * **A question another mode has handed to chat, for a fresh conversation:
+ * sent as its first question, or put in its composer to wait** (`send`).
  *
- * Today there is one sender: the glossary's *Ask in chat*, for a term the
- * article does not contain. Greg, 2026-09-11, asked whether the question should
- * go into the conversation already open or a new one: *"fresh"*. So it never
- * touches another conversation's draft, and it spends nothing until Send.
+ * The senders are all in `Reader` (§ `handToChat`): *Ask in chat* in Glossary,
+ * Citations and Debate, Debate's *Check this claim in chat*, and the button
+ * on a Summary paragraph, which hands over the paragraph, quoted
+ * (docs/plans/261004a-ask-about-a-summary-paragraph-in-chat.md). Greg,
+ * 2026-09-11, asked whether the glossary's question should go into the
+ * conversation already open or a new one: *"fresh"*. So a handoff never
+ * touches another conversation's draft.
  *
  * **A prop, owned by `Reader`, and deliberately not the module-level cell that
  * src/web/chat-handoff.ts used to be.** That cell was deleted for three real
@@ -288,10 +319,37 @@ type ConversationKind = Exclude<ThreadKind, "candidates">;
 export interface ChatHandoff {
   readonly slug: string;
   readonly question: string;
+  /**
+   * **Whether the press that handed this over was the Send.** Greg,
+   * 2026-10-06 (spya-x896vu): *"When I click "ask in Chat" anywhere,
+   * automatically submit the input (rather than just prefilling the input box
+   * and waiting for me to hit send)"*. Until then every handoff waited in the
+   * box. `true` for a question that is complete as handed over; `false` for
+   * the Summary paragraph's, which is a quoted paragraph and an empty line
+   * where the reader's question goes, so there is nothing to ask yet.
+   * Required, so a new sender has to say.
+   * docs/plans/261006j-ask-in-chat-sends-the-question.md.
+   */
+  readonly send: boolean;
+  /**
+   * The item the question is about, when the conversation should remember it
+   * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05,
+   * and *Ask in chat* on a Glossary entry or a Citations row since 2026-10-06
+   * (docs/plans/261006d-glossary-and-citations-ask-in-chat-with-origin.md).
+   * The band keeps it beside the new conversation and sends it with the
+   * first question. The Summary's handoff sends none, and nor does the
+   * glossary's other one, for a typed word the article does not contain.
+   * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md.
+   */
+  readonly origin?: ThreadOrigin;
+  /** A passage the handed-over question is about. */
+  readonly anchor?: ChatAnchor;
+  /** The saved comment that asked this question, when there is one. */
+  readonly sourceCommentId?: string;
 }
 
 /**
- * **The reader's one Remember conversation, out of whatever the list holds.**
+ * **The reader's one Learn conversation, out of whatever the list holds.**
  *
  * The server keeps at most one per article (plan 261001m § 1), but this tab can
  * briefly hold more: an empty one it began before a refetch brought the stored
@@ -299,9 +357,9 @@ export interface ChatHandoff {
  * the earliest, then the id — a total order, so every render picks the same.
  * Pure and exported for that reason.
  */
-export function oneRemember(
+export function oneLearn(
   threads: readonly ChatThread[],
-  kind: SingleThreadKind = "remember",
+  kind: SingleThreadKind = "learn",
 ): ChatThread | null {
   let best: ChatThread | null = null;
   for (const t of threads) {
@@ -319,7 +377,7 @@ function before(a: ChatThread, b: ChatThread): boolean {
 }
 
 /**
- * `kind` — which mode mounted the band, chat or Remember — and what goes with
+ * `kind` — which mode mounted the band, chat or Learn — and what goes with
  * each.
  *
  * **One component for both, and not two.** Everything in here is the same for
@@ -348,16 +406,41 @@ type ConversationVisibilityByKind = {
     kind: "chat";
     onScreen: () => readonly BlockId[];
   };
-  remember: {
-    /** Remember must never report a screenful to its prompt. */
-    kind: "remember";
+  learn: {
+    /** Learn must never report a screenful to its prompt. */
+    kind: "learn";
     onScreen?: never;
   };
-  /** Remember's Tutorial: the same rule as Recall's. */
+  /** Learn's Tutorial: the same rule as Recall's. */
   tutorial: {
     kind: "tutorial";
     onScreen?: never;
   };
+  /** Learn's Explore: about the reader's thinking, not where they are on the page. */
+  explore: {
+    kind: "explore";
+    onScreen?: never;
+  };
+};
+
+/**
+ * **Which kinds of conversation offer Live**, the spoken one
+ * (docs/project/live-conversation.md). A capability per kind, written out for
+ * every kind, so a new one has to say — it was a `kind === "tutorial"` check
+ * until Explore, which would have got a Live button by default and a 400 from
+ * the server on its first spoken turn (GPT Sol's review of plan 261003l, PR-5).
+ *
+ * It has to agree with `SpokenKind` in src/chat.ts, the kinds a spoken turn
+ * may create or join: tests/learn-own-thread.test.tsx holds the two
+ * together. Tutorial has none yet because Greg said Live "doesn't work very
+ * well at the moment"; Explore has none for the same reason, and because a
+ * spoken turn carries no notes digest.
+ */
+export const OFFERS_LIVE: Readonly<Record<ConversationKind, boolean>> = {
+  chat: true,
+  learn: true,
+  tutorial: false,
+  explore: false,
 };
 
 type ConversationBandProps = {
@@ -365,15 +448,19 @@ type ConversationBandProps = {
   blocks: Map<string, string>;
   onJump(id: BlockId): void;
   /**
-   * A question to open a fresh conversation with, unsent — see `ChatHandoff`.
-   * Only chat mode is handed one.
+   * A question to open a fresh conversation with, sent or left in its box —
+   * see `ChatHandoff`. Only chat mode is handed one.
    */
   handoff?: ChatHandoff | null | undefined;
   /** The band has taken `handoff` (or refused it); the owner should forget it. */
   onHandoffTaken?: (() => void) | undefined;
+  /** The fresh conversation a sent handoff opened, including a corrected id. */
+  onHandoffThread?: ((handoff: ChatHandoff, threadId: string) => void) | undefined;
+  /** An answer settled, including after this band has gone. */
+  onSettled?: (() => void) | undefined;
   /**
-   * **The Recall | Tutorial | Quiz control**, when this band is one of Remember's
-   * conversation views. Absent in chat mode. Built by `RememberBand` above and passed straight
+   * **The Recall | Tutorial | Explore | Quiz control**, when this band is one of Learn's
+   * conversation views. Absent in chat mode. Built by `LearnBand` above and passed straight
    * through to `ChatPanel`, which is where it is drawn.
    */
   subMode?: React.ReactNode;
@@ -387,6 +474,8 @@ export function ConversationBand({
   subMode,
   handoff,
   onHandoffTaken,
+  onHandoffThread,
+  onSettled,
   onScreen,
 }: ConversationBandProps) {
   useRenderCount("ConversationBand");
@@ -402,61 +491,90 @@ export function ConversationBand({
     begin,
     discard,
     rename,
+    openHint,
     remove,
     deleting,
     settled,
+    named,
     speak,
     error,
-  } = useChat(slug);
+  } = useChat(slug, onSettled);
   /**
-   * **This mode's conversations, and only this mode's.**
+   * **The conversations this band may open: this mode's kind, and only it.**
    *
-   * The list was shared between chat and Remember from 2026-08-27 until report
-   * `spya-peszam` (Greg, 2026-10-01): *"The Remember mode should be its own
+   * The list was shared between chat and Learn from 2026-08-27 until report
+   * `spya-peszam` (Greg, 2026-10-01): *"The Learn mode should be its own
    * single, special conversation thread (not visible from Chat, nor should
-   * other Chat threads be visible in Remember mode)."* So a thread of the other
-   * kind is not here at all, and neither is Candidates, which is Referee mode's
-   * machinery. Plan 261001m § 4.
+   * other Chat threads be visible in Learn mode)."* Plan 261001m § 4.
+   *
+   * **The "not visible from Chat" half of that changed on 2026-10-05**, for
+   * report `spya-hyfqkq`: Chat's list now shows Learn's conversations too
+   * (`listed` below; plan
+   * docs/plans/261005i-chats-started-from-a-mode-a-thread-remembers-where-it-began.md,
+   * D5). The other half stands, and so does this filter: Learn shows only
+   * its own one conversation, and what Chat may *open* is still only a chat.
    */
+  /* Origins come from the server, through a load or the successful `begin`
+     frame. A held draft may have been refused, so it cannot label a row. */
   const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
+  /**
+   * **What Chat's list draws: every conversation but Referee's Candidates.**
+   *
+   * A second set beside `threads`, and the two are kept apart on purpose (the
+   * plan review's F3). Everything below that decides which conversation is
+   * open, where a question goes or whose unsent words are whose reads
+   * `threads`. Only two things read this one: the panel's list, and the
+   * arrival rule's "is there anything to show".
+   */
+  const listed = useMemo(() => everyThread.filter(listedInChat), [everyThread]);
   const [thread, setThread] = useQueryState("thread", threadParam);
-  /* Recall and Tutorial: each one conversation per article, no list. Named
-     for Remember because that is where both live. */
+  /** `?chatfrom=`: which source Chat's list is narrowed to. Null is All. */
+  const [from, setFrom] = useQueryState("chatfrom", chatFromParam);
+  /* For a press on a Learn row, which changes three parameters at once. */
+  /* Closed on a line of its own: tests/last-view.test.ts reads the keys of
+     every `useQueryStates` call by that shape. */
+  const [{ mode: modeNow }, setWhere] = useQueryStates({
+    mode: modeParam,
+    learn: learnParam,
+    thread: threadParam,
+  });
+  /* Recall, Tutorial and Explore: each one conversation per article, no
+     list. Named for Learn because that is where all three live. */
   const single = isSingleThreadKind(kind) ? kind : null;
-  const remembering = single !== null;
+  const learning = single !== null;
   /**
    * Start over has two ordered waits: Live must finish writing its last spoken
-   * exchange, then the DELETE must finish. While either is true Remember has no
+   * exchange, then the DELETE must finish. While either is true Learn has no
    * composer and none of its callbacks may start another write.
    */
   const [resetting, setResetting] = useState<"idle" | "stopping-live" | "deleting">("idle");
   const resettingNow = useRef(false);
   /**
-   * **Remember's one conversation, derived during render** — never chosen in an
+   * **Learn's one conversation, derived during render** — never chosen in an
    * effect, so there is no frame in which the panel is handed a `?thread=` that
    * names nothing and draws a list. `?thread=` follows it (the effect below)
-   * rather than leading it: a chat's id or a stale one in Remember's URL is
+   * rather than leading it: a chat's id or a stale one in Learn's URL is
    * simply overruled. GPT Sol's plan review, F6.
    */
-  const remembered = useMemo(() => (single ? oneRemember(threads, single) : null), [single, threads]);
-  const theRemember = resetting === "idle" ? remembered : null;
-  /** The open conversation's id: Remember's one, or what `?thread=` says in chat. */
-  const current = remembering ? (theRemember?.id ?? null) : thread;
+  const found = useMemo(() => (single ? oneLearn(threads, single) : null), [single, threads]);
+  const theLearn = resetting === "idle" ? found : null;
+  /** The open conversation's id: Learn's one, or what `?thread=` says in chat. */
+  const current = learning ? (theLearn?.id ?? null) : thread;
 
-  /* The address follows Remember's conversation, by *replace* — this corrects
+  /* The address follows Learn's conversation, by *replace* — this corrects
      the URL; it is not a step the reader took. */
   useEffect(() => {
-    if (!theRemember || thread === theRemember.id) return;
-    void setThread(theRemember.id, { history: "replace" });
-  }, [theRemember, thread, setThread]);
+    if (!theLearn || thread === theLearn.id) return;
+    void setThread(theLearn.id, { history: "replace" });
+  }, [theLearn, thread, setThread]);
 
-  /* An empty Remember conversation that lost to the stored one — begun before a
+  /* An empty Learn conversation that lost to the stored one — begun before a
      refetch brought the real one — is this tab's alone, so it is dropped rather
      than left to resurface. `discard` is a no-op on anything with a message. */
   useEffect(() => {
-    if (!theRemember) return;
-    for (const t of threads) if (t.id !== theRemember.id && t.messages.length === 0) discard(t.id);
-  }, [theRemember, threads, discard]);
+    if (!theLearn) return;
+    for (const t of threads) if (t.id !== theLearn.id && t.messages.length === 0) discard(t.id);
+  }, [theLearn, threads, discard]);
 
   /**
    * The conversations as they are **now**, for a callback that outlives a render.
@@ -472,16 +590,62 @@ export function ConversationBand({
   selectedThread.current = current;
   const [pendingLive, setPendingLive] = useState<{ id: string; from: string | null } | null>(null);
   /**
-   * The text a handed-over question starts its conversation's composer with.
-   * `ChatPanel` treats it as that conversation's initial draft — see `seed`
-   * there. Carries its slug, so a band that outlives an article change does not
-   * offer it to the next one.
+   * **This article's unsent words, and where Chat was** — src/web/chat-draft.ts.
+   * They outlive this band, which is the point: the band goes on every mode
+   * change. The panel reads and writes the words; what the band does with the
+   * store is the part only it can know — which conversations it began and
+   * whether anything has been submitted to them, where a handed-over question
+   * goes, and where the reader was when they left (the arrival rule below).
+   * docs/plans/261004j-chat-keeps-an-unsent-question-across-a-mode-change.md.
    */
-  const [seed, setSeed] = useState<{
-    slug: string;
-    threadId: string;
-    text: string;
-  } | null>(null);
+  const drafts = chatDraftsFor(slug);
+  /* A draft recovered onto a forced list must survive another mode change
+     before its row is opened. Empty local rows go with this band; keeping its
+     destination lets the next visit recover the words and pending origin. */
+  const heldOnList = useRef<string | null>(null);
+  useEffect(() => {
+    for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
+  }, [threads, named, drafts]);
+  /**
+   * `speak`, as the live session is handed it: **a spoken exchange is a
+   * submission**, and it is one the typed draft knows nothing about — the
+   * reader may hold words in the box while talking, and they do not change.
+   * So "never submitted" is revoked here, where the exchange is written, and
+   * not where the draft is. GPT Sol's review of the plan above, F9.
+   */
+  const speakAndMark = useCallback<typeof speak>(
+    (spoken, onThreadId) => {
+      drafts.submitted(spoken.threadId);
+      return speak(spoken, onThreadId);
+    },
+    [drafts, speak],
+  );
+  /**
+   * **Where this conversation was started from, while the server does not have
+   * it yet** — the origin a handoff left beside the conversation's words
+   * (`ChatDrafts.origin`), or `undefined`.
+   *
+   * The server stores an origin on the insert that creates the thread and at
+   * no other time, so it is offered on every Send until the thread exists
+   * there (`named`), and on none after. A first Send that fails leaves it
+   * pending, so the next one carries it again; an identical origin for a
+   * thread that already has it is let through, so a Send that did land
+   * without this tab hearing is harmless too.
+   *
+   * `named` answers from the controller, which re-renders this band when it
+   * changes. The effect above forgets confirmed entries; the server's row
+   * carries the origin from then on.
+   */
+  const pendingOrigin = (id: string | null): ThreadOrigin | undefined =>
+    kind === "chat" && id !== null && !named(id) ? drafts.origin(id) : undefined;
+  /**
+   * **No Live until the first typed Send has landed** (plan 261005i, F4). A
+   * spoken first exchange creates the thread by its own route, which carries
+   * no origin, and the thread would then never have one. So while one is
+   * pending the control is not handed down and the start callback does
+   * nothing; a spoken first turn with an origin is a later stage.
+   */
+  const awaitsOrigin = (id: string | null): boolean => pendingOrigin(id) !== undefined;
 
   /**
    * **The live conversation, owned here** — above the panel, above the keyed
@@ -509,7 +673,7 @@ export function ConversationBand({
    * the one that owns the call, as the same `LiveApi`. ../../live/useLive.ts.
    */
   const live = useLive(slug, {
-    speak,
+    speak: speakAndMark,
     blocks,
     tailNow: (id) => threadsRef.current.find((t) => t.id === id)?.messages.at(-1)?.id ?? null,
     onThreadId: (id, startedThreadId) => {
@@ -574,13 +738,21 @@ export function ConversationBand({
    * for somewhere to type.
    */
   const [focusNonce, setFocusNonce] = useState(0);
-  const startNew = useCallback(() => {
+  /* `focus` is false for one caller: a handed-over question that is sent on
+     arrival (the handoff effect below), where there is nothing to type. */
+  const beginHere = useCallback((focus: boolean) => {
+    heldOnList.current = null;
     setPendingLive(null);
     const id = begin(kind);
+    /* Begun here, in this tab, and nothing submitted to it: the one kind of
+       conversation the arrival rule may begin again on the way back. Chat's
+       only — Learn's words are kept by kind and need no such mark. */
+    if (kind === "chat") drafts.markFresh(id);
     void setThread(id);
-    setFocusNonce((n) => n + 1);
+    if (focus) setFocusNonce((n) => n + 1);
     return id;
-  }, [begin, setThread, kind]);
+  }, [begin, setThread, kind, drafts]);
+  const startNew = useCallback(() => beginHere(true), [beginHere]);
 
   /**
    * **An empty chat opens a conversation rather than an empty list.**
@@ -614,16 +786,25 @@ export function ConversationBand({
    * future reasoning that assumes it does will be wrong. It is reset on `slug`
    * as well, for the case the panel stays mounted across a change of article.
    *
-   * `thread` is deliberately *not* in the condition. `?thread=` can name a
-   * conversation that no longer exists — leave chat mode with an empty new one
-   * open and the URL keeps its id while the panel takes the conversation with
-   * it — and a reader coming back to that URL should get a conversation, not a
-   * list they did not ask for. Starting one overwrites the stale id, which is
-   * why there is no separate effect clearing it: an effect that cleared the URL
-   * whenever the id was missing would also fire in the window between a first
-   * question being sent and the server having written it down.
+   * **What does survive a mode switch, since 2026-10-04, is the reader's unsent
+   * words and where they were** (`drafts` above), and the effect below reads
+   * them before it falls back on this rule: a reader who left words in the
+   * box is put back with them rather than handed an empty conversation. See
+   * "Arriving in chat" there.
+   *
+   * `thread` is deliberately *not* in this rule's condition. `?thread=` can
+   * name a conversation that no longer exists — leave chat mode with an empty
+   * new one open and the URL keeps its id while the panel takes the
+   * conversation with it — and a reader coming back to that URL should get a
+   * conversation, not a list they did not ask for. Starting one overwrites the
+   * stale id, which is why there is no separate effect clearing it: an effect
+   * that cleared the URL whenever the id was missing would also fire in the
+   * window between a first question being sent and the server having written
+   * it down.
    */
   const started = useRef(false);
+  /** Has this visit's arrival been decided? Spent once the list has answered. */
+  const arrived = useRef(false);
   /* `kind` as well as `slug`. This component is now mounted by two modes, and
      React will reuse the instance if it ever renders in the same position for
      both — at which point the latch would still be spent from the mode the
@@ -632,11 +813,14 @@ export function ConversationBand({
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run trigger — the effect reads nothing, and changing article or mode is exactly when the latch stops meaning anything
   useEffect(() => {
     started.current = false;
+    arrived.current = false;
+    heldOnList.current = null;
   }, [slug, kind]);
 
   /**
-   * **Take a handed-over question: a fresh conversation, the question in its
-   * box, the caret in the box, and nothing sent.**
+   * **Take a handed-over question: a fresh conversation, and the question
+   * either sent to it as its first (`handoff.send`), or in its box with the
+   * caret and nothing sent.**
    *
    * Declared after the latch reset above and before the arrival rule below, and
    * the order is the point: all three can run in one commit, and this one spends
@@ -655,35 +839,241 @@ export function ConversationBand({
    * second — and the reader who closed the handed-over conversation before the
    * list arrived was handed a new empty one by the arrival rule.
    * tests/conversation-band-handoff.test.tsx caught it.
+   *
+   * **A question that sends goes through `sendTo` below, the function behind
+   * the panel's Send**, so the origin, the blocks on screen, the "submitted"
+   * mark and a corrected id are one path for a typed question and a handed
+   * one. `taken` is what makes one press one model call. It takes no caret:
+   * there is nothing to type, a caret on a phone raises the keyboard over the
+   * answer, and on a laptop it stops ↑/↓ stepping the article. Through a ref
+   * because `sendTo` is rebuilt every render and this effect must not re-run
+   * for that. docs/plans/261006j-ask-in-chat-sends-the-question.md.
+   *
+   * **A question that waits is written into the article's drafts here, once, as that
+   * conversation's unsent words** — exactly what the reader would have had if
+   * they had typed it: in the box, editable, cleared by Escape, enough to stop
+   * the panel's `leave` discarding the conversation, and still there after a
+   * look at another mode. It used to ride down to the panel as a `seed` prop
+   * that was looked up during render and never stored, so a question the
+   * reader had not touched was in the box and nowhere else. GPT Sol's review
+   * of plan 261004j, F10. The write is in this effect, after `startNew`
+   * returns and before the render that mounts the composer, so the composer's
+   * one read finds it.
    */
   const taken = useRef<ChatHandoff | null>(null);
+  const sendToRef = useRef<
+    (id: string | null, question: string, first?: ChatHandoff) => void
+  >(() => {});
   useEffect(() => {
     if (!handoff) return;
     /* Asked in another article: not this conversation's question. */
     const ours = handoff.slug === slug;
     if (ours) started.current = true;
     if (taken.current === handoff) return;
-    taken.current = handoff;
-    if (ours) setSeed({ slug, threadId: startNew(), text: handoff.question });
-    onHandoffTaken?.();
-  }, [handoff, slug, startNew, onHandoffTaken]);
+    const take = () => {
+      if (taken.current === handoff) return;
+      taken.current = handoff;
+      if (ours) {
+        const id = beginHere(!handoff.send);
+        /* Under the conversation's id, so it goes wherever its words go, and
+           before the send, which reads it (`pendingOrigin`). */
+        if (handoff.origin) drafts.setOrigin(id, handoff.origin);
+        if (handoff.send) {
+          sendToRef.current(id, handoff.question, handoff);
+          onHandoffThread?.(handoff, id);
+        } else drafts.setThread(id, handoff.question);
+      }
+      onHandoffTaken?.();
+    };
+    if (!ours || !handoff.send) {
+      take();
+      return;
+    }
+
+    /* `useChat` drops navigation callbacks in its effect cleanup, correctly:
+       a real unmount must not repoint a later screen. StrictMode also performs
+       that cleanup once immediately after mount. Sending inside this effect's
+       first setup registered `onThreadId` just before that synthetic cleanup,
+       so a corrected server id could never reach the URL. Queue the paid work;
+       the first setup cancels its task and the replayed setup performs it once,
+       after the cleanup. Production has one setup and the same one microtask
+       delay. The synchronous `started` latch above still prevents the arrival
+       effect from beginning another conversation meanwhile. */
+    let live = true;
+    queueMicrotask(() => {
+      if (live) take();
+    });
+    return () => {
+      live = false;
+    };
+  }, [handoff, slug, beginHere, onHandoffTaken, onHandoffThread, drafts]);
+
+  /**
+   * **Arriving in chat: one decision, in this order**, made once per visit and
+   * only when the list has answered.
+   *
+   * 1. A handed-over question wins (the effect above has spent the latch).
+   * 2. **A known non-chat URL shows the list.** Unsent chat words remain on
+   *    their row; missing fresh drafts and pending origins get a local row.
+   * 3. **Otherwise, the reader left words or a pending origin, and is put back with them.** Only the
+   *    place they were in is ever recovered (`drafts.destination`), so an older
+   *    conversation with words in it cannot take over the list or another
+   *    conversation:
+   *    - they were on the list, with words in its box → the list, and no
+   *      conversation is started over it, because the new conversation's empty
+   *      composer would be drawn where the box with the words is;
+   *    - `?thread=` already names one of the listed conversations → nothing;
+   *      the reader chose that one, by a link or by Back;
+   *    - the conversation they were in is listed → open it, by *replace*. This
+   *      is the case the address cannot be trusted for: Recall writes its own
+   *      conversation's id over `?thread=` and Quiz clears it, so the words
+   *      were kept and no composer was mounted to show them;
+   *    - it is not listed, and was never submitted to → begin another and move
+   *      the words across. A conversation with no message exists only in the
+   *      tab that began it, and went with the band;
+   *    - it is not listed, and has a pending origin after submission → resume
+   *      the same id, so a late stored first turn remains part of its history;
+   *    - it is not listed, and something *was* submitted without a pending origin → nothing. The
+   *      first question's write has not landed, or another tab deleted it;
+   *      beginning another would send a follow-up without its history. The
+   *      words stay in the store, under its id.
+   * 4. Otherwise the rule above: no conversations of any listed kind, so start one.
+   *
+   * **Steps 2 and 3 are not taken on a failed load.** `loaded` means "we have asked",
+   * and a list that failed to arrive has no conversations in it whatever the
+   * server holds, so "not listed" would be a claim about nothing. Step 4 is
+   * left as it was on a failed load.
+   *
+   * One effect rather than two, because two arrival rules are two answers to
+   * one question and the second undid the first: a reader back on the list
+   * with words in its box was handed a new empty conversation by step 3.
+   * Plan 261004j, and GPT Sol's two reviews of it (F1–F3, F6, F7).
+   */
+  /**
+   * **A `?thread=` naming a conversation of another kind is cleared, and the
+   * list shown** (the plan review's F3). It gets here two ways: carried over
+   * from Learn, which writes its conversation's id into the address, or
+   * pasted. The panel could not have opened it (it is not in `threads`), so
+   * this only makes the address say what is on screen.
+   *
+   * Only once the list has shown what kind it is: an id the list does not
+   * hold may be a first question still being written, which the note on the
+   * latch above says not to clear. By *replace*: this corrects the address;
+   * it is not a step the reader took. Before the arrival rule, so that when
+   * that rule puts the reader back in the chat they left, its write is the
+   * later of the two.
+   *
+   * **Only while the address still says Chat** (`modeNow`). A press on a
+   * Learn row writes `mode=learn` and that conversation's id together,
+   * and this band can render once more before it is unmounted: without the
+   * check it cleared the id the press had just written.
+   */
+  useEffect(() => {
+    if (kind !== "chat" || modeNow !== "chat" || !loaded || thread === null) return;
+    if (everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+      void setThread(null, { history: "replace" });
+    }
+  }, [kind, modeNow, loaded, thread, everyThread, setThread]);
+
+  /**
+   * **A filter whose source this article has no conversation from becomes
+   * All**, by replace, once the list has answered (the plan review's F6). The
+   * panel already reads such a choice as All; this keeps the address from
+   * holding a word that would start narrowing the list later, unasked.
+   */
+  useEffect(() => {
+    if (kind !== "chat" || !loaded || loadFailed || from === null) return;
+    if (!sourcesIn(listed).includes(from)) void setFrom(null, { history: "replace" });
+  }, [kind, loaded, loadFailed, from, listed, setFrom]);
 
   useEffect(() => {
-    if (remembering || !loaded || started.current) return;
-    if (threads.length === 0) {
+    if (learning || !loaded) return;
+    if (!arrived.current) {
+      arrived.current = true;
+      const was = drafts.destination();
+      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+        /* A known non-chat URL means the list, even if this tab left words in
+           another chat. Stored chats already have a selectable row. Recover
+           a missing draft as a row too, without selecting it or sending it. */
+        if (was && !threads.some((t) => t.id === was)
+          && ((drafts.thread(was) ?? "").trim() !== "" || drafts.origin(was))
+          && (drafts.isFresh(was) || drafts.origin(was))) {
+          const id = drafts.isFresh(was) ? begin(kind) : begin(kind, was);
+          if (id !== was) {
+            drafts.markFresh(id);
+            drafts.moveThread(was, id);
+          }
+          drafts.setDestination(id);
+          heldOnList.current = id;
+        }
+      } else if (!started.current && was && drafts.origin(was) && !everyThread.some((t) => t.id === was)
+        && !threads.some((t) => t.id === thread)
+        && (!drafts.isFresh(was) || loadFailed)) {
+        /* A submitted first turn may have landed without acknowledgement.
+           Resume its exact id, never mint another: a later Send will join
+           that history if it exists and resend the identical origin. */
+        started.current = true;
+        begin(kind, was);
+        void setThread(was, { history: "replace" });
+        setFocusNonce((n) => n + 1);
+      } else if (loadFailed || started.current || was === undefined) {
+        /* Nothing to recover, or no ground to recover it on. */
+      } else if (was === null) {
+        if (drafts.list().trim() !== "") started.current = true;
+      } else if ((drafts.thread(was) ?? "").trim() !== "" || drafts.origin(was) !== undefined) {
+        if (threads.some((t) => t.id === thread)) {
+          /* The reader's own choice. */
+        } else if (threads.some((t) => t.id === was)) {
+          /* This corrects the address; it is not a step the reader took. */
+          void setThread(was, { history: "replace" });
+        } else if (drafts.isFresh(was)) {
+          started.current = true;
+          drafts.moveThread(was, startNew());
+        }
+      }
+    }
+    if (started.current) return;
+    /* `listed`, not `threads`, since 2026-10-05: an article whose only
+       conversations are Learn's has rows to show, and a blank chat begun
+       over them would hide the list this visit was for. The box under the
+       list and the + in the header still start one. */
+    if (listed.length === 0) {
       started.current = true;
       startNew();
     }
-  }, [remembering, loaded, threads.length, startNew]);
+  }, [learning, loaded, loadFailed, threads, listed, everyThread, thread, setThread, startNew, drafts, begin, kind]);
 
   /**
-   * **Remember has a conversation whenever it can have one** — on arrival with
+   * **Where chat is, written down for the next visit** — the conversation on
+   * screen, or `null` for the list. Read by the arrival rule above, and by
+   * nothing else.
+   *
+   * After that rule, and only once the list has answered: before then
+   * `?thread=` is whatever the last mode left in it, and recording that would
+   * overwrite the very thing the rule is about to read. A failed load cannot
+   * establish that a conversation is absent, so it cannot record the list.
+   * A positively matched local conversation is still known, though: `begin`
+   * can have supplied it independently of that failed fetch.
+   *
+   * "On screen" is the panel's own test — `?thread=` names a conversation in
+   * the list — rather than `thread` alone, which can name nothing.
+   */
+  useEffect(() => {
+    if (kind !== "chat" || !loaded) return;
+    if (threads.some((t) => t.id === thread)) {
+      heldOnList.current = null;
+      drafts.setDestination(thread);
+    } else if (!loadFailed && heldOnList.current === null) drafts.setDestination(null);
+  }, [kind, loaded, loadFailed, threads, thread, drafts]);
+
+  /**
+   * **Learn has a conversation whenever it can have one** — on arrival with
    * none, and after Start over. No latch: there is no list to come back to and
    * no close button, so "nothing open" is never a state the reader asked for.
    * It cannot loop, because `begin` inserts its conversation on the spot.
    *
    * **Not while a delete is out** (`deleting`), and that is GPT Sol's P0 on
-   * the plan, F1. The server folds a new Remember thread's first turn into the
+   * the plan, F1. The server folds a new Learn thread's first turn into the
    * article's existing one, so a question typed into a fresh conversation
    * before Start over's DELETE has landed would be appended to the very thread
    * the DELETE then removes. With nothing begun there is no composer, so there
@@ -692,12 +1082,12 @@ export function ConversationBand({
    * begin.
    */
   useEffect(() => {
-    if (!remembering || !loaded || theRemember || deleting || resetting !== "idle") return;
+    if (!learning || !loaded || theLearn || deleting || resetting !== "idle") return;
     startNew();
-  }, [remembering, loaded, theRemember, deleting, resetting, startNew]);
+  }, [learning, loaded, theLearn, deleting, resetting, startNew]);
 
   /* A failed DELETE restores the old thread; a successful one leaves none. In
-     either case the operation retiring is what lets Remember draw again. */
+     either case the operation retiring is what lets Learn draw again. */
   useEffect(() => {
     if (resetting !== "deleting" || deleting) return;
     resettingNow.current = false;
@@ -708,10 +1098,65 @@ export function ConversationBand({
      said" resolve to where the reader actually is. */
   const at = currentAt();
 
+  /**
+   * **Send `question` to the conversation `to`** — the panel's Send, with
+   * `to`, and a handed-over question that sends on arrival, with the
+   * conversation the handoff effect has just begun (which `to` does not
+   * name until the next render).
+   */
+  const sendTo = (
+    to: string | null,
+    question: string,
+    first?: ChatHandoff,
+  ): void => {
+    if (resettingNow.current) return;
+    // `send` returns the thread it went to, minted here when this is a new
+    // conversation — so the URL can name it before the request lands.
+    /* This mode's kind: every conversation the band can open is of it now.
+       The server refuses a kind that contradicts an existing thread rather
+       than taking our word for it, so this being wrong is a 409 rather than
+       a corrupted transcript. */
+    const origin = pendingOrigin(to);
+    const id = send(to, question, at, {
+      onThreadId: (corrected) => void setThread(corrected),
+      ...((first || (origin && to)) ? {
+        /* Data survives a mode change; URL navigation above does not. */
+        onConfirmed: (confirmed: string) => {
+          /* This is data too: the comment must learn the server's id even if
+             the band has unmounted and its navigation callback was detached. */
+          if (first && confirmed !== to) onHandoffThread?.(first, confirmed);
+          /* Accepted residual (review CR-6, plan 261005i): this moves the
+             draft's bookkeeping to a corrected id, but a band that was
+             closed and reopened before `begin` arrived still addresses the
+             guess. The server corrects a chat's id only when the guess
+             equals an existing message id in this article (about one in a
+             million), and then a follow-up from the reopened composer
+             starts a separate conversation with no origin. The first
+             conversation and its origin are intact. */
+          if (origin && to && confirmed !== to) {
+            drafts.moveThread(to, confirmed);
+            if (drafts.destination() === to) drafts.setDestination(confirmed);
+          }
+          if (origin && to) drafts.clearOrigin(confirmed);
+        },
+      } : {}),
+      kind,
+      ...(onScreen ? { visible: onScreen() } : {}),
+      ...(origin ? { origin } : {}),
+      ...(first?.anchor ? { anchor: first.anchor } : {}),
+      ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
+    });
+    /* Something has now been sent to it, so it is no longer a conversation
+       the arrival rule may begin again — whatever is typed into its box
+       afterwards, and whether or not this write ever lands. */
+    drafts.submitted(id);
+    if (id !== to) void setThread(id);
+  };
+  sendToRef.current = sendTo;
+
   return (
     <ChatPanel
       slug={slug}
-      seed={seed?.slug === slug ? { threadId: seed.threadId, text: seed.text } : null}
       /* Not for display — the panel offers its "start a new one" box only once
          this is true. It went in because a conversation minted before the first
          fetch landed was wiped by it; that is fixed at source now
@@ -719,30 +1164,53 @@ export function ConversationBand({
          a list the reader cannot see yet. See the composer under `ThreadList`. */
       loaded={loaded}
       loadFailed={loadFailed}
-      /* Remember is handed its one conversation and nothing else, so the panel
+      /* Learn is handed its one conversation and nothing else, so the panel
          has nothing it could list. */
-      threads={remembering ? (theRemember ? [theRemember] : []) : threads}
+      threads={learning ? (theLearn ? [theLearn] : []) : threads}
+      /* Chat's list, its filter, and the way from a Learn row back to
+         Learn. None of them for Learn, which has no list. */
+      listed={kind === "chat" ? listed : undefined}
+      from={kind === "chat" ? from : undefined}
+      onFrom={kind === "chat" ? (next) => void setFrom(next) : undefined}
+      /* **One navigation for all three**, so Back from Learn is one press
+         and there is no entry on the stack that says Chat with a Recall
+         conversation open. Pushed, as a press on the bar's Learn is.
+         Learn's band would write its conversation's id itself; naming it
+         here means the address is right from the first frame. */
+      onOpenLearn={kind === "chat" ? (view, id) => {
+        setPendingLive(null);
+        void setWhere({ mode: "learn", learn: view, thread: id }, { history: "push" });
+      } : undefined}
       threadId={current}
       /* Open a conversation from the list, or close one back to it — chat's
-         only, since Remember has neither. Every row is this mode's kind now, so
-         there is no other mode to follow it into. */
+         only, since Learn has neither. The panel calls this for a chat's
+         row and `onOpenLearn` for a Learn row. */
       onThread={(id) => {
+        heldOnList.current = null;
+        drafts.setDestination(id);
         setPendingLive(null);
         void setThread(id);
       }}
       onNew={startNew}
       /* **Owned above this panel**, which is remounted on every conversation
          switch — see the note where the hook is called. */
-      /* **No Live in Tutorial, yet.** Short alternating turns are ideal spoken,
-         and Greg said so, but also that Live "doesn't work very well at the
-         moment" — so Tutorial is typed or dictated first, and a spoken turn
-         cannot create one (`SpokenKind` in src/chat.ts stays chat | remember).
-         Omitted here rather than refused by the server, so there is no button. */
-      live={kind === "tutorial" ? undefined : live}
-      onStartLive={kind === "tutorial" ? undefined : (id) => {
+      /* **No Live in Tutorial or Explore, yet** (`OFFERS_LIVE` above). Short
+         alternating turns are ideal spoken, and Greg said so, but also that
+         Live "doesn't work very well at the moment" — so both are typed or
+         dictated first, and a spoken turn cannot create one (`SpokenKind` in
+         src/chat.ts stays chat | learn). Omitted here rather than refused
+         by the server, so there is no button. */
+      /* Nor on a conversation whose origin the server does not have yet
+         (`awaitsOrigin` above): no button, and the callback is refused too. */
+      live={OFFERS_LIVE[kind] && !awaitsOrigin(current) ? live : undefined}
+      onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
         if (resettingNow.current) return;
+        if (awaitsOrigin(id)) return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");
+        /* Begun here like `startNew`'s, and as unsent until its first spoken
+           exchange is written (`speakAndMark` above). */
+        if (!id) drafts.markFresh(next);
         setPendingLive({ id: next, from: current });
         void setThread(next);
         return next;
@@ -750,21 +1218,7 @@ export function ConversationBand({
       /* Local only — an empty conversation was never written down. See
          `withoutEmpty` in useChat.ts. */
       onDiscard={discard}
-      onSend={(question) => {
-        if (resettingNow.current) return;
-        // `send` returns the thread it went to, minted here when this is a new
-        // conversation — so the URL can name it before the request lands.
-        /* This mode's kind: every conversation the band can open is of it now.
-           The server refuses a kind that contradicts an existing thread rather
-           than taking our word for it, so this being wrong is a 409 rather than
-           a corrupted transcript. */
-        const id = send(current, question, at, {
-          onThreadId: (corrected) => void setThread(corrected),
-          kind,
-          ...(onScreen ? { visible: onScreen() } : {}),
-        });
-        if (id !== current) void setThread(id);
-      }}
+      onSend={(question) => sendTo(current, question)}
       /* The box under the list. `null` rather than `thread` is the whole
          difference: it mints whatever `?thread=` still says, which on the list
          is either nothing, a conversation the fetch has not brought yet, or one
@@ -774,6 +1228,7 @@ export function ConversationBand({
          opens, in the composer that has just replaced the one they typed into. */
       onSendNew={(question) => {
         if (resettingNow.current) return;
+        heldOnList.current = null;
         /* `null` for the thread, so this mints a new one — and therefore this
            mode's kind, not any open conversation's. */
         const id = send(null, question, at, {
@@ -793,13 +1248,13 @@ export function ConversationBand({
          named by the server, nothing of this tab's still out for it (`settled`
          in useChat.ts). So its DELETE is never held waiting for a name, and
          never races this tab's own write. Plan 261001m. */
-      canStartOver={remembering && current !== null && settled(current)}
+      canStartOver={learning && current !== null && settled(current)}
       onRename={rename}
       onDelete={(id) => {
         /* **Start over.** The conversation leaves the screen at once, and the
            fresh one is begun only when the server has answered — see the
-           Remember effect above. If the server refuses, the old one comes back. */
-        if (remembering) {
+           Learn effect above. If the server refuses, the old one comes back. */
+        if (learning) {
           /* The panel offers no button otherwise; this is the same rule held
              where the request is made, not a second one. */
           if (resettingNow.current || !settled(id)) return;
@@ -816,6 +1271,11 @@ export function ConversationBand({
           return;
         }
         remove(id);
+        /* And its unsent words go with it: kept, they would be words for a
+           conversation that is not there. (Not Start over above, which leaves
+           Learn's box as it is — a refused delete puts the conversation
+           back, and the words should still be under it. Plan 261004j, F8.) */
+        drafts.dropThread(id);
         // Back to the list rather than to a conversation that is not there.
         if (id === thread) void setThread(null);
       }}
@@ -828,6 +1288,7 @@ export function ConversationBand({
         current && edit(current, messageId, question, at, onScreen?.())
       }
       onStop={(messageId) => current && stop(current, messageId)}
+      onHintOpened={(messageId, hint) => current && openHint(current, messageId, hint)}
       onJump={onJump}
       recovering={recovering}
       blocks={blocks}

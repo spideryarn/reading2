@@ -1,0 +1,561 @@
+{
+  "slug": "scaling-hypothesis",
+  "arm": "before",
+  "run": 2,
+  "promptVersion": "citations/5",
+  "systemPromptSha256": "cf270e5cfd7097861350040dc631a0530843218b27a33ec0f149490fd4889025",
+  "model": "claude-sonnet-5",
+  "at": "2026-10-03T19:07:33.306Z",
+  "tokens": {
+    "input": 38853,
+    "output": 17737,
+    "cacheRead": 0,
+    "cacheWrite": 0
+  },
+  "works": [
+    {
+      "title": "It Looks Like You're Trying To Take Over The World",
+      "authors": "Gwern",
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "a fictional short story by the same author treating the scaling hypothesis's implications, offered as companion reading"
+    },
+    {
+      "title": "Situational Awareness",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "cited as further reading on where AI capability trends may lead, related to the scaling hypothesis"
+    },
+    {
+      "title": "AI 2027",
+      "authors": null,
+      "year": "2027",
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "cited alongside Situational Awareness as further reading on forecasts of future AI capability"
+    },
+    {
+      "title": "Human-like Neural Nets by Catapulting",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "cited as further speculation on why scaling deep learning produces human-like behavior"
+    },
+    {
+      "title": "Meta-Learning with Memory-Augmented Neural Networks",
+      "authors": "Santoro et al.",
+      "year": "2016",
+      "relevance": 0.3,
+      "influence": 0.5,
+      "why": "early demonstration of implicit meta-learning in neural networks, cited as background for GPT-3's emergent meta-learning"
+    },
+    {
+      "title": "Wang et al 2018",
+      "authors": "Wang et al.",
+      "year": "2018",
+      "relevance": 0.3,
+      "influence": 0.4,
+      "why": "cited as background work on implicit meta-learning emerging in trained networks"
+    },
+    {
+      "title": "Botvinick et al 2019a",
+      "authors": "Botvinick et al.",
+      "year": "2019",
+      "relevance": 0.4,
+      "influence": 0.4,
+      "why": "cited as background on meta-reinforcement learning, tied to Botvinick's quote about meta-learning being unavoidable"
+    },
+    {
+      "title": "Clune 2019",
+      "authors": "Clune",
+      "year": "2019",
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "cited as further reading on implicit meta-learning in neural networks"
+    },
+    {
+      "title": "Jukebox",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.5,
+      "why": "OpenAI's raw-audio music generation model cited as another recent demonstration of the benefits of scale"
+    },
+    {
+      "title": "Hernandez & Brown 2020",
+      "authors": "Hernandez, Brown",
+      "year": "2020",
+      "relevance": 0.5,
+      "influence": 0.3,
+      "why": "used to estimate how training costs for a fixed performance level fall over time due to algorithmic efficiency gains"
+    },
+    {
+      "title": "Behind Deep Blue",
+      "authors": "Hsu",
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "source clarifying the actual cost estimates of IBM's Deep Blue chess project, used to contextualize GPT-3's compute cost"
+    },
+    {
+      "title": "LeCun 2019 remark on GPT and AGI",
+      "authors": "LeCun",
+      "year": "2019",
+      "relevance": 0.5,
+      "influence": 0.4,
+      "why": "quoted skepticism ('the cake is a lie') about whether GPT-style models are part of the path to AGI, which the essay argues against"
+    },
+    {
+      "title": "Banko & Brill 2001",
+      "authors": "Banko, Brill",
+      "year": "2001",
+      "relevance": 0.3,
+      "influence": 0.5,
+      "why": "early example of a 'scissor effect' where neural/data-hungry methods eventually overtake other approaches as data scales"
+    },
+    {
+      "title": "Brants et al 2007",
+      "authors": "Brants et al.",
+      "year": "2007",
+      "relevance": 0.3,
+      "influence": 0.4,
+      "why": "another example of large-scale data causing simple methods to overtake more complex ones, used to frame GPT-3's scaling"
+    },
+    {
+      "title": "Koehn & Knowles 2017",
+      "authors": "Koehn, Knowles",
+      "year": "2017",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "cited as another example of scaling curves crossing where neural methods eventually dominate"
+    },
+    {
+      "title": "Thompson et al 2020",
+      "authors": "Thompson et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": 0.2,
+      "why": "criticized as a poorly controlled attempt to infer scaling laws from disparate papers, contrasted with the well-controlled scaling papers"
+    },
+    {
+      "title": "AlphaGo Zero",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.9,
+      "why": "used as the compute benchmark compared to GPT-3's training cost, and as an example of the 'just stack more layers' scaling approach"
+    },
+    {
+      "title": "Chuan Li's compute cost estimate",
+      "authors": "Li",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": 0.2,
+      "why": "source of an estimate of GPT-3's training hardware cost used in the essay's cost discussion"
+    },
+    {
+      "title": "Scaling Laws for Neural Language Models",
+      "authors": "Kaplan et al.",
+      "year": "2020",
+      "relevance": 0.9,
+      "influence": 0.8,
+      "why": "shows that cutting prediction error follows clean power-law curves as models, data and compute grow"
+    },
+    {
+      "title": "Language Models are Few-Shot Learners (GPT-3 paper)",
+      "authors": "Brown et al.",
+      "year": "2020",
+      "relevance": 1,
+      "influence": 1,
+      "why": "reports GPT-3's scaling results and few-shot meta-learning abilities that the whole essay is built around"
+    },
+    {
+      "title": "Hendrycks et al 2020",
+      "authors": "Hendrycks et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "cited for a chart of GPT-3 model size versus question-answering performance"
+    },
+    {
+      "title": "Schrimpf et al 2020",
+      "authors": "Schrimpf et al.",
+      "year": "2020",
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "shown as evidence that scaled language models increasingly match human brain activity patterns"
+    },
+    {
+      "title": "Warstadt et al 2020",
+      "authors": "Warstadt et al.",
+      "year": "2020",
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "shown as evidence that models pick up more human-like linguistic biases as training data increases"
+    },
+    {
+      "title": "Child 2020",
+      "authors": "Child",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "shown as evidence that very deep VAEs can catch up to GANs in image generation quality when scaled"
+    },
+    {
+      "title": "Vahdat & Kautz 2020",
+      "authors": "Vahdat, Kautz",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "further evidence that deep VAEs scale to match GAN-quality image generation"
+    },
+    {
+      "title": "Dojolonga et al 2020",
+      "authors": "Dojolonga et al.",
+      "year": "2020",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "shows transfer-learning representations keep improving with scale even after classification accuracy plateaus"
+    },
+    {
+      "title": "BiT (Big Transfer)",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "example of a classifier CNN that transfers and develops human-like errors when scaled up"
+    },
+    {
+      "title": "Hill et al 2019",
+      "authors": "Hill et al.",
+      "year": "2019",
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "cited among examples of agents trained at scale developing generalizable abilities"
+    },
+    {
+      "title": "Chaplot et al 2017",
+      "authors": "Chaplot et al.",
+      "year": "2017",
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "cited among examples of scaled agent training producing generalization"
+    },
+    {
+      "title": "Yu et al 2018",
+      "authors": "Yu et al.",
+      "year": "2018",
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "cited among examples of scaled agent training producing generalization"
+    },
+    {
+      "title": "Lake 2019",
+      "authors": "Lake",
+      "year": "2019",
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "cited among examples relevant to generalization emerging from scaled training"
+    },
+    {
+      "title": "MetaMimic",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "example of imitation-learning reinforcement learning generalizing across hundreds of tasks when trained on a deep network"
+    },
+    {
+      "title": "Dactyl",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.4,
+      "why": "robot hand control system shown to develop implicit runtime meta-learning after training on millions of randomized environments"
+    },
+    {
+      "title": "DD-PPO",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "example of a reinforcement learning system that outperforms classical robot planners after scaling by orders of magnitude"
+    },
+    {
+      "title": "Procgen / CoinRun",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "shows that training on enough procedurally generated game levels makes agents generalize to unseen levels, unlike training on only hundreds"
+    },
+    {
+      "title": "StyleGAN",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.5,
+      "why": "example of disentangled latent representations emerging with sufficiently deep embeddings, part of the blessings-of-scale evidence"
+    },
+    {
+      "title": "GQN (Generative Query Network)",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "example cited where enough samples force factorized, disentangled representations to emerge"
+    },
+    {
+      "title": "BigGAN",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.5,
+      "why": "example of a GAN that stabilizes and benefits from unusually large minibatches at scale, like other blessings-of-scale cases"
+    },
+    {
+      "title": "ViLBERT / VideoBERT",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "examples of multimodal learning producing better representations from fewer data, motivating interest in big multimodal models"
+    },
+    {
+      "title": "AlphaZero",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.8,
+      "why": "demonstrated superhuman Go play from scaled self-play training without the 'delusions' of earlier search-based systems"
+    },
+    {
+      "title": "MuZero",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.7,
+      "why": "shown that training an RNN end-to-end to predict reward on enough data can obsolete AlphaZero by learning tree search implicitly"
+    },
+    {
+      "title": "AlphaStar",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.6,
+      "why": "reached human-level StarCraft play using hundreds of competing self-play agents to cover possible strategies"
+    },
+    {
+      "title": "iGPT / Vision Transformer",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.5,
+      "why": "shown that scaling unsupervised image models without supervision can match the best specialized alternatives, paralleling GPT"
+    },
+    {
+      "title": "GPT-f",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "mentioned as another case showing scaling's benefits to some degree, alongside iGPT and Vision Transformer"
+    },
+    {
+      "title": "Orseau et al 2020",
+      "authors": "Orseau et al.",
+      "year": "2020",
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "cited for the idea that big models encode countless small sub-models interpolating over the data"
+    },
+    {
+      "title": "Viering & Loog 2021",
+      "authors": "Viering, Loog",
+      "year": "2021",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "cited regarding phase transitions in learning, relevant to how a model abruptly shifts from memorizing to generalizing"
+    },
+    {
+      "title": "The Brain as a Universal Learning Machine",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "cited for the idea that the brain, like scalable neural network architectures, applies similar learning rules fairly uniformly"
+    },
+    {
+      "title": "Hawkins (on cortical uniformity)",
+      "authors": "Hawkins",
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "cited alongside the universal learning machine idea for the view that the brain applies one algorithm fairly uniformly"
+    },
+    {
+      "title": "Envisioned evolution of NLP research through three eras",
+      "authors": "Cambria, White",
+      "year": "2014",
+      "relevance": 0.3,
+      "influence": 0.2,
+      "why": "source of the figure depicting hypothetical S-curves of progress in natural language processing research"
+    },
+    {
+      "title": "Natural Language Processing (Almost) from Scratch",
+      "authors": "Collobert et al.",
+      "year": "2011",
+      "relevance": 0.4,
+      "influence": 0.6,
+      "why": "quoted on whether the small entropy gap between n-gram models and humans could be closed by learning grammar and world knowledge"
+    },
+    {
+      "title": "The Limits of Automatic Speech Recognition / n-gram entropy study",
+      "authors": "Teahan, Cleary",
+      "year": "1996",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "provides a measured per-character entropy of English using n-gram models, used as a comparison point for GPT-3's own loss"
+    },
+    {
+      "title": "Prediction and Entropy of Printed English",
+      "authors": "Shannon",
+      "year": "1951",
+      "relevance": 0.5,
+      "influence": 0.8,
+      "why": "classic estimate of the per-character entropy of English from human guessing experiments, used as a human benchmark for loss"
+    },
+    {
+      "title": "The Quiet Enemy (in The Legacy of Hiroshima)",
+      "authors": "Teller",
+      "year": "1962",
+      "relevance": 0.3,
+      "influence": 0.2,
+      "why": "source of the Edward Teller anecdote about Bohr doubting an atomic bomb could be built, used as an analogy for skepticism about scaling"
+    },
+    {
+      "title": "The Human Use of Human Beings",
+      "authors": "Wiener",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.5,
+      "why": "quoted on how publicly announcing that a hard problem (like the atomic bomb) is solvable accelerates its solution, paralleling AI scaling"
+    },
+    {
+      "title": "Ilya Sutskever on scaling and conviction",
+      "authors": "Sutskever",
+      "year": null,
+      "relevance": 0.5,
+      "influence": 0.4,
+      "why": "quoted explaining that what was missing before scaling worked was conviction that existing methods plus scale would succeed"
+    },
+    {
+      "title": "Zaremba interview on OpenAI Five",
+      "authors": "Zaremba, Biewald",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "quoted describing how existing reinforcement learning methods, simply scaled up, worked surprisingly well on Dota 2"
+    },
+    {
+      "title": "GShard",
+      "authors": null,
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.4,
+      "why": "example of a mixture-of-experts model Google Brain pursued mainly for deployment in Google Translate rather than scaling for its own sake"
+    },
+    {
+      "title": "Deep Learning Scaling is Predictable, Empirically",
+      "authors": "Hestness et al.",
+      "year": "2017",
+      "relevance": 0.4,
+      "influence": 0.4,
+      "why": "an early scaling-law paper showing predictable gains from data and model size, cited as evidence scaling research predates GPT-3"
+    },
+    {
+      "title": "DynamicEmbedding",
+      "authors": null,
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.2,
+      "why": "example of a very large embedding approach contrasted with genuinely 'dense' scaled models like GPT-3"
+    },
+    {
+      "title": "Moravec's forecast of AI hardware progress (1998)",
+      "authors": "Moravec",
+      "year": "1998",
+      "relevance": 0.7,
+      "influence": 0.6,
+      "why": "source of the decades-old prediction that affordable compute for human-level AI would arrive around the 2020s, central to the scaling hypothesis argument"
+    },
+    {
+      "title": "Peter Norvig / Lukas Biewald interview",
+      "authors": "Norvig, Biewald",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.2,
+      "why": "anecdote illustrating that lack of compute, not ideas, held back 1980s neural network research"
+    },
+    {
+      "title": "Jeff Dean on computing slowdown",
+      "authors": "Dean",
+      "year": null,
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "quoted noting the coincidence of machine learning's compute needs rising just as CPU performance growth slowed"
+    },
+    {
+      "title": "Jim Gray 1999 remarks on AI and supercomputers",
+      "authors": "Gray",
+      "year": "1999",
+      "relevance": 0.3,
+      "influence": 0.2,
+      "why": "quoted making a since-refuted argument that having enough compute should already have produced machine intelligence"
+    },
+    {
+      "title": "Greg Brockman on OA5 training",
+      "authors": "Brockman",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.3,
+      "why": "quoted describing how OpenAI Five kept improving with scale and never hit a wall"
+    },
+    {
+      "title": "SayCan",
+      "authors": null,
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.4,
+      "why": "example of a language model used to plan and execute real-world robot actions, cited as evidence tool AIs become agent AIs"
+    },
+    {
+      "title": "The intentional stance",
+      "authors": "Dennett",
+      "year": null,
+      "relevance": 0.4,
+      "influence": 0.6,
+      "why": "framework invoked to argue that modeling non-agentic systems as agents is a useful, broadly applicable trick that a neural net might also learn"
+    },
+    {
+      "title": "An Introduction to Wittgenstein's Tractatus",
+      "authors": "Anscombe",
+      "year": "1963",
+      "relevance": 0.3,
+      "influence": 0.3,
+      "why": "source of the Wittgenstein anecdote used as an analogy for how a correct but counterintuitive framing (agency, heliocentrism) can feel false"
+    },
+    {
+      "title": "Story Of Your Life",
+      "authors": "Chiang",
+      "year": null,
+      "relevance": 0.2,
+      "influence": 0.3,
+      "why": "fiction cited to illustrate the variational, 'wanting to minimize a global quantity' way of describing physical processes"
+    }
+  ]
+}
