@@ -15,8 +15,8 @@
  * (`buildConverseMessages`). **Tools off** (`useTools: false`): the articles
  * are the committed fixture corpus (tests/fixtures/data-root), which no
  * database row backs, so the article tools would have nothing to search; and
- * the question here is what the guide writes, not where it looks. No spend
- * sink either: nothing is written to any database.
+ * the question here is what the guide writes, not where it looks. Each paid
+ * call writes an `ai_calls` ledger row, the only database write.
  *
  * ## The cases (eight per article, each run `--runs` times)
  *
@@ -57,6 +57,8 @@ import { loadEnvLocal } from "../../src/env.js";
 import type { GuideExperience } from "../../src/guide.js";
 import { renderProfile } from "../../src/profile.js";
 import type { Block, Meta } from "../../src/types.js";
+import { environmentOwnerId } from "../../src/owner.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import catalogue from "../../src/command-pick-catalogue.generated.json" with { type: "json" };
 
 /* ---------------------------------------------------- the renderer's code -- */
@@ -532,7 +534,7 @@ async function main(): Promise<void> {
               return { error: err instanceof Error ? err.message : String(err) };
             }
           },
-          { attribution: { scopeKind: "eval" } },
+          { attribution: { scopeKind: "eval", ownerId: environmentOwnerId() }, sink: (row) => costStore.record(row) },
         );
         const { nanos, unpriced } = totalSpend(report.calls);
         if (unpriced > 0) console.warn(`  ${unpriced} call(s) reported no cost — the total below is a floor`);

@@ -40,6 +40,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { blindCoin, hardShare, isCommon, wordsIn } from "./run.js";
 import { sourceFingerprint } from "./source-fingerprint.js";
@@ -154,7 +155,7 @@ async function generate(arm: string, keepUnfinished: boolean): Promise<void> {
           })(),
         );
       }
-      const answers = await Promise.all(jobs);
+      const answers = await allOrStop(jobs, () => {}); // Keep accounting open for bought siblings even if an answer is rejected.
       const blocksSha256 = createHash("sha256")
         .update(JSON.stringify(article.blocks.map((b) => [b.id, b.text])))
         .digest("hex");
@@ -267,7 +268,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (cmd === "generate") {
     const arm = flag("--arm");
     if (!arm || !/^(before|after)(-\d+)?$/.test(arm)) throw new Error("generate needs --arm before|after[-N]");
-    await generate(arm, rest.includes("--keep-unfinished"));
+    loadEnvLocal();
+    const { withLedger } = await import("../../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    await withLedger("eval", () => generate(arm, rest.includes("--keep-unfinished")));
   } else if (cmd === "report") {
     report();
   } else if (cmd === "pairs") {

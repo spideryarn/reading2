@@ -6,14 +6,15 @@
  * bespoke `main()` bodies. Leaving CLI calls unscoped is why `recordSpend`
  * warns about them, and a warning on every local run is a warning nobody reads.
  *
- * **There is one caller left, and that is the point of the file rather than a
- * sign it is dying.** The stage CLIs went through the queue on 2026-09-05
+ * **Stage CLIs use the queue; standalone paid CLIs and evals use this wrapper.**
+ * The stage CLIs went through the queue on 2026-09-05
  * (`scripts/stage.ts`), where `runStep` opens a `scopeKind: "job_step"`
  * collector per step — so a stage run from a terminal is scoped by the same
  * mechanism that scopes it when a reader presses Add, and a CLI that *also*
  * wrapped the run in `withLedger("cli", …)` would scope one purchase twice.
- * What is left is `npm run eval:pdf-read`, which is not a stage runner at all
- * but the PDF extraction-quality tool, and which spends per chunk.
+ * `npm run eval:pdf-read` is the PDF extraction-quality tool and spends per
+ * chunk. Standalone evals also use `withLedger("eval", …)` so their model
+ * calls reach the shared ledger.
  *
  * ## This did not work until the store stopped dragging the read layer in
  *

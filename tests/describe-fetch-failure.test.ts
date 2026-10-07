@@ -242,6 +242,25 @@ describe("a read our own caller gave up on", () => {
 });
 
 describe("the reader's path: a chat turn", () => {
+  it.each(["delta", "done", "error"])("reports a non-JSON %s as PAGE_FAULT without starting recovery", async (name) => {
+    vi.stubGlobal("fetch", async () => new Response(
+      'event: begin\ndata: {"threadId":"t","messageId":"m"}\n\n' +
+      `event: ${name}\ndata: {not json\n\n`,
+      { status: 200, headers: { "content-type": "text/event-stream" } },
+    ));
+    const failed = vi.fn();
+    const disconnected = vi.fn();
+    const done = vi.fn();
+    await runTurn("a-slug", "t", { question: "why?" }, {
+      began() {}, delta() {}, tool() {}, refused() {}, failed, disconnected, done,
+    });
+    expect(failed).toHaveBeenCalledExactlyOnceWith(PAGE_FAULT.message);
+    expect(disconnected).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    const { MalformedReply } = await import("../src/web/lib/reader-facing.js");
+    expect(captured).toEqual([{ err: expect.any(MalformedReply), options: { neverAuthored: true } }]);
+  });
+
   it("fails with the page's own sentence when the store throws mid-stream, not React's", async () => {
     const frames =
       'event: begin\ndata: {"threadId":"t","messageId":"m"}\n\n' +
