@@ -216,9 +216,14 @@ describe("a query in the search box", () => {
 });
 
 describe("the field and the rows, for a finger", () => {
-  it("gives the search box 16px type on a touch screen, so iOS does not zoom into it", () => {
+  it("never gives the search box less than 16px type on a touch screen", () => {
     const m = mount();
-    expect(box(m)?.classList.contains("tw:any-pointer-coarse:text-base")).toBe(true);
+    /* `text-base` is only `1rem`: it drops below iOS's 16px zoom threshold
+       when the reader has made the root type smaller. The hand-written floor
+       uses this same max(), but a Tailwind utility outranks it. */
+    expect(
+      box(m)?.classList.contains("tw:any-pointer-coarse:text-[max(1rem,16px)]"),
+    ).toBe(true);
   });
 
   it("makes an entry taller and larger below lg, and today's size from lg", () => {

@@ -279,8 +279,11 @@ Two rules now live there beside the dock's, and both are floors rather than fixe
   `tw:` class after the stylesheets, so the Tailwind-styled fields — sign-in's email and
   password, the shelf's search, Add URL, the library's in-place title editor, and since 2026-10-07
   the search box above the contents list on Metadata and `/profile` and Help's search box — carry
-  `tw:any-pointer-coarse:text-base` at their own call sites. Grep for the class rather than trust
-  this list. It also wins over a breakpoint variant on the same element (`tw:lg:text-xs`), because
+  an `any-pointer-coarse` font-size floor at their own call sites. Most carry
+  `tw:any-pointer-coarse:text-base`, which is `1rem` and so drops under 16px for a reader whose
+  root type is smaller; the two added on 2026-10-07 carry
+  `tw:any-pointer-coarse:text-[max(1rem,16px)]`, the same floor as the app-layer rule, and moving
+  the rest to it is queued. Grep for `any-pointer-coarse:text-` rather than trust this list. It also wins over a breakpoint variant on the same element (`tw:lg:text-xs`), because
   Tailwind emits the `any-pointer` block after the breakpoint ones.
 
   **`<select>` joined it on 2026-09-08**, working the second report of the same bug

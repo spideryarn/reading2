@@ -31,7 +31,9 @@ and the list is folded under a line reading *Contents*, shut until pressed.
 ## What we will do
 
 **Below 1024px, the same `<nav>` is drawn in the page's own column instead of being hidden**: the
-search box, then a *Contents* button that opens the list. From 1024px up nothing changes.
+search box, then a *Contents* button that opens the list. From 1024px up the list is where it
+was and looks as it did, with two differences: on a touch screen the search box's type is 16px, so
+iOS does not zoom into it, and the list comes after the page's title in tab order, not before.
 
 ```
   phone, list shut                 phone, Contents pressed
@@ -150,3 +152,49 @@ established P1s, both right and both folded in above before anything was built.
 
 It agreed with shut by default, found no ancestor that would capture the fixed list, and found the
 observers settle with the list inside `<main>`.
+
+## What landed
+
+Built as planned, in one stage (`43e261c58`), by an Opus subagent, tests red first. Two things
+differ from the first draft: the gap is a top margin on the `<nav>` (a bottom one collapses into
+the next section's), and the chevron follows the word *Contents*, as `PageSection.tsx`'s does.
+
+**GPT Sol's code review, 2026-10-07** (`261007c-contents-list-narrow-code-review-sol.md`): **ship
+with the fixes made.** F1, F3, F4 and F5 closed.
+
+- **C1 (P1, fixed by the reviewer, red first)**: F2 was only half closed. `text-base` is `1rem`,
+  which is under 16px for a reader whose root type is smaller. Both search boxes now carry
+  `tw:any-pointer-coarse:text-[max(1rem,16px)]` and `leading-6`. Seven older fields (sign-in, set
+  password, Add URL, the shelf's search, the title editor, two on the vouchers page) still carry
+  the weaker `text-base`; that is outside this report and has its own queue entry.
+- **C2, C3 (P3)**: this plan and `narrow-windows.md` said things C1 made untrue. Corrected.
+
+**The browser check** (Sonnet, Playwright on the box; `/read/fowler-phrenology/metadata` and
+`/profile`; 390, 820, 1024, 1280 and 1440 wide) passed every item. No console errors.
+
+| window | list | list left..right, top | *Contents* button | search box type |
+|---|---|---|---|---|
+| 390×844 | in the column, above the first section | 24..351 | shown, shut | 14px; 16px on a touch screen |
+| 820×1180 | in the column, above the first section | 42.5..762.5 | shown, shut | 14px; 16px on a touch screen |
+| 1024×768 | fixed in the margin | 24..200, 96 | not drawn | 12px; 16px on a touch screen |
+| 1280×800 | fixed in the margin | 24..200, 96 | not drawn | 12px |
+| 1440×900 | fixed in the margin | 24..200, 96 | not drawn | 12px |
+
+- Below 1024: no sideways scroll, shut or open. Pressing *Contents* shows the list; rows are 35px
+  tall at 14px type. A pressed entry opens its section, brings its heading to 96px from the top
+  where the page can scroll that far, and flashes it; nothing covers the heading. *cost* on
+  Metadata and *dark mode* on Profile show their match with no *Contents* button, Enter goes to
+  it, and Escape puts the button back, still shut.
+- From 1024 up the list's box is the one 261002a and 261003n measured (24..200), and the page's
+  text starts at 216 at 1024, clear of it. The same-day comparison against an unchanged dev server
+  was not done, because none was running; the comparison is with those two plans' recorded figures.
+- Help's search box is 16px on a touch screen at all three widths.
+- Not checked: Escape after the list had been opened with *Contents* (the unit test covers the
+  state coming back as it was left), and the dark Profile screenshots were taken but not looked at.
+
+Shots: [phone, shut](261007c-shot-390-metadata-shut.png) ·
+[phone, open](261007c-shot-390-metadata-open.png) ·
+[Profile on a phone, open](261007c-shot-390-profile-open.png).
+
+**Left as it is:** on a touch screen from 1024px up the search box's 16px type sits above 12px
+entries. It fits (the placeholder is 124px in 158px) and it is what stops the zoom.

@@ -386,11 +386,14 @@ function HelpContents({
   };
   return (
     <aside className="tw:lg:sticky tw:lg:top-[calc(3.5rem_+_var(--safe-top))] tw:lg:max-h-[calc(100dvh_-_4.5rem_-_var(--safe-top))] tw:lg:self-start tw:lg:overflow-y-auto">
-      {/* `any-pointer-coarse:text-base` — iOS zooms the page in on a field
-          under 16px, and the app-wide rule that prevents it cannot reach a
-          `tw:text-*` utility (narrow-windows.md § the utilities layer is out
-          of reach). This box was `text-sm` with nothing over it until
-          2026-10-07, found while giving PageContents.tsx's box the same. */}
+      {/* `any-pointer-coarse:text-[max(1rem,16px)]` — iOS zooms the page in on
+          a field under 16px, and the app-wide rule that prevents it cannot
+          reach a `tw:text-*` utility (narrow-windows.md § the utilities layer
+          is out of reach). A bare `text-base` is only `1rem`, which is still
+          under the threshold when the reader's root type is smaller; the
+          separate `leading-6` retains that utility's touch line height. This
+          box was `text-sm` with nothing over it until 2026-10-07, found while
+          giving PageContents.tsx's box the same. */}
       <input
         type="search"
         value={query}
@@ -399,7 +402,7 @@ function HelpContents({
         placeholder="Search Help"
         enterKeyHint="search"
         aria-label="Search Help"
-        className="tw:box-border tw:block tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:font-sans tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-base tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
+        className="tw:box-border tw:block tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:font-sans tw:text-sm tw:text-foreground tw:any-pointer-coarse:text-[max(1rem,16px)] tw:any-pointer-coarse:leading-6 tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
       />
       {/* Mounted before the first keystroke, for PageContents.tsx's reason: a
           live region inserted with its first message is not announced

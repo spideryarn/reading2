@@ -531,16 +531,18 @@ export function PageContents({
           list back. `type="search"` for the platform's clear button and the
           right on-screen keyboard.
 
-          **`any-pointer-coarse:text-base`, at every width**: iOS zooms the
+          **`any-pointer-coarse:text-[max(1rem,16px)]`, at every width**: iOS zooms the
           page in on a field under 16px and does not zoom back out. The
           app-wide rule that lifts fields to 16px on a touch screen is in the
           `app` layer and cannot reach a `tw:text-*` utility, so this box, at
           `text-xs`, zoomed an iPad in landscape before it was ever drawn on a
-          phone (narrow-windows.md § the utilities layer is out of reach). It
-          beats `lg:text-xs` by order alone, the two being one class each:
-          Tailwind emits the `any-pointer` block after the `lg` one, read off
-          the compiled CSS on 2026-10-07. Below `lg` the box is a little
-          larger, for a finger. */}
+          phone (narrow-windows.md § the utilities layer is out of reach).
+          `max(1rem, 16px)`, rather than `text-base`'s bare `1rem`, also keeps
+          the floor when the reader's root type is smaller than 16px;
+          `leading-6` retains `text-base`'s touch line height. The two coarse
+          utilities beat the `lg` ones by order: Tailwind emits the
+          `any-pointer` block after the breakpoint block, read off the compiled
+          CSS on 2026-10-07. */}
       <input
         type="search"
         value={query}
@@ -569,7 +571,7 @@ export function PageContents({
         placeholder="Search this page"
         enterKeyHint="search"
         aria-label="Search this page's sections"
-        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-2 tw:font-sans tw:text-sm tw:text-foreground tw:lg:px-2 tw:lg:py-1 tw:lg:text-xs tw:any-pointer-coarse:text-base tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
+        className="tw:mb-3 tw:block tw:w-full tw:shrink-0 tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-2 tw:font-sans tw:text-sm tw:text-foreground tw:lg:px-2 tw:lg:py-1 tw:lg:text-xs tw:any-pointer-coarse:text-[max(1rem,16px)] tw:any-pointer-coarse:leading-6 tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none"
       />
       {/* Kept mounted before the first keystroke: a live region inserted with
           its first message is not announced consistently. Sighted readers only

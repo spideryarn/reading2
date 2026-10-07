@@ -283,6 +283,16 @@ describe("the page", () => {
 });
 
 describe("the search box", () => {
+  it("never uses type below 16px on a touch screen", () => {
+    mountAt("/help");
+    /* This field has a Tailwind font-size utility, so the app-layer input
+       floor cannot win. `text-base` alone would still be under 16px for a
+       reader whose root type is smaller than the browser default. */
+    expect(
+      searchBox()?.classList.contains("tw:any-pointer-coarse:text-[max(1rem,16px)]"),
+    ).toBe(true);
+  });
+
   it("finds what a reader would type", () => {
     mountAt("/help");
     for (const [q, want] of [
