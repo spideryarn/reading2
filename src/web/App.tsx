@@ -15,6 +15,7 @@ import { PublicLibraryPage } from "./PublicLibraryPage.js";
 import { PricingPage } from "./PricingPage.js";
 import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
 import { SignInPage } from "./SignInPage.js";
+import { OAuthConsentPage } from "./OAuthConsentPage.js";
 import { useSession } from "./useSession.js";
 import { useJobSession } from "./useJobs.js";
 import { SignedInReader } from "./lib/made-for.js";
@@ -27,6 +28,7 @@ import {
   adminOnly,
   CALLBACK_HREF,
   LIBRARY_HREF,
+  loginHref,
   navigate,
   parseRoute,
   type Route,
@@ -266,6 +268,13 @@ export function App() {
      docs/plans/260827ai-public-read-only-access.md § The seam. */
   if (!user) {
     if (route.kind === "login") return <SignInPage />;
+    /* **Not the pitch, and not the consent page either: the sign-in page,
+       told to come back here.** An AI app's sign-in sent this reader with an
+       `authorization_id` that is the whole request, and the landing page's
+       links would drop it. `/login?next=` carries the address, query and all,
+       through SignInControls' one-shot store and back via `LeaveLogin`.
+       OAuthConsentPage.tsx; docs/plans/261007p. */
+    if (route.kind === "oauth-consent") return <SendToSignIn />;
     /* **The third exception, since 2026-09-02.** The privacy policy is for
        somebody deciding whether to sign in, so answering it with the pitch
        would be answering the one question the pitch is trying to get past.
@@ -442,6 +451,21 @@ function LeaveLogin() {
   useEffect(() => {
     if (parseRoute(location.pathname).kind !== "login") return;
     navigate(takeReturn(CALLBACK_HREF) ?? LIBRARY_HREF, { replace: true });
+  }, []);
+  return null;
+}
+
+/**
+ * A signed-out reader at an address that must survive signing in: off to
+ * `/login`, with that address as `next`. `replace`, as `LeaveLogin` does, so
+ * Back does not land on a page that bounces straight on again.
+ */
+function SendToSignIn() {
+  useEffect(() => {
+    /* StrictMode runs this twice, and the second run is already on `/login`:
+       sending that address as `next` would lose the one that mattered. */
+    if (parseRoute(location.pathname).kind !== "oauth-consent") return;
+    navigate(loginHref({ next: `${location.pathname}${location.search}` }), { replace: true });
   }, []);
   return null;
 }
@@ -723,6 +747,15 @@ function SignedIn({
      In an effect, `LeaveLogin` below, since a navigation during render updates
      every route subscriber mid-render, which React warns about. */
   if (route.kind === "login") return <LeaveLogin />;
+  /* An AI app asking to act as this reader. The corner logo like every other
+     standalone page; OAuthConsentPage.tsx says what the page shows and why. */
+  if (route.kind === "oauth-consent")
+    return (
+      <>
+        <HomeLogo />
+        <OAuthConsentPage key={user.id} />
+      </>
+    );
 
   /* No `HomeLogo` here any more, and that is not a tidy-up. `ArticlePage` can
      now end at `LandingPage` — a stranger following a link to a document that

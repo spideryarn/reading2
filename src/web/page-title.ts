@@ -215,6 +215,8 @@ export type TitleSpec =
    */
   | { kind: "landing" }
   | { kind: "login" }
+  /** An AI app asking to act as you — OAuthConsentPage.tsx. */
+  | { kind: "oauth-consent" }
   | { kind: "callback" }
   /**
    * The callback page after a password-recovery link, asking for a new one.
@@ -362,6 +364,11 @@ function segments(spec: TitleSpec): string[] {
 
     case "login":
       return ["Sign in", APP_NAME];
+
+    /* What the page asks, not what it is called: "Consent" would mean nothing
+       to somebody who arrived from Claude's connector settings. */
+    case "oauth-consent":
+      return ["Allow an app", APP_NAME];
 
     /* Half a second on a good day, and a page nobody chose to visit. It says
        what is happening rather than naming itself, because "Callback" would

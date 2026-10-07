@@ -41,6 +41,10 @@
       "destination": "/api/index?__spy_read=:slug"
     },
     {
+      "source": "/.well-known/oauth-protected-resource/api/mcp",
+      "destination": "/api/index?__spy_path=mcp/resource-metadata"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index?__spy_path=$1"
     },

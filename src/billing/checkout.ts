@@ -86,8 +86,8 @@ import { errorFields, log } from "../log.js";
 import { BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE } from "../messages.js";
 import type { OwnerId } from "../owner.js";
 import { readTiers } from "../store/pg-tiers.js";
-import { PUBLIC_ORIGIN } from "../urls.js";
-import { StripeConfigError, assertLivemode, isProductionDeployment, stripeClient } from "./stripe.js";
+import { siteOrigin } from "../site-origin.js";
+import { StripeConfigError, assertLivemode, stripeClient } from "./stripe.js";
 import { type SyncResult, syncSubscriptionFromStripe } from "./sync.js";
 import { subscriptionState } from "./tiers.js";
 import type { SubscriptionColumns, TierRow } from "./tiers.js";
@@ -131,37 +131,13 @@ export interface CheckoutDeps {
 }
 
 /**
- * Where Stripe sends the reader back to.
- *
- * **Built here, never from a request header.** A `Host` an attacker chooses would
- * become the address a paying customer is returned to, and `X-Forwarded-Host` is
- * the version of that mistake which looks careful. The same reasoning as
- * `PUBLIC_ORIGIN` in src/urls.ts, which is where the production value lives.
- *
- * Production is decided first and reads no variable, so nothing in the
- * environment can point a real customer's return anywhere but at us.
- * `SPIDERYARN_BASE_URL` exists for a local dev server that is not on 5273 —
- * every worktree after the first gets 5274, 5275… (docs/project/worktrees.md).
+ * Where Stripe sends the reader back to: this deployment's own origin, built
+ * from configuration and never from a request header — src/site-origin.ts
+ * says why, and is where the logic lives since the remote MCP server needed
+ * the same answer (plan 261007p).
  */
 export function billingReturnOrigin(): string {
-  if (isProductionDeployment()) return PUBLIC_ORIGIN;
-
-  const configured = process.env.SPIDERYARN_BASE_URL?.trim();
-  if (configured) {
-    try {
-      const url = new URL(configured);
-      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
-    } catch {
-      /* Fall through to the deployment host. A malformed override is worth a
-         line rather than a throw on the one route that sells things. */
-    }
-    logger.warn({ configured }, "SPIDERYARN_BASE_URL is not an http(s) URL, so it was ignored");
-  }
-
-  const preview = process.env.VERCEL_URL?.trim();
-  if (preview) return preview.includes("://") ? preview : `https://${preview}`;
-
-  return "http://localhost:5273";
+  return siteOrigin();
 }
 
 /** Where a finished or abandoned Checkout lands. `/profile` is the billing surface. */

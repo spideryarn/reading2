@@ -1,0 +1,695 @@
+diff --git a/docs/project/mcp.md b/docs/project/mcp.md
+index c25492bb4..9928a11f0 100644
+--- a/docs/project/mcp.md
++++ b/docs/project/mcp.md
+@@ -5,8 +5,10 @@ Up: [architecture.md](architecture.md)
+ An **MCP server** gives an AI app (Claude Desktop, Cowork, Claude Code, or any MCP client) a set of
+ named tools it may call. Spideryarn's runs **on your own computer**, signs in to Spideryarn as you,
+ and calls the same `/api/…` routes the web app calls, so **it can do exactly what you can do and
+-nothing more**: an admin's voucher tools work, anybody else's get the server's own 403. It changes
+-nothing on the server. Built for report `spya-bkkjzy`, Greg's:
++nothing more**: an admin's voucher tools work, anybody else's get the server's own 403. Since
++2026-10-07 the same tools can also be served from the site itself, for Claude on the web or a phone;
++that version is built but switched off (§ From Claude on the web or a phone). Built for report
++`spya-bkkjzy`, Greg's:
+ 
+ > I'd give it to Claude Co-work, and Claude Co-work would prompt an authentication into Spideryarn
+ > … what would be even better would be if actually the MCP allows you to do whatever you were
+@@ -100,7 +102,28 @@ that conversation too**, which the privacy page says
+ ([privacy.md](privacy.md#an-administrators-ai-assistant-can-look-up-accounts)). Both came with
+ [261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md).
+ 
+-**Not there yet:** signing in from Cowork on the web or phone.
++## From Claude on the web or a phone (built, switched off)
++
++The same tools are also served at `https://www.spideryarn.com/api/mcp`, for an AI app that cannot
++start a program on your Mac. Claude signs in with OAuth: it sends you to `/oauth/consent`, you
++press *Allow*, and it gets a token from Supabase's OAuth server for your account
++([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
++
++- **Off until Greg switches it on.** It accepts only the token of the one AI app whose id is in
++  `MCP_OAUTH_CLIENT_ID`; unset, it refuses everyone. Switching on: Supabase dashboard,
++  Authentication → OAuth Server on (dynamic registration **off**) and Authentication → OAuth Apps,
++  one confidential app with redirect `https://claude.ai/api/mcp/auth_callback`; its id into Vercel
++  as `MCP_OAUTH_CLIENT_ID`; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
++  the address above, *Use your own OAuth client*, its id and secret.
++- **Administrator only**, for now.
++- **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
++  publishing and private links are done in the Mac app or on the site.
++- **What the token can do at Supabase** is more than the tools, and is written up in
++  [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
++
++The code is [`src/mcp/remote.ts`](../../src/mcp/remote.ts) (the route, the per-request server, the
++in-process API) and [`src/web/OAuthConsentPage.tsx`](../../src/web/OAuthConsentPage.tsx). It must
++stay out of the local server's imports: `tests/mcp-remote-import-graph.test.ts`.
+ 
+ ## Where the code is
+ 
+diff --git a/docs/project/security-map.md b/docs/project/security-map.md
+index eba94addb..d2bfdfb18 100644
+--- a/docs/project/security-map.md
++++ b/docs/project/security-map.md
+@@ -102,7 +102,8 @@ An agent about to edit one of these is editing a defence, not a helper.
+ | [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
+ | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
+ | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
+-| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser` |
++| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, which refuses an AI app's OAuth token (one with a `client_id`) everywhere. See [§ An AI app's token](#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route) |
++| [`src/mcp/remote.ts`](../../src/mcp/remote.ts) | **the second gate**: `POST /api/mcp`, dispatched before `requireUser` like the Stripe webhook, accepting only the one registered AI app's token, only the administrator's, and running the MCP tools through `handleApi` as that reader. See the same section |
+ | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) + [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where a sign-in returns the reader to: same-origin only (no `//evil.example`), never the callback itself, ten minutes at most, and **forgotten on every callback failure** — AuthCallback has one `fail()` exit, the only caller of `setError`, and a test pins that ([261001i](../plans/261001i-password-reset.md)). The callback's own address is always the bare `/auth/callback`, so a one-time code cannot ride into another URL ([auth.md](auth.md), point 4) |
+ | [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — every request is bound to the reader the tab held as it was made, and is not sent with a token known to be another reader's (`NotThisReader`). The server cannot see this one: reader B's token on reader A's words is a valid request. [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another) |
+ | [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts) (re-exported from `pg.ts`) | `ownedSlug()` — keeps one reader's shelf out of another's |
+@@ -130,6 +131,35 @@ The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-clien
+ `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
+ `tests/public-dto.test.ts`.
+ 
++### And since 2026-10-07, an AI app's token, which opens one route
++
++([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md); Greg approved changing the sign-in
++gate for it.) Supabase's OAuth server issues tokens to an AI app the owner approves on
++`/oauth/consent`, so that Claude on the web or a phone can use the MCP tools
++([mcp.md](mcp.md)). Such a token carries a `client_id` claim and a browser session's never does.
++
++- **`requireUser` refuses it**, 401 `[auth-oauth-token]`, so a connector's token cannot reach a
++  route that is not a tool.
++- **`POST /api/mcp` accepts only it**, and only when `client_id` is exactly `MCP_OAUTH_CLIENT_ID`:
++  one app, registered by hand in Supabase for Claude's callback, with **dynamic registration off**.
++  Unset, the route refuses everyone, which is how it shipped. Then the administrator only (`isAdmin`),
++  and an `Origin`, if sent, must be ours or `https://claude.ai`.
++- **The tools run through `handleApi`** with a verifier that accepts one random per-request token
++  and nothing else, so every route's own owner scoping and admin gate applies as it does to the local
++  server. No OAuth token is forwarded anywhere.
++- **The tools that send mail, publish or hand over a private link refuse here**: their approval is
++  a dialog on the owner's Mac, which a server cannot show.
++
++**What this cannot stop, and is accepted rather than defended:** at Supabase itself the token is an
++ordinary sign-in to the account. Supabase's Auth API (`PUT /auth/v1/user`, the MFA endpoints) does
++not look at `client_id`, so whoever holds the token could, while it is valid, change the account's
++password unless *secure password change* is on. Anthropic's connector service holds it; the model
++never sees it. Switching this on in production is Greg's decision with that written in front of him
++([261007p § Questions](../plans/261007p-mcp-remote-sign-in-with-oauth.md#questions-for-greg-not-blocking)).
++Revoking: unsetting `MCP_OAUTH_CLIENT_ID` refuses every token at `/api/mcp` at once; removing the app
++in Supabase stops new ones, while an issued access token stays valid at Supabase until it expires
++(an hour). `tests/mcp-remote.test.ts` and `tests/auth.test.ts` hold the gate.
++
+ ### The unauthenticated namespace, and the tripwire under it
+ 
+ Everything else on this page is a defence in front of a gate. `/api/public/` is the one surface
+diff --git a/src/auth.ts b/src/auth.ts
+index e15ac4ed1..6504a2551 100644
+--- a/src/auth.ts
++++ b/src/auth.ts
+@@ -170,8 +170,25 @@ export function assertVerifiedUser(value: unknown): asserts value is VerifiedUse
+  */
+ export type Verifier = (token: string) => Promise<VerifyResult>;
+ 
++/**
++ * What a verified token says about itself. Nothing in it is checked by the
++ * signature alone; `personFrom` below checks what matters.
++ *
++ * `client_id` is on every token Supabase's OAuth server issues to an AI app
++ * (plan 261007p) and never on a browser session's. `unknown`, because it is
++ * whatever the token carries: `requireUser` refuses its mere presence, and
++ * src/mcp/remote.ts compares it to the one client it accepts.
++ */
++export type TokenClaims = {
++  sub: string;
++  email?: string;
++  role?: string;
++  is_anonymous?: boolean;
++  client_id?: unknown;
++};
++
+ export type VerifyResult =
+-  | { ok: true; claims: { sub: string; email?: string; role?: string; is_anonymous?: boolean } }
++  | { ok: true; claims: TokenClaims }
+   /** The token is bad. 401, and the reader should sign in again. */
+   | { ok: false; kind: "bad-token" }
+   /**
+@@ -303,6 +320,49 @@ export async function requireUser(
+   req: IncomingMessage,
+   verify: Verifier = verifyWithSupabase,
+ ): Promise<VerifiedUser> {
++  const claims = await verifiedClaims(req, verify);
++
++  /* **An AI app's token is refused here, whoever it names** — plan 261007p
++     § 3. Supabase's OAuth server issues tokens to an app the owner approved,
++     and those carry `client_id`; a browser session's never does. Such a token
++     is for `POST /api/mcp` alone, which checks it itself (src/mcp/remote.ts)
++     and never reaches this function with it. Without this line a token granted
++     to Claude for the MCP tools would open every route in the API, including
++     the ones that are not tools. Checked before anything else about the
++     claims, so the reason given is the real one. */
++  if (claims.client_id !== undefined) {
++    throw httpError(
++      401,
++      "That sign-in belongs to an app and only works for its tools, not here. [auth-oauth-token]",
++    );
++  }
++
++  const user = personFrom(claims);
++
++  /* **Frozen first, then remembered, and both last.** Not at the top of the
++     function and not on the claims: the whole content of the mark is
++     "everything in this function said yes", so anywhere earlier would be a
++     promise about a check that had not run yet.
++
++     `freeze` before `add` reads in the right order but is not the load-bearing
++     part — what is, is that both happen before the value escapes. A caller
++     holding a reference is the only thing that could change `id` afterwards,
++     and `setRequestOwner` is one frame away. */
++  Object.freeze(user);
++  verified.add(user);
++  return user as VerifiedUser;
++}
++
++/**
++ * **The bearer token's claims, verified, or a thrown `httpError`.** The half
++ * of the gate both gates share: the header, the signature, and telling a bad
++ * token (401) from an unreachable key set (503). It says nothing about who
++ * the claims name — `personFrom` does.
++ *
++ * Exported for src/mcp/remote.ts, the one other gate, so the two cannot drift
++ * into checking a token two ways.
++ */
++export async function verifiedClaims(req: IncomingMessage, verify: Verifier): Promise<TokenClaims> {
+   const header = req.headers?.authorization ?? "";
+   const [scheme, token] = header.split(" ");
+   if (scheme?.toLowerCase() !== "bearer" || !token) {
+@@ -324,8 +384,15 @@ export async function requireUser(
+     throw httpError(401, "Your sign-in has expired or isn't valid. Sign in again. [auth-bad]");
+   }
+ 
+-  const { claims } = result;
++  return result.claims;
++}
+ 
++/**
++ * **The person these claims name, or a thrown 401.** The other shared half:
++ * every check on what a verified token says, short of whether it is an app's.
++ * Unbranded — only `requireUser` marks a user as its own.
++ */
++export function personFrom(claims: TokenClaims): AuthedUser {
+   /* **The claims are checked, not just the signature.** `getClaims` verifies
+      the signature and the expiry and runtime-checks none of this, so "the
+      signature checked out" is a strictly weaker statement than "this is one of
+@@ -352,21 +419,9 @@ export async function requireUser(
+   /* **Anyone Supabase will vouch for is in: there is no allowlist.** Greg,
+      2026-08-26, twice: *"We can get rid of the allowlist once we've added
+      authentication. I'll accept the risk."* — docs/project/auth.md. A check on
+-     *who* may come in would go here, after the claims and before the mark. An
++     *who* may come in would go here, after the claims (so before
++     `requireUser`'s mark). An
+      `isAllowed()` that returned `true` stood here until 2026-10-04, in front
+      of a 403 nothing could reach. */
+-  const user: AuthedUser = { id: claims.sub as OwnerId, email: claims.email };
+-
+-  /* **Frozen first, then remembered, and both last.** Not at the top of the
+-     function and not on the claims: the whole content of the mark is
+-     "everything in this function said yes", so anywhere earlier would be a
+-     promise about a check that had not run yet.
+-
+-     `freeze` before `add` reads in the right order but is not the load-bearing
+-     part — what is, is that both happen before the value escapes. A caller
+-     holding a reference is the only thing that could change `id` afterwards,
+-     and `setRequestOwner` is one frame away. */
+-  Object.freeze(user);
+-  verified.add(user);
+-  return user as VerifiedUser;
++  return { id: claims.sub as OwnerId, email: claims.email };
+ }
+diff --git a/src/billing/checkout.ts b/src/billing/checkout.ts
+index 75ff66801..80b32bbab 100644
+--- a/src/billing/checkout.ts
++++ b/src/billing/checkout.ts
+@@ -86,8 +86,8 @@ import { errorFields, log } from "../log.js";
+ import { BILLING_NOT_AVAILABLE, BILLING_UNREACHABLE, NOTHING_TO_MANAGE } from "../messages.js";
+ import type { OwnerId } from "../owner.js";
+ import { readTiers } from "../store/pg-tiers.js";
+-import { PUBLIC_ORIGIN } from "../urls.js";
+-import { StripeConfigError, assertLivemode, isProductionDeployment, stripeClient } from "./stripe.js";
++import { siteOrigin } from "../site-origin.js";
++import { StripeConfigError, assertLivemode, stripeClient } from "./stripe.js";
+ import { type SyncResult, syncSubscriptionFromStripe } from "./sync.js";
+ import { subscriptionState } from "./tiers.js";
+ import type { SubscriptionColumns, TierRow } from "./tiers.js";
+@@ -131,37 +131,13 @@ export interface CheckoutDeps {
+ }
+ 
+ /**
+- * Where Stripe sends the reader back to.
+- *
+- * **Built here, never from a request header.** A `Host` an attacker chooses would
+- * become the address a paying customer is returned to, and `X-Forwarded-Host` is
+- * the version of that mistake which looks careful. The same reasoning as
+- * `PUBLIC_ORIGIN` in src/urls.ts, which is where the production value lives.
+- *
+- * Production is decided first and reads no variable, so nothing in the
+- * environment can point a real customer's return anywhere but at us.
+- * `SPIDERYARN_BASE_URL` exists for a local dev server that is not on 5273 —
+- * every worktree after the first gets 5274, 5275… (docs/project/worktrees.md).
++ * Where Stripe sends the reader back to: this deployment's own origin, built
++ * from configuration and never from a request header — src/site-origin.ts
++ * says why, and is where the logic lives since the remote MCP server needed
++ * the same answer (plan 261007p).
+  */
+ export function billingReturnOrigin(): string {
+-  if (isProductionDeployment()) return PUBLIC_ORIGIN;
+-
+-  const configured = process.env.SPIDERYARN_BASE_URL?.trim();
+-  if (configured) {
+-    try {
+-      const url = new URL(configured);
+-      if (url.protocol === "http:" || url.protocol === "https:") return url.origin;
+-    } catch {
+-      /* Fall through to the deployment host. A malformed override is worth a
+-         line rather than a throw on the one route that sells things. */
+-    }
+-    logger.warn({ configured }, "SPIDERYARN_BASE_URL is not an http(s) URL, so it was ignored");
+-  }
+-
+-  const preview = process.env.VERCEL_URL?.trim();
+-  if (preview) return preview.includes("://") ? preview : `https://${preview}`;
+-
+-  return "http://localhost:5273";
++  return siteOrigin();
+ }
+ 
+ /** Where a finished or abandoned Checkout lands. `/profile` is the billing surface. */
+diff --git a/src/feedback-page.ts b/src/feedback-page.ts
+index 871e41b4d..8d9babe67 100644
+--- a/src/feedback-page.ts
++++ b/src/feedback-page.ts
+@@ -66,6 +66,7 @@ const FIXED_PAGES: ReadonlySet<string> = new Set([
+   "/help",
+   "/opensource",
+   "/auth/callback",
++  "/oauth/consent",
+   "/admin",
+   ADMIN_USERS_PATH,
+   ADMIN_FEEDBACK_PATH,
+diff --git a/src/messages.ts b/src/messages.ts
+index 8d1b019f0..d0d2583d0 100644
+--- a/src/messages.ts
++++ b/src/messages.ts
+@@ -3632,6 +3632,25 @@ export const NOT_FOUND_TO_SHELF = "Go to your shelf";
+  */
+ export const NOT_FOUND_TO_HOME = "Go to the home page";
+ 
++/* ── An AI app's sign-in: the consent page ──────────────────────────────────
++   OAuthConsentPage.tsx. Browser-only, like the `st-` and `mic-` families: no
++   job stores them and `kindOfMessage` never reads them, so they are not in
++   `CODE_KINDS`. docs/plans/261007p-mcp-remote-sign-in-with-oauth.md. */
++
++/** `/oauth/consent` with no `authorization_id`: nothing to agree to. */
++export const OAUTH_NO_REQUEST =
++  "This page needs a sign-in request from the app that sent you, and the address has none. " +
++  "Start again from the app. [oauth-no-request]";
++
++/**
++ * Supabase would not say what the request is, or would not take the answer.
++ * Usually a request that has expired or was already used; Supabase's own words
++ * are not shown, for copy.md's rule 4.
++ */
++export const OAUTH_FAILED =
++  "We couldn't complete this sign-in request. It may have expired or already been used; " +
++  "start again from the app. [oauth-failed]";
++
+ /* ── The shelf of public articles ──────────────────────────────────────────── */
+ 
+ /**
+diff --git a/src/routes.ts b/src/routes.ts
+index 6fcb4ab34..6f592eaa2 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -325,6 +325,7 @@ import {
+ import { NotProcessed } from "./not-processed.js";
+ import { StillBeingAdded } from "./still-being-added.js";
+ import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
++import { isRemoteMcpPath, serveRemoteMcp } from "./mcp/remote.js";
+ import {
+   confirmCheckout,
+   openPortal,
+@@ -8352,6 +8353,20 @@ async function serveApi(
+       return true;
+     }
+ 
++    /**
++     * **The MCP tools for an AI app, and the third thing before the gate** —
++     * plan 261007p. `requireUser` refuses an OAuth token everywhere (its
++     * `[auth-oauth-token]`), so this route checks its own: the same claims,
++     * plus the one client it accepts and the administrator only. Exact paths,
++     * like the webhook's. `handleApi` is handed in because each tool calls the
++     * routes below in-process, as the verified person, through this same
++     * function. src/mcp/remote.ts.
++     */
++    if (isRemoteMcpPath(path)) {
++      await serveRemoteMcp({ req, res, method, path, verify, handleApi });
++      return true;
++    }
++
+     /* **The gate, and it is inside the `try` — that is the whole of this
+        comment's content.** An earlier plan put it just after the `/api/` prefix
+        check, eighty-five lines above, on the theory that this `try` would turn
+diff --git a/src/vercel-health.ts b/src/vercel-health.ts
+index 9281894d3..87b972720 100644
+--- a/src/vercel-health.ts
++++ b/src/vercel-health.ts
+@@ -442,12 +442,20 @@ const EXPECTED = [
+    * entitled to make.
+    */
+   { name: "SPIDERYARN_OWNER_ID", breaks: null },
++  /**
++   * **The one AI app whose OAuth tokens `POST /api/mcp` accepts** —
++   * src/mcp/remote.ts, plan 261007p. Unset is the shipped state and a
++   * deliberate one: the route then refuses everybody, so remote MCP is off
++   * until Greg registers the client and sets this. Hence `breaks: null`; an
++   * operator still wants to see at a glance whether it is on.
++   */
++  { name: "MCP_OAUTH_CLIENT_ID", breaks: null },
+   /* **`SPIDERYARN_BASE_URL` was here for a few hours on 2026-09-07 and is
+      not, and the reason is worth more than the entry was.** It is where
+      Stripe returns a reader after Checkout, and the production table in
+      docs/project/deployment.md lists it under "**must stay unset here**, and
+      it is listed so nobody adds it" — production answers `PUBLIC_ORIGIN`
+-     before it reads any variable (src/billing/checkout.ts:150), and a preview
++     before it reads any variable (src/site-origin.ts), and a preview
+      falls back to `VERCEL_URL`. A line reporting a setting production is
+      documented as forbidden to have is not neutral: it is an invitation to
+      set it. It belongs to a developer's own machine, which is what it is.
+diff --git a/src/web/App.tsx b/src/web/App.tsx
+index 19750dba0..d80a036f0 100644
+--- a/src/web/App.tsx
++++ b/src/web/App.tsx
+@@ -15,6 +15,7 @@ import { PublicLibraryPage } from "./PublicLibraryPage.js";
+ import { PricingPage } from "./PricingPage.js";
+ import { PublicReadableSharingPage } from "./PublicReadableSharingPage.js";
+ import { SignInPage } from "./SignInPage.js";
++import { OAuthConsentPage } from "./OAuthConsentPage.js";
+ import { useSession } from "./useSession.js";
+ import { useJobSession } from "./useJobs.js";
+ import { SignedInReader } from "./lib/made-for.js";
+@@ -27,6 +28,7 @@ import {
+   adminOnly,
+   CALLBACK_HREF,
+   LIBRARY_HREF,
++  loginHref,
+   navigate,
+   parseRoute,
+   type Route,
+@@ -266,6 +268,13 @@ export function App() {
+      docs/plans/260827ai-public-read-only-access.md § The seam. */
+   if (!user) {
+     if (route.kind === "login") return <SignInPage />;
++    /* **Not the pitch, and not the consent page either: the sign-in page,
++       told to come back here.** An AI app's sign-in sent this reader with an
++       `authorization_id` that is the whole request, and the landing page's
++       links would drop it. `/login?next=` carries the address, query and all,
++       through SignInControls' one-shot store and back via `LeaveLogin`.
++       OAuthConsentPage.tsx; docs/plans/261007p. */
++    if (route.kind === "oauth-consent") return <SendToSignIn />;
+     /* **The third exception, since 2026-09-02.** The privacy policy is for
+        somebody deciding whether to sign in, so answering it with the pitch
+        would be answering the one question the pitch is trying to get past.
+@@ -446,6 +455,21 @@ function LeaveLogin() {
+   return null;
+ }
+ 
++/**
++ * A signed-out reader at an address that must survive signing in: off to
++ * `/login`, with that address as `next`. `replace`, as `LeaveLogin` does, so
++ * Back does not land on a page that bounces straight on again.
++ */
++function SendToSignIn() {
++  useEffect(() => {
++    /* StrictMode runs this twice, and the second run is already on `/login`:
++       sending that address as `next` would lose the one that mattered. */
++    if (parseRoute(location.pathname).kind !== "oauth-consent") return;
++    navigate(loginHref({ next: `${location.pathname}${location.search}` }), { replace: true });
++  }, []);
++  return null;
++}
++
+ function SignedIn({
+   route,
+   user,
+@@ -723,6 +747,15 @@ function SignedIn({
+      In an effect, `LeaveLogin` below, since a navigation during render updates
+      every route subscriber mid-render, which React warns about. */
+   if (route.kind === "login") return <LeaveLogin />;
++  /* An AI app asking to act as this reader. The corner logo like every other
++     standalone page; OAuthConsentPage.tsx says what the page shows and why. */
++  if (route.kind === "oauth-consent")
++    return (
++      <>
++        <HomeLogo />
++        <OAuthConsentPage key={user.id} />
++      </>
++    );
+ 
+   /* No `HomeLogo` here any more, and that is not a tidy-up. `ArticlePage` can
+      now end at `LandingPage` — a stranger following a link to a document that
+diff --git a/src/web/page-title.ts b/src/web/page-title.ts
+index 44de49d54..394c1441c 100644
+--- a/src/web/page-title.ts
++++ b/src/web/page-title.ts
+@@ -215,6 +215,8 @@ export type TitleSpec =
+    */
+   | { kind: "landing" }
+   | { kind: "login" }
++  /** An AI app asking to act as you — OAuthConsentPage.tsx. */
++  | { kind: "oauth-consent" }
+   | { kind: "callback" }
+   /**
+    * The callback page after a password-recovery link, asking for a new one.
+@@ -363,6 +365,11 @@ function segments(spec: TitleSpec): string[] {
+     case "login":
+       return ["Sign in", APP_NAME];
+ 
++    /* What the page asks, not what it is called: "Consent" would mean nothing
++       to somebody who arrived from Claude's connector settings. */
++    case "oauth-consent":
++      return ["Allow an app", APP_NAME];
++
+     /* Half a second on a good day, and a page nobody chose to visit. It says
+        what is happening rather than naming itself, because "Callback" would
+        mean nothing to the person reading it. */
+diff --git a/src/web/router.ts b/src/web/router.ts
+index d6039babf..66c6a0cf9 100644
+--- a/src/web/router.ts
++++ b/src/web/router.ts
+@@ -312,6 +312,17 @@ export type Route =
+    * auth code. GPT Sol found it; docs/plans/260826w-auth-supabase.md has the diagram.
+    */
+   | { kind: "callback" }
++  /**
++   * **Where an AI app's sign-in asks you to agree** — `/oauth/consent`, the
++   * consent page Supabase's OAuth server sends the browser to with
++   * `?authorization_id=…`. OAuthConsentPage.tsx, and
++   * docs/plans/261007p-mcp-remote-sign-in-with-oauth.md.
++   *
++   * No payload: the id is read from the query string by the page, as `/login`
++   * reads `?next=`. Signed out, App.tsx sends the reader to `/login` with this
++   * whole address as `next`, so the id comes back with them.
++   */
++  | { kind: "oauth-consent" }
+   /**
+    * **An address nobody minted** — `/asdf`, `/read/a/b`, `/privacy/cookies`.
+    * See NotFoundPage.tsx, and docs/plans/260903j-not-found-page.md for the
+@@ -390,6 +401,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
+   help: false,
+   opensource: false,
+   callback: false,
++  "oauth-consent": false,
+   "not-found": false,
+ };
+ 
+@@ -670,6 +682,8 @@ export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
+ export const ADMIN_COSTS_HREF = ADMIN_COSTS_PATH;
+ export const DESIGN_HREF = "/design";
+ export const LOGIN_HREF = "/login";
++/** The consent page for an AI app's sign-in — the `oauth-consent` variant. */
++export const OAUTH_CONSENT_HREF = "/oauth/consent";
+ /**
+  * The sign-in page, told where to go afterwards and which tab to open on.
+  *
+@@ -862,6 +876,8 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
+      nothing may reinterpret it. See the `callback` variant above. */
+   [CALLBACK_HREF, "callback"],
+   [LOGIN_HREF, "login"],
++  /* Top level and sharing a prefix with nothing, so order is indifferent to it. */
++  [OAUTH_CONSENT_HREF, "oauth-consent"],
+   // Beside `design` and above `/read/` for the same reason: it is not about an
+   // article, so the article regex must never get a chance at it.
+   [PROFILE_HREF, "profile"],
+diff --git a/supabase/config.toml b/supabase/config.toml
+index 07d27bcce..f95d0495b 100644
+--- a/supabase/config.toml
++++ b/supabase/config.toml
+@@ -565,11 +565,11 @@ enabled = false
+ 
+ # OAuth server configuration
+ [auth.oauth_server]
+-# Enable OAuth server functionality
+-enabled = false
++# Enable OAuth server functionality: remote MCP sign-in, plan 261007p. Takes effect on the next stack restart.
++enabled = true
+ # Path for OAuth consent flow UI
+ authorization_url_path = "/oauth/consent"
+-# Allow dynamic client registration
++# Allow dynamic client registration. Off: one client, registered by hand (plan 261007p, Sol F6).
+ allow_dynamic_registration = false
+ 
+ [edge_runtime]
+diff --git a/tests/auth.test.ts b/tests/auth.test.ts
+index 7f68924c2..d757785f5 100644
+--- a/tests/auth.test.ts
++++ b/tests/auth.test.ts
+@@ -102,6 +102,26 @@ describe("requireUser", () => {
+     expect(await statusOf(requireUser(req("Bearer t"), says({ ...good, email: "" })))).toBe(401);
+   });
+ 
++  /**
++   * **An AI app's OAuth token opens `/api/mcp` and nothing else** — plan
++   * 261007p § 3. Supabase puts `client_id` on every token it issues to an
++   * OAuth client and never on a browser session's, so its presence is what the
++   * ordinary gate refuses. Any value, even an empty or odd one: the claim being
++   * there at all says the token was not a browser's.
++   */
++  it("refuses a token issued to an OAuth client, whatever its client_id", async () => {
++    for (const client_id of ["9a3c3f8e-1b2c-4d5e-8f90-123456789abc", "", 42, null]) {
++      let thrown: unknown;
++      try {
++        await requireUser(req("Bearer t"), says({ ...good, client_id }));
++      } catch (err) {
++        thrown = err;
++      }
++      expect((thrown as { status?: number } | undefined)?.status, String(client_id)).toBe(401);
++      expect((thrown as Error).message).toMatch(/\[auth-oauth-token\]$/);
++    }
++  });
++
+   it("returns the user for a good token", async () => {
+     const user = await requireUser(req("Bearer t"), says(good));
+     expect(user).toEqual({ id: SUB, email: ADMIN_EMAIL_LOCAL });
+diff --git a/tests/env-names-are-inventoried.test.ts b/tests/env-names-are-inventoried.test.ts
+index a038a6386..e533d766e 100644
+--- a/tests/env-names-are-inventoried.test.ts
++++ b/tests/env-names-are-inventoried.test.ts
+@@ -210,8 +210,8 @@ const ALLOWED: readonly AllowGroup[] = [
+        2026-09-07 and moving it here is the interesting one.** It is where
+        Stripe returns a reader after Checkout, and the production table in
+        docs/project/deployment.md lists it under "**must stay unset here**, and
+-       it is listed so nobody adds it" — `billingReturnOrigin()`
+-       (src/billing/checkout.ts) answers `PUBLIC_ORIGIN` before it reads any
++       it is listed so nobody adds it" — `siteOrigin()`
++       (src/site-origin.ts, since 261007p) answers `PUBLIC_ORIGIN` before it reads any
+        variable, and a preview falls back to `VERCEL_URL`. Reporting a setting
+        production is documented as forbidden to have is worse than not
+        reporting it: a line in a health report is an invitation to set the
+diff --git a/tests/feedback-page.test.ts b/tests/feedback-page.test.ts
+index ad4ab4b7f..fef535ce1 100644
+--- a/tests/feedback-page.test.ts
++++ b/tests/feedback-page.test.ts
+@@ -43,6 +43,7 @@ const SAMPLES: Record<Route["kind"], readonly string[]> = {
+   help: ["/help", "/help/", "/help/spine", "/help/spine/", "/help/questions", "/help/nonsense"],
+   opensource: ["/opensource"],
+   callback: ["/auth/callback"],
++  "oauth-consent": ["/oauth/consent", "/oauth/consent/"],
+   "not-found": [
+     "/nope",
+     "/admin/secrets",
+diff --git a/tests/public-read-rewrite.test.ts b/tests/public-read-rewrite.test.ts
+index 185814a8b..c3c2c5b91 100644
+--- a/tests/public-read-rewrite.test.ts
++++ b/tests/public-read-rewrite.test.ts
+@@ -32,6 +32,7 @@ import path from "node:path";
+ 
+ import { describe, expect, it } from "vitest";
+ 
++import { MCP_METADATA_PATH, MCP_WELL_KNOWN_PATH } from "../src/mcp/remote.js";
+ import { decidePublicPage } from "../src/public/page.js";
+ import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
+ import { redirectsToMetadata, viewFor } from "../src/read-address.js";
+@@ -155,6 +156,25 @@ describe("vercel.json's rewrites", () => {
+   });
+ });
+ 
++/**
++ * **Where an MCP client looks for `/api/mcp`'s metadata, RFC 9728** — plan
++ * 261007p, Sol's F4. The well-known address is outside `/api/`, so the SPA
++ * catch-all would answer it with the app's HTML unless a rule above it sends
++ * it to the function — and to a concrete `__spy_path`, not to a second rewrite
++ * that might or might not run after this one.
++ */
++describe("the MCP resource-metadata rewrite", () => {
++  it("sends the well-known address to the function, ahead of the SPA catch-all", () => {
++    expect(routedBy(MCP_WELL_KNOWN_PATH)).toBe(MCP_WELL_KNOWN_PATH);
++    const rule = config.rewrites.find((r) => r.source === MCP_WELL_KNOWN_PATH);
++    expect(rule?.destination).toBe("/api/index?__spy_path=mcp/resource-metadata");
++    /* And the function puts back exactly the path src/routes.ts dispatches on. */
++    expect(originalUrl(rule?.destination ?? "")).toBe(MCP_METADATA_PATH);
++    /* `/api/mcp` itself needs nothing new: the API rule already has it. */
++    expect(routedBy("/api/mcp")).toBe("/api/(.*)");
++  });
++});
++
+ describe("vercel.json's headers", () => {
+   /**
+    * **One `noindex, nofollow` rule, and every `/read/` address is under it.**
+diff --git a/tests/store-migration-registry.ts b/tests/store-migration-registry.ts
+index bd65f124b..b720011ee 100644
+--- a/tests/store-migration-registry.ts
++++ b/tests/store-migration-registry.ts
+@@ -3246,6 +3246,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
+      and the public reads with a key. The bucket is a temp directory, mocked at
+      the `blobStore()` selector as `asset-route` mocks it. */
+   "tests/share-link-pg.test.ts": "private-postgres",
++  /* Plan 261007p: the MCP tools at `POST /api/mcp`, through `handleApi` and
++     the SDK's client, reading two seeded articles through the library route. */
++  "tests/mcp-remote.test.ts": "private-postgres",
+   /* Plan 261007f, E14 to E16: two seeded readers who hold the same article,
+      through the real billing, upload, share-link and public routes. The bucket
+      is a temp directory, mocked as `share-link-pg` mocks it, and the upload
+@@ -3615,6 +3618,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
+   },
+   /* Plan 261005l. `seedAuthUser` in `beforeAll`: its jobs spend real ingest
+      reservations, which hang off the `auth.users` foreign key. */
++  /* Plan 261007p. `seedAuthUser` in `beforeAll`: a second reader who owns an
++     article the administrator's tools must not see, and who is refused at
++     `/api/mcp` for not being the administrator. */
++  "tests/mcp-remote.test.ts": {
++    "00000000-0000-4000-8000-00000000b0b0": { kind: "seeded" },
++  },
+   "tests/a-paper-queued-before-the-resolver.test.ts": {
+     "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
+   },
+diff --git a/tests/voices-css.test.ts b/tests/voices-css.test.ts
+index c8ee96d64..6abb532cc 100644
+--- a/tests/voices-css.test.ts
++++ b/tests/voices-css.test.ts
+@@ -244,6 +244,9 @@ const VOICES_BY_SURFACE: Record<Surface, readonly string[] | { none: string }> =
+   help: { none: OURS },
+   opensource: { none: OURS },
+   callback: { none: "a redirect; it draws no text" },
++  /* The client's name is whatever its registrant typed, shown as a labelled
++     value beside the app's own sentences rather than as anybody's prose. */
++  "oauth-consent": { none: OURS },
+   "not-found": { none: OURS },
+ };
+ 
+diff --git a/vercel.json b/vercel.json
+index e1ef2920e..8777ddb22 100644
+--- a/vercel.json
++++ b/vercel.json
+@@ -40,6 +40,10 @@
+       "source": "/read/:slug",
+       "destination": "/api/index?__spy_read=:slug"
+     },
++    {
++      "source": "/.well-known/oauth-protected-resource/api/mcp",
++      "destination": "/api/index?__spy_path=mcp/resource-metadata"
++    },
+     {
+       "source": "/api/(.*)",
+       "destination": "/api/index?__spy_path=$1"

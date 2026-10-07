@@ -170,8 +170,25 @@ export function assertVerifiedUser(value: unknown): asserts value is VerifiedUse
  */
 export type Verifier = (token: string) => Promise<VerifyResult>;
 
+/**
+ * What a verified token says about itself. Nothing in it is checked by the
+ * signature alone; `personFrom` below checks what matters.
+ *
+ * `client_id` is on every token Supabase's OAuth server issues to an AI app
+ * (plan 261007p) and never on a browser session's. `unknown`, because it is
+ * whatever the token carries: `requireUser` refuses its mere presence, and
+ * src/mcp/remote.ts compares it to the one client it accepts.
+ */
+export type TokenClaims = {
+  sub: string;
+  email?: string;
+  role?: string;
+  is_anonymous?: boolean;
+  client_id?: unknown;
+};
+
 export type VerifyResult =
-  | { ok: true; claims: { sub: string; email?: string; role?: string; is_anonymous?: boolean } }
+  | { ok: true; claims: TokenClaims }
   /** The token is bad. 401, and the reader should sign in again. */
   | { ok: false; kind: "bad-token" }
   /**
@@ -303,6 +320,49 @@ export async function requireUser(
   req: IncomingMessage,
   verify: Verifier = verifyWithSupabase,
 ): Promise<VerifiedUser> {
+  const claims = await verifiedClaims(req, verify);
+
+  /* **An AI app's token is refused here, whoever it names** — plan 261007p
+     § 3. Supabase's OAuth server issues tokens to an app the owner approved,
+     and those carry `client_id`; a browser session's never does. Such a token
+     is for `POST /api/mcp` alone, which checks it itself (src/mcp/remote.ts)
+     and never reaches this function with it. Without this line a token granted
+     to Claude for the MCP tools would open every route in the API, including
+     the ones that are not tools. Checked before anything else about the
+     claims, so the reason given is the real one. */
+  if (claims.client_id !== undefined) {
+    throw httpError(
+      401,
+      "That sign-in belongs to an app and only works for its tools, not here. [auth-oauth-token]",
+    );
+  }
+
+  const user = personFrom(claims);
+
+  /* **Frozen first, then remembered, and both last.** Not at the top of the
+     function and not on the claims: the whole content of the mark is
+     "everything in this function said yes", so anywhere earlier would be a
+     promise about a check that had not run yet.
+
+     `freeze` before `add` reads in the right order but is not the load-bearing
+     part — what is, is that both happen before the value escapes. A caller
+     holding a reference is the only thing that could change `id` afterwards,
+     and `setRequestOwner` is one frame away. */
+  Object.freeze(user);
+  verified.add(user);
+  return user as VerifiedUser;
+}
+
+/**
+ * **The bearer token's claims, verified, or a thrown `httpError`.** The half
+ * of the gate both gates share: the header, the signature, and telling a bad
+ * token (401) from an unreachable key set (503). It says nothing about who
+ * the claims name — `personFrom` does.
+ *
+ * Exported for src/mcp/remote.ts, the one other gate, so the two cannot drift
+ * into checking a token two ways.
+ */
+export async function verifiedClaims(req: IncomingMessage, verify: Verifier): Promise<TokenClaims> {
   const header = req.headers?.authorization ?? "";
   const [scheme, token] = header.split(" ");
   if (scheme?.toLowerCase() !== "bearer" || !token) {
@@ -324,8 +384,15 @@ export async function requireUser(
     throw httpError(401, "Your sign-in has expired or isn't valid. Sign in again. [auth-bad]");
   }
 
-  const { claims } = result;
+  return result.claims;
+}
 
+/**
+ * **The person these claims name, or a thrown 401.** The other shared half:
+ * every check on what a verified token says, short of whether it is an app's.
+ * Unbranded — only `requireUser` marks a user as its own.
+ */
+export function personFrom(claims: TokenClaims): AuthedUser {
   /* **The claims are checked, not just the signature.** `getClaims` verifies
      the signature and the expiry and runtime-checks none of this, so "the
      signature checked out" is a strictly weaker statement than "this is one of
@@ -352,21 +419,9 @@ export async function requireUser(
   /* **Anyone Supabase will vouch for is in: there is no allowlist.** Greg,
      2026-08-26, twice: *"We can get rid of the allowlist once we've added
      authentication. I'll accept the risk."* — docs/project/auth.md. A check on
-     *who* may come in would go here, after the claims and before the mark. An
+     *who* may come in would go here, after the claims (so before
+     `requireUser`'s mark). An
      `isAllowed()` that returned `true` stood here until 2026-10-04, in front
      of a 403 nothing could reach. */
-  const user: AuthedUser = { id: claims.sub as OwnerId, email: claims.email };
-
-  /* **Frozen first, then remembered, and both last.** Not at the top of the
-     function and not on the claims: the whole content of the mark is
-     "everything in this function said yes", so anywhere earlier would be a
-     promise about a check that had not run yet.
-
-     `freeze` before `add` reads in the right order but is not the load-bearing
-     part — what is, is that both happen before the value escapes. A caller
-     holding a reference is the only thing that could change `id` afterwards,
-     and `setRequestOwner` is one frame away. */
-  Object.freeze(user);
-  verified.add(user);
-  return user as VerifiedUser;
+  return { id: claims.sub as OwnerId, email: claims.email };
 }

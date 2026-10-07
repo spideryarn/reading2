@@ -210,8 +210,8 @@ const ALLOWED: readonly AllowGroup[] = [
        2026-09-07 and moving it here is the interesting one.** It is where
        Stripe returns a reader after Checkout, and the production table in
        docs/project/deployment.md lists it under "**must stay unset here**, and
-       it is listed so nobody adds it" — `billingReturnOrigin()`
-       (src/billing/checkout.ts) answers `PUBLIC_ORIGIN` before it reads any
+       it is listed so nobody adds it" — `siteOrigin()`
+       (src/site-origin.ts, since 261007p) answers `PUBLIC_ORIGIN` before it reads any
        variable, and a preview falls back to `VERCEL_URL`. Reporting a setting
        production is documented as forbidden to have is worse than not
        reporting it: a line in a health report is an invitation to set the

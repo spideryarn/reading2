@@ -325,6 +325,7 @@ import {
 import { NotProcessed } from "./not-processed.js";
 import { StillBeingAdded } from "./still-being-added.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
+import { isRemoteMcpPath, serveRemoteMcp } from "./mcp/remote.js";
 import {
   confirmCheckout,
   openPortal,
@@ -8349,6 +8350,20 @@ async function serveApi(
      */
     if (path === WEBHOOK_PATH) {
       await serveStripeWebhook(req, res, method);
+      return true;
+    }
+
+    /**
+     * **The MCP tools for an AI app, and the third thing before the gate** —
+     * plan 261007p. `requireUser` refuses an OAuth token everywhere (its
+     * `[auth-oauth-token]`), so this route checks its own: the same claims,
+     * plus the one client it accepts and the administrator only. Exact paths,
+     * like the webhook's. `handleApi` is handed in because each tool calls the
+     * routes below in-process, as the verified person, through this same
+     * function. src/mcp/remote.ts.
+     */
+    if (isRemoteMcpPath(path)) {
+      await serveRemoteMcp({ req, res, method, path, verify, handleApi });
       return true;
     }
 

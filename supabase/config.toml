@@ -565,11 +565,11 @@ enabled = false
 
 # OAuth server configuration
 [auth.oauth_server]
-# Enable OAuth server functionality
-enabled = false
+# Enable OAuth server functionality: remote MCP sign-in, plan 261007p. Takes effect on the next stack restart.
+enabled = true
 # Path for OAuth consent flow UI
 authorization_url_path = "/oauth/consent"
-# Allow dynamic client registration
+# Allow dynamic client registration. Off: one client, registered by hand (plan 261007p, Sol F6).
 allow_dynamic_registration = false
 
 [edge_runtime]

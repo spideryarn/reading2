@@ -66,6 +66,7 @@ const FIXED_PAGES: ReadonlySet<string> = new Set([
   "/help",
   "/opensource",
   "/auth/callback",
+  "/oauth/consent",
   "/admin",
   ADMIN_USERS_PATH,
   ADMIN_FEEDBACK_PATH,

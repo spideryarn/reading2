@@ -1,0 +1,59 @@
+The plan needs changes before production. The main blocker is that restricting Spideryarn’s API does not restrict what the connector’s Supabase credential can do at Supabase itself.
+
+Read-only review completed; no files edited. Two in-memory probes confirmed that the installed SDK accepts verified claims without checking the intended audience, and that a stateless transport cannot handle a second request.
+
+1. **F1 — P1: Supabase Auth replay is a production blocker, not merely a finding to report.**  
+   Evidence: [plan:151](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:151). Supabase’s current [routing](https://github.com/supabase/auth/blob/master/internal/api/api.go), [authentication middleware](https://github.com/supabase/auth/blob/master/internal/api/auth.go), and [account-update handler](https://github.com/supabase/auth/blob/master/internal/api/user.go) contain no OAuth-client exclusion for `PUT /auth/v1/user`. The update handler also does not enforce the token’s audience. This indicates possible account changes—and potentially setting a password that subsequently obtains an ordinary browser token—subject to the deployed version and password/MFA settings. That would bypass both the API replay defence and remote approval restrictions. Changing `aud` alone is insufficient.
+
+   **Fix:** make unsuccessful account-update and credential-escalation attempts an explicit production gate, tested on disposable accounts against the relevant Auth version/configuration. If Supabase cannot enforce the restriction, isolate connector credentials from the production Auth account, for example with a separate Supabase OAuth issuer and explicit identity mapping. Preserve OAuth; do not ship unrestricted project credentials under narrower consent wording.
+
+2. **F2 — P1: `client_id` identifies an OAuth client, not the intended resource.**  
+   Evidence: [plan:67](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:67), [auth.ts:235](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/src/auth.ts:235). A Greg token issued to another OAuth client/resource still satisfies the proposed MCP gate. `getClaims` checks signature and expiry; the installed SDK does not check an expected `aud` or `iss`. MCP requires verification that the token was specifically issued for this server. [MCP authorization requirements](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#token-audience-binding-and-validation).
+
+   **Fix:** define and enforce an issuance policy binding MCP tokens to the canonical `/api/mcp` resource, then check that binding and the configured issuer. A Supabase access-token hook can customize `aud`, but its client-selection policy must be explicit. Retain the ordinary API’s OAuth-token rejection. Test validly signed tokens for another audience/client, malformed `client_id`, and browser tokens. [Supabase token customization](https://supabase.com/docs/guides/auth/oauth-server/token-security#customizing-the-audience-claim).
+
+3. **F3 — P1: The spike does not establish Claude’s actual OAuth compatibility.**  
+   Evidence: [plan:147](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:147). It omits explicit authorization/token requests containing `resource=https://www.spideryarn.com/api/mcp`. MCP clients must send that parameter even when the issuer lacks support. Current Supabase source parses it during authorization, but token generation still uses the user’s audience; accepting the parameter therefore does not establish resource binding. [MCP resource requirements](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#resource-parameter-implementation), [Supabase authorization](https://github.com/supabase/auth/blob/master/internal/api/oauthserver/authorize.go), [token generation](https://github.com/supabase/auth/blob/master/internal/tokens/service.go).
+
+   **Fix:** test the exact authorization, form-encoded exchange, refresh, and resulting claims against the deployed version. Require a real Claude.ai connector acceptance check. Document selecting **Register automatically** or **Use your own OAuth client**: Claude currently also offers a recommended published-identity mode, which this UUID-based Supabase registration design does not establish support for. [Claude connector configuration](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
+
+4. **F4 — P1: The well-known rewrite needs a concrete function destination.**  
+   Evidence: [plan:92](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:92), [vercel.json:38](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/vercel.json:38), [vercel.ts:113](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/src/vercel.ts:113). This repo has one `/api/index` function; `/api/mcp/resource-metadata` is an application route reconstructed through `__spy_path`. A rewrite “to it” must not depend on another rewrite subsequently resolving that virtual route.
+
+   **Fix:** explicitly rewrite the well-known path to `/api/index?__spy_path=mcp/resource-metadata`, before the SPA catch-all. Test the rewrite and URL restoration together, then verify deployed unauthenticated JSON discovery. The proposed path-specific well-known location and `WWW-Authenticate` syntax are otherwise correct. [RFC 9728](https://www.rfc-editor.org/rfc/rfc9728.html#section-3).
+
+5. **F5 — P1: Specify a fresh server, transport, and identity closure per request.**  
+   Evidence: [plan:81](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:81), installed [transport:488](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/node_modules/@modelcontextprotocol/server/dist/index.mjs:488). `sessionIdGenerator: undefined` does not make a singleton reusable: the SDK throws on its second request. Reusing a server with tools closed over Greg’s identity also introduces identity/lifecycle hazards under Vercel concurrency.
+
+   **Fix:** explicitly construct `buildServer`, its identity-bound dependencies, and transport for every POST; set `enableJsonResponse: true`; close them after completion or abort. Test initialization, the subsequent 202 notification, list/call requests, and overlapping requests in one warm process. GET/DELETE returning 405 is appropriate for this stateless design.
+
+6. **F6 — P2: DCR consent still needs an explicit client-trust policy.**  
+   Evidence: [plan:53](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:53). Displaying the redirect host is useful, but anyone can register the name “Claude” and present a legitimate Spideryarn consent page for an attacker-controlled callback. The displayed name must not become an assertion that Anthropic is asking.
+
+   **Fix:** for this one-admin version, the simplest policy is a preregistered Claude client with exact callbacks and DCR disabled. If retaining DCR, prominently label client names as unverified, show the complete callback origin without misleading truncation, and define how unknown clients are approved. Test a client named “Claude” redirecting to an unrelated or deceptive hostname. Supabase itself recommends trusted-domain validation for DCR. [Supabase MCP guidance](https://supabase.com/docs/guides/auth/oauth-server/mcp-authentication#dynamic-client-registration).
+
+7. **F7 — P2: Origin validation is missing and disabled by SDK default.**  
+   Evidence: [plan:81](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:81), installed [transport:396](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/node_modules/@modelcontextprotocol/server/dist/index.mjs:396). Streamable HTTP requires validating a supplied `Origin`; merely using the transport does not enable its protection. [MCP transport requirements](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#security-warning).
+
+   **Fix:** configure host/origin validation or implement it before dispatch. Permit absent Origin for server clients; reject present unapproved origins with 403. Build resource and metadata addresses from trusted configuration. Add allowed, absent, hostile, and `null` Origin tests.
+
+8. **F8 — P2: A boolean refusal cannot supply the promised web-page explanation.**  
+   Evidence: [plan:88](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:88), [server.ts:56](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/src/mcp/server.ts:56). Returning `false` produces the fixed “Not approved” result, without a page address. The existing `CannotAsk` mechanism already supports the intended explanation.
+
+   **Fix:** inject an unconditional remote approver that throws `CannotAsk` with the relevant page. Do not select it by host OS: remote HTTP served during Mac development must also refuse. Test every approval-requiring operation, including an existing private link, for no writes and no key disclosure; verify address-free voucher updates still work.
+
+9. **F9 — P2: The tests do not protect the dispatch seam or local stdio compatibility.**  
+   Evidence: [plan:135](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:135). One successful library call and one refused asking tool leave substantial boundary behaviour untested.
+
+   **Fix:** add owner-scoping tests with another owner’s data, preserved admin/billing refusals, request-isolation tests, real browser-session acceptance through the changed ordinary gate, and consent return-through-login preserving `authorization_id`. Retain the spawned stdio/session/tool suites; its fake HTTP server alone cannot detect an ordinary-gate regression. Keep remote routing dependencies outside the local stdio import graph.
+
+10. **F10 — P2: Revocation wording overstates what offline JWT verification provides.**  
+    Evidence: [plan:119](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/docs/plans/261007p-mcp-remote-sign-in-with-oauth.md:119), [auth.ts:238](/var/tmp/spideryarn-worktrees/mcp-admin-tools-oauth/src/auth.ts:238). Signing out everywhere revokes refresh tokens, but existing access tokens remain valid until expiry. Local `getClaims` verification cannot observe revoked sessions/grants. [Supabase sign-out semantics](https://supabase.com/docs/guides/auth/signout).
+
+    **Fix:** specify and test the revocation delay and a working per-client revocation procedure. If immediate revocation is required, check authoritative session/grant state in the MCP gate.
+
+The **in-process `Api` is defensible** if its verifier is private, created per verified request, and used only for tool-constructed requests. It preserves owner scopes, billing checks, and the admin namespace gate through `handleApi`; no OAuth bearer needs forwarding. A cleaner alternative is a small shared authenticated-request wrapper taking the existing frozen, branded `VerifiedUser`, with browser and MCP gates sharing claim validation. Preserve `handleApi`’s request context, accounting, error handling, and after-response work—calling `serveAuthenticatedApi` alone loses that wrapper.
+
+The Data API’s exclusion of `spideryarn` is a valid existing defence; this does not justify adding RLS throughout the application. Add a live negative assertion that connector credentials cannot access that schema. It does not resolve F1.
+
+VERDICT: rethink

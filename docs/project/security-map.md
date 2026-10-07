@@ -102,7 +102,8 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/web/external-links.ts`](../../src/web/external-links.ts) | not a defence, but it *rests* on one: `target="_blank" rel="noopener noreferrer"` on every outbound link, written at ingress **after** the sanitiser has stripped the author's own `target`. It lives outside the sanitiser for the reason in the row above |
 | [`src/routes.ts`](../../src/routes.ts) | `slugPart()` for every capture that becomes a directory name; the one `requireUser` call |
 | [`src/slug.ts`](../../src/slug.ts) | what a slug may be — two rules, one per question (mint? read?) |
-| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser` |
+| [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser`, which refuses an AI app's OAuth token (one with a `client_id`) everywhere. See [§ An AI app's token](#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route) |
+| [`src/mcp/remote.ts`](../../src/mcp/remote.ts) | **the second gate**: `POST /api/mcp`, dispatched before `requireUser` like the Stripe webhook, accepting only the one registered AI app's token, only the administrator's, and running the MCP tools through `handleApi` as that reader. See the same section |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) + [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where a sign-in returns the reader to: same-origin only (no `//evil.example`), never the callback itself, ten minutes at most, and **forgotten on every callback failure** — AuthCallback has one `fail()` exit, the only caller of `setError`, and a test pins that ([261001i](../plans/261001i-password-reset.md)). The callback's own address is always the bare `/auth/callback`, so a one-time code cannot ride into another URL ([auth.md](auth.md), point 4) |
 | [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — every request is bound to the reader the tab held as it was made, and is not sent with a token known to be another reader's (`NotThisReader`). The server cannot see this one: reader B's token on reader A's words is a valid request. [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another) |
 | [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts) (re-exported from `pg.ts`) | `ownedSlug()` — keeps one reader's shelf out of another's |
@@ -129,6 +130,35 @@ An agent about to edit one of these is editing a defence, not a helper.
 The tests are the specification: `tests/sanitize.test.ts`, `tests/sanitize-client.test.ts`,
 `tests/routes.test.ts`, `tests/slug.test.ts`, `tests/owner-isolation.test.ts`,
 `tests/public-dto.test.ts`.
+
+### And since 2026-10-07, an AI app's token, which opens one route
+
+([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md); Greg approved changing the sign-in
+gate for it.) Supabase's OAuth server issues tokens to an AI app the owner approves on
+`/oauth/consent`, so that Claude on the web or a phone can use the MCP tools
+([mcp.md](mcp.md)). Such a token carries a `client_id` claim and a browser session's never does.
+
+- **`requireUser` refuses it**, 401 `[auth-oauth-token]`, so a connector's token cannot reach a
+  route that is not a tool.
+- **`POST /api/mcp` accepts only it**, and only when `client_id` is exactly `MCP_OAUTH_CLIENT_ID`:
+  one app, registered by hand in Supabase for Claude's callback, with **dynamic registration off**.
+  Unset, the route refuses everyone, which is how it shipped. Then the administrator only (`isAdmin`),
+  and an `Origin`, if sent, must be ours or `https://claude.ai`.
+- **The tools run through `handleApi`** with a verifier that accepts one random per-request token
+  and nothing else, so every route's own owner scoping and admin gate applies as it does to the local
+  server. No OAuth token is forwarded anywhere.
+- **The tools that send mail, publish or hand over a private link refuse here**: their approval is
+  a dialog on the owner's Mac, which a server cannot show.
+
+**What this cannot stop, and needs Greg's decision before switching on:** at Supabase itself the token is an
+ordinary sign-in to the account. Supabase's Auth API (`PUT /auth/v1/user`, the MFA endpoints) does
+not look at `client_id`, so whoever holds the token could, while it is valid, change the account's
+password unless *secure password change* is on. Anthropic's connector service holds it; the model
+never sees it. Switching this on in production is Greg's decision with that written in front of him
+([261007p § Questions](../plans/261007p-mcp-remote-sign-in-with-oauth.md#questions-for-greg-not-blocking)).
+Revoking: unsetting `MCP_OAUTH_CLIENT_ID` refuses every token at `/api/mcp` at once; removing the app
+in Supabase stops new ones, while an issued access token stays valid at Supabase until it expires
+(an hour). `tests/mcp-remote.test.ts` and `tests/auth.test.ts` hold the gate.
 
 ### The unauthenticated namespace, and the tripwire under it
 

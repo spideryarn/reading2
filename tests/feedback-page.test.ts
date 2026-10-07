@@ -43,6 +43,7 @@ const SAMPLES: Record<Route["kind"], readonly string[]> = {
   help: ["/help", "/help/", "/help/spine", "/help/spine/", "/help/questions", "/help/nonsense"],
   opensource: ["/opensource"],
   callback: ["/auth/callback"],
+  "oauth-consent": ["/oauth/consent", "/oauth/consent/"],
   "not-found": [
     "/nope",
     "/admin/secrets",

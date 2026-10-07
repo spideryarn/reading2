@@ -244,6 +244,9 @@ const VOICES_BY_SURFACE: Record<Surface, readonly string[] | { none: string }> =
   help: { none: OURS },
   opensource: { none: OURS },
   callback: { none: "a redirect; it draws no text" },
+  /* The client's name is whatever its registrant typed, shown as a labelled
+     value beside the app's own sentences rather than as anybody's prose. */
+  "oauth-consent": { none: OURS },
   "not-found": { none: OURS },
 };
 
