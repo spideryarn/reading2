@@ -305,14 +305,14 @@
   cursor: pointer;
 }
 .chat-icon:not(:disabled):not([aria-disabled="true"]):hover { background: var(--surface-raised); color: var(--ink); }
-.chat-icon.danger:not(:disabled):hover { color: var(--destructive, oklch(0.65 0.2 25)); }
+.chat-icon.danger:not(:disabled):hover { color: var(--destructive); }
 /* Armed: one press has already happened and the next one deletes. Coloured
    rather than merely hovered, because the whole point is that it looks
    different from the button you pressed a moment ago. */
 .chat-icon.danger.armed,
 .chat-icon.danger.armed:hover {
   color: var(--page);
-  background: var(--destructive, oklch(0.65 0.2 25));
+  background: var(--destructive);
 }
 /* Matches Send's unavailable rule below, and it was missing here — so the one
    icon button that is ever disabled (Ask again, while an answer arrives) kept
@@ -915,11 +915,15 @@
    pulsing, or the strip reads as though everything is still in flight. */
 .chat-tool.running .chat-tool-label { color: var(--ink); }
 
-/* A tool that threw. The same fallback chain `.dock-question-state.error` uses,
-   and deliberately only on the *detail* — a failed tool is a footnote to an
-   answer that still arrived, not a failed answer, and colouring the whole row
-   would make it read as the latter. */
-.chat-tool.error .chat-tool-detail { color: var(--danger, var(--highlight)); }
+/* A tool that threw. The same error-text colour `.dock-question-state.error`
+   uses, and deliberately only on the *detail* — a failed tool is a footnote to
+   an answer that still arrived, not a failed answer, and colouring the whole
+   row would make it read as the latter.
+
+   Full opacity, where the ordinary detail above is 0.7: `--danger` is measured
+   at 4.5:1 on the band and on the chat dialog's raised surface, and at 0.7 it
+   would fall back under that on both (styles/tokens.css § --danger). */
+.chat-tool.error .chat-tool-detail { color: var(--danger); opacity: 1; }
 
 .chat-sources {
   margin: 0.4rem 0 0;

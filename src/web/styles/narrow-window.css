@@ -1028,7 +1028,9 @@
    **The utilities layer is out of reach from here**, whatever the specificity:
    `@layer theme, base, app, utilities` in tailwind.css puts every `tw:` class
    after this file. The Tailwind-classed fields carry `tw:any-pointer-coarse:text-base`
-   at their own call sites instead — grep for it. */
+   at their own call sites instead — grep for it. `text-base` is `1rem`, so
+   those fields are still under 16px at a root smaller than 16px; the `max()`
+   below does not reach them. */
 @media (any-pointer: coarse) {
   :root input:is(
       :not([type]),
@@ -1042,7 +1044,11 @@
     ),
   :root select:not([hidden]),
   :root textarea:not([hidden]) {
-    font-size: 1rem;
+    /* `max()`, because the threshold is 16 CSS pixels and `1rem` is only that
+       at a 16px root: a reader whose browser is set to 12px got a 12px field
+       (measured in Chrome, 2026-10-07). Never a bare `16px`, which would
+       shrink the field for a reader who has made their type larger. */
+    font-size: max(1rem, 16px);
   }
 }
 
