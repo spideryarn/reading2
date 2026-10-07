@@ -15,8 +15,9 @@
  * in tests/no-undeclared-spend.test.ts still sees one file naming the
  * credential, not two.
  *
- * `--prompt-version` is passed through to the report. Only version 1 exists
- * until Stage 2 adds the proposal-aware prompt, so any other is refused.
+ * `--prompt-version` is passed through to the report. Version 1 is the plain
+ * question and `PROPOSAL_PROMPT_VERSION` the proposal-aware one, the only one
+ * that yields routing; any other is refused.
  */
 import { writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";

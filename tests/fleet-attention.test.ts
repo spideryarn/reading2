@@ -92,7 +92,7 @@ const PROSE_ITEM: AttentionItem = {
   proposal: {
     kind: "proposed",
     id: "fp-2:v2",
-    recipient: "fable",
+    recipient: "opus",
     reason: "it is a question of wording",
     asks: "Tell me which wording you'd rather.",
     by: { kind: "model", model: "openai/gpt-5.6-luna", via: "overseer" },
@@ -166,6 +166,13 @@ describe("an item's proposal, read off the file (plan 260910f Stage 2)", () => {
       if (list?.kind !== "list") continue;
       expect(list.items[0]?.proposal).toEqual(proposal);
     }
+  });
+
+  it("reads a proposal made for Fable, before Greg retired it (2026-09-28), as one for Opus", () => {
+    const list = readWith({ ...PROSE_ITEM, proposal: { ...PROSE_ITEM.proposal, recipient: "fable" } });
+    expect(list?.kind).toBe("list");
+    if (list?.kind !== "list") return;
+    expect(list.items[0]?.proposal).toEqual(PROSE_ITEM.proposal);
   });
 
   it("reads an item from an older producer, with no proposal, as `not-reported` — not a failure", () => {

@@ -150,7 +150,7 @@ export type AttentionPassOptions = {
   promptVersion?: number;
   /**
    * The checkpoint's stored usage verdict — `null` when it holds none — which
-   * is all `reach` knows about whether Fable could take a question now (plan
+   * is all `reach` knows about whether Opus could take a question now (plan
    * 260910f D14). A PLAIN INPUT, read by the caller, so the pass stays free of
    * the store; and projected into every card on every pass, never cached, so a
    * limit that lifts reaches the next card at no cost.
@@ -459,8 +459,8 @@ function proposalAuthor(model: string): ProposalAuthor {
  * usage reading the caller hands in, and never remembered (D14), so a limit
  * that lifts reaches the next card at no cost.
  *
- * **Missing capability is shown, never substituted**: a `fable` question (Opus
- * since 2026-09-28) whose Claude limit is hit still names it, with `unavailable`. And where nothing is
+ * **Missing capability is shown, never substituted**: an `opus` question whose
+ * Claude limit is hit still names it, with `unavailable`. And where nothing is
  * measured it says `not-checked` rather than hoping — the checkpoint carries
  * no Codex reading and nothing reads the Overseer's own capacity.
  */
@@ -469,7 +469,7 @@ export function projectReach(recipient: ProposalRecipient, usage: UsageVerdict |
     case "greg":
     case "self":
       return { kind: "available" };
-    case "fable": {
+    case "opus": {
       if (usage?.level === "limited") {
         const detail = usage.reasons[0];
         return {
@@ -496,7 +496,7 @@ export function projectReach(recipient: ProposalRecipient, usage: UsageVerdict |
  * The proposal on a prose card, from the verdict that placed it.
  *
  * `off` when this pass is not proposal-aware, whatever the verdict holds — a
- * version-2 verdict left in memory after proposals are turned off is not
+ * proposal-aware verdict left in memory after proposals are turned off is not
  * drawn. `not-reached` when the verdict came from another prompt (stale, D3),
  * or when the model that made it was never recorded (F18): it still places the
  * card, and says whether its re-read was refused, failed, or not reached by the
@@ -522,7 +522,7 @@ function proposalFor(input: {
     };
   }
   const v = cached.verdict;
-  // `parseVerdict` and the memory parser both refuse a version-2 question with
+  // `parseVerdict` and the memory parser both refuse a proposal-aware question with
   // no proposal, so this is unreachable — but a card with no proposal is not a
   // card with a default one.
   if (v.kind !== "question" || v.recipient === undefined) {

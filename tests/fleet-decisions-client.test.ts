@@ -118,6 +118,13 @@ describe("strict parsing", () => {
     expect(parseDecisionsFeed(WITH_ROW)).toEqual(WITH_ROW);
   });
 
+  it("accepts Opus as an adviser, and Fable on a decision made before Greg retired it", () => {
+    for (const advisers of [["opus"], ["sol", "opus"], ["sol", "fable"]] as const) {
+      const feed = { ...WITH_ROW, rows: [{ ...ROW, record: { ...ROW.record, advisers: [...advisers] } }] };
+      expect(parseDecisionsFeed(feed)).toEqual(feed);
+    }
+  });
+
   it("accepts each server arm without changing whose voice its reason is in", () => {
     expect(
       parseDecisionsFeed({
