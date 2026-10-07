@@ -121,6 +121,7 @@ import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { ICON_BUTTON_CLASS, IconButton } from "./IconButton.js";
 import { WrittenForYou } from "./WrittenForYou.js";
 import { ReadError } from "./ReadError.js";
@@ -132,6 +133,7 @@ import { armActivation } from "./activation.js";
 import { LEARN_SUB_MODES, visibleLearnViews } from "./sub-modes.js";
 import { useRenderCount } from "./perf.js";
 import { withVoice } from "./voice.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A question pressed in the prose, to open Quiz at** — since 2026-09-30
@@ -285,12 +287,17 @@ export function LearnSubModeToggle({
   experimental: boolean;
   onChange(next: LearnView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, value);
   return (
     /* No `role="group"`: each button already says what it is and whether it is
        pressed, and the two honest alternatives are worse — a `fieldset` needs a
        `legend` this band has no room for, and a `tablist` promises arrow-key
        navigation that would then have to be written and kept. */
-    <div className="learn-submode">
+    /* Drawn as the part-switcher every mode shares (mode-band.css § the
+       part-switcher, plan 261007h § F2), at the left of its row like every
+       other mode's; the toggle buttons and their `aria-pressed` are unchanged. */
+    <div ref={group} className="learn-submode summ-views">
       {/* A card on every chip, the way the other five sub-mode rows have one
           (StructureMode.tsx § `StructureViewToggle`): `TooltipGroup` so that
           reading along the row is one gesture, `keepSide` so a card is not
@@ -315,7 +322,7 @@ export function LearnSubModeToggle({
           >
             <button
               type="button"
-              className={`learn-submode-btn${value === view ? " on" : ""}`}
+              className={`learn-submode-btn summ-view-btn${value === view ? " on" : ""}`}
               /* `aria-pressed` rather than `aria-selected`: this is a pair of toggle
                  buttons, not a tablist, and claiming to be a tablist without the
                  arrow-key handling a tablist promises is worse than not claiming
@@ -1164,7 +1171,7 @@ export function QuizPanel({
 
       {owner.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
+      {owner.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the questions…</BandWaiting>}
 
       {owner.status === "none" && (
         <div className="gloss-empty">
@@ -1216,7 +1223,7 @@ export function QuizPanel({
           )}
 
           {waitingForReading && questions.length > 0 && (
-            <p className="gloss-quiet">Looking for what you have read…</p>
+            <BandWaiting className="gloss-quiet">Looking for what you have read…</BandWaiting>
           )}
 
           {filterActive && questions.length > 0 && includedAt.length === 0 && (

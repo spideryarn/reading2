@@ -101,7 +101,7 @@ export function ShelfTags({
             }}
             /* The shelf menu's surface (ShelfEntry.tsx § ShelfActionsMenu), for
                its reasons: raised, opaque, frontmost. */
-            className="tw:z-[100] tw:w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-2 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+            className="tw:z-[100] tw:w-[min(22rem,calc(100vw-1.75rem))] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-2 tw:shadow-[var(--shadow-pop)]"
           >
             <p className="tw:mt-0 tw:mb-1.5 tw:text-xs tw:text-muted-foreground">
               Your own tags — only you see them. Filter by them above the shelf.

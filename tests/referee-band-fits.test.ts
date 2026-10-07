@@ -111,7 +111,10 @@ describe("the Hidden text mark is visible in either state", () => {
 describe("five chips at phone width", () => {
   it("wraps the row rather than wrapping a multi-word chip", () => {
     expect(bodyOf(".ref-top")).toMatch(/flex-wrap:\s*wrap/);
-    expect(bodyOf(".ref-view-btn")).toMatch(/white-space:\s*nowrap/);
+    /* The chips are the shared part-switcher's buttons since 2026-10-07 (plan
+       261007h § F2), so their `nowrap` is that rule's (mode-band.css). */
+    expect(BAND_SOURCE).toMatch(/ref-view-btn summ-view-btn/);
+    expect(bodyOf(".summ-view-btn")).toMatch(/white-space:\s*nowrap/);
   });
 });
 

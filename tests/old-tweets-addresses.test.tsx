@@ -219,7 +219,7 @@ describe("the same visitor, with no thread stored either", () => {
     act(() => {
       root.render(createElement(NuqsAdapter, null, createElement(Bare)));
     });
-    expect(host.textContent).toContain("Nobody has built a tweet thread for this piece yet.");
+    expect(host.textContent).toContain("Nobody has built a tweet thread for this one yet.");
     expect(host.querySelector(".mode-band.tweets")).toBeNull();
     expect(host.querySelectorAll('.summ-views [role="radio"]')).toHaveLength(3);
   });

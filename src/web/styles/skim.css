@@ -60,7 +60,6 @@
 .skim-spark-dot.on { fill: var(--highlight); stroke: var(--highlight); }
 
 .skim-arrow,
-.skim-depth,
 .skim-door-btn {
   display: inline-flex;
   align-items: center;
@@ -78,30 +77,28 @@
 .skim-arrow { width: var(--control-h-lg); height: var(--control-h-lg); padding: 0; }
 .skim-arrow:disabled { opacity: 0.4; cursor: default; }
 .skim-arrow:not(:disabled):hover,
-.skim-depth:hover,
 .skim-door-btn:hover { border-color: var(--highlight); }
 
-/* **Three segmented buttons**, one box: the middle one's borders are shared. */
+/* **The depths**: the part-switcher every mode shares, `.summ-views` /
+   `.summ-view-btn` (mode-band.css § the part-switcher; plan 261007h § F2), so
+   its outline, its dividers and its chosen fill are not here. Its chosen depth
+   was the accent until 2026-10-07; it is marked neutrally now, because **orange
+   marks the mode and a part within it is marked neutrally**. What stays is the
+   size: the house's 36px (`--control-h`), not the bar's 26, because this is the
+   mode's main control beside the 44px stepper (Greg, 2026-09-28); a finger
+   gets the bar's 44px. The fieldset's own margin and padding go. */
 .skim-depths {
-  display: inline-flex;
   margin: 0;
   padding: 0;
-  border: 0;
 }
 .skim-depth {
-  padding: 0 0.45rem;
-  border-radius: 0;
+  min-height: var(--control-h);
+  padding-block: 0;
+  padding-inline: 0.45rem;
   font-size: 0.85rem;
 }
-.skim-depth + .skim-depth { margin-left: -1px; }
-.skim-depth:first-child { border-radius: var(--radius) 0 0 var(--radius); }
-.skim-depth:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
-.skim-depth.on {
-  position: relative; /* its border over its neighbours' */
-  border-color: var(--highlight);
-  background: var(--highlight-wash);
-  color: var(--highlight-ink);
-  font-weight: 600;
+@media (any-pointer: coarse) {
+  .skim-depth { min-height: var(--control-h-lg); }
 }
 .skim-depth-n {
   color: var(--ink-faint);

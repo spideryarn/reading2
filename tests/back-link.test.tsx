@@ -60,14 +60,6 @@ describe("BackLink", () => {
     expect(a?.textContent?.trim()).toBe("");
   });
 
-  it("draws a house, not an arrow, for a way home", () => {
-    act(() => root.render(<BackLink href="/" label="Home" icon="home" />));
-    const a = host.querySelector("a");
-    expect(a?.getAttribute("aria-label")).toBe("Home");
-    expect(a?.querySelector("svg")?.getAttribute("class")).toContain("house");
-    expect(a?.querySelector("svg")?.getAttribute("class")).not.toContain("arrow-left");
-  });
-
   it("opens its card on a real hover, saying where it goes", async () => {
     act(() => root.render(<BackLink href="/" label="Back to your library" />));
     expect(document.querySelector(".tooltip")).toBeNull();

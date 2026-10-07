@@ -46,15 +46,16 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** A visitor on a public article whose owner never asked for one. */
-export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this piece yet.";
+export const SIMPLE_NONE_VISITOR = "Nobody has made a plain-words version of this one yet.";
 
 /** The ask button's name and its card: one sentence, the same in both. */
 export const SIMPLE_ASK_CHAT = "Ask about this paragraph in chat";
 
 /** The owner's empty state, before the press has started anything. */
-export const SIMPLE_NONE_OWNER = "Nobody has asked for a plain-words version of this piece yet.";
+export const SIMPLE_NONE_OWNER = "Nobody has asked for a plain-words version of this one yet.";
 
 /** On Fuller, while Brief can already be read and Fuller cannot. */
 export const SIMPLE_FULLER_PENDING = "Brief is ready. Fuller is still being written.";
@@ -146,7 +147,7 @@ export function SimplePanel({
   return (
     <div className="summ-scroll simple-scroll">
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
-      {owner?.status === "loading" && !early && <p className="summ-quiet">Looking for the plain-words version…</p>}
+      {owner?.status === "loading" && !early && <BandWaiting className="summ-quiet">Looking for the plain-words version…</BandWaiting>}
       {owner && early && (
         <EarlyBrief
           owner={owner}

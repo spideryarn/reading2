@@ -77,6 +77,7 @@ import {
   withYours,
   type ReaderRowComment,
 } from "./quote-band-rows.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job choosing the
@@ -1035,7 +1036,7 @@ export function QuotesPanel({
 
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="quotes-quiet">Looking for quotes…</p>}
+      {owner?.status === "loading" && <BandWaiting className="quotes-quiet">Looking for quotes…</BandWaiting>}
 
       {/* **A visitor's list is already here or it is not**, so there is no
           loading state and no offer to build one — a piece with no quotes never
@@ -1411,7 +1412,7 @@ function QuoteRow({
         >
           <button
             type="button"
-            className={`quotes-why${why ? " on" : ""}`}
+            className={`quotes-why tap-target${why ? " on" : ""}`}
             aria-label={quote.reason ? "Why this one" : "Who chose this, and when"}
             aria-expanded={why}
             onClick={() => setWhy((was) => !was)}
@@ -1484,7 +1485,7 @@ function YoursRow({
         >
           <button
             type="button"
-            className={`quotes-why${about ? " on" : ""}`}
+            className={`quotes-why tap-target${about ? " on" : ""}`}
             aria-label="About your highlight"
             aria-expanded={about}
             onClick={() => setAbout((was) => !was)}

@@ -2343,7 +2343,7 @@ export function CommandBar({
         if (e.target === ref.current) onClose();
       }}
     >
-      <div className="cmdbar-panel tw:mx-auto tw:mt-[12vh] tw:flex tw:max-h-[70%] tw:w-[min(34rem,92vw)] tw:flex-col tw:overflow-hidden tw:rounded-lg tw:border tw:border-rule tw:bg-surface-raised tw:shadow-lg">
+      <div className="cmdbar-panel tw:mx-auto tw:mt-[12vh] tw:flex tw:max-h-[70%] tw:w-[min(34rem,92vw)] tw:flex-col tw:overflow-hidden tw:rounded-lg tw:border tw:border-rule tw:bg-surface-raised tw:shadow-[var(--shadow-dialog)]">
         {/* The box and its microphone on one line, the rule under both. */}
         <div className="cmdbar-box tw:flex tw:items-center tw:gap-1 tw:border-b tw:border-rule tw:pr-2">
         <input

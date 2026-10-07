@@ -41,7 +41,7 @@
 
 import { REPO_URL } from "../changelog.js";
 import { GitHubMark } from "./GitHubMark.js";
-import { HomeLink } from "./BackLink.js";
+import { DocumentPage } from "./DocumentPage.js";
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { CHANGELOG_HREF, PRIVACY_HREF } from "./router.js";
@@ -62,11 +62,8 @@ export function OpenSourcePage() {
   useDocumentTitle(pageTitle({ kind: "opensource" }));
 
   return (
-    <main className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:pb-24 tw:font-sans">
-      {/* Signed out only: signed in, the corner logo is the way home.
-          BackLink.tsx § `HomeLink`. */}
-      <HomeLink className="tw:mb-6" />
-
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx. */
+    <DocumentPage here="opensource" className="tw:mx-auto tw:max-w-2xl tw:px-6 tw:pb-24 tw:font-sans">
       <h1 className="tw:m-0 tw:flex tw:items-center tw:gap-2.5 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         <GitHubMark size={22} className="tw:shrink-0 tw:text-ink-faint" />
         Open source
@@ -138,6 +135,6 @@ export function OpenSourcePage() {
       </div>
 
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }

@@ -136,6 +136,10 @@ const MANIFEST = [
   /* Shared close geometry before every component sheet, whose later rules own
      colour and shape but deliberately no width, height or padding. Plan 261002i. */
   "close.css",
+  /* The finger's invisible 40px target for any small control, beside the close
+     cross's; early, so a component's own `position` comes later and wins.
+     Plan 261007h § F5a. */
+  "tap-target.css",
   "crumbs.css",
   "table.css",
   "prose.css",

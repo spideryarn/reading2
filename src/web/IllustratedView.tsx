@@ -48,6 +48,7 @@
  * looking for — and the brief itself is one press away, because a prompt can be
  * read against the article where a picture cannot.
  */
+import { BandWaiting } from "./BandWaiting.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Brush,
@@ -275,9 +276,11 @@ function Plate({
   if (error) return <p className="ill-plate-out">{error}</p>;
   if (!url) {
     return (
-      <p className="ill-plate-out" role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Fetching the picture…
-      </p>
+      /* The dashed plate is there at once, so the page does not jump; the
+         words join it only if the fetch is slow. BandWaiting.tsx. */
+      <BandWaiting key={`${slug}\u0000${plate.image.sha256}\u0000${plate.image.ext}`} className="ill-plate-out">
+        Fetching the picture…
+      </BandWaiting>
     );
   }
   return (
@@ -522,9 +525,9 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
 
   if (view.status === "loading") {
     return (
-      <div className="ill-wait" role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Looking for a painting…
-      </div>
+      <BandWaiting as="div" className="ill-wait">
+        Looking for a painting…
+      </BandWaiting>
     );
   }
 
@@ -945,10 +948,10 @@ function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
 
   if (sketch.kind === "checking") {
     return (
-      <p role="status">
-        <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> Nobody has painted this
-        one yet.
-      </p>
+      <>
+        <p>Nobody has painted this one yet.</p>
+        <BandWaiting>Looking for the Sketch…</BandWaiting>
+      </>
     );
   }
 

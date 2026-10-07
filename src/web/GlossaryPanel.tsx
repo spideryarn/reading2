@@ -133,6 +133,7 @@ import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { GlossaryKindIcon } from "./GlossaryKindIcon.js";
 import { useRenderCount } from "./perf.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **The owner's half of this panel** — the read's status, the job writing it,
@@ -498,7 +499,7 @@ export function GlossaryPanel({
         </p>
       )}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for a glossary…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for a glossary…</BandWaiting>}
 
       {/* **A visitor's list is already here or it is not**, so there is no
           loading state and no offer to build one — a piece with no glossary

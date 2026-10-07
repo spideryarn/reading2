@@ -32,6 +32,21 @@
   --rule: var(--border);
   --rule-strong: oklch(0.36 0 0);
 
+  /* **Elevation: three shadows, by what is floating** (plan 261007h § F6).
+     Each was a literal in several rules, tuned for the dark page; written once
+     here so the light block below can soften them. Things that are not
+     elevation keep their own `box-shadow` — swatch rings, inset highlight
+     marks, table dividers, focus rings.
+     - `--shadow-pop`: a small surface over the page — tooltips, menus,
+       pickers (tooltip.css, menu.ts, DataTable, TagEditor, ShelfTags…).
+     - `--shadow-dialog`: a panel over the prose — the chat, annotate and
+       comment panels, the command bar, the return chip, the toast.
+     - `--shadow-sheet`: a large modal surface — the purpose prompt on
+       /profile, the feedback dialog, the lightbox. */
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px -6px rgb(0 0 0 / 0.65);
+  --shadow-dialog: 0 12px 32px rgb(0 0 0 / 0.55);
+  --shadow-sheet: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+
   --highlight: var(--spideryarn-orange);
   /* The orange tinted *into* the page rather than into white — a lit patch, not a
      pale one. Any "mix the orange with black to darken it" from the light palette
@@ -447,6 +462,13 @@
   /* On a light ground a raised surface is the lightest thing there. */
   --surface-raised: oklch(1 0 0);
   --rule-strong: oklch(0.78 0 0);
+  /* The elevation shadows at about 0.35–0.4 of the dark alphas: black on a
+     white page reads far heavier than on a black one, and the raised surface
+     here already has a border to stand on. The marketing pages made the same
+     call for `--site-lift` (site.css, 0.75 → 0.28). */
+  --shadow-pop: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px -6px rgb(0 0 0 / 0.24);
+  --shadow-dialog: 0 12px 32px rgb(0 0 0 / 0.2);
+  --shadow-sheet: 0 24px 64px -16px rgb(0 0 0 / 0.3);
   /* Orange as text, darkened rather than lifted: #DB8A45 on white is ~2.6:1. */
   --highlight-ink: color-mix(in oklab, var(--spideryarn-orange) 72%, black);
   --highlight-text: var(--highlight-ink);

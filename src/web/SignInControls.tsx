@@ -71,6 +71,10 @@ const FIELD =
      outranks it, so a `tw:`-styled field says so itself. */
   "tw:w-full tw:rounded-md tw:border tw:border-border tw:bg-card tw:px-3 tw:py-2 tw:text-sm tw:text-foreground tw:outline-none tw:any-pointer-coarse:text-base tw:focus:border-highlight-text";
 
+/* The two quiet text buttons under the form ("Forgot your password?", "back to
+   sign in") also take `tap-target`, the finger's invisible 40px (tap-target.css):
+   they are 18px tall. Not this constant's job, because the Show/Hide button
+   wears it too and is already the field's full height. */
 const QUIET = "tw:text-xs tw:text-ink-faint tw:hover:text-highlight-text";
 
 /** Google's sign-in button palettes, one per theme — see the comment at the button. */
@@ -360,7 +364,7 @@ export function SignInControls({
                 setMode("form");
               }}
               disabled={busy}
-              className={QUIET}
+              className={`tap-target ${QUIET}`}
             >
               back to sign in
             </button>
@@ -449,7 +453,7 @@ export function SignInControls({
                   setMode("forgot");
                 }}
                 disabled={busy}
-                className={`tw:ml-auto ${QUIET}`}
+                className={`tap-target tw:ml-auto ${QUIET}`}
               >
                 Forgot your password?
               </button>

@@ -77,6 +77,7 @@
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { WebsitePlans } from "./PlanCards.js";
 import { PublicShowcase } from "./PublicShowcase.js";
 import { FEATURES_HREF, PRICING_HREF, loginHref } from "./router.js";
@@ -96,6 +97,8 @@ import {
 
 export function LandingPage() {
   useDocumentTitle(pageTitle({ kind: "landing" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
   /* **The address this page is standing on**, which is not always `/`: App.tsx
      draws it for an unshared `/read/<slug>`, `/add/…`, `/profile` and the rest,
      and that is where the reader should land after signing in. `loginHref`

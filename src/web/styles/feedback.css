@@ -125,7 +125,7 @@
   border: 1px solid var(--rule-strong);
   border-radius: 10px;
   background: var(--surface-raised);
-  box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.8);
+  box-shadow: var(--shadow-sheet);
   font-family: var(--font-ui);
 }
 
@@ -681,7 +681,7 @@ a.fb-earlier-page:focus-visible {
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   color: var(--ink);
   font-family: var(--font-ui);
 }

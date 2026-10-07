@@ -129,7 +129,7 @@
  * `publicDebate`, plan 260929c), and a visitor's panel draws the stored rows
  * with no job, no verb and no read: nothing on it can start a search.
  */
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   CircleHelp,
@@ -238,6 +238,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ControlTip, TipNote, Tooltip, TooltipGroup } from "./Tooltip.js";
+import { useRevealChosen } from "./useRevealChosen.js";
 import { lensThreads, threadForOrigin } from "./useChatAnchors.js";
 import { OriginChatMark } from "./OriginChat.js";
 import { useRenderCount } from "./perf.js";
@@ -250,6 +251,7 @@ import type {
   PublicDirectDebateRow,
   PublicIdentificationSignal,
 } from "../public-types.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /**
  * **A row as this panel draws it** — the owner's stored row and a visitor's
@@ -1205,7 +1207,7 @@ export function DebatePanel({
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
       {owner?.status === "loading" && (
-        <p className="gloss-quiet">Looking for what the web says…</p>
+        <BandWaiting className="gloss-quiet">Looking for what the web says…</BandWaiting>
       )}
 
       {owner?.status === "none" && (
@@ -1644,8 +1646,10 @@ function DebateViews({
   counts: Record<DebateView, number>;
   onView(view: DebateView): void;
 }) {
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, view);
   return (
-    <div className="summ-views dbt-views" role="radiogroup" aria-label="Debate view">
+    <div ref={group} className="summ-views dbt-views" role="radiogroup" aria-label="Debate view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {DEBATE_VIEWS.map((v) => (
           <Tooltip

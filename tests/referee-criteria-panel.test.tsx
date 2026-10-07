@@ -647,7 +647,9 @@ describe("a criterion deleted while the model is thinking stays deleted", () => 
       },
     ]);
     await flush();
-    expect(host.querySelector(".gloss-quiet")?.textContent).toContain("Reading the paper…");
+    /* This answers the press that started the run: the words are immediate. */
+    expect(host.querySelector('.crit-row .band-waiting[role="status"]')?.textContent)
+      .toContain("Reading the paper…");
 
     // The referee gives up on it mid-run.
     click(byLabel("Delete"));

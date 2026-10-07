@@ -264,7 +264,7 @@ export function TagEditor({
         role="listbox"
         aria-label="Suggested tags"
         hidden={!shown}
-        className="tw:absolute tw:left-0 tw:right-0 tw:z-[110] tw:mt-1 tw:max-h-64 tw:list-none tw:overflow-auto tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]"
+        className="tw:absolute tw:left-0 tw:right-0 tw:z-[110] tw:mt-1 tw:max-h-64 tw:list-none tw:overflow-auto tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[var(--shadow-pop)]"
       >
         {options.map((o, i) => (
           // biome-ignore lint/a11y/useFocusableInteractive: focus stays on the combobox and aria-activedescendant identifies this option

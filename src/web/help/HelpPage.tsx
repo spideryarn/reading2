@@ -78,7 +78,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { HomeLink } from "../BackLink.js";
+import { DocumentPage } from "../DocumentPage.js";
 import { scrollToAndFlash } from "../flash.js";
 import { isImeComposing } from "../key-chord.js";
 import { Link } from "../Link.js";
@@ -296,14 +296,15 @@ export function HelpPage() {
   const found = results === null ? null : <Results results={results} onTake={() => setQuery("")} />;
 
   return (
-    <main
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx,
+       which also says why the sticky bar clears the contents column and the
+       section anchors below. */
+    <DocumentPage
+      here="help"
+      floor
       onClickCapture={onClickCapture}
-      className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-5xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans"
+      className="tw:mx-auto tw:flex tw:max-w-5xl tw:flex-col tw:px-6 tw:font-sans"
     >
-      {/* Signed out only, as on `/changelog`: signed in, the corner logo is the
-          way home. BackLink.tsx § `HomeLink`. */}
-      <HomeLink className="tw:mb-6" />
-
       {shown.kind === "contents" || shown.kind === "missing" ? (
         <div className="tw:max-w-2xl">
           {shown.kind === "missing" && (
@@ -334,7 +335,7 @@ export function HelpPage() {
 
       <div className="tw:flex-1" />
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }
 
@@ -444,10 +445,11 @@ function SeeAlso({ related }: { related: readonly HelpAnchor[] }) {
  * **The questions, together**: each a section under its own `faq-…` id, with a
  * `#` beside its heading.
  *
- * `scroll-mt` so the heading lands below the corner logo rather than under
- * it — the same clearance PrivacyPage.tsx's sections take. `data-section` is
- * the attribute the Metadata page's sections carry, kept for the same reader:
- * anything that walks a page's sections.
+ * `scroll-mt` so the heading lands below the corner logo (signed in) or the
+ * site bar (signed out) rather than under it. `DocumentPage` adds the safe
+ * top inset to this clearance signed out, as on Privacy's sections.
+ * `data-section` is the attribute the Metadata page's sections carry, kept
+ * for the same reader: anything that walks a page's sections.
  */
 function QuestionsView() {
   return (
