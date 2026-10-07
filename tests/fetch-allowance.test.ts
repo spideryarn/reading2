@@ -39,6 +39,7 @@ import type { RatePolicy } from "../src/store/contracts.js";
 import { PREVIEW_RATE_POLICY } from "../src/link-previews.js";
 import { SUMMARY_RATE_POLICY } from "../src/link-summary.js";
 import { FEEDBACK_NOTICE_POLICY } from "../src/feedback-notice.js";
+import { HELP_CHAT_RATE_POLICY } from "../src/help-chat-call.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
@@ -273,6 +274,24 @@ describe("the feedback notice's bucket", () => {
       .set({ startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
       .where(and(eq(rateLimitEvents.ownerId, ALICE), eq(rateLimitEvents.bucket, "feedback-notice")));
     expect((await ask()).kind).toBe("rate");
+  });
+});
+
+describe("the Help chatbot's bucket", () => {
+  /**
+   * Plan 261007k. Against the real table, for the feedback notice's reason: a
+   * bucket the CHECK does not know — a migration that never ran — is a throw
+   * on every question, and here it is a red test instead. And one at a time:
+   * a second question while the first is answering is refused, then allowed
+   * once the first is finished.
+   */
+  it("takes a question, refuses a second while the first is in flight, and allows it after", async () => {
+    const ask = () => runAsOwner(ALICE, () => pgFetchAllowanceStore.take("help-chat", HELP_CHAT_RATE_POLICY));
+    const first = await ask();
+    if (first.kind !== "allowed") throw new Error(`expected allowance, got ${first.kind}`);
+    expect((await ask()).kind).toBe("concurrency");
+    await runAsOwner(ALICE, () => pgFetchAllowanceStore.finish(first.id));
+    expect((await ask()).kind).toBe("allowed");
   });
 });
 

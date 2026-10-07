@@ -415,6 +415,8 @@ import { type PickAnswer, parsePickRequest } from "./command-pick.js";
 import { pickCommand } from "./command-pick-call.js";
 import { type SuggestAnswer, parseSuggestRequest, readFromHash } from "./command-suggest.js";
 import { suggestCommands, suggestableOptions } from "./command-suggest-call.js";
+import { parseHelpChatRequest } from "./help-chat.js";
+import { admitHelpChat, askHelp } from "./help-chat-call.js";
 import type {
   Block,
   ChatAnchor,
@@ -1364,8 +1366,8 @@ function sse(res: ServerResponse): {
    * with `runMirror` moved up a row on 2026-10-05:
    *
    *   stops the model call    `streamLinkSummary`, `streamAskedTerm`,
-   *                           `markOneAnswer`, `runMirror`, and `search` for a
-   *                           quick run
+   *                           `markOneAnswer`, `runMirror`, `streamHelpAnswer`,
+   *                           and `search` for a quick run
    *   lets it run to the end  `answer` (comments), `streamTermLookup`,
    *                           `streamCitationInvestigation`,
    *                           `runRefereeCriterion`, `runRefereeClaims`, and
@@ -7261,6 +7263,61 @@ async function pickCommandForSentence(req: IncomingMessage, res: ServerResponse)
   }
 }
 
+/* ------------------------------------------------------------- help chat -- */
+
+/**
+ * ***Ask about Spideryarn*: one question about using the app, answered from the
+ * Help pages, a few words at a time.** `POST /api/help-chat`, body
+ * `{ question }`, SSE out — plan docs/plans/261007k-help-chatbot.md;
+ * src/help-chat-call.ts makes the call and src/help-chat.ts owns the shapes.
+ *
+ * `streamAskedTerm`'s rule: **every refusal is decided before a header is
+ * written** — the body's 400 and the allowance's 429 or 503 are ordinary JSON.
+ * Then any number of `delta`, and exactly one `done` (`{ answer, complete }`)
+ * or `error` (`{ error }`, a reader's sentence), unless the reader left first.
+ *
+ * **`gone` goes to the model call**, and that is the choice for this stream
+ * (the list on `sse` above): nothing is stored, so an answer nobody is waiting
+ * for is money spent on nothing. The allowance's slot is freed however the
+ * stream ends; the question still counts.
+ *
+ * **No slug**: nothing here is an article's, so there is nothing to attribute
+ * the spend to (`article: "none"`, as `/api/command-pick`).
+ */
+async function streamHelpAnswer(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const parsed = parseHelpChatRequest(await readBody(req));
+  if (!parsed.ok) throw httpError(400, parsed.reason);
+  const free = await admitHelpChat(fetchAllowanceStore);
+  try {
+    const { frame, gone } = sse(res);
+    try {
+      for await (const event of askHelp(parsed.request.question, gone)) {
+        if (event.type === "delta") {
+          frame("delta", { text: event.text });
+          continue;
+        }
+        frame("done", { answer: event.answer, complete: event.complete });
+      }
+    } catch (err) {
+      /* **Reported here or nowhere** — the note on `answer`. A reader who left
+         is not a failure worth an issue, and `frame` is a no-op on their
+         closed socket anyway. */
+      if (!gone.aborted) captureFailure(err, { route: "help-chat" });
+      frame("error", { error: sayToReader(err, { route: "help-chat" }) });
+    } finally {
+      res.end();
+    }
+  } finally {
+    /* **Nothing past `sse(res)` may throw** — the headers are gone. A store
+       that cannot free the slot leaves it to its lease. */
+    try {
+      await free();
+    } catch (err) {
+      log("store").error({ ...errorFields(err), route: "help-chat" }, "could not free a help chat allowance");
+    }
+  }
+}
+
 /* ------------------------------------------------------ command suggest -- */
 
 /**
@@ -9251,6 +9308,22 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* Words made from the reader's profile: never a shared cache's. */
       res.setHeader("Cache-Control", "private, no-store");
       send(res, 200, answer);
+    },
+  },
+
+  /* ***Ask about Spideryarn*, on the Help pages** — one question, answered
+     from the Help, streamed. Signed in only: a row here is after
+     `requireUser` (plan 261007k, F8). No slug: nothing about it is an
+     article's. src/help-chat-call.ts. */
+  {
+    kind: "exact",
+    method: "POST",
+    /* `HELP_CHAT_PATH` (src/help-chat.ts) is what the page posts to; a literal
+       here because the contract test reads this table as text. */
+    path: "/api/help-chat",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      await streamHelpAnswer(req, res);
     },
   },
 

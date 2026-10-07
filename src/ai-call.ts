@@ -775,6 +775,43 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
     wire: "chat",
     provider: { require_parameters: true },
   },
+  /* **A question asked on the Help pages** (src/help-chat-call.ts, plan
+     261007k) — **the first quick-tier job with a prefix worth caching**, so
+     the first OpenAI-model row with an `order`, and the reasoning is the
+     opposite of `link-summary`'s for that reason.
+
+     Every request carries the whole Help, about 28k tokens of system prompt
+     that is byte-identical across every reader and every question; only the
+     last user message differs. On `HELP_CHAT_MODEL` (an OpenAI model) the
+     cache is **OpenAI's automatic prefix cache**: no `cache_control` marker
+     (that is Anthropic's mechanism, and docs/project/prompt-caching.md's rule
+     is about explicit breakpoints), a 1,024-token floor this clears many
+     times over, and a read billed at a fraction of input. A cache lives on the
+     upstream that wrote it (prompt-caching.md § What breaks a cache, 6), so
+     `order: ["openai"]` prefers OpenAI's own endpoint, where the prefix is
+     most likely warm, over any other upstream OpenRouter might pick.
+
+     - **`order`, not `only`**, for the house reason: a cache miss costs money,
+       an unavailable Help box costs the reader the feature.
+     - **`require_parameters`**, for `link-summary`'s reason: the body sends
+       `max_completion_tokens` and reasoning `none`, and an upstream that
+       dropped either would think at length with no ceiling.
+     - **No `prompt_cache_key` and no `session_id`.** Either might steer
+       routing towards a warm machine, and neither has been sent through this
+       gateway before; an unmeasured key is `env-proposal`'s lesson. OpenRouter's
+       sticky routing keys on the first system *and* first user message, so it
+       is no help here either: the user message is the question.
+
+     **What is assumed rather than measured**: that OpenAI serves this model on
+     OpenRouter under the slug `openai`, and that its cache is shared across
+     our requests. Stage 3 of the plan measures cold and warm calls
+     (`cached_tokens`, the upstream, the cost), and the global fuse is sized
+     from the cold cost so that being wrong here costs money, not safety. */
+  "help-chat": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: { order: ["openai"], require_parameters: true },
+  },
   pdf: {
     path: "/v1/chat/completions",
     wire: "chat",
@@ -1134,6 +1171,12 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      the bar. The setting the eval ran at
      (docs/investigations/261005b-does-the-command-bar-suggest-useful-searches-from-why-you-are-reading.md). */
   "command-suggest": { effort: "none" },
+  /* Finding the right Help page and saying what it says, with the reader
+     watching the box. `command-suggest`'s setting on the same model; whether
+     a little thinking buys better answers is for the plan's Stage 3 eval
+     (docs/plans/261007k-help-chatbot.md), and until then the ceiling of 800
+     tokens is all answer. */
+  "help-chat": { effort: "none" },
   eval: {
     providerDefault:
       "Through the gateway an eval call takes the provider default. An eval comparing efforts " +

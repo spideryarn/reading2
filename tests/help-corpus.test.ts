@@ -1,0 +1,103 @@
+/**
+ * **The Help pages as the Help chatbot is handed them** —
+ * src/help-corpus.generated.json. Plan docs/plans/261007k-help-chatbot.md,
+ * GPT Sol's F3 on it.
+ *
+ * **This file is the generator and the check**, as
+ * tests/command-pick-catalogue.test.ts is for the bar's rows, and for the same
+ * reason: the Help's pages are Vite `?raw` imports (src/web/help/help-pages.ts),
+ * so nothing outside Vitest or the browser can read them, and the server must
+ * not read `src/web/` at run time. The last test builds the corpus again and
+ * fails when the checked-in file differs. To regenerate:
+ *
+ *     WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts
+ *
+ * **Built from the Help's own sources of truth, not from the files alone**: the
+ * order is `HELP_GROUPS` (what the contents page shows), the title, summary and
+ * keywords are `helpEntry`'s, a mode's first two sentences are the mode
+ * catalog's (they are not in its file), every `{{…}}` token is expanded by
+ * `expandHelpTokens`, and each page's address is `helpHref` — so a question is
+ * `/help/questions#faq-…`, never `/help/faq-…`.
+ *
+ * A Help page edited without regenerating is a red test here, not a chatbot
+ * answering from yesterday's Help.
+ */
+import { readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+
+import type { HelpCorpusPage } from "../src/help-chat.js";
+import { MODE_CATALOG } from "../src/mode-catalog.js";
+import { HELP_ANCHORS, helpAnchorKind, helpHref, type HelpAnchor } from "../src/web/help/help-anchors.js";
+import { HELP_GROUPS, helpEntry } from "../src/web/help/help-content.js";
+import { expandHelpTokens } from "../src/web/help/help-markdown.js";
+import { helpPage } from "../src/web/help/help-pages.js";
+
+const FILE = path.join(import.meta.dirname, "..", "src", "help-corpus.generated.json");
+const REGENERATE = "WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts";
+
+/** A mode's page opens with the catalog's two sentences, as the page draws it (help-content.tsx § helpBody). */
+function bodyOf(anchor: HelpAnchor): string {
+  const words = expandHelpTokens(helpPage(anchor).body, anchor).trim();
+  const kind = helpAnchorKind(anchor);
+  if (kind.kind !== "mode") return words;
+  const catalog = MODE_CATALOG[kind.mode];
+  return `${catalog.description}.\n\n${catalog.how}\n\n${words}`;
+}
+
+const built: HelpCorpusPage[] = HELP_GROUPS.flatMap((group) =>
+  group.anchors.map((anchor) => {
+    const entry = helpEntry(anchor);
+    return {
+      anchor,
+      href: helpHref(anchor),
+      group: group.title,
+      title: entry.title,
+      summary: entry.summary,
+      keywords: entry.search.keywords,
+      experimental: entry.experimental,
+      body: bodyOf(anchor),
+    };
+  }),
+);
+const text = `${JSON.stringify(built, null, 1)}\n`;
+
+describe("src/help-corpus.generated.json", () => {
+  it("holds every live Help anchor once, in the contents page's order", () => {
+    expect(built.map((p) => p.anchor).sort()).toEqual([...HELP_ANCHORS].sort());
+    expect(new Set(built.map((p) => p.anchor)).size).toBe(built.length);
+  });
+
+  it("gives a question its place on the questions' page, and every other page its own address", () => {
+    const question = built.find((p) => p.anchor.startsWith("faq-"));
+    expect(question?.href).toBe(`/help/questions#${question?.anchor}`);
+    expect(built.find((p) => p.anchor === "spine")?.href).toBe("/help/spine");
+  });
+
+  it("expands every token, so no page shows the model a {{…}}", () => {
+    for (const page of built) expect(page.body, page.anchor).not.toMatch(/\{\{|\}\}/);
+  });
+
+  it("opens a mode's page with the catalog's sentences, which its file does not hold", () => {
+    const glossary = built.find((p) => p.anchor === "mode-glossary");
+    expect(glossary?.body.startsWith(`${MODE_CATALOG.glossary.description}.`)).toBe(true);
+    expect(glossary?.body).toContain(MODE_CATALOG.glossary.how);
+    expect(glossary?.body).toContain("## When to use it");
+  });
+
+  it.runIf(process.env.WRITE_HELP_CORPUS === "1")("is written", () => {
+    writeFileSync(FILE, text);
+  });
+
+  it("is what the Help pages say today", () => {
+    let onDisk = "";
+    try {
+      onDisk = readFileSync(FILE, "utf8");
+    } catch {
+      /* Reported below, with the command. */
+    }
+    expect(onDisk === text, `src/help-corpus.generated.json is not what the Help pages say now. Regenerate it:\n  ${REGENERATE}`).toBe(
+      true,
+    );
+  });
+});
