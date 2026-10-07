@@ -126,9 +126,112 @@ back.
   mode's own line. The foot that shows a job's progress on a current list also shows the waiting
   line, as Ideas' does.
 
-## The guard, the loaded branches, WCO9 and WCO8
+## The guard: built
 
-Recorded as each lands, below.
+`tests/rewrite-hold.test.tsx` § the membership guard. A file under `src/web` that writes a `force`
+into a request must be a row's hook or a line in `NOT_HELD` with its reason; every row's hook must
+call `useRewriteHold`, and no excluded file may.
+
+It reads the syntax tree (`@babel/parser`, as `tests/use-copy.test.tsx` does), not the text,
+because Sol's review is right that the text is not enough. A hit is an object literal with a
+`force` property, written out, shorthand or nested in a spread, whose value is not `false` and not
+itself an object literal. That covers the three forms the review named, and the test asserts the
+two awkward ones by name: Skim's conditional spread and the glossary's shorthand `{ force, … }`.
+Eleven small snippets pin what is and is not a hit.
+
+The exclusion list is six, not the two the brief expected, because six files force and hold
+nothing: Skim (*pending C10b*), `useStepJob.ts` (the transport), `Metadata.tsx`, `CommandBar.tsx`,
+`StructureNotice.tsx` and `ShelfEntry.tsx`. It is a table in a test, in the shape
+`tests/read-error-matrix.test.tsx` § `NOT_A_ROW` already has. No registry.
+
+**What it cannot see**, said in the test too: a request built another way (a computed key, an
+object handed in from another module), and whether every forced path in a file goes through the
+hold. The second is each row's *holds the forced verb synchronously* test, for the control the row
+names.
+
+Seen red: with the exclusion for Skim renamed, two of its four table checks fail.
+
+## The loaded branches of the Sketch and Illustrated views: not built
+
+When a picture is on screen and a redraw runs, `SketchView.tsx` § `progress` and
+`IllustratedView.tsx` § `body` draw one grey line with a spinner, and one grey line if it failed.
+The empty branches use `JobProgress`, which also gives Stop, Retry and the stalled warning. The UI
+sweep handed over the question of making the loaded branches use it too.
+
+**It is not a drop-in, so it is not built.** `JobProgress` in that place would reverse three
+things that are written down as deliberate, and each needs somebody to choose:
+
+1. **Whether there is a Stop beside a picture at all.**
+   [sketch.md](../project/sketch.md) says the line is "Deliberately **not** `JobProgress`: that row
+   carries a Stop button and, with no job running, the Draw button", and both views' comments say
+   the same.
+2. **What is drawn when nothing is running.** With no job and no failure `JobProgress` always draws
+   its run button. So it would have to be mounted only while a job is running, starting or failed,
+   or be given a new "status only" prop. And after a refused start it draws the run button anyway,
+   which needs a label: Sketch has no words for a forced redraw in the band (its one redraw is
+   *Regenerate*, in the profile panel), and in Illustrated it would be a second *Paint again* that
+   skips the steering note.
+3. **What a failure looks like.** `JobProgress` prints the failure in the destructive red.
+   `diagram-sketch.css` § `.sk-failed` records the opposite choice for this band: "The same grey as
+   every other failure in this band, not a red".
+
+Smaller things it would also touch: where the line sits (`.sk-busy` is "above the notes rather
+than below"), the two CSS classes `tests/diagram-css.test.ts` and
+`tests/sketch-view-drawing.test.tsx` name, and the Retry it would add, which is not taken through
+the hold (see § Left).
+
+What is needed before anyone builds it: a yes or no on Stop beside a loaded picture; and if yes,
+whether the reader gets Retry there too, in which colour the failure is said, and what the button
+after a refused start is called in Sketch.
+
+## WCO9: the signpost
+
+One bullet at the end of [mode.md](../project/mode.md)'s client residue, naming what `Reader.tsx`
+asks about the mode outside the `modeBand()` switch and pointing at the two typed sub-mode tables
+(`subModeViews` in `Reader.tsx` § `surface`; `SUB_MODE_SELECTS_A_BAND_FOR` in `ModeBoundary.tsx`).
+No count is written into the doc. Recounted from the syntax tree for this plan: 19 comparisons of
+the `mode` identifier with a string, on 17 lines, naming seven modes, which is Sol's figure and
+not the investigation's 21 and nine.
+
+Sol's five groups needed a sixth thing said. Two of the comparisons decide what is drawn in the
+prose rather than over it (the quote card knowing it is in Quotes, Skim's door after the current
+stop), so the last group is "overlays, and what is drawn in the prose".
+
+The same doc's sentence that the hold's row is something "which nothing checks you added" was made
+false by the guard, and now says what the guard checks and what it does not.
+
+## WCO8: counts in comments
+
+Live counts removed, dated history left alone:
+
+- `useAutoRun.ts`: "Eleven targets … twelve controls … eleven copies" is gone; the header points at
+  `AutoRunTarget` in `auto-run-targets.ts`, which is the list. Its `@returns` no longer lists which
+  hooks carry `automatic` (the list had missed FAQ and Skim).
+- "shared with the seven other artefact readers" in `useQuotes.ts`, `useTimeline.ts`,
+  `useSketch.ts` and `useArc.ts` is "the other artefact readers", as `useDebate.ts` already said.
+- `useGlossary.ts`: the same phrase, and "all eight now pass `refresh` here", are reworded so the
+  number is dated (2026-09-02) rather than a claim about today. The second was also false today:
+  `useSkim` passes its own `onFinished`.
+- `rewrite-hold.ts` and the header of `tests/rewrite-hold.test.tsx` no longer list the modes.
+- Two comments that still spoke of a file: `useArc.ts` ("the one on disk") and `useIllustrated.ts`
+  ("our own file").
+
+**Left, because the file is another cluster's:** `useIdeas.ts` has the same "seven other artefact
+readers" line. `JobProgress.tsx` counts its callers ("the nine other reader-facing callers … the
+tenth is the showcase"); it is not a hook and was not touched.
+
+## Left
+
+- **Skim's hold** (C10b).
+- **A Retry is not taken through the hold.** `JobProgress` offers Retry under a failed job in every
+  mode, and it re-runs the job without going through `useRewriteHold`. A hook hides the failure
+  while it is holding, so the two do not overlap; but after a retried run finishes, the gap this
+  plan closes is open again for that run. True of the first six as well. Not reproduced here, only
+  read.
+- **The command bar's *Run again* rows and Metadata's re-run rows force a step with an artefact
+  possibly on screen in another tab or behind them.** They are excluded from the guard with their
+  reasons; whether they want a hold of some kind is a separate question.
+- **A browser pass.** None was made in this cluster; the caller arranges one.
 
 ## Done when
 
@@ -139,6 +242,18 @@ Recorded as each lands, below.
   [reader-profile.md § Regenerate waits for its own result](../project/reader-profile.md#regenerate-waits-for-its-own-result)
   names Skim as the one left;
 - typecheck, the touched suites and `doc-links` pass.
+
+## Gates
+
+On the tree with `origin/dev` merged (2026-10-07), outside any sandbox: `npm run typecheck` clean;
+`npx vitest run` by file in four runs, 91 files, 2,473 tests passed, 9 skipped, none failed
+(`tests/rewrite-hold.test.tsx` 233 of 233, with `doc-links`, `read-error-matrix`,
+`artefact-read-race` and every suite that names a changed hook, panel or band). Biome on the 19
+touched files: 5 `useOptionalChain` warnings on the `waiting` line, written as
+`IdeasPanel.tsx` writes it (it has the same warning), and 7 informational notes, among them the
+existing complexity advisories on five panel functions and a new one on the guard's walker.
+No full `npm test`, no browser pass, no cross-family code review yet: the caller runs that before
+pushing.
 
 ## What the documents got wrong
 
