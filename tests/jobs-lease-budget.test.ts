@@ -20,7 +20,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { ASSETS_BUDGET_MS } from "../src/collect-assets.js";
+import { PDF_FIGURES_BUDGET_MS } from "../src/collect-pdf-figures.js";
+import { DEFAULTS as FETCH_DEFAULTS, retryDelayMs } from "../src/fetch.js";
 import { DEADLINE_MARGIN_MS, LEASE_MS, STEP_BUDGET_MS } from "../src/jobs.js";
+import { resolvePaperSource } from "../src/paper-sources.js";
 import { QUIZ_MAX_TOKENS } from "../src/quiz.js";
 import { deadlineFor } from "../src/token-budget.js";
 import { DEFAULT_INGEST_STEPS } from "../src/pipeline.js";
@@ -310,5 +313,88 @@ describe("the job lease and the platform's kill", () => {
     expect(deadlineFor(QUIZ_MAX_TOKENS), "a quiz that uses its whole allowance outlives the claim").toBeLessThan(claimMs);
     expect(STEP_BUDGET_MS.quiz, "the quiz reservation is under its slowest measured run").toBeGreaterThanOrEqual(452_000);
     expect(STEP_BUDGET_MS.quiz).toBeLessThan(claimMs);
+  });
+
+  /**
+   * **A step's admission estimate covers the clocks the step sets on itself.**
+   *
+   * `STEP_BUDGET_MS` decides whether the walk starts a step on what is left of
+   * the claim. A step with its own wall-clock caps has told us, in code, how
+   * long it may legitimately run; a budget under the sum of those caps admits
+   * the step on a remnant it is entitled to outlive, and it meets our deadline
+   * instead of its own. Since 2026-10-07 that is a pause and a re-run, not a
+   * lost job, but each one spends one of `REQUEUE_BUDGET`'s windows and three
+   * of them end the import.
+   *
+   * `assets` was admitted on 185 s — `collectAssets`'s cap and its unwinding —
+   * while the step goes on, for a PDF, to `recoverPdfFigures` and a second
+   * 180 s cap. Both caps are read from the modules that enforce them, so moving
+   * either moves the floor here. docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md.
+   */
+  it("admits `assets` only with room for both of its own clocks, and still inside a claim", () => {
+    const ownCapsMs = ASSETS_BUDGET_MS + PDF_FIGURES_BUDGET_MS;
+    expect(
+      STEP_BUDGET_MS.assets,
+      "the walk would start `assets` with less window than its own two caps allow it to run",
+    ).toBeGreaterThanOrEqual(ownCapsMs);
+    expect(
+      STEP_BUDGET_MS.assets,
+      "a budget at or over the claimant's deadline can never be met, so the table has " +
+        "stopped saying anything about this step",
+    ).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
+  });
+
+  /**
+   * **The same for `fetch`, whose clocks are per request and whose requests
+   * are several.** One `fetchDocument` is `attempts` tries of `timeoutMs`, with
+   * the longest wait `retryDelayMs` will ever sleep between them (a server's
+   * `Retry-After`, capped). Since 261006i the step may make one of those for the
+   * pasted address and then one per candidate of the paper source it led to
+   * (`fetchByAddress`, src/pipeline.ts), so the ceiling is that times one more
+   * than the most candidates any source gives.
+   *
+   * The sample addresses are one per source in src/paper-sources.ts's
+   * registry. **A source added there and not here is not counted**: the
+   * registry is not exported, and this list is the weak point of the test.
+   *
+   * `fetch` is the first step of every job that names it, and the walk runs
+   * the first step of a claim ungated, so today this row decides nothing about
+   * admission. It is held to its clocks anyway so the table states the truth
+   * the day something comes to precede it.
+   */
+  it("admits `fetch` only with room for every request it may make, and still inside a claim", () => {
+    const attempts = FETCH_DEFAULTS.attempts;
+    let longestWaitMs = 0;
+    for (let attempt = 1; attempt < attempts; attempt += 1) {
+      longestWaitMs += Math.max(
+        retryDelayMs(attempt, Number.MAX_SAFE_INTEGER, () => 1),
+        retryDelayMs(attempt, null, () => 1),
+      );
+    }
+    const oneFetchDocumentMs = attempts * FETCH_DEFAULTS.timeoutMs + longestWaitMs;
+
+    const onePerSource = [
+      "https://arxiv.org/abs/2608.13566",
+      "https://aclanthology.org/2020.acl-main.703/",
+      "https://proceedings.mlr.press/v139/radford21a.html",
+      "https://proceedings.neurips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html",
+      "https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html",
+      "https://jmlr.org/papers/v15/srivastava14a.html",
+      "https://www.nber.org/papers/w30000",
+    ];
+    const mostCandidates = Math.max(
+      ...onePerSource.map((address) => {
+        const paper = resolvePaperSource(address);
+        if (paper === null) throw new Error(`no paper source recognises ${address} any more; pick another sample`);
+        return paper.candidates.length;
+      }),
+    );
+    const requestsAtMost = 1 + mostCandidates;
+
+    expect(
+      STEP_BUDGET_MS.fetch,
+      `\`fetch\` may make ${requestsAtMost} requests of up to ${oneFetchDocumentMs} ms each`,
+    ).toBeGreaterThanOrEqual(requestsAtMost * oneFetchDocumentMs);
+    expect(STEP_BUDGET_MS.fetch).toBeLessThan(LEASE_MS - DEADLINE_MARGIN_MS);
   });
 });

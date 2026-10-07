@@ -265,12 +265,15 @@ const aborts = processSingleton<Map<string, AbortController>>(
  *   (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so a PDF's `assets`
  *   can take about 360 s.
  *
- * Neither number was changed with this note. What rests on them is the sum
- * above, and `STEP_BUDGET_MS.assets`, which decides whether `assets` is started
- * after `structure` in the same window: a step admitted on 185 s can outlive
- * the deadline. `transitionAfter` discards its product; `pauseForDeadline`
- * requeues while budget remains, lets Stop win, or refuses a stale claim.
- * Exhausting the budget ends the job as interrupted.
+ * The sum above is still the ordinary web page's, where neither of those
+ * happens, so its two numbers stay. **The admission estimates are separate
+ * and were raised on 2026-10-07** to cover every clock each step sets on
+ * itself: `STEP_BUDGET_MS.assets` 185 s → 400 s and `.fetch` 150 s → 360 s,
+ * measured and reasoned at each row below. Until then `assets` could be
+ * started after `structure` on a remnant it was entitled to outlive; a step
+ * that does outlive the deadline still has its product discarded by
+ * `transitionAfter`, and `pauseForDeadline` requeues while budget remains,
+ * lets Stop win, or refuses a stale claim.
  *
  * **That sum is elapsed time, and since 2026-09-04 it is no longer the number of
  * requests.** `STEP_BUDGET_MS.structure` is now 700s, so a walk that has spent
@@ -581,11 +584,29 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      It read *"GUESS, generous. Network only, no model call. Never measured"*
      until then, and 10 s was under a single one of its own three timeouts.
 
-     **110 s is one `fetchDocument`, and the step can make several.** Since
-     261006i `fetchByAddress` (src/pipeline.ts) may fetch the address and then
-     a paper source's candidates, each with its own three attempts, so 150 s
-     does not bound the step. Not re-measured, and the number is unchanged. */
-  fetch: 150_000,
+     **110 s is one `fetchDocument`, and the step can make three.** Since
+     261006i `fetchByAddress` (src/pipeline.ts) may fetch the pasted address and
+     then each candidate of the paper source it led to, and the most any source
+     gives is two (arXiv's HTML and PDF, PMLR's two PDFs), so the network half
+     is 3 × 110 = **330 s**. 150 s did not cover it.
+
+     **Raised to 360 s on 2026-10-07**: the 330 s the clocks allow, plus the
+     page count and the storage put above, rounded up.
+     tests/jobs-lease-budget.test.ts derives the 330 s from src/fetch.ts's
+     `DEFAULTS` and `retryDelayMs` and from the paper sources' candidate
+     lists, so a fourth attempt or a third candidate turns it red.
+
+     **Measured the same day, and the clocks are the whole of the number.**
+     `revision_step_runs`, rows this step ran (not carried forward): production
+     45 runs, median 1.0 s, p99 3.6 s, max **4.3 s**; local 160 runs, max
+     10.7 s. Nothing has come near one timeout, let alone three.
+
+     **And this row decides nothing today**, which is worth knowing before
+     tuning it: `fetch` is first in `STEP_ORDER`, so it is the first step of
+     every job that names it, and the walk starts a claim's first step
+     ungated. It is kept honest for the day something precedes it.
+     docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md. */
+  fetch: 360_000,
   /* **GUESS, generous.** One cheap call over at most 6,000 characters, capped at
      `TIMEOUT_MS` = 60 s in src/paper-metadata.ts, plus pdf.js opening the file
      (1.5–1.8 s cold, measured for `fetch` above) or Readability over an HTML
@@ -720,15 +741,33 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      against, and the two are allowed to differ — this one has to be the
      *claimant's* worst case, which is the cap plus whatever unwinding costs.
 
-     **It is the worst case of the first half of the step only.** For a PDF
-     the step goes on to `recoverPdfFigures`, with a second 180 s cap
-     (`PDF_FIGURES_BUDGET_MS`, src/collect-pdf-figures.ts), so the claimant's
-     real worst case is about 360 s and this number is under it. Unchanged
-     here; whether to raise it is reported in
-     docs/plans/261007b-seventh-sweep-job-queue-tier-0.md. A step that does
-     outlive the deadline discards its product and asks `pauseForDeadline` for
-     another window; exhausted budget ends the job as interrupted. */
-  assets: 185_000,
+     **That was the worst case of the first half of the step only, and the
+     row said 185 s until 2026-10-07.** The step goes on to
+     `recoverPdfFigures`, with a second 180 s cap (`PDF_FIGURES_BUDGET_MS`,
+     src/collect-pdf-figures.ts), whose clock starts only after the PDF has
+     been read from storage (`readRawBytes`, which no clock bounds). So the
+     walk could start `assets` after `structure` with 185 s left, the figures
+     would meet our deadline instead of their own clock, and the job would
+     pause and re-run the step, spending one of `REQUEUE_BUDGET`'s windows
+     each time; three, and the import ended interrupted.
+
+     **400 s since 2026-10-07**: the two caps (360 s) with the 5 s of
+     unwinding each that 185 s already allowed the first one (370 s), and the
+     storage read rounded up into the rest. Under the claimant's 740 s with
+     340 s to spare. tests/jobs-lease-budget.test.ts holds it at or over
+     `ASSETS_BUDGET_MS + PDF_FIGURES_BUDGET_MS`, read from the two modules.
+
+     **Measured the same day**, `revision_step_runs`, rows this step ran:
+     production 47 runs, a PDF's median 2.2 s, p90 40.0 s, max **92.8 s**
+     (27 runs), a web page's max 4.2 s (20); local 131 runs, a PDF's max
+     **184.3 s**, which is the figures clock running out on a local paper.
+     The two halves are alternatives in practice (a PDF's blocks carry no
+     `<img>`, a web page has no figure markers), so no run has spent both
+     caps; nothing in the code stops one, and rounding up is the cheap
+     direction. What the raise costs is a hand-back before `assets` when
+     `structure` left less than 400 s, which is one more request.
+     docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md. */
+  assets: 400_000,
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
      up hard because it is a model call and one measurement is one sample. */
   arc: 60_000,
@@ -2935,7 +2974,10 @@ async function walkClaim(
          committed the finished product into a draft the same transaction then
          failed, and ended the job `error` under a sentence saying finished
          steps are kept. It was reachable: `assets` answers an abort by
-         returning, and can run about 360 s against a 185 s budget.
+         returning, and its two clocks allow 360 s against what was then a
+         185 s budget. The budget covers them since 2026-10-07
+         (`STEP_BUDGET_MS.assets`); it is still reachable through what no
+         clock bounds, a storage read or put that hangs.
 
          **Not kept, deliberately.** What such a step returns is what it had
          when it was told to stop. `assets` returns a manifest whose unfetched

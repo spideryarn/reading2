@@ -232,7 +232,9 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   capping the marker count and the per-figure size still let 100 × 12 MiB through. Both numbers match
   their `collect-assets.ts` counterparts deliberately: the two halves are **alternatives**, since a
   PDF-made article has no `<img>` and a web article has no PDF, so an article costs at most one of
-  them. The reasons are a vocabulary rather than a catch-all — `no-source`, `unreadable-pdf`,
+  them. **The step's time is the exception**: the queue's admission estimate for `assets`
+  (`STEP_BUDGET_MS`, [ingest-queue.md](ingest-queue.md)) counts both clocks, since nothing in the
+  code stops both running, and it was under the second until 2026-10-07. The reasons are a vocabulary rather than a catch-all — `no-source`, `unreadable-pdf`,
   `storage`, `budget` and `out-of-time` say *whose* problem it is, for the reason `AssetFailure`
   keeps `storage` apart from `network`: the two need different people. All four were once spelled
   `out-of-time` (GPT Sol, C-4).

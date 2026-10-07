@@ -1974,13 +1974,28 @@ has the reasoning, stage C.
 **A step that returns after the deadline takes the same pause, since 2026-10-07.** A step that
 ignores its signal runs to the end and hands back a product. Until then that case alone *ended*
 the job: `transitionAfter` answered an `error` ending, the product was committed into a draft the
-same transaction failed, and the card said the finished steps were kept. It is reachable through
-`assets`, which answers an abort by returning and can run about 360 s against a 185 s budget. Now
-`transitionAfter` throws the deadline instead of answering, so nothing is committed and the walk
-reaches `pauseForDeadline` with its four answers, exactly as for a step that obeyed. **The product
-is dropped on purpose**: `assets` returns a manifest whose unfetched images are marked
-`failed: "network"` and stamped current, and keeping it would publish it. The step runs again in
-the next window, on a draft that still holds every step before it.
+same transaction failed, and the card said the finished steps were kept. It was reachable through
+`assets`, which answers an abort by returning and whose two clocks allow 360 s, against what was
+then a 185 s budget. Now `transitionAfter` throws the deadline instead of answering, so nothing is
+committed and the walk reaches `pauseForDeadline` with its four answers, exactly as for a step that
+obeyed. **The product is dropped on purpose**: `assets` returns a manifest whose unfetched images
+are marked `failed: "network"` and stamped current, and keeping it would publish it. The step runs
+again in the next window, on a draft that still holds every step before it.
+
+**And the budget that let `assets` start on a remnant was raised the same day.**
+`STEP_BUDGET_MS` in [`src/jobs.ts`](../../src/jobs.ts) is what the walk checks between steps: the
+next step starts only if that much of the claim is left, and otherwise the claim is handed back
+intact. A step admitted on less than its own clocks allow meets our deadline instead of its own,
+and each such overrun spends one of `REQUEUE_BUDGET`'s windows, so a slow PDF could lose the
+import. `assets` went 185 s → **400 s** (its `collectAssets` cap and its PDF-figures cap, 180 s
+each, with unwinding and the storage read the figures clock does not cover) and `fetch` 150 s →
+**360 s** (three `fetchDocument`s of 110 s since a pasted address can lead to a paper source with
+two candidates). `tests/jobs-lease-budget.test.ts` derives both floors from the constants that
+enforce the clocks. Measured, production's worst `assets` is 92.8 s and its worst `fetch` 4.3 s,
+so the numbers are the clocks' and not the data's; what the raise costs is one more request when
+`structure` leaves under 400 s. `fetch`'s row decides nothing today, since it is always a claim's
+first step and the first step runs ungated.
+[261007g](../plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md).
 
 **What Stop does in the same position is two things, and is an open question.** If the last step
 finishes although Stop was pressed, the job ends `done` and published when the Stop was answered
