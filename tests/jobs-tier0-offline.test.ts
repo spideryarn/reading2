@@ -50,6 +50,8 @@ const { advanceJobWith, cancelJob, DEADLINE_MARGIN_MS, REQUEUE_BUDGET } = await 
 const { STEPS } = await import("../src/pipeline.js");
 const { StaleAttemptError } = await import("../src/store/jobs.js");
 const { CallDeadlineReached } = await import("../src/call-failure.js");
+const { NeedsAnotherWindow } = await import("../src/another-window.js");
+const { INTERRUPTED } = await import("../src/messages.js");
 const { runAsOwner } = await import("../src/owner.js");
 
 function fixture(
@@ -111,6 +113,24 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("Tier 0 queue decisions without Postgres", () => {
+  it("an explicit hand-back on the final window ends interrupted and offers a retry", async () => {
+    row.requeues = REQUEUE_BUDGET;
+    let window: StepContext["window"];
+    const advance = fixture(["illustrated"], async (ctx) => {
+      window = ctx.window;
+      throw new NeedsAnotherWindow();
+    });
+    const ended = await advance();
+    expect(window).toEqual({ number: REQUEUE_BUDGET + 1, anotherAvailable: false });
+    expect(ended?.done).toBe(true);
+    expect(ended?.job.status).toBe("error");
+    expect(ended?.job.error).toBe(INTERRUPTED.message);
+    expect(ended?.job.failureKind).toBe(INTERRUPTED.kind);
+    expect(ended?.job.steps[0]?.error).toBe(INTERRUPTED.message);
+    expect(pauses).toBe(1);
+    expect(commits).toEqual([]);
+  });
+
   it.each(["extract", "metadata"] as const)("keeps an existing title when %s returns an empty detail", async (name) => {
     row.title = "Stored title";
     const advance = fixture([name], async () => ({ detail: "" }));
@@ -259,25 +279,6 @@ describe("Tier 0 queue decisions without Postgres", () => {
     expect((await advance())?.job.status).toBe("cancelled");
     expect(ran).toEqual(["fetch"]);
     expect(commits).toEqual(["fetch"]);
-  });
-
-  it("rejects a product that forbids retention under abort when Stop lands after run returns", async () => {
-    const spend = await import("../src/ai-spend.js");
-    const realCollectSpend = spend.collectSpend;
-    const spy = vi.spyOn(spend, "collectSpend").mockImplementation(async (...args) => {
-      const result = await realCollectSpend(...args);
-      /* A completed run can still be awaiting ledger/preview settlement. */
-      await cancelJob(row.id);
-      return result;
-    });
-    try {
-      const advance = fixture(["fetch"], async () => ({ detail: "partial", discardOnAbort: true }));
-      expect((await advance())?.job.status).toBe("cancelled");
-      expect(ran).toEqual(["fetch"]);
-      expect(commits).toEqual([]);
-    } finally {
-      spy.mockRestore();
-    }
   });
 
   it("honours a Stop returned by a final skipped note after a kept progress write failed", async () => {

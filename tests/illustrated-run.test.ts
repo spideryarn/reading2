@@ -44,8 +44,17 @@ vi.mock("../src/messages-stream.js", async (importOriginal) => ({
   streamMessage,
 }));
 
-const { generateIllustrated, imagePrompt, inputFingerprint, isStale, PLATE_REQUEST, ILLUSTRATED_BRIEF_OUTPUT_SCHEMA } =
-  await import("../src/illustrated.js");
+const {
+  BRIEF_CAP_MS,
+  generateIllustrated,
+  imagePrompt,
+  inputFingerprint,
+  isStale,
+  PLATE_REQUEST,
+  ILLUSTRATED_BRIEF_OUTPUT_SCHEMA,
+  SETTLE_MARGIN_MS,
+} = await import("../src/illustrated.js");
+const { NeedsAnotherWindow } = await import("../src/another-window.js");
 const { MAX_PLATES } = await import("../src/illustrated-plate.js");
 const { failureKindOf, readerFailureOf, undeclaredBlocked } = await import("../src/job-failure.js");
 const { MODEL_REFUSED } = await import("../src/messages.js");
@@ -492,6 +501,217 @@ describe("generateIllustrated", () => {
 });
 
 /**
+ * **No request outruns a claim** — docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md
+ * § Part 1. The step is two units, the brief and the plates; each starts only
+ * with room for its own clock plus the settling margin, the brief is banked
+ * between them, and a unit that would not fit hands the job back
+ * (`NeedsAnotherWindow`) instead of being started and killed by the deadline.
+ */
+describe("generateIllustrated inside a claim", () => {
+  const plates = BRIEF.plates.length;
+
+  function bank(saved?: string, writes = true) {
+    const written: string[] = [];
+    return {
+      written,
+      bank: {
+        read: async () => saved,
+        write: async (raw: string) => {
+          written.push(raw);
+          return writes;
+        },
+      },
+    };
+  }
+
+  it("hands back before the brief when its clock would not fit, having bought nothing", async () => {
+    const { draw, calls } = drawer();
+    const { bank: b } = bank();
+    await expect(
+      generateIllustrated({
+        power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+        deadlineAt: Date.now() + BRIEF_CAP_MS + SETTLE_MARGIN_MS - 1_000,
+      }),
+    ).rejects.toBeInstanceOf(NeedsAnotherWindow);
+    expect(streamMessage).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("banks the brief and hands back when the plates would not fit after it", async () => {
+    const { draw, calls } = drawer();
+    const { bank: b, written } = bank();
+    await expect(
+      generateIllustrated({
+        power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+        /* Room for the brief, and not for three plates on 300 s clocks after it. */
+        deadlineAt: Date.now() + BRIEF_CAP_MS + SETTLE_MARGIN_MS + 5_000,
+        plateCapMs: 300_000,
+      }),
+    ).rejects.toBeInstanceOf(NeedsAnotherWindow);
+    expect(streamMessage).toHaveBeenCalledTimes(1);
+    expect(written).toEqual([JSON.stringify(BRIEF)]);
+    expect(calls, "no plate is started that the claim cannot finish").toHaveLength(0);
+  });
+
+  it("does not hand back a brief it could not save: that would buy it again", async () => {
+    const { draw } = drawer();
+    const { bank: b } = bank(undefined, false);
+    const run = generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+      deadlineAt: Date.now() + BRIEF_CAP_MS + SETTLE_MARGIN_MS + 5_000,
+      plateCapMs: 300_000,
+    });
+    await expect(run).rejects.toThrow(/could not be saved/);
+    await expect(run).rejects.not.toBeInstanceOf(NeedsAnotherWindow);
+  });
+
+  it("draws from a banked brief without asking the model again", async () => {
+    const { draw, calls } = drawer();
+    const { bank: b, written } = bank(JSON.stringify(BRIEF));
+    const run = await generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+      deadlineAt: Date.now() + plates * 60_000 + SETTLE_MARGIN_MS + 5_000,
+      plateCapMs: 60_000,
+    });
+    expect(streamMessage).not.toHaveBeenCalled();
+    expect(written).toEqual([]);
+    expect(calls).toHaveLength(plates);
+    expect(run.draws.every((d) => d.image)).toBe(true);
+    expect(run.outputTokens, "this window bought no brief").toBe(0);
+  });
+
+  it.each(["not JSON", "null", "{}", '{"style":"wrong","plates":[{}]}'])(
+    "replaces an unusable banked brief (%s) instead of trusting or failing on it",
+    async (raw) => {
+      const { draw, calls } = drawer();
+      const { bank: b, written } = bank(raw);
+      const run = await generateIllustrated({
+        power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+        deadlineAt: Date.now() + 740_000,
+      });
+      expect(streamMessage).toHaveBeenCalledTimes(1);
+      expect(written).toEqual([JSON.stringify(BRIEF)]);
+      expect(calls).toHaveLength(plates);
+      expect(run.draws.every((d) => d.image)).toBe(true);
+    },
+  );
+
+  it("hands back without spending when an unusable checkpoint leaves too little time for a new brief", async () => {
+    const { draw, calls } = drawer();
+    const { bank: b, written } = bank("not JSON");
+    await expect(generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+      deadlineAt: Date.now() + 60_000,
+    })).rejects.toBeInstanceOf(NeedsAnotherWindow);
+    expect(streamMessage).not.toHaveBeenCalled();
+    expect(written).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("does not bank a fresh answer that cannot be parsed", async () => {
+    answerWith(BRIEF, { content: [{ type: "text", text: "not JSON" }] });
+    const { draw, calls } = drawer();
+    const { bank: b, written } = bank();
+    await expect(generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+    })).rejects.toThrow();
+    expect(streamMessage).toHaveBeenCalledTimes(1);
+    expect(written).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("does not bank a fresh answer with no surviving plate", async () => {
+    answerWith({});
+    const { draw, calls } = drawer();
+    const { bank: b, written } = bank();
+    const run = await generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+    });
+    expect(run.illustrated.plates).toEqual([]);
+    expect(written).toEqual([]);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("runs both units in one claim when both fit, and still banks the brief", async () => {
+    const { draw, calls } = drawer();
+    const { bank: b, written } = bank();
+    await generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, bank: b,
+      deadlineAt: Date.now() + 740_000,
+      plateCapMs: 1_000,
+    });
+    expect(streamMessage).toHaveBeenCalledTimes(1);
+    expect(written).toHaveLength(1);
+    expect(calls).toHaveLength(plates);
+  });
+
+  it("gives the brief a clock of its own, and its expiry is a failure, not a Stop", async () => {
+    let briefSignal: AbortSignal | undefined;
+    streamMessage.mockImplementationOnce(((_task: string, request: NonNullable<typeof lastBriefRequest>, options?: { signal?: AbortSignal }) => {
+      lastBriefRequest = request;
+      briefSignal = options?.signal;
+      return {
+        onText: () => {},
+        /* Answers nothing until its signal fires, as a stalled stream would. */
+        finalMessage: () =>
+          new Promise((_, reject) => {
+            options?.signal?.addEventListener("abort", () => reject(options.signal?.reason));
+          }),
+        aborted: () => false,
+      };
+    }) as unknown as Parameters<typeof streamMessage.mockImplementationOnce>[0]);
+    const { draw, calls } = drawer();
+    const run = generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, briefCapMs: 20,
+    });
+    const err = await run.then(
+      () => undefined,
+      (e: unknown) => e,
+    );
+    expect(readerFailureOf(err, "Illustrated").message).toMatch(/took too long/);
+    expect(failureKindOf(err), "the reader may try again").toBe("retry");
+    expect(briefSignal, "the brief is sent with a signal carrying its clock").toBeDefined();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("gives each plate a clock; a plate over it fails and the next is drawn", async () => {
+    const calls: Parameters<DrawPlate>[0][] = [];
+    const draw: DrawPlate = async (req) => {
+      calls.push(req);
+      if (calls.length === 1) {
+        /* Hangs until its own signal fires, as an unanswered image call would. */
+        await new Promise((_, reject) => req.signal?.addEventListener("abort", () => reject(req.signal?.reason)));
+      }
+      return { image: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), mediaType: "image/jpeg", usdCost: null };
+    };
+    const run = await generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH, draw, plateCapMs: 20,
+    });
+    expect(calls).toHaveLength(plates);
+    expect(run.cancelled, "a plate's own clock is not the reader's Stop").toBe(false);
+    expect(run.draws[0]?.failed).toMatch(/took longer than/);
+    expect(run.draws.slice(1).every((d) => d.image)).toBe(true);
+  });
+
+  /* A timeout from the provider with the reader's signal live is that plate's
+     failure. It used to stop the set and return it as cancelled, which then
+     published a part-painted set, because nothing had aborted (Sol, 261007l
+     plan review, finding 3). */
+  it("treats a provider's own timeout as that plate's failure, not as a Stop", async () => {
+    const { draw, calls } = drawer((i) => {
+      if (i !== 0) return undefined;
+      const err = new Error("The operation timed out.");
+      err.name = "TimeoutError";
+      return err;
+    });
+    const run = await generateIllustrated({ power: "standard", article: ARTICLE, sketch: SKETCH, draw });
+    expect(run.cancelled).toBe(false);
+    expect(calls).toHaveLength(plates);
+    expect(run.draws[0]?.failed).toBeTruthy();
+  });
+});
+
+/**
  * **The envelope the composition goes out in**, which is the only thing of ours
  * the image model is told.
  *
@@ -805,6 +1025,37 @@ describe("drawWithGateway", () => {
     expect(sent[0]?.body.input_references).toEqual([
       { type: "image_url", image_url: { url: "data:image/jpeg;base64,AAAA" } },
     ]);
+  });
+
+  it.each(["clock", "Stop"] as const)("cancels real image retry backoff on %s, without another attempt", async (why) => {
+    const jpeg = (await readFile(PLATE)).toString("base64");
+    const stop = new AbortController();
+    const signals: AbortSignal[] = [];
+    let requests = 0;
+    vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+      if (init.signal) signals.push(init.signal);
+      if (++requests === 1) {
+        /* A transport failure enters the real gateway's retry wait. Stop is
+           scheduled after the first response, while that wait is live. */
+        if (why === "Stop") setTimeout(() => stop.abort(), 10);
+        return new Response("unavailable", { status: 503 });
+      }
+      return new Response(JSON.stringify({ data: [{ b64_json: jpeg, media_type: "image/jpeg" }], usage: {} }));
+    });
+    const run = await generateIllustrated({
+      power: "standard", article: ARTICLE, sketch: SKETCH,
+      signal: stop.signal, plateCapMs: why === "clock" ? 20 : 60_000,
+    });
+    expect(signals[0]?.aborted, "the composed signal reaches the transport").toBe(true);
+    expect(run.cancelled).toBe(why === "Stop");
+    expect(requests).toBe(why === "Stop" ? 1 : BRIEF.plates.length);
+    expect(signals).toHaveLength(why === "Stop" ? 1 : BRIEF.plates.length);
+    if (why === "clock") {
+      expect(run.draws[0]?.failed).toMatch(/took longer than/);
+      expect(run.draws.slice(1).every((d) => d.image)).toBe(true);
+    } else {
+      expect(run.draws).toEqual([]);
+    }
   });
 });
 

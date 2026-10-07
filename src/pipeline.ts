@@ -150,6 +150,7 @@ import {
   skimInputHash,
 } from "./skim.js";
 import {
+  type BriefBank,
   generateIllustrated,
   inputFingerprint as illustratedFingerprint,
   PROMPT_VERSION as ILLUSTRATED_PROMPT_VERSION,
@@ -699,6 +700,13 @@ export interface StepContext {
    */
   deadlineAt?: number;
   /**
+   * **Which job this step runs in**, `Job.id`. Absent from a command line or a
+   * test. Illustrated keys the brief it banks between two windows on it, so
+   * only this job's later windows read it back and a new press asks again
+   * (src/illustrated.ts § `BriefBank`).
+   */
+  jobId?: string;
+  /**
    * How long the queue allows this step, `STEP_BUDGET_MS[step]` in src/jobs.ts,
    * which this file cannot import. The structure step's slices path stops
    * itself inside it. `undefined` from a command line or a test.
@@ -819,13 +827,6 @@ export interface StepProduct {
   parts?: ArtifactParts;
   /** What the store should record about this run. */
   stamp?: StepStamp;
-  /**
-   * This partial product may be kept only while the step's signal is live.
-   * The runner checks again after ledger/preview settlement, before deciding
-   * the commit. Illustrated uses it for a provider-cancelled plate set; a
-   * later Stop must preserve the last good painting.
-   */
-  discardOnAbort?: true;
 }
 
 /**
@@ -1764,6 +1765,52 @@ const ILLUSTRATE_REFUSAL: Record<IllustrateRefusal, ReaderFacingFailure> = {
   "stale-sketch": ILLUSTRATE_SKETCH_STALE,
   "wrong-profile": ILLUSTRATE_SKETCH_PROFILE,
 };
+
+
+/**
+ * **Where Illustrated's brief waits between two windows of one job** — a
+ * checkpoint in `illustrated-brief`.
+ *
+ * The key is a digest of the job, what the picture is drawn from (the Sketch,
+ * the figures and the note, which carries the prompt version) and the model
+ * that writes the brief. The job is what keeps a new press, a forced repaint
+ * included, from getting the last brief back; the rest keeps a window from
+ * reusing a brief for inputs that moved under it (GPT Sol, 261007l plan review).
+ *
+ * A failed read is no brief, and a failed write answers `false`, which stops
+ * the step handing back a brief the next window could not find. Both are
+ * `warn`s rather than failures, as every other checkpoint's are.
+ */
+function briefBank(
+  ctx: StepContext,
+  jobId: string,
+  checkpoints: CheckpointStore,
+  sourceHash: string,
+): BriefBank {
+  const key = createHash("sha256")
+    .update(["illustrated-brief/1", jobId, sourceHash, generatorFor(ctx.power)].join("\n"), "utf8")
+    .digest("hex");
+  return {
+    async read() {
+      try {
+        const found = (await checkpoints.read<{ raw?: unknown }>(ctx.slug, "illustrated-brief", [key])).get(key);
+        return typeof found?.raw === "string" ? found.raw : undefined;
+      } catch (err) {
+        plog.warn({ slug: ctx.slug, step: "illustrated", err }, `illustrated ${ctx.slug}: the banked brief could not be read`);
+        return undefined;
+      }
+    },
+    async write(raw) {
+      try {
+        await checkpoints.write(ctx.slug, "illustrated-brief", key, { raw });
+        return true;
+      } catch (err) {
+        plog.warn({ slug: ctx.slug, step: "illustrated", err }, `illustrated ${ctx.slug}: the brief could not be banked`);
+        return false;
+      }
+    },
+  };
+}
 
 /**
  * A function declaration rather than a `const`, so that TypeScript narrows
@@ -4855,7 +4902,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         ...(sketch.profileHash === undefined ? {} : { profileHash: sketch.profileHash }),
       };
     },
-    async run(ctx, store) {
+    async run(ctx, store, checkpoints) {
       const sketch = await store.read(ctx.slug, "sketch", "sketch");
       if (!usableSketch(sketch)) refuseToIllustrate("no-sketch");
 
@@ -4922,6 +4969,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         );
       }
 
+      /* What this picture is drawn from, the same value `stamp` above computes
+         and the artefact is stamped with below. */
+      const sourceHash = illustratedFingerprint(
+        sketch,
+        undefined,
+        figuresFingerprint(assets),
+        ctx.illustrationNote ?? "",
+      );
+
       const run = await generateIllustrated({
         article,
         sketch,
@@ -4946,18 +5002,19 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         cacheArticle: ctx.cacheArticle,
         figures: figureSurvey.figures,
         ...(ctx.illustrationNote ? { note: ctx.illustrationNote } : {}),
+        /* **No request outruns the claim.** The brief and the plates each start
+           only with room for their own clock, and the brief waits in a
+           checkpoint when the plates must go to the next window.
+           docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
+        ...(ctx.deadlineAt !== undefined ? { deadlineAt: ctx.deadlineAt } : {}),
+        ...(ctx.jobId ? { bank: briefBank(ctx, ctx.jobId, checkpoints, sourceHash) } : {}),
       });
 
       /* **Written here rather than in `generateIllustrated`**, which writes
          nothing on purpose (its header says why): the hash of the Sketch is a
          store-shaped fact, and a stage that stamped itself could not be
          re-rendered from a saved brief by the eval. */
-      run.illustrated.sourceHash = illustratedFingerprint(
-        sketch,
-        undefined,
-        figuresFingerprint(assets),
-        ctx.illustrationNote ?? "",
-      );
+      run.illustrated.sourceHash = sourceHash;
       /* A legacy Sketch's unknown provenance stays unknown. Turning absence
          into null would make a permitted painting immediately profile-changed. */
       if (sketch.profileHash === undefined) delete run.illustrated.profileHash;
@@ -4999,12 +5056,15 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
 
       /* **Stopped between plates: no product.** Check after storage so the
          bytes already paid for are kept as blobs, as before, even though the
-         draft is discarded and the last good painting stays. A provider
-         timeout can return a cancelled set with a live signal, then Stop can
-         land during these writes. Only throw when the signal fired: a
-         provider timeout alone keeps its old partial-result path. The
-         product flag below carries this condition through the runner's own
-         awaits. docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
+         draft is discarded and the last good painting stays.
+         docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md.
+
+         Since 2026-10-07 `cancelled` means the reader's signal fired and
+         nothing else: a provider's own timeout is that plate's failure and the
+         set is whole (src/illustrated.ts § `drawPlates`). So this always
+         throws for a cancelled set; a whole set follows the runner's usual
+         rule for a Stop that lands after the step returned its product.
+         docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
       if (run.cancelled) ctx.signal.throwIfAborted();
 
       plog.info(
@@ -5042,7 +5102,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const missing = run.illustrated.plates.length - stored;
       return {
         parts: { illustrated: run.illustrated },
-        ...(run.cancelled ? { discardOnAbort: true as const } : {}),
         detail:
           `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
           ` — ${run.illustrated.style}`,

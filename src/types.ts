@@ -3656,6 +3656,16 @@ export interface Job {
   /** Stop has been pressed and the abort has not landed yet. */
   cancelling?: boolean;
   /**
+   * **The reader pressed Stop and the job finished anyway**: `done`, with a
+   * Stop accepted while it was running (`jobs.cancel_requested_at`, which only
+   * an accepted Stop stamps and nothing clears). The Stop reached the last step
+   * while that step was finishing, and its product is kept
+   * (docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md). The
+   * card says so (`STOP_CAME_TOO_LATE`, src/job-state.ts). Absent otherwise,
+   * like `cancelling`. docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md.
+   */
+  stopCameTooLate?: true;
+  /**
    * **How many extra lease windows this job has been given** — so the card can
    * say which attempt it is on rather than looking stalled.
    *

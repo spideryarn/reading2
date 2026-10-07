@@ -770,7 +770,7 @@ export function JobCard({
       </ol>
 
       {/* Under the steps rather than beside the title, because it is about the
-          run as a whole and it is read after them. Five of the eight display
+          run as a whole and it is read after them. Five of the nine display
           states say nothing at all here — see `SENTENCES` in src/job-state.ts
           for why silence is the right answer for a failure, whose own step row
           is already carrying the explanation. */}

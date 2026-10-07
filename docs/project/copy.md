@@ -194,7 +194,7 @@ them. The same narrow exception registers `[auth-down]` and
 **The import-state sentences are the second exception**, and they differ from the
 `mic-` family in the one way that matters: they carry **no bracketed code at
 all**. They live in [`src/job-state.ts`](../../src/job-state.ts) —
-`WAITING_TO_CONTINUE`, `TAKING_LONGER`, `STOPPING_AFTER_STEP`, `KEEP_A_TAB_OPEN`,
+`WAITING_TO_CONTINUE`, `TAKING_LONGER`, `STOPPING_AFTER_STEP`, `STOP_CAME_TOO_LATE`, `KEEP_A_TAB_OPEN`,
 `DRIVER_STALLED`, `RUNNING_A_WHILE` and `STEP_USUALLY_ABOUT_A_MINUTE` — beside `displayJob`,
 which is the one place that decides what state an import is in.
 

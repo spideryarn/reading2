@@ -417,7 +417,7 @@ function Band({
       )}
       {/* Full width for the same reason the detail is: this is a whole
           sentence in a band about twenty characters wide, and inline it
-          would push Stop onto a third row. Two of the eight states have one
+          would push Stop onto a third row. Two of the nine states have one
           — *taking longer than usual* and *stopping after the current step*
           — and both are the reader's cue that the wait is not a mistake they
           are making. */}
