@@ -29,7 +29,7 @@ below, live. The families came from plan
 
 | a control that… | the shared piece | tests of the piece or its listed callers |
 |---|---|---|
-| switches a mode's parts | `.summ-views` / `.summ-view-btn`, [`mode-band.css`](../../src/web/styles/mode-band.css) | [`part-switchers-share-one-bar`](../../tests/part-switchers-share-one-bar.test.ts) |
+| switches a mode's parts | `.summ-views` / `.summ-view-btn`, [`mode-band.css`](../../src/web/styles/mode-band.css) | [`part-switchers-share-one-bar`](../../tests/part-switchers-share-one-bar.test.ts), [`reveal-chosen-more`](../../tests/reveal-chosen-more.test.tsx) (the fade at an edge with more, shared with the order row) |
 | starts a model call | [`JobProgress`](../../src/web/JobProgress.tsx), or shadcn `Button` outline / sm | [`run-buttons-and-text-boxes-agree`](../../tests/run-buttons-and-text-boxes-agree.test.ts) |
 | takes the reader's typing in a band | `mode-band.css` § text boxes in the bands | the same test |
 | orders a list | [`OrderGroup`](../../src/web/OrderGroup.tsx) with `.gloss-sort-btn` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |

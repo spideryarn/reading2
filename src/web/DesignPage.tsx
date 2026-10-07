@@ -1343,7 +1343,8 @@ function ControlsAcrossModes() {
           <>
             off is faint ink; on is the raised fill, full ink and weight 600, never orange; hover
             is full ink; focus is the orange ring drawn inside the button. Narrow, it scrolls
-            sideways rather than wrap. Skim's ‹ › is a pager, not this.
+            sideways rather than wrap, and an edge with more beyond it fades. Skim's ‹ › is a
+            pager, not this.
           </>
         }
         finger={<>44px tall (--control-h-lg) under a coarse pointer; about 25px for a mouse.</>}
@@ -1357,6 +1358,7 @@ function ControlsAcrossModes() {
               type="button"
               role="radio"
               aria-checked={part === p}
+              tabIndex={0}
               className={`summ-view-btn${part === p ? " on" : ""}`}
               onClick={() => setPart(p)}
             >
@@ -1421,7 +1423,10 @@ function ControlsAcrossModes() {
           </>
         }
         finger={
-          <>40px tall under a coarse pointer, and the row stays one line and scrolls sideways.</>
+          <>
+            40px tall under a coarse pointer, and the row stays one line and scrolls sideways, an
+            edge with more beyond it faded.
+          </>
         }
         usedBy="Glossary, Quotes, FAQ, Citations, Debate; Search's row is .srch-sort-btn, the same chip"
       >
