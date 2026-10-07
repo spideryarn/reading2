@@ -702,10 +702,11 @@ Three kinds of site deliberately do **not**:
   does not replace what is on screen. Without the header the answer is the 404 it always was,
   because a tab left open across the deploy would show an error for a `null`; "no such article"
   is a 404 either way. `apiFetch` does not keep the `null` for offline, as it never kept the 404.
-  **Tweets, relations, Skim, Sketch and Arc still answer a plain 404.** Moving one over is three
-  places: the typed error at its loader's throw, the helper at its route, and its name in
-  `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if the
-  last two disagree.
+  **Six reads still answer a 404 whatever is sent**; the list, and what is left to do for each, is
+  in [`src/store/artefact-not-made-yet.ts`](../../src/store/artefact-not-made-yet.ts). Moving one
+  over is two places that must land together: the helper at its route, and its name in
+  `NONE_YET_AS_NULL` (`src/web/lib/api.ts`) — `tests/api-fetch-offline.test.ts` fails if they
+  disagree.
   [261006g](../plans/261006g-none-yet-is-not-a-404-and-admin-costs-scroll-cue.md),
   [261006h](../plans/261006h-the-other-seven-artefact-reads-answer-none-yet-as-200-null.md).
 - **A fetch that is not ours.** The Wikipedia summary in `link-facts.ts` and the

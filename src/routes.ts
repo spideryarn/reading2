@@ -579,7 +579,8 @@ function send(res: ServerResponse, status: number, body: unknown): void {
  * simple, ideas, faq, timeline, debate, glossary and quotes: "not made yet" is
  * their ordinary answer, and as a 404 it was a red line in the console for
  * each one an ordinary page load asked for. `NONE_YET_AS_NULL_HEADER` in
- * src/types.ts says why it is opt-in, and names the reads not moved.
+ * src/types.ts says why it is opt-in; src/store/artefact-not-made-yet.ts
+ * names the reads not moved.
  *
  * - **Only `ArtefactNotMadeYet`.** "No such article" is `notFound(slug)`, a
  *   different 404, and stays one whatever the header says; so does every other

@@ -3627,12 +3627,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const thread = found.revision.tweets as TweetThread | null;
     if (!thread) {
-      throw Object.assign(
-        new Error(
-          `No thread for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No thread for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3927,12 +3924,9 @@ const rawPgArticleReader: ArticleReader = {
       relations.relations === null ||
       Array.isArray(relations.relations)
     ) {
-      throw Object.assign(
-        new Error(
-          `No relations for "${slug}" yet. Build them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No relations for "${slug}" yet. Build them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
       );
     }
     const blocks = await relationsFingerprintInputs(found.revision.id);
@@ -4033,12 +4027,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const skim = found.revision.skim as Skim | null;
     if (!skim || !Array.isArray(skim.stops)) {
-      throw Object.assign(
-        new Error(
-          `No Skim route for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No Skim route for "${slug}" yet. Build it with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
       );
     }
     const quotes = found.revision.quotes as Quotes | null;
@@ -4270,12 +4261,9 @@ const rawPgArticleReader: ArticleReader = {
        column can hold `{"scenes": []}` — from an import, or from a hand edit —
        and a panel handed that would draw an empty band and report success. */
     if (!sketch || !Array.isArray(sketch.scenes) || sketch.scenes.length === 0) {
-      throw Object.assign(
-        new Error(
-          `No sketch for "${slug}" yet. Draw one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No sketch for "${slug}" yet. Draw one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4313,12 +4301,9 @@ const rawPgArticleReader: ArticleReader = {
     /* An empty plate list counts as none — the same hole `SHAPE` closes at the
        store boundary and `loadIllustrated` closes on the filesystem. */
     if (!illustrated || !Array.isArray(illustrated.plates) || illustrated.plates.length === 0) {
-      throw Object.assign(
-        new Error(
-          `No illustration for "${slug}" yet. Paint one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No illustration for "${slug}" yet. Paint one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
       );
     }
     const sketch = found.revision.sketch as Sketch | null;
@@ -4366,12 +4351,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const arc = found.revision.arc as Arc | null;
     if (!arc) {
-      throw Object.assign(
-        new Error(
-          `No arc for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No arc for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
