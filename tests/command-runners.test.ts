@@ -30,6 +30,7 @@ import {
 } from "../src/web/glossary-ask-handoff.js";
 import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { searchDraftFor } from "../src/web/search-draft.js";
+import { markUnreachable, ReaderFacingError } from "../src/web/lib/reader-facing.js";
 
 const block = (id: string, text: string): Block => ({
   id,
@@ -87,12 +88,47 @@ describe("tags", () => {
   });
 
   it("keeps the bar open with the server's sentence when the save is refused", async () => {
+    /* The class the real save throws for a refusal (`HttpError` extends it). */
     const edit = vi.fn(async () => {
-      throw new Error("An article can carry at most 30 tags.");
+      throw new ReaderFacingError("An article can carry at most 30 tags.");
     });
     const outcome = await tagRunners({ edit })["tag-add"]({ id: "tag-add", tag: "x" });
     expect(outcome.kind).toBe("stay");
-    if (outcome.kind === "stay") expect(outcome.message).toContain("An article can carry at most 30 tags.");
+    if (outcome.kind === "stay") {
+      expect(outcome.message).toBe("Couldn't add that tag. An article can carry at most 30 tags.");
+    }
+  });
+
+  /* The save is `editArticleTags` or the Metadata page's editor, and either can
+     reject with something nobody wrote for a reader. Printed raw until
+     2026-10-07 (plan 261007a § K4). */
+  it("says a lost connection in our words, not the browser's", async () => {
+    const edit = vi.fn(async () => {
+      throw markUnreachable(new TypeError("Load failed"));
+    });
+    vi.stubEnv("PROD", true);
+    const outcome = await tagRunners({ edit })["tag-remove"]({ id: "tag-remove", tag: "x" });
+    vi.unstubAllEnvs();
+    expect(outcome.kind).toBe("stay");
+    if (outcome.kind === "stay") {
+      expect(outcome.message).toContain("Couldn't remove that tag.");
+      expect(outcome.message).toMatch(/\[net-down\]$/);
+      expect(outcome.message).not.toContain("Load failed");
+    }
+  });
+
+  it("does not print an exception nobody wrote for a reader", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const edit = vi.fn(async () => {
+      throw new TypeError("Cannot read properties of undefined (reading 'tags')");
+    });
+    const outcome = await tagRunners({ edit })["tag-add"]({ id: "tag-add", tag: "x" });
+    vi.restoreAllMocks();
+    expect(outcome.kind).toBe("stay");
+    if (outcome.kind === "stay") {
+      expect(outcome.message).toMatch(/\[web-unexpected\]$/);
+      expect(outcome.message).not.toContain("Cannot read");
+    }
   });
 });
 

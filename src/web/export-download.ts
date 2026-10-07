@@ -16,7 +16,10 @@
  * bar shuts or stays open with the sentence (command-match.ts §
  * `ActionOutcome`).
  */
+import { codeOfMessage } from "../messages.js";
 import { apiFetch, failure, statusOf } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
+import { markUnreachable } from "./lib/reader-facing.js";
 
 /**
  * `busy` is a second press for the same article while the first zip is still
@@ -53,7 +56,14 @@ export async function downloadExport(slug: string): Promise<ExportResult> {
        On a refusal it hands back the server's own sentence. */
     if (!res.ok) throw await failure(res);
 
-    const url = URL.createObjectURL(await res.blob());
+    /* A zip that dies part-way down rejects with a bare `TypeError`. It is a
+       lost connection, not a bug, and this is the place that knows it came
+       from the transport; `readJson` marks its own read the same way
+       (lib/api.ts), and a blob does not go through it. */
+    const bytes = await res.blob().catch((e: unknown) => {
+      throw e instanceof TypeError ? markUnreachable(e) : e;
+    });
+    const url = URL.createObjectURL(bytes);
     const link = document.createElement("a");
     link.href = url;
     /* The route names the file in `Content-Disposition`, and every header is
@@ -79,13 +89,20 @@ export async function downloadExport(slug: string): Promise<ExportResult> {
        Putting "Couldn't build the download" in front of it would add a lead
        that sentence does not need. Everything else gets the lead, because a
        bare "No such article." beside a button says nothing about which
-       button. */
+       button.
+
+       **Through `describeFetchFailure`**, since 2026-10-07: besides the
+       server's refusal (an `HttpError`, passed through), this catches a lost
+       connection from `apiFetch` or from the zip dying part-way down, and
+       anything unexpected in the DOM work above. Their own words were printed
+       here. One code, last: the reason's own when it has one. */
+    const why = describeFetchFailure(e as Error);
     return {
       kind: "failed",
       message:
         statusOf(e) === 413
-          ? `${(e as Error).message} [export-too-big]`
-          : `Couldn't build the download. ${(e as Error).message} [export-failed]`,
+          ? `${why} [export-too-big]`
+          : `Couldn't build the download. ${codeOfMessage(why) ? why : `${why} [export-failed]`}`,
     };
   } finally {
     building.delete(slug);
