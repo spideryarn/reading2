@@ -82,4 +82,44 @@ hiding the empty state on error — each red.
 > — Greg, 2026-10-07, answering question 6 (drop the unused column; nothing reads or writes it;
 > its one production row holds null)
 
-Filled in by the second commit.
+**Re-verified absent.** `grep -rnE 'running_job_id|runningJobId'` over `src`, `scripts`, `tools`,
+`evals`, `tests` and `drizzle/` outside its own creation in `0000`: the declaration in
+`src/db/schema.ts` and one sentence in `src/store/article-rows.ts`, nothing else, and no string
+built from parts. `claim` (`src/store/pg-jobs.ts`) only ever runs
+`select 1 from queue_state where id = 1 for update nowait`. The row, its seed, its singleton CHECK,
+its delete trigger and `claim`'s refusal when the row is missing all stay.
+
+**The export walk was the one thing that noticed the column.** `articleScopedTables`
+(tests/store-export-covers-tables.test.ts) follows every foreign key one way and one hop the other,
+and `queue_state` was in scope only through this column's key to `jobs`. With the key gone it is
+out of scope, so its `ARTICLE_TABLE_COVERAGE` entry — two sentences saying it is not exported —
+went red as stale ("names nothing that is not a table any more") and is deleted. The effect on what
+anybody receives: the reader's bundle `manifest.json` no longer lists `queue_state` among the
+tables it leaves out. Neither export ever wrote a byte of it. `db:reown` finds its tables by an
+`owner_id` column, which `queue_state` never had, so it is unaffected.
+
+**The migration**, `drizzle/20261007065807_drop_queue_state_running_job_id.sql`, generated, and
+exactly:
+
+```sql
+ALTER TABLE "spideryarn"."queue_state" DROP CONSTRAINT "queue_state_running_job_id_jobs_id_fk";
+ALTER TABLE "spideryarn"."queue_state" DROP COLUMN "running_job_id";
+```
+
+Its stamp, `1791356287082`, sorts after the seven already waiting for production
+([261007c § Before applying to production](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md#before-applying-to-production),
+which now lists eight and whose pre-flight now checks this one).
+
+**Not applied to the shared local database.** `npm run db:migrate` (Target
+`postgresql://postgres@127.0.0.1:54362/postgres`) refused, rightly: that database carries two
+ledger rows from a peer worktree's unlanded migrations (`20261007041657_feedback_number`,
+`20261007051332_feedback_question_answers`), and the guard will not apply anything past rows this
+journal has never heard of. Instead the whole chain was applied to an empty `spideryarn` schema
+in a private database (`scripts/db-test-create.ts`): 161 ledger rows, `queue_state` left with `id`
+and `updated_at`, its key gone, its CHECK, primary key, delete trigger and one row still there, and
+`db:check` against it (Target that database) answered no drift. `db:chain` is clean and
+`db:generate -- --allow-empty` says no schema changes.
+
+**Production, read-only.** Inside `BEGIN READ ONLY; … ROLLBACK;` as `spideryarn_app`: one
+`queue_state` row, none with a `running_job_id`, the key present, the ledger at 153. Then the
+updated pre-flight, the result in 261007c.

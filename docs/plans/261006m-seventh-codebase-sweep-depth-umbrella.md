@@ -466,7 +466,9 @@ applies the fix is cheap: carry the existing check to the other side and keep bo
    it is there. *Recommend:* leave both; deleting it buys nothing at runtime.
 6. **An unused column, `queue_state.running_job_id`**: nothing reads or writes it and its one row
    is empty. Dropping it also removes a link the export tool follows. *Recommend:* drop it, low
-   priority.
+   priority. **Answered 2026-10-07: yes** (relayed by the Overseer). The migration is in
+   [261007f](261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2 and waits
+   for production with the schema plan's seven.
 7. **Callout blocks**: the database still allows a block kind the pipeline never produces (0 rows).
    Narrow it only if callouts are abandoned for good. *Recommend:* leave it.
 8. **Thirteen of 62 production articles never finished their first import** and are never removed;

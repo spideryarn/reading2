@@ -480,18 +480,26 @@ lock waits or index-build time.
 
 ## Before applying to production
 
-**What is waiting.** The seven migrations listed above, in that order: an index on
+**What is waiting.** Eight migrations, in this order. The seven listed above: an index on
 `revision_blocks (article_id, block_id)`; the criterion-shape CHECK dropped and re-added as
 all-or-none; a new CHECK that a claims run holds no claims unless it is done; a nullable
 `created_at` column on `upload_source_guesses`; the duplicate chat-message index dropped; and two
-comment-only files that record a ledger row and run nothing.
+comment-only files that record a ledger row and run nothing. And an eighth, added on 2026-10-07
+from another plan: `20261007065807_drop_queue_state_running_job_id`, **a column drop approved by
+Greg on 2026-10-07** (*"yes"*, to the seventh sweep's question 6, relayed by the Overseer). It
+drops the foreign key `queue_state_running_job_id_jobs_id_fk` and the column `running_job_id`,
+nothing else; nothing ever read or wrote the column, and its one row holds null
+([261007f](261007f-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2). It is the
+one destructive statement in the set.
 
 **They land together or not at all.** Drizzle applies every pending file in one transaction.
 
 **The caution (review finding C1).** The index build takes a `SHARE` lock on `revision_blocks`
 (105,774 rows, 144 MB) and blocks writes to it until the whole transaction commits. The later
-statements need `ACCESS EXCLUSIVE` on four other tables, so a long-running transaction on any of
-those keeps the migration waiting while it already blocks block writes. So:
+statements need `ACCESS EXCLUSIVE` on four other tables, and the eighth on `queue_state` (with a
+lock on `jobs` to drop the key), so a long-running transaction on any of those keeps the migration
+waiting while it already blocks block writes. While it holds `queue_state`, every job claim —
+which takes that row `FOR UPDATE NOWAIT` — answers busy and is tried again later. So:
 
 1. Set a finite `lock_timeout` and `statement_timeout` on the migration connection. The runner
    sets neither. At the 02:31 read the connection's own were `lock_timeout` 0 (wait for ever) and
@@ -505,8 +513,14 @@ those keeps the migration waiting while it already blocks block writes. So:
 [261007c-seventh-sweep-schema-production-preflight.sql](261007c-seventh-sweep-schema-production-preflight.sql),
 written by GPT Sol. It only reads: `SELECT`s over counts and the catalog inside
 `BEGIN READ ONLY; … ROLLBACK;`, no prose column, no statement text from `pg_stat_activity`. Its
-ledger literal expects exactly 153 applied rows followed by these seven; rebuild it if another
+ledger literal expects exactly 153 applied rows followed by these eight; rebuild it if another
 migration lands first. Run the whole file in one `psql` invocation so the transaction wraps it.
+
+**After applying, the eighth's check inverts.** The pre-flight's `queue_state` VIOLATIONS block
+must then return exactly its two "is missing" rows — the column and the key gone. Run its first two
+arms alone, inside `BEGIN READ ONLY; … ROLLBACK;`: the third reads the dropped column and will
+error. Those two arms were seen to return both rows against a database built from the whole chain
+(`scripts/db-test-create.ts`), 2026-10-07.
 
 ### The pre-flight's result, 2026-10-07 02:31 UTC
 
@@ -535,3 +549,22 @@ for the migration credential, and two checks mean less as the application role; 
 
 Nothing here stops the migrations. It is a reading from 02:31, not a guarantee for the moment of
 applying: items 1 and 2 above still stand.
+
+### Run again with the eighth, 2026-10-07 ~07:10 UTC
+
+The updated file, the same way (as `spideryarn_app`, `psql` in the local Supabase container, the
+whole file in one invocation, `-v ON_ERROR_ROLLBACK=on`). Every row of the table above read the same
+— 153 rows at the same watermark, every VIOLATIONS query empty, the same counts — and the new or
+widened checks read:
+
+| Check | Result |
+|---|---|
+| The eight pending | all eight listed, each clears the watermark, none has a ledger row |
+| VIOLATIONS: `running_job_id` and its key present as `0000` made them, and the column empty | zero rows |
+| `queue_state` rows | 1 |
+| Ownership, now seven tables with `queue_state` and `jobs` | all owned by `postgres`; `can_act_as_owner` false, as above |
+| Locks held by other sessions, now including `queue_state` and `jobs` | zero rows |
+| Transactions older than five seconds | zero rows (weak as this role, as above) |
+
+A separate read-only count just before it: `queue_state` 1 row, 0 with a `running_job_id`; the key
+present; the ledger at 153.
