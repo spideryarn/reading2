@@ -387,7 +387,11 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
           ...(e.background ? { background: e.background } : {}),
         }));
       };
-      const [s, g] = await Promise.all([summaries(), glossary()]);
+      /* Both bought calls must finish before a rejection closes the ledger. */
+      const [summaryResult, glossaryResult] = await Promise.allSettled([summaries(), glossary()]);
+      if (summaryResult.status === "rejected") throw summaryResult.reason;
+      if (glossaryResult.status === "rejected") throw glossaryResult.reason;
+      const [s, g] = [summaryResult.value, glossaryResult.value];
       fs.writeFileSync(
         out,
         `${JSON.stringify({ arm, slug, tocVersion: TOC_VERSION, glossaryVersion: GLOSSARY_VERSION, sourceSha256, at: new Date().toISOString(), summaries: s, glossary: g }, null, 2)}\n`,

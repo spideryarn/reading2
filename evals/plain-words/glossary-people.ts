@@ -8,6 +8,7 @@
  * npx tsx evals/plain-words/glossary-people.ts [n=2]
  * ```
  */
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { isMain } from "../../src/is-main.js";
 
@@ -27,8 +28,9 @@ async function main(): Promise<void> {
   const slug = "noema-mythology-of-conscious-ai";
   await runAsOwner(environmentOwnerId(), async () => {
     const article = await loadArticle(slug);
-    const runs = await Promise.all(
+    const runs = await allOrStop(
       Array.from({ length: n }, () => generateGlossary({ power: "standard", article: { ...article, slug }, previous: null, profile: null })),
+      () => {}, // Let bought calls finish before the ledger closes on failure.
     );
     for (const r of runs) {
       const entries = r.glossary.entries;

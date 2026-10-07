@@ -279,13 +279,13 @@ export const DECLARATIONS: readonly Declaration[] = [
        docs/plans/260907c-dictation-onto-an-openai-transcriber.md. */
     wire: "transcription",
     metered: false,
-    why: "Not a bypass at all — it calls `transcribeWith`, which goes through the seam and is metered. It simply never opens a collector, so every call warns \"no spend collector open\" and the row is dropped. One `withLedger(\"eval\", …)` fixes it, in a file another agent was actively writing on the day this was found.",
+    why: "Not a bypass at all — it calls `transcribeWith`, which goes through the seam. It opens no collector, so since 2026-10-07 its gateway calls are refused before spending. One `withLedger(\"eval\", …)` would record them; the credential declaration remains until that conversion.",
   },
   /* **The two halves of the 2026-09-03 model bake-off**, and the same story as
      `dictation-bench-vocabulary-sources` above: both call `transcribeWith`, so
-     every call goes through the seam and is metered — they simply never open a
-     collector, so each one warns "no spend collector open" and its row is
-     dropped. The fix for all three is one `withLedger("eval", …)` each, and it
+     their transcription calls go through the seam — they simply never open a
+     collector, so those calls used to warn "no spend collector open" and drop
+     their rows. The fix for all three is one `withLedger("eval", …)` each, and it
      is deliberately not being done here: the sibling's entry has said so since
      2026-08-28, and doing it for two files and not the third would leave the
      directory half-converted with nothing saying which half. Worth doing as one
@@ -294,10 +294,10 @@ export const DECLARATIONS: readonly Declaration[] = [
 
      **Since 2026-10-07 none of the three can spend that way.** `beginSpend`
      refuses a gateway call from a script or an eval with no ledger open
-     (`UnrecordedSpendRefused`, src/ai-spend.ts), so each now stops at its
-     first transcription, for nothing, until it is wrapped. The entries stay
+     (`UnrecordedSpendRefused`, src/ai-spend.ts). The benches catch failures and
+     can continue, but those gateway calls spend nothing until wrapped. The entries stay
      because the files still name a credential, and `gate-models.ts` still makes
-     raw diagnostic requests no wrapper meters —
+     raw diagnostic requests no wrapper meters; those requests can still spend —
      docs/plans/261007n-openrouter-spend-the-ledger-does-not-record.md. */
   {
     id: "dictation-gate-models",
@@ -312,7 +312,7 @@ export const DECLARATIONS: readonly Declaration[] = [
        *gates* is the production one, and that is now a transcription. */
     wire: "transcription",
     metered: false,
-    why: "Asks which candidate models can serve the production request at all, before the bake-off spends an hour finding out. Calls `transcribeWith`, so it is through the seam and metered; it opens no collector. Its `diagnose` half sends raw fetches the app never would, on purpose — that is where the answer to 'why not OpenAI on the chat endpoint?' comes from. docs/plans/260903i-which-model-transcribes-dictation.md and 260907c.",
+    why: "Asks which candidate models can serve the production request at all, before the bake-off spends an hour finding out. Calls `transcribeWith` with no collector, so since 2026-10-07 those gateway calls are refused. Its `diagnose` half still sends raw unmetered fetches the app never would, on purpose — that is where the answer to 'why not OpenAI on the chat endpoint?' comes from. docs/plans/260903i-which-model-transcribes-dictation.md and 260907c.",
   },
   {
     /* **The one file in this repo that spends on two accounts in one run, and

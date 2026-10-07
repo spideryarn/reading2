@@ -30,6 +30,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { allOrStop } from "../src/concurrency.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 
@@ -68,7 +69,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   );
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   await runAsOwner(environmentOwnerId(), async () => {
-    await Promise.all(
+    await allOrStop(
       slugs.map(async (slug) => {
         const out = path.join(OUT, arm, `${slug}.json`);
         /* Never overwrite an arm: a second run under the same name would replace
@@ -87,6 +88,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
         console.log(`${arm} ${slug}: ${entries.length} entries written`);
       }),
+      () => {}, // A failed article must not close accounting over paid siblings.
     );
   });
 }

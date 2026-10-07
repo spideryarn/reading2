@@ -11,6 +11,7 @@
  * keeps today's behaviour: a warning and a counter, because a refusal there
  * would break a reader's feature or a test rather than stop a leak.
  */
+import { AsyncResource } from "node:async_hooks";
 import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -23,6 +24,7 @@ import {
   UnrecordedSpendRefused,
   beginSpend,
   collectSpend,
+  collectingSpend,
   overrideProcessEntryForTests,
   refusesUnrecordedSpend,
   resetUnscopedCalls,
@@ -79,7 +81,10 @@ describe("beginSpend, from an eval", () => {
     let later: (() => unknown) | undefined;
     await collectSpend(
       async () => {
-        later = () => beginSpend("chat", "m");
+        later = AsyncResource.bind(() => {
+          expect(collectingSpend()).toBe(true);
+          return beginSpend("chat", "m");
+        });
       },
       { sink: async () => {} },
     );
@@ -90,6 +95,16 @@ describe("beginSpend, from an eval", () => {
     overrideProcessEntryForTests(at("evals/x/run.ts"));
     const { result } = await collectSpend(async () => beginSpend("chat", "m"), { sink: async () => {} });
     expect(typeof result).toBe("number");
+  });
+
+  it("an inner sinkless collector cannot borrow the outer collector's sink", async () => {
+    overrideProcessEntryForTests(at("scripts/stage.ts"));
+    await expect(
+      collectSpend(
+        async () => collectSpend(async () => beginSpend("structure", "m")),
+        { sink: async () => {} },
+      ),
+    ).rejects.toThrow(UnrecordedSpendRefused);
   });
 
   it("names the job, the model and the fix", () => {

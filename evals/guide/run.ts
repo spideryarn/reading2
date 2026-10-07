@@ -15,8 +15,8 @@
  * (`buildConverseMessages`). **Tools off** (`useTools: false`): the articles
  * are the committed fixture corpus (tests/fixtures/data-root), which no
  * database row backs, so the article tools would have nothing to search; and
- * the question here is what the guide writes, not where it looks. No spend
- * sink either: nothing is written to any database.
+ * the question here is what the guide writes, not where it looks. Each paid
+ * call writes an `ai_calls` ledger row, the only database write.
  *
  * ## The cases (eight per article, each run `--runs` times)
  *

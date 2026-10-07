@@ -128,3 +128,22 @@ the retry loops rethrow the refusal rather than retrying it. These changed:
 - **The ~$40 of October not named here.** The Overseer's classifier (under $2), the fleet's
   describer and dictation (pennies), stopped calls recorded at $0 ($2.20), and whatever else is left.
   That needs OpenRouter's activity export. It is a question for Greg in the debrief.
+
+## Result
+
+- **Stage 1 and 2 landed in `f3367eed1`.** `beginSpend` refuses; `src/transcribe.ts` and
+  `src/structure-slices.ts` pass the refusal on; about thirty evals and probes record. The new
+  tests were seen red first. The long-structure dry run was run after the change: 13,780 rows in
+  `ai_calls` before and after, and no fake rows.
+- **GPT Sol's code review** ([261007n-code-review-sol.md](261007n-code-review-sol.md)) found one
+  real defect and fixed it. Several of the converted evals ran paid calls in parallel under
+  `Promise.all`. One failing task closed the collector while its siblings were still buying, and
+  their rows were dropped as late. They now drain with `allOrStop` or `allSettled` before
+  rethrowing, and two new tests went red before the fix.
+  [Postmortem 261007s](../postmortems/261007s-a-failed-parallel-task-closes-accounting-before-its-siblings-finish.md)
+  names the class. The review also corrected a test that checked the wrong state, and fixed stale
+  comments.
+- **`preview-shelf.ts`** keeps a sink that writes nothing, on purpose, with a comment. It reads
+  production, and a ledger row there would be a write to production.
+- **Not attributed: about $40 of October.** Closing it needs OpenRouter's per-generation
+  activity, which neither key can read. It is a question for Greg.

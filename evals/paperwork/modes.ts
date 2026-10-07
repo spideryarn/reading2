@@ -28,6 +28,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { admitExclusions, type Exclusion, PAPERWORK as PAPERWORK_WORDS } from "./run.js";
 import { blindCoin } from "../plain-words/run.js";
@@ -158,7 +159,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   /* The ledger closes, and its writes land, before `closeDb` below. */
   await withLedger("eval", () => runAsOwner(environmentOwnerId(), async () => {
-    await Promise.all(
+    await allOrStop(
       slugs.map(async (slug) => {
         const out = path.join(OUT, arm, `${slug}.json`);
         if (fs.existsSync(out)) throw new Error(`refusing to overwrite ${path.relative(REPO, out)}`);
@@ -193,6 +194,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         fs.writeFileSync(out, JSON.stringify(file, null, 2));
         console.log(`${arm} ${slug}: ${MODES.filter((m) => failed(file.outputs[m])).join(", ") || "all modes"}${MODES.some((m) => failed(file.outputs[m])) ? " FAILED" : " written"}`);
       }),
+      () => {}, // Drain other articles' bought calls before closing the ledger.
     );
   }));
   await closeDb();

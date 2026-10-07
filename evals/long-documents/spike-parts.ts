@@ -19,6 +19,7 @@ import { mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend, type AiCallRow, type SpendRecord } from "../../src/ai-spend.js";
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { buildBoundedHeadingTree } from "../../src/heading-tree.js";
 import { unaskableBatches } from "../../src/labels.js";
@@ -371,7 +372,8 @@ async function modeRun() {
 
   const { result, report } = await collectSpend(
     async () => {
-      const sliceResults = await Promise.all(
+      // Keep the collector open for paid siblings if one slice's setup fails.
+      const sliceResults = await allOrStop(
         slices.map(async (s, i): Promise<SliceResult & { answer?: string }> => {
           const part = body.slice(s.lo, s.hi + 1);
           const answerPath = path.join(OUT, `slice-${i}-answer.json`);
@@ -411,6 +413,7 @@ async function modeRun() {
             return { ...base, ms, ...usage, parsedAndBuiltFirstTime: false, error: (err as Error).message.slice(0, 300), depth1: 0, depth2: 0, repairs: 0, repairedKinds: [], droppedChildren: 0, droppedHeadings: 0, leafDepths: {} };
           }
         }),
+        () => {},
       );
       const slicesWallMs = Date.now() - began;
       if (sliceResults.some((r) => !r.parsedAndBuiltFirstTime)) return { sliceResults, slicesWallMs, root: null, rootMs: 0, rootUsage: null };

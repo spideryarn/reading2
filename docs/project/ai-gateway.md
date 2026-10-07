@@ -741,7 +741,7 @@ Three properties of that write are load-bearing and none of them is obvious:
   take down a reader-facing feature — [logging.md](logging.md) quotes it as the thing not to copy.
 
 **A CLI stage run is in the ledger too** — but since 2026-09-05 by a different mechanism, and the
-difference is worth a sentence because it is why `src/cli-ledger.ts` now has one caller rather than
+difference is worth a sentence because it is why `stageCli` in `src/cli-ledger.ts` now has one caller rather than
 eight. The stage commands go through the queue
 ([setup-dev.md](setup-dev.md#the-stage-commands-are-one-script-and-they-drive-the-queue)), and
 `runStep` opens a `scopeKind: "job_step"` collector per step — so a stage driven from a terminal is

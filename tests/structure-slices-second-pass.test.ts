@@ -14,6 +14,7 @@
  * the fake of tests/helpers/slice-model.ts.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UnrecordedSpendRefused } from "../src/ai-spend.js";
 import type { MessagesBody } from "../src/messages-stream.js";
 import type { Block } from "../src/types.js";
 import { askedIds, isRootCall, messageOf, ROOT_ANSWER, ROOT_ONLY, sectionsAnswer, USAGE } from "./helpers/slice-model.js";
@@ -84,6 +85,12 @@ const builds = (out: Awaited<ReturnType<typeof run>>, blocks: Block[] = body): b
 
 beforeEach(() => { calls = []; respond = good; answered = 0; });
 afterEach(() => { vi.useRealTimers(); });
+
+it("passes a ledger refusal through instead of returning a failed slice", async () => {
+  const refusal = new UnrecordedSpendRefused("structure", "m");
+  respond = () => { throw refusal; };
+  await expect(run()).rejects.toBe(refusal);
+});
 
 describe("where a slice is cut in two", () => {
   it("is the middle block when no heading is near it, and nowhere under the minimum size", () => {

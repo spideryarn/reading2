@@ -40,6 +40,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { blindCoin, hardShare, isCommon, wordsIn } from "./run.js";
 import { sourceFingerprint } from "./source-fingerprint.js";
@@ -154,7 +155,7 @@ async function generate(arm: string, keepUnfinished: boolean): Promise<void> {
           })(),
         );
       }
-      const answers = await Promise.all(jobs);
+      const answers = await allOrStop(jobs, () => {}); // Keep accounting open for bought siblings even if an answer is rejected.
       const blocksSha256 = createHash("sha256")
         .update(JSON.stringify(article.blocks.map((b) => [b.id, b.text])))
         .digest("hex");

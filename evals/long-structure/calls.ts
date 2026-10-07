@@ -4,8 +4,9 @@
  *
  * Every call goes through `streamMessage("structure", …)`, the gateway the
  * structure step uses, inside a `collectSpend` scope of kind `eval`. The scope's
- * sink is the ledger file here, not `ai_calls`: this eval writes nothing to the
- * database. One line per network attempt, with the provider's own cost.
+ * sink keeps rows for the ledger file here and, on real runs, also writes them
+ * to `ai_calls`. Fake runs never use the database sink. One line per network
+ * attempt, with the provider's own cost.
  *
  * **The re-ask rule is production's** (src/structure-slices.ts § `ask`): an
  * answer that came back whole and did not pass is asked for once more; a

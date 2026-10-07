@@ -18,8 +18,8 @@
  * that was read, one DOI that was not, one matched-page row, then anything
  * read), each through the real `makeInvestigateCitation` press — real reader,
  * real paper read, real passages call, real stream and quote guard — with
- * these substitutions so that **nothing is written to the database by the
- * press**:
+ * these substitutions so that **the press saves no investigation, find or
+ * allowance row**:
  *
  * - `investigations` records the answer instead of saving it;
  * - `finds` keeps a *Look it up* find in memory (and the reader overlays its
@@ -29,7 +29,7 @@
  *   scope, the environment owner) — an eval's spend is refused without one —
  *   and the cost printed is read from the collector's own records.
  *
- * The one write that remains in both parts is stage 1's registry cache
+ * The write shared by both parts is stage 1's registry cache
  * (`lookupWork` caches its Crossref/DataCite answers), which is the real
  * dependency and is what a reader's press would write too.
  *

@@ -21,6 +21,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../../src/ai-spend.js";
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { unaskableBatches } from "../../src/labels.js";
 import { finishedText, streamMessage, type MessagesBody } from "../../src/messages-stream.js";
@@ -167,10 +168,13 @@ console.log(`fat sectionless chapters to refill: ${fat.map((c) => `${at.get(c.ra
 const began = Date.now();
 const { result, report } = await collectSpend(
   async () => {
-    const [refills, hinted] = await Promise.all([
-      Promise.all(fat.map((c, i) => ask(`refill-${i}`, at.get(c.range[0])!, at.get(c.range[1])!, false))),
-      Promise.all([2, 3].map((i) => ask(`hint-slice-${i}`, slices[i]!.lo, slices[i]!.hi, true))),
-    ]);
+    // Drain all paid siblings before the collector closes, including across the two groups.
+    const answers = await allOrStop([
+      ...fat.map((c, i) => ask(`refill-${i}`, at.get(c.range[0])!, at.get(c.range[1])!, false)),
+      ...[2, 3].map((i) => ask(`hint-slice-${i}`, slices[i]!.lo, slices[i]!.hi, true)),
+    ], () => {});
+    const refills = answers.slice(0, fat.length);
+    const hinted = answers.slice(fat.length);
     const refilled = baseline.flatMap((r) => r.children ?? []).flatMap((c) => {
       const i = fat.indexOf(c);
       const got = i >= 0 ? refills[i] : undefined;

@@ -11,10 +11,10 @@
  *  - `C`: as B, but the per-part call returns starts and titles only, and a
  *    third round writes the gists.
  *
- * Every arm runs cold (no checkpoint is read or written), writes nothing to
- * the database, and hands back a `ModelNode` proposal. `finishTree` is the one
- * build every proposal goes through; a tree that fails it is a failed cell,
- * never mended.
+ * Every arm runs cold (no checkpoint is read or written), writes only paid
+ * calls to `ai_calls` on real runs, and hands back a `ModelNode` proposal.
+ * `finishTree` is the one build every proposal goes through; a tree that fails
+ * it is a failed cell, never mended.
  */
 import { type AiCallRow, collectSpend } from "../../src/ai-spend.js";
 import { buildBoundedHeadingTree } from "../../src/heading-tree.js";

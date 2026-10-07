@@ -916,9 +916,9 @@ const REPO_ROOT = real(path.resolve(path.dirname(fileURLToPath(import.meta.url))
 /**
  * **Whether a process started from `entry` must not spend unrecorded.**
  *
- * True for an entry file under `evals/` or `scripts/`. Those are the processes
- * a person starts to spend money on purpose, and nothing else in them will ever
- * write the row. Everything else keeps the warning and the counter
+ * True for an entry file under `evals/` or `scripts/`. Those processes must
+ * supply a sink, either explicitly or through their job runner (`runStep`).
+ * Everything else keeps the warning and the counter
  * (`unscopedCalls()`). The dev server runs under Vite, production under Vercel,
  * and a test under vitest, where `tests/setup/no-provider-calls.ts` already
  * stops a real call. Refusing in any of those would break a reader's feature or
