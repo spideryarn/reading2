@@ -524,6 +524,12 @@ const SHARED_WITH_READER = [
      `SettingsSection`, `mode-catalog.ts` (the (i)'s words), `useSession.ts`,
      and the experimental store's three files. */
   "src/web/BandAbout.tsx",
+  /* Arrived 2026-10-07 with the one-line band wait (plan 261007h F1): `/design`
+     draws a live specimen of it. Every mode's band already waits through it, and
+     `useSlow.ts` (its 600 ms delay) is imported by the shelf and the article page,
+     so both were in the reader's closure first; only `/design` reaching them is new. */
+  "src/web/BandWaiting.tsx",
+  "src/web/useSlow.ts",
   "src/web/HighPowerSwitch.tsx",
   "src/web/IconButton.tsx",
   "src/web/JobProgress.tsx",
