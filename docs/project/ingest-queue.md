@@ -1586,6 +1586,15 @@ how long it has been running, and one place decides what state an import is in:
 [`src/job-state.ts`](../../src/job-state.ts), beside [`job-failure.ts`](../../src/job-failure.ts)
 which does the same job for what a failure offers.
 
+**The card's heading is the job's title, and the slug until it has one** (`job.title ?? job.slug`,
+`src/web/AddArticle.tsx`). The title is whatever `extract` or `metadata` read, lifted onto the job by
+`runStep` and written to the row by the next progress write. Until 2026-10-07 only `extract` was
+lifted and the title reached the row only at a release or an ending, so a minimal paper's job
+(`fetch`, `metadata`) never had one, and a job that paused mid-step after `extract` lost it for
+good, because the next claim skips `extract`. One gap is left: a claimant that dies between
+`extract`'s commit and the progress write after it. An absent or blank title preserves the stored
+one. No column was added; `jobs.title` was there.
+
 `displayJob(job, now)` is **pure, with the clock injected** — a mapper that reads the wall clock is a
 mapper nothing can test — and returns one of eight states: `waiting`, `working`, `slow`, `stopping`,
 `interrupted`, `failed`, `stopped`, `done`. Four things about it are decisions rather than details.
@@ -1960,6 +1969,25 @@ has the step's side;
 [261005j § Plan: the rest of stage 1a](../plans/261005j-long-document-structure-arrives-top-level-first-then-sections-then-summaries.md)
 has the reasoning, stage C.
 
+**A step that returns after the deadline takes the same pause, since 2026-10-07.** A step that
+ignores its signal runs to the end and hands back a product. Until then that case alone *ended*
+the job: `transitionAfter` answered an `error` ending, the product was committed into a draft the
+same transaction failed, and the card said the finished steps were kept. It is reachable through
+`assets`, which answers an abort by returning and can run about 360 s against a 185 s budget. Now
+`transitionAfter` throws the deadline instead of answering, so nothing is committed and the walk
+reaches `pauseForDeadline` with its four answers, exactly as for a step that obeyed. **The product
+is dropped on purpose**: `assets` returns a manifest whose unfetched images are marked
+`failed: "network"` and stamped current, and keeping it would publish it. The step runs again in
+the next window, on a draft that still holds every step before it.
+
+**What Stop does in the same position is two things, and is an open question.** If the last step
+finishes although Stop was pressed, the job ends `done` and published when the Stop was answered
+by another server (`finishIn` clears the flag), and `cancelled` with the draft failed when it was
+answered by the claimant's own. Neither was changed; both are pinned as today's behaviour in
+`tests/jobs-walk.test.ts`, and
+[261007b § Left open](../plans/261007b-seventh-sweep-job-queue-tier-0.md#left-open-for-greg) has
+the question.
+
 **What that costs, measured rather than asserted.** Statements per poll go **1 → 2 while a job is
 running**, about **+1.5 ms** each locally, nearly all of it round trip rather than work — counted at
 the driver over 300 iterations, not read off the source. An idle shelf is unchanged, because the gate
@@ -2112,6 +2140,52 @@ Related, and the reason a failed job stops rather than continuing: every step co
 the one before it wrote. Carrying on past a failure would run the two model calls against whatever
 stale file happened to be on disk, and produce a tree for the previous version of the article —
 which looks entirely fine. A [silent success](../reusable/silent-success.md).
+
+### A read or a progress write that fails does not abandon the claim
+
+Until 2026-10-07 four awaits in the walk stood outside every catcher: the freshness read
+(`stepIsDone`, in `runStep`'s `if`) and the three progress writes (`note()`: a skip, a step
+starting, a kept step). Any of them failing once left the request as a throw that recorded nothing.
+The row stayed `running` behind a live lease, so its own next advance answered `busy`, every other
+job on the article waited behind it, and it held one of the machine's slots, for up to the 760 s of
+`LEASE_MS`.
+
+Two rules now, in [`src/jobs.ts`](../../src/jobs.ts):
+
+- **A freshness read that fails is the step's failure**, caught where it is made and rethrown
+  inside `runStep`'s `try`, as a failed power read already was. The job ends `error`, retryable,
+  with its draft failed and its pointer cleared. It is never taken as "not current", which would
+  start paid work on a question nobody answered.
+- **A progress write that fails is logged and the walk goes on**, unless the failure is the fence
+  saying the claim has moved, which still stops the claimant. The step's own `beginStep` or
+  commit, which comes next, is what decides whether the store can be reached. A failed write
+  loses the card's update and one look at `cancelling`; a successful starting write checks it
+  again before the next runnable step runs. Repeated failures can delay Stop over several steps,
+  bounded by the finite step list and the claim deadline.
+
+**A step's commit writes the job's steps, so a forced step is bought once.** `force` is a request,
+and it is spent when the step's stored status is `done` (`stillForced`); the artefacts cannot say
+it, because a rebuilt one looks like the one it replaced. Until 2026-10-07 a commit that kept the
+claim wrote nothing to the `jobs` row, and `done` reached it only through the progress write
+after. Anything that lost that write left the step stored `running` and forced, the requeue put it
+back to `pending`, and the next claim ran it and paid for it again. Two roads led there: a claim
+that lapsed between the commit and the write, which is as old as the kept claim (2026-08-30), and,
+for the hours tolerant progress writes existed without this, two failed writes followed by a
+mid-step pause. The steps now go in the product's transaction (`keepStepIn`,
+[`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), which already held the job row's lock, so
+neither road is open and a progress write carries nothing a repeat purchase depends on. Status,
+lease and title are not written there.
+
+**Ending the job when a progress write fails was the other option, and it was not taken.** It
+would have made a database blink between two steps of a refresh a failed job, and Retry gives a
+forced job all its force back ([§ below](#the-failures-retry-is-not-offered-under)), so pressing
+it would run the finished forced steps again and pay again for every call in them that is not
+checkpointed.
+
+**What is still left to the lease** is a failure of the write that *settles* the job
+(`pauseForDeadline`, or `settleJob` recording a cancel or a failure): there is no further write to
+fall back on. `tests/jobs-walk.test.ts` § *the exits of a claim* has the cases;
+[261007b](../plans/261007b-seventh-sweep-job-queue-tier-0.md) has the count.
 
 ## The failures Retry is not offered under
 
@@ -2304,6 +2378,13 @@ So [`retryJob`](../../src/jobs.ts) now refuses a job that is not `error` or `can
 the server asks whether to spend, and a client is not where a spending rule lives. Somebody else's
 job stays a **404** (`null`), because *no such job of yours* and *that job is not a candidate* are
 different answers.
+
+**Advance answers 404 for a job that is not there, whatever the queue is doing**, since
+2026-10-07. `claim` takes the queue's lock with `NOWAIT` and answers `busy` when another claim holds
+it, before it has looked for the job. `advanceJobWith` then read the job and assumed it was there,
+so for the moment the lock was held a missing job, or somebody else's, got 200
+`{ran: null, busy: true, done: false}` with no `job` field, and the browser's driver threw on it.
+The read is now checked. A job that exists is still told to wait.
 
 Cancelling stops a queued job outright, and a running one as fast as the step it is in allows. Every
 step gets the `AbortSignal`: the fetch layer folds it into its own deadline, and the Anthropic SDK
