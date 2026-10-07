@@ -129,6 +129,7 @@ import type { SavedCriterion } from "./saved-criteria.js";
 import { runClaimsStream } from "./referee-claims-run.js";
 /* What a claims run is stamped with: the fingerprint of the blocks it was sent. */
 import { hashBlocks } from "./source-hash.js";
+import { CRITERION_NOT_ON_ARTICLE } from "./referee-criteria-store.js";
 import type { Claim } from "./referee-claims.js";
 /* Referee mode's rule 5, and the one thing under it that costs nothing: the
    deterministic scan of the stored raw source. No model, no gateway, no spend
@@ -1485,8 +1486,9 @@ const MAX_BODY_CHARS = 4000;
  * article **and** to the requesting owner (`ownedSlug`, src/store/pg.ts), so a
  * criterion belonging to somebody else — or to another article, or to nothing —
  * is refused rather than stored. `comments_criterion_fk` refuses it a second
- * time, but a foreign-key error becomes a generic store failure through
- * src/store/db-errors.ts rather than this useful bad-request answer. (The
+ * time. On `create` and `patchMark`, the store catches this key before the
+ * error guard scrubs it and returns the same 400 if the criterion disappears
+ * between this check and the write. Other foreign keys remain store failures. (The
  * filesystem store, until 2026-09-05, had no constraint at all, and the two
  * stores agreed only because this check was above both of them.)
  *
@@ -1537,7 +1539,7 @@ async function tidyMark(slug: string, raw: Record<string, unknown>): Promise<Mar
     const criteria = await refereeCriteriaStore.load(slug);
     named = criteria.find((c) => c.id === id);
     if (!named) {
-      throw httpError(400, "criterionId is not one of your criteria on this article");
+      throw httpError(400, CRITERION_NOT_ON_ARTICLE);
     }
   }
 

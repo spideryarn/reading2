@@ -37,6 +37,21 @@ import { globSync } from "node:fs";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { describe, expect, it } from "vitest";
 
+import { DATED_FOLDERS, IMAGE_EXTENSIONS } from "../scripts/prune-old-screenshots.js";
+
+/**
+ * A link from a doc in one of the dated folders to an image that also lives in
+ * one. Those images are deleted a week after their last commit, so the link is
+ * allowed to be dead; see the test that uses this.
+ */
+function isPrunedScreenshotLink(from: string, target: string): boolean {
+  const inDated = (p: string) => DATED_FOLDERS.some((folder) => p.startsWith(`${folder}/`));
+  const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(from), target.replace(/#.*$/, "")));
+  return (
+    inDated(from) && inDated(resolved) && (IMAGE_EXTENSIONS as readonly string[]).includes(path.extname(resolved).toLowerCase())
+  );
+}
+
 // infra/hetzner/README.md is named explicitly rather than picked up by a glob,
 // because it is the only markdown outside docs/ that is a runbook someone
 // follows literally — and it was outside this gate until 2026-08-31, which is
@@ -291,8 +306,25 @@ describe("documentation links", () => {
       // ends in one — so this exempts the citation without exempting the file.
       // Narrow on purpose: `foo.md#anchor` and plain `foo.ts` are still checked.
       .filter((l) => !/:\d+$/.test(l.target))
+      // A dated doc's link to a screenshot that has since been pruned. Greg,
+      // 2026-10-06: "old screenshots (>1w) can be deleted", and a plan left
+      // with a dead image link is the accepted cost (docs/project/overseer.md
+      // § Keeping `/home` from filling). Narrow on purpose: only an image, only
+      // linked from one of the folders scripts/prune-old-screenshots.ts prunes.
+      // A missing image linked from docs/project or a tutorial still fails.
+      .filter((l) => !isPrunedScreenshotLink(l.from, l.target))
       .map((l) => `${l.from} → ${l.target}`);
     expect(broken).toEqual([]);
+  });
+
+  it("exempts a pruned screenshot only where screenshots are pruned", () => {
+    expect(isPrunedScreenshotLink("docs/plans/260929e-plan.md", "260929e-shot-example.png")).toBe(true);
+    expect(isPrunedScreenshotLink("docs/postmortems/260929a-pm.md", "shots/A.JPG")).toBe(true);
+    expect(isPrunedScreenshotLink("docs/plans/260929e-plan.md", "260929e-review-sol.md")).toBe(false);
+    expect(isPrunedScreenshotLink("docs/project/marketing-pages.md", "hero.png")).toBe(false);
+    expect(isPrunedScreenshotLink("docs/tutorials/260901a-how.html", "figure.png")).toBe(false);
+    // Out of the dated folders by way of `..` is not a pruned screenshot.
+    expect(isPrunedScreenshotLink("docs/plans/260929e-plan.md", "../project/diagram.png")).toBe(false);
   });
 
   /**

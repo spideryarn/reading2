@@ -41,6 +41,7 @@ import { useCallback, useEffect, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Debate, DebateResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -90,6 +91,13 @@ export interface UseDebate {
    * step replaces rather than appends.
    */
   regenerate(): Promise<void>;
+  /**
+   * The forced run was pressed on the search still on screen, and has neither
+   * replaced it nor failed — every forced control waits. rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /** Read again, trailing a read in flight — `OrderedRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   cancel(id: string): void;
@@ -114,6 +122,8 @@ export interface DebateRead {
   reload(): Promise<void>;
   /** Read again because the list has just changed. `OrderedRead.refresh`. */
   refresh(): Promise<void>;
+  /** This read's bookkeeping for the forced verb's hold — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
 }
 
 export function useDebateRead(slug: string): DebateRead {
@@ -122,6 +132,8 @@ export function useDebateRead(slug: string): DebateRead {
   const [stale, setStale] = useState(false);
   const [outdated, setOutdated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * The read itself — the parse, the "none yet" branch and the error copy, which are
@@ -130,6 +142,7 @@ export function useDebateRead(slug: string): DebateRead {
    * since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       /* The header asks for "none yet" as `200 null` rather than a 404, which
          a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
@@ -148,6 +161,7 @@ export function useDebateRead(slug: string): DebateRead {
         setDebate(null);
         setStale(false);
         setOutdated(false);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
@@ -160,6 +174,7 @@ export function useDebateRead(slug: string): DebateRead {
         throw new MalformedReply("the debate reply has no debate");
       }
       setDebate(loaded.debate);
+      landed(started, res, loaded.debate.searchedAt);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       setError(null);
@@ -176,7 +191,7 @@ export function useDebateRead(slug: string): DebateRead {
          guard, same reason, as useTimeline.ts and useIdeas.ts. */
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
@@ -197,7 +212,7 @@ export function useDebateRead(slug: string): DebateRead {
     void reload();
   }, [reload]);
 
-  return { status, debate, stale, outdated, error, retryRead, reload, refresh };
+  return { status, debate, stale, outdated, error, retryRead, reload, refresh, fresh };
 }
 
 export function useDebate(slug: string): UseDebate {
@@ -212,9 +227,22 @@ export function useDebate(slug: string): UseDebate {
   const ensure = useCallback(async () => {
     await queue.start({});
   }, [queue]);
+  /* **The forced verb holds the search it was pressed on** (rewrite-hold.ts),
+     as useIdeas.ts § `regenerate` does. `searchedAt` is the identity because it
+     is this artefact's only clock (src/types.ts § `Debate.searchedAt`): a
+     forced run replaces the search and re-stamps it. */
+  const hold = useRewriteHold({
+    slug,
+    step: "debate",
+    identity: read.debate?.searchedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(async () => {
-    await queue.start({ force: true });
-  }, [queue]);
+    await held(() => queue.start({ force: true }));
+  }, [queue, held]);
 
   /* **Arrival never POSTs.** `useAutoRun` spends a press and only a press: a
      pasted `?mode=debate`, a Back step and a link from the metadata page all
@@ -232,10 +260,12 @@ export function useDebate(slug: string): UseDebate {
     slug,
     error: read.error,
     job: queue.job,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
     automatic: auto && (queue.job !== null || queue.starting),
+    rewriting: hold.rewriting,
+    refresh,
     retryRead: read.retryRead,
     ensure,
     regenerate,

@@ -47,6 +47,7 @@ import { useCallback, useEffect, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Job, Quotes, QuotesResponse } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
+import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
 import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -129,6 +130,8 @@ export interface QuotesRead {
    * the five-step sequence this gets wrong the other way.
    */
   refresh(): Promise<void>;
+  /** This read's bookkeeping for the forced verb's hold — rewrite-hold.ts § `FreshReads`. */
+  fresh: FreshReads;
 }
 
 export interface UseQuotes {
@@ -194,6 +197,14 @@ export interface UseQuotes {
    *   the profile (the *Use your profile* checkbox went on 2026-09-13).
    */
   regenerate(useProfile?: boolean): Promise<void>;
+  /**
+   * The forced run was pressed on the list still on screen, and has neither
+   * changed it nor failed — *Find more* and *Choose them again* both wait.
+   * rewrite-hold.ts.
+   */
+  rewriting: boolean;
+  /** Read again, trailing a read in flight — `QuotesRead.refresh`. Never spends. */
+  refresh(): Promise<void>;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   cancel(id: string): void;
@@ -207,6 +218,8 @@ export function useQuotesRead(slug: string): QuotesRead {
   const [profiled, setProfiled] = useState(false);
   const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fresh = useFreshReads();
+  const { begin, landed } = fresh;
 
   /**
    * The read itself — the parse, the "none yet" branch and the error copy, which are
@@ -215,6 +228,7 @@ export function useQuotesRead(slug: string): QuotesRead {
    * has since moved on from. See src/web/useOrderedRead.ts.
    */
   const load = useCallback(async (current: () => boolean) => {
+    const started = begin();
     try {
       /* The header asks for "none yet" as `200 null` rather than a 404, which
          a browser prints in red (`NONE_YET_AS_NULL_HEADER`, src/types.ts). A 404
@@ -234,6 +248,7 @@ export function useQuotesRead(slug: string): QuotesRead {
         setOutdated(false);
         setProfiled(false);
         setProfileChanged(false);
+        landed(started, res, null);
         setError(null);
         setStatus("none");
         return;
@@ -247,6 +262,7 @@ export function useQuotesRead(slug: string): QuotesRead {
       }
       const profiled = loaded.quotes.profileHash != null;
       setQuotes(loaded.quotes);
+      landed(started, res, loaded.quotes.generatedAt);
       setStale(loaded.stale);
       setOutdated(loaded.outdated);
       /* `!= null` rather than truthiness: the field is `string | null |
@@ -267,12 +283,12 @@ export function useQuotesRead(slug: string): QuotesRead {
          guard, same reason, as useIdeas.ts and useGlossary.ts. */
       setStatus((was) => (was === "loading" ? "error" : was));
     }
-  }, [slug]);
+  }, [slug, begin, landed]);
 
   /* **The ordering is not this hook's**: an ordinary `reload` joins the read
      already in flight, a post-job `refresh` trails it rather than racing it, and
      only the newest reply may commit. src/web/useOrderedRead.ts, shared with the
-     seven other artefact readers — this one lost that race until 2026-09-02
+     other artefact readers — this one lost that race until 2026-09-02
      (tests/artefact-read-race.test.tsx). */
   const { reload, refresh } = useOrderedRead(load);
   /* A run that finishes after the reader left the band still reaches the prose.
@@ -296,7 +312,7 @@ export function useQuotesRead(slug: string): QuotesRead {
     void reload();
   }, [reload]);
 
-  return { status, quotes, stale, outdated, profiled, profileChanged, error, retryRead, reload, refresh };
+  return { status, quotes, stale, outdated, profiled, profileChanged, error, retryRead, reload, refresh, fresh };
 }
 
 /**
@@ -343,11 +359,26 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     },
     [queue],
   );
+  /* **The forced verb holds the list it was pressed on** (rewrite-hold.ts), as
+     useGlossary.ts § `more` does for the other appending verb. The list's
+     clock is the identity, and an append re-stamps it as a rewrite does
+     (src/quotes.ts § `generatedAt: completedAt`) — which is all the release
+     claims: the job wrote. A *Find more* that found nothing still re-stamps,
+     so it lets go too. */
+  const hold = useRewriteHold({
+    slug,
+    step: "quotes",
+    identity: quotes?.generatedAt ?? null,
+    queue,
+    fresh: read.fresh,
+    refresh,
+  });
+  const held = hold.run;
   const regenerate = useCallback(
     async (useProfile = true) => {
-      await queue.start({ force: true, useProfile });
+      await held(() => queue.start({ force: true, useProfile }));
     },
-    [queue],
+    [queue, held],
   );
 
   /* `reload` is the way out of a failed read — useAutoRun.ts § A failed read is
@@ -365,9 +396,11 @@ export function useQuotes(slug: string, read: QuotesRead): UseQuotes {
     error,
     job: queue.job,
     loaded: queue.loaded,
-    failed: queue.failed,
+    failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
     starting: queue.starting,
+    rewriting: hold.rewriting,
+    refresh,
     retryRead: read.retryRead,
     ensure,
     regenerate,

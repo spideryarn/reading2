@@ -3927,6 +3927,18 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
         "constraint exists — nothing reaches it with this id.",
     },
   },
+  "tests/referee-routes-postgres.test.ts": {
+    "00000000-0000-4000-8000-0000000000d5": {
+      kind: "no-row-needed",
+      why:
+        "`outsider` is a request owner for the one case that asks whether somebody who does not " +
+        "own the article is turned away before `comments_criterion_fk` is ever consulted. Both " +
+        "calls made as him, `refereeCriteriaStore.remove` and `commentStore.create`, must reject " +
+        "with a 404 from the article lookup, and the case then checks that no comment and no " +
+        "criterion changed. If either call ever got as far as its write, the insert would name " +
+        "him in `comments.owner_id` and this entry would have to become `seeded`.",
+    },
+  },
   "tests/store-jobs-parity.test.ts": {
     "00000000-0000-4000-8000-0000000000b5": {
       kind: "no-row-needed",

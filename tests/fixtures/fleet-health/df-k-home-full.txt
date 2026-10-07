@@ -1,0 +1,2 @@
+Filesystem     1K-blocks     Used Available Use% Mounted on
+/dev/sdb        51290592 48213156    439612  100% /home

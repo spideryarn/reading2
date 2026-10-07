@@ -345,7 +345,14 @@ Two rules the route holds, both in `tidyMark` ([`src/routes.ts`](../../src/route
 
 - **A criterion that is not yours is refused, not stored.** `criterionId` comes off a request, so on
   its own it names any string; it is checked against `refereeCriteriaStore.load(slug)`, which is
-  scoped to the article *and* the requesting owner.
+  scoped to the article *and* the requesting owner. **And the same 400, in the same words, when the
+  criterion goes between that check and the write** — another tab deleting it, which it may while
+  nothing is placed on it. The check and the write are two statements, so `comments_criterion_fk`
+  is what notices; `rethrowPlacementError` in
+  [`src/store/pg-comments.ts`](../../src/store/pg-comments.ts) catches that key by name on `create`
+  and `patchMark` and answers as the route would have. It was a 500 until 2026-10-07. The other
+  direction — deleting a criterion comments are placed on — is
+  [referee-mode.md § a criterion with comments on it](referee-mode.md#a-criterion-with-comments-on-it).
 - **An out-of-range valence is a 400, never a clamp.** This is the one rule the feature exists for.
   `SearchHit.confidence` is a 0–100 match strength whose validator clamps negatives to zero, so a
   placement that travelled anything confidence-shaped arrives as `0` — *"no strong feeling"* — with
