@@ -321,6 +321,9 @@ export function parseIdsFile(text: string): string[] {
  * `TidySafetyError` with the reason; returns the articles to destroy, in order.
  */
 export function checkDeletion(survey: NeverPublishedSurvey, pinned: readonly string[]): Candidate[] {
+  if (survey.quietDays < DEFAULT_QUIET_DAYS) {
+    throw new TidySafetyError(`refusing: a survey at ${survey.quietDays} quiet days; deleting needs at least ${DEFAULT_QUIET_DAYS}`);
+  }
   if (!survey.proven || !proofIsClean(survey.proof, survey.eligible.length)) {
     throw new TidySafetyError("refusing: the two queries disagree about the eligible set");
   }
@@ -604,6 +607,11 @@ export async function main(args: readonly string[], deps: MainDeps = realDeps())
   const quietDays = value("--quiet-days") === undefined ? DEFAULT_QUIET_DAYS : Number(value("--quiet-days"));
   if (!Number.isInteger(quietDays) || quietDays < 1) {
     throw new TidySafetyError("--quiet-days must be a whole number of days, at least 1.");
+  }
+  /* A shorter look is fine for a dry run; deleting is held to the reviewed
+     rule. GPT Sol's R3. `checkDeletion` asks again of the survey itself. */
+  if (doDelete && quietDays < DEFAULT_QUIET_DAYS) {
+    throw new TidySafetyError(`refusing: --delete needs --quiet-days of at least ${DEFAULT_QUIET_DAYS} (the reviewed rule); it was ${quietDays}`);
   }
 
   /* `.env.prod` read directly with --prod, `.env.local` without; a shell

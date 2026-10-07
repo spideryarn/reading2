@@ -353,4 +353,25 @@ describe("the command refuses, and never reaches destroy", () => {
     expect(calls).toEqual({ connect: 0, backup: 0, destroy: [] });
     expect(await stillThere(a.id)).toBe(true);
   });
+
+  it("--quiet-days below seven with --delete, though the article would qualify at one day", async () => {
+    /* Sol's R3: an ordinary option must not weaken the reviewed rule. Two days
+       quiet: eligible at --quiet-days 1, not at 7. */
+    const a = await failedFirstImport("two-days");
+    const twoDaysAgo = new Date(Date.now() - 2 * DAY);
+    await getDb().update(articles).set({ createdAt: twoDaysAgo }).where(eq(articles.id, a.id));
+    expect((await survey(1)).eligible.map((c) => c.articleId)).toEqual([a.id]);
+    const s = scratch([a.id]);
+    const { deps, calls } = harness();
+    try {
+      await expect(main(["--delete", "--quiet-days", "1", "--ids", s.idsFile, "--backup-dir", s.backupDir], deps)).rejects.toThrow(/at least 7/);
+    } finally {
+      s.done();
+    }
+    expect(calls).toEqual({ connect: 0, backup: 0, destroy: [] });
+    expect(await stillThere(a.id)).toBe(true);
+    /* And the library call refuses a survey taken at a weaker threshold. */
+    const weak = await survey(1);
+    expect(() => checkDeletion(weak, [a.id])).toThrow(/at least 7/);
+  });
 });
