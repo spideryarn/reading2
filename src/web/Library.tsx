@@ -537,8 +537,8 @@ export function Library({
     <main className="tw:mx-auto tw:max-w-4xl tw:px-6 tw:pt-[calc(2.5rem_+_var(--safe-top))] tw:font-sans">
       <header className="tw:mb-8">
         {/* The masthead links are deliberately the quietest thing on the page —
-            same faint-until-hovered treatment as the back-link in Masthead.tsx,
-            so the two read as one convention. This paragraph used to argue that
+            the faint-until-hovered treatment `BackLink` has (BackLink.tsx), so
+            the two read as one convention. This paragraph used to argue that
             the design reference in particular should not be stepped over by a
             reader arriving at their shelf; it is on /admin since 2026-09-05,
             which is that argument taken to its conclusion. */}
