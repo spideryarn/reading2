@@ -83,6 +83,47 @@ paragraphs are `MODE_CATALOG`'s `description` and `how` — the same words as th
 band's (i). Its file adds only *when to use it* and *how to read it*. So fix a mode's description in the
 catalog, and Help follows.
 
+## Ask about Spideryarn <a id="ask-about-spideryarn"></a>
+
+**A box on every Help page that answers a question from the Help's own words** — in the column
+beside a page, and under the search on `/help` itself. Greg asked for it in `spya-ucftjt`, 2026-10-06:
+
+> you can ask it stuff like, This is what I'm trying to achieve, or I'm stuck, or What does this do?
+> or Why is this parting that color? or whatever. What does this symbol mean? And it would be able to
+> do a pretty good job of answering it. But if anything else, it would kind of know, like, Hang on,
+> yeah, that's not what I'm here for.
+
+The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
+
+- **It answers from these pages and nothing else.** Every page is copied, in contents order, into
+  [`src/help-corpus.generated.json`](../../src/help-corpus.generated.json), which
+  `tests/help-corpus.test.ts` rebuilds and compares, so editing a page without regenerating it is a
+  red test, not a stale answer: `WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts`. The
+  whole corpus is the model's system prompt ([`src/help-chat-call.ts`](../../src/help-chat-call.ts)
+  § `HELP_CHAT_SYSTEM`), with a rule to link the page each answer comes from and to decline, in one
+  sentence, anything that is not about using Spideryarn. `docs/project/` is not in it: it is written
+  for us, names every defence, and is too big to send whole.
+- **One question at a time.** No conversation is sent back, because a history the browser writes is
+  the easiest way to talk a Help-only model into being a general one (the plan's F1). A new question
+  replaces the last answer. The question and the answer are neither stored nor logged; what is kept
+  is that a question was asked, and when (the allowance's row), and what the call cost (the cost
+  ledger, with no article).
+- **The answer is a model's, so it is drawn as untrusted**: through `CitedMarkdown`'s walk
+  ([`src/web/Cited.tsx`](../../src/web/Cited.tsx)) with no HTML and web links off, and a link drawn
+  only when its address is exactly one of these pages or `/help`
+  ([`help-answer-links.ts`](../../src/web/help/help-answer-links.ts)). Anything else is shown as the
+  characters the model typed.
+- **Signed in only, for now.** Every request a stranger can make today is a read, and this would be
+  the first anonymous request that spends money: it would mean a door in front of the sign-in check
+  and an allowance for somebody with no account. Greg has the options in the plan's § For Greg; until
+  he picks, a stranger sees *Sign in to ask a question about Spideryarn* in the same place.
+- **Free, with its own allowance**: no article slot, nothing off the reader's articles. Each reader
+  may ask 30 an hour and 100 a day, one at a time, and a fuse across everybody stops it for the day
+  at 1,500 questions (`HELP_CHAT_RATE_POLICY` in `help-chat-call.ts`), sized from the cost of a
+  question with nothing cached.
+- The box is [`HelpAsk.tsx`](../../src/web/help/HelpAsk.tsx); `HelpPage.tsx` holds its state, so an
+  answer on `/help` survives following one of its links to a page.
+
 ## Anchors are a promise
 
 People will paste `/help/spine` into messages, and the code links into Help by anchor, so:

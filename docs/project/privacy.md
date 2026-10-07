@@ -18,6 +18,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
 - [§ A sentence in the command bar](#a-sentence-in-the-command-bar) — what the pick models see
+- [§ A question asked in Help](#a-question-asked-in-help) — the question and the Help pages to Luna, nothing kept
 - [§ The command bar's suggestions](#the-command-bars-suggestions-are-made-from-the-profile) — profile to a model, and no promise about names
 - [§ Admin sign-up notices](#the-admins-sign-up-and-upgrade-notices-carry-the-address) — the address in the notice
 - [§ A gift email](#a-gift-email-to-an-existing-reader-carries-their-allowance) — counts in Resend's log
@@ -502,6 +503,20 @@ of the reader's own words to two models already on the page**, not a new subproc
 `jev-1.13` clause in the models paragraph says so and `LAST_UPDATED` moved to 3 October 2026. The
 sentence is not stored, and [`src/command-pick-call.ts`](../../src/command-pick-call.ts) logs the
 outcome's kind, counts and timings, never the sentence or the words.
+
+## A question asked in Help
+
+**Added 2026-10-07**, with [help-page.md § Ask about Spideryarn](help-page.md#ask-about-spideryarn)
+and [plan 261007k](../plans/261007k-help-chatbot.md): a signed-in reader's question in Help's *Ask
+about Spideryarn* box goes to `gpt-5.6-luna` (OpenAI's, through OpenRouter, job `help-chat`), with
+every Help page and nothing of the reader's besides — no article, no profile. **A new flow of the
+reader's own words to a model already on the page**, so the `gpt-5.6-luna` clause in the models
+paragraph says so; `LAST_UPDATED` already read 7 October 2026. The question and the answer are not
+stored, and [`src/help-chat-call.ts`](../../src/help-chat-call.ts) logs the outcome, timings, token
+counts and model, never the question or the answer. What is kept is the allowance's row (who asked,
+and when) and the call's cost. `tests/privacy-page.test.ts` holds the clause, since naming the model
+alone would not notice it being deleted. A stranger cannot ask yet; if Greg opens it to them, the
+plan's option B keeps a keyed hash of their address, and the page gains a line for that.
 
 ## The command bar's suggestions are made from the profile
 

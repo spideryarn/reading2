@@ -253,6 +253,19 @@ describe("the privacy page", () => {
     expect(models).toContain('{ job: "command-suggest", id: QUICK_MODEL_OPENROUTER');
   });
 
+  it("says a question asked in Help goes to the model, and is neither kept nor logged", () => {
+    /* Plan 261007k. `gpt-5.6-luna` was already on the page, so the model-name
+       check cannot notice this disclosure being deleted. Held to the job: if
+       the call moves to another model, this clause should move with it. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("to answer a question you ask in Help’s <em>Ask about Spideryarn</em>");
+    expect(prose).toContain("box, for which it is shown that question and the Help pages, and nothing of yours besides");
+    expect(prose).toContain("the question is not kept, and is not written to our logs");
+    const models = readFileSync(path.join(ROOT, "src/models.ts"), "utf8");
+    expect(models).toContain('{ job: "help-chat", id: HELP_CHAT_MODEL');
+    expect(models).toMatch(/export const HELP_CHAT_MODEL = QUICK_MODEL_OPENROUTER/);
+  });
+
   it("gives the one contact address rather than spelling one of its own", () => {
     /* docs/project/website-text.md: one address, in src/site-text.ts. A page
        that typed it out would be the second copy that goes stale after a

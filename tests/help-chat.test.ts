@@ -62,6 +62,18 @@ describe("what the model is sent", () => {
     expect(HELP_CHAT_SYSTEM.indexOf("THE HELP PAGES")).toBeLessThan(HELP_CHAT_SYSTEM.indexOf("WHAT YOU DO"));
   });
 
+  /* The rule names pages by address — Feedback for a question the pages do
+     not answer, Chat for one about an article. An address the Help has since
+     moved would be a link the page refuses to draw (help-answer-links.ts), so
+     every one the rule itself writes must be a page the corpus has. */
+  it("links, in its own rule, only to pages the Help has", () => {
+    const rule = HELP_CHAT_SYSTEM.slice(HELP_CHAT_SYSTEM.indexOf("=== End of the Help pages ==="));
+    const linked = [...rule.matchAll(/\]\((\/[^)\s]*)\)/g)].map((m) => m[1]);
+    expect(linked).toEqual(expect.arrayContaining(["/help/feedback", "/help/mode-chat"]));
+    const known = new Set(["/help", ...pages.map((p) => p.href)]);
+    for (const href of linked) expect(known.has(href ?? ""), href).toBe(true);
+  });
+
   it("carries the plain-words rule for an explanation", () => {
     expect(HELP_CHAT_SYSTEM).toContain(plainWords("explain"));
   });
@@ -111,9 +123,9 @@ describe("the help-chat job, registered everywhere a job must be", () => {
 });
 
 describe("the allowance", () => {
-  it("is 30 an hour and 100 a day per reader, one at a time, with a fuse of 1,500 a day", () => {
+  it("is 30 an hour and 100 a day per reader, one at a time, with a fuse of 1,300 a day", () => {
     expect(HELP_CHAT_RATE_POLICY).toMatchObject({ fills: 30, windowMs: 3_600_000, concurrency: 1 });
-    expect(HELP_CHAT_RATE_POLICY.daily).toEqual({ fills: 100, globalFills: 1_500, windowMs: 86_400_000 });
+    expect(HELP_CHAT_RATE_POLICY.daily).toEqual({ fills: 100, globalFills: 1_300, windowMs: 86_400_000 });
   });
 
   it("holds its slot for the whole deadline and then some, so a live answer is never doubled", () => {
