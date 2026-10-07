@@ -483,6 +483,14 @@
 /* *Ask in chat*, beside Dig deeper (OriginChat.tsx; plan 261006d). The two
    are inline, so the gap is a margin and survives a wrap onto a second line. */
 .gloss-ask-chat { margin-left: 0.35rem; }
+/* The house control height for a finger, as Citations gives its own Dig
+   deeper and Ask in chat (citations.css § `pointer: coarse`), so the pair is
+   one height in both modes on a touch screen too (plan 261007m S2, GPT Sol's
+   M2). */
+@media (pointer: coarse) {
+  .gloss-dig,
+  .gloss-ask-chat { min-height: var(--control-h); }
+}
 .gloss-look.on {
   padding: 0.45rem 0.5rem;
   border-radius: var(--radius);

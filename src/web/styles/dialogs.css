@@ -68,7 +68,7 @@
   padding-inline: 0.7rem;
   /* Lighter than the floating panel's: it is beside the article now rather
      than hovering over it. */
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+  box-shadow: 0 4px 14px rgb(0 0 0 / calc(0.3 * var(--shadow-strength)));
 }
 
 /* **In the column: a card level with its block, scrolling with the article.**
@@ -138,7 +138,7 @@
   box-sizing: border-box;
   padding-inline: 0.7rem;
   /* Beside the article, not hovering over it: the docked panel's shadow. */
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+  box-shadow: 0 4px 14px rgb(0 0 0 / calc(0.3 * var(--shadow-strength)));
   /* In the page's own order. The base rule's 70 would put a scrolling card
      over the sticky bars. */
   z-index: auto;

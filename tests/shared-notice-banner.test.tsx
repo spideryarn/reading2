@@ -32,6 +32,7 @@ function render(
       signedIn: true,
       sessionUnconfirmed: false,
       sharedBy,
+      copyFrom: null,
       ...(source ? { source } : {}),
     }),
   );

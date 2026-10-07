@@ -47,8 +47,9 @@ first read, the dock's comments and Search's saved searches — Search with its 
 hue through `spinnerClassName` (plan
 [261007h § F1](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)).
 `delayMs={0}` draws it at once: `/design` passes it to show the line, and so do Referee's two
-"Reading the paper…" lines and Search's first "Reading the article for you…" answer, because they
-answer a run the reader has just pressed — the same
+"Reading the paper…" lines, Search's first "Reading the article for you…" answer and Learn's
+"Starting over…" (plan [261007m § S1](../plans/261007m-design-consistency-follow-ups-five-queued-items.md)),
+because they answer a press the reader has just made — the same
 exception as a chat turn already sent, since a press followed by 600ms of nothing reads as a press
 that did nothing. A wait for a read leaves it.
 
