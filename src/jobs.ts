@@ -1308,6 +1308,10 @@ async function runStep(
       controller.abort();
       controller.signal.throwIfAborted();
     }
+    /* A local Stop can arrive during the preflight reads even when the
+       starting note fails. Keeping a last step's returned product does not
+       authorise starting that step's work with an already-aborted signal. */
+    controller.signal.throwIfAborted();
     if (!powerRead.ok) throw powerRead.error;
     /* Before `beginStep`: a refused step never started, so it leaves no marker. */
     if (!structureRead.ok) throw structureRead.error;
@@ -1321,6 +1325,9 @@ async function runStep(
        the step honestly not-done. See `beginStep` in
        src/store/artifacts.ts. */
     const attempt = await session.beginStep(job.slug, step.name);
+    /* Opening the marker also yields: honour a Stop/deadline that arrived
+       there before invoking a step that might ignore its signal. */
+    controller.signal.throwIfAborted();
     /* **The one place that knows a step is over.** A step is not a model call
        — summarise batches per parent, labels fans out — so no stage can report
        its own total, and threading one up would be a return-type change on
@@ -1367,6 +1374,10 @@ async function runStep(
        write has landed (`stepPreviews`). What it showed is in `product` now
        and is stored by the commit below; the job row keeps nothing of it. */
     await shown.settle();
+    /* A partial run can return before a Stop, then yield while its ledger or
+       preview settles. Keep the step's retention condition until this final
+       decision boundary, rather than trusting a check inside its run. */
+    if (product.discardOnAbort) controller.signal.throwIfAborted();
     step.detail = product.detail;
     /* **Marked done before the commit, not after, and that is the ordering the
        atomic boundary needs.** `decide` below asks whether this was the job's

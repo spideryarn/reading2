@@ -1635,6 +1635,36 @@ describe("one claim walks the whole job", () => {
       const local = (id: string) => runAsOwner(OWNER, () => cancelJob(id));
       const remote = (id: string) => pgJobStore.requestCancel(id, OWNER);
 
+      /* C1 of the GPT Sol code review: a Stop while `beginStep` opens the
+         marker must stop the last step's work and fail the draft. Red without
+         the check after `beginStep` in `runStep` (it ran `metadata`). */
+      it("a Stop during the last step's opening prevents its work and fails the draft", async () => {
+        let draft: string | null | undefined;
+        const { job, parts, ran } = await fixture("test-walk-stop-last-opening", ["fetch", "metadata"]);
+        const advanced = await advanceAsOwner(job.id, {
+          ...parts,
+          session: async (j, attempt) => {
+            const session = await parts.session(j, attempt);
+            return {
+              ...session,
+              beginStep: async (slug, name) => {
+                const stepAttempt = await session.beginStep(slug, name);
+                if (name === "metadata") {
+                  draft = (await rowOf(job.id))?.draft;
+                  await local(job.id);
+                }
+                return stepAttempt;
+              },
+            };
+          },
+        });
+        expect(ran.names).toEqual(["fetch"]);
+        expect(advanced?.job.status).toBe("cancelled");
+        expect((await rowOf(job.id))?.status).toBe("cancelled");
+        expect((await rowOf(job.id))?.draft).toBeNull();
+        expect(await revisionStatus(draft)).toBe("failed");
+      });
+
       it("pressed on another server: the job ends done and the article is published", async () => {
         const { advanced, draft, row, job } = await stopDuring("test-walk-stop-remote-last", ["fetch"], remote);
         expect(advanced?.job.status).toBe("done");

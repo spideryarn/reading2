@@ -1,7 +1,8 @@
 # Stop during the last step keeps and publishes
 
-Status as of 2026-10-07: built, red first, mutation-checked, gates green. Not pushed: a GPT Sol code
-review comes first.
+Status as of 2026-10-07: built, red first, mutation-checked, reviewed by GPT Sol, its fixes C1–C4
+applied and checked against Postgres, gates green, pushed to `dev`. See
+[Review status](#review-status).
 
 ## Goal
 
@@ -147,7 +148,7 @@ Each put in, the named suites run, and taken out (`grep MUTATION` empty afterwar
 | Mutation | Red |
 |---|---|
 | M1: a local Stop always ends `cancelled` (the old rule) | 3: local Stop on the last step (Postgres and offline), Stop-then-deadline |
-| M2: no `cancelled` branch for a local Stop with steps left | **none**: the walk's next progress write reads `cancelling` and ends the job `cancelled` with the same draft outcome, so the branch is defence in depth and no case can see it |
+| M2: no `cancelled` branch for a local Stop with steps left | **none**: the walk's next progress write reads `cancelling` and ends the job `cancelled` with the same draft outcome, so the branch is defence in depth and no case can see it. Since GPT Sol's C4, 1: an offline case that counts the next step's preparation |
 | M3: a local Stop always ends `done` | 2: the earlier-step controls (Postgres and offline) |
 | M4: our deadline not told apart (`overran()` throw removed) | 7: the existing deadline cases, and deadline-then-Stop |
 | M5: the signals told apart by the clock, not the reason | 1: Stop-then-deadline |
@@ -182,12 +183,54 @@ After merging `origin/dev` (2026-10-07):
   pre-change file).
 - Not run: the full `npm test`.
 
+## Review status
+
+GPT Sol reviewed `f81555bc7` ([prompt](261007f-stop-during-the-last-step-keeps-and-publishes-code-review-prompt.md),
+[answer](261007f-stop-during-the-last-step-keeps-and-publishes-code-review-sol.md)). Verdict:
+**ship with these fixes applied**. Sol's sandbox had no Postgres, so its fixes were then read as a
+proposal: each one hand-reverted, its regression seen red, and the file restored byte for byte
+(checked by hash). Root cause and class:
+[postmortem](../postmortems/261007f-cancellation-checked-before-asynchronous-preparation-finishes.md).
+
+| | Finding | What happened |
+|---|---|---|
+| C1 | A Stop before the last step's work starts (during the preflight reads with a failed starting note, or while `beginStep` opens the marker) still ran the step and published | **Fixed**: `runStep` checks the signal before and after `beginStep`. Without both checks, the two offline cases end `done`. The check before `beginStep` had no red of its own (the later check also catches a preflight Stop, one marker later), so the preflight case now also asserts no marker was opened; red without that check. Sol's Postgres case (Stop while the marker opens: `metadata` never runs, job `cancelled`, draft pointer cleared, draft revision `failed`) passes, and goes red without the check after `beginStep` |
+| C2 | A provider-timeout partial Illustrated set, with a Stop landing during image storage or the runner's ledger and preview settlement, could replace the last good painting | **Fixed**: the step checks the signal after storage, and returns `StepProduct.discardOnAbort` for a cancelled set, which `runStep` checks after `shown.settle()`, just before the commit decision. Each half red without it: the storage case resolves instead of rejecting, the product lacks the flag, and the offline settlement case ends `done` |
+| C3 | The early Illustrated throw added in `f81555bc7` dropped a plate already paid for | **Fixed**: the throw moved after storage. Red when moved back (`storePlateImage` called 0 times, not 1) |
+| C4 | M2 was a test gap, not a dead branch: without the local-Stop branch the next step's preparation starts, though the job still ends `cancelled` | **Covered**: an offline case counts the power reads. Red under M2 (2 reads, not 1) |
+| C5 | A remote Stop during an earlier step can be missed across failed progress reads | **Left**, below |
+| C6 | A retried `assets` run rebuilds the manifest | **Left**, below |
+| C7 | The card never says the Stop came too late | **Left**: the first item below |
+
+**Is `discardOnAbort` the smallest seam?** Yes. The condition (a partial set, kept only while the
+signal is live) belongs to the step, and the last await it must survive (`collectSpend`'s drain and
+`shown.settle()`) belongs to the runner, so something has to cross from one to the other. It is
+one optional field on `StepProduct`, one producer (`STEPS.illustrated`), one consumer (`runStep`),
+and no store, session or transition code sees it. A runner-wide "aborted after `run` returned ⇒
+discard" would undo the keep rule this plan exists for, since a whole product is meant to be kept.
+
+Postgres: `tests/jobs-walk.test.ts` 43 of 43 passed in the `private-postgres` lane, Sol's new case
+included.
+
 ## Left
 
 - **The reader is not told their Stop was overridden.** The card shows *Stopping…* and *"Stopping
   after the current step…"* until the job ends, then the ordinary finished state (*Done — read
   it* on the add page; the card leaves the box eight seconds later). Nothing says the Stop came too
-  late. Not false, but silent; a sentence would be a reader-facing change, out of scope.
+  late. Not false, but silent; a sentence would be a reader-facing change, out of scope. GPT Sol's
+  C7 says the same: *"Stopping after the current step…"* is ambiguous, and *Done — read it*
+  accurately describes the published result. Any wording is for Greg to choose.
+- **A remote Stop during an earlier step can be missed** (Sol's C5). A Stop that reaches another
+  instance is seen only through this instance's progress writes, so when the boundary note and the
+  next starting note both fail, there is no local abort and later steps can run, and the last one
+  can then publish. Predates this change; fixing it is a change to how the row is read, not to the
+  keep rule.
+- **A retried `assets` run rebuilds the manifest** (Sol's C6). A run after a stopped one starts from
+  nothing, so an image the stopped run did fetch and the retry fails to fetch ends up `failed`,
+  hot-linked, rather than kept. Existing collection behaviour, not changed here.
+- **The Illustrated plates paid for before a Stop are stored blobs, not a checkpoint.** They stay in
+  the blob store, but no later run resumes from them: the next painting starts again and pays
+  again.
 - **`metadata` and `extract` can publish without registry facts** after a Stop that lands during the
   registry lookup (only the identifiers not yet asked are lost; a lookup in flight completes). Low
   value and rare; the facts are filled only by a re-extraction or `src/backfill-registry-facts.ts`.

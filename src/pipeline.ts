@@ -819,6 +819,13 @@ export interface StepProduct {
   parts?: ArtifactParts;
   /** What the store should record about this run. */
   stamp?: StepStamp;
+  /**
+   * This partial product may be kept only while the step's signal is live.
+   * The runner checks again after ledger/preview settlement, before deciding
+   * the commit. Illustrated uses it for a provider-cancelled plate set; a
+   * later Stop must preserve the last good painting.
+   */
+  discardOnAbort?: true;
 }
 
 /**
@@ -4940,18 +4947,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
         ...(ctx.illustrationNote ? { note: ctx.illustrationNote } : {}),
       });
 
-      /* **Stopped between plates: no product.** `run.cancelled` is the
-         generator's way of saying the set is half-painted, and it leaves the
-         decision to whoever stores it. Since 2026-10-07 the queue keeps and
-         publishes what a job's last step returns after a Stop, and this step
-         is always a job's last, so returning would publish the half set,
-         stamped current, over the last good painting. Throwing the abort is
-         what the queue made of it before: `cancelled`, and nothing replaced.
-         Only when the signal fired: `cancelled` also covers a provider's own
-         timeout, which is not a Stop and keeps its old path.
-         docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
-      if (run.cancelled) ctx.signal.throwIfAborted();
-
       /* **Written here rather than in `generateIllustrated`**, which writes
          nothing on purpose (its header says why): the hash of the Sketch is a
          store-shaped fact, and a stage that stamped itself could not be
@@ -5001,6 +4996,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
       run.illustrated.plates = settled;
 
+      /* **Stopped between plates: no product.** Check after storage so the
+         bytes already paid for are kept as blobs, as before, even though the
+         draft is discarded and the last good painting stays. A provider
+         timeout can return a cancelled set with a live signal, then Stop can
+         land during these writes. Only throw when the signal fired: a
+         provider timeout alone keeps its old partial-result path. The
+         product flag below carries this condition through the runner's own
+         awaits. docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
+      if (run.cancelled) ctx.signal.throwIfAborted();
+
       plog.info(
         {
           slug: ctx.slug,
@@ -5036,6 +5041,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const missing = run.illustrated.plates.length - stored;
       return {
         parts: { illustrated: run.illustrated },
+        ...(run.cancelled ? { discardOnAbort: true as const } : {}),
         detail:
           `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
           ` — ${run.illustrated.style}`,

@@ -591,6 +591,8 @@ describe("the plates", () => {
   it("throws rather than return a half-painted set when the reader stops it between plates", async () => {
     const stop = new AbortController();
     const call = await import("../src/ai-call.js");
+    const images = await import("../src/illustrated-image.js");
+    const storeSpy = vi.spyOn(images, "storePlateImage");
     const spy = vi.spyOn(call, "openRouterImage").mockImplementation(() => {
       plateCalls++;
       /* The reader presses Stop while the first plate is being drawn, and the
@@ -607,8 +609,47 @@ describe("the plates", () => {
         STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore()),
       ).rejects.toBeDefined();
       expect(plateCalls - before, "the second plate is never asked for").toBe(1);
+      expect(storeSpy, "keep the paid first plate's bytes as before, even though the draft is discarded").toHaveBeenCalledTimes(1);
     } finally {
       spy.mockRestore();
+      storeSpy.mockRestore();
+    }
+  });
+
+  it.each([false, true])("a provider-cancelled set with Stop during storage=%s preserves the Stop rule", async (stopDuringStorage) => {
+    const stop = new AbortController();
+    const call = await import("../src/ai-call.js");
+    const images = await import("../src/illustrated-image.js");
+    const realStorePlateImage = images.storePlateImage;
+    let draws = 0;
+    const drawSpy = vi.spyOn(call, "openRouterImage").mockImplementation(async () => {
+      plateCalls++;
+      if (++draws === 2) throw new DOMException("provider timed out", "AbortError");
+      return { image: PLATE, mediaType: "image/jpeg" } as Awaited<ReturnType<typeof call.openRouterImage>>;
+    });
+    let stored = 0;
+    const storeSpy = vi.spyOn(images, "storePlateImage").mockImplementation(async (...args) => {
+      if (stopDuringStorage) stop.abort();
+      const image = await realStorePlateImage(...args);
+      stored++;
+      return image;
+    });
+    try {
+      await script();
+      const result = STEPS.illustrated.run({ ...ctxFor(), signal: stop.signal }, store, nullCheckpointStore());
+      if (stopDuringStorage) {
+        await expect(result).rejects.toBeDefined();
+      } else {
+        const product = await result;
+        expect(product.discardOnAbort, "the runner must also check any later Stop before commit").toBe(true);
+        const partial = product.parts?.illustrated as Illustrated;
+        expect(partial.plates.filter((plate) => plate.image)).toHaveLength(1);
+      }
+      expect(draws).toBe(2);
+      expect(stored).toBe(1);
+    } finally {
+      drawSpy.mockRestore();
+      storeSpy.mockRestore();
     }
   });
 
