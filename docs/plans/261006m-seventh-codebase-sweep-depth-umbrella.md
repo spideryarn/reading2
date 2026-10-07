@@ -724,6 +724,12 @@ Not done, in this order of importance:
      740 s, before its images): cap the plates or the brief per request, or split the step.
    - **Nothing tells a reader their Stop came too late**: the card goes from "Stopping…" to "Done —
      read it".
+   **Settled 2026-10-07 by the Overseer**, on Greg's *"If you're confident and/or these aren't hard
+   to reverse, consequential, risky … then just go with your judgment"*: the eight sentences stay
+   (each is plain and true, and a word change later is cheap); no Stop beside a loaded Sketch or
+   painting (the three earlier decisions stand); Illustrated's step is split so no single request
+   can outrun a claim (engineering, nothing a reader sees); and a Stop that came too late says so
+   in one line instead of "Done — read it". The last two are queued as one job.
 4. **Left, each in its cluster's plan:** the route opt-in for the last six "none yet" reads; stage 7 of the schema
    (the published-scalars CHECK); a deleted cross-reference artefact replayed from the offline
    cache; the developer-register 400 sentence a reader can meet in Referee; NEW1.
