@@ -845,7 +845,7 @@ behind a fifteen-second stream. So two writers share one row and neither waits f
   row read back after that write (`settle` in [`src/routes.ts`](../../src/routes.ts) § `answer`).
   If a newer attempt claimed it before that read, this stream retains its own committed terminal
   answer over the latest reader fields; it cannot watch the replacement attempt. See
-  [the postmortem](../postmortems/261007a-a-post-write-read-can-belong-to-a-new-attempt.md).
+  [the postmortem](../postmortems/261007b-a-post-write-read-can-belong-to-a-new-attempt.md).
 - **In the tab**, every frame of the stream (`begin`, each `delta`, `done`, and the hook's own
   failure branch) writes the answer's half onto the row as it is on screen now: `putAnswer` and
   `withAnswerOf` in [`src/web/useComments.ts`](../../src/web/useComments.ts). The half is replaced,

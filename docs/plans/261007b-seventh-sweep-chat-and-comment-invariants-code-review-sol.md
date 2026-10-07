@@ -25,7 +25,7 @@ A/B review found **no ordinary single-tab newly refused request**. Traced dialog
 
 The comment mark survived the probes. Same-tab deletion suppresses the fallback frame, so it does not resurrect the row.
 
-**Files changed:** [routes.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/routes.ts), [chat.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/chat.ts), [types.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/types.ts), [useComments.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/web/useComments.ts); three comment test files; the stage plan, comments documentation, and [postmortem](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/docs/postmortems/261007a-a-post-write-read-can-belong-to-a-new-attempt.md). **No commit.**
+**Files changed:** [routes.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/routes.ts), [chat.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/chat.ts), [types.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/types.ts), [useComments.ts](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/src/web/useComments.ts); three comment test files; the stage plan, comments documentation, and [postmortem](/var/tmp/spideryarn-worktrees/sweep7-chat-comment-invariants/docs/postmortems/261007b-a-post-write-read-can-belong-to-a-new-attempt.md). **No commit.**
 
 **What ran, raw counts:**
 

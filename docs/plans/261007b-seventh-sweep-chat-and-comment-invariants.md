@@ -265,7 +265,7 @@ spinner without a watcher. Reproduced in the real route with store/model leaves 
 success and failure cases were red; the three controls passed. The fix retains current reader
 fields and this attempt's committed terminal answer only when that returned row is pending. A
 newer terminal row still passes unchanged. Root cause and rejected options:
-[postmortem](../postmortems/261007a-a-post-write-read-can-belong-to-a-new-attempt.md).
+[postmortem](../postmortems/261007b-a-post-write-read-can-belong-to-a-new-attempt.md).
 
 `tests/comment-answer-terminal-frame.test.ts` also has a preceding sibling row, so `kept[0]`
 cannot pass as the matching id (watched red: 1 failure). Replacing `place`'s `landPatch` with
@@ -330,8 +330,12 @@ findings, all fixed by the reviewer and committed as one further commit:
   every suite that mentions `useComments`, `tests/routes.test.ts`,
   `tests/store-migration-registry.test.ts`, the tests that read `src/routes.ts` as text, and
   `tests/doc-links.test.ts`): **2,953 passed, 0 failed**. Biome on the 13 touched source and test
-  files: 19 infos, no warnings or errors. The same gates are run again after the merge, before the
-  push.
+  files: 19 infos, no warnings or errors.
+- *Gates, after merging `dev`* (one conflict, an import line in `src/chat.ts` that both sides had
+  added a name to; both kept). Typecheck: all four projects, 3,347 files. The same selection, now
+  147 files: **3,036 passed, 0 failed**.
+- *The postmortem was renamed* from `261007a-…` to `261007b-…` after the merge: `dev` already had
+  two postmortems under `261007a`, and `scripts/plan-name.ts` gives `b`.
 
 **Left, from Sol's wider notes.** None is new in this stage's fix, and none is fixed here:
 
