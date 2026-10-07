@@ -333,6 +333,14 @@ export function useGlossaryRead(slug: string): GlossaryRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
   /* The hide write may outlive the article it started on. Kept beside the
      other per-article state so the render-time slug reset below can clear it
      before the next article's children see a pending id from this one. */
@@ -376,6 +384,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
           setPanelRun(undefined);
           landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
@@ -399,6 +408,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
         setPanelRun(loaded.panelRun);
         landed(started, res, loaded.glossary.generatedAt);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
@@ -416,7 +426,7 @@ export function useGlossaryRead(slug: string): GlossaryRead {
            Only the opening read has nothing to fall back on. GPT Sol, reviewing
            the built code. The error is shown either way; `GlossaryPanel` puts
            it above the list. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
     [slug, begin, landed],

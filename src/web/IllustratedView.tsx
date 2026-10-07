@@ -529,9 +529,23 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
   }
 
   if (view.status === "none" || view.status === "error") {
+    /* **A failure over "none yet" keeps the empty state under it** — the
+       server has said nobody painted one, and a read failing since does not
+       unsay it (Greg, 2026-10-07; docs/project/mode.md § The artefact, if the
+       mode shows one). Until then a failure here drew the sentence alone, in
+       either status, so the paint button went with any failed read. A failed
+       *opening* read (`error`) still draws the sentence alone: nothing was
+       ever answered. */
     return (
       <div className="ill-empty">
-        <Empty view={view} steer={steer} />
+        {view.error && (
+          <ReadError
+            error={view.error}
+            onRetry={view.retryRead}
+            className={view.status === "none" ? "tw:m-0 tw:mb-2" : "tw:m-0"}
+          />
+        )}
+        {view.status === "none" && <Empty view={view} steer={steer} />}
       </div>
     );
   }
@@ -905,16 +919,6 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
  */
 function Empty({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
   const { sketch } = view;
-
-  if (view.error) {
-    return (
-      <ReadError
-        error={view.error}
-        onRetry={view.retryRead}
-        className="tw:m-0"
-      />
-    );
-  }
 
   /* **Before every other branch.** `JobProgress` draws the spinner, the step's
      own label and Stop when there is a job, so this is the whole of what a

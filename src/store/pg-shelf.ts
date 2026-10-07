@@ -32,7 +32,7 @@ import { READ_COMMITTED } from "./isolation.js";
 import { lockBillingAccount } from "./pg-billing.js";
 import { TERMINAL } from "./pg-jobs.js";
 import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
-import type { LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
+import type { DestroyOptions, LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import type { LibraryEntry, LibraryHit, ShelfState } from "../types.js";
 import { pgArticleReader } from "./pg.js";
@@ -463,7 +463,7 @@ const rawPgShelfStore: ShelfStore = {
    * object. Removing the row here would make the bytes unreachable rather than
    * deleted, which is the failure that stage exists to prevent.
    */
-  async destroy(slug: string): Promise<{ destroyed: string }> {
+  async destroy(slug: string, opts?: DestroyOptions): Promise<{ destroyed: string }> {
     /* Before any query, so a pasted title comes back as "that is not a name"
        rather than as "there is no such article". tests/store-slug-guard.test.ts. */
     requireSlug(slug);
@@ -516,6 +516,11 @@ const rawPgShelfStore: ShelfStore = {
          ever arrive `queued`. See `strandedReservationsQuery`. */
       const stranded = await strandedReservationsQuery(tx, slug, ownerId);
       if (stranded.length > 0) throw strandedReservation(stranded);
+
+      /* **The caller's own last check, under these locks** (`DestroyOptions`
+         in contracts.ts). Before `deleteTerminalJobs`, so it still sees every
+         job row this transaction is about to take. */
+      if (opts?.beforeDelete) await opts.beforeDelete(tx, article);
 
       /* **And the finished ones go with it**, in this transaction, and only
          after the refusal above has established there are no others. See
