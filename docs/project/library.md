@@ -95,7 +95,7 @@ active. `EnqueueTicket` in [`src/store/jobs.ts`](../../src/store/jobs.ts) has bo
 `tests/article-delete-pg.test.ts` § *what a delete can take out from under a request already in
 flight* holds the article row open so each race happens on purpose rather than by luck.
 
-**This said "the two routes" until 2026-08-25.** The last two arrived together, and they are one
+The last two arrived together, and they are one
 route with two views rather than two routes (three until 2026-09-29, when the tweets page became a mode, and since 2026-10-03 Summary's Thread view): same article, same fetch, same bottom bar, so
 `Route` carries a `view` and `ArticlePage` branches on it
 ([`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx)). The article payload is fetched
@@ -130,10 +130,9 @@ third segment as much as an unrecognised first one, so `/read/x/nonsense` and `/
 answer. [`router.ts`](../../src/web/router.ts) is the list, and it is the only one;
 [`NotFoundPage.tsx`](../../src/web/NotFoundPage.tsx) is a heading, a sentence and a link home.
 
-**It was the shelf until 2026-09-03**, and this paragraph said so: *"There is no 404 page on
-purpose: a mistyped address lands you on the shelf, which is both a useful place to be and
-self-explanatory."* Greg went to `/asdf`, got the homepage and asked where the 404 was, which
-answers the second half. The shelf is useful and it is *silent*: a link that has rotted and a link
+What it was before 2026-09-03 is in
+[261007g-library-history.md § An address nobody minted](../plans/261007g-library-history.md#an-address-nobody-minted).
+The shelf is useful and it is *silent*: a link that has rotted and a link
 that was never right both look exactly like a link that worked.
 [260903j-not-found-page.md](../plans/260903j-not-found-page.md) has the reversal, the addresses that
 still fall through to the shelf (the root in its three spellings, and `/add` with nothing after it),
@@ -167,8 +166,8 @@ that works until the day it doesn't.
 as a property of nuqs. It is not: in nuqs 2.10 it takes a call to `enableHistorySync()`, and until
 [`main.tsx`](../../src/web/main.tsx) made one, every `useQueryState` went on serving the previous
 page's query string after one of our navigations, and nothing cancelled the debounced `?at=` queue
-when the reading view unmounted. Caught by a cross-model review on 2026-08-25, and written up in
-[260825e-metadata-page.md § What the plan got wrong](../plans/260825e-metadata-page.md#found-by-the-cross-model-review).
+when the reading view unmounted. How it was caught is in
+[261007g-library-history.md § Fifty lines of router](../plans/261007g-library-history.md#fifty-lines-of-router-not-react-router).
 The argument for hand-rolling the router depends on that one call; if it goes, this section goes
 with it.
 
@@ -321,8 +320,9 @@ default and does not fetch until turned on (`?archived=1`, a direct link include
 faceted-search-topic-pills and/or sort to look through the Archived articles easily too)"*
 (SPIDERYARN-READING2-4V, plan
 [260929a](../plans/260929a-shelf-topics-round-three-concreteness-zero-pills-archived-toggle.md)).
-Until then it was a **Show archived** disclosure at the foot of the shelf with a second, plainer
-list, which neither the sort nor the row cap reached. Now the two arrays are combined in
+What it was until then is in
+[261007g-library-history.md § Archive](../plans/261007g-library-history.md#archive-and-undo-is-the-confirmation).
+Now the two arrays are combined in
 `Library.tsx` *before* TanStack sorts, so the sort, the fixture sink, the row cap, search, Unread,
 topics and "n of m" apply to both as one list, in both views. Each archived row says **Archived**
 on its card and its table row (`ArchivedMark`, keyed on the entry's own `archivedAt`), and offers
@@ -362,7 +362,7 @@ is answered at its own link and named in no list. (That query is all there is to
 still renders a 404 in [`App.tsx`](../../src/web/App.tsx), and the showcase page that will use it is
 [260904b](../plans/260904b-pricing-page-and-public-showcase.md).)
 
-The clause went in on 2026-09-04, when GPT Sol asked which way the asymmetry ran. The first version
+The first version
 had no clause, on the rule above — visibility is a property of the work, archiving is a property of
 one person's shelf — and the consequence is what settles it: without it an owner loses sight of the
 article on their own shelf while strangers go on finding it, and since the payload carries no
@@ -408,8 +408,7 @@ number is the server's: `/api/library/search` with the archive left out also ret
 `archivedArticles`, a count of archived articles with a matching passage (`countArchivedMatches` in
 [`pg-shelf.ts`](../../src/store/pg-shelf.ts), the same predicates as the passages, uncapped). So it is
 about the text, and says "mention". The public number is the cards that match by the card rule, off
-the one public read `Library` shares with the Include public section. It replaced the sentence
-*"Archived articles aren't searched — turn on Include archived"*. Plan 261002b § Part D.
+the one public read `Library` shares with the Include public section. Plan 261002b § Part D.
 
 **On a phone, the shelf opens with one line** saying Spideryarn is best on a bigger screen, until
 dismissed — the article banner's sibling, [touch.md § One banner, once](touch.md#one-banner-once-when-both-will-not-fit).
@@ -427,6 +426,9 @@ article Metadata. This should be easy to reverse, and by default the Homepage sh
 archived articles."* All of it already worked, and had for nine days. **He could not tell, because
 the button was called Delete.**
 
+The unchanged storage vocabulary and the earlier deferral of permanent deletion are in
+[260904d § History moved from library.md](../plans/260904d-archive-articles-centre-the-text-and-a-done-key.md#history-moved-from-librarymd-2026-10-07).
+
 So the fix was the word, and that is the lesson worth keeping: *a reader cannot tell a reversible
 act from a destructive one by watching the row disappear — only the label says which it was.* The
 label, the icon and the destructive red were three ways of saying the same wrong thing, so all three
@@ -434,15 +436,6 @@ moved: **Archive** on a box glyph, at the shelf's ordinary weight rather than in
 reserves for what cannot be undone. `tests/shelf-archive-label.test.tsx` pins the label to
 `shelf.archive` in both renderers, and `tests/metadata-page-order.test.tsx` pins the section
 heading, so it cannot drift back quietly.
-
-Nothing under the interface changed: no schema change, no API change, no store change.
-`archived_at`, `?archived=1` and `shelf.archive` were always the words in the database, on the wire
-and in the client, so the rename **narrowed** the vocabulary rather than adding to it.
-
-**Permanent deletion was deferred**, deliberately and in writing, though Greg's report raised it —
-*"maybe there should also be a way to permanently delete"*. It gets its own plan: one production
-database, real readers' articles, and a mis-tap that nothing can undo is a different kind of feature
-from this one.
 
 #### The same act on the article's own page, where the undo never expires
 
@@ -568,9 +561,6 @@ text.
 |---|---|
 | `postgres` | four columns on `spideryarn.articles`: `archived_at`, `title_override`, `opens`, `last_opened_at` — [`src/store/pg-shelf.ts`](../../src/store/pg-shelf.ts) |
 
-The filesystem half — `data/<slug>/shelf.json`, and the writes in `src/shelf.ts` — was deleted on
-2026-09-05.
-
 Columns on `articles` and **not** on `article_revisions`, which is the load-bearing part: a revision
 is one extraction, and re-extracting must not un-archive an article, forget its title or reset the
 count. Reader state outlives revisions — the same rule `block_identities` exists to enforce for block
@@ -655,8 +645,7 @@ for either; nobody has wired that read into it.
 One box **directly above the list**, with **two matchers behind it** — which is the same shape the
 in-article search already has ([search.md](search.md)), deliberately rather than coincidentally.
 
-It sat at the very top of the page until 2026-09-03, above the box for *adding* an article and
-separated from the list it filters by everything in between. Greg: *"Move the search bar so it's
+Greg: *"Move the search bar so it's
 just above the list of articles."* The order the page renders in is now **add box and its jobs →
 errors and Undo → search → `ShelfControls` → the "n of m" count → the list**
 ([`Library.tsx`](../../src/web/Library.tsx)).
@@ -674,8 +663,7 @@ else already has the focus, or when the box is not on screen (Back can mount the
 >
 > — Greg, 2026-10-04, SPIDERYARN-READING2-C7 (`spya-wzmvva`)
 
-There had been one since August, a 14px grey glyph, with the browser's own bolder cross beside it
-whenever the box had the focus. It is now the house cross (`styles/close.css` § `.close-x`) with the
+It is now the house cross (`styles/close.css` § `.close-x`) with the
 browser's hidden (`.own-clear`), and pressing it puts the cursor back in the box unless a finger or
 pen pressed it. Plan
 [261004f](../plans/261004f-shelf-search-clear-cross-that-can-be-seen.md).
@@ -907,8 +895,7 @@ which is what a list of things that *arrived* wants; a shelf is not an inbox. Wh
 likely to want off it is the piece you were half-way through an hour ago, and under Added that sat
 wherever it happened to have been fetched — for anything imported in a batch, nowhere near the top.
 
-The chip row leads with whatever the default is, so Last opened is now leftmost. That rule did not
-change; the default did. Both live in `DEFAULT_BY` and `CHIP_ORDER` in
+The chip row leads with whatever the default is, so Last opened is now leftmost. Both live in `DEFAULT_BY` and `CHIP_ORDER` in
 [`library-columns.tsx`](../../src/web/library-columns.tsx), and the default writes **no parameters
 at all** into the URL, so a bare `/` and `?by=opened` are the same shelf.
 
@@ -949,7 +936,7 @@ On the line under the title, after the author and the site: `Rich Sutton · inco
 
 > Show the publication date in the logged-in homepage Shelf
 
-Until then a card said it only while the shelf was sorted by Published. It is printed by
+It is printed by
 [`publishedOf`](../../src/web/relative-time.ts), the same reader the sort and the Metadata page use,
 so a paper dated only to a year says `2017` and a piece with no date says nothing. **Bare, with no
 "published" in front**: beside the author and the site a date reads as the piece's own, and the
@@ -960,8 +947,7 @@ The Table view is unchanged: its Published column still starts hidden.
 
 **Each `·` belongs to the fact before it.** On a phone the line wraps, and it wraps between facts.
 The dot is drawn after each fact but the last, so the upper line ends with a dot and the lower one
-starts with a fact. It was in front of each fact until 2026-10-05, and a wrapped line started with
-a dot. The cards on `/read/public` do the same.
+starts with a fact. The cards on `/read/public` do the same.
 
 ### Three rules a browser cannot check
 
@@ -1216,27 +1202,17 @@ card and the page.
 Every number on the card — words, minutes, blocks, parts, sections — and the blurb are produced by
 one function, [`deriveLibraryScalars`](../../src/library-scalars.ts), which runs at **publish**,
 inside the transaction that writes the blocks and the tree, writing the five columns the shelf then
-reads. (Until 2026-09-05 the filesystem store ran it at read instead, over the artefacts the
-directory walk had just loaded, since there was no publish transaction to hang it on.)
+reads.
 
 `describeArticle` in [`src/library-scalars.ts`](../../src/library-scalars.ts) *receives* those five
 and assembles the card. It used to derive them itself, which made it a second implementation — and
 the two had **already diverged once**, over the `excerpt` rung of the blurb's fallback, found in
 review rather than by a test.
 
-**On the Postgres side that was also the shelf's whole cost.** Deriving per request meant reading
-every block row of every article — `text`, `html` and the generated `fts` vector — and running each
-one through the jsdom sanitiser, on every homepage load, in order to add up some word counts. Six
-articles on a laptop against a local Supabase:
+What deriving per request cost is in
+[260828c § History moved from library.md](../plans/260828c-library-read-latency.md#history-moved-from-librarymd-2026-10-07).
 
-```
-                          before      after
-  statements per call     13 (1+2N)   2
-  row JSON per call       641 KB      4 KB
-  wall clock (median)     558 ms      3 ms
-```
-
-The four ticks went the same way. `has.glossary` was `row.revision.glossary != null` on a JSONB
+`has.glossary` was `row.revision.glossary != null` on a JSONB
 document the query had dragged across the wire; it is now `is not null`, evaluated in Postgres, and
 the document stays on the server. So does the tree, which is 37 KB on one article and was read to
 count two kinds of node.
@@ -1277,11 +1253,8 @@ pointing the button at it means there is one thing that starts an ingest rather 
 stays, and its job is now the one it always covered: showing you the runs *this* page did not start,
 from another tab, from an article page, or from the CLI.
 
-**This section used to describe a stub.** It said the box printed four commands for you to run
-yourself, and that *"running the pipeline from a request handler means background jobs, progress,
-partial failure and a retry path — real work, and not what the experiment is about yet"*. That was
-true and it was the right call for a day. Greg asked for the real thing on 2026-08-25, and it kept
-the shape the stub promised: the input stayed, and the command list became the progress list.
+The stub this box replaced on 2026-08-25 is in
+[261007g-library-history.md § Adding an article](../plans/261007g-library-history.md#adding-an-article-the-box-submits-now).
 
 The queue, the choice of p-queue over the Redis- and Postgres-backed alternatives, what
 "idempotent" does and does not mean yet, and why it polls rather than streaming, are all in
@@ -1296,8 +1269,7 @@ have lands you back on it instead of shelving a second copy —
 failure: a stage that goes wrong stops the job, says which stage and why, and offers a Retry that
 skips whatever already worked.
 
-`pipelineCommands` is gone. It existed to print those four commands, and a list of shell commands
-that nothing executes drifts from the pipeline silently. The stages are documented in
+The stages are documented in
 [setup-dev.md § The pipeline stages](setup-dev.md#the-pipeline-stages), which is where they belong,
 and they still run by hand.
 
@@ -1341,11 +1313,7 @@ shape:
 
 Two details worth knowing, both in [`src/extract.ts`](../../src/extract.ts):
 
-- **The slug is passed in, and used to be read off the output filename.** Stage 3 named its blocks
-  file after the HTML file and stage 4 named the data directory after *that*, so the basename was
-  what the rest of the pipeline would call this article — and deriving it from the URL a second time
-  would have been right for `npm run extract <url>` and wrong the moment anyone passed an explicit
-  filename, with an article that had no byline as the only symptom. There is no filename to read one
+- **The slug is passed in, and used to be read off the output filename.** There is no filename to read one
   off any more: `runExtract` takes the slug, and the command line that could pass one went on
   2026-09-05.
 - **It is rewritten every run**, because re-extracting is how you refresh a page and the fetch date
@@ -1409,9 +1377,9 @@ in `tests/cited-in-spideryarn.test.ts`.
 
 ## When this becomes Postgres
 
-**Done, since 2026-09-01, and since 2026-09-05 the only store there is** — kept here because the
-left column below is what the filesystem store actually did, and the reasoning for the move still
-holds. See [database.md](database.md) for the store as a whole, and
+What the filesystem store did, row by row against what replaced it, is in
+[260825f § History moved from library.md](../plans/260825f-postgres-migration.md#history-moved-from-librarymd-2026-10-07).
+See [database.md](database.md) for the store as a whole, and
 [260825f-postgres-migration.md](../plans/260825f-postgres-migration.md) for the schema and the risks.
 
 `src/store/pg.ts`, reached through `src/store/index.ts`, is the seam now; it is the only place that
@@ -1421,15 +1389,7 @@ knows articles are Postgres rows. Above it the client sees two types, both shape
 - `LibraryEntry` — one shelf record, `GET /api/library` ([`src/types.ts`](../../src/types.ts))
 
 Every field of `LibraryEntry` is a scalar a column could hold. Nothing in it is a path, a directory
-name that means something, or a nested artefact. So the migration was:
-
-| Then (filesystem, gone 2026-09-05) | Now |
-|---|---|
-| `listArticles()` walks `data/*/`, reads three JSON files per directory | one `SELECT` over an `articles` table |
-| counts (`words`, `blocks`, `parts`, `sections`) derived per request | columns, written once at ingest |
-| `addedAt` from `meta.fetchedAt`, falling back to file mtime | a `fetched_at` column, no fallback |
-| `comments` counted by reading `comments.json` | `SELECT count(*)` or a denormalised column |
-| the `example/` fixture, always listed, flagged `fixture: true` | a seed row, listed like any other article — see [§ The fixture was always on the shelf](#the-fixture-was-always-on-the-shelf) |
+name that means something, or a nested artefact.
 
 The one thing that must survive the move unchanged is **block ids** — they are the join key for
 everything a reader has ever pointed at, and they are minted once and preserved. Read
@@ -1589,13 +1549,8 @@ failed to clear is a copy we would go on serving.
 
 ## The fixture was always on the shelf
 
-Until 2026-09-05, `example/` was listed under the slug `example`, flagged, and sorted below the real
-articles, on every clone unconditionally — a fresh clone had no `data/` at all, and an empty homepage
-reads as a broken app rather than an empty shelf. It was listed under its **directory name** and not
-under the slug inside its own `meta.json` — that one names the full Noema article the fixture is an
-excerpt of, and listing it there would collide with the real thing. `loadArticle("example")` resolved
-by falling through (`src/api.ts`, the filesystem reader, deleted that day with the store it read
-from).
+How it was listed before 2026-09-05 is in
+[261007g-library-history.md § The fixture](../plans/261007g-library-history.md#the-fixture-was-always-on-the-shelf).
 
 **Under Postgres it is not automatic.** `npm run setup` seeds the fixture into the local database on
 one development account ([`scripts/db-seed-dev.ts`](../../scripts/db-seed-dev.ts)) and it is then

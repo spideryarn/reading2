@@ -377,7 +377,29 @@ opened, reads the two sections, and either fixes a sentence or moves on. It cost
 one, so some of its lines will be noise, and a hint that is usually noise gets ignored. The honest
 test is to run it for a week and count how often its list led to an edit.
 
-*Recommend:* B, built as a hint and reviewed after a week; not C. I have not built it.
+*Recommend:* B, built as a hint and reviewed after a week; not C.
+
+**Built 2026-10-07** as [`.claude/hooks/push-doc-hint.sh`](../../.claude/hooks/push-doc-hint.sh),
+a second hook on the Bash `PreToolUse` matcher beside `protect-shared-tree.sh`. It is a separate
+file because the two have opposite contracts: that one refuses on any doubt, this one always exits
+0 and goes quiet on any error. "Changed" means the files in the non-merge commits of
+`origin/dev..HEAD`. The hint goes to the agent as `additionalContext`, because stderr on exit 0
+reaches nobody. Non-push calls return before Git or the doc scan; a push costs about 0.5s, and the
+doc scan is one grep. The time bound is the registration's `timeout: 5`, past which Claude Code lets
+the call through. Its tests are `bash .claude/hooks/push-doc-hint.test.sh`.
+
+GPT Sol's code review
+([answer](261007a-docs-sweep-push-hint-code-review-sol.md)) fixed rename handling, nested docs, a
+pipeline that could print a hint from partial `git` output, and a missing-file guard on the
+registration. It also added a Python shell tokenizer, a self-re-exec under `timeout` and size caps,
+which took the hook to 216 lines. I took those three out again. Greg had asked for minimal, and a
+wrong guess costs one line of noise: `echo "git push"` gets a needless hint, and
+`cd elsewhere && git push` gets the session repo's list. The test file says so.
+
+**It will be judged on 2026-10-14** by how often its list led to a doc edit. Every hint appends a
+line to `push-doc-hint.log` in the shared `.git` directory, giving the time, the HEAD pushed and the
+docs named, so the review can check each line against later commits. Queue item `qi-hxg5w49c` asks
+the Overseer to do that review.
 
 ### Three questions that are not wording
 
@@ -425,6 +447,88 @@ test is to run it for a week and count how often its list led to an edit.
 | `touch.md`, `keyboard.md`, `url-state.md` | 940, 840, 890 | each is half the removed gist columns in the present tense |
 | `granularity-zoom.md`, `column-context.md` | 920, 445 | 500 lines and 440 lines of history around a small live core |
 | `reading-view-overview.md` § the command bar | 250 | says it has no doc of its own; has outgrown that |
+
+**The split, done 2026-10-07 (question 3), and what it found.** The ten worst docs above were split
+with one rule set: what is true now, the intent, every Greg quote and the signposts stay; dated
+narration moves verbatim to `docs/plans/261007g-<doc>-history.md`, or to the plan it came from, with a
+pointer left behind; no sentence reworded and no topic carved out. Each doc was done by an Opus
+subagent. A sentence-level checker then confirmed that every old sentence survives in the doc or a
+destination, and `tests/doc-links.test.ts` stayed green. GPT Sol reviewed each batch and moved back
+what it judged live: the claim guidance, the billing traps, a Greg instruction in `glossary.md` and
+Greg's archive intent in `library.md`. Each doc is its own commit.
+
+| Doc | Lines before → after |
+|---|---|
+| `ingest-queue.md` | 2,677 → 2,579 |
+| `search.md` | 1,844 → 1,786 |
+| `billing.md` | 1,765 → 1,700 |
+| `overseer-direction.md` | 1,706 → 1,661 |
+| `glossary.md` | 1,706 → 1,660 |
+| `diagram.md` | 1,705 → 1,579 |
+| `structure-step.md` | 1,660 → 1,557 |
+| `testing.md` | 1,632 → 1,549 |
+| `comments.md` | 1,571 → 1,533 |
+| `library.md` | 1,568 → 1,523 |
+
+**About 4–7% came out of each, not the half the table implied.** All ten agents and all three
+reviews say the same thing. These docs are not mostly narration. They are mostly live reasoning
+with a date attached: "since X it does Y, because Z". A sentence like that is both, and moving text
+without rewording cannot split it. So the length that is left is in two places, and each would be
+its own job:
+
+- **Topic splits.** Most proposed cuts in the table are topics, not history: billing's quota
+  section; diagram's "graph Force is drawn from" and step bar; overseer-direction's attention,
+  backlog and usage limits; glossary's dig-deeper and look-up; library's shelf actions, cached paint
+  and offline; search's third search; testing's five docs; structure-step's deepening wave. Each
+  needs a new `docs/project/` doc with an owner line, so it needs a yes per doc.
+- **Rewriting the mixed sentences into the present tense**, with the dated part moved to the plan.
+  That is rewording, which Greg's rule for this job ruled out. It would shrink these docs most, and
+  it is the riskiest edit there is to a rule doc.
+
+**Left from the list:** everything below `library.md` in the table (`database.md`, `performance.md`,
+`deployment.md`, `security.md`, `worktrees.md`, `referee-mode.md`, `content-extraction.md`,
+`web-client.md`, the gist-column trio, `granularity-zoom.md`/`column-context.md`, and the command
+bar). The job stopped at ten, as briefed.
+
+**Statements the splitters found false and left alone**, because this job moves text and does not
+correct it. Each is a one-line fix for whoever owns the area:
+
+- `ingest-queue.md` § When this becomes Postgres still argues from concurrency 1 and from files.
+  Concurrency is `SPIDERYARN_JOB_CONCURRENCY`, and the files are gone.
+- `search.md` § The mode band says the gist columns go away while you search. They were removed on
+  2026-09-29. The fallback bullet says "just under 0.7 prints as 70", but the floor is 0.65.
+- `billing.md`: "The live row that needs a backfill" is probably moot, since that subscription ended
+  2026-10-03. The ChatGPT-tiers note says multiples of 50 cents, while the live section says whole
+  units.
+- `overseer-direction.md` says the scheduler has no home, but `scripts/overseer.ts` arms
+  `OVERSEER_JOBS`. It also contradicts itself twice: Two tenses against Divergence on who owns the
+  vitals history, and § The gates against § Route on who drops a case.
+- `glossary.md` § Where it lives says the Dock is a toggle; it is a `radiogroup`. § What is still
+  open has two near-duplicate bullets.
+- `diagram.md` contradicts itself in three places:
+  - Lanes says sideways means centrality, but the moved story says `laneX` was rewritten away
+    from exactly that.
+  - The visitor section says Force is the default, but Sketch has been since 2026-09-04.
+  - The Interaction bullets say ← folds a node, but the "Folding a part away is gone" bullet says
+    it does not.
+
+  It also says "never the other six" when there are five pictures.
+- `structure-step.md` § Worked example says the example tree stands in "until stage 4 exists". The
+  Schema block omits `question` and `treatment`.
+- `testing.md`:
+  - Three lanes says "five today", but `LANES_BEYOND_THE_SCAN` needs counting.
+  - "A wedged row's second symptom" describes a skip that can no longer happen.
+  - The `takeRunLock` advice names a `reachable` that `pgReady` no longer returns.
+- `comments.md`:
+  - "There is one reader" is wrong, since `pg-comments.ts` stamps `ownerId`.
+  - The transport table says one POST, but the answer streams.
+  - "No way to see every comment at once" predates the drawer and Marginalia.
+  - "Three things" item 4 says a duplicate POST resets the comment, but `create` answers 409.
+- `library.md`:
+  - It says `/read/public` 404s, but the public shelf renders.
+  - "Both stores" and "the filesystem store has no visibility column" describe a store that is
+    gone.
+  - The **Archived** chip is now **Include archived**.
 
 **Headings that are now false** and were left, because a heading's anchor is linked from elsewhere:
 `deployment.md` § *What does not work in production yet* and § *Still to do before this is a real
@@ -477,6 +581,9 @@ And `admission-journal.ts` at the repo root, which `vitest.config.ts` imports.
   error; their side kept). On the merged tree `de1c9b5f9`: `npm run typecheck` clean, `npm test`
   1,760 files passed and 1 skipped, doc-links 17 of 17. Pushed to `dev` as `17dc16dca` after a
   second merge that brought only other sessions' commits. Not deployed.
+- 2026-10-07 — Greg said yes to item 6 (B) and question 3. The push hint was built and GPT
+  Sol reviewed it (§ 6). The ten worst docs were split, with a GPT Sol review for each batch of three
+  or four (§ For the next sweep, *The split*). Not deployed.
 
 **Where it stands: done enough to stop here.** The signposts were measured and mended, the tree was
 read for what is false, and the two areas with code and no hub have one. What remains is real and

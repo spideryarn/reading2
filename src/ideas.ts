@@ -116,6 +116,21 @@ export const MAX_IDEAS = 10;
 /** The most occurrences one idea may carry into the artefact. */
 export const MAX_OCCURRENCES = 6;
 
+/**
+ * The answer this stage asks room for, given how many ideas it asks for.
+ *
+ * Each idea is a short proposition, two prose fields, an optional analogy and
+ * up to five verbatim quotes — and the quotes are what makes this larger per
+ * item than the glossary's. Undersizing does not degrade: it throws
+ * `truncationFailure` and loses the whole pass. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate
+ * in `STEP_BUDGET_MS.ideas` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
+ */
+export function ideasAnswerTokens(count: number): number {
+  return 400 + count * 420;
+}
+
 const PROVENANCES: ReadonlySet<string> = new Set<IdeaProvenance>(["assumed", "introduced"]);
 
 /**
@@ -965,11 +980,7 @@ export async function generateIdeas(opts: {
   const count = suggestedIdeas(words);
   const started = Date.now();
 
-  /* Each idea is a short proposition, two prose fields, an optional analogy and
-     up to five verbatim quotes — and the quotes are what makes this larger per
-     item than the glossary's. Undersizing does not degrade: it throws
-     `truncationFailure` and loses the whole pass. */
-  const answerTokens = 400 + count * 420;
+  const answerTokens = ideasAnswerTokens(count);
   const maxTokens = budgetFor("ideas", answerTokens);
 
   /* `streamMessage` builds the client, and sets `logLevel: "off"` on it — a

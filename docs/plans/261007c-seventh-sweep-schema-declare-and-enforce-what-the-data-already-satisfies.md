@@ -578,6 +578,8 @@ watermark, every VIOLATIONS query empty, the same counts — and the new or wide
 | Transactions older than five seconds | zero rows (weak as this role, as above) |
 | Prepared transactions | zero rows |
 
-`billing_vouchers` is not in the ownership or lock inspections: the voucher migration's `ADD
-CONSTRAINT … CHECK` takes `ACCESS EXCLUSIVE` on it and scans it, the same shape as the CHECKs above,
-but checking it is that plan's to add, not this one's.
+`billing_vouchers` was added to the ownership and lock inspections on 2026-10-07, after this table
+was taken: the voucher migration's `ADD CONSTRAINT … CHECK` takes `ACCESS EXCLUSIVE` on it and scans
+it, the same shape as the CHECKs above, and all nine migrations apply in one transaction, so a lock
+held on it delays the whole set. The pre-flight run above predates that edit; re-run it before
+applying, as the conditions already say.
