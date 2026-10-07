@@ -458,12 +458,17 @@ applies the fix is cheap: carry the existing check to the other side and keep bo
    modes remove their Generate button and Tweets keeps it. Keeping it lets the reader spend on a
    run while the app does not know whether a result already exists. *Recommend:* keep the button
    everywhere; a possible duplicate run is cheaper than a dead end. Per hook, a few lines each.
+   **Answered 2026-10-07: keep it** (*"ok, i'll go along with you on this. I don't quite
+   follow"*, relayed by the Overseer). Built in
+   [261007g](261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 1.
 5. **One old rate-limit record in production** (from 2026-09-29, no reader text in it) belongs to a
    limit that no longer exists. The database's list of allowed limit names cannot be tidied while
    it is there. *Recommend:* leave both; deleting it buys nothing at runtime.
 6. **An unused column, `queue_state.running_job_id`**: nothing reads or writes it and its one row
    is empty. Dropping it also removes a link the export tool follows. *Recommend:* drop it, low
-   priority.
+   priority. **Answered 2026-10-07: yes** (relayed by the Overseer). The migration is in
+   [261007g](261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2 and waits
+   for production with the schema plan's seven.
 7. **Callout blocks**: the database still allows a block kind the pipeline never produces (0 rows).
    Narrow it only if callouts are abandoned for good. *Recommend:* leave it.
 8. **Thirteen of 62 production articles never finished their first import** and are never removed;
@@ -677,6 +682,9 @@ Not done, in this order of importance:
      about 360 s; fetch on 150 s. Raising them costs requeue windows; the numbers were not touched.
    - Question 4 (the Generate button after a failed retry) is not "one line once C9 lands": the
      union was not adopted, so it is a few lines in each of twelve hooks.
+   - Question 8 was answered "yes, tidy them": the
+     [plan and script](261007f-tidy-the-never-published-production-articles.md) are ready and
+     reviewed (GPT Sol, three rounds), waiting for the index in production and 2026-10-08 18:31 UTC.
 4. **Left, each in its cluster's plan:** the command bar's *Run again* row bypasses every hold
    (reproduced, pinned by a test that goes red when it is fixed; P1 by Sol's grading and the most
    valuable thing left); the route opt-in for the last six "none yet" reads; stage 7 of the schema

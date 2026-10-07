@@ -314,6 +314,14 @@ export function useCitationsRead(slug: string): CitationsRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * The read itself. `current()` after every `await`, before any state is set:
@@ -343,6 +351,7 @@ export function useCitationsRead(slug: string): CitationsRead {
           setOutdated(false);
           landed(started, res, null);
           setError(null);
+          saidNoneFor.current = slug;
           setStatus("none");
           return;
         }
@@ -358,6 +367,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         setStale(loaded.stale);
         setOutdated(loaded.outdated);
         setError(null);
+        saidNoneFor.current = null;
         setStatus("ready");
       } catch (err) {
         if (!current()) return;
@@ -365,7 +375,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         /* **A failed revalidation must not take the list away** — `load` runs
            again every time a job finishes, and only the opening read has
            nothing to fall back on. Same guard as useTimeline.ts. */
-        setStatus((was) => (was === "loading" ? "error" : was));
+        setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
       }
     },
     [slug, begin, landed],

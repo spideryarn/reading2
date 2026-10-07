@@ -221,7 +221,7 @@ encoded yesterday's set will not fail loudly when it does.
 ## See also
 
 - [url-state.md § the unit is a section, not a position](../project/url-state.md#the-unit-is-a-section-not-a-position) — the contract, and what a jump is allowed to put in it
-- [diagram.md § and then they sprang back](../project/diagram.md#and-then-they-sprang-back-which-was-not-the-pictures-fault-at-all) — the same bug from the panel's side
+- [261007g-diagram-history.md § and then they sprang back](../plans/261007g-diagram-history.md#and-then-they-sprang-back-which-was-not-the-pictures-fault-at-all) — the same bug from the panel's side
 - [keyboard.md § rapid presses chain from the last target](../project/keyboard.md#rapid-presses-chain-from-the-last-target-not-from-the-page) — why the arrow keys never had this
 - [`tests/reading-position.test.ts`](../../tests/reading-position.test.ts) — the red tests
 - [`docs/plans/260830z-diagram-step-springback-review-sol.md`](../plans/260830z-diagram-step-springback-review-sol.md) — the cross-family review that found rules 1 and 3
