@@ -49,6 +49,7 @@ const prepared = (sha: string, over: Partial<Preparation> = {}): Preparation => 
   version: PREPARATION_VERSION,
   sha,
   envLocalSha256: ENV_HASH,
+  envLocalVerified: true,
   ...over,
 });
 
@@ -145,6 +146,40 @@ describe("testEvidenceFor — when the deploy may skip running the suite", () =>
     expect(evidence(read(red, check({}, 1))).kind).toBe("reuse");
   });
 
+  it("refuses tied test passes whose preparation differs, in either input order", () => {
+    const good = check();
+    const unstamped = check({ preparation: null });
+    for (const records of [[good, unstamped], [unstamped, good]]) {
+      expect(evidence(read(...records)).kind).toBe("run");
+    }
+  });
+
+  it("refuses tied check passes when one test pass sits on a failed build", () => {
+    const good = check();
+    const badBuild = check({
+      outcome: "fail", exit: 1,
+      counts: { kind: "check", steps: CLEAN_ROWS.map((r) => r.name === "build" ? row("build", "failed") : r) },
+    });
+    for (const records of [[good, badBuild], [badBuild, good]]) {
+      expect(evidence(read(...records)).kind).toBe("run");
+    }
+  });
+
+  it("refuses a tied standalone test pass even if the verdict picks the prepared check", () => {
+    const good = check();
+    const standalone = check({ check: "test", counts: { kind: "vitest", files: null, tests: null } });
+    for (const records of [[good, standalone], [standalone, good]]) {
+      expect(evidence(read(...records)).kind).toBe("run");
+    }
+  });
+
+  it("refuses an unfinished check that started before the chosen pass finished", () => {
+    const { state: _state, ...common } = check({}, 1);
+    const running: StartedRecord = { ...common, state: "started" };
+    // Its start is two hours ago; the other check finished one hour ago.
+    expectRun(evidence(read(check({}, 1), running)), /unfinished|still going/);
+  });
+
   it("runs the suite when the passing run is older than the window", () => {
     const hours = TEST_EVIDENCE_MAX_AGE_MS / HOUR + 1;
     expectRun(evidence(read(check({}, hours))), /older than/);
@@ -189,6 +224,11 @@ describe("testEvidenceFor — when the deploy may skip running the suite", () =>
 
   it("runs the suite when the stamp is from an older preparation version", () => {
     expectRun(evidence(read(check({ preparation: prepared(SHA, { version: PREPARATION_VERSION - 1 }) }))), /version/);
+  });
+
+  it("runs the suite when an older wrapper only copied the loop's current-version statement", () => {
+    const { envLocalVerified: _absent, ...loopStatement } = prepared(SHA);
+    expectRun(evidence(read(check({ preparation: loopStatement }))), /wrapper.*verif/);
   });
 
   it("runs the suite when the stamp is about another commit", () => {

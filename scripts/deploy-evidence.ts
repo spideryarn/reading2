@@ -53,9 +53,8 @@ const hoursAgo = (ms: number): string => {
 /**
  * **Does the readiness store already prove this commit's test gate?**
  *
- * `readings` should span the store's whole retention, not the 24 hours a pass
- * may be old: an older red on the same sha is still a red, and the verdict
- * holds a known failure sticky over a later pass.
+ * `readings` includes every record in the reuse window. The newest settled
+ * result decides; an unfinished attempt cannot clear a failure.
  *
  * Every way of saying no is `run` with the reason, and the deploy then runs the
  * suite as it always did. There is no third answer.
@@ -87,6 +86,21 @@ export function testEvidenceFor(opts: {
   if (record === null || record.state !== "finished") {
     return { kind: "run", why: "the readiness verdict named no finished run for test" };
   }
+  const testReadings = readings.filter((r) =>
+    (r.record.check === "test" || r.record.check === "check") && aboutDevTree(r, sha).ok,
+  );
+  // A running check can start before another check finishes. Its start time
+  // then loses to that finish in the tab's timeline, but it remains unfinished.
+  if (testReadings.some((r) => r.state === "running")) {
+    return { kind: "run", why: "a test or check on this commit is still going — an unfinished run cannot stand behind a deploy" };
+  }
+  // The verdict's equal-time passes have equal severity, so it keeps whichever
+  // came first. That is enough to say green, but not to choose preparation or
+  // prerequisite-build evidence. Refuse an ambiguous run instead of letting
+  // filesystem order choose which record's stamp and rows are checked.
+  if (testReadings.some((r) => r.record !== record && r.atMs === Date.parse(record.at))) {
+    return { kind: "run", why: "multiple test/check records share the passing run's timestamp, so its preparation evidence is ambiguous" };
+  }
   if (record.check !== "check") {
     return {
       kind: "run",
@@ -116,6 +130,9 @@ export function testEvidenceFor(opts: {
   }
   if (prep.version !== PREPARATION_VERSION) {
     return { kind: "run", why: `the passing run was prepared the version-${prep.version} way, not version ${PREPARATION_VERSION}` };
+  }
+  if (prep.envLocalVerified !== true) {
+    return { kind: "run", why: "the wrapper did not verify the prepared .env.local at both ends of this run" };
   }
   if (prep.sha !== sha) {
     return { kind: "run", why: `the passing run's preparation is about ${prep.sha.slice(0, 8)}, not this commit` };

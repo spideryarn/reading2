@@ -235,7 +235,11 @@ function runnerLocalDatabaseEnv(runner: string): NodeJS.ProcessEnv {
  * having run nothing.
  */
 export function readinessCheckEnv(runner: string): NodeJS.ProcessEnv {
-  return runnerChildEnv(runnerLocalDatabaseEnv(runner));
+  const env = runnerChildEnv(runnerLocalDatabaseEnv(runner));
+  // Only the explicit stamp made for this tick may reach the wrapper. In
+  // particular, merging an empty preparation object must mean no stamp.
+  delete env[READINESS_PREPARATION_ENV];
+  return env;
 }
 
 export function runCommand(
@@ -425,9 +429,11 @@ function runnerBranchExists(primary: string): boolean {
   return result.status === 0;
 }
 
-function ensureRunnerWorktree(primary: string, nowIso: string): string {
+export function ensureRunnerWorktree(primary: string, nowIso: string): string {
   const runner = readinessRunnerPath(primary);
   if (existsSync(runner)) {
+    const problem = runnerWorktreeProblem(runner, runCommand, primary);
+    if (problem !== null) throw new Error(`refusing to prepare an unexpected runner checkout: ${problem}`);
     linkRunnerEnvLocal(runner, primary);
     return runner;
   }
@@ -902,7 +908,8 @@ async function tick(
   const tickMs = Date.now();
   const nowIso = new Date(tickMs).toISOString();
   const fastForwardProblem = advanceRunner(runner, expectedRepository);
-  linkRunnerEnvLocal(runner, expectedRepository);
+  // A refused repository/pointer guard must also refuse filesystem mutation.
+  if (fastForwardProblem === null) linkRunnerEnvLocal(runner, expectedRepository);
 
   const dev = snapshotDev(runner, nowIso);
   const afterMerge = stampTree(runner);

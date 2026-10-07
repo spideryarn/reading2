@@ -72,7 +72,9 @@ is a stricter reader than the tab, and it changed three things here:
   created.
 - **A loop run carries a preparation stamp** (`preparation` in the record: `by`, `version`, `sha`,
   and the sha256 of the `.env.local` it read), handed to the wrapper in
-  `SPIDERYARN_READINESS_PREPARATION` and kept only when it names the commit the run started on. A
+  `SPIDERYARN_READINESS_PREPARATION`. The wrapper keeps it only when it names the commit the run is
+  on and the `.env.local` hash still matches, checks both again at the end, and only then marks the
+  finished record `envLocalVerified`; it never passes the variable on to its own children. A
   hand-run wrapper has none, and neither does any record from before the change; the deploy reuses
   only stamped runs, at the current `PREPARATION_VERSION` in
   [`tools/fleet/readiness.ts`](../../tools/fleet/readiness.ts). **Bump that number** whenever what

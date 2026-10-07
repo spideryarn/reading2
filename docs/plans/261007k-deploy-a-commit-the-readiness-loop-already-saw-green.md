@@ -276,3 +276,21 @@ Each P1 was checked against the code and held; what was done:
   would remove the need to prove equivalence at all. It is the better long-term shape, and larger
   than this change: the deploy's gate and `npm run check` would become one entry point. Left as a
   follow-on.
+
+## After the code review
+
+Sol's write-capable review
+([…-code-review-sol.md](261007k-deploy-a-commit-the-readiness-loop-already-saw-green-code-review-sol.md))
+fixed five things, each with a test, all read and kept:
+
+1. Two test/check records with the same finish time let input order pick which record's stamp and
+   rows were checked; that is now a refusal.
+2. A check that started before another finished could vanish behind the finish in the timeline; a
+   running test or check on the sha now refuses reuse.
+3. The stamp could be inherited by a wrapper launched inside the check; both the loop and the
+   wrapper now strip it from children.
+4. The stamp did not prove what the wrapper read: the wrapper now checks the `.env.local` hash at
+   start and end and writes `envLocalVerified` itself, which reuse requires.
+   `PREPARATION_VERSION` went to 2 with it (no version-1 stamp was ever written).
+5. A runner that fails its repository guard no longer has its `.env.local` replaced.
+

@@ -410,6 +410,9 @@ export type Preparation = {
    * the primary's, so the deploy compares this with the primary's file now.
    */
   envLocalSha256: string;
+  /** Set only by the wrapper after verifying the hash at both ends, never by
+      the loop. An older wrapper may copy a newer loop's version unchanged. */
+  envLocalVerified?: true;
 };
 
 /**
@@ -419,8 +422,10 @@ export type Preparation = {
  * 1 (2026-10-07): preparation latched at the sha, `.env.local` a symlink to the
  * primary's, `data/` and `output/` deleted and re-copied from the commit's
  * corpus immediately before the run.
+ * 2 (2026-10-07): the statement is not inherited by other checks; the wrapper
+ * verifies the `.env.local` hash at both ends before retaining it.
  */
-export const PREPARATION_VERSION = 1;
+export const PREPARATION_VERSION = 2;
 
 /** The variable the loop sets on `readiness-run.ts` to carry a {@link Preparation}. */
 export const READINESS_PREPARATION_ENV = "SPIDERYARN_READINESS_PREPARATION";
@@ -436,7 +441,7 @@ export function asPreparation(v: unknown): Preparation | null {
   if (typeof version !== "number" || !Number.isInteger(version)) return null;
   if (typeof sha !== "string" || !/^[0-9a-f]{40}$/.test(sha)) return null;
   if (typeof envLocalSha256 !== "string" || !/^[0-9a-f]{64}$/.test(envLocalSha256)) return null;
-  return { by, version, sha, envLocalSha256 };
+  return { by, version, sha, envLocalSha256, ...(v.envLocalVerified === true ? { envLocalVerified: true as const } : {}) };
 }
 
 /**
