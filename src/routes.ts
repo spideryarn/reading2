@@ -8188,6 +8188,25 @@ async function serveApi(
        conventions the streams use — and anything else is `UNEXPECTED_FAILURE`.
        The error itself is already in `logRequest`'s line, stack and all.
        Plan 260924a § Stage 2c. */
+    /* **A response that has already started gets no second answer.** A handler
+       that threw after `sse(res)`, or after a stream it had finished, used to
+       reach the `send` below: that set `statusCode = 500` on a response the
+       reader had received as 200, and then `setHeader` threw
+       `ERR_HTTP_HEADERS_SENT` out of this catch — so the request line said 500,
+       and src/vercel.ts's outer catch filed a second Sentry event about headers
+       in place of the fault. The fault itself is captured above, once, and
+       `failure` puts it on the request line beside the status the reader got.
+
+       All that is left to do is close a stream nobody else will: only one that
+       is neither ended nor destroyed. **This does not replace a stream's own
+       catch** — those send the terminal frame and reconcile what was stored,
+       and nothing here can do either. tests/serve-api-after-headers.test.ts,
+       which uses a real `ServerResponse` because a fake `setHeader` cannot
+       throw. */
+    if (res.headersSent) {
+      if (!res.writableEnded && !res.destroyed) res.end();
+      return true;
+    }
     const said =
       status >= 500 ? (authoredSentence(err) ?? UNEXPECTED_FAILURE.message) : (err as Error).message;
     send(res, status, { error: said, ...declaredFields(err) });
