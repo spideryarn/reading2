@@ -2826,6 +2826,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* 261001p: the voucher emails' outbox. The same shape as the file above, with
      a stem of its own; every send goes to an injected fetch, never Resend. */
   "tests/billing-voucher-emails.test.ts": "private-postgres",
+  /* 261007j: a voucher's starter article. The same shape again, with its own
+     stem and its own articles, minted per run; the Auth lookup replaced. */
+  "tests/voucher-starter.test.ts": "private-postgres",
   "tests/blocks-baseline.test.ts": "private-postgres",
   "tests/candidates-route.test.ts": "private-postgres",
   "tests/chat-anchor.test.ts": "private-postgres",
@@ -3010,6 +3013,14 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      finished conversations of several kinds, and posts chat turns through the
      route with `fetch` stubbed to keep the request and fail. No model is called. */
   "tests/explore-digest-route.test.ts": "private-postgres",
+  /* The guide's turn, 261007j stage 1. Seeds one article and posts guide and
+     other turns through the route with `fetch` stubbed to keep the request and
+     fail, the experience count stubbed on the store. No model is called. */
+  "tests/guide-route.test.ts": "private-postgres",
+  /* The guide's experience count, 261007j stage 1. Seeds two private owners in
+     `auth.users` and seven bare articles, one per rule the count keeps, and
+     deletes them all afterwards. */
+  "tests/guide-experience-pg.test.ts": "private-postgres",
   /* Claims and settles guessed web addresses on a bare article, seeds one more
      to read both payloads, and drives the route to its 409. No model is called. */
   "tests/source-guess-pg.test.ts": "private-postgres",

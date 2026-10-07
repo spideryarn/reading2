@@ -294,7 +294,8 @@ export function PrivacyPage() {
               (docs/plans/261002a), hence its second clause; and since the same day
               it may carry a note from whoever gave it (docs/plans/261002b),
               and since 2026-10-07 the recipient's name as that person typed it
-              (docs/plans/261007f). The
+              (docs/plans/261007f) and a link to a starter article, private
+              or public (docs/plans/261007j). The
               copy of each reader's feedback mailed to us is docs/plans/261002j. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
@@ -304,7 +305,8 @@ export function PrivacyPage() {
             our domain’s mail forwarding at Namecheap, to our own inbox. An administrator can also give
             a gift of free articles to an email address, and that address is sent one email saying
             so, with a short note from whoever gave it, if they wrote one, and the recipient’s name as that person
-            gave it, if they gave one — if it is already your account’s, the email also says how many articles you had left
+            gave it, if they gave one, and a link to one of their articles, if they chose one — for an article that
+            is not public, a private link that lets whoever holds it read that article — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
             it. When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you
             were on, and your email address — the same way. If you send us feedback through the Feedback button and we
@@ -481,7 +483,8 @@ export function PrivacyPage() {
             it. Add a model, and that test tells you this page is out of date. */}
         <p className="tw:text-xs tw:text-ink-faint">
           The default models, as of the date above: <code>claude-sonnet-5</code> for most of the reading
-          aids, chat and search, and Opus or a similar frontier model in its place on an article
+          aids, chat and search, and for the guide in Chat, which is also told roughly how many other
+          articles you have opened here (none, a few, or many), and Opus or a similar frontier model in its place on an article
           switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our

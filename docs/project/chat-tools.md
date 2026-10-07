@@ -114,9 +114,12 @@ and this file does not change.
 | `article_citations` | The works **this** article cites, from its stored [citations](citations.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
 | `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
 
-**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation and Live share. The
-ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts), for the kinds
-that function names and no others.
+**Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
+Live, share. The ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
+for the kinds that function names and no others. **The guide** (plan
+[261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)) gets five,
+`GUIDE_TOOLS`: the article's own, and nothing that leaves it — no `read_web_page`, no library, no
+notes, and no web search.
 
 **There is no `summarise_article` tool and there should never be one.** The whole article is in the
 prompt on every turn, so it would be a model call to do a thing the model can already do — wearing a
@@ -337,8 +340,9 @@ reads and what to say when one fails.
   of our rows.
 
 **Who gets it: typed Chat and Explore.** It is not in `CHAT_TOOLS`. `toolsFor(kind)` returns the
-shared eight plus this for `chat` and `explore`, and the shared eight for every other kind; the
-`switch` is exhaustive, so a new kind has to be given an answer. Chat reaches for it when the reader
+shared eight plus this for `chat` and `explore`, the shared eight for Recall, Tutorial and
+Candidates, and the guide's five for the guide; the `switch` is exhaustive, so a new kind has to be
+given an answer. Chat reaches for it when the reader
 asks what they marked or said. **Explore has the notes and the list already**, sent with every turn
 (learn-mode.md § The notes go with every turn), so there the tool is for reading one earlier
 conversation in full. Why each of the others is left out (PR-3):
@@ -350,11 +354,14 @@ conversation in full. Why each of the others is left out (PR-3):
   prompt. Either can be added later, with a check of how it behaves.
 - **Candidates** is Referee machinery.
 
-**The offer is not the gate.** `runTool` asks `toolsFor` again on the tool's own `case`, and a
-caller that names no kind has the shared eight. So a Recall model that asks for `reader_notes`
-anyway is told there is no such tool, and so is Live's endpoint, which also refuses the name before
-that because `LIVE_SERVER_TOOLS` is built from `CHAT_TOOLS`. Each guard was switched off and the
-tests watched go red.
+**The offer is not the gate.** `runTool` asks `toolsFor` again before it runs **any** name, ahead
+of the whole dispatch, and a caller that names no kind has the shared eight. So a Recall model that
+asks for `reader_notes` anyway, or a guide model that asks for `read_web_page`, is told there is no
+such tool and nothing is fetched or read; and so is Live's endpoint, which also refuses the name
+before that because `LIVE_SERVER_TOOLS` is built from `CHAT_TOOLS`. Until 2026-10-07 only
+`reader_notes` was checked, on its own `case`; the guide's narrower set moved the check to the top
+(GPT Sol's F1, plan 261007j). Each guard was switched off and the tests watched go red
+(`tests/guide-tool-gate.test.ts`, `tests/reader-notes-tool.test.ts`).
 
 **Whose notes.** The tool is handed a slug and never an owner. `commentStore.load` and
 `chatStore.load` resolve the slug through the article's owner before they read a child row
@@ -471,7 +478,17 @@ Since 2026-10-05, for report `spya-hyfqkq`
 From 2026-10-01 it showed chats only.
 
 - **What is listed.** Chats, and Learn's Recall, Tutorial and Explore conversations. Referee's
-  Candidates thread is not: it is not a conversation the reader had.
+  Candidates thread is not: it is not a conversation the reader had. **The guide is not listed but
+  pinned** (since 2026-10-07,
+  [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)): one row above the
+  filter and the list, with a `Compass`, there whatever `?chatfrom=` says and before the guide
+  exists; a press opens it in the band, and `?mode=chat&guide=1` does the same from a link
+  ([url-state.md](url-state.md)).
+- **What Chat may open is chats and the guide** (`openableInChat`). A send, an edit and Live go by
+  the open conversation's kind, never the band's: a guide turn is sent as `guide`, with no blocks
+  on screen and no Live. Every *Ask in chat* handoff still starts a fresh chat, even with the guide
+  open; a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
+  (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
   from a claim in Debate*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
@@ -485,7 +502,8 @@ From 2026-10-01 it showed chats only.
   *Start over* lives in Learn.
 - **What Chat lists and what Chat may open are two sets.** The band's composer sends the blocks on
   screen, which the server refuses on any kind but `chat`. So `ConversationBand` hands the panel
-  `listed` (every kind but Candidates) and `threads` (chats only), and the open conversation, the
+  `listed` (every kind but Candidates and the guide) and `threads` (chats, and the guide since
+  2026-10-07), and the open conversation, the
   drafts and Send are resolved among `threads`. A `?thread=` that names another kind in Chat is
   cleared by replace once the list has loaded. An article whose only conversations are Learn's
   shows those rows and does not begin a blank chat; the box under the list and the + start one.
@@ -865,13 +883,30 @@ prompt.
   command accepts, and for a bookmark a block this article has. `glossary-open` is not on it — its
   argument is an entry id the model is never shown — so chat writes `glossary-ask` with the term and
   `chipFor` turns that into *open the entry* when the visible glossary has it.
+- **Two more ids since 2026-10-07, for Chat and the guide alike**
+  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
+  `quick-search:<words>` is the bar's own *Quick search “X”* row (the same press,
+  `quickSearchPress`; the words take `find`'s rule; it *generates*), and `mode:<catalogue key>` —
+  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
+  sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
+  at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
+  [`command-runners.ts`](../../src/web/command-runners.ts), built by the reading view from
+  `visibleModes` and `subModeRows`), never the whole catalogue. The Dock keeps an experimental
+  mode already open visible as a way out after the switch is turned off; the proposal set
+  deliberately removes that escape hatch, and retained experimental sub-modes, so a mode behind
+  the switch or one this page does not draw is no button. Its `generates` marker is the mode's own
+  (`modeGenerates` / `subModeGenerates`; `RISK` says `per-mode`), and the press is the Dock's own
+  activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
+  key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
+  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button: the
+  guide's greeting holds the reader's own box instead (the plan's F5).
 - **Asked twice.** `chipFor` runs at the draw and again at the press
   ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
   remembered from the render. A press goes through `chatExecutor`
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
+- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`
@@ -890,6 +925,43 @@ runner is [`evals/chat-commands/run.ts`](../../evals/chat-commands/run.ts).
 
 ***Copy answer* leaves the button lines out** (`withoutCommandLines`, src/citable.ts): the reader was
 shown a button, not a token. A token that was drawn as text is copied as text.
+
+## The guide
+
+> think of it as a chat less about the content and more about the reading experience. So more
+> about a guide for the user about how to use Spideryarn and how to make the most of its features
+> and also how to read this article given their needs.
+>
+> — Greg, 2026-10-06 (`spya-tddvg2`)
+
+**Built 2026-10-07** ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)).
+A thread kind of its own, `guide`, one per article (`chat_threads_one_guide`), opened in Chat's band
+from the pinned row above the list. What makes it a guide rather than a chat:
+
+- **Its prompt**, `GUIDE_SYSTEM` in [`src/converse.ts`](../../src/converse.ts): the subject is the
+  reading, never a summary in its place; ask why they are reading if they have not said; invite
+  *About you* once; under 100 words; point to at most three places, by block id. It carries our
+  words for every mode, each ordinary one with its ready-made button (`modeWordsSection`,
+  [`src/guide.ts`](../../src/guide.ts)) — stable bytes, above the cache breakpoint.
+- **How experienced the reader is**: none, a few or many other articles opened, in the last
+  message only (`experienceLine`), so the cached prefix is the same for everyone.
+  [privacy.md § The guide is told…](privacy.md#the-guide-is-told-how-many-other-articles-you-have-opened).
+- **Its tools** are `GUIDE_TOOLS` (§ The nine above), and no web search.
+- **Its greeting is ours**, not a model's ([`GuideGreeting.tsx`](../../src/web/GuideGreeting.tsx)):
+  free, and holding the same autosaving *Why you're reading this one* box Metadata has, so the
+  reason saved is always the reader's own words. *Ask the guide where to start* sends a fixed first
+  question once there is one.
+- **Its buttons** are chat's, offered unasked when it suggests a mode or a search
+  (§ Command buttons). It cannot act; the press is the act.
+- **Three doors**: the pinned row; the command bar's *Ask the guide: "…"* when the fast pick
+  answers that no row fits
+  ([reading-view-overview.md § The command bar](reading-view-overview.md#the-command-bar)); and a
+  first open from the add page with no reason given, where a band fits, which opens the guide instead
+  of the "Why are you reading this?" modal (`src/web/first-open-purpose.ts`).
+
+Its cost is reported as `chat` (`jobFor`), on purpose for now. The eval is
+[261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) and
+[`evals/guide/run.ts`](../../evals/guide/run.ts).
 
 ## Not built, and worth building
 

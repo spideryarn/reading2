@@ -13,7 +13,11 @@ Five of them are not in the bar itself but under its **More** button: Quotes, Gl
 and Timeline. Press **More** and pick one from the list. While one of those is open it has a button
 of its own in the bar, so you can see where you are, and pressing that button closes it.
 
+![The More list open above the bottom bar: Quotes, Glossary, FAQ, Ideas and Timeline, each with a line on what it does, Ideas ticked](images/more-open.png "More holds the modes you will want less often. The tick marks the one that is open.")
+
 {{modes-table}}
 
 The ones marked experimental appear only once you turn on [experimental
 features](/help/experimental-features).
+
+![The (i) card for Quotes: what the mode does, how many quotes it found, which model wrote them and when, and a More in Help link](images/help-mode-info.png "Every mode’s (i) says what it does and how this panel was made, and ends with a link to its page in Help.")

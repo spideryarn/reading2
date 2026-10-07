@@ -14,7 +14,7 @@ import { isAdmin } from "../admin.js";
 import type { HighPowerIntent } from "./add-high-power.js";
 import { useSession } from "./useSession.js";
 
-export function AddHighPower({ intent }: { intent: HighPowerIntent }) {
+export function AddHighPower({ intent, repeat = false }: { intent: HighPowerIntent; repeat?: boolean }) {
   const { user } = useSession();
   const state = useSyncExternalStore(intent.subscribe, intent.get);
   const exempt = isAdmin(user?.id);
@@ -47,7 +47,7 @@ export function AddHighPower({ intent }: { intent: HighPowerIntent }) {
               : "Counts as one more article against your allowance (half of one while it is shared publicly). Switching off later doesn't give it back."}
           </span>
           <span className="tw:block tw:text-muted-foreground" aria-live="polite">
-            {line(state)}
+            {line(state, repeat)}
           </span>
         </span>
       </label>
@@ -55,7 +55,7 @@ export function AddHighPower({ intent }: { intent: HighPowerIntent }) {
   );
 }
 
-function line(state: ReturnType<HighPowerIntent["get"]>) {
+function line(state: ReturnType<HighPowerIntent["get"]>, repeat: boolean) {
   switch (state.kind) {
     case "off":
       return null;
@@ -64,6 +64,7 @@ function line(state: ReturnType<HighPowerIntent["get"]>) {
     case "saving":
       return "Saving…";
     case "on":
+      if (repeat) return "On — anything you generate next uses it.";
       return state.lateRisk
         ? "On. Some of this import may already have used the standard model — Run it again on the article's Metadata page to redo a mode."
         : "On — later work in this import uses it.";

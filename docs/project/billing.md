@@ -662,10 +662,18 @@ Four things to know before touching any of it.
   term is a deleted article's frozen price; see below.) Said out loud rather than discovered:
   *an article you shared last week does not become cheaper; the discount applies to what you add from
   now on.* Articles added before billing launched have no ledger row at all and already cost nothing.
-- **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article
-  — a re-added URL adopts the shelf's article and charges again — so sharing that article halves
-  *both* rows. Defensible, since they did pay for two ingests, and the copy must not promise
-  otherwise.
+- **It is a statement about ingests, not about articles.** Cardinality is N charged rows : 1 article,
+  so sharing that article halves *all* its rows, and the copy must not promise otherwise. Until
+  2026-10-07 a re-added URL adopted the shelf's article and charged again, which is where most such
+  rows came from. Greg, 2026-10-06:
+
+  > yes repeat pastes should be free (and signal they're a repeat in the UI)
+
+  So a plain `POST /api/jobs { url }` that finds one of the reader's own articles now answers
+  `{ article, repeat: true }` before any slot is reserved, and no job runs
+  ([261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md)). Rows charged before that stay, and
+  N : 1 is still reachable — an article published between the route's look and the locked admission
+  is charged as before, and a retry reserves on its own terms.
 - **The period is filtered twice, once per counted column**, and only the full-price copy had a
   behavioural test until 2026-09-05. Reversing the paid bounds in the *public* copy alone keeps the
   generated SQL's parameter count and values identical, so the shape test stays green — and with no
@@ -807,7 +815,8 @@ as "2 of them are public". `/admin/users` does the same split. GPT Sol found thi
 
 - An article with no charged ingest still pays one article's worth. That covers articles added
   before billing, charged before `article_id` existed, or added by the admin.
-- A re-added URL has N ingest rows and gets one upgrade, not N.
+- An article with N ingest rows (re-added before 2026-10-07, when that still charged) gets one
+  upgrade, not N.
 - Re-runs stay free, so on a high-powered article each re-run costs us about twice what it would.
 
 ### A minimal paper costs a hundredth
@@ -930,6 +939,7 @@ the route still knows what was asked for.
 | | |
 |---|---|
 | `POST /api/jobs {url}` | reserves |
+| `POST /api/jobs {url}` for an article the reader already has, with no `steps` or `force` | free: answers `{ article, repeat: true }` and queues nothing |
 | `POST /api/jobs {uploadId}` | reserves |
 | `POST /api/jobs/:id/retry`, when the old job carried a slot | reserves a **fresh** one |
 | `POST /api/jobs {slug, steps}` — a glossary, ideas, a quiz | free |
@@ -1069,6 +1079,9 @@ product rule. The answer when it matters is a daily attempt cap, not a change to
 A voucher is a row of `billing_vouchers`: an address, a number of articles (1–1000), a private note,
 optionally a note to the recipient and their name (`recipient_name`, at most 80 characters, which
 opens their email *Dear <name>,* — [261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md)),
+optionally a starter article of the administrator's own that the email links (`starter_article_id`
+and `starter_slug`, never the private link's key —
+[261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)),
 who made it, and — once claimed — which account claimed it. Only the administrator makes or changes
 one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review are
 [261001m](../plans/261001m-gift-vouchers-for-free-articles.md). Four rules, each for a reason:

@@ -51,6 +51,7 @@ import {
   articleShareLinkEvents,
   articleVisibilityChanges,
   articles,
+  billingVouchers,
   blockIdentities,
   chatThreads,
   checkpoints,
@@ -883,6 +884,8 @@ describe("destroying an article", () => {
   const GONE_BLOCK = "spya-pgaaqg";
   const GONE_AI_CALL = "00000000-0000-4000-8000-0000000000d8";
   const GONE_SESSION = "00000000-0000-4000-8000-0000000000d9";
+  /** A gift voucher that named the article as its starter (plan 261007j). */
+  const GONE_VOUCHER = "00000000-0000-4000-8000-0000000b0c6d";
 
   async function seed(): Promise<void> {
     const db = getDb();
@@ -997,6 +1000,18 @@ describe("destroying an article", () => {
           fromVisibility: "private",
           toVisibility: "public",
           rightsConfirmed: true,
+        }),
+      /* A gift voucher's starter (plan 261007j): `set null`, because the
+         voucher is a gift to somebody and outlives the article it linked; it
+         keeps `starter_slug`, so it still knows there was one. */
+      billing_vouchers: () =>
+        db.insert(billingVouchers).values({
+          id: GONE_VOUCHER,
+          email: "shelf-destroyed-starter@example.invalid",
+          articles: 1,
+          createdBy: owner,
+          starterArticleId: GONE_ARTICLE,
+          starterSlug: GONE_SLUG,
         }),
       block_identities: () => Promise.resolve(),
       chat_threads: () =>
@@ -1143,7 +1158,7 @@ describe("destroying an article", () => {
 
   async function sweep(): Promise<void> {
     const db = getDb();
-    /* The four `set null` rows outlive the article, so they are named rather
+    /* The `set null` rows outlive the article, so they are named rather
        than cascaded — and `ai_calls` first, because it points at the session. */
     await db.delete(aiCalls).where(eq(aiCalls.id, GONE_AI_CALL));
     await db.delete(realtimeSessions).where(eq(realtimeSessions.id, GONE_SESSION));
@@ -1152,6 +1167,7 @@ describe("destroying an article", () => {
       .where(eq(articleVisibilityChanges.slug, GONE_SLUG));
     await db.delete(articleShareLinkEvents).where(eq(articleShareLinkEvents.slug, GONE_SLUG));
     await db.delete(ingestEvents).where(eq(ingestEvents.slug, GONE_SLUG));
+    await db.delete(billingVouchers).where(eq(billingVouchers.id, GONE_VOUCHER));
     /* And then the one statement, which is the whole of what the Stage A spike
        measured: tidying the cascade's children by hand first is what fails. */
     await db.delete(articles).where(eq(articles.id, GONE_ARTICLE));
@@ -1213,11 +1229,13 @@ describe("destroying an article", () => {
     expect(
       found.filter((fk) => fk.survives).map((fk) => fk.name),
       "the deliberate survivors, docs/plans/260906h § What survives a delete; " +
-        "the private link's audit joined them on 2026-10-05 (plan 261005e)",
+        "the private link's audit joined them on 2026-10-05 (plan 261005e), and a " +
+        "gift voucher's starter on 2026-10-07 (plan 261007j)",
     ).toEqual([
       "ai_calls",
       "article_share_link_events",
       "article_visibility_changes",
+      "billing_vouchers",
       "ingest_events",
       "realtime_sessions",
     ]);

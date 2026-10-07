@@ -44,6 +44,8 @@ matches it holds. A heading set in the author’s typeface is the author’s own
 written by the AI. Once a card is open, move slowly down the spine and the cards follow, so you can
 read the outline section by section.
 
+![The pointer moving down the spine, and a section’s card beside it changing at each new section: an outline with the section marked, a one-line gist, and how far in it starts](images/spine-walk.gif "Move slowly down the spine and the card follows, one section at a time.")
+
 **Click to go there.** A click lands at the start of that section. On a touchscreen, the first tap
 opens the card and the second goes there, because most sections are too thin to tap blind. With the
 pointer over the spine, <kbd>↑</kbd> and <kbd>↓</kbd> move one part at a time.

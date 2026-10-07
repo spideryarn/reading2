@@ -18,6 +18,8 @@ touchscreen). Then its controls appear:
   type in, and the answer opens as a chat you can carry on.
 - **…** appears when a short paragraph has no room for every control.
 
+![A paragraph with its margin controls showing beside it: link, chat, bookmark and a question mark](images/gutter.png "Point at a paragraph and its margin shows Link, Chat, Bookmark and ?.")
+
 To mark only part of a paragraph, select the words instead — see [Comments and
 bookmarks](/help/comments).
 

@@ -256,7 +256,8 @@ import type { CitersResult } from "./types.js";
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
-import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
+import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
+import { slugForUrlKey } from "./store/find-article.js";
 import { isOwnReadingPage } from "./own-reading-page.js";
 import {
   advanceJob,
@@ -331,18 +332,17 @@ import {
 import { readBillingSummary } from "./billing/summary.js";
 import {
   claimVouchersFor,
-  createVoucher,
-  listVouchers,
   parseNewVoucher,
   parseVoucherPatch,
-  updateVoucher,
+  pgVoucherStore,
+  type StarterRefusal,
 } from "./store/pg-vouchers.js";
 import {
   deliverReservedVoucherEmail,
   reserveVoucherEmailRetry,
   sendQueuedVoucherEmail,
 } from "./store/pg-voucher-emails.js";
-import type { VoucherCreated } from "./admin-vouchers.js";
+import type { VoucherCreated, VoucherUpdated } from "./admin-vouchers.js";
 import {
   chargeAndSwitchOnHighPower,
   refuseUploadWithoutQuota,
@@ -388,6 +388,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { routeProfileIsStale } from "./skim.js";
 import {
@@ -2957,6 +2958,40 @@ async function exploreNotes(
   }
 }
 
+/**
+ * **How much the reader has used Spideryarn, for a guide turn**, or `null`.
+ *
+ * The other articles on their shelf they have opened (`articlesOpenedBefore`),
+ * bucketed by `experienceOf` (src/guide.ts) — the bucket goes to the model,
+ * never the count. Resolved per turn, like the profile, from the stored
+ * thread's kind: `null` for every kind but `guide`.
+ *
+ * **A failed read costs the line, not the turn**, as `exploreNotes` above:
+ * the guide's prompt says what to assume when the line is missing. Logged with
+ * the slug and the error's kind, never a count.
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, F7.
+ */
+async function guideExperience(
+  slug: string,
+  thread: Pick<ChatThread, "kind">,
+): Promise<GuideExperience | null> {
+  if (thread.kind !== "guide") return null;
+  try {
+    return experienceOf(await shelfStore.articlesOpenedBefore(slug));
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "guide: could not read how many articles the reader has opened; answering without it",
+    );
+    return null;
+  }
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -3578,6 +3613,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          the stored thread's kind and id, like `kind` below. `null` for every
          other kind, and for an Explore turn whose notes could not be read. */
       notes: await exploreNotes(slug, thread, article.blocks),
+      /* **How much the reader has used Spideryarn, on every guide turn**, from
+         the stored thread's kind like `notes` above. `null` for every other
+         kind, and for a guide turn whose count could not be read. */
+      experience: await guideExperience(slug, thread),
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an
@@ -8487,6 +8526,28 @@ const JOBS_PATH = "/api/jobs";
 const SHARE_LINK_PATTERN = /^\/api\/article\/([\w.%-]+)\/share-link$/;
 /* Gift vouchers: GET lists, POST creates (261001m). */
 const ADMIN_VOUCHERS_PATH = "/api/admin/vouchers";
+
+/**
+ * **Why a voucher's starter article was refused**, in the administrator's
+ * words (plan 261007j). A slug that is not theirs is a 400, as a typo would
+ * be; the other two are states of their own article they can change, so 409.
+ * Constant sentences: every `httpError` here is logged, and none names the
+ * article, let alone its link.
+ */
+function starterRefused(reason: StarterRefusal): Error {
+  switch (reason) {
+    case "absent":
+      return httpError(400, "That starter article is not one of yours.");
+    case "unpublished":
+      return httpError(409, "That starter article has nothing to read yet. Choose it once it is on your shelf.");
+    case "link-off":
+      return httpError(409, "That starter article is private and has no private link. Make the link on its page first.");
+    default: {
+      const never: never = reason;
+      return httpError(500, `unknown starter refusal ${String(never)}`);
+    }
+  }
+}
 /* One report, by its pair: read with GET, marked ignored with PATCH. */
 const ADMIN_FEEDBACK_REPORT_PATTERN = /^\/api\/admin\/feedback\/([\w-]+)\/([\w-]+)$/;
 const UPLOAD_PATTERN = /^\/api\/uploads\/([\w-]+)$/;
@@ -8618,7 +8679,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
      `billing_vouchers` bar the reader's own claim, and they are here, inside
      the namespace gate above the table, so no reader can reach them.
      docs/plans/261001m-gift-vouchers-for-free-articles.md;
-     src/store/pg-vouchers.ts. No hard delete: `revoked` is the invalidation. */
+     src/store/pg-vouchers.ts. No hard delete: `revoked` is the invalidation.
+     Through `pgVoucherStore`, the guarded store, so a failed write cannot put
+     the email it was queueing — a starter's private link included — into a
+     log line, a 500 or Sentry (261007j, Sol's F1). */
   {
     kind: "exact",
     method: "GET",
@@ -8627,7 +8691,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ request: { res } }) => {
       /* Addresses and private notes about other people. */
       res.setHeader("Cache-Control", "private, no-store");
-      send(res, 200, { vouchers: await listVouchers() });
+      send(res, 200, { vouchers: await pgVoucherStore.listVouchers() });
     },
   },
   {
@@ -8638,9 +8702,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     handler: async ({ user, request: { req, res } }) => {
       const parsed = parseNewVoucher(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
-      /* The browser mints the id, so a replay is the same create (261001p). */
-      const answer = await createVoucher(parsed.value, user.id);
+      /* The browser mints the id, so a replay is the same create (261001p).
+         A starter is resolved as this administrator, after the replay check
+         and only for a new id (261007j); its link is read, never made. */
+      const answer = await pgVoucherStore.createVoucher(parsed.value, user.id);
       if (answer.kind === "conflict") throw httpError(409, "A different voucher already has that id.");
+      if (answer.kind === "starter-refused") throw starterRefused(answer.reason);
       res.setHeader("Cache-Control", "private, no-store");
       if (answer.kind === "replayed") {
         send(res, 200, { id: answer.id, email: "replayed" } satisfies VoucherCreated);
@@ -8664,16 +8731,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (!isUuid(id)) throw httpError(400, "id must be a uuid");
       const parsed = parseVoucherPatch(await readBody(req));
       if (!parsed.ok) throw httpError(400, parsed.message);
-      const answer = await updateVoucher(id, parsed.value);
+      const answer = await pgVoucherStore.updateVoucher(id, parsed.value);
       if (answer.kind === "not-found") throw httpError(404, "There is no such voucher.");
       if (answer.kind === "claimed") {
         throw httpError(409, "That voucher has been claimed, so its address can no longer change.");
       }
       res.setHeader("Cache-Control", "private, no-store");
-      /* A real change of address queued the recipient's email to the new one. */
+      /* A real change of address queued the recipient's email to the new one,
+         and says whether that email still links the starter (261007j, F3). */
       const delivery = answer.giftDelivery;
       if (delivery) await afterResponse("voucher email: gift", () => sendQueuedVoucherEmail(delivery));
-      send(res, 200, delivery ? { ok: true, email: "queued" } : { ok: true });
+      send(
+        res,
+        200,
+        (delivery
+          ? { ok: true, email: "queued", ...(answer.starter ? { starter: answer.starter } : {}) }
+          : { ok: true }) satisfies VoucherUpdated,
+      );
     },
   },
   /* **Retry one voucher email** — the Status cell's button. Reserved here, so
@@ -11422,6 +11496,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (request.readThis) {
         send(res, 202, publicJob(await queueReadThis(request.slug)));
         return;
+      }
+      /* **A repeat paste is free, and says it is one** — Greg, 2026-10-06:
+         *"yes repeat pastes should be free (and signal they're a repeat in the
+         UI)"*. A plain add whose address finds an article the reader already
+         has used to adopt it, run a job whose cached steps usually skipped, and charge a
+         slot. Now it is answered with the article and nothing else: no slot, no
+         job. The upload path's `{ article }` answer is the same shape, so the
+         add page already treats it as a completion; `repeat` is what lets it
+         say why.
+
+         **Outside the billing lock, and safe there in both directions.** A hit
+         spends nothing and starts nothing, so there is nothing to race for; a
+         miss falls through to the locked admission below, and an article that
+         publishes in between is charged exactly as before.
+
+         Only a *plain* add: `steps` or `force` beside a URL asks for work on
+         the article, and swallowing it here would drop that work and report
+         success. docs/plans/261007k-repeat-paste-is-free-and-says-so.md. */
+      if (request.url !== undefined && request.steps === undefined && request.force === undefined) {
+        const have = await slugForUrlKey(urlKey(request.url));
+        if (have !== undefined) {
+          send(res, 200, { article: have, repeat: true });
+          return;
+        }
       }
       const profile =
         request.url !== undefined || request.useProfile === false

@@ -20,6 +20,9 @@ import {
   chatExecutor,
   glossaryRunners,
   jumpFirstRunner,
+  type ModeCommand,
+  modeDoor,
+  modeRunner,
   readingExecutor,
   tagRunners,
 } from "../src/web/command-runners.js";
@@ -279,6 +282,69 @@ describe("the reading view's executor", () => {
     const owner = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), openQuickSearch: vi.fn() });
     const chat = chatExecutor({ reading: owner, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
     expect(chat.quickSearch).toBeUndefined();
+  });
+
+  /* Plan 261007j: a chat chip's `quick-search` proposal presses the bar's own
+     quick search — one search, whichever door. */
+  it("gives chat's chips the bar's own quick search as the quick-search proposal", () => {
+    const slug = "a-piece-chip-quick-search";
+    const openQuickSearch = vi.fn();
+    const owner = readingExecutor({ slug, blocks: BLOCKS, jump: vi.fn(), openQuickSearch });
+    const chat = chatExecutor({ reading: owner, blocks: BLOCKS, jump: vi.fn(), tags: { edit: vi.fn() }, find: vi.fn() });
+    expect(chat.runners["quick-search"]?.({ id: "quick-search", words: "free will" })).toEqual({ kind: "close" });
+    const draft = searchDraftFor(slug);
+    expect(draft.handoff()).toEqual({ type: "enter", text: "free will" });
+    expect(openQuickSearch).toHaveBeenCalledTimes(1);
+    draft.clearHandoffs();
+    expect(readingExecutor({ slug, blocks: BLOCKS, jump: vi.fn() }).runners["quick-search"]).toBeUndefined();
+  });
+});
+
+/* Plan 261007j, GPT Sol's F3: what a `mode` chip can open is the bar's own
+   rows here, and a press is the Dock's own activator. */
+describe("the mode door", () => {
+  const rows: ModeCommand[] = [
+    { kind: "mode", mode: "summary" },
+    { kind: "mode", mode: "structure" },
+    { kind: "submode", sub: { mode: "learn", view: "tutorial" } },
+  ];
+
+  it("offers exactly the rows it is handed, each with the mode's own marker", () => {
+    const door = modeDoor(rows, { mode: vi.fn(), sub: vi.fn() });
+    expect([...door.targets.keys()]).toEqual(["mode:summary", "mode:structure", "submode:learn:tutorial"]);
+    expect(door.targets.get("mode:summary")?.generates).toBe(true);
+    expect(door.targets.get("mode:structure")?.generates).toBe(false);
+    expect(door.targets.get("submode:learn:tutorial")?.label).toBe("Learn › Tutorial");
+    expect(door.targets.has("mode:debate")).toBe(false);
+  });
+
+  it("opens a mode or a sub-mode through the activator it was handed, once", () => {
+    const mode = vi.fn();
+    const sub = vi.fn();
+    const executor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn(), modes: modeDoor(rows, { mode, sub }) });
+    expect(executor.sources.modes?.has("mode:summary")).toBe(true);
+    expect(executor.runners.mode?.({ id: "mode", key: "mode:summary" })).toEqual({ kind: "close" });
+    expect(mode).toHaveBeenCalledWith({ kind: "mode", mode: "summary" });
+    expect(executor.runners.mode?.({ id: "mode", key: "submode:learn:tutorial" })).toEqual({ kind: "close" });
+    expect(sub).toHaveBeenCalledWith({ kind: "submode", sub: { mode: "learn", view: "tutorial" } });
+    expect(mode).toHaveBeenCalledTimes(1);
+    expect(sub).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a key it does not offer, and opens nothing", () => {
+    const mode = vi.fn();
+    const runner = modeRunner(modeDoor(rows, { mode, sub: vi.fn() }));
+    expect(runner({ id: "mode", key: "mode:debate" })).toEqual({
+      kind: "stay",
+      message: "That mode isn't available here any more.",
+    });
+    expect(mode).not.toHaveBeenCalled();
+  });
+
+  it("is absent where the page hands in no door: a visitor's executor has no mode", () => {
+    const visitor = readingExecutor({ slug: "a-piece", blocks: BLOCKS, jump: vi.fn() });
+    expect(visitor.runners.mode).toBeUndefined();
+    expect(visitor.sources.modes).toBeUndefined();
   });
 });
 

@@ -71,8 +71,10 @@ export function shareKeyIn(search: string): ShareKey | null {
  *
  * Takes a `ShareKey`, so only a value `parseShareKey` passed can be forwarded.
  * For the two public requests a visitor's page makes for one article: its
- * payload and its pictures (src/web/public-api.ts, src/web/rehost.ts). The
- * path must have no query string of its own; neither of those does.
+ * payload and its pictures (src/web/public-api.ts, src/web/rehost.ts); and for
+ * the whole private link a gift voucher's email carries, built on `articleUrl`
+ * (src/store/voucher-starter.ts, plan 261007j). The path must have no query
+ * string of its own; none of those does.
  */
 export function withShareKey(path: string, key: ShareKey | null): string {
   return key === null ? path : `${path}?${SHARE_KEY_PARAM}=${encodeURIComponent(key)}`;

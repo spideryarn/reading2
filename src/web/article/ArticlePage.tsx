@@ -37,6 +37,7 @@ import { useComments } from "../useComments.js";
 import { useChatAnchors } from "../useChatAnchors.js";
 import { useReadingTime } from "../useReadingTime.js";
 import { PurposePrompt } from "../PurposePrompt.js";
+import { settleFirstOpen } from "../first-open-purpose.js";
 import { useSourceGuess } from "../useSourceGuess.js";
 import { articleWaitTitle, useDocumentTitle } from "../page-title.js";
 import { apiFetch } from "../lib/api.js";
@@ -754,6 +755,11 @@ function VisitorArticle({
   sessionUnconfirmed: boolean;
   view: ArticleView;
 }) {
+  /* No owner's purpose read happens here, so a stale add-page mark naming this
+     slug must not hold a visitor's first-open default (first-open-purpose.ts). */
+  useEffect(() => {
+    settleFirstOpen(slug, null, "unknown");
+  }, [slug]);
   if (view === "metadata")
     return (
       <PublicMetadataPage

@@ -15,13 +15,15 @@ import {
   canRun,
   type CommandExecutor,
   type CommandProposal,
+  type ModeTarget,
   type ProposalId,
   parseProposalToken,
   resolveArgument,
 } from "./command-proposal.js";
 
 /**
- * **The ids a chat answer may propose.** Six of the seven.
+ * **The ids a chat answer may propose.** Eight of the nine — and the guide's
+ * the same eight (plan 261007j: one allowlist, the same token, the same press).
  *
  * `glossary-open` is left out because its argument is a glossary entry's id,
  * and nothing chat is shown carries one: a model writing it would be inventing
@@ -36,6 +38,11 @@ export const CHAT_PROPOSABLE: readonly ProposalId[] = [
   "tag-add",
   "tag-remove",
   "bookmark",
+  /* Since 2026-10-07: open a mode the reader can open here, and the bar's own
+     quick search. Resolved against what is here at the draw and at the press
+     (`chipFor`). */
+  "mode",
+  "quick-search",
 ];
 
 /**
@@ -45,6 +52,8 @@ export const CHAT_PROPOSABLE: readonly ProposalId[] = [
 export interface ChatChip {
   readonly proposal: CommandProposal;
   readonly shown?: string;
+  /** What a `mode` proposal opens here, with its name and its own `generates`. */
+  readonly target?: ModeTarget;
   readonly enabled: boolean;
 }
 
@@ -53,8 +62,12 @@ export interface ChatChip {
  * model wrote**, exactly as a block id the article lacks is.
  *
  * `null` for a token that does not parse or whose argument its command refuses
- * (`parseProposalToken`), an id outside `CHAT_PROPOSABLE`, and a bookmark on a
- * block this article does not have — the case a hostile page would write.
+ * (`parseProposalToken`), an id outside `CHAT_PROPOSABLE`, a bookmark on a
+ * block this article does not have — the case a hostile page would write — and
+ * a mode the reader cannot open here: hidden behind the experimental switch,
+ * unknown, or anything else the Dock does not offer now (GPT Sol's F3 on plan
+ * 261007j). A mode's key is resolved against `commands.sources.modes`, the
+ * live set, never against the whole catalogue.
  *
  * A chip with no runner here is still a chip, **not enabled**: the bookmark
  * before the comments read has landed, the look-up before the glossary read
@@ -67,6 +80,11 @@ export function chipFor(raw: string, commands: CommandExecutor, blocks: Known): 
   const parsed = parseProposalToken(raw);
   if (parsed === null || !CHAT_PROPOSABLE.includes(parsed.id)) return null;
   if (parsed.id === "bookmark" && !blocks.has(parsed.blockId)) return null;
+  if (parsed.id === "mode") {
+    const target = commands.sources.modes?.get(parsed.key);
+    if (target === undefined) return null;
+    return { proposal: parsed, target, enabled: canRun(commands.runners, "mode") };
+  }
   if (parsed.id !== "glossary-ask") {
     return { proposal: parsed, enabled: canRun(commands.runners, parsed.id) };
   }
@@ -97,10 +115,14 @@ export function doneWords(id: ProposalId): string | null {
       return "Removed.";
     case "bookmark":
       return "Bookmarked.";
+    /* A mode and a quick search move the reader into a band that shows what
+       happened; there is nothing more for the chip to say. */
     case "jump-first":
     case "find":
     case "glossary-open":
     case "glossary-ask":
+    case "mode":
+    case "quick-search":
       return null;
     default: {
       const never: never = id;

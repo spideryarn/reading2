@@ -66,7 +66,7 @@ describe("the kind itself", () => {
   it("is a thread kind, and a single-thread one like Recall and Tutorial", () => {
     expect(isThreadKind("explore")).toBe(true);
     expect(THREAD_KINDS).toContain("explore");
-    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore"]);
+    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore", "guide"]);
     expect(isSingleThreadKind("explore")).toBe(true);
   });
 

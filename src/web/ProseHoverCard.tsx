@@ -97,11 +97,12 @@ import { HOVER_DELAY, useHoverCard } from "./useHoverCard.js";
 export const QUOTE_OPEN_MS = 900;
 import { TermJump } from "./TermJump.js";
 import { describeLink, type ExternalPreview, type LinkPreview } from "./link-preview.js";
-import { worthRetrying } from "../messages.js";
+import { REPEAT_PASTE_ON_THE_CARD, worthRetrying } from "../messages.js";
 import { blockOfLink, refreshShelf, useLinkFacts, type LinkFacts } from "./link-facts.js";
 import { leavesTheApp } from "./external-links.js";
 import { QuotaNotice } from "./QuotaNotice.js";
 import { useJobs } from "./useJobs.js";
+import { forgetOnReaderChange } from "./lib/reader-change.js";
 import { Link } from "./Link.js";
 import { helpHref, modeAnchor } from "./help/help-anchors.js";
 import { readHref } from "./router.js";
@@ -920,6 +921,15 @@ type AddToShelf =
   /** It finished, and the shelf has not caught up. See `describeAdd`. */
   | { kind: "added" }
   /**
+   * **The reader already had it**, so nothing was added and nothing spent:
+   * the server answered a repeat paste with the article
+   * (docs/plans/261007k-repeat-paste-is-free-and-says-so.md). The slug comes
+   * from that answer, not from the shelf, because the shelf this card reads
+   * does not find every article the server does (a paper by the link it was
+   * asked for, an archived one) — waiting for it could wait for ever.
+   */
+  | { kind: "have"; slug: string }
+  /**
    * It went wrong and **another press would not help**, so this arm has no
    * action in it at all. `message` is the server's own sentence and may be a
    * quota refusal, which is why it goes to `QuotaNotice` rather than into a
@@ -980,6 +990,7 @@ const NO_ADD_TO_SHELF: AddToShelf = { kind: "none" };
 type Asked =
   | { kind: "sending"; wait: Promise<void> }
   | { kind: "queued"; jobId: string }
+  | { kind: "have"; slug: string }
   | { kind: "refused"; message: string };
 
 const asked = new Map<string, Asked>();
@@ -993,6 +1004,12 @@ const asked = new Map<string, Asked>();
  * of that link would re-read `GET /api/library`.
  */
 const refreshedFor = new Set<string>();
+let askedGeneration = 0;
+forgetOnReaderChange(() => {
+  askedGeneration += 1;
+  asked.clear();
+  refreshedFor.clear();
+});
 
 /** The line while no step is running — before the first, and between two. */
 const ADDING = "adding it to your shelf…";
@@ -1084,14 +1101,18 @@ function WithAddToShelf({
   }, [finished]);
 
   const add = () => {
+    const generation = askedGeneration;
     const wait = (async () => {
       const started = await queue.add(url);
+      /* An answer made for the previous reader must not refill the cleared map. */
+      if (generation !== askedGeneration) return;
       /* **Read straight after the await.** `error` on the queue is engine state
          that this action's own follow-up poll clears milliseconds later;
          `lastFailure()` is the durable one, and three surfaces got this wrong
          before it existed. useJobs.ts § lastFailure. */
       const why = started ? null : queue.lastFailure();
-      if (started) asked.set(key, { kind: "queued", jobId: started.id });
+      if (started && "article" in started) asked.set(key, { kind: "have", slug: started.article });
+      else if (started) asked.set(key, { kind: "queued", jobId: started.id });
       else if (why) asked.set(key, { kind: "refused", message: why });
       /* Refused with nothing to say — which should not happen, since every
          refusal carries the server's sentence. Put the button back rather than
@@ -1117,6 +1138,8 @@ export function describeAdd(state: Asked | undefined, job: Job | null, add: () =
   switch (state.kind) {
     case "sending":
       return { kind: "working", line: ADDING };
+    case "have":
+      return { kind: "have", slug: state.slug };
     case "refused":
       /* **`worthRetrying` decides whether there is a button at all**, and it is
          the same question `AddArticle.tsx` asks of a failed job. A `[pay-free]`
@@ -1556,6 +1579,12 @@ function ExternalBody({
           added to your shelf
         </p>
       )}
+      {adding.kind === "have" && (
+        <p className="prose-card-text prose-card-waiting">
+          <BookCheck size={11} />
+          {REPEAT_PASTE_ON_THE_CARD}
+        </p>
+      )}
       {/* **Why it did not go through** — the refusal that ends it, and the one
           the reader may press past, drawn identically because they read
           identically to whoever is looking.
@@ -1627,6 +1656,14 @@ function ExternalBody({
             only refusal that reaches `offer` is one worth pressing — a reader
             at their quota gets the sentence and the link to the page that
             answers it, and nothing to spend the next attempt on. */}
+        {/* The repeat's own way there: `library` did not find it, or this
+            arm would be `none`, so the link above is not drawn. */}
+        {adding.kind === "have" && (
+          <Link className="prose-card-open" href={readHref(adding.slug)}>
+            <BookOpen size={10} />
+            read it here
+          </Link>
+        )}
         {adding.kind === "offer" && (
           <button type="button" className="prose-card-open" onClick={adding.add}>
             <Plus size={10} />

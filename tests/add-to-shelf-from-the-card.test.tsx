@@ -106,7 +106,7 @@ let useJobsCalls = 0;
 /** The queue as the engine would report it — replaced by the test, not polled. */
 let jobs: Job[] = [];
 /** What the next `add()` resolves to. Null is a refusal, with `failure` its reason. */
-let added: Job | null = null;
+let added: Job | { article: string; repeat?: true } | null = null;
 let failure: string | null = null;
 /** Every URL `add()` was asked for. Two entries is a second slot spent. */
 const posted: string[] = [];
@@ -387,6 +387,51 @@ describe("who is offered it", () => {
 });
 
 describe("pressing it", () => {
+  it.each([false, true])("forgets a repeat across a reader change (pending: %s)", async (pending) => {
+    const { noteReader } = await import("../src/web/lib/reader-change.js");
+    const url = `https://example.org/repeat-reader-${pending}`;
+    noteReader("reader-a");
+    added = { article: "reader-a-article", repeat: true };
+    holdPost = pending;
+    await render(url, true);
+    await hover();
+    await press();
+    await settle();
+    await unhover();
+    noteReader("reader-b");
+    releasePost?.();
+    await settle();
+    await hover();
+    expect(addButton(), "reader B inherited reader A's repeat").not.toBeNull();
+    expect(text()).not.toContain("already on your shelf");
+  });
+
+  /**
+   * **A repeat: the server answers with the article, not a job** — free, and
+   * nothing queued (docs/plans/261007k-repeat-paste-is-free-and-says-so.md).
+   * The card's shelf did not know it (a paper found by the link it was asked
+   * for, or an archived article), so the slug has to come from the answer: a
+   * card that read `id` off it sat on "adding" for ever.
+   */
+  it("says the reader already has it, and links to it, when the answer is the article", async () => {
+    const url = "https://example.org/repeat";
+    added = { article: "slug-already", repeat: true };
+    await render(url, true);
+    await hover();
+    await press();
+    await settle();
+
+    expect(posted).toEqual([url]);
+    expect(text()).toContain("already on your shelf");
+    const link = [...(card()?.querySelectorAll("a") ?? [])].find((a) => a.textContent?.includes("read it here"));
+    expect(link?.getAttribute("href")).toBe("/read/slug-already");
+    expect(addButton()).toBe(null);
+    await unhover();
+    await hover();
+    expect(text()).toContain("already on your shelf");
+    expect(posted).toEqual([url]);
+  });
+
   it("posts the link's own address and shows the step that is running", async () => {
     const url = "https://example.org/three";
     added = job("job-3", url);

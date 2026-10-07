@@ -19,7 +19,7 @@
  *    find. See docs/plans/260826e-postgres-storage-implementation.md § Rules.
  */
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
@@ -31,7 +31,7 @@ import { currentOwnerId, type OwnerId } from "../owner.js";
 import { READ_COMMITTED } from "./isolation.js";
 import { lockBillingAccount } from "./pg-billing.js";
 import { TERMINAL } from "./pg-jobs.js";
-import { notFound, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
+import { notFound, onTheShelf, ownedByReader, ownedSlug, requireSlug, shelfFrom } from "./pg.js";
 import type { DestroyOptions, LibrarySearch, LibrarySearchOptions, ShelfStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 import type { LibraryEntry, LibraryHit, ShelfState } from "../types.js";
@@ -408,6 +408,30 @@ const rawPgShelfStore: ShelfStore = {
       .where(ownedSlug(slug))
       .returning({ slug: articles.slug });
     if (!row) throw notFound(slug);
+  },
+
+  async articlesOpenedBefore(slug: string): Promise<number> {
+    requireSlug(slug);
+    /* The shelf's own three predicates — `ownedByReader`, not archived, and
+       `onTheShelf` — so this cannot count an article the reader could not see
+       on their shelf. `count()` is drizzle's, which maps to a number;
+       `Number(...)` below is the runtime check that a string never gets through
+       as one (src/store/pg-admin.ts § `.mapWith` has the trap). */
+    const [row] = await db()
+      .select({ n: count() })
+      .from(articles)
+      .where(
+        and(
+          ownedByReader(),
+          isNull(articles.archivedAt),
+          onTheShelf(),
+          gt(articles.opens, 0),
+          ne(articles.slug, slug),
+        ),
+      );
+    const n = Number(row?.n ?? 0);
+    if (!Number.isInteger(n) || n < 0) throw new Error("articlesOpenedBefore: the count was not a whole number");
+    return n;
   },
 
   /**

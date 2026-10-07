@@ -24,7 +24,12 @@ vi.mock("../src/web/lib/supabase.js", () => ({
   supabase: { auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) } },
 }));
 vi.mock("../src/web/Masthead.js", () => ({ Masthead: () => null }));
-vi.mock("../src/web/Dock.js", () => ({ Dock: () => null }));
+/* The component only: Reader also calls the Dock's mode activators and
+   `visibleModes` for chat's `mode` chips (plan 261007j). */
+vi.mock("../src/web/Dock.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/web/Dock.js")>()),
+  Dock: () => null,
+}));
 vi.mock("../src/web/reader/measure.js", () => ({ useWindowWidth: () => 1600, useRootFontPx: () => 16 }));
 vi.mock("../src/web/marginalia/MarginaliaColumn.js", async (original) => ({
   ...await original<typeof import("../src/web/marginalia/MarginaliaColumn.js")>(),

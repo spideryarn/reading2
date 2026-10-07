@@ -43,6 +43,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { imageSize } from "./helpers/image-size.js";
+
 const ROOT = path.resolve(import.meta.dirname, "..");
 /* Since 2026-09-03 the record lives in shots.ts, shared by the landing page
    and the features page, and this reads that one file. Same guarantee. */
@@ -72,55 +74,6 @@ function declaredShots(): { file: string; w: number; h: number }[] {
   ].map((m) => ({ file: m[1] as string, w: Number(m[2]), h: Number(m[3]) }));
   if (found.length === 0) throw new Error("shots.ts no longer declares any SHOTS");
   return found;
-}
-
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-/**
- * An image's real width and height, from the file's own header.
- *
- * **JPEG as well as PNG, because the captures are JPEGs.** The browser tool
- * that takes these screenshots produces JPEG, and re-encoding one as a PNG
- * quadruples the bytes without recovering anything the JPEG already threw away.
- * A test that only understood PNG would therefore have quietly pushed the page
- * towards the larger file for the test's own convenience.
- *
- * PNG: eight bytes of signature, a chunk header, then width and height as
- * big-endian 32-bit integers at offsets 16 and 20.
- *
- * JPEG: a chain of marker segments. Walk it, and take the height and width out
- * of the first start-of-frame marker (0xC0–0xCF, excluding 0xC4, 0xC8 and 0xCC,
- * which are Huffman tables and arithmetic-coding conditioning rather than
- * frames). Anything else, skip by its own declared length.
- *
- * The signature is checked first in both cases: an HTML error page saved under
- * an image name would otherwise yield two plausible-looking numbers read out of
- * whatever bytes happened to sit at those offsets.
- */
-function imageSize(file: string): { width: number; height: number; bytes: number } {
-  const buf = readFileSync(file);
-  const bytes = buf.length;
-
-  if (buf.subarray(0, 8).equals(PNG_SIGNATURE)) {
-    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20), bytes };
-  }
-
-  if (buf[0] === 0xff && buf[1] === 0xd8) {
-    let at = 2;
-    while (at + 9 < buf.length) {
-      if (buf[at] !== 0xff) throw new Error(`${file} is a malformed JPEG`);
-      const marker = buf[at + 1] as number;
-      const length = buf.readUInt16BE(at + 2);
-      const isFrame = marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
-      if (isFrame) {
-        return { height: buf.readUInt16BE(at + 5), width: buf.readUInt16BE(at + 7), bytes };
-      }
-      at += 2 + length;
-    }
-    throw new Error(`${file} is a JPEG with no start-of-frame marker`);
-  }
-
-  throw new Error(`${file} is neither a PNG nor a JPEG`);
 }
 
 describe("the landing page's screenshots", () => {
