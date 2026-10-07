@@ -171,6 +171,7 @@ import { type DictationContext, useReaderTranscriber } from "./dictation-upload.
 import { setAppearance, useAppearance } from "./appearance.js";
 import { appearanceRows } from "./appearance-commands.js";
 import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimental-store.js";
+import { isImeComposing } from "./key-chord.js";
 import { useDictationField } from "./useDictationField.js";
 import { type MetadataSection, type Mode, type LearnView, modeParam, learnInSearch, withSection } from "./params.js";
 import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
@@ -2362,6 +2363,11 @@ export function CommandBar({
              says why, and is what a dictation calls too. */
           onChange={(e) => changeDraft(e.target.value)}
           onKeyDown={(e) => {
+            /* **A key an input method is using was never a press of this
+               bar**: its Enter finishes a word and its arrows walk its own
+               candidate list. Asked first, before any `preventDefault`, so the
+               key reaches the input method untouched. */
+            if (isImeComposing(e)) return;
             if (e.key === "ArrowDown") {
               e.preventDefault();
               /* Clamped rather than wrapped, at both ends. Wrapping is fine in a
@@ -2380,9 +2386,8 @@ export function CommandBar({
               /* **Only a fresh press** (GPT Sol's F4 on plan 261003k). A key
                  held down repeats, and the first Enter may have asked a
                  question whose answer is now a row that spends: the repeat
-                 must not confirm it. Nor an Enter that is finishing a word in
-                 an input method, which was never a press of this bar. */
-              if (e.repeat || e.nativeEvent.isComposing) return;
+                 must not confirm it. */
+              if (e.repeat) return;
               enter();
             }
           }}

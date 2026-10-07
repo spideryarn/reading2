@@ -549,6 +549,33 @@ describe("a pick that generates, writes or takes words never runs without a seco
     expect(openedModes).toEqual(["glossary"]);
   });
 
+  /* Plan 261007a-ui-sweep-k2: the older spelling of "composing" (`keyCode`
+     229, no flag) is refused too, and a composing key is left wholly to the
+     input method: not cancelled, and the arrows that walk its candidate list
+     do not also walk ours. */
+  it("leaves a composing Enter and the arrows to the input method", async () => {
+    reading();
+    openBar();
+    type("o");
+    await settle();
+    const before = input().getAttribute("aria-activedescendant");
+    const sent: KeyboardEvent[] = [];
+    for (const init of [{ isComposing: true }, { keyCode: 229 } as KeyboardEventInit]) {
+      for (const key of ["ArrowDown", "Enter"]) {
+        const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
+        act(() => {
+          input().dispatchEvent(e);
+        });
+        sent.push(e);
+      }
+    }
+    await settle();
+    expect(sent.map((e) => e.defaultPrevented)).toEqual([false, false, false, false]);
+    expect(input().getAttribute("aria-activedescendant")).toBe(before);
+    expect(openedModes).toEqual([]);
+    expect(dialog().open).toBe(true);
+  });
+
   it("does not ask for a held Enter either", async () => {
     reading();
     openBar();

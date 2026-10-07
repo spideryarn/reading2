@@ -266,7 +266,12 @@ on the mode. `MODE_CONTAINMENT` there is a `Record<Mode, …>`, so a new mode do
 somebody has said whether its band is contained; the only exemption is Plain, which
 has no band — a boundary around either would have to take the article with it. The token a band's
 boundary retires is `bandTarget` in `activation.ts`, answered from the same tables the presses arm
-from, including Diagram's picture and the Referee and Learn chips. `band()` makes the visitor's
+from, including Diagram's picture and the Referee and Learn chips. A sub-mode is a band of its own
+too: the view goes in the boundary's reset key, so Back from a broken view to its sibling starts
+fresh. Which modes, and for which reader, is `SUB_MODE_SELECTS_A_BAND_FOR` in the same file, a
+`Record` over every mode with sub-modes — it was a hand list of five until 2026-10-06, and Debate
+was missing from it and from `Reader` § `surface`, the snapshot that stops a late comment box
+opening over a newer choice. `band()` makes the visitor's
 not-available `VisitorBand` part of that same choice, so the sentence that replaces an owner-only or
 missing-artefact band cannot take the shared article with it either.
 
@@ -636,8 +641,8 @@ browser already has a console — but before this, nothing reached it at all.
 [`tests/web-api.test.ts`](../../tests/web-api.test.ts) pins the real bodies.
 
 `describeFetchFailure` in [`lib/describe-failure.ts`](../../src/web/lib/describe-failure.ts) is
-where a caught failure becomes the sentence a reader sees, for the seven files
-that use it — a refusal from here, a request that never got a response at all, a
+where a caught failure becomes the sentence a reader sees, for every file
+that uses it — a refusal from here, a request that never got a response at all, a
 stream that stalled, or something else entirely. It passes a caught error's words
 through only when the error says a reader was meant to read them — a
 `ReaderFacingError` (`HttpError` is one), or a lost connection this file and

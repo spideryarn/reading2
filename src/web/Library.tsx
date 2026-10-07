@@ -53,6 +53,7 @@ import { Search, Shield, Undo2, User, X } from "lucide-react";
 import { isAdmin } from "../admin.js";
 import type { LibraryEntry, LibraryHit } from "../types.js";
 import { AddArticle } from "./AddArticle.js";
+import { isImeComposing } from "./key-chord.js";
 import { ADDED_NOTE, CARD_NOTES, CHIP_ORDER, DEFAULT_BY, libraryColumns } from "./library-columns.js";
 /* The shelf's own Feedback control, in the masthead row below — the same
    trigger the corner and the dock draw, in a third shape. FeedbackButton.tsx §
@@ -1224,6 +1225,15 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
              with nothing behind it. */
           enterKeyHint="search"
           onKeyDown={(e) => {
+            if (e.key === "Escape" && value !== "") e.stopPropagation();
+            /* A key an input method is using is not ours: its Enter accepts a
+               candidate and its Escape dismisses the list. A `type="search"`
+               box is also emptied by the browser itself on Escape (measured in
+               Chrome, 2026-10-07), so that default is cancelled. */
+            if (isImeComposing(e)) {
+              if (e.key === "Escape") e.preventDefault();
+              return;
+            }
             if (e.key === "Enter") {
               e.preventDefault();
               e.currentTarget.blur();
@@ -1232,7 +1242,6 @@ function SearchBox({ value, onChange }: { value: string; onChange: (v: string) =
                  box still reaches whatever else on the page listens for it —
                  the same rule as PageContents.tsx's box. */
               e.preventDefault();
-              e.stopPropagation();
               onChange("");
             }
           }}
