@@ -796,12 +796,14 @@ export interface StepContext {
  * difference between a step's artefacts, its postcondition and its completion
  * committing together or one at a time.
  *
- * **`parts` is optional and `UNCONVERTED_STEPS` is what makes that safe.** A
- * stage that still writes its own files during `run` returns `{ detail }` alone,
- * and the session refuses that for any step not on the list — because under a
- * transactional session the same stage would write nothing, pass its
- * postcondition against the artefacts the draft carried forward, and report
- * success. See `checkProduct` in src/store/session.ts.
+ * **`parts` is optional in this type and required in practice.** Every step's
+ * `run` returns a `ConvertedProduct`, below, where it is required, and the
+ * session refuses a product without it at commit — because a stage that wrote
+ * its own files during `run` and returned `{ detail }` alone would write
+ * nothing into the draft, pass its postcondition against the artefacts the
+ * draft carried forward, and report success. This looser type is what `commit`
+ * accepts, so that the refusal is a runtime check as well as a compile-time
+ * one. See `checkProduct` in src/store/session.ts.
  *
  * `stamp` is what the store records about this run, passed straight to `write`.
  * It is separate from `parts` because the store keeps it apart from the
@@ -812,66 +814,33 @@ export interface StepContext {
 export interface StepProduct {
   /** One line about what happened, kept on the finished step and shown to the reader. */
   detail: string;
-  /** The artefacts this run made, for the commit to write. Absent until the step is converted. */
+  /** The artefacts this run made, for the commit to write. The commit refuses a product without them. */
   parts?: ArtifactParts;
   /** What the store should record about this run. */
   stamp?: StepStamp;
 }
 
 /**
- * The steps that still write their own artefacts inside `run`, and so are
- * allowed to return a product with no `parts` in it.
- *
- * **Empty since 2026-08-31, and it is kept rather than deleted.**
- *
- * Every one of the thirteen steps now returns its artefacts and writes no file of
- * its own (docs/plans/260831b-finish-the-database-move.md § Stage 2). The exemption has
- * no members, which means `LegacyUnconvertedStep` is `never` and `run` must
- * return a `ConvertedProduct` for every step in the pipeline — so the mechanism
- * has stopped being a list of exceptions and become a compile-time rule with no
- * way round it.
- *
- * **Deleting it would be the wrong tidy-up.** It is what makes conversion the
- * default rather than something a new stage has to opt into: a stage added
- * tomorrow that writes its own file is refused at commit, by name, and the only
- * way to make that legal is for somebody to add the name here deliberately.
- * That direction was inverted for a few hours on 2026-08-29 — a test held this
- * against `STEP_ORDER`, so a new step was *forced* onto the exemption to make
- * the suite green, which is fail-open. An empty list is the strongest the rule
- * has ever been; an absent one is no rule at all.
- *
- * GPT Sol's rule, and it is the whole design: the unsafe answer must never be
- * the one you get by doing nothing. A name is added here only by somebody who
- * has looked at the stage and knows it still writes its own files.
- *
- * **The two sessions now agree, where they used to differ.** The filesystem
- * session consults this list and a transactional one deliberately passes an
- * empty set instead — because a stage writing outside the transaction is the
- * failure the transaction exists to prevent
- * (docs/plans/260827aa-delete-the-importer.md § D1b). With the list empty those are the
- * same question, and that is the point of the migration rather than a reason to
- * merge them: the day somebody adds a name back, they diverge again on purpose.
- */
-export const LEGACY_UNCONVERTED_STEPS = [] as const satisfies readonly StepName[];
-
-/** A step still on the exemption above — see `LEGACY_UNCONVERTED_STEPS`. */
-export type LegacyUnconvertedStep = (typeof LEGACY_UNCONVERTED_STEPS)[number];
-
-/**
- * The same list as a set, for `checkProduct` — one source, so the runtime rule
- * and the type rule cannot disagree.
- */
-export const UNCONVERTED_STEPS: ReadonlySet<StepName> = new Set<StepName>(
-  LEGACY_UNCONVERTED_STEPS,
-);
-
-/**
  * What a **converted** step returns: the same product, with `parts` required.
  *
  * This is finding 3 of the D1a review made static. The runtime guard in
- * `checkProduct` refuses an absent `parts` for any step off the legacy list, and
- * this is the same refusal at compile time, so a new stage cannot reach the
- * runtime guard by accident.
+ * `checkProduct` (src/store/session.ts) refuses an absent `parts`, and this is
+ * the same refusal at compile time, so a new stage cannot reach the runtime
+ * guard by accident.
+ *
+ * **Every step, with no way round it since 2026-10-07.** There was a list of
+ * step names allowed to return no `parts` because they still wrote their own
+ * files inside `run` (`LEGACY_UNCONVERTED_STEPS`), and `run`'s return type was
+ * conditional on it. It emptied on 2026-08-31, when the last of the thirteen
+ * steps was converted (docs/plans/260831b-finish-the-database-move.md § Stage 2),
+ * and was kept empty on purpose, on the argument that *an empty list is the
+ * strongest the rule has ever been; an absent one is no rule at all*. That
+ * argument was about the refusal, and the refusal is what stayed: it is
+ * unconditional in the type here and in `checkProduct`. What went is the way
+ * to opt out of it, whose last reader was the filesystem session
+ * (docs/plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md).
+ * GPT Sol's rule is unchanged: the unsafe answer must never be the one you get
+ * by doing nothing.
  */
 export interface ConvertedProduct extends StepProduct {
   parts: ArtifactParts;
@@ -997,7 +966,7 @@ export interface PipelineStep<N extends StepName = StepName> {
     ctx: StepContext,
     store: ArtifactReads,
     checkpoints: CheckpointStore,
-  ): Promise<N extends LegacyUnconvertedStep ? StepProduct : ConvertedProduct>;
+  ): Promise<ConvertedProduct>;
 }
 
 /**
@@ -2013,8 +1982,10 @@ export async function recoverPdfFigures(
  */
 /**
  * **`{ [K in StepName]: PipelineStep<K> }`, not `Record<StepName, PipelineStep>`.**
- * Each entry is bound to its own name, which is what lets `run`'s return type
- * depend on whether that name is still on `LEGACY_UNCONVERTED_STEPS`.
+ * Each entry is bound to its own name. That was what let `run`'s return type
+ * depend on the step's name while some steps were exempt from returning
+ * `parts`; none is now, and the binding is kept for the callers that narrow
+ * on `name`.
  */
 /**
  * **The two readers the `metadata` step calls**, in an object so a test can
@@ -4685,7 +4656,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
    * nothing. Every other article-reading stage followed it on 2026-08-31, and
    * the stages that acquire and cut the article rather than read it — `fetch`,
    * `extract`, `blocks` and `structure` — converted the same day, so
-   * `LEGACY_UNCONVERTED_STEPS` is now empty
+   * no step is exempt any more
    * (docs/plans/260831b-finish-the-database-move.md § Stage 2).
    */
   sketch: {

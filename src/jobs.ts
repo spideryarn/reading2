@@ -2286,8 +2286,7 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  * files the stages had written into a draft and published that. It existed
  * because the stages wrote their own files inside `run()` and returned nothing a
  * session could write, so `pgStoreSession` would have refused every one of them
- * by name (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts). That list is empty:
- * every one of the thirteen steps returns its product, so the copy has nothing
+ * by name. Every one of the thirteen steps returns its product, so the copy has nothing
  * left to do and the files it copied from are not written at all under Postgres.
  * docs/plans/260831b-finish-the-database-move.md § Stage 3 — the flip.
  *
@@ -2299,7 +2298,8 @@ export type StepRegistry = { [K in StepName]: PipelineStep<K> };
  *
  * This was `if (STORE !== "postgres") return fsStoreSession(…)` until
  * 2026-09-05, and that branch was what every laptop ran: no draft, no
- * publication, no database. It went with the flag. What is left is the one
+ * publication, no database. It went with the flag, and `fsStoreSession` itself
+ * on 2026-10-07. What is left is the one
  * session, and `tests/claim-session-postgres.test.ts` is the proof that this
  * line opens it.
  *

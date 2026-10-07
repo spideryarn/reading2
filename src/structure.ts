@@ -3444,20 +3444,15 @@ function finishStructureRun(
      and the caller gives them to its store in one call.
 
      **What that map does and does not buy, because an earlier version of this
-     comment said they "land together or not at all" and that is false on the
-     filesystem.** `fsStoreSession` has no transaction and says so outright
-     (src/store/session.ts); its writes are sequential, so a kill between them
-     really does leave one artefact new and another old. Three separate things
-     make the ordering unnecessary anyway:
+     comment said they "land together or not at all" and that was false on the
+     filesystem.** The filesystem session (`fsStoreSession`, deleted 2026-10-07)
+     had no transaction; its writes were sequential, so a kill between them
+     really did leave one artefact new and another old, and its `beginStep`
+     marker was what made the next run re-run the step. Two things make the
+     ordering unnecessary now:
 
-     - **On the filesystem**, the `beginStep` marker. A step that did not finish
-       leaves it behind, so the next run re-runs the step over whatever the
-       partial write left rather than skipping it. That marker is the
-       filesystem's whole answer to atomicity, and it is weaker than a
-       transaction rather than an imitation of one.
-     - **On Postgres**, the store's transaction, which does make the three
-       atomic — the property the old sentence claimed, in the one store that has
-       it.
+     - **The store's transaction**, which does make the three atomic — the
+       property the old sentence claimed, in the one store there is.
      - **And the map itself** centralises ownership: one place that knows what
        this stage produces, so nothing can write two of the three and forget the
        third. That is worth having and it is not atomicity.

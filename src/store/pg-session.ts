@@ -4,10 +4,11 @@
  * > A stage stops writing. It returns a product. A short commit afterwards
  * > writes the product, checks it, finishes the step, and moves the job on.
  *
- * `fsStoreSession` says out loud that it holds no transaction: on the filesystem
- * the four writes happen one after another and a kill between any two of them
- * leaves the state it always did. This is the other implementation, and the
- * whole of its value is the word *one*: **artefacts, postcondition, step
+ * This is the only implementation since 2026-10-07. The filesystem one
+ * (`fsStoreSession`, which only a test still called) held no transaction: its
+ * four writes happened one after another and a kill between any two of them
+ * left the state it always did. The whole of this one's value is the word
+ * *one*: **artefacts, postcondition, step
  * completion, publication and job transition commit together or not at all.**
  *
  * The model call stays outside, permanently. `run` happens between `beginStep`
@@ -75,18 +76,20 @@
  * which is why `publishRevisionIn` and `failRevisionIn` may go on taking it for
  * themselves. GPT Sol, 2026-08-29.
  *
- * ## It does not accept `JobSettles`
+ * ## It does not take the job store's public methods
  *
- * `releaseStepIn(tx, …)` and `finishIn(tx, …)` are called directly, because the
- * public capability's methods reach `getDb()` for themselves and injecting them
- * would bind nothing to this transaction — artefacts and step state committing
- * while the release fails separately is the exact fault this file exists to
- * remove. See `JobSettles` in src/store/session.ts.
+ * `releaseStepIn(tx, …)` and `finishIn(tx, …)` are called directly, because
+ * `JobStore.releaseStep` and `.finish` reach `getDb()` for themselves and
+ * injecting them would bind nothing to this transaction — artefacts and step
+ * state committing while the release fails separately is the exact fault this
+ * file exists to remove. (The injected pair was a type, `JobSettles`, which
+ * went with the filesystem session on 2026-10-07.)
  *
  * ## Every real step runs through it, and once nothing could
  *
- * `checkProduct` is asked with the unconverted set, and that set is now
- * **empty** (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts): every step returns
+ * `checkProduct` refuses a product with no `parts` for every step, with no
+ * exemption (the list of exempt names, `LEGACY_UNCONVERTED_STEPS`, emptied on
+ * 2026-08-31 and was deleted on 2026-10-07): every step returns
  * `parts` and this session is what writes them. This paragraph said *"nothing
  * real can run through it yet, and that is correct"* while all ten steps were
  * still legacy and a stage that wrote its own files during `run` wrote them
@@ -141,18 +144,6 @@ import {
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-
-/**
- * **No step is exempt here**, and it is a constant rather than an option.
- *
- * `fsStoreSession` consults `UNCONVERTED_STEPS` because on the filesystem a
- * stage writing its own files during `run` is simply how it has always worked.
- * Under a transaction those writes land outside it, so the same product would
- * pass its postcondition against the artefacts `beginDraftIn` carried forward
- * and be marked done having written nothing into the draft. There is no value
- * of this that would be safe, so there is no parameter.
- */
-const NOTHING_UNCONVERTED: ReadonlySet<StepName> = new Set<StepName>();
 
 /* **`READ_COMMITTED` was defined here, and moved to [isolation.ts](isolation.ts)
    on 2026-09-03** when every transaction in the store started naming its level
@@ -788,7 +779,7 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
       /* **Before the transaction opens**, because it is a claim about the
          product and not about the database, and a refusal that has not touched
          Postgres is one nothing has to roll back. */
-      checkProduct(step, product, NOTHING_UNCONVERTED);
+      checkProduct(step, product);
 
       let announced: Announcement = {};
       const settled = await db

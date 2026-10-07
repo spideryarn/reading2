@@ -335,10 +335,12 @@ Since 2026-08-29 a step returns a *product* —
 `{ detail, parts?, stamp? }` — and the commit after it
 ([`src/store/session.ts`](../../src/store/session.ts)) writes that product, checks it, and finishes
 the step. The boundary landed empty on purpose, so that the stages could move behind it one at a
-time; by 2026-08-31 every one of them had. `LEGACY_UNCONVERTED_STEPS` in
-[`src/pipeline.ts`](../../src/pipeline.ts) is the list of steps still exempted from returning
-`parts` — **empty**, and kept rather than deleted, because a step off it must return `parts` or the
-type checker refuses it: the exemption has to be asked for by name, not fallen into.
+time; by 2026-08-31 every one of them had. A step must return `parts`: `PipelineStep.run` in
+[`src/pipeline.ts`](../../src/pipeline.ts) is typed to return a `ConvertedProduct`, and
+`checkProduct` refuses a product without them at commit. There was a list of step names exempted
+from that (`LEGACY_UNCONVERTED_STEPS`), empty from 2026-08-31 and deleted on 2026-10-07 with the
+filesystem session that was its last reader ([261007d](../plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)), so there is no way to ask for the
+exemption any more.
 [260827aa-delete-the-importer.md § D1](../plans/260827aa-delete-the-importer.md),
 [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 

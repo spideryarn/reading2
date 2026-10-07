@@ -7,8 +7,9 @@
  * The runner in src/jobs.ts used to make four store calls per step —
  * `beginStep`, the stage's own writes inside `run`, `assertProduced`,
  * `finishStep` — and then a fifth from its caller, the job's own release or
- * finish. Each commits on its own. On the filesystem that is fine, because there
- * is nothing to commit. On Postgres each would be its own transaction, and the
+ * finish. Each commits on its own. On the filesystem store (gone 2026-09-05)
+ * that was fine, because there was nothing to commit. On Postgres each would be
+ * its own transaction, and the
  * first of them writes the artefacts: a crash between the write and the
  * completion leaves a revision holding new artefacts that no step claims to have
  * made, and a crash between the completion and the release leaves a revision
@@ -22,22 +23,19 @@
  * held open across a thirty-second model call is a transaction held open across
  * a thirty-second model call, whatever else is true about it.
  *
- * docs/plans/260827aa-delete-the-importer.md § D1. This file is D1a: the shape, and the
- * filesystem session, which holds no transaction and says so. The transactional
- * one is D1b, and everything it needs a place for has a place here.
+ * docs/plans/260827aa-delete-the-importer.md § D1. This file is the shape: the
+ * types, `settlementOf`, and `checkProduct`. The one session is the
+ * transactional one, `pgStoreSession` in ./pg-session.ts. A second, over the
+ * filesystem and with no transaction in it (`fsStoreSession`), lived here
+ * until 2026-10-07; only a test had called it since the filesystem store went
+ * on 2026-09-05
+ * (docs/plans/261007d-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md).
  */
-import { assertProduced, UNCONVERTED_STEPS } from "../pipeline.js";
 import type { PipelineStep, StepContext, StepProduct } from "../pipeline.js";
 import { ProductRefused } from "./artifacts.js";
-import { nullCheckpointStore } from "./checkpoints.js";
 import type { CheckpointStore } from "./checkpoints.js";
-import type {
-  ArtifactKind,
-  ArtifactMap,
-  ArtifactReads,
-  ArtifactStore,
-} from "./artifacts.js";
-import type { JobEnding, JobStore, StepOutcome as JobStepFields } from "./jobs.js";
+import type { ArtifactKind, ArtifactMap, ArtifactReads } from "./artifacts.js";
+import type { JobEnding, StepOutcome as JobStepFields } from "./jobs.js";
 import type { Job, JobStep, StepName } from "../types.js";
 
 /**
@@ -45,8 +43,8 @@ import type { Job, JobStep, StepName } from "../types.js";
  *
  * **A payload, not a closure**, for the same reason `commit` takes the product
  * rather than a function: a session that is handed a closure cannot inspect what
- * it is about to do, and D1b has to bind these to its transaction rather than
- * run them beside it. The two shapes are the two things that can follow a step —
+ * it is about to do, and the session has to bind these to its transaction
+ * rather than run them beside it. The two shapes are the two things that can follow a step —
  * the claim goes back so the next request can have it, or the job is over.
  *
  * **All three carry the job's steps**, `keep` included since 2026-10-07. This
@@ -69,9 +67,7 @@ export type JobTransition =
    * not the title. `noteProgress` still follows it, outside the transaction,
    * for the card and for the look at `cancelling`.
    *
-   * The Postgres session writes `steps` in the product's transaction
-   * (`keepStepIn`). `fsStoreSession`, which only a test reaches and which has
-   * no transaction, ignores them.
+   * The session writes `steps` in the product's transaction (`keepStepIn`).
    *
    * **Why it is not simply `release`.** A release hands the claim back, and on a
    * serverless host the next request lands on a different instance with an empty
@@ -118,31 +114,13 @@ export type JobEndTransition = Extract<JobTransition, { kind: "end" }>;
 export type JobSettlingTransition = Exclude<JobTransition, { kind: "keep" }>;
 
 /**
- * The two job writes a session performs, and no others.
- *
- * Narrowed the way `ArtifactReads` is: a session may end a claim, and it may not
- * claim, cancel, sweep or enumerate. It also makes the session testable against
- * a two-method stub rather than a whole `JobStore`.
- *
- * **The transactional session must not accept this**, and that is not a style
- * preference. Its methods reach `getDb()` for themselves, so handing them to a
- * session binds them to nothing: the artefacts and the step state would commit
- * while the release failed separately, which is the exact fault the whole seam
- * exists to remove. It calls `releaseStepIn(tx, …)` and `finishIn(tx, …)`
- * instead. GPT Sol, 2026-08-29,
- * docs/plans/260827aa-delete-the-importer-d1b-design-sol.md critical 2.
- */
-export type JobSettles = Pick<JobStore, "releaseStep" | "finish">;
-
-/**
  * **What the settlement actually did** — never what it was asked to do.
  *
  * `commit` and `settleJob` used to return the `Job` alone, and every caller
  * worked out what had happened by looking at the transition it had *requested*.
  * That is wrong on one path, and the path is reachable: `releaseStep` resolves
  * to **cancelled** when a Stop arrived while the step was running (see the
- * `case` expression in src/store/pg-jobs.ts, and the same branch in
- * src/store/jobs-fs.ts). A caller that infers "released, so the job goes on"
+ * `case` expression in src/store/pg-jobs.ts). A caller that infers "released, so the job goes on"
  * from its own request then tells the reader the job is still working, and
  * `/advance` answers `done: false` about a job that is over.
  *
@@ -175,10 +153,9 @@ export type JobSettlement =
 /**
  * The requested transition plus the row that came back, read as what happened.
  *
- * **One dispatcher, shared by both sessions**, so the filesystem and Postgres
- * cannot disagree about what a release-that-cancelled is. Both stores really do
- * settle a cancellation inside `releaseStep`, so this is not a Postgres-only
- * shape.
+ * **One dispatcher**, so there is one account of what a release-that-cancelled
+ * is. It was written to be shared by two sessions; the filesystem one went on
+ * 2026-10-07.
  *
  * It reads `job.status` and not the flag it was set from: the status is what the
  * store committed and what the reader will be shown, and asking the same
@@ -248,10 +225,8 @@ export interface StoreSession {
    * transaction would leave the seam looking wired and doing nothing.
    *
    * Bound to one article at construction, because a retry is a new job and a
-   * new draft revision and the entries have to outlive both. The Postgres
-   * session builds it from the `articleId` its draft reference already carries;
-   * the filesystem session has no article row and hands out
-   * `nullCheckpointStore()`.
+   * new draft revision and the entries have to outlive both. The session
+   * builds it from the `articleId` its draft reference already carries.
    */
   readonly checkpoints: CheckpointStore;
   /** This step has started; nothing it writes is to be believed until `commit`. */
@@ -266,9 +241,7 @@ export interface StoreSession {
    * precisely the failure that has to be refusable. See `checkProduct`.
    *
    * **And it takes the job transition**, so that the step's completion and the
-   * job's are one act rather than two. On the filesystem they are still two
-   * writes in a row; what this buys today is that there is exactly one place for
-   * D1b to make them one.
+   * job's are one act rather than two: one transaction in `pgStoreSession`.
    *
    * **Or the job's steps and nothing more.** A `keep` is the ordinary case now
    * that one claim walks the whole job: the step is finished and the job stays
@@ -312,31 +285,6 @@ export interface StoreSession {
 }
 
 /**
- * The six read operations, and nothing else reachable.
- *
- * Written out one by one rather than spread, because a spread of the store is
- * the store: `{ ...store }` carries `write`, `beginStep` and `finishStep` along
- * with the rest, and the only thing stopping a stage calling them would be the
- * type. `read` and `readBaseline` are generic, so they are methods rather than
- * arrow properties — an arrow with rest arguments loses the type parameter and
- * hands every caller back `unknown`.
- */
-export function readsOf(store: ArtifactReads): ArtifactReads {
-  return {
-    has: (slug, step, kinds) => store.has(slug, step, kinds),
-    hasEarlierBlocks: (slug) => store.hasEarlierBlocks(slug),
-    read<K extends ArtifactKind>(slug: string, step: StepName, kind: K) {
-      return store.read(slug, step, kind);
-    },
-    readBaseline<K extends ArtifactKind>(slug: string, step: StepName, kind: K) {
-      return store.readBaseline(slug, step, kind);
-    },
-    stampFor: (slug, step) => store.stampFor(slug, step),
-    interrupted: (slug, step) => store.interrupted(slug, step),
-  };
-}
-
-/**
  * Is this product one the commit may act on at all? Throws if it is not.
  *
  * **Asked before anything is written**, which is not a detail. `assertProduced`
@@ -357,12 +305,13 @@ export function readsOf(store: ArtifactReads): ArtifactReads {
  *    otherwise pass every check here and be marked done — while `has([], …)`
  *    deliberately answers `false`, so the step could never be considered done
  *    and would re-run for ever with nothing to show for it.
- * 2. **A product with no `parts` is permitted only for a step still on
- *    `LEGACY_UNCONVERTED_STEPS`** — and a transactional session passes an empty
- *    set, so no step is. The legacy set is empty today too (src/pipeline.ts).
- *    An unconverted stage used to write its files during `run`; under a
- *    transaction those files would leave the draft unchanged while its carried
- *    artefacts could still pass `assertProduced`.
+ * 2. **A product must have `parts`.** A stage that wrote its own files during
+ *    `run` and returned only a `detail` would, under a transaction, leave the
+ *    draft unchanged while its carried artefacts still passed
+ *    `assertProduced`. There was an exemption by step name for stages not yet
+ *    converted (`LEGACY_UNCONVERTED_STEPS`, src/pipeline.ts); it had been
+ *    empty since 2026-08-31 and went on 2026-10-07, so the refusal is now
+ *    unconditional, as `PipelineStep.run`'s return type is.
  * 3. **A product with `parts` must have all of them**, as its **own**
  *    properties. `ArtifactParts` is `Partial`, so nothing in the type system
  *    asks. `Object.hasOwn` rather than a lookup, because `write` iterates
@@ -379,11 +328,7 @@ export function readsOf(store: ArtifactReads): ArtifactReads {
  * kinds, and would call `write` with nothing in it — so it goes through rule 3
  * and is refused by name.
  */
-export function checkProduct(
-  step: PipelineStep,
-  product: StepProduct,
-  unconverted: ReadonlySet<StepName>,
-): void {
+export function checkProduct(step: PipelineStep, product: StepProduct): void {
   if (step.produces.length === 0) {
     throw new ProductRefused(
       `${step.name} declares no artefacts, so nothing can say whether it ran. ` +
@@ -392,12 +337,10 @@ export function checkProduct(
     );
   }
   if (product.parts === undefined) {
-    if (unconverted.has(step.name)) return;
     throw new ProductRefused(
-      `${step.name} returned no artefacts to write, and it is not marked unconverted. ` +
-        `A step that writes its own artefacts inside run() must be named in ` +
-        `LEGACY_UNCONVERTED_STEPS (src/pipeline.ts); one that has been converted ` +
-        `must return parts.`,
+      `${step.name} returned no artefacts to write. A step returns what it made as ` +
+        `parts and the commit writes them; one that writes its own artefacts inside ` +
+        `run() leaves the draft unchanged.`,
     );
   }
   const parts: Partial<Record<ArtifactKind, ArtifactMap[ArtifactKind]>> = product.parts;
@@ -421,85 +364,4 @@ export function checkProduct(
         `own writes the valid ones first and then throws on the unknown one.`,
     );
   }
-}
-
-/**
- * A session over the filesystem, and **there is no transaction in it.**
- *
- * Said plainly rather than left to be inferred, because the shape of `commit`
- * invites the inference. The four things inside it — `write`, the postcondition,
- * `finishStep`, the job transition — happen one after another, and a kill
- * between any two of them leaves exactly the state it always did: artefacts on
- * disk and a `beginStep` marker still there saying the run did not finish, which
- * is what makes the next run re-run the step. That marker is the filesystem's
- * whole answer to atomicity, and it is weaker than a transaction rather than an
- * imitation of one.
- *
- * What this session *does* buy on the filesystem is the boundary: the runner has
- * one place where a step's product is written and checked and completed and the
- * job moves on, so D1b can make that place atomic without touching the runner
- * again.
- *
- * `unconverted` is a parameter with a default rather than a lookup, so that the
- * Postgres session can pass an empty set and so that a test can make a step
- * converted without editing the production list.
- */
-export function fsStoreSession(options: {
-  artifacts: ArtifactStore;
-  jobs: JobSettles;
-  unconverted?: ReadonlySet<StepName>;
-}): StoreSession {
-  const { artifacts, jobs, unconverted = UNCONVERTED_STEPS } = options;
-  /* **Through `settlementOf`, on the filesystem too.** `jobs-fs.ts`'s
-     `releaseStep` has the same cancelling branch the Postgres one has — Stop
-     arriving mid-step lands on the release — so a filesystem caller that read
-     the outcome off its own request would be wrong in exactly the same way. */
-  const settleJob = async (transition: JobSettlingTransition): Promise<JobSettlement> =>
-    settlementOf(
-      transition,
-      transition.kind === "release"
-        ? await jobs.releaseStep(
-            transition.jobId,
-            transition.attempt,
-            transition.steps,
-            transition.fields,
-          )
-        : await jobs.finish(transition.jobId, transition.attempt, transition.ending),
-    );
-
-  return {
-    reads: readsOf(artifacts),
-    /* **Nothing, deliberately** — see `nullCheckpointStore`. There is no
-       `articles` row on this path and therefore no id to key an entry on, and
-       keying on anything else is the one mistake that would make the table
-       useless (src/store/checkpoints.ts). The articles this session produces are
-       unchanged; a *second* attempt after a killed one pays again. */
-    checkpoints: nullCheckpointStore(),
-    beginStep: (slug, step) => artifacts.beginStep(slug, step),
-    settleJob,
-    async commit(ctx, step, attempt, product, transition) {
-      checkProduct(step, product, unconverted);
-      if (product.parts) {
-        await artifacts.write(ctx.slug, step.name, product.parts, product.stamp ?? {});
-      }
-      /* Still asked, and still the guard it always was: `checkProduct` knows
-         what the step *says* it made, and this knows what the store can actually
-         read back. An unconverted step passes the first and is caught by the
-         second when its own writes did not land. */
-      await assertProduced(step, ctx, artifacts);
-      await artifacts.finishStep(ctx.slug, step.name, attempt);
-      /* **Nothing else on a `keep`, here.** The Postgres session writes the
-         job's steps at this point, in the product's transaction. This one has
-         no transaction and its `JobSettles` has no such write, so the
-         coordinator's `noteProgress` is what catches the row up. See
-         `JobTransition`. */
-      if (transition.kind === "keep") return { kind: "kept" };
-      /* **Last, and inside the same call.** Under D1b this is the statement that
-         has to share a transaction with the three above it: without that there
-         is a window in which `settleExpired` invalidates the attempt after the
-         artefacts have committed, and the revision says done while the job says
-         interrupted. On the filesystem it is simply the next write. */
-      return await settleJob(transition);
-    },
-  };
 }

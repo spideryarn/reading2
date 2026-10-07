@@ -1758,14 +1758,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "default `repeatable read` so a passing assertion cannot be the database's own default " +
       "agreeing with the bug. Nothing about it is filesystem; the two sites are `contextPaths`.",
   },
-  "tests/store-session.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "D1a — the commit seam **on the filesystem, where there is no transaction to hold**, and its " +
-      "sharpest case is a refusal over an artefact carried from a previous run, because against an " +
-      "empty directory a refusal proves nothing. The Postgres half of the same seam already lives " +
-      "in `store-pg-session.test.ts`.",
-  },
   "tests/store-uploads-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:

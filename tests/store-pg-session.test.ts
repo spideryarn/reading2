@@ -2,14 +2,15 @@
  * The transactional store session: artefacts, postcondition, step completion,
  * publication and job transition, in **one** transaction or none of them.
  *
- * `tests/store-session.test.ts` is the other half of the seam, where there is
- * no transaction to hold and the file says so out loud. This is the Postgres
- * half — `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md —
- * and everything here is a claim that could not be made on the filesystem.
+ * `src/store/pg-session.ts`, D1b of docs/plans/260827aa-delete-the-importer.md.
+ * It was the Postgres half of a seam with two sessions; the filesystem one and
+ * its test (`tests/store-session.test.ts`) were deleted on 2026-10-07, and the
+ * cases of that test that asserted a rule this session keeps are here (the run
+ * phase's six reads) and in tests/check-product.test.ts.
  *
  * ## The eight, and what each is for
  *
- * Sixteen cases. Three of them are checks on the other thirteen rather than on the
+ * Seventeen cases. Three of them are checks on the other fourteen rather than on the
  * session: the first asks whether the returned object is still guarded, the
  * lock-order one exists because deleting `lockArticleFor` leaves every other
  * case green, and the last one compiles rather than runs.
@@ -59,6 +60,8 @@
  *     settled one line later has to close it — the ordering case 10 cannot see.
  * 14. `settleJob` takes an ending and nothing else. Compile-time; there is no
  *     other kind of case a narrowing can have.
+ * 15. The run phase is handed six read methods and nothing that writes. Ported
+ *     from the deleted filesystem session's test on 2026-10-07.
  *
  * ## Why it drives the real coordinator for half of them
  *
@@ -204,6 +207,7 @@ import { hashBlocks } from "../src/source-hash.js";
 import {
   type ArtifactOutcome,
   type ArtifactReads,
+  type ArtifactStore,
   NO_INPUT_HASH,
   PIPELINE_RUN,
 } from "../src/store/artifacts.js";
@@ -543,14 +547,11 @@ interface StepLog {
  * `PipelineStep<"arc">["run"]` returns `ConvertedProduct`, where `parts` is
  * required. That is the compile-time half of the same rule and it is working.
  *
- * The runtime half still has to be tested, and it is not redundant. The
- * transactional session asks `checkProduct` with an **empty** unconverted set,
- * so it refuses a product with no `parts` for *every* step — including the four
- * still on the legacy list, whose types permit `{ detail }` today. A type is
- * also only a claim about this repository's own callers. So the fixture reaches
+ * The runtime half still has to be tested, and it is not redundant:
+ * `checkProduct` refuses a product with no `parts` for *every* step, and a type
+ * is only a claim about this repository's own callers. So the fixture reaches
  * past the compiler on purpose, in one place, with the reason written down —
- * rather than each call site casting, or the whole test being rewritten around
- * a still-legacy step and quietly ceasing to say anything about a converted one.
+ * rather than each call site casting.
  */
 function fakeArc(
   produce: (ctx: StepContext, store: ArtifactReads) => Promise<StepProduct>,
@@ -1870,5 +1871,46 @@ describe("the transactional session", () => {
       // @ts-expect-error a release may not be settled through this door.
       session.settleJob(release);
     expect(typeof refused).toBe("function");
+  });
+
+  /* ----------------------------------------------------------------- 15 -- */
+
+  /**
+   * **The run phase gets six reads and no way back to a write.**
+   *
+   * `session.reads` is what a stage is handed while it works. If it were the
+   * whole store — or carried `write`, `beginStep` or `finishStep` along with
+   * the reads — the narrowing would be a type only, and one cast would have a
+   * stage writing outside the transaction that is supposed to hold the step
+   * together. Ported on 2026-10-07 from the deleted filesystem session's test,
+   * where it was asked of `fsStoreSession`; nothing asked it of this one.
+   *
+   * Mutation, watched red that day: `reads` built from `pgArtifactsIn` (the
+   * whole store) instead of `readsPgArtifacts` → `expected [ 'beginStep',
+   * 'finishStep', 'has', …(6) ] to deeply equal [ 'has', …(5) ]`.
+   */
+  mine("hands the run phase six read methods, and not the store behind them", async () => {
+    const slug = `${SLUG_PREFIX}reads`;
+    await publishArticle(slug, "the carried arc");
+    const claimed = await claimWithSession(slug, ["arc"]);
+
+    expect(Object.keys(claimed.session.reads).sort()).toEqual([
+      "has",
+      "hasEarlierBlocks",
+      "interrupted",
+      "read",
+      "readBaseline",
+      "stampFor",
+    ]);
+    // The cast is the point: this is what a stage that wanted to write would do.
+    const reached = claimed.session.reads as unknown as ArtifactStore;
+    expect(reached.write).toBeUndefined();
+    expect(reached.beginStep).toBeUndefined();
+    expect(reached.finishStep).toBeUndefined();
+    /* And the six really answer, about this draft: a facade of undefineds would
+       pass everything above. */
+    expect((await claimed.session.reads.read(slug, "arc", "arc"))?.entries[0]?.text).toBe(
+      "the carried arc",
+    );
   });
 });

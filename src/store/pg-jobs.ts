@@ -2210,8 +2210,9 @@ const rawPgJobStore: JobStore = {
  * These are exported anyway, because the transactional store session
  * (docs/plans/260827aa-delete-the-importer.md § D1b) has to settle the job inside the
  * *artefact* transaction, and a method that calls `getDb()` for itself binds to
- * nothing. Injecting the public `JobSettles` capability was the design the
- * review rejected for exactly that reason.
+ * nothing. Injecting the public pair (`JobSettles`, a type deleted with the
+ * filesystem session on 2026-10-07) was the design the review rejected for
+ * exactly that reason.
  *
  * **So the scrubbing has to be re-provided by the caller, and here is where:**
  * the session constructs its returned object through `guardDbStore`, the same

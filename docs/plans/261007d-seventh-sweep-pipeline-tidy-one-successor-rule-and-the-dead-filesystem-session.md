@@ -80,3 +80,95 @@ moved with the query, unchanged.
 **What the docs got wrong.** Sol's finding was marked *C, not reproduced*; the Opus review
 reproduced it, and so did this. Nothing in the finding was false.
 [structure-step.md](../project/structure-step.md) now says both callers ask.
+
+## Item 2: PQO3, the filesystem session
+
+**What was deleted.** From [`src/store/session.ts`](../../src/store/session.ts): `fsStoreSession`,
+`JobSettles`, and `readsOf` (the six-method facade, whose only caller was `fsStoreSession`; the
+live session builds its own with `readsPgArtifacts`). From
+[`src/pipeline.ts`](../../src/pipeline.ts): `LEGACY_UNCONVERTED_STEPS`, `LegacyUnconvertedStep`,
+`UNCONVERTED_STEPS`, and the conditional return type on `PipelineStep.run`, which is now
+`ConvertedProduct` for every step. From `src/store/pg-session.ts`: `NOTHING_UNCONVERTED`.
+`checkProduct` lost its third parameter and refuses a product with no `parts` unconditionally.
+`tests/store-session.test.ts` (626 lines) is gone, and its entry in the closed migration record
+(`tests/store-migration-registry.ts`), which may name only files that exist.
+
+**`JobStore.finish` and `JobStore.releaseStep` are left exactly as they were (U7).** They are the
+public terminal methods with no caller in `src/`; nine test files use them as fixtures, and moving
+those through a session is its own piece of work, tied to PQO5.
+
+**A comment said not to do part of this, and it is answered rather than overridden.** The
+docstring on `LEGACY_UNCONVERTED_STEPS` read *"Deleting it would be the wrong tidy-up … An empty
+list is the strongest the rule has ever been; an absent one is no rule at all."* That argument was
+for the refusal, and the refusal stayed: it is unconditional in the type and in `checkProduct`.
+What went is the way to opt out of it, whose last reader was `fsStoreSession`. The reasoning is
+kept on `ConvertedProduct`.
+
+**The simpler option passed over:** deleting only `fsStoreSession` and its test, leaving the empty
+list and the conditional type. It leaves a parameter with one possible value and a type that is
+conditional on `never`.
+
+### The greps, before deleting
+
+Over `src scripts tools evals tests package.json`, 2026-10-07, on `origin/dev` at `434e03141`:
+
+| pattern | hits outside the definition and the old test |
+|---|---|
+| `fsStoreSession` | 0 calls. 17 comments: 5 in `src/`, 12 in `tests/` |
+| `fs[-_ ]?store[-_ ]?session`, `fsStore`, and `"fs" +` / `` `fs${ `` string builds (case-insensitive) | 0 |
+| `store-session.test` | a comment in `tests/store-pg-session.test.ts` and the registry entry |
+| `JobSettles` | 0 uses. 3 comments |
+| `UNCONVERTED`, `LegacyUnconvertedStep` | `src/store/pg-session.ts` (the empty set it passed) and `tests/stage2c-raw-bytes.test.ts` (five uses, all passing the empty set or asserting it empty) |
+| `readsOf` from `session.ts` | 0. The `readsOf` in `src/sharing-steps.ts` is a different function |
+
+`tools/` does not exist. `npm run typecheck` is clean and `npm run knip` reports nothing in any
+file this touched.
+
+### The old test's 18 cases
+
+| # | case | verdict |
+|---|---|---|
+| 1 | refuses a step that returned one of the two artefacts it declares | **twin**: `stage2c-raw-bytes` *refuses an extract product missing extractedHtml, by name* |
+| 2 | refuses over an artefact carried from a previous run, and leaves it alone | **twin**: `store-pg-session` *refuses a missing part that the carried artefact would have hidden* |
+| 3 | refuses an empty parts object | **twin**: the same case (it passes `parts: {}`), and `stage2c-raw-bytes` *refuses a fetch product with no raw manifest* |
+| 4 | writes the new artefacts over the carried ones, and finishes the step | **twin**: `store-pg-session` *writes, completes, publishes, finishes and clears the pointer* |
+| 5 | is accepted with no parts while it is marked unconverted | **obsolete**: the exemption is deleted |
+| 6 | is refused with no parts once it is no longer marked unconverted | **twin**: `stage2c-raw-bytes` *refuses an extract product with no parts whatsoever*; the marker half is `store-pg-session` *re-runs a step that was begun and never committed* |
+| 7 | lists only real steps on the exemption | **obsolete**: the list is deleted |
+| 8 | `assertProduced` refuses an unconverted step whose artefacts are not there | **obsolete**: only an exempt step could reach the postcondition with no parts |
+| 9 | `assertProduced`, as a function: half of what a step declares is missing | **ported**: `check-product` *refuses a step with half of what it declares readable* |
+| 10 | refuses a part inherited from a prototype | **ported**: `check-product`, same name |
+| 11 | refuses an artefact the step does not declare | **ported**: `check-product`, same name |
+| 12 | refuses a step that declares nothing | **ported**: `check-product`, same name |
+| 13 | the run phase is six read methods, and not the store behind them | **ported**: `store-pg-session` case 15, against the real session |
+| 14 | the six still answer, about the real store | **twin**: `store-pg-session` case 2 reads the carried arc through `session.reads`; case 15 does too |
+| 15 | releases the claim once the step is committed | **twin**: `store-pg-session` *waits for the article row before it writes anything* (`settlement.kind` is `released`) |
+| 16 | reports the ending when a Stop turns the release into a cancellation | **twin**: `store-pg-session` *reports the cancellation a release resolved into, and disposes of the draft* |
+| 17 | leaves the job alone when the product is refused | **twin**: `store-pg-session` case 2 (the job is still `running` and holds its draft) |
+| 18 | ends the job on its own, for the endings that have no product | **twin**: `store-pg-session` *publishes the work an earlier request released, when every step skips*, and every `settleJob` case in `publication-enqueues-the-labels-successor` |
+
+Thirteen had a twin or are obsolete; five were ported. Cases 10 to 12 are the three the Sol review
+named. Cases 9 and 13 are two it did not.
+
+### The ported cases, each watched red
+
+| mutation | red |
+|---|---|
+| `!Object.hasOwn(parts, kind) \|\|` dropped from `checkProduct` | case 10 → `expected [Function] to throw an error` |
+| the `extra.length > 0` throw disabled | case 11 → same |
+| the `produces.length === 0` throw disabled | case 12 → same |
+| `assertProduced` made never to ask the store | case 9 → `promise resolved "undefined" instead of rejecting` |
+| the session's `reads` built from `pgArtifactsIn` (the whole store) | case 13 → `expected [ 'beginStep', 'finishStep', …(7) ] to deeply equal [ 'has', 'hasEarlierBlocks', …(4) ]` |
+| the no-`parts` refusal disabled (the branch this item changed) | `stage2c-raw-bytes` *refuses an extract product with no parts whatsoever* |
+
+**What the docs got wrong.**
+
+- [ingest-queue.md](../project/ingest-queue.md) said the filesystem session *"went with the flag"*
+  on 2026-09-05. The branch that chose it did; the session lasted another month. Corrected.
+- [database.md](../project/database.md) described the exemption list as *"empty, and kept rather
+  than deleted"*. Corrected to what is there now.
+- The Opus read's count, *one real caller*, was right. Its list of what goes with it omitted
+  `readsOf` and the registry entry.
+- Comments that described `fsStoreSession` in the present tense, in `session.ts`, `pg-session.ts`,
+  `pg-jobs.ts`, `jobs.ts`, `structure.ts`, `sketch.ts`, `checkpoints.ts`, `artifacts-pg.ts` and four
+  test files, now say when it went. Comments that already described it as history are untouched.
