@@ -179,7 +179,11 @@
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.97 0 0);
     --muted: oklch(0.245 0 0);
-    --muted-foreground: oklch(0.63 0 0);
+    /* 0.64, not 0.63, since 2026-10-07: at 0.63 the faint grey read 4.44:1 on
+       `--surface-raised` (the dock's labels, the hover cards' buttons), under
+       the 4.5 bar. One step, everywhere: 4.62 on raised, 5.88 on the page.
+       tests/appearance-palette.test.ts; plan 261007h § F6. */
+    --muted-foreground: oklch(0.64 0 0);
     /* CAREFUL: --accent here is shadcn's meaning — a raised dark *surface* for hover
        states — NOT the brand highlight colour. If you import this file into a
        stylesheet that already uses --accent to mean "the orange", every highlight

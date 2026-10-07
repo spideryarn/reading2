@@ -761,6 +761,16 @@ header says which things it does not cover.
 The whole run holds a **session advisory lock**. drizzle takes none, so without it two invocations
 read the same watermark and both attempt the same DDL.
 
+**Since 2026-10-07, every migration connection also `SET`s a 15 s `lock_timeout` and a 10 min
+`statement_timeout`** in `pool.on("connect", …)`, not the startup `options` parameter — Supabase's
+session pooler silently drops `options` (measured: `options: "-c lock_timeout=15s"`, then `SHOW
+lock_timeout` → `0`). A lock a migration cannot get within 15 s rolls the whole run back rather than
+blocking the app's writes indefinitely; a statement past 10 minutes does the same. The setup is
+awaited before the connection is handed out, so a failed `SET` rejects acquisition instead of
+silently leaving the timeouts unset — see
+[261007i](../postmortems/261007i-connection-setup-errors-must-reject-acquisition.md), caught in
+review before it reached production.
+
 **Never hand-write a `when`.** [tests/migration-journal.test.ts](../../tests/migration-journal.test.ts)
 fails on any entry stamped no later than one above it in the journal. The published `0035`/`0036`
 pair is grandfathered by name *and* by both timestamps, so regenerating either file takes the

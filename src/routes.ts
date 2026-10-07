@@ -11213,10 +11213,10 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* The source scan, and the one route under `/api/referee/` that is not a
-     sub-mode: it belongs to the **mode**, because a hidden instruction is a fact
-     about the document that bears on Criteria, Claims, Mirror and Candidates
-     alike. GET only, and nothing to POST: the answer is a pure function of bytes
+  /* The source scan behind Referee's Hidden text sub-mode. It is fetched by the
+     band because a hidden instruction is a fact about the document, and the
+     answer must survive chip changes without another scan. GET only, and
+     nothing to POST: the answer is a pure function of bytes
      already stored, so asking for it is reading. One row, so the pattern is
      written here rather than named above. */
   {

@@ -20,16 +20,19 @@
  * ## Why it looks like `/privacy` and not like `/features`
  *
  * The three marketing pages (`/`, `/features`, `/pricing`) open with
- * `className="site"` and a `SiteNav`, and carry the `--site-*` token scope with
- * them — a hero and a glow. That shell exists to sell something to a stranger
- * over a long scroll. This page is three short paragraphs, so it takes
- * `PrivacyPage.tsx`'s shape instead: a Home icon link (signed out), an `h1`, prose, and the
- * same `SiteFooter` every other page a reader lands on carries.
+ * `className="site"` around the whole page, and carry the `--site-*` token
+ * scope with them — a hero and a glow. That shell exists to sell something to a
+ * stranger over a long scroll. This page is three short paragraphs, so it takes
+ * `PrivacyPage.tsx`'s shape instead: an `h1`, prose, and the same `SiteFooter`
+ * every other page a reader lands on carries. **The bar is shared since
+ * 2026-10-07**: signed out, `SiteNav` sits above it as it does above the
+ * marketing pages, where until then there was a lone house icon
+ * (DocumentPage.tsx).
  *
  * **The footer is no longer one of the differences.** It was — the marketing
  * pages passed `variant="marketing"` for a taller one — until 2026-09-08, when
  * the row was redesigned and one measure closed both kinds of page. What still
- * separates the two families is the nav and the hero, which is the decision
+ * separates the two families is the hero (and, until 2026-10-07, the nav), which is the decision
  * above; that it stands is GPT Sol's finding 4 on
  * docs/plans/260908d-make-the-site-footer-and-the-signed-out-pages-more-aesthetically-pleasing.md,
  * where it survived having its first argument disproved.
@@ -46,7 +49,7 @@
  * established a P1 against the first draft of it, 2026-09-05:
  *
  *  - *"If you are signed in"* — `FeedbackButton` lives in the signed-in chrome,
- *    and App.tsx renders this page **bare** to a stranger. So the first draft
+ *    and App.tsx renders this page without it to a stranger. So the first draft
  *    pointed a signed-out reader at a top-right corner with nothing in it.
  *  - *"it carries that page's address"*, rather than the first draft's *"so we
  *    can see what you saw"* — pressing Feedback here sends `/contact` and not
@@ -59,7 +62,7 @@
  */
 
 import { CONTACT_EMAIL } from "../site-text.js";
-import { HomeLink } from "./BackLink.js";
+import { DocumentPage } from "./DocumentPage.js";
 import { SiteFooter } from "./SiteFooter.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 
@@ -69,11 +72,12 @@ export function ContactPage() {
   useDocumentTitle(pageTitle({ kind: "contact" }));
 
   return (
-    <main className="tw:mx-auto tw:flex tw:min-h-dvh tw:max-w-2xl tw:flex-col tw:px-6 tw:pt-[calc(3.5rem_+_var(--safe-top))] tw:font-sans">
-      {/* Signed out only: signed in, the corner logo is the way home.
-          BackLink.tsx § `HomeLink`, which also says why "Home" and not "Back". */}
-      <HomeLink className="tw:mb-6" />
-
+    /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx. */
+    <DocumentPage
+      here="contact"
+      floor
+      className="tw:mx-auto tw:flex tw:max-w-2xl tw:flex-col tw:px-6 tw:font-sans"
+    >
       <h1 className="tw:m-0 tw:font-prose tw:text-2xl tw:leading-snug tw:text-foreground">
         Contact
       </h1>
@@ -111,6 +115,6 @@ export function ContactPage() {
       <div className="tw:flex-1" />
 
       <SiteFooter />
-    </main>
+    </DocumentPage>
   );
 }

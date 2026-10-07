@@ -46,7 +46,7 @@
  * visitor's band takes both off the public payload with no hook at all.
  */
 
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 import { useQueryState } from "nuqs";
 import type { Article, BlockId } from "../../../types.js";
 import type { PublicSimpleSummary, PublicTweets } from "../../../public-types.js";
@@ -59,6 +59,7 @@ import { ModeSurface } from "../../ModeSurface.js";
 import { SimplePanel } from "../../SimplePanel.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { useSimple } from "../../useSimple.js";
+import { useRevealChosen } from "../../useRevealChosen.js";
 import { notBuiltGap, visitorSentence } from "../../visitor.js";
 import { WrittenForYou } from "../../WrittenForYou.js";
 import { TweetsBand, VisitorTweetsBand } from "./TweetsMode.js";
@@ -310,7 +311,8 @@ const VIEW: Record<SummaryView, { label: string; what: string; how: string }> = 
  * scale of length. Built the way Structure's and Referee's sub-mode toggles
  * are (StructureMode.tsx § `StructureViewToggle`): a radiogroup of buttons,
  * each its own tab stop, labelled in words, with a card on each. Drawn joined,
- * so the three read as one choice (summary.css § `.summ-views`).
+ * so the three read as one choice (mode-band.css § the part-switcher, which
+ * every mode's part-switcher shares).
  *
  * @param slug the article, **only so a press can be recorded** — null for a
  *   visitor, whose press must arm nothing (there is no `useAutoRun` to claim
@@ -345,9 +347,11 @@ export function SummaryControls({
        nowhere. */
     if (value !== next) onChange(next);
   };
+  const group = useRef<HTMLDivElement>(null);
+  useRevealChosen(group, value);
 
   return (
-    <div className="summ-views" role="radiogroup" aria-label="Summary view">
+    <div ref={group} className="summ-views" role="radiogroup" aria-label="Summary view">
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
         {SUMMARY_VIEWS.map((v) => (
           /* `keepSide` for the reason RefereeViews gives: the band sits at the

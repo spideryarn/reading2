@@ -11,7 +11,7 @@ is built for public preprints, open-review submissions, and drafts the author ha
 conferences count sending one to an AI service as a breach of confidentiality, and where a venue
 does allow AI help it usually asks you to say so.
 
-Four parts, chosen by the chips at the top:
+Five parts, chosen by the chips at the top:
 
 - **Criteria**: write what you are judging against, or start from a preset such as **Controls** or
   **Strength of evidence**, then press **Run this criterion**.
@@ -21,15 +21,19 @@ Four parts, chosen by the chips at the top:
   It is not saved, so leaving Mirror loses it.
 - **Candidates**: the expertise a reviewer would need, then names if you ask. No
   conflict-of-interest check is run, and it may send words from the paper to a search engine.
+- **Hidden text**: the check of the original web page for words a reader would not see but an AI
+  would read. Its chip carries a mark when it found something.
 
 Referee is only for whoever added the article.
 
 ## Reading it
 
-**Hidden instructions**, behind the Notices button, checks the original web page for text a person
-would not see but an AI would read — text the colour of its background, too small to read, invisible
-characters, instructions written to a model. It reports and blocks nothing. “Nothing found” is not a
-clean bill: PDFs and some parts of a page are not checked, and it says which.
+**Hidden text** checks the original web page for text a person would not see but an AI would read —
+text the colour of its background, too small to read, invisible characters, instructions written to
+a model. It reports and blocks nothing. “Nothing found” is not a clean bill: PDFs and some parts of
+a page are not checked, and it says which. Each finding says in plain words what the trick is;
+identical ones are listed once, with a count. A filled dot on the chip means something without an
+everyday explanation was found, a ring that everything found has one — such as a page’s own menus.
 
 Colour means two different things:
 

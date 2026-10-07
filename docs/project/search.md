@@ -839,7 +839,7 @@ well under the size at which a mark's exact position can be read off, so this is
 hover card ("62% in") and in the bar's accessible name.
 
 **Neutral grey, not the search hue.** The hue means *a match* everywhere else in this mode — the outline
-in the prose, the bar down a matched paragraph, the selected matcher, the confidence chip — and a
+in the prose, the bar down a matched paragraph, the confidence chip — and a
 second thing wearing it would be a reader having to learn that this particular blue sometimes means
 something else. Two channels, two colours, and neither carries its meaning by colour alone: the
 confidence prints its number, the place bar has a name.

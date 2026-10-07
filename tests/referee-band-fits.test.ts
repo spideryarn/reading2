@@ -33,8 +33,9 @@
  *
  * - a rule capping `.ref-brief` and giving it its own scrollbar, plus a floor
  *   under `.ref-panel` so it is no longer the child that gives way;
- * - markup that actually puts the notice and the scan inside a `.ref-brief`,
- *   and leaves the chips and the panel outside it.
+ * - markup that actually puts the notice inside a `.ref-brief`, and leaves the
+ *   chips and the panel outside it. The scan moved into that panel on
+ *   2026-10-07, so it no longer contributes to the preamble's height at all.
  *
  * Delete the wrapper from the band and the CSS matches nothing; every other test
  * still passes and the mode is unusable again. So this file pins the pairing,
@@ -96,6 +97,27 @@ describe("the stylesheet caps the preamble and floors the panel", () => {
   });
 });
 
+describe("the Hidden text mark is visible in either state", () => {
+  it("gives the ring a size and border, and fills an unexplained finding", () => {
+    const ring = bodyOf(".ref-view-dot");
+    expect(ring).not.toBeNull();
+    expect(ring).toMatch(/width:\s*(?!0(?:\D|$))[^;]+;/);
+    expect(ring).toMatch(/height:\s*(?!0(?:\D|$))[^;]+;/);
+    expect(ring).toMatch(/border:\s*[^;]+;/);
+    expect(bodyOf(".ref-view-dot.found")).toMatch(/background:\s*[^;]+;/);
+  });
+});
+
+describe("five chips at phone width", () => {
+  it("wraps the row rather than wrapping a multi-word chip", () => {
+    expect(bodyOf(".ref-top")).toMatch(/flex-wrap:\s*wrap/);
+    /* The chips are the shared part-switcher's buttons since 2026-10-07 (plan
+       261007h § F2), so their `nowrap` is that rule's (mode-band.css). */
+    expect(BAND_SOURCE).toMatch(/ref-view-btn summ-view-btn/);
+    expect(bodyOf(".summ-view-btn")).toMatch(/white-space:\s*nowrap/);
+  });
+});
+
 describe("the markup the rules above are aimed at", () => {
   /**
    * The frame, from `feature="gloss referee"` to the end of its `<ModeSurface>`.
@@ -106,37 +128,37 @@ describe("the markup the rules above are aimed at", () => {
    * **Since 2026-10-03 the brief is rendered only while Notices is open, and
    * the chips are above it** (plan 261003k). The pairing this file pins is
    * unchanged: when the brief *is* open it is the capped, scrolling box, the
-   * scan and the notice are inside it, and the panel is outside it — so an
-   * opened Notices box still cannot push the panel off a band that clips
-   * nothing. tests/referee-notices.test.tsx holds when it is open.
+   * notice is inside it, and the panel is outside it — so an opened Notices
+   * box still cannot push the panel off a band that clips nothing.
+   * tests/referee-notices.test.tsx holds when it is open.
+   *
+   * **Since 2026-10-07 the scan is not in the frame at all**: it is the Hidden
+   * text sub-mode's panel (plan 261007h), drawn as the panel's child, and the
+   * last test here holds that it did not drift back into the brief.
    */
   const band = BAND_SOURCE.match(/feature="gloss referee"[\s\S]*?<\/ModeSurface>/)?.[0];
 
-  /* The five **tags**, not the five words: a class name also appears in the
+  /* The four **tags**, not the four words: a class name also appears in the
      prose of comments, and an `indexOf` on the bare name finds the comment. */
   const TAGS = {
     chips: "<RefereeViews",
     brief: 'className="ref-brief"',
-    scan: "<SourceScanNotice",
     notice: 'className="ref-notice"',
     panel: 'className="ref-panel"',
   } as const;
 
-  it(`the Referee band is still in ${BAND_FILE} and still has all five parts`, () => {
+  it(`the Referee band is still in ${BAND_FILE} and still has all four parts`, () => {
     expect(band, `no \`gloss referee\` ModeSurface in ${BAND_FILE}`).toBeDefined();
     for (const [name, tag] of Object.entries(TAGS)) {
       expect(band, `the ${name} (\`${tag}\`) is not in the band`).toContain(tag);
     }
   });
 
-  it("the scan and the notice are inside `.ref-brief`, and the chips and the panel are not", () => {
+  it("the notice is inside `.ref-brief`, and the chips and the panel are not", () => {
     const at = (needle: string) => band?.indexOf(needle) ?? -1;
-    /* Positions rather than a parse: the point is the order of the five. The
-       scan is first inside the brief because it is what opens the box
-       unasked, and under the paragraphs a finding would start below the cap. */
+    /* Positions rather than a parse: the point is the order of the four. */
     expect(at(TAGS.chips)).toBeLessThan(at(TAGS.brief));
-    expect(at(TAGS.brief)).toBeLessThan(at(TAGS.scan));
-    expect(at(TAGS.scan)).toBeLessThan(at(TAGS.notice));
+    expect(at(TAGS.brief)).toBeLessThan(at(TAGS.notice));
     expect(at(TAGS.notice)).toBeLessThan(at(TAGS.panel));
 
     /* And the wrapper really closes before the panel, rather than swallowing
@@ -147,14 +169,16 @@ describe("the markup the rules above are aimed at", () => {
     expect(gap.match(/<\/div>/g)?.length, "`.ref-brief` does not close before the panel").toBe(2);
   });
 
-  it("is shut on every visit unless the scan says otherwise, and remembers nothing", () => {
+  it("is shut on every visit, and remembers nothing", () => {
     /* A collapse is only allowed here because it is not a dismissal —
-       RefereeMode.tsx § RefereeBand. No storage, no column: the default is
-       computed from the scan and a press lasts as long as the mount. */
-    expect(BAND_SOURCE).toContain(
-      "const [noticesChoice, setNoticesChoice] = useState<boolean | null>(null);",
-    );
-    expect(BAND_SOURCE).toContain("const noticesOpen = noticesChoice ?? sourceScanOpens(scan);");
+       RefereeMode.tsx § RefereeBand. No storage, no column: a press lasts as
+       long as the mount. */
+    expect(BAND_SOURCE).toContain("const [noticesOpen, setNoticesOpen] = useState(false);");
     expect(BAND_SOURCE).not.toMatch(/window\.localStorage|sessionStorage/);
+  });
+
+  it("draws the scan as the Hidden text panel, not inside the frame", () => {
+    expect(band).not.toContain("<SourceScanNotice");
+    expect(BAND_SOURCE).toMatch(/case "hidden":[\s\S]*?return <SourceScanNotice state=\{scan\} \/>;/);
   });
 });

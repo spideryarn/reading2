@@ -358,7 +358,7 @@ Five things to get right, and the first is the one that cost this field a whole 
   (which navigate and arm *nothing*), and either of those seen by a visitor, who gets an explanatory
   band rather than a generator. So *"opening it runs a model pass"* is false on three of the four.
   Four of the then fourteen cards opened that way in first draft (2026-09-07) and every one was caught by a cross-family
-  review rather than by anything in the diff. *"One model pass over the article, written once and
+  review rather than by anything in the diff. *"One model call over the article, written once and
   then stored"* says the same thing and is true wherever the card is read — and it is what makes
   `how` an intrinsic fact about the mode rather than a Dock string parked in a shared module, which
   is the argument for it living in the catalog at all.

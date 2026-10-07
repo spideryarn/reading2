@@ -476,6 +476,31 @@ async function draw(o: UseSkim, v: SkimView) {
 const text = (sel: string) => host.querySelector(sel)?.textContent ?? null;
 
 describe("the panel", () => {
+  it("reveals an unchanged chosen depth when a refreshed route first offers the depth bar", async () => {
+    const box = (left: number, width: number) =>
+      ({ left, right: left + width, width, top: 0, bottom: 36, height: 36, x: left, y: 0 }) as DOMRect;
+    const fieldsetRect = HTMLFieldSetElement.prototype.getBoundingClientRect;
+    const buttonRect = HTMLButtonElement.prototype.getBoundingClientRect;
+    HTMLFieldSetElement.prototype.getBoundingClientRect = () => box(0, 150);
+    HTMLButtonElement.prototype.getBoundingClientRect = function () {
+      if (!this.classList.contains("skim-depth")) return buttonRect.call(this);
+      const parent = this.parentElement!;
+      return box([...parent.children].indexOf(this) * 100 - parent.scrollLeft, 80);
+    };
+    try {
+      await draw(owner(), view({ depth: 3, depths: [{ depth: 3, label: "Most", count: 4 }] }));
+      expect(host.querySelector(".skim-depths")).toBeNull();
+      await draw(owner(), view({ depth: 3 }));
+      const group = host.querySelector<HTMLElement>(".skim-depths");
+      expect(group).not.toBeNull();
+      expect(group?.querySelector('[aria-pressed="true"]')?.textContent).toContain("Most");
+      expect(group?.scrollLeft, "the unchanged chosen depth must be revealed when its bar arrives").toBe(130);
+    } finally {
+      HTMLFieldSetElement.prototype.getBoundingClientRect = fieldsetRect;
+      HTMLButtonElement.prototype.getBoundingClientRect = buttonRect;
+    }
+  });
+
   it("pins the stepper and the depth control in the head, with counts", async () => {
     await draw(owner(), view());
     const head = host.querySelector(".band-head");
@@ -1256,7 +1281,7 @@ describe("the panel", () => {
   it("offers to plan a route when there is none", async () => {
     await draw(owner({ status: "none", skim: null }), view({ rows: [], position: 0, depth: null }));
     expect(host.querySelector(".band-head")).toBeNull();
-    expect(text(".gloss-empty")).toContain("Nobody has planned a route");
+    expect(text(".gloss-empty")).toContain("Nobody has planned a route through this one yet.");
   });
 });
 

@@ -27,6 +27,7 @@
 @import "./styles/tokens.css";
 @import "./styles/shell.css";
 @import "./styles/close.css";
+@import "./styles/tap-target.css";
 @import "./styles/crumbs.css";
 @import "./styles/table.css";
 @import "./styles/prose.css";

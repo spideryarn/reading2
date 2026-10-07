@@ -1010,7 +1010,7 @@ td.text.has-hit[data-hues="8"] {
   background: var(--surface-raised);
   border: 1px solid var(--rule-strong);
   border-radius: var(--radius);
-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-dialog);
   font-family: var(--font-ui);
   /* Above everything structural — the sticky bars (≤40) and the spine (45) —
      but BELOW the tooltip layer (.tooltip-anchor, 100 — it said 80 here until

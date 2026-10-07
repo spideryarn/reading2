@@ -823,6 +823,14 @@ holding a link and a button, portalled to the end of `<body>`, opened by keyboar
 skipped by Tab. That is a known defect awaiting a product decision, **not** an example of the rule
 above. Anything new should look like the ten, not the two.
 
+### The first Tab stop: Skip to modes
+
+**The reading view's first Tab stop is a "Skip to modes" link**, hidden until it has focus, which
+puts focus on the checked mode radio in the dock (the first radio when the open mode lives under
+More) — so a keyboard reader does not tab past the spine's slivers and every paragraph's buttons to
+reach the switcher. Since 2026-10-07; [`SkipToModes.tsx`](../../src/web/reader/SkipToModes.tsx),
+`tests/skip-to-modes.test.tsx`, plan 261007h § F5b.
+
 ### What giving focus back means in practice
 
 - **Only rescue focus that went nowhere.** A reader who has already clicked something real must be

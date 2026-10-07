@@ -1010,9 +1010,12 @@ finding 2). The path is now `GET /api/referee/scan/:slug` →
 hands back, with the answer drawn in the Referee band by
 [`src/web/SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx). It reads the **raw source**
 rather than the extracted blocks on purpose: extraction throws hidden text away with everything else
-it does not keep, so a scan of the blocks would report a clean paper about a hostile one. It is at
-the **mode** level and not inside a sub-mode, because a hidden instruction bears on all four of
-them. It calls no model and costs nothing, so it is the one route under `/api/referee/` with no
+it does not keep, so a scan of the blocks would report a clean paper about a hostile one. It was
+drawn at the **mode** level, above every sub-mode, until 2026-10-07; since then it is the **Hidden
+text** sub-mode, and a finding leaves a mark on that chip whichever sub-mode is open — a ring even
+when every finding wears an everyday label, because the label is forgeable
+([referee-mode.md § The scan has its own chip](referee-mode.md#the-scan-has-its-own-chip-since-2026-10-07)).
+It calls no model and costs nothing, so it is the one route under `/api/referee/` with no
 spend attribution round it — and, like every route that reads somebody's original manuscript, it
 asks `shelfStore.read` whose article it is before it reads a byte.
 
@@ -1026,7 +1029,11 @@ Three properties, and each is a decision rather than an implementation detail:
   and — exactly as with the chat fence [above](#prompt-injection-and-what-the-fence-does-not-do) —
   **it is not called a defence**.
 - **It reports; it decides nothing.** No boolean, no score, no refusal. A finding is a place in the
-  source and the words that were there, for a person to look at.
+  source and the words that were there, for a person to look at. The browser treats the returned
+  path as opaque, document-written evidence rather than reparsing it into a place claim, prints
+  bidi controls as code points so they cannot reorder what the referee sees, and caps paths and
+  detail in the display so an attacker-written id, class or CSS value cannot fill the panel
+  ([`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx)).
 - **`ordinary` is a label, not a filter.** Pages hide text for good reasons all day: a nav submenu, a
   print-only block, a `sr-only` skip link, a closed `<details>`. Those findings are *labelled* and
   still returned, because the label is read off class names and element names and is therefore
@@ -1062,10 +1069,11 @@ something a reader has to remember. The panel is collapsed by default (2026-09-0
 [referee-mode.md § rule 5](referee-mode.md)), so the list itself is now one press away — and the
 rule survived by moving into the panel's headline: a clean result reads *nothing
 found in the HTML source — which is not a clean bill*, never *nothing found* alone. That is the half
-a type cannot enforce, in both versions. Since 2026-10-03 the whole panel, headline included, is
-behind Referee's Notices button, which opens by itself only when something was found; whether a
-one-line result should stay on screen is an open question for Greg
-([261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md)).
+a type cannot enforce, in both versions. From 2026-10-03 the whole panel, headline included, was
+behind Referee's Notices button, which opened by itself when something was found
+([261003k](../plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md));
+since 2026-10-07 it is the Hidden text sub-mode, with a mark on its chip
+([261007h](../plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md)).
 `tests/source-scan-notice.test.tsx` is where that, the PDF branch, and the sorting of labelled
 findings are held; each was watched red against a mutated panel before it was believed.
 

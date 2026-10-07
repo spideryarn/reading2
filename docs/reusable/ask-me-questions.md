@@ -11,6 +11,12 @@ How to put a decision to the person who owns it, so it can be answered in one re
 And the older half, 2026-09-09: *"Often I get asked a question and I don't understand what the
 question is asking, or the options, or how to choose between them."*
 
+**A relayed question needs its background as much as a new one.** On 2026-10-07 the Overseer
+passed on another agent's questions as one-line labels ("eight new sentences to veto"), and Greg
+answered *"I don't really understand what you're asking me here."* Whoever passes on a question
+rewrites it with the background, the options and the example, rather than forwarding the label it
+arrived with.
+
 ## Whether to ask at all
 
 Ask only what is gated on him: [engineering-manager.md § How far to run](engineering-manager.md#how-far-to-run).
