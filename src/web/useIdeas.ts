@@ -38,15 +38,19 @@ import { apiFetch, readJson } from "./lib/api.js";
 import { MalformedReply } from "./lib/reader-facing.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
+import { answerOf, failedRead, landed as readLanded, type Read, retrying, statusOf } from "./read-state.js";
 
-type IdeasStatus = "loading" | "none" | "ready" | "error";
-
-export interface UseIdeas {
-  status: IdeasStatus;
-  ideas: Ideas | null;
+/**
+ * **Everything that arrives with the list, as one value** — so the four facts
+ * about it cannot outlive it. They were five `useState`s, each reset by hand in
+ * the "none yet" branch; one object set once is the same thing with nothing to
+ * forget. docs/plans/261006n-one-type-for-a-read-spiked-on-useideas.md.
+ */
+export interface IdeasAnswer {
+  ideas: Ideas;
   /** The article moved after these were written — blocks **or** sections. */
   stale: boolean;
-  /** They predate the current prompt. A different fact from `stale`, with its own sentence. */
+  /** They predate the current prompt. A different fact from `stale`. */
   outdated: boolean;
   /** These were written from a reader profile at all. */
   profiled: boolean;
@@ -61,6 +65,11 @@ export interface UseIdeas {
    * (src/pipeline.ts § ideas), which no other stage does yet.
    */
   profileChanged: boolean;
+}
+
+export interface UseIdeas {
+  /** What the read knows — src/web/read-state.ts. The list and its flags are inside it. */
+  read: Read<IdeasAnswer>;
   /**
    * The article this band is about. The profile panel shows the *per-article*
    * half ("why you're reading this one") and links to the page that edits it,
@@ -68,7 +77,6 @@ export interface UseIdeas {
    * docs/plans/260830c-profile-panel.md.
    */
   slug: string;
-  error: string | null;
   /** The job writing this article's ideas, if one is. */
   job: Job | null;
   /** Why the job this session started stopped, if it stopped badly. */
@@ -135,15 +143,10 @@ export interface UseIdeas {
  * behaves exactly as it did before the split.
  */
 export interface IdeasRead {
-  status: IdeasStatus;
-  ideas: Ideas | null;
-  stale: boolean;
-  outdated: boolean;
-  profiled: boolean;
-  profileChanged: boolean;
+  /** What the read knows — src/web/read-state.ts. */
+  read: Read<IdeasAnswer>;
   /** Which reads the server itself answered — rewrite-hold.ts § `FreshReads`. */
   fresh: FreshReads;
-  error: string | null;
   /** Repeat only the GET after a failed read — useFaq.ts § `retryRead`. */
   retryRead(): Promise<void>;
   /** Join a read in flight, or start one. `OrderedRead.reload`. */
@@ -152,28 +155,12 @@ export interface IdeasRead {
   refresh(): Promise<void>;
 }
 
-/**
- * **Everything that arrives with the list, as one value** — so the four facts
- * about it cannot outlive it. They were five `useState`s, each reset by hand in
- * the "none yet" branch; one object set once is the same thing with nothing to
- * forget. docs/plans/261006n-one-type-for-a-read-spiked-on-useideas.md.
- */
-export interface IdeasAnswer {
-  ideas: Ideas;
-  /** The article moved after these were written — blocks **or** sections. */
-  stale: boolean;
-  /** They predate the current prompt. A different fact from `stale`. */
-  outdated: boolean;
-  /** These were written from a reader profile at all. */
-  profiled: boolean;
-  /** ...and that profile is no longer the reader's. See `UseIdeas.profileChanged`. */
-  profileChanged: boolean;
-}
-
 export function useIdeasRead(slug: string): IdeasRead {
-  const [status, setStatus] = useState<IdeasStatus>("loading");
-  const [answer, setAnswer] = useState<IdeasAnswer | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  /* **The one store, and three writers**: `readLanded`, `failedRead` and
+     `retrying`. Every update below is one of them, and the two that depend on
+     what was known take it from the updater, so `load` closes over no state
+     and keeps the identity `useOrderedRead` keys on. */
+  const [read, setRead] = useState<Read<IdeasAnswer>>({ kind: "asking" });
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
 
@@ -199,10 +186,8 @@ export function useIdeasRead(slug: string): IdeasRead {
       if (loaded === null) {
         // The ordinary case, not a fault: most articles have none, and this is
         // what the panel's button is for.
-        setAnswer(null);
         landed(started, res, null);
-        setError(null);
-        setStatus("none");
+        setRead(readLanded<IdeasAnswer>(null));
         return;
       }
       /* Only an explicit `null` means none yet, and a reply without its
@@ -212,29 +197,29 @@ export function useIdeasRead(slug: string): IdeasRead {
       if (typeof loaded?.ideas !== "object" || loaded.ideas === null) {
         throw new MalformedReply("the ideas reply has no ideas");
       }
-      setAnswer({
-        ideas: loaded.ideas,
-        stale: loaded.stale,
-        outdated: loaded.outdated,
-        /* `!= null` rather than truthiness: the field is `string | null |
-           undefined` and only `null` and absent mean "written without one". */
-        profiled: loaded.ideas.profileHash != null,
-        profileChanged: loaded.profileChanged,
-      });
       landed(started, res, loaded.ideas.generatedAt);
-      setError(null);
-      setStatus("ready");
+      setRead(
+        readLanded({
+          ideas: loaded.ideas,
+          stale: loaded.stale,
+          outdated: loaded.outdated,
+          /* `!= null` rather than truthiness: the field is `string | null |
+             undefined` and only `null` and absent mean "written without one". */
+          profiled: loaded.ideas.profileHash != null,
+          profileChanged: loaded.profileChanged,
+        }),
+      );
     } catch (err) {
       if (!current()) return;
-      setError(describeFetchFailure(err as Error));
+      const message = describeFetchFailure(err as Error);
       /* **A failed revalidation must not take the list away.** `load` is not
          only the opening read — `onFinished` below calls it again every time a
-         job finishes — and `IdeasPanel` renders the list only under
-         `status === "ready"`, so an unconditional `error` here made a flaky
-         connection blank a list that was still perfectly good. Only the opening
-         read has nothing to fall back on. The message is shown either way. Same
-         guard, same reason, as useGlossary.ts § `fetchNow`. */
-      setStatus((was) => (was === "loading" ? "error" : was));
+         job finishes — so an unconditional failure here made a flaky connection
+         blank a list that was still perfectly good. `failedRead` keeps what was
+         known, "none yet" included, and says the failure beside it; only a read
+         with nothing known has nothing to fall back on. Same reason as
+         useGlossary.ts § `fetchNow`. */
+      setRead((was) => failedRead(was, message));
     }
   }, [slug, begin, landed]);
 
@@ -249,33 +234,19 @@ export function useIdeasRead(slug: string): IdeasRead {
      `retryRead`. Ideas already on screen stay there while a failed
      revalidation is tried again; only the opening error returns to loading. */
   const retryRead = useCallback(async () => {
-    setError(null);
-    if (answer === null) setStatus("loading");
+    setRead(retrying);
     await reload();
-  }, [answer, reload]);
+  }, [reload]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
-  return {
-    status,
-    ideas: answer?.ideas ?? null,
-    stale: answer?.stale ?? false,
-    outdated: answer?.outdated ?? false,
-    profiled: answer?.profiled ?? false,
-    profileChanged: answer?.profileChanged ?? false,
-    fresh,
-    error,
-    retryRead,
-    reload,
-    refresh,
-  };
+  return { read, fresh, retryRead, reload, refresh };
 }
 
 export function useIdeas(slug: string): UseIdeas {
-  const read = useIdeasRead(slug);
-  const { status, reload, refresh } = read;
+  const { read, fresh, retryRead, reload, refresh } = useIdeasRead(slug);
 
   /* The job half — the poll, the running job, and what a refused or dead run
      says to the reader — is src/web/useStepJob.ts, shared with the glossary and
@@ -296,9 +267,9 @@ export function useIdeas(slug: string): UseIdeas {
   const hold = useRewriteHold({
     slug,
     step: "ideas",
-    identity: read.ideas?.generatedAt ?? null,
+    identity: answerOf(read)?.ideas.generatedAt ?? null,
     queue,
-    fresh: read.fresh,
+    fresh,
     refresh,
   });
   const held = hold.run;
@@ -313,18 +284,16 @@ export function useIdeas(slug: string): UseIdeas {
      answered by reading again, not by spending. useAutoRun.ts § A failed read
      is not an answer. And `reload` rather than the raw `load`, which takes the
      ordering predicate from useOrderedRead and is not a standalone read — the
-     merge of the two on 2026-09-02 was a typecheck error at this line. */
-  useAutoRun(slug, "ideas", status, ensure, reload);
+     merge of the two on 2026-09-02 was a typecheck error at this line.
+
+     `statusOf` is the read in the four words `useAutoRun` takes, and this is
+     its only caller: a failed recheck changes none of them, so it cannot
+     change what is spent. */
+  useAutoRun(slug, "ideas", statusOf(read), ensure, reload);
 
   return {
-    status,
-    ideas: read.ideas,
-    stale: read.stale,
-    outdated: read.outdated,
-    profiled: read.profiled,
-    profileChanged: read.profileChanged,
+    read,
     slug,
-    error: read.error,
     job: queue.job,
     failed: hold.rewriting ? null : queue.failed,
     stalled: queue.stalled,
@@ -333,7 +302,7 @@ export function useIdeas(slug: string): UseIdeas {
     ensure,
     regenerate,
     refresh,
-    retryRead: read.retryRead,
+    retryRead,
     cancel: queue.cancel,
   };
 }

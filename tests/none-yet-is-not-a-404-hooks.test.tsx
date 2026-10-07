@@ -26,6 +26,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat } from "./helpers/ideas-read-fields.js";
 import { NONE_YET_AS_NULL_HEADER } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -53,7 +54,10 @@ const { useQuizRead } = await import("../src/web/useQuiz.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { useCrossrefs } = await import("../src/web/useCrossrefs.js");
 const { useSimple } = await import("../src/web/useSimple.js");
-const { useIdeasRead } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeasRead: useIdeasReadAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeasRead = (slug: string) => flat(useIdeasReadAsItIs(slug));
 const { useFaqRead } = await import("../src/web/useFaq.js");
 const { useTimelineRead } = await import("../src/web/useTimeline.js");
 const { useDebateRead } = await import("../src/web/useDebate.js");

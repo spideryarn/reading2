@@ -157,6 +157,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type IdeasFields, ideasReadFrom } from "./helpers/ideas-read-fields.js";
 
 import type { DebateOwner } from "../src/web/DebatePanel.js";
 import type { DiagramAccess } from "../src/web/DiagramPanel.js";
@@ -1307,16 +1308,17 @@ function glossaryOwner(glossary: Glossary | null): GlossaryOwner {
   };
 }
 
-function ideasOwner(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): IdeasOwner {
+/** An owner posed from the read's flat fields and the job's — helpers/ideas-read-fields.ts. */
+type PosedIdeasOwner = Partial<IdeasOwner> & Pick<Partial<IdeasFields>, "stale" | "outdated">;
+function ideasOwner(ideas: Ideas | null, { stale, outdated, ...over }: PosedIdeasOwner = {}): IdeasOwner {
   return {
-    status: ideas ? "ready" : "loading",
-    ideas,
-    stale: false,
-    outdated: false,
-    profiled: false,
-    profileChanged: false,
+    read: ideasReadFrom({
+      status: ideas ? "ready" : "loading",
+      ideas,
+      ...(stale === undefined ? {} : { stale }),
+      ...(outdated === undefined ? {} : { outdated }),
+    }),
     slug: SLUG,
-    error: null,
     retryRead: async () => {},
     job: null,
     failed: null,
@@ -1503,7 +1505,7 @@ function mountGlossary(access: GlossaryAccess): ReactNode {
   });
 }
 
-function mountIdeas(ideas: Ideas | null, over: Partial<IdeasOwner> = {}): ReactNode {
+function mountIdeas(ideas: Ideas | null, over: PosedIdeasOwner = {}): ReactNode {
   return createElement(IdeasPanel, {
     access: { kind: "owner", owner: ideasOwner(ideas, over), ideas },
     ideaId: null,

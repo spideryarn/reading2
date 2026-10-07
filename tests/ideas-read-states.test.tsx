@@ -240,6 +240,7 @@ const QUOTES: QuotesRead = {
   outdated: false,
   profiled: false,
   profileChanged: false,
+  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
   error: null,
   retryRead: async () => {},
   reload: async () => {},
@@ -382,39 +383,28 @@ interface Seen {
   profileChanged: boolean;
 }
 /**
- * **The one place that knows how the hook stores its state.** It also refuses a
- * combination the six classes do not contain — a list under `loading`, an
- * `error` status with nothing to say — so a hook that could reach one fails
- * here rather than being read as its nearest neighbour.
+ * **The one place that knows how the hook stores its state.** Until stage 2b of
+ * the spike it read a status word, a list, an error and four flags, and threw
+ * on a combination the six classes do not contain; `Read` cannot hold one, so
+ * there is nothing left to refuse.
  */
 function seen(from: IdeasRead | null = read): Seen {
   if (!from) throw new Error("the read probe is not mounted");
-  const { status, ideas, error } = from;
-  const impossible = (why: string): never => {
-    throw new Error(`not one of the six states: ${why} (${status}, ${ideas ? "a list" : "no list"}, ${error ?? "no error"})`);
-  };
-  let is: ReadClass;
-  if (status === "loading") {
-    if (ideas !== null || error !== null) impossible("asking, with something known");
-    is = "asking";
-  } else if (status === "error") {
-    if (ideas !== null || error === null) impossible("failed, with a list or without a sentence");
-    is = "failed";
-  } else if (status === "none") {
-    if (ideas !== null) impossible("none, with a list");
-    is = error === null ? "none" : "none, recheck failed";
-  } else {
-    if (ideas === null) impossible("ready, with no list");
-    is = error === null ? "list" : "list, recheck failed";
+  const { read: state } = from;
+  if (state.kind === "asking") return { is: "asking", ...KNOWN_NOTHING };
+  if (state.kind === "failed") return { is: "failed", ...KNOWN_NOTHING, error: state.error };
+  const { answer, recheck } = state;
+  if (answer === null) {
+    return { is: recheck === null ? "none" : "none, recheck failed", ...KNOWN_NOTHING, error: recheck };
   }
   return {
-    is,
-    error,
-    names: ideas?.ideas.map((i) => i.name) ?? null,
-    stale: from.stale,
-    outdated: from.outdated,
-    profiled: from.profiled,
-    profileChanged: from.profileChanged,
+    is: recheck === null ? "list" : "list, recheck failed",
+    error: recheck,
+    names: answer.ideas.ideas.map((i) => i.name),
+    stale: answer.stale,
+    outdated: answer.outdated,
+    profiled: answer.profiled,
+    profileChanged: answer.profileChanged,
   };
 }
 const NO_FLAGS = { stale: false, outdated: false, profiled: false, profileChanged: false };
@@ -734,6 +724,22 @@ describe("what arrives with the answer", () => {
       expect(screen().badge).toBe(profiled ? "written" : "none");
     },
   );
+
+  /* Added in stage 2b, when removing the footer's stale gate turned nothing
+     red: the footer carries a current list's job, the banner a stale one's. */
+  it.each([
+    ["a current list's running job shows in the footer", {}, true],
+    ["a stale list's running job shows in its banner, and the footer stays away", { stale: true }, false],
+  ] as [string, Flags, boolean][])("%s", async (_name, flags, foot) => {
+    answer(serves(list("Measure first", flags)));
+    await mount(["band"]);
+    expect(screen().foot).toBe(false);
+    jobs = [job("somebody-started-this", ["ideas"], "running")];
+    await mount(["band"]);
+    expect(screen().foot).toBe(foot);
+    expect(screen().older).toBe(!foot);
+    expect(screen().names).toEqual(["Measure first"]);
+  });
 
   it("keeps an artefact with no ideas in it as a list, not as none yet", async () => {
     const empty = list("unused");

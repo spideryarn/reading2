@@ -36,6 +36,7 @@ import { captureClientFailure } from "../monitoring.js";
 import { useRenderCount } from "../perf.js";
 import { ControlTip, Tooltip } from "../Tooltip.js";
 import { useIdeasRead } from "../useIdeas.js";
+import { answerOf } from "../read-state.js";
 import { useTimelineRead } from "../useTimeline.js";
 import { datingWords } from "../TimelinePanel.js";
 import {
@@ -816,7 +817,8 @@ export function OwnerMarginFeed({
   useStepFinished(slug, "faq", faqRead.refresh);
   useStepFinished(slug, "timeline", timelineRead.refresh);
   useStepFinished(slug, "debate", debateRead.refresh);
-  const ideas = ideasRead.status === "ready" && !ideasRead.stale ? (ideasRead.ideas?.ideas ?? null) : null;
+  const ideasAnswer = answerOf(ideasRead.read);
+  const ideas = ideasAnswer !== null && !ideasAnswer.stale ? ideasAnswer.ideas.ideas : null;
   const faq = faqRead.status === "ready" && !faqRead.stale ? (faqRead.faq?.questions ?? null) : null;
   const timeline =
     timelineRead.status === "ready" && !timelineRead.stale ? (timelineRead.timeline?.events ?? null) : null;

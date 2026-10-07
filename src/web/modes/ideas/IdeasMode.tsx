@@ -21,6 +21,7 @@ import { ideaParam } from "../../params.js";
 import { usePassageLifecycle } from "../../passage-lifecycle.js";
 import { useRenderCount } from "../../perf.js";
 import { useIdeas } from "../../useIdeas.js";
+import { answerOf } from "../../read-state.js";
 import { IdeasPanel } from "../../IdeasPanel.js";
 
 /**
@@ -59,12 +60,14 @@ export function IdeasBand({
   onOpenKey(key: string | null): void;
 }) {
   useRenderCount("IdeasBand");
-  const ideas = useIdeas(slug);
+  const owner = useIdeas(slug);
+  /* The list on hand, if there is one — still there after a failed re-read. */
+  const ideas = answerOf(owner.read)?.ideas ?? null;
   const band = useIdeasMode({
-    ideas: ideas.ideas,
+    ideas,
     /* The artefact's own clock, which src/ideas.ts fixes at write time so the
        palette cannot reshuffle. See `useIdeasMode`. */
-    generatedAt: ideas.ideas?.generatedAt ?? "",
+    generatedAt: ideas?.generatedAt ?? "",
     blocks,
     onFound,
     openKey,
@@ -73,7 +76,7 @@ export function IdeasBand({
   });
   return (
     <IdeasPanel
-      access={{ kind: "owner", owner: ideas, ideas: ideas.ideas }}
+      access={{ kind: "owner", owner, ideas }}
       {...band}
       openKey={openKey}
       onOpenKey={onOpenKey}

@@ -21,6 +21,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat } from "./helpers/ideas-read-fields.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,7 +112,11 @@ vi.mock("../src/web/lib/api.js", async () => {
   return { ...real, apiFetch, fetchOk: async (url: string, init?: RequestInit) => apiFetch(url, init) };
 });
 
-const { useIdeas, useIdeasRead } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeas: useIdeasAsItIs, useIdeasRead: useIdeasReadAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeas = (slug: string) => flat(useIdeasAsItIs(slug));
+const useIdeasRead = (slug: string) => flat(useIdeasReadAsItIs(slug));
 const faqHooks = await import("../src/web/useFaq.js");
 const { useFaq, useFaqRead } = faqHooks;
 const { useDebate, useDebateRead } = await import("../src/web/useDebate.js");

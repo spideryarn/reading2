@@ -48,6 +48,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat } from "./helpers/ideas-read-fields.js";
 import type { Article, Ideas, TweetThread } from "../src/types.js";
 
 /* React only permits `act` when the environment says it is a test one. Without
@@ -191,7 +192,10 @@ vi.mock("../src/web/Dock.js", async (importOriginal) => ({
   Dock: () => null,
 }));
 
-const { useIdeas } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeas: useIdeasAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeas = (slug: string) => flat(useIdeasAsItIs(slug));
 const { TweetsBand } = await import("../src/web/modes/summary/TweetsMode.js");
 
 /** A job for this article, landing in the hook's poll as finished. */

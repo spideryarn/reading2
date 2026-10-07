@@ -25,6 +25,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type IdeasFields, ideasReadFrom } from "./helpers/ideas-read-fields.js";
 import { IdeasPanel } from "../src/web/IdeasPanel.js";
 import type { UseIdeas } from "../src/web/useIdeas.js";
 import type { Job } from "../src/types.js";
@@ -41,16 +42,11 @@ const RUNNING = {
   updatedAt: 1,
 } as unknown as Job;
 
-function owner(over: Partial<UseIdeas> = {}): UseIdeas {
+/** An owner posed from the read's flat fields and the job's — helpers/ideas-read-fields.ts. */
+function owner({ status = "none", profiled, ...over }: Partial<UseIdeas> & Partial<IdeasFields> = {}): UseIdeas {
   return {
-    status: "none",
-    ideas: null,
-    stale: false,
-    outdated: false,
-    profiled: false,
-    profileChanged: false,
+    read: ideasReadFrom({ status, ...(profiled === undefined ? {} : { profiled }) }),
     slug: "constitution",
-    error: null,
     retryRead: async () => {},
     job: null,
     failed: null,

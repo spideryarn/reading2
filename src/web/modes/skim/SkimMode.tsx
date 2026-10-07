@@ -59,6 +59,7 @@ import { type CardSources, type CardTarget, gatherStopCard, type StopCard } from
 import type { TermActions } from "../../ProseHoverCard.js";
 import type { GlossaryRead } from "../../useGlossary.js";
 import { useIdeasRead } from "../../useIdeas.js";
+import { answerOf } from "../../read-state.js";
 import { useTimelineRead } from "../../useTimeline.js";
 
 /**
@@ -244,19 +245,20 @@ export function SkimBand({
      of these is generated (Sol F22). The glossary is `Reader`'s own read. The
      Ideas are the exception above: made by the route's job, never by the card. */
   const timeline = useTimelineRead(slug);
+  /* The list on hand, whatever its last re-read did: a failed refresh leaves
+     the card its ideas. */
+  const ideasAnswer = answerOf(ideas.read);
   const sources = useMemo<CardSources>(
     () => ({
       glossary: { value: glossary.status === "ready" ? glossary.glossary : null, stale: glossary.stale },
-      ideas: { value: ideas.status === "ready" ? ideas.ideas : null, stale: ideas.stale },
+      ideas: { value: ideasAnswer?.ideas ?? null, stale: ideasAnswer?.stale ?? false },
       timeline: { value: timeline.status === "ready" ? timeline.timeline : null, stale: timeline.stale },
     }),
     [
       glossary.status,
       glossary.glossary,
       glossary.stale,
-      ideas.status,
-      ideas.ideas,
-      ideas.stale,
+      ideasAnswer,
       timeline.status,
       timeline.timeline,
       timeline.stale,

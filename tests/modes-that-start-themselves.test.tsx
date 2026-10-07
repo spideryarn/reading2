@@ -43,6 +43,7 @@
 import { act, createElement, StrictMode, useState, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat, type IdeasFields, ideasReadFrom } from "./helpers/ideas-read-fields.js";
 import { type BandMode, isBandMode } from "../src/modes.js";
 import { modePress } from "../src/web/reader/mode-press.js";
 import type { BlockId, Job } from "../src/types.js";
@@ -150,7 +151,10 @@ vi.mock("../src/web/useJobs.js", async () => {
 });
 
 const { Dock } = await import("../src/web/Dock.js");
-const { useIdeas } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeas: useIdeasAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeas = (slug: string) => flat(useIdeasAsItIs(slug));
 const { useQuotes } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
 const { useGlossary } = await import("../src/web/useGlossary.js");
@@ -397,20 +401,19 @@ const SETTLED_EMPTY_QUOTES_READ = {
   refresh: async () => {},
 };
 
+/** The Ideas read, posed from the fields a test names. */
+function posedIdeasRead(fields: Partial<IdeasFields>): import("../src/web/useIdeas.js").IdeasRead {
+  return {
+    read: ideasReadFrom(fields),
+    fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
+    retryRead: async () => {},
+    reload: async () => {},
+    refresh: async () => {},
+  };
+}
+
 /** `SETTLED_EMPTY_QUOTES_READ`'s twin for the Ideas: read, and there are none. */
-const SETTLED_EMPTY_IDEAS_READ = {
-  status: "none" as const,
-  ideas: null,
-  stale: false,
-  outdated: false,
-  profiled: false,
-  profileChanged: false,
-  fresh: { begin: () => 0, landed: () => {}, begun: () => 0, latest: null },
-  error: null,
-  retryRead: async () => {},
-  reload: async () => {},
-  refresh: async () => {},
-};
+const SETTLED_EMPTY_IDEAS_READ = posedIdeasRead({ status: "none" });
 
 /**
  * The reading view, as far as this file is concerned: a mode, the real bar that
@@ -737,7 +740,7 @@ describe("a press", () => {
 
   it("finds stale Ideas again before planning the route", async () => {
     skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
-    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", stale: true };
+    skimIdeas = posedIdeasRead({ status: "ready", stale: true });
     try {
       await open("plain");
       await press("Skim");
@@ -755,7 +758,7 @@ describe("a press", () => {
      so current Quotes are skipped by `stepIsDone` and cost nothing. */
   it("chooses stale Quotes again before planning the route", async () => {
     skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready", stale: true };
-    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
+    skimIdeas = posedIdeasRead({ status: "ready" });
     try {
       await open("plain");
       await press("Skim");
@@ -770,7 +773,7 @@ describe("a press", () => {
   it("plans the route alone when the Quotes and the Ideas are there and current", async () => {
     skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
     /* Merely outdated Ideas are not named: `stepIsDone` would re-run them. */
-    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready", outdated: true };
+    skimIdeas = posedIdeasRead({ status: "ready", outdated: true });
     try {
       await open("plain");
       await press("Skim");
@@ -805,14 +808,14 @@ describe("a press", () => {
 
   it("waits for the Ideas' read too before deciding what the route press buys", async () => {
     skimQuotes = { ...SETTLED_EMPTY_QUOTES_READ, status: "ready" };
-    skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "loading" };
+    skimIdeas = posedIdeasRead({ status: "loading" });
     try {
       await open("plain");
       await press("Skim");
       await settle();
       expect(posts, "spent before the Ideas had answered").toEqual([]);
 
-      skimIdeas = { ...SETTLED_EMPTY_IDEAS_READ, status: "ready" };
+      skimIdeas = posedIdeasRead({ status: "ready" });
       await reopen("constitution", "skim");
       await settle();
       expect(posts).toEqual([{ slug: "constitution", steps: ["skim"] }]);

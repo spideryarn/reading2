@@ -39,6 +39,7 @@
 import { act, createElement, StrictMode, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat } from "./helpers/ideas-read-fields.js";
 import type { Job } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -103,7 +104,10 @@ vi.mock("../src/web/lib/api.js", () => ({
   statusOf: () => null,
 }));
 
-const { useIdeas } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeas: useIdeasAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeas = (slug: string) => flat(useIdeasAsItIs(slug));
 const { jobEngine } = await import("../src/web/jobEngine.js");
 
 let view: ReturnType<typeof useIdeas> | null = null;

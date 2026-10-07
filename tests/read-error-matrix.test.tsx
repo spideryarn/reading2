@@ -46,6 +46,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat } from "./helpers/ideas-read-fields.js";
 import { COULD_NOT_REACH, PAGE_FAULT } from "../src/messages.js";
 import type { Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
@@ -513,7 +514,10 @@ const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { SketchView } = await import("../src/web/SketchView.js");
 const { IllustratedView } = await import("../src/web/IllustratedView.js");
-const { useIdeasRead } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeasRead: useIdeasReadAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeasRead = (slug: string) => flat(useIdeasReadAsItIs(slug));
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuizRead } = await import("../src/web/useQuiz.js");

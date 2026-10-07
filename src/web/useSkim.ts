@@ -190,12 +190,16 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
      another profile: `stepIsDone` would re-run them, a whole-article call, on
      a press that asked for a route. Stage 6 of plan 260928a. */
   const ideasFirst =
-    ideas.status === "none" || ideas.status === "error" || (ideas.status === "ready" && ideas.stale);
+    ideas.read.kind === "failed" ||
+    (ideas.read.kind === "known" && (ideas.read.answer === null || ideas.read.answer.stale));
+  /* Only a read with nothing known is waited for: a refresh over a known
+     answer does not hold a press. */
+  const ideasAsking = ideas.read.kind === "asking";
   const precededBy = useMemo<StepBefore<"skim">[]>(
     () => [...(quotesFirst ? (["quotes"] as const) : []), ...(ideasFirst ? (["ideas"] as const) : [])],
     [quotesFirst, ideasFirst],
   );
-  const prerequisitesLoading = quotes.status === "loading" || ideas.status === "loading";
+  const prerequisitesLoading = quotes.status === "loading" || ideasAsking;
   const startReady = useCallback(
     async (kind: "ensure" | "regenerate") => {
       await queue.start({
@@ -241,7 +245,7 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
    * waits until both have answered.
    */
   const gate: SkimStatus =
-    status === "none" && (quotes.status === "loading" || ideas.status === "loading")
+    status === "none" && (quotes.status === "loading" || ideasAsking)
       ? "loading"
       : status;
   const auto = useAutoRun(slug, "skim", gate, ensure, reload);

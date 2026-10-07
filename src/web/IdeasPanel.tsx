@@ -40,6 +40,7 @@
 import { Lightbulb, TriangleAlert } from "lucide-react";
 import type { Idea } from "../types.js";
 import type { UseIdeas } from "./useIdeas.js";
+import { answerOf, failureOf } from "./read-state.js";
 import type { Found } from "./search-hits.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
 import { BlockRef } from "./BlockRef.js";
@@ -126,6 +127,13 @@ export function IdeasPanel({
   const owner = access.kind === "owner" ? access.owner : null;
   const ideas = access.ideas;
   const all = ideas?.ideas ?? [];
+  /* **The owner's read, and the two things most of this panel asks of it**:
+     the answer on hand (the list with its flags; null for none yet, and for
+     nothing known) and the failure to say, whichever state it came in. The
+     three states themselves are tested where they are drawn, below. */
+  const read = owner?.read ?? null;
+  const known = read ? answerOf(read) : null;
+  const failure = read ? failureOf(read) : null;
   /* **Returns nothing for a visitor**, which is what makes every call site
      below one line rather than a conditional: this whole block is a button that
      spends a model call, and a visitor has none. */
@@ -142,7 +150,7 @@ export function IdeasPanel({
   const waiting = owner !== null && owner.rewriting && !owner.job && !owner.starting && !owner.failed;
   const run = (label: string, again = false) =>
     owner &&
-    (again && waiting && !owner.error ? (
+    (again && waiting && failure === null ? (
       <RewriteWaiting line="The new ideas haven't loaded yet." onRead={owner.refresh} className="tw:m-0" />
     ) : (
       <div className="gloss-run">
@@ -152,7 +160,7 @@ export function IdeasPanel({
           failed={owner.failed}
           stalled={owner.stalled}
           onRun={() => (again ? owner.regenerate() : owner.ensure())}
-          /* With `error` set the retry is `ReadError`'s; the button stays held. */
+          /* With a failed read the retry is `ReadError`'s; the button stays held. */
           runDisabled={again && owner.rewriting}
           onCancel={owner.cancel}
           label={label}
@@ -169,7 +177,7 @@ export function IdeasPanel({
      head row's until then; each group's own count stays beside its heading,
      where it labels the group. The provenance is the owner's artefact's — a
      visitor's carries none (src/public-types.ts). */
-  const made = owner?.ideas ?? null;
+  const made = known?.ideas ?? null;
   const assumed = all.filter((i) => i.provenance === "assumed").length;
   const about = ideas ? (
     <>
@@ -205,10 +213,10 @@ export function IdeasPanel({
           never leaves the server, so a visitor sees none of it
           (src/public-types.ts). */
       profile={
-        ideas && owner ? (
+        owner && known ? (
           <WrittenForYou
-            written={owner.profiled}
-            changed={owner.profileChanged}
+            written={known.profiled}
+            changed={known.profileChanged}
             slug={owner.slug}
             /* The forced run replaces the list (plan 261002b). */
             regenerate={{
@@ -245,18 +253,18 @@ export function IdeasPanel({
           list has not loaded (`waiting`), for the read that brings it in —
           unless `ReadError` above is already offering that read. */
       foot={
-        ideas &&
-        owner?.status === "ready" &&
-        !owner.stale &&
-        (owner.job || owner.starting || owner.failed || (waiting && !owner.error)) ? (
+        owner &&
+        known &&
+        !known.stale &&
+        (owner.job || owner.starting || owner.failed || (waiting && failure === null)) ? (
           <div className="ideas-again">{run("Find them again", true)}</div>
         ) : null
       }
     >
 
-      {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
+      {owner && failure !== null && <ReadError error={failure} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the ideas…</p>}
+      {read?.kind === "asking" && <p className="gloss-quiet">Looking for the ideas…</p>}
 
       {/* A piece with no ideas never mounts this panel for a visitor —
           `visitorGap` answers *not-built* and the band says so instead. What is
@@ -264,7 +272,7 @@ export function IdeasPanel({
           back with nothing in it. src/messages.ts § builtButEmpty. */}
       {!owner && all.length === 0 && <p className="gloss-quiet">{builtButEmpty("A list of ideas")}</p>}
 
-      {owner?.status === "none" && (
+      {read?.kind === "known" && read.answer === null && (
         <div className="gloss-empty">
           <p>Nobody has found the ideas for this one yet.</p>
           <p className="gloss-hint">
@@ -275,7 +283,7 @@ export function IdeasPanel({
         </div>
       )}
 
-      {ideas && (owner === null || owner.status === "ready") && (
+      {ideas && (owner === null || known !== null) && (
         <>
           {/* Stale wins when both are true: it is the one that makes the
               occurrence links wrong, and two banners stacked is a wall. Same
@@ -287,7 +295,7 @@ export function IdeasPanel({
               even when every paragraph is byte-identical — which is right,
               because the model judged what the argument rests on from the
               skeleton. */}
-          {owner?.stale ? (
+          {known?.stale ? (
             <div className="gloss-stale">
               <p>
                 <TriangleAlert size={13} />

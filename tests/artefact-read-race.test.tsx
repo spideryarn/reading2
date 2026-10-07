@@ -36,6 +36,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { flat } from "./helpers/ideas-read-fields.js";
 import type {
   Arc,
   BlockId,
@@ -242,7 +243,10 @@ vi.mock("../src/web/useJobs.js", () => ({
   },
 }));
 
-const { useIdeas } = await import("../src/web/useIdeas.js");
+/* `useIdeas` keeps its read as one value (src/web/read-state.ts); `flat` puts
+   the fields this file reads by name beside it. tests/helpers/ideas-read-fields.ts. */
+const { useIdeas: useIdeasAsItIs } = await import("../src/web/useIdeas.js");
+const useIdeas = (slug: string) => flat(useIdeasAsItIs(slug));
 const { useGlossary, useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotes, useQuotesRead } = await import("../src/web/useQuotes.js");
 const { useTimeline } = await import("../src/web/useTimeline.js");
