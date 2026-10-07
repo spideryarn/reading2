@@ -778,7 +778,11 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, choice, setShow, retry, questions, replies } = useEarlierFeedback(open, view === "earlier", admin);
+  const { earlier, choice, setShow, retry, questions, openQuestionCount, replies } = useEarlierFeedback(
+    open,
+    view === "earlier",
+    admin,
+  );
   /* A half-written reply to a question is a draft too (261007d): an automatic
      reload would lose it exactly as it would lose the Write box's words. */
   useDraftHeld(holdsDraft, replies.holds);
@@ -1339,7 +1343,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierFilter choice={choice} onShow={setShow} questions={questions} />
+          <EarlierFilter choice={choice} onShow={setShow} questionCount={openQuestionCount} />
           {/* An agent's questions, for an admin: the top of Needs a decision.
               Hidden, not unmounted, on every other filter and tab, so a reply
               in progress survives (FeedbackEarlier.tsx § EarlierQuestions). */}

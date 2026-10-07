@@ -363,9 +363,12 @@ export interface EarlierFeedback {
   retry(): void;
   /**
    * Every open question, for an admin, from any answer of this opening (each
-   * carries them all); `null` for every other reader and until one lands.
+   * carries them all), plus a remembered question while it holds a local
+   * draft; `null` for every other reader and until one lands.
    */
   questions: AdminFeedbackQuestion[] | null;
+  /** The server's open-question count, without a remembered no-longer-open question. */
+  openQuestionCount: number | null;
   replies: QuestionReplies;
 }
 
@@ -447,7 +450,7 @@ function useQuestionReplies(): QuestionReplies {
            not evidence the words were kept. */
         const receipt = (await res.json()) as { answer?: unknown } | null;
         const answer = receipt?.answer;
-        if (isQuestionAnswer(answer)) {
+        if (isQuestionAnswer(answer) && answer.id === id && answer.body === body) {
           attempt.current = null;
           sending.current = false;
           setSent((all) => ({ ...all, [question]: answer }));
@@ -542,6 +545,12 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
   const detail: EarlierLoaded["detail"] = admin && !fellBack ? "admin" : "plain";
   const generation = useRef(0);
   const sequence = useRef<Partial<Record<AnyShow, number>>>({});
+  /* A question may be resolved by a deploy while Greg is answering it. Keep
+     the question's words beside any open or non-empty local draft, so the
+     draft never becomes an invisible reload veto and a dictation in flight
+     is not unmounted when the dialog closes. */
+  const rememberedQuestions = useRef(new Map<string, AdminFeedbackQuestion>());
+  const replies = useQuestionReplies();
 
   const load = useCallback(async (asked: EarlierAsk) => {
     const which = asked.show;
@@ -590,13 +599,33 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     if (open && wanted && earlier.kind === "idle") void load(askOf(detail, show));
   }, [open, wanted, earlier.kind, detail, show, load]);
 
-  const replies = useQuestionReplies();
+  const currentQuestions = questionsOf(choice, states);
+  if (currentQuestions !== null) {
+    for (const question of currentQuestions) rememberedQuestions.current.set(question.id, question);
+  }
+  const heldQuestionIds = new Set(
+    Object.entries(replies.drafts)
+      .filter(([, draft]) => draft.trim() !== "")
+      .map(([id]) => id),
+  );
+  if (replies.openId !== null) heldQuestionIds.add(replies.openId);
+  const questions =
+    currentQuestions === null && heldQuestionIds.size === 0
+      ? null
+      : [
+          ...(currentQuestions ?? []),
+          ...[...heldQuestionIds]
+            .filter((id) => !currentQuestions?.some((question) => question.id === id))
+            .map((id) => rememberedQuestions.current.get(id))
+            .filter((question): question is AdminFeedbackQuestion => question !== undefined),
+        ];
   return {
     earlier,
     choice,
     setShow,
     retry: () => void load(askOf(detail, show)),
-    questions: questionsOf(choice, states),
+    questions,
+    openQuestionCount: currentQuestions?.length ?? null,
     replies,
   };
 }
@@ -713,14 +742,14 @@ function when(iso: string, now: number): string {
 export function EarlierFilter({
   choice,
   onShow,
-  questions: asked = null,
+  questionCount = null,
 }: {
   choice: EarlierChoice;
   onShow(show: AnyShow): void;
   /** The open questions, for an admin; null or none says nothing on the pill. */
-  questions?: readonly AdminFeedbackQuestion[] | null;
+  questionCount?: number | null;
 }) {
-  const questions = asked?.length ?? 0;
+  const questions = questionCount ?? 0;
   /* Three pills for every reader, five for an admin (261007d). A row that
      wraps: five do not fit one line on a phone (`.fb-kind`). */
   const pills: { which: AnyShow; word: string; count: number | null }[] =
@@ -934,8 +963,17 @@ function ReplyBox({
   });
   busyRef.current = dictate.busy;
   const { armed, toggle } = dictate.dictation;
+  const stoppedOutOfSight = useRef(false);
   useEffect(() => {
-    if (!active && armed) toggle();
+    if (active) {
+      stoppedOutOfSight.current = false;
+    } else if (armed && !stoppedOutOfSight.current) {
+      /* The retained box can render more than once while hidden (for example
+         when the fetched lists are forgotten on close). Ask the recorder to
+         stop once for that departure, not once per render. */
+      stoppedOutOfSight.current = true;
+      toggle();
+    }
   }, [active, armed, toggle]);
 
   /* ⌘/Ctrl+Enter sends the reply, and goes no further: the dialog's own
@@ -1035,7 +1073,7 @@ export function EarlierQuestions({
   return (
     <section className="fb-questions" hidden={!showing} aria-label="Questions for you">
       <h3 className="fb-questions-heading">
-        {questions.length} open {questions.length === 1 ? "question" : "questions"} for you
+        {questions.length} {questions.length === 1 ? "question" : "questions"} for you
       </h3>
       <ol className="fb-questions-list">
         {questions.map((question) => {

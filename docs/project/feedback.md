@@ -359,10 +359,13 @@ this is what the app does with it.
   answered (a rollback, or the minutes of a deploy) and says to copy the words, reload and reply
   again; anything else says to try again. If the `questions` part of the list's answer is not what
   the browser expects, the whole list shows the ordinary "would not load" sentence, never some of
-  the questions.
+  the questions. If a later list no longer contains a question while its box has words or a
+  transcription in flight, that question remains beside the local draft until it is sent or
+  cancelled; it is not counted as an open question on the pill.
 
 After a reply the card says *Answered* and offers *Reply again*; the question itself leaves the
-dialog when an agent marks its file `status: answered` and that commit is deployed.
+dialog when an agent marks its file `status: answered` and that commit is deployed, unless the
+browser is still holding an unsent reply to it as above.
 
 ## The thank-you, and getting out of it
 

@@ -490,5 +490,5 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-us5kzc": "Set aside: this was a test of the Feedback button on the day it shipped, so there was nothing to build.",
   "spya-v322fd": "You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-mgxnj233).",
   "spya-vgwt4z": "No change: the Send button already had a spinner, in production since 2026-09-01, and a test now pins it. You decided against adding a minimum time on screen (2026-09-06).",
-  "spya-zuk4f7": "Stage 1 shipped: Debate asks for, and keeps, the work that cites the piece. Still waiting on you for stage 2: may Debate send an article's DOI to a citation index, to list every work that cites it?",
+  "spya-zuk4f7": "Both stages shipped: Debate asks for work that cites the piece, and OpenAlex supplies its count and list of citing papers.",
 };

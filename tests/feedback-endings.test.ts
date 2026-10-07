@@ -15,6 +15,7 @@ import {
   compileEndings,
   compileQuestions,
   GENERATED_PATH,
+  NOTES_DIR,
   parseNoteHeader,
   parseQuestionFile,
   QUESTIONS_GENERATED_PATH,
@@ -414,5 +415,39 @@ describe("the committed questions", () => {
     expect(Object.keys(FEEDBACK_QUESTION_STATUS).length).toBeGreaterThanOrEqual(open.length);
     expect(feedbackQuestionStatus("q-zzzzzz")).toBeNull();
     expect(feedbackQuestionStatus("constructor")).toBeNull();
+  });
+
+  it("links a question to the one report named by its source note", () => {
+    const { questions, problems } = compileQuestions(readQuestionFiles());
+    expect(problems).toEqual([]);
+    for (const question of questions) {
+      const noteName = /docs\/user-feedback\/([^ ·]+\.md)/.exec(question.refs ?? "")?.[1];
+      if (!noteName) continue;
+      const header = parseNoteHeader(readFileSync(path.join(NOTES_DIR, noteName), "utf8"));
+      if (header === null || typeof header === "string" || header.reports.length !== 1) continue;
+      expect(question.report, `${question.id} should name the report in ${noteName}`).toBe(header.reports[0]);
+    }
+  });
+
+  it("has no live work left in the retired waiting list", () => {
+    const waiting = readFileSync(path.join(NOTES_DIR, "awaiting-approval.md"), "utf8");
+    const liveSection = waiting.split("## Waiting on Greg now")[1]?.split("## Attempted abuse")[0] ?? "";
+    expect(liveSection).not.toMatch(/^-[ \t]+20\d\d-/m);
+    expect(liveSection).not.toMatch(/left behind|want checking/i);
+  });
+
+  it("does not call a shipped note 'Awaiting Greg' in its body", () => {
+    const contradictions = readNotes()
+      .filter((noteFile) => {
+        const header = parseNoteHeader(noteFile.text);
+        return (
+          header !== null &&
+          typeof header !== "string" &&
+          header.ending === "shipped" &&
+          /^\*\*Ending:\s*Awaiting Greg\b/im.test(noteFile.text)
+        );
+      })
+      .map((noteFile) => noteFile.name);
+    expect(contradictions).toEqual([]);
   });
 });

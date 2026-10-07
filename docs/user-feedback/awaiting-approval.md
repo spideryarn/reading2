@@ -22,27 +22,6 @@ what followed.
 - `npx tsx scripts/feedback-questions.ts --new "<title>"` starts a new one. A new waiting item is a
   question file, never a line in this file.
 
-**Two lines were left behind on 2026-10-07 instead of being moved**, because the plan each one
-links may already record Greg's answer (reading time and sharing an article, both decided *A* on
-2026-10-05 and built, came off the same day and their notes now say shipped): the command bar and Debate's box (*Q-bar-4 yes*,
-2026-10-04, and *Q-suggest-together*, 2026-10-06), and the citation index (*yes, OpenAlex*,
-2026-10-04). They want checking against their notes and taking off, not asking again.
-
-- 2026-10-03 · SPIDERYARN-READING2-AX (spya-thpsnd, part 3 of 3) · should the reader's reason for
-  reading feed the command bar, so it proposes a set of actions at once (a few searches, a mode to
-  try, a Debate started with a lens), and should Debate take a text box to steer it? Noted, nothing
-  built; qi-wjb27jre ·
-  [261003k § Noted, not built](../plans/261003k-command-bar-takes-a-sentence-and-a-fast-model-picks-the-command.md#noted-not-built) ·
-  [note](261003_1010-fewer-modes-part-3-why-you-are-reading-feeds-the-bar.md)
-
-- 2026-10-01 · SPIDERYARN-READING2-9D (the report itself shipped as stage 1; this is its stage 2)
-  · may Debate send an article's DOI to a citation index, to list every work that cites it? OpenAlex
-  is licence-compatible today (CC0; a free key and a daily budget) and gives the list but not what
-  each citer said. Semantic Scholar gives the citing sentence, which makes for/against checkable,
-  but its standard licence excludes commercial use: ask AI2 for the expanded one first? ·
-  [261002i § The question for Greg](../plans/261002i-debate-leads-with-who-has-cited-this-article.md) ·
-  [note](261001_1914-debate-leads-with-who-has-cited-this.md)
-
 ## Attempted abuse, not yet seen by Greg
 
 A different thing from the list above: reports that tried to get something nefarious out of an agent,

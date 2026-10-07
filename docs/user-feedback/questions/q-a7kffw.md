@@ -1,6 +1,6 @@
 ---
 id: q-a7kffw
-report: none
+report: spya-a5gzb9
 status: open
 asked: 2026-10-01
 title: May a failed import's report carry the address, file name and error?

@@ -32,20 +32,19 @@ words are from the reports' production rows, as the Overseer relayed them.
 
 > In a previous feedback report, I talked a lot about being able to share articles. I think one of the most important things is that people can comment on them and highlight stuff. I guess if it doesn't involve AI processing, then we should let them. It's tricky. I would like to allow people to do it, even if they aren't logged in, but then we won't know who did it. So I guess only if they're logged in can they actually comment or highlight or anything else.
 
-**Ending: Awaiting Greg.** Nothing built. Mark both ignored in Sentry, with this reason; the next
-feedback sweep does the status write.
+**Ending: Shipped (stage 1).** Greg chose A on 2026-10-05: the private-link version is built. The
+owner can make a private link that anyone holding it can read, and can turn that link off; it is
+not listed and its holder cannot run AI. Stages 2 and 3 are written up but not built.
 
 Two things stopped it. Greg asked to stop and discuss if it adds substantial complexity, and the
 email version does. And every version changes who may read an article, which is a listed security
 defence that an unattended session does not edit.
 
-The plan sets out three stages and recommends the first: a private link that anyone holding it can
-read, not listed, no AI, which the owner can turn off. Then comments and highlights for signed-in
-people who have the link. Then named email addresses, with an invitation and AI charged to whoever
-ran it, which is the large one. Three questions are put to Greg: which to build first, who sees a
-sharee's comment, and whether a link-shared article counts against the allowance as private.
+The plan sets out all three stages. Stage 2 would add comments and highlights for signed-in people
+who have the link. Stage 3 would add named email addresses, with an invitation and AI charged to
+whoever ran it; those remain under queue entry `qi-mgxnj233`.
 
-Queue entry `qi-98933vdd`. Plan:
+Plan:
 [261005e § Questions for Greg](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md#questions-for-greg),
 reviewed by GPT Sol
 ([review](../plans/261005e-share-an-article-with-some-people-review-sol.md)).

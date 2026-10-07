@@ -1950,6 +1950,24 @@ describe("the Earlier tab", () => {
         expect(replyBoxes()[0]?.value).toBe("1A");
       });
 
+      it("treats a well-formed receipt for different words as not sent", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("1A");
+        answer = async () => {
+          const request = sent(0);
+          return new Response(
+            JSON.stringify({ answer: { id: request.id, body: "different words", createdAt: "2026-10-07T09:00:00.000Z" } }),
+            { status: 201 },
+          );
+        };
+        click(button(card("q-aaaaaa"), "Send reply"));
+        await act(async () => {});
+        expect(card("q-aaaaaa").textContent).toContain("[fb-reply]");
+        expect(replyBoxes()[0]?.value).toBe("1A");
+        expect(card("q-aaaaaa").querySelector(".fb-question-answer")).toBeNull();
+      });
+
       it("sends nothing empty, nothing over the cap, and one reply for two presses", async () => {
         await openWaiting();
         click(button(card("q-aaaaaa"), "Reply"));
@@ -2043,6 +2061,40 @@ describe("the Earlier tab", () => {
         click(button(card("q-aaaaaa"), "Send reply"));
         await act(async () => {});
         expect(reloadVeto()).toBeNull();
+      });
+
+      it("keeps a draft reachable when a refreshed question list no longer contains it", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        typeReply("a decision in progress");
+
+        show(false);
+        listAnswer = page({ ...WITH_QUESTIONS, questions: [Q2] });
+        show(true);
+        click(tab("Earlier"));
+        await act(async () => {});
+        listAnswer = page({ ...WAITING, questions: [Q2] });
+        click(pill("Needs a decision"));
+        await act(async () => {});
+
+        expect(card("q-aaaaaa").querySelector<HTMLTextAreaElement>("textarea.fb-reply-input")?.value).toBe(
+          "a decision in progress",
+        );
+        expect(pills()).toContain("Needs a decision 1 · 1 open question");
+        expect(questionsBox()?.querySelector(".fb-questions-heading")?.textContent).toBe("2 questions for you");
+      });
+
+      it("keeps the reply box mounted while closing during transcription", async () => {
+        await openWaiting();
+        click(button(card("q-aaaaaa"), "Reply"));
+        replyMic.transcribing = true;
+        show(true);
+        expect(replyBoxes()[0]?.readOnly).toBe(true);
+
+        show(false);
+
+        expect(replyBoxes()).toHaveLength(1);
+        expect(questionsBox()?.hidden).toBe(true);
       });
 
       it.each([

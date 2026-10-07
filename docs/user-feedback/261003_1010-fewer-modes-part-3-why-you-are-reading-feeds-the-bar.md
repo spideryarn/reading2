@@ -2,7 +2,7 @@
 reports: spya-thpsnd
 ending: shipped
 parts: 3
-comment: Part 3 of 3 shipped: the bar offers Suggest what to do here, and Debate takes an angle. Still a question for you: confirming several suggestions with one press.
+comment: Part 3 of 3 shipped: the bar offers Suggest what to do here, and Debate takes an angle. You chose one press per suggestion for now on 2026-10-06.
 ---
 
 # Fewer modes, part 3 of 3: why you are reading, feeding the command bar
@@ -33,9 +33,9 @@ Summary) have their own sessions and notes.
 on an article with a reason for reading, the bar offers *Suggest what to do here* and, on a press,
 lists a few quick searches, a mode or two and one question about what the web says, each waiting
 for a press of its own; and Debate has a box that takes an angle and starts a chat from it, listed
-under *Your angles*. **One part of the idea is not built and is a question for Greg**
-(`[Q-suggest-together]`): confirming several suggestions with one press. The plan says why, and
-names the small version (the searches only) it would recommend.
+under *Your angles*. Greg decided `[Q-suggest-together]` on 2026-10-06: keep one press per
+suggestion for now, and revisit confirming several searches together only if pressing each row
+feels like work.
 
 What this note said before, kept for the record: **Awaiting Greg — noted, nothing built**, as the
 Overseer's brief asked. The bar that takes a
