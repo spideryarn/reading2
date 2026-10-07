@@ -284,7 +284,7 @@ describe("the two queries protect the same things", () => {
 
 describe("--delete refuses", () => {
   const fake = (over: Partial<NeverPublishedSurvey>): NeverPublishedSurvey => ({
-    candidates: [], eligible: [], proven: true, role: "fixture", quietDays: 7,
+    candidates: [], eligible: [], proven: true, role: "fixture", source: "fixture", quietDays: 7,
     proof: { seen: 0, published: 0, revisions: 0, jobs: 0, reservations: 0, readerState: 0, recent: 0 },
     ...over,
   });
@@ -748,6 +748,134 @@ describe("restore", () => {
     try {
       await expect(main(["--restore", s.idsFile], h.deps)).rejects.toThrow();
       expect(h.calls.connect).toBe(0);
+    } finally {
+      s.done();
+    }
+  });
+});
+
+describe("restore refuses a backup that is not this database's, or not what it says it is", () => {
+  /* Sol's round-2 D4. Each case deletes one article through the command (so
+     the backup is real and the article really is absent), then edits the file
+     the way a wrong or damaged one would differ, and asks for a restore. Each
+     must refuse, and nothing may be written. */
+  async function deletedWithBackup(name: string) {
+    const a = await failedFirstImport(name, { identities: 2, checkpoint: true });
+    await pgCostStore.record(aiCall({ articleSlug: a.slug, finishedAt: new Date(Date.now() - 30 * DAY).toISOString() }));
+    await age([a.id]);
+    const s = scratch([a.id]);
+    let file = "";
+    const h = harness({
+      writeBackup: async (...args) => {
+        const written = await writeBackup(...args);
+        file = written.file;
+        return written;
+      },
+    });
+    expect(await main(["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], h.deps)).toBe(0);
+    const edit = (change: (b: Record<string, unknown>) => void) => {
+      const b = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+      change(b);
+      writeFileSync(file, JSON.stringify(b));
+    };
+    return { a, s, file, edit };
+  }
+  const unlinkedCalls = async () =>
+    (await pool.query("select count(*)::int as n from spideryarn.ai_calls where owner_id = $1 and article_id is null", [OWNER])).rows[0]?.n;
+
+  it("records which database it came from, and restores into that one", async () => {
+    const { a, s, file } = await deletedWithBackup("d4-same");
+    try {
+      const header = JSON.parse(readFileSync(file, "utf8")) as { source?: unknown };
+      expect(header.source).toMatch(/^system \d+, database \S+ \(oid \d+\)$/);
+      expect(await main(["--restore", file], harness().deps)).toBe(0);
+      expect(await stillThere(a.id)).toBe(true);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("a backup taken from another database", async () => {
+    const { a, s, file, edit } = await deletedWithBackup("d4-other-db");
+    try {
+      edit((b) => {
+        b.source = "system 1, database elsewhere (oid 1)";
+      });
+      await expect(main(["--restore", file], harness().deps)).rejects.toThrow(/taken from .*elsewhere.*this database is/);
+      expect(await stillThere(a.id)).toBe(false);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("a backup with no record of where it came from", async () => {
+    const { s, file, edit } = await deletedWithBackup("d4-no-source");
+    try {
+      edit((b) => {
+        delete b.source;
+      });
+      await expect(main(["--restore", file], harness().deps)).rejects.toThrow(/not a never-published backup/);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("a header whose ids are not the article rows' ids", async () => {
+    const { a, s, file, edit } = await deletedWithBackup("d4-header");
+    try {
+      edit((b) => {
+        b.ids = [a.id, "66666666-6666-4666-8666-666666666666"];
+      });
+      await expect(main(["--restore", file], harness().deps)).rejects.toThrow(/header names/);
+      expect(await stillThere(a.id)).toBe(false);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("a ledger link that points at an article the backup does not hold", async () => {
+    /* The damage this prevents: re-pointing somebody's unlinked model call at
+       another article. Here, a real unlinked call of this owner and a real
+       article of this owner, neither of them in the backup. */
+    const { a, s, file, edit } = await deletedWithBackup("d4-child");
+    const other = await failedFirstImport("d4-bystander", { identities: 0 });
+    const stray = aiCall();
+    await pgCostStore.record(stray);
+    const unlinkedBefore = await unlinkedCalls();
+    try {
+      edit((b) => {
+        (b.ai_calls_unlinked as unknown[]).push({ id: stray.id, article_id: other.id });
+      });
+      await expect(main(["--restore", file], harness().deps)).rejects.toThrow(/ai_calls_unlinked .*not in the backup/);
+      expect(await stillThere(a.id)).toBe(false);
+      expect(await unlinkedCalls()).toBe(unlinkedBefore);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("a block identity that names an article the backup does not hold", async () => {
+    const { s, file, edit } = await deletedWithBackup("d4-identity");
+    try {
+      edit((b) => {
+        const rows = b.block_identities as { article_id: string }[];
+        if (rows[0]) rows[0].article_id = "77777777-7777-4777-8777-777777777777";
+      });
+      await expect(main(["--restore", file], harness().deps)).rejects.toThrow(/block_identities .*not in the backup/);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("--restore against a database that is not local, without --ids pinning the set — before connecting", async () => {
+    const { a, s, file } = await deletedWithBackup("d4-remote");
+    const h = harness({
+      target: () => ({ url: "postgresql://someone:pw@aws-0-eu-west-2.pooler.supabase.com:6543/postgres", file: ".env.prod" }),
+    });
+    try {
+      await expect(main(["--prod", "--restore", file], h.deps)).rejects.toThrow(/needs --ids/);
+      expect(h.calls.connect).toBe(0);
+      expect(await stillThere(a.id)).toBe(false);
     } finally {
       s.done();
     }

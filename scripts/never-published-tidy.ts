@@ -6,8 +6,12 @@
  *     npx tsx scripts/never-published-tidy.ts --prod                # production, dry run (read-only)
  *     npx tsx scripts/never-published-tidy.ts --prod --delete \
  *       --ids <file of article ids> --backup-dir <dir outside the repo>
- *     npx tsx scripts/never-published-tidy.ts --restore <backup file>  # the undo (add --prod only to undo the real run)
+ *     npx tsx scripts/never-published-tidy.ts --restore <backup file>  # the undo, local
  *     npx tsx scripts/never-published-tidy.ts --restore <backup file> --ids <subset>  # undo a run that stopped part-way
+ *     npx tsx scripts/never-published-tidy.ts --prod --restore <backup file> --ids <file>  # the real run's undo: --ids required
+ *
+ * A restore refuses a backup taken from any database but the one it is
+ * writing to (`databaseIdentity`, in the backup's header).
  *
  * `beginRevision`/`lockOrCreateArticle` write the `articles` row before there
  * is anything in it, so a first import that fails leaves a row no reader can
@@ -117,6 +121,8 @@ export interface NeverPublishedSurvey {
   readonly proof: EligibleProof;
   readonly proven: boolean;
   readonly role: string;
+  /** `databaseIdentity`: what a backup taken now would record. */
+  readonly source: string;
   readonly quietDays: number;
 }
 
@@ -258,6 +264,7 @@ export async function surveyNeverPublished(
         proof,
         proven: proofIsClean(proof, eligible.length),
         role: String(who?.role ?? "(unknown)"),
+        source: await databaseIdentity(tx),
         quietDays,
       };
     },
@@ -384,7 +391,29 @@ export interface BackupRows {
 
 export interface Backup extends BackupRows {
   readonly written_at: string;
+  /** `databaseIdentity` of the database it was read from; a restore refuses any other. */
+  readonly source: string;
   readonly ids: string[];
+}
+
+/**
+ * **Which database a connection reaches, with nothing secret in it**: the
+ * cluster's `system_identifier` (from `pg_control_system()`, fixed when the
+ * cluster was created, readable by any role), the database's name and its oid.
+ * Production and the box's local Supabase differ in the first; the test lanes,
+ * which share one cluster, differ in the last two. Recorded in a backup's
+ * header and compared before a restore writes anything (GPT Sol's round-2 D4).
+ * Printed by the dry run, so the value production gives is on record.
+ */
+export async function databaseIdentity(tx: Pick<Tx, "execute">): Promise<string> {
+  const [row] = (
+    await tx.execute(sql`
+      select (select system_identifier::text from pg_control_system()) as system,
+        current_database()::text as name,
+        (select oid::text from pg_database where datname = current_database()) as oid`)
+  ).rows as Row[];
+  if (!row?.system || !row.name || !row.oid) throw new TidySafetyError("refusing: could not tell which database this is");
+  return `system ${String(row.system)}, database ${String(row.name)} (oid ${String(row.oid)})`;
 }
 
 /**
@@ -444,12 +473,15 @@ export async function writeBackup(
   const abs = realpathSync(path.resolve(dir));
   if (inside(abs)) refuseInside();
 
-  const dump = await db.transaction(async (tx) => await dumpRows(tx, ids), { accessMode: "read only" });
+  const { source, dump } = await db.transaction(
+    async (tx) => ({ source: await databaseIdentity(tx), dump: await dumpRows(tx, ids) }),
+    { accessMode: "read only" },
+  );
   if (dump.articles.length !== ids.length) {
     throw new TidySafetyError(`refusing: the backup would hold ${dump.articles.length} article rows for ${ids.length} ids`);
   }
   const file = path.join(abs, `never-published-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  writeFileSync(file, JSON.stringify({ written_at: new Date().toISOString(), ids, ...dump }), { mode: 0o600, flag: "wx" });
+  writeFileSync(file, JSON.stringify({ written_at: new Date().toISOString(), source, ids, ...dump }), { mode: 0o600, flag: "wx" });
   chmodSync(file, 0o600);
 
   /* **Verified from the disk, not from memory**: read back, parsed, and every
@@ -461,20 +493,41 @@ export async function writeBackup(
   const wrong = (Object.keys(dump) as (keyof BackupRows)[]).filter((k) => backup[k].length !== dump[k].length);
   const sameIds = [...ids].sort().join() === backup.articles.map((r) => String(r.id)).sort().join() &&
     [...ids].sort().join() === [...backup.ids].sort().join();
-  if (wrong.length > 0 || !sameIds) {
-    throw new TidySafetyError(`refusing: the backup read back from ${file} does not match what was written (${wrong.join(", ") || "article ids"})`);
+  if (wrong.length > 0 || !sameIds || backup.source !== source) {
+    throw new TidySafetyError(`refusing: the backup read back from ${file} does not match what was written (${wrong.join(", ") || "article ids or source"})`);
   }
   return { file, backup };
 }
 
-/** A backup file, parsed, with its shape checked. Throws `TidySafetyError` on anything else. */
+/**
+ * A backup file, parsed, with its shape **and its internal consistency**
+ * checked: a header naming where it came from, header `ids` that are exactly
+ * the article rows' ids, and every identity, checkpoint, ledger link and upload
+ * naming only those articles — so a restore cannot re-point a model call at, or
+ * insert a row for, an article the backup does not hold (GPT Sol's round-2 D4).
+ * Throws `TidySafetyError` on anything else.
+ */
 export function readBackup(file: string): Backup {
   const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<Backup>;
   const tables: (keyof BackupRows)[] = ["articles", "block_identities", "checkpoints", "ai_calls_unlinked", "uploads_left_with_a_stale_slug"];
-  if (!Array.isArray(parsed.ids) || typeof parsed.written_at !== "string" || tables.some((t) => !Array.isArray(parsed[t]))) {
+  if (!Array.isArray(parsed.ids) || typeof parsed.written_at !== "string" || typeof parsed.source !== "string" ||
+    tables.some((t) => !Array.isArray(parsed[t]))) {
     throw new TidySafetyError(`refusing: ${file} is not a never-published backup`);
   }
-  return parsed as Backup;
+  const backup = parsed as Backup;
+  const header = [...backup.ids].map(String).sort();
+  const rows = backup.articles.map((r) => String(r.id)).sort();
+  if (new Set(header).size !== header.length || header.join() !== rows.join()) {
+    throw new TidySafetyError(`refusing: ${file}'s header names ${header.length} article(s), its article rows ${rows.length}, and they are not the same ids`);
+  }
+  const held = new Set(rows);
+  for (const t of tables.filter((t) => t !== "articles")) {
+    const stray = backup[t].filter((r) => !held.has(String(r.article_id)));
+    if (stray.length > 0) {
+      throw new TidySafetyError(`refusing: ${file}: ${stray.length} ${t} row(s) name an article not in the backup`);
+    }
+  }
+  return backup;
 }
 
 export interface Restored {
@@ -518,6 +571,12 @@ export async function restoreBackup(db: Db, backup: Backup, only?: readonly stri
     rows = backupOf(backup, only);
   }
   return await db.transaction(async (tx) => {
+    /* The database the backup was read from, and no other — before anything
+       is written. GPT Sol's round-2 D4. */
+    const here = await databaseIdentity(tx);
+    if (here !== backup.source) {
+      throw new TidySafetyError(`refusing: the backup was taken from ${backup.source}; this database is ${here}`);
+    }
     const ids = rows.articles.map((r) => String(r.id));
     if (ids.length === 0) throw new TidySafetyError("refusing: the backup holds no articles");
     const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
@@ -651,6 +710,7 @@ const days = (ms: number) => `${Math.floor(ms / 86_400_000)}d`;
 
 function printSurvey(survey: NeverPublishedSurvey, out: (line: string) => void): void {
   out(`Role:   ${survey.role}`);
+  out(`Source: ${survey.source}`);
   out(`Rule:   never published; no revision, job or reservation; no reader state; nothing moved for ${survey.quietDays} days`);
   out(`\nNever-published articles: ${survey.candidates.length}, eligible: ${survey.eligible.length}`);
   out("  article id                            short id     created     quiet  ids    ckpt  calls  uploads  held because");
@@ -777,6 +837,12 @@ export async function main(args: readonly string[], deps: MainDeps = realDeps())
     const backup = readBackup(restoreFile);
     const onlyFile = value("--ids");
     const only = onlyFile === undefined ? undefined : parseIdsFile(deps.readText(onlyFile));
+    /* **Against anything but a local database, the set is pinned by hand**, as
+       it is for `--delete`: the restore puts back the articles the ids file
+       names and nothing the file merely happens to hold. GPT Sol's round-2 D4. */
+    if (only === undefined && !isLocalDatabaseUrl(url)) {
+      throw new TidySafetyError("refusing: --restore against a database that is not local needs --ids <file> naming the articles to put back");
+    }
     const { db, end } = deps.connect(url, true);
     try {
       const r = await restoreBackup(db, backup, only);
