@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-E4 (spya-rvbmss; the report itself shipped: two readers'
+  copies of one article are now tested end to end, this is its deferred half) · two small design
+  questions. Q1: when two readers both share one article, the public shelf shows two identical
+  cards; leave it (recommended, it has not happened yet), show one, label them, or one card that
+  opens to its versions. Q2: in Citations, a stranger's public copy matched by DOI is linked ahead
+  of your own matched only by title; leave it (recommended) or show both · qi-a8wyhr67 ·
+  [261007f § Questions for Greg](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#questions-for-greg) ·
+  [note](261006_2135-two-readers-import-the-same-article.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-E8 (spya-n8cuqq; the report itself shipped: dictation runs
   fifteen minutes and warns before it stops, this is its deferred half) · should Feedback take a
   full fifteen minutes of non-stop speech? It takes 12,000 characters now, about thirteen minutes
