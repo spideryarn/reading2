@@ -157,10 +157,11 @@ import type { ArtifactParts, ArtifactReads } from "../src/store/artifacts.js";
 import { readsPgArtifacts } from "../src/store/artifacts-pg.js";
 import { mintAttempt, StaleAttemptError } from "../src/store/jobs.js";
 import { pgJobStore } from "../src/store/pg-jobs.js";
+import { pgStoreSession } from "../src/store/pg-session.js";
 import type { StoreSession } from "../src/store/session.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
-import type { BlockId, Job, JobStep, StepName, StepPreview } from "../src/types.js";
+import type { BlockId, Job, JobStep, Meta, StepName, StepPreview } from "../src/types.js";
 
 /* A `restoreStore` closure stood here until 2026-09-05, put back in `afterAll`
    rather than after the imports because two cases below reload `src/store/live.ts`
@@ -1267,11 +1268,11 @@ describe("one claim walks the whole job", () => {
       fresh.note("test-walk-note-fails-skip", "fetch");
       const realNote = pgJobStore.noteProgress.bind(pgJobStore);
       let calls = 0;
+      let firstWritten: JobStep[] | undefined;
       vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
         calls += 1;
         if (calls === 1) {
-          expect(steps[0]?.status, "the first write is the skip's").toBe("skipped");
-          expect(steps[1]?.status, "the skip must be written before the next step starts").toBe("pending");
+          firstWritten = structuredClone(steps);
           throw new Error("the database blinked");
         }
         return await realNote(id, attempt, steps, title);
@@ -1279,6 +1280,8 @@ describe("one claim walks the whole job", () => {
 
       const advanced = await advanceAsOwner(job.id, parts);
 
+      expect(firstWritten?.[0]?.status, "the first write is the skip's").toBe("skipped");
+      expect(firstWritten?.[1]?.status, "the skip must be written before the next step starts").toBe("pending");
       expect(calls, "the failing skipped-step write must have happened").toBeGreaterThan(0);
       expect(ran.names).toEqual(["extract"]);
       expect(advanced?.job.status).toBe("done");
@@ -1413,6 +1416,93 @@ describe("one claim walks the whole job", () => {
       expect(second?.job.status).toBe("done");
       expect(second?.job.requeues, "it came back through the sweep").toBe(1);
       expect(ran.names, "bought once").toEqual(["extract", "blocks"]);
+    });
+
+    /* Round 2. Written in the review sandbox without Postgres; run against it
+       on 2026-10-07, and seen red with the receipt moved to an awaited second
+       transaction after the product's (the snapshot taken inside the first
+       shows the step still `pending`). The replay cases
+       above also pass an awaited receipt write in a second transaction. Here
+       the product differs from the seed, and the transaction is observed and
+       then rolled back after its body, before it can commit. All assertions
+       stay outside the transaction and the coordinator's failure catchers. */
+    it("keeps the forced receipt and changed product in one transaction, including a refused receipt", async () => {
+      await runAsOwner(OWNER, async () => {
+        const slug = "test-walk-forced-receipt-atomic";
+        const { job, made } = await fixture(slug, ["metadata", "extract"]);
+        try {
+          const steps = job.steps.map((s): JobStep => ({ ...s, force: s.name === "metadata" }));
+          await getDb().update(jobsTable).set({ steps }).where(eq(jobsTable.id, job.id));
+          const attempt = mintAttempt();
+          const claimed = await pgJobStore.claim(job.id, OWNER, attempt, LEASE_MS, 100);
+          expect(claimed.kind).toBe("claimed");
+          if (claimed.kind !== "claimed") throw new Error("fixture was not claimed");
+          await claimSession(claimed.job, attempt);
+          const draft = (await rowOf(job.id))?.draft;
+          expect(draft).toBeTruthy();
+          if (!draft) throw new Error("fixture has no draft");
+          const [revision] = await getDb().select().from(articleRevisions)
+            .where(eq(articleRevisions.id, draft));
+          if (!revision) throw new Error("fixture draft disappeared");
+          const originalMeta = (made.metadata!.parts as { meta: Meta }).meta;
+          const changedTitle = "The atomic forced receipt's distinct product";
+          expect(originalMeta.title).not.toBe(changedTitle);
+          const product: StepProduct = {
+            ...made.metadata!, detail: changedTitle,
+            parts: { meta: { ...originalMeta, title: changedTitle } },
+          };
+          const doneSteps = steps.map((s): JobStep => s.name === "metadata" ? { ...s, status: "done" } : s);
+          const transition = { kind: "keep" as const, jobId: job.id, attempt, steps: doneSteps };
+          const db = getDb();
+          type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+          const snapshot = async (exec: Pick<Tx, "select">) => {
+            const [storedJob] = await exec.select({ steps: jobsTable.steps }).from(jobsTable)
+              .where(eq(jobsTable.id, job.id));
+            const [storedProduct] = await exec.select({ title: articleRevisions.title }).from(articleRevisions)
+              .where(eq(articleRevisions.id, draft));
+            return { steps: storedJob?.steps, title: storedProduct?.title };
+          };
+          let rejectCommit = false;
+          let inside: Awaited<ReturnType<typeof snapshot>> | undefined;
+          const watched = new Proxy(db, {
+            get(target, prop, receiver): unknown {
+              if (prop !== "transaction") return Reflect.get(target, prop, receiver);
+              return (body: (tx: Tx) => Promise<unknown>, config?: Parameters<typeof db.transaction>[1]) =>
+                target.transaction(async (tx) => {
+                  const result = await body(tx);
+                  if (rejectCommit) {
+                    inside = await snapshot(tx);
+                    throw new Error("review injected rollback after transaction body");
+                  }
+                  return result;
+                }, config);
+            },
+          });
+          const session = pgStoreSession({ db: watched, ref: {
+            slug, articleId: revision.articleId, revisionId: draft, jobId: job.id, attemptId: attempt,
+          } });
+          const stepAttempt = await session.beginStep(slug, "metadata");
+          const before = await snapshot(db);
+          const ctx: StepContext = {
+            slug, power: "standard", report: () => {}, preview: () => {},
+            signal: new AbortController().signal, cacheArticle: false,
+          };
+          rejectCommit = true;
+          await expect(session.commit(ctx, STEPS.metadata, stepAttempt, product, transition)).rejects.toThrow();
+          expect(inside).toEqual({ steps: doneSteps, title: changedTitle });
+          expect(await snapshot(db), "both writes roll back together").toEqual(before);
+          rejectCommit = false;
+          await expect(session.commit(ctx, STEPS.metadata, stepAttempt, product, {
+            ...transition, attempt: mintAttempt(),
+          })).rejects.toBeInstanceOf(StaleAttemptError);
+          expect(await snapshot(db), "a refused receipt rolls back the product").toEqual(before);
+          expect(await session.commit(ctx, STEPS.metadata, stepAttempt, product, transition)).toEqual({ kind: "kept" });
+          expect(await snapshot(db), "the positive control must write both").toEqual({ steps: doneSteps, title: changedTitle });
+        } finally {
+          // A successful keep must not hold a concurrency slot for later cases.
+          await getDb().delete(jobsTable).where(eq(jobsTable.id, job.id));
+        }
+      });
     });
 
     /* ------------------------------------------------------------ PQO1 -- */

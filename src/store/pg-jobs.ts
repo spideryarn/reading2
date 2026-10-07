@@ -1438,8 +1438,8 @@ const rawPgJobStore: JobStore = {
              *failure* narrative `runStep` records on the way out — `error`, and
              `INTERRUPTED`'s sentence — and writing those onto a job that is
              going back into the line would put a red step on a card that is
-             waiting its turn. The row already holds every finished step, because
-             `noteProgress` wrote them. */
+             waiting its turn. The row already holds every finished step,
+             written in the transaction that committed its product. */
           steps: settledSteps(sql`true`),
           attemptId: null,
           leaseExpiresAt: null,

@@ -339,17 +339,24 @@ which is what they are for.
 
 ## What is left
 
-- **Greg's:** the Stop question above.
-- **Reported:** `STEP_BUDGET_MS.assets` and `.fetch` against their steps' real ceilings.
+- **Greg's:** the Stop question above
+  ([Left open, for Greg](#left-open-for-greg)): Stop pressed during an import's last step, when
+  the step finishes anyway, keeps the article on one server and loses it on another.
+- **Reported, numbers unchanged on purpose:** two step budgets look too small.
+  `STEP_BUDGET_MS.assets` is 185 s against a real ceiling of about 360 s for a PDF, and
+  `STEP_BUDGET_MS.fetch` is 150 s against a paper source that tries several candidates. Both are
+  in [PQ4 + PQO4](#pq4-pqo4-the-comments-that-describe-a-queue-and-a-store-that-are-gone). A
+  budget is a measurement to make, not a comment to correct, so this stage changed neither.
 - **Not closed in PQ1:** a failure of the write that settles the job (`pauseForDeadline`, or
   `settleJob` after a cancel or a failure) still leaves the row to the lease. Closing it needs a
   fourth storage-failure door and a sentence for the reader's card.
-- **Not closed in PQO2:** a claimant that dies between `extract`'s commit and the next progress
-  write. It is one field away since C1: a `keep` now writes the job's steps inside the commit
-  (`keepStepIn`), and the title could ride the same statement. Not built, because C1 was kept to
-  the receipt.
+- **Not closed in PQO2:** the title is lost if a claimant dies between `extract`'s commit and the
+  next progress write. It is one field away since C1: a `keep` now writes the job's steps inside
+  the commit (`keepStepIn`), and the title could ride the same statement. Not built, because C1
+  was kept to the receipt.
+- **By design, and still able to repeat a paid call:** work lost before its commit, a discarded
+  draft, and an explicit Retry, which gives a job its force set back. See round 2 below.
 - **Another cluster's:** PQ3, PQO3, PQO5.
-- A second, narrow GPT review of the C1 change, which the orchestrating agent runs before pushing.
 
 ## Review status
 
@@ -490,4 +497,41 @@ passed it over the first time.
   `src/pipeline.ts`), and six complexity notices. Five are the ones Sol counted; the sixth is
   `settleIn` in `src/store/pg-session.ts`, a file Sol's run did not include. C1 added statements
   to an existing branch there and no branch, so it is taken to predate this; that was not measured.
+- Not run: the full `npm test`.
+
+### Round 2: GPT Sol on the C1 fix, 2026-10-07
+
+**Verdict: ship with these fixes applied, and C1 is closed.** Sol found no commit path where a
+forced step's product lands without its `done` receipt (`keepStepIn`, `releaseStepIn` and
+`finishIn` cover keep, release and the last step, each in the product's transaction). Discovery
+is closed after this round. The [report](261007b-seventh-sweep-job-queue-tier-0-code-review-2-sol.md)
+and its [prompt](261007b-seventh-sweep-job-queue-tier-0-code-review-2-prompt.md) are beside this
+file. Sol again had no database, so its test changes arrived unrun.
+
+| | Finding | Sol | Against Postgres |
+|---|---|---|---|
+| D1 | P2. The skipped-step case asserted inside a `noteProgress` spy, where the tolerant `note()` swallowed a failure | the steps are captured and asserted outside | passed as written |
+| D2 | P2. Both replay cases would accept a receipt written in an awaited *second* transaction | a new case: a changed `metadata` product, a rollback injected after the transaction's body, a refused attempt, a successful control | passed as written; red against that implementation, below |
+| D3 | P3. The pause's comment still credited `noteProgress` with storing the finished steps | comment corrected | comment only |
+
+**D2 seen red.** The session was changed so that `settleIn`'s `keep` branch wrote nothing and
+`commit` ran `keepStepIn` in a second awaited `db.transaction` after the product's had returned.
+The new case failed on its first assertion: the snapshot taken inside the product's transaction
+showed `metadata` still `pending`. The two replay cases stayed green against it, which is the gap
+Sol named. With `keepStepIn` not called at all, all three went red (the two replay cases on the
+receipt). The session file was then put back byte for byte.
+
+**What remains by design.** Tolerant continuation can no longer repeat a *committed* forced step.
+It is not a promise that every paid call happens once: work lost before its commit, a discarded
+draft, and an explicit Retry can each repeat one, and Retry deliberately restores the original
+force set (`forceForRetry`). None of that is changed here.
+
+**Gates after round 2**, before merging `dev`:
+
+- `npm run typecheck`: 4 projects, all 3339 source files covered, no errors.
+- `tests/jobs-walk.test.ts` 37 passed; `tests/jobs-tier0-offline.test.ts` 14 passed.
+- The job, queue, claim, session, retry and publication suites by file, with
+  `tests/store-migration-registry.test.ts` and `tests/doc-links.test.ts`: 70 files in three runs,
+  872 tests, 872 passed.
+- Biome on the nine touched files: unchanged, the one error, one warning and six notices above.
 - Not run: the full `npm test`.
