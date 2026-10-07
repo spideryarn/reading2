@@ -1,0 +1,102 @@
+# Design-consistency follow-ups: five queued items from 261007h
+
+**Status: plan, 2026-10-07.** The five items plan
+[261007h](261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)
+left in the queue (§ Left, and where it went). Greg, 2026-10-04, on the Overseer's queue: *"If
+you're confident, address all of the Q-queue-yeses"*; and on 261007h's deferrals, 2026-10-07:
+*"yes to all as you see fit"*. The aim is 261007h's: *"controls that do the same job should look
+the same in every mode"* (Greg, 2026-10-07).
+
+One commit per item, cheapest and clearest first. Each defect gets a test seen red first.
+
+## S1 — `qi-fahzat55`: Learn's Start over names what it is doing
+
+**Now.** Start over (`ConversationModes.tsx`, `onDelete` in Learn) sets `resetting` to
+`stopping-live`, then `deleting`, and hides the conversation at once (`theLearn` is null unless
+`resetting === "idle"`). `ChatPanel` then draws `ChatListLoading` — the delayed band wait — so
+for 600ms nothing answers the press, and then it says *"Fetching your Learn conversation…"*,
+which is not what is happening.
+
+**Change.** `ChatPanel` takes a `startingOver: boolean` (true while `resetting !== "idle"`); in
+the `learn` arm it draws `<BandWaiting delayMs={0}>Starting over…</BandWaiting>` instead of
+`ChatListLoading`. The press-response exception in
+[loading-spinner.md](../project/loading-spinner.md) is exactly this case. One sentence for both
+phases rather than one per phase: the reader pressed one button, and "Ending the live
+conversation…" then "Clearing…" is two lines flashing past for one act.
+
+**Test first:** render `ChatPanel` in Learn with no thread and `startingOver`; expect "Starting
+over…" on the first render and no "Fetching". Red before the prop exists.
+
+## S2 — `qi-h2cneb4y`: Ask in chat at Dig deeper's size
+
+**Now.** Glossary: Dig deeper is shadcn `Button` outline/sm (32px) beside a 28px `.gloss-btn` Ask
+in chat. Citations: Dig deeper was cut to `xs` (24px) to match its 25px Ask in chat.
+
+**Change.** `AskInChatButton` (`OriginChat.tsx`) renders `Button variant="outline" size="sm"`,
+keeping the caller's placement class; Citations' Dig deeper goes back to `sm`. Both pairs are then
+32px. Its only two callers are Glossary and Citations (Debate's claim has its own icon button),
+so "used in several modes" is these two. The `.gloss-btn` rules that styled it are checked for
+anything that would now fight the Button's classes. Wrapping checked in a browser at 1440, the
+iPad band (~288px) and 390.
+
+**Test first:** a render test that Ask in chat and Dig deeper carry the same `data-size` in each
+panel (red today: the Ask button has no `data-size`).
+
+## S3 — `qi-mpnpp2qp`: Diagram's pager takes the Quotes/Skim shape
+
+**Now.** `.diag-step` is a three-column grid; each button fills its third (≈160×44), border
+`--rule`, half radius, transparent ground, faint ink. Quotes' and Skim's are 44px squares
+(`--control-h-lg`), `--rule-strong` border, `--radius`, `--surface-raised` ground, ink.
+
+**Change.** Dimensions and look only: `.diag-step` becomes a centred flex row like
+`.quotes-step`; `.diag-step-btn` takes `.quotes-arrow`'s box (44px square, border, radius,
+ground, ink, hover border, focus mark). **Kept** (GPT Sol's R20 on 261007h): vertical chevrons,
+`aria-disabled` rather than `disabled` (the unavailable look moves to `[aria-disabled="true"]`),
+and the focusable readout with its card. The readout gets Quotes' `min-width` so the buttons do
+not move as the count grows.
+
+**Trade-off, named:** the buttons shrink from ≈160×44 to 44×44. 44px is the house touch height
+and Apple's minimum; Greg's iPad ask (2026-08-27) was for a target a thumb could hit, which 44
+still is, and the queue item asks for exactly this shape. The comment that says "the size is the
+whole feature" is rewritten to say what changed and why.
+
+**The missing up-cell border** is diagnosed in the browser first (which rule removes it); if it is
+a rule rather than a rendering artefact it goes, with a test on the computed rule if one is cheap.
+
+## S4 — `qi-a5gzv44d`: six elevation shadows soften in light
+
+**Now.** Docked/in-column chat (`dialogs.css`, two rules), the Ask chip (`annotations.css`), the
+revealed gutter (`gutter.css`), the dock drawer (`dock.css`, upward), the mode herald
+(`mode-band.css`) and chat's latest-message pill (`chat-actions.css`) keep dark-tuned black
+literals, so they are heavy on a white page.
+
+**Change.** One factor rather than six tokens: `--shadow-strength: 1` in the dark block,
+`0.38` in the light one (the ratio the three F6 tokens already use), and each of the six writes
+its alpha as `calc(<dark alpha> * var(--shadow-strength))`. Dark computes to the same number, so
+it is pixel-identical; each silhouette stays its own. **Simpler option passed over:** six new
+tokens, each with a dark and a light value — twelve numbers to keep in step, for silhouettes used
+once each. The factor is one number and says the rule ("light is ~0.38 of dark") once.
+
+**Test first:** a stylesheet scan that every outer (non-`inset`) `box-shadow` with a black colour
+in `src/web/styles/` uses a `--shadow-*` token or `var(--shadow-strength)`; red today on the six
+(and any others it finds, each judged: elevation or not).
+
+## S5 — `qi-zm95p9we`: the voice row, one geometry
+
+**Now.** Chat: bare mic, "Live", engine menu (Experimental), Send. Learn: mic + "Talk", "Live
+conversation", the menu, Send; at 390 Learn's Send drops to its own line. The mic and Live button
+are 1.65rem (26px); Send is `--control-h` (36px).
+
+**Change** (details after the browser baseline): one height for the row's controls, and Learn's
+row ordered and sized so Send stays on the line at 390 — the label "Talk" stays (R20: it is
+deliberate). Candidate: at narrow widths Learn's Live label shortens to "Live", as in Chat, since
+the longer label is what pushes Send off. Decided against the screenshots, written here before
+building.
+
+## Not in this job
+
+The queue itself (the Overseer owns it). Font sizes across modes (`qi-f8h393sb`).
+
+## Review
+
+GPT Sol on this plan (read-only), then one code review over all five commits.

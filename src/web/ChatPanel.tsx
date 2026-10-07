@@ -250,6 +250,13 @@ interface Props {
    * `settled` in useChat.ts. Chat's delete ignores it.
    */
   canStartOver: boolean;
+  /**
+   * **Learn's Start over is under way**: Live is hanging up or the DELETE is
+   * out, and the conversation has already left the screen. The panel says so
+   * at once rather than falling through to the delayed read wait (plan
+   * 261007m S1). Optional; Chat never passes it.
+   */
+  startingOver?: boolean | undefined;
   /** Answer the last question again, over the top of the answer it has. */
   onRetry(messageId: string): void;
   /** Rewrite one of the reader's questions. Discards everything after it. */
@@ -412,6 +419,7 @@ export function ChatPanel({
   onRename,
   onDelete,
   canStartOver,
+  startingOver = false,
   onRetry,
   onEdit,
   onStop,
@@ -697,8 +705,21 @@ export function ChatPanel({
            this is reached only before the first fetch lands, in the beat before
            an empty band begins its conversation, and while Start over's DELETE
            is out — and in none of them is there anywhere for a question to go.
-           Plan 261001m, F1 and F6. */
-        <ChatListLoading what={`your ${MODE_LABEL.learn} conversation`} />
+           Plan 261001m, F1 and F6.
+
+           **Start over names itself, at once.** The reader just pressed a
+           button, so this is the press-response exception in
+           loading-spinner.md (`delayMs={0}`); and "Fetching your Learn
+           conversation…" would be untrue while the old one is being deleted.
+           One sentence for both of its phases, Live hanging up and the DELETE:
+           the reader made one press. Plan 261007m S1. */
+        startingOver ? (
+          <BandWaiting as="div" className="chat-loading" delayMs={0}>
+            Starting over…
+          </BandWaiting>
+        ) : (
+          <ChatListLoading what={`your ${MODE_LABEL.learn} conversation`} />
+        )
       ) : rows.length === 0 && !loaded ? (
         /* **Not the empty list, which is a claim we cannot make yet.** On a
            slow connection the first fetch takes seconds, and for all of them
