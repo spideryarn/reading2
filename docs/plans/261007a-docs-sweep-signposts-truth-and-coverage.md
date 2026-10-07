@@ -377,7 +377,29 @@ opened, reads the two sections, and either fixes a sentence or moves on. It cost
 one, so some of its lines will be noise, and a hint that is usually noise gets ignored. The honest
 test is to run it for a week and count how often its list led to an edit.
 
-*Recommend:* B, built as a hint and reviewed after a week; not C. I have not built it.
+*Recommend:* B, built as a hint and reviewed after a week; not C.
+
+**Built 2026-10-07** as [`.claude/hooks/push-doc-hint.sh`](../../.claude/hooks/push-doc-hint.sh),
+a second hook on the Bash `PreToolUse` matcher beside `protect-shared-tree.sh`. It is a separate
+file because the two have opposite contracts: that one refuses on any doubt, this one always exits
+0 and goes quiet on any error. "Changed" means the files in the non-merge commits of
+`origin/dev..HEAD`. The hint goes to the agent as `additionalContext`, because stderr on exit 0
+reaches nobody. Non-push calls return before Git or the doc scan; a push costs about 0.5s, and the
+doc scan is one grep. The time bound is the registration's `timeout: 5`, past which Claude Code lets
+the call through. Its tests are `bash .claude/hooks/push-doc-hint.test.sh`.
+
+GPT Sol's code review
+([answer](261007a-docs-sweep-push-hint-code-review-sol.md)) fixed rename handling, nested docs, a
+pipeline that could print a hint from partial `git` output, and a missing-file guard on the
+registration. It also added a Python shell tokenizer, a self-re-exec under `timeout` and size caps,
+which took the hook to 216 lines. I took those three out again. Greg had asked for minimal, and a
+wrong guess costs one line of noise: `echo "git push"` gets a needless hint, and
+`cd elsewhere && git push` gets the session repo's list. The test file says so.
+
+**It will be judged on 2026-10-14** by how often its list led to a doc edit. Every hint appends a
+line to `push-doc-hint.log` in the shared `.git` directory, giving the time, the HEAD pushed and the
+docs named, so the review can check each line against later commits. Queue item `qi-hxg5w49c` asks
+the Overseer to do that review.
 
 ### Three questions that are not wording
 
