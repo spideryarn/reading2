@@ -7252,7 +7252,11 @@ export interface EarlierFeedback {
  */
 export interface EarlierFeedbackPage {
   reports: EarlierFeedback[];
-  /** `true` when the reader has filed more than `EARLIER_FEEDBACK_LIMIT`, so the list says so. */
+  /**
+   * `true` when the reader has filed more than this list holds — more than
+   * `EARLIER_FEEDBACK_LIMIT`, or more than fit `FEEDBACK_LIST_BYTES` — so the
+   * list says so.
+   */
   more: boolean;
   /**
    * **How many under each filter**, uncapped, on every answer whatever `?show=`
@@ -7387,45 +7391,50 @@ export const EARLIER_FEEDBACK_LIMIT = 50;
  * pasted article cannot become an attachment, which is the case the cap is
  * really for.
  *
- * **12,000 since 2026-10-07; it was 4,000**, and the reason is dictation. A
- * dictation may now run fifteen minutes (`MAX_MS`, src/web/mic-recording.ts),
- * which at an even 150 words a minute is about 13,000 characters, and Greg was
- * cut off dictating a long report into this box (spya-n8cuqq). At 4,000 the box
- * would have refused what the microphone had just been allowed to take.
- * 12,000 is what the column's CHECK already admits (`MAX_FEEDBACK_BODY_CHARS`
- * below), so no migration went with it. Past it the failure is a sentence
- * asking the reader to trim, with every word still in the box. Plan
- * docs/plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md.
+ * **20,000 since 2026-10-07; it was 4,000, then 12,000 the same morning**, and
+ * the reason is dictation. A dictation may now run fifteen minutes (`MAX_MS`,
+ * src/web/mic-recording.ts), and Greg was cut off dictating a long report into
+ * this box (spya-n8cuqq). 12,000 was what the database already admitted, about
+ * thirteen minutes of non-stop speech; fifteen minutes non-stop came to 15,108
+ * in plan 261007b's soak. 20,000 covers fifteen minutes at 200 words a minute,
+ * and Greg said yes to widening the column's CHECK to match (plan
+ * docs/plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md).
+ * Past it the failure is a sentence asking the reader to trim, with every word
+ * still in the box.
+ *
+ * **Equal to `MAX_FEEDBACK_BODY_CHARS` below, on purpose**: what the reader may
+ * send is what the database will keep. Still a cap, and the cap still matters:
+ * it is what stops a pasted article becoming an attachment on its way to
+ * Sentry. 20,000 characters is a short article, and that is the trade Greg took.
  */
-export const MAX_FEEDBACK_ANSWER_CHARS = 12_000;
+export const MAX_FEEDBACK_ANSWER_CHARS = 20_000;
 
 /**
  * The cap on **each of the three answers a stale client sends** — the dialog's
  * shape before 2026-09-02, still folded into one `body` by src/routes.ts §
  * `feedbackBody`. It was `MAX_FEEDBACK_ANSWER_CHARS` until that one went up;
- * these stay at the 4,000 they were written under, because three at 12,000
- * would pass the route and then fail the column's CHECK as a database error.
+ * these stay at the 4,000 they were written under: three of them under their
+ * headings come to 12,072, inside the column's CHECK.
  */
 export const MAX_LEGACY_FEEDBACK_ANSWER_CHARS = 4_000;
 
 /**
- * The longest a `feedback.body` may be **in the database**, which is three times
- * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` plus the headings — and that is not sloppiness, it is what
- * the backfill needs.
+ * The longest a `feedback.body` may be **in the database** — the number written
+ * into `feedback_body_shape` (src/db/schema.ts), which tests/feedback-store.test.ts
+ * holds to this one by writing exactly it and one character more.
  *
- * Reports filed before 2026-09-02 are three answers, each capped at
- * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
- * used to write. Three full ones come to exactly 12,072 characters. The column's
- * CHECK has to admit that, or the migration that wrote them into `body` would
- * fail on a row that was legal when it was filed — and the alternative, cutting
- * the backfill to 4,000, silently throws away something a reader wrote.
+ * It was 12,072 until 2026-10-07, which is three old answers: reports filed
+ * before 2026-09-02 are three answers, each capped at
+ * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS`, glued under the headings src/feedback.ts
+ * used to write, and the migration that wrote them into `body` needed a CHECK
+ * that admitted three full ones rather than one that cut them. **Whatever this
+ * becomes, it may not go below 12,072**, or a row that was legal when it was
+ * filed becomes illegal.
  *
- * **The reader's limit is still `MAX_FEEDBACK_ANSWER_CHARS`**: the route refuses
- * more and the dialog says so. This one is the ceiling under which no historical
- * row is illegal, and it is also what a report from a *stale client* folds into
- * — src/routes.ts § `feedbackBody`.
+ * Since plan 261007j it is 20,000, equal to `MAX_FEEDBACK_ANSWER_CHARS`: the
+ * reader's limit and the database's are one number.
  */
-export const MAX_FEEDBACK_BODY_CHARS = 12_072;
+export const MAX_FEEDBACK_BODY_CHARS = 20_000;
 
 /**
  * The largest screenshot the database will take, in **decoded** bytes.
@@ -7485,6 +7494,27 @@ export interface FeedbackDiagnostics {
  * says whether the store saw another row and `nextCursor` reaches it.
  */
 export const ADMIN_FEEDBACK_MAX = 500;
+
+/**
+ * **The most one list of feedback reports may weigh**, as the UTF-8 bytes of
+ * its reports' JSON — a second ceiling beside the count, because a count stands
+ * in for a size only while every report is small. Both lists that return whole
+ * reports read it: `/admin/feedback` (`ADMIN_FEEDBACK_DEFAULT_LIMIT`, up to
+ * `ADMIN_FEEDBACK_MAX`) and the reader's own Earlier tab
+ * (`EARLIER_FEEDBACK_LIMIT`).
+ *
+ * A report may be `MAX_FEEDBACK_BODY_CHARS` (20,000) characters — 120 KB of
+ * JSON when every character escapes to six bytes — so 200 of them is 4 MB or
+ * more, fifty can be 6 MB, and a Vercel function's response may be 4.5 MB. The
+ * list stops before the report that would take it past this, always holding at
+ * least one, and says there are more (src/json-budget.ts): the admin page's
+ * cursor is the last report returned, so *Load older* reaches the rest; the
+ * Earlier tab says how many of how many it shows. No report is ever shortened.
+ * 3 MiB leaves room for one worst-case report and the envelope;
+ * tests/admin-feedback-store.test.ts holds the arithmetic. Plan
+ * docs/plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md.
+ */
+export const FEEDBACK_LIST_BYTES = 3 * 1024 * 1024;
 
 /** What `/api/admin/feedback` asks for when the address says nothing. */
 export const ADMIN_FEEDBACK_DEFAULT_LIMIT = 200;
@@ -7554,9 +7584,9 @@ export interface AdminFeedbackReport {
    *
    * **Not length-capped on the way out.** Reports filed before 2026-09-02 carry
    * the three old answers glued together with their headings, so a legacy body
-   * can legitimately be longer than the dialog's limit (`MAX_FEEDBACK_BODY_CHARS`
-   * against `MAX_FEEDBACK_ANSWER_CHARS`: three times it until 2026-10-07, 72
-   * characters over it since). A renderer that truncates to the dialog's limit
+   * could be longer than the dialog's limit (three times it until 2026-10-07;
+   * since plan 261007j the dialog's limit is the column's, but a later cut to
+   * the dialog must not truncate the old ones). A renderer that truncates to the dialog's limit
    * would silently cut the oldest reports — the ones most likely to be the
    * reason somebody opened this page. GPT Sol, 2026-09-02.
    */

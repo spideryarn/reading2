@@ -28,7 +28,9 @@ import {
 import { ADMIN_USER_ID_PROD } from "../src/admin.js";
 import { isFeedbackQuestionId } from "../src/feedback-question-values.js";
 
-const STRANGER = "11111111-2222-4333-8444-555555555555";
+/* Minted per run: a literal here collided with tests/uploads-api.test.ts in
+   tests/fixture-ids.test.ts (2026-10-07). Nothing here inserts it. */
+const STRANGER = crypto.randomUUID();
 
 function question(id: string, over: Partial<QuestionFile> = {}): QuestionFile {
   return { id, report: null, status: "open", asked: "2026-10-07", title: `About ${id}`, acted: [], body: "The body.", ...over };

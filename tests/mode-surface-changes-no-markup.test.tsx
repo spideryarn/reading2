@@ -1760,12 +1760,16 @@ const GLOSSARY_SHAPE: BandShape = {
  * Nothing in the suite could see that before this literal existed. The shape
  * stage 2 has to write is a fragment that is always present, with the
  * conditionals inside it.
+ *
+ * **Edited on purpose, 2026-10-07**: every `*_LOADING` shape's last child went
+ * from a bare `p.gloss-quiet` (or `p.quotes-quiet`) to the shared wait line,
+ * `p.band-waiting.gloss-quiet[role]` — BandWaiting.tsx, plan 261007h § F1.
  */
 const GLOSSARY_LOADING: BandShape = {
   className: "mode-band gloss has-about",
   label: "Glossary",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.gloss-ask", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
 };
 
@@ -1796,7 +1800,7 @@ const IDEAS_LOADING: BandShape = {
   className: "mode-band gloss ideas has-about",
   label: "Ideas",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
 };
 
@@ -1813,7 +1817,7 @@ const QUOTES_LOADING: BandShape = {
   className: "mode-band quotes has-about",
   label: "Quotes",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.quotes-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.band-waiting.quotes-quiet[role]"],
   headChildren: [],
 };
 
@@ -1831,7 +1835,7 @@ const TIMELINE_LOADING: BandShape = {
   className: "mode-band gloss timeline has-about",
   label: "Timeline",
   head: true,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "p.band-waiting.gloss-quiet[role]"],
   headChildren: [],
 };
 
@@ -1865,7 +1869,7 @@ const TWEETS_LOADING: BandShape = {
   className: "mode-band summ gloss tweets has-about",
   label: "Summary",
   head: false,
-  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "p.gloss-quiet"],
+  children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.summ-controls", "p.band-waiting.gloss-quiet[role]"],
 };
 
 /** A visitor has the posts and the (i), and no footer. */
@@ -1935,7 +1939,7 @@ const DEBATE_LOADING: BandShape = {
     "button.band-about[aria-expanded,aria-haspopup,aria-label,type]",
     "div.band-head",
     "div.gloss-ask.dbt-lens",
-    "p.gloss-quiet",
+    "p.band-waiting.gloss-quiet[role]",
     "div.dbt-scroll",
   ],
   headChildren: [

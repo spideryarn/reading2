@@ -340,7 +340,9 @@ function screen(): Screen {
   const text = band.textContent ?? "";
   const badge = band.querySelector(".prof-badge");
   return {
-    looking: text.includes(LOOKING),
+    /* The wait line's live region, which is mounted at once; its words wait
+       600ms (BandWaiting.tsx), so the text is not what says "looking". */
+    looking: band.querySelector('.band-waiting[role="status"]') !== null,
     error: band.querySelector('[role="alert"]')?.textContent ?? null,
     tryAgain: buttons("Try again").length > 0,
     nobody: text.includes(NOBODY),
@@ -484,11 +486,30 @@ afterEach(() => {
 
 describe("the six things the Ideas read can be", () => {
   it("asking: the opening read is out, and the band says it is looking", async () => {
-    const opening = hold();
-    await mount(["band", "probe"]);
-    expect(screen()).toEqual(ASKING);
-    expect(seen()).toEqual({ is: "asking", ...KNOWN_NOTHING });
-    await opening.land(noneYet);
+    vi.useFakeTimers();
+    try {
+      const opening = hold();
+      // mount() flushes real event-loop turns. Render directly under fake time.
+      await act(async () => root.render(
+        createElement(NuqsTestingAdapter, { searchParams: "", hasMemory: true } as Parameters<typeof NuqsTestingAdapter>[0], [
+          createElement(IdeasBand, { key: "band", slug: SLUG, blocks: BLOCKS, onJump: noop, onFound: noop, openKey: null, onOpenKey: noop }),
+          createElement(Probe, { key: "probe", slug: SLUG, withSkim: false }),
+        ]),
+      ));
+      expect(screen()).toEqual(ASKING);
+      expect(seen()).toEqual({ is: "asking", ...KNOWN_NOTHING });
+      /* The box alone cannot prove the caller eventually names its read. */
+      act(() => vi.advanceTimersByTime(599));
+      expect(host.textContent).not.toContain(LOOKING);
+      act(() => vi.advanceTimersByTime(1));
+      expect(host.textContent).toContain(LOOKING);
+      vi.useRealTimers();
+      await opening.land(noneYet);
+      expect(host.querySelector('.band-waiting[role="status"]')).toBeNull();
+      expect(host.textContent).not.toContain(LOOKING);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("failed: the opening read failed, and the band offers the read again and nothing that spends", async () => {

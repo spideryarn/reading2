@@ -158,6 +158,7 @@ list page now agree, and agreeing is the whole of it:
 | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
 | every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |
 | the shelf card's action icons, for a finger on a card ≥ 28rem; the "⋯" | 40px (`size-10`) | `rounded-md` |
+| any other small control a finger has to hit, **`.tap-target`** (Greg: *"yes to all as you see fit"*, 2026-10-07): Quotes' ⓘ, a bare passage id, /profile's and Metadata's section headings, "Forgot your password?", "back to sign in" | drawn its own size; under `any-pointer: coarse` an invisible `::after` at least 40 × 40, centred. **A passage id is bounded** to its own width and 1.3rem tall, because ids sit 3px apart; where two 40px targets would overlap, **the row grows instead** (Quotes stacks its ⓘ over its id) | the control's own |
 
 **`--control-h` is the first of these with a token behind it**, added 2026-09-12 in
 [`styles/tokens.css`](../../styles/tokens.css) when Greg asked for Send to be bigger
@@ -171,6 +172,16 @@ component's own rule wins on everything *but* size — and so those rules must n
 height or a padding, which [`tests/close-cross.test.ts`](../../tests/close-cross.test.ts) checks
 for each of the seven. In px, because the app supports a 12px root.
 ([261002i](../plans/261002i-ipad-touch-targets-shelf-card-actions-on-the-bottom-row-bigger-close-crosses-a-visible-band-scrollbar.md))
+
+**`.tap-target` is the same idea for a control of any size**:
+[`styles/tap-target.css`](../../src/web/styles/tap-target.css), imported straight after
+`close.css`. It changes nothing for a mouse, and owes its caller room: the target reaches
+`(40 − size) / 2` past the control, and whatever is inside that loses its taps to whichever of the
+two comes later in the page. So a control with a close neighbour either makes room under the same
+query or sets `--tap-w` / `--tap-h` to bound it, and the measurements behind each are in
+[261007h § F5a](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md).
+Not on an inline element that can wrap: its `::after` would span from its first line to its last.
+[`tests/tap-target.test.tsx`](../../tests/tap-target.test.tsx).
 
 The chip is stated as a **height**, not as padding, in `chipClass` in
 [`lib/DataTable.tsx`](../../src/web/lib/DataTable.tsx) — that is what lets an icon-only control in

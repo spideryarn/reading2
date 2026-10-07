@@ -9,7 +9,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { OrderGroup, revealPressed } from "../src/web/OrderGroup.js";
+import { OrderGroup } from "../src/web/OrderGroup.js";
+import { revealChosen } from "../src/web/useRevealChosen.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,31 +29,41 @@ function group(left: number, width = 80): HTMLElement {
   return g;
 }
 
-describe("revealPressed", () => {
+describe("revealChosen", () => {
   it("scrolls right just far enough to show a pressed button past the right edge", () => {
     const g = group(300);
-    revealPressed(g);
+    revealChosen(g);
     expect(g.scrollLeft).toBe(180); // its right edge, 380, lands on 200
   });
 
   it("scrolls left to show a pressed button before the left edge", () => {
     const g = group(20);
     g.scrollLeft = 100; // the button is now at -80
-    revealPressed(g);
+    revealChosen(g);
     expect(g.scrollLeft).toBe(20);
   });
 
   it("leaves a button already in view alone", () => {
     const g = group(50);
     g.scrollLeft = 10;
-    revealPressed(g);
+    revealChosen(g);
     expect(g.scrollLeft).toBe(10);
+  });
+
+  it("finds a radiogroup's checked button as well as a pressed one (the part-switcher)", () => {
+    const g = group(300);
+    const b = g.querySelector("button");
+    b?.removeAttribute("aria-pressed");
+    b?.setAttribute("role", "radio");
+    b?.setAttribute("aria-checked", "true");
+    revealChosen(g);
+    expect(g.scrollLeft).toBe(180);
   });
 
   it("does nothing when no button is pressed", () => {
     const g = group(300);
     g.querySelector("button")?.removeAttribute("aria-pressed");
-    revealPressed(g);
+    revealChosen(g);
     expect(g.scrollLeft).toBe(0);
   });
 });

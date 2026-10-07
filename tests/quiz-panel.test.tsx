@@ -37,6 +37,7 @@ import type { BlockId, Quiz, QuizQuestion } from "../src/types.js";
 import type { Attempt, UseQuiz } from "../src/web/useQuiz.js";
 import type { ReadSoFar } from "../src/web/read-filter.js";
 import { STARTING } from "../src/job-state.js";
+import { SLOW_AFTER_MS } from "../src/web/useSlow.js";
 
 /**
  * Dictation is mocked, and only so that rule 4 above can be tested at all.
@@ -1315,10 +1316,21 @@ describe("only what you have read", () => {
   });
 
   it("waits while the levels are loading, rather than calling that read nothing", () => {
-    paintRead(owner({ quiz: PATH }), read([], "loading"));
-    expect(host.textContent).toContain("Looking for what you have read");
-    expect(host.textContent).not.toContain("None of these questions");
-    expect(host.querySelector("textarea")).toBeNull();
+    /* The shared wait line (BandWaiting.tsx): nothing in it before 600ms. */
+    vi.useFakeTimers();
+    try {
+      paintRead(owner({ quiz: PATH }), read([], "loading"));
+      expect(host.querySelector('.band-waiting[role="status"]')).not.toBeNull();
+      expect(host.textContent).not.toContain("Looking for what you have read");
+      act(() => {
+        vi.advanceTimersByTime(SLOW_AFTER_MS + 1);
+      });
+      expect(host.textContent).toContain("Looking for what you have read");
+      expect(host.textContent).not.toContain("None of these questions");
+      expect(host.querySelector("textarea")).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("walks every question, and says why, when the levels could not be loaded", () => {

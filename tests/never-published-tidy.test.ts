@@ -293,8 +293,10 @@ describe("--delete refuses", () => {
     articleId, shortId: null, ownerId: OWNER, slug: "x", createdAt: new Date(), newestActivity: new Date(), hold: [],
     attached: { revisions: 0, blockIdentities: 0, checkpoints: 0, aiCalls: 0, jobs: 0, reservations: 0, uploadsBySlug: 0, readerState: 0 },
   });
-  const A = "11111111-1111-4111-8111-111111111111";
-  const B = "22222222-2222-4222-8222-222222222222";
+  /* Minted per run: literals here collided with tests/upload-records.test.ts
+     in tests/fixture-ids.test.ts (2026-10-07). */
+  const A = crypto.randomUUID();
+  const B = crypto.randomUUID();
 
   it("a list that differs from the pinned ids, either way round", () => {
     const s = fake({ eligible: [cand(A)], proof: { ...fake({}).proof, seen: 1 } });
@@ -650,7 +652,7 @@ describe("the command refuses, and never reaches destroy", () => {
   });
 
   it("an --ids file that pins an id the survey does not admit, as well as the eligible one", async () => {
-    const extra = "33333333-3333-4333-8333-333333333333";
+    const extra = crypto.randomUUID();
     const r = await runOn("ids-wrong", (s) => ["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], {}, (a) => [a.id, extra]);
     expect(r.err?.message).toMatch(/not the pinned list/);
     expect([r.calls.backup, r.calls.destroy, r.survives]).toEqual([0, [], true]);

@@ -47,6 +47,7 @@
  */
 import { Link } from "./Link.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
+import { useRevealOnce } from "./reveal-once.js";
 import { WebsitePlans } from "./PlanCards.js";
 import { PublicShowcase } from "./PublicShowcase.js";
 import { PRICING_HREF } from "./router.js";
@@ -73,6 +74,8 @@ import {
  */
 export function FeaturesPage({ signedIn }: { signedIn: boolean }) {
   useDocumentTitle(pageTitle({ kind: "features" }));
+  /* Each `.site-reveal` rises in once and stays — reveal-once.ts. */
+  useRevealOnce();
 
   return (
     <div className="site tw:font-sans tw:text-muted-foreground">

@@ -75,6 +75,7 @@ import { ScoreBars } from "./ScoreBars.js";
 import { ReadError } from "./ReadError.js";
 import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ThresholdSlider } from "./ThresholdSlider.js";
+import { BandWaiting } from "./BandWaiting.js";
 
 /** What a deliberate `questions: []` is drawn as — a real answer, with no retry. */
 export const FAQ_NONE = "The model found no questions worth asking this piece.";
@@ -216,13 +217,13 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
     >
       {owner?.error && <ReadError error={owner.error} onRetry={owner.retryRead} />}
 
-      {owner?.status === "loading" && <p className="gloss-quiet">Looking for the questions…</p>}
+      {owner?.status === "loading" && <BandWaiting className="gloss-quiet">Looking for the questions…</BandWaiting>}
 
       {owner?.status === "none" && (
         <div className="gloss-empty">
-          <p>Nobody has asked this piece its questions yet.</p>
+          <p>Nobody has asked this one its questions yet.</p>
           <p className="gloss-hint">
-            One model pass over the whole article, and it takes tens of seconds. Written once and kept —
+            One model call over the whole article, and it takes tens of seconds. Written once and kept —
             you will not be asked again unless the article changes.
           </p>
           {run("Find the questions")}

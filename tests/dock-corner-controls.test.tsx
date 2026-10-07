@@ -851,10 +851,16 @@ describe("nothing reserves the corners they left", () => {
        reading view now (plan 260929f), so it has no page padding to keep — only
        the corner's room must not have come back with it. */
     expect(src("Tweets.tsx"), "Tweets.tsx still reserves the corner").not.toContain("pt-[calc(3.5rem");
-    for (const file of ["ProfilePage.tsx", "ContactPage.tsx", "PrivacyPage.tsx"]) {
+    /* `/contact` and `/privacy` keep the room through `DocumentPage` since
+       2026-10-07 (plan 261007h, F4b), which holds it signed in only — signed
+       out the site bar is above them instead. */
+    for (const file of ["ProfilePage.tsx", "DocumentPage.tsx"]) {
       expect(src(file), `${file} draws the corner pair and needs the room`).toContain(
         "pt-[calc(3.5rem",
       );
+    }
+    for (const file of ["ContactPage.tsx", "PrivacyPage.tsx"]) {
+      expect(src(file), `${file} no longer takes its top from DocumentPage`).toContain("<DocumentPage");
     }
   });
 });

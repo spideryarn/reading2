@@ -53,9 +53,13 @@ const SOURCES = [...filesUnder("src"), ...filesUnder("scripts")].sort();
 const code = new Map(SOURCES.map((file) => [file, codeOf(readFileSync(path.join(ROOT, file), "utf8"))]));
 
 describe("the private link's key", () => {
-  it("is named by four files, and each has one job with it", () => {
+  it("is named by five files, and each has one job with it", () => {
     const naming = SOURCES.filter((file) => /shareToken\b|share_token\b/.test(code.get(file) ?? ""));
     expect(naming).toEqual([
+      /* The one-off never-published tidy (261007f): asks only whether a key exists
+         (`share_token is not null`, inside its refusal conditions), so an article that
+         was ever shared is never deleted. It selects no value. Greg, 2026-10-07: "A". */
+      "scripts/never-published-tidy.ts",
       /* Declares the column and its two CHECKs. */
       "src/db/schema.ts",
       /* Drops it from the reader's export. */

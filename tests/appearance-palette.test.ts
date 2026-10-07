@@ -71,6 +71,10 @@ const PAIRS: [string, string, number][] = [
   ["--muted-foreground", "--background", 4.5],
   ["--foreground", "--sidebar", 7],
   ["--muted-foreground", "--sidebar", 4.5],
+  /* The faint grey on the raised surfaces it is drawn on — the dock's labels,
+     the hover cards' buttons. Dark read 4.44:1 here until 2026-10-07, when
+     its `--muted-foreground` went up one step (plan 261007h § F6). */
+  ["--muted-foreground", "--surface-raised", 4.5],
   ["--highlight-ink", "--background", 4.5],
   ["--highlight-foreground", "--highlight", 4.5],
   ["--popover-foreground", "--popover", 7],

@@ -98,8 +98,9 @@ export function StructureArriving({ arrival }: { arrival: StructureArrival }) {
       {build ? (
         <button
           type="button"
-          /* The band's own chip (structure-mode.css § `.struct-view-btn`),
-             rather than a fourth button look in one head row. */
+          /* The toggle's old single-chip look (structure-mode.css § the
+             structure-arriving line): an action, so not the joined bar the
+             Fisheye / Expanded parts are drawn in. */
           className="struct-view-btn struct-arriving-build"
           disabled={build.starting}
           onClick={build.press}

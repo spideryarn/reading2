@@ -17,7 +17,7 @@ import { type PointerEvent, type MouseEvent, useRef } from "react";
  * Width is the caller's: the two menus hold different things.
  */
 export const MENU_SURFACE =
-  "tw:z-[100] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[0_1px_2px_rgb(0_0_0/0.5),0_8px_24px_-6px_rgb(0_0_0/0.65)]";
+  "tw:z-[100] tw:rounded-[5px] tw:border tw:border-rule-strong tw:bg-surface-raised tw:p-1 tw:shadow-[var(--shadow-pop)]";
 
 /**
  * One menu item's look: finger-sized, and quiet until it is the one in focus.

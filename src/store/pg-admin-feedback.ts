@@ -59,6 +59,7 @@
 import { and, desc, eq, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { ADMIN_USER_IDS } from "../admin.js";
+import { prefixWithinBytes } from "../json-budget.js";
 
 import { getDb } from "../db/client.js";
 import { feedback as feedbackTable } from "../db/schema.js";
@@ -72,7 +73,11 @@ import type {
   FeedbackEnvironment,
   FeedbackKind,
 } from "../types.js";
-import { ADMIN_FEEDBACK_DEFAULT_LIMIT, ADMIN_FEEDBACK_MAX } from "../types.js";
+import {
+  ADMIN_FEEDBACK_DEFAULT_LIMIT,
+  ADMIN_FEEDBACK_MAX,
+  FEEDBACK_LIST_BYTES,
+} from "../types.js";
 
 /**
  * **What crosses owners, written out by hand.** See the header — this list is
@@ -230,6 +235,8 @@ export async function listFeedbackAcrossOwners(
   limit: number,
   cursor: FeedbackCursor | null,
   from: FeedbackFrom = "everyone",
+  /** `FEEDBACK_LIST_BYTES`; a parameter only so a test can reach the cut with five reports. */
+  pageBytes: number = FEEDBACK_LIST_BYTES,
 ): Promise<AdminFeedbackPage> {
   /* Clamped rather than trusted, and floored before the compare so a fractional
      `?limit=1.5` off a query string cannot reach the driver. A limit of 0 is
@@ -266,11 +273,17 @@ export async function listFeedbackAcrossOwners(
        elsewhere. */
     .limit(capped + 1);
 
-  const page = rows.slice(0, capped).map(toListed);
+  /* **Then cut by weight.** The page stops before the report that would take it
+     past `pageBytes`, measured as the JSON it will be sent as, and always holds
+     at least one. Everything below reads `page.length`, so a page cut here has
+     `hasMore` and a cursor at its own last report, and the next page starts
+     straight after it — a smaller page, never a skipped report. src/types.ts §
+     `FEEDBACK_LIST_BYTES`. */
+  const page = prefixWithinBytes(rows.slice(0, capped).map(toListed), pageBytes);
   /* The **raw** row, not the mapped report — the cursor needs the precise
      timestamp, and the report deliberately does not carry it. */
   const last = rows[page.length - 1];
-  const hasMore = rows.length > capped;
+  const hasMore = rows.length > page.length;
   return {
     reports: page,
     hasMore,
