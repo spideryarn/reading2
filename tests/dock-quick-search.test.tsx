@@ -308,6 +308,23 @@ describe("typing in the bar's box", () => {
     expect(opened, "a cleared box still opened Search mode").toBe(0);
   });
 
+  /* An input method's Escape dismisses its candidate list; the words and the
+     caret stay. Plan 261007a-ui-sweep-k2. */
+  it("neither clears nor lets go on a composing Escape", () => {
+    server();
+    mount();
+    barBox().focus();
+    type(barBox(), "日本語の");
+    const flagged = key(barBox(), { key: "Escape", isComposing: true });
+    const older = key(barBox(), { key: "Escape", keyCode: 229 } as KeyboardEventInit);
+    expect(barBox().value).toBe("日本語の");
+    expect(document.activeElement).toBe(barBox());
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(flagged.defaultPrevented).toBe(true);
+    expect(older.defaultPrevented).toBe(true);
+  });
+
   it("switches Search mode to quick when it is open on another matcher", async () => {
     const posted = server();
     mount({ startOpen: true, url: "?mode=search&match=meaning" });

@@ -57,7 +57,10 @@ true, and the prose has nowhere to say "out of date".
 - **On demand**, from Metadata's *AI processing* (`METADATA_RERUN_STEPS`).
 
 Not in the import itself, which stays as fast as it can be. The prose picks the links up as soon as
-the job finishes, with no reload (`useCrossrefs` refreshes on the job's completion).
+the job finishes, with no reload (`useCrossrefs` refreshes on the job's completion). A re-read that
+fails changes nothing: the links already drawn stay, silently, and only a read that answered — none,
+stale, another article's — takes them away
+([`tests/crossrefs-revalidate.test.tsx`](../../tests/crossrefs-revalidate.test.tsx)).
 
 **Cost, measured**: $0.05–0.17 an article on the local corpus. The plan has the token counts.
 

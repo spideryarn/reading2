@@ -36,7 +36,7 @@ import type {
   ThreadKind,
   ToolRun,
 } from "./types.js";
-import { isSingleThreadKind, isThreadKind, sameAnchor, sameOrigin } from "./types.js";
+import { RETIRED_THREAD_KINDS, isSingleThreadKind, isThreadKind, sameAnchor, sameOrigin } from "./types.js";
 import { titleFrom, titleFromOrigin } from "./chat-title.js";
 import { isSpideryarnId, mintUniqueId } from "./ids.js";
 import { errorFields, log } from "./log.js";
@@ -59,34 +59,44 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const fileFor = (slug: string) => path.join(ROOT, "data", slug, "chat.json");
 
 /**
- * A stored thread written before Learn mode existed has no `kind`. Give it one.
+ * **The kind of a thread read from a fixture's `chat.json`.** Current kinds
+ * are kept; legacy cases are handled explicitly, with no default for anything else.
  *
- * **`ChatThread.kind` is required**, deliberately — an optional field would mean
- * a `?? "chat"` at every read site, and one of those would eventually be missed,
- * which is a Learn turn answered with chat's prompt and nothing on screen
- * disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md, finding 5). The
- * price of "required" is exactly this function. One place holds the default
- * instead of twenty.
+ * - **Absent** is a thread written before Learn mode existed: a chat.
+ *   `ChatThread.kind` is required, deliberately — an optional field would mean
+ *   a `?? "chat"` at every read site, and one of those would eventually be
+ *   missed, which is a Learn turn answered with chat's prompt and nothing on
+ *   screen disagreeing (GPT Sol's review of docs/plans/260827ah-review-mode.md,
+ *   finding 5). The price of "required" is this function.
+ * - **A retired word** (`RETIRED_THREAD_KINDS`, src/types.ts) is a file written
+ *   before a rename the database made by migration. Database migrations do
+ *   not update files, so this is that migration's half for files.
+ * - **Anything else is refused.** Until 2026-10-07 this coerced every unknown
+ *   word to `"chat"`, so the `remember` → `learn` rename turned the Recall
+ *   threads in a pre-rename `data/noema-mythology-of-conscious-ai/chat.json`
+ *   into chats on their way into Postgres, and only
+ *   tests/store-roundtrip.test.ts noticed —
+ *   docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md.
+ *   The Postgres readers stopped coercing the day before (`storedThreadKind`).
  *
- * It had a twin in src/store/pg-chat.ts until 2026-10-06. That one now refuses
- * a kind it does not know (`storedThreadKind`, src/types.ts) because its input
- * is a column that cannot be absent. This one stays lenient because its only
- * input is a fixture's `chat.json` (see the header), where an absent kind is a
- * real, old state. It never sees a row from Postgres.
- * docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md stage 0.
- *
- * It reads the field off a value the type says always has it, which is the one
- * honest way to write this: the type describes what the rest of the program may
- * assume, and JSON on disk is not bound by it.
+ * It reads a field off a value the type says always has it, which is the one
+ * honest way to write this: JSON on disk is not bound by the type. It never
+ * sees a row from Postgres.
  */
+export function kindFromFile(value: unknown): ThreadKind {
+  if (value === undefined) return "chat";
+  if (isThreadKind(value)) return value;
+  if (typeof value === "string" && Object.hasOwn(RETIRED_THREAD_KINDS, value)) {
+    return RETIRED_THREAD_KINDS[value as keyof typeof RETIRED_THREAD_KINDS];
+  }
+  /* File contents are unconstrained and could be prose. loadThreads logs this
+     error, so do not include the rejected value in its message. */
+  throw new Error("unknown thread kind in chat.json");
+}
+
 function normaliseKind(thread: ChatThread): ChatThread {
-  /* `isThreadKind` rather than a list written out here — src/types.ts
-     § THREAD_KINDS. The union has grown once already (`candidates`, 2026-09-01),
-     and a member missed in either normaliser is a thread that silently becomes a
-     chat on its next read, answered with chat's prompt, with nothing on screen
-     disagreeing. That is the failure this field exists to prevent, so the list
-     is not written down twice. */
-  return isThreadKind(thread.kind) ? thread : { ...thread, kind: "chat" };
+  const kind = kindFromFile((thread as { kind?: unknown }).kind);
+  return kind === thread.kind ? thread : { ...thread, kind };
 }
 
 export async function loadThreads(slug: string): Promise<ChatThread[]> {

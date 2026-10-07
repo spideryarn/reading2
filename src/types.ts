@@ -3998,10 +3998,26 @@ export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore
  *
  * Since 2026-10-06 the two Postgres readers (src/store/pg-chat.ts and
  * src/store/export.ts) no longer coerce at all: `storedThreadKind` below
- * refuses a kind that is not on this list. Only `normaliseKind` in src/chat.ts
- * still supplies `"chat"`, and it reads fixture files, never the database.
+ * refuses a kind that is not on this list. Since 2026-10-07 neither does the
+ * fixture-file reader, `kindFromFile` in src/chat.ts: it supplies `"chat"` only
+ * for an absent kind, and reads `RETIRED_THREAD_KINDS` below.
  */
 export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "tutorial", "explore"];
+
+/**
+ * **Words a thread kind used to be, and what each became.** The database
+ * renamed them by migration — `review` → `remember` in
+ * drizzle/0048_rename_review_thread_kind.sql, `remember` → `learn` in
+ * drizzle/20261006035355_rename_remember_thread_kind_to_learn.sql — but
+ * database migrations do not update `chat.json` on disk, so a file reader
+ * needs the same map.
+ * A rename of a kind adds its old word here, pointing at the final one.
+ * docs/postmortems/261007a-a-renamed-enum-word-read-by-a-lenient-reader-becomes-its-default.md.
+ */
+export const RETIRED_THREAD_KINDS = {
+  review: "learn",
+  remember: "learn",
+} as const satisfies Record<string, ThreadKind>;
 
 /**
  * **The kinds an article has at most one of** — Learn's Recall, Tutorial and
@@ -4031,7 +4047,7 @@ export function isSingleThreadKind(kind: ThreadKind | undefined): kind is Single
  */
 export const MAX_VISIBLE_BLOCKS = 100;
 
-/** Is this one of the three? Used by both stores' normalisers and by the route. */
+/** Is this a current thread kind? Used by the file and database readers and the route. */
 export function isThreadKind(value: unknown): value is ThreadKind {
   return typeof value === "string" && (THREAD_KINDS as readonly string[]).includes(value);
 }

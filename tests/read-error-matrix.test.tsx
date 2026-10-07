@@ -660,9 +660,9 @@ const NOT_A_ROW: Record<string, string> = {
   "useRelations.ts":
     "Marginalia's relation words: a failed read stores no message and draws nothing, the notes simply have no connective.",
   "useCrossrefs.ts":
-    "an enhancement over the prose with no error state at all: a failed read draws no links and says nothing.",
+    "an enhancement over the prose with no error state at all: a failed first read draws no links, a failed re-read keeps the ones it had, and neither says anything (tests/crossrefs-revalidate.test.tsx).",
   "Metadata.tsx":
-    "the metadata page's provenance read, not a mode band. It still prints the caught message as it is; that is another cluster's file (plan 261004c § Out of scope).",
+    "the metadata page's provenance read, not a mode band: no ReadError and no Try again, the sentence heads AI processing and a failed first read asks again on a timer. It goes through `describeFetchFailure` since 2026-10-06, checked in tests/metadata-failed-read-says-a-readers-sentence.test.tsx.",
 };
 
 function arrange(row: Row, answer: Answer): void {
