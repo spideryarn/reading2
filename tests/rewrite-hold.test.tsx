@@ -20,6 +20,10 @@
  *
  * The sequences are the reviewer's own (F2, F3, F9, F10), named on each test.
  */
+import { readdirSync, readFileSync } from "node:fs";
+import nodePath from "node:path";
+import { parse } from "@babel/parser";
+import { type Node, VISITOR_KEYS } from "@babel/types";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
@@ -180,6 +184,8 @@ const stamp = (which: Which, profiled: boolean) => ({
 
 interface Row {
   name: string;
+  /** The hook file under src/web that makes the forced run — the membership guard's key. */
+  hook: string;
   step: string;
   /** The artefact's GET, without the slug. */
   path: string;
@@ -279,6 +285,7 @@ const summary = (show: boolean) =>
 const ROWS: Row[] = [
   {
     name: "Quiz",
+    hook: "useQuiz.ts",
     step: "quiz",
     path: "/api/quiz/",
     body: (which, { stale, profiled }) => ({
@@ -307,6 +314,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Summary",
+    hook: "useSimple.ts",
     step: "simple",
     path: "/api/simple/",
     search: "?summary=brief",
@@ -332,6 +340,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Thread",
+    hook: "useTweets.ts",
     step: "tweets",
     path: "/api/tweets/",
     search: "?summary=thread",
@@ -353,6 +362,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Ideas",
+    hook: "useIdeas.ts",
     step: "ideas",
     path: "/api/ideas/",
     body: (which, { stale, profiled }) => ({
@@ -383,6 +393,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Glossary",
+    hook: "useGlossary.ts",
     step: "glossary",
     path: "/api/glossary/",
     body: (which, { stale, profiled }) => ({
@@ -415,6 +426,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Sketch",
+    hook: "useSketch.ts",
     step: "sketch",
     path: "/api/sketch/",
     body: (which, { stale, profiled }) => ({
@@ -449,6 +461,7 @@ const ROWS: Row[] = [
      control it has as `verb`. Plan 261007b. */
   {
     name: "Illustrated",
+    hook: "useIllustrated.ts",
     step: "illustrated",
     path: "/api/illustrated/",
     body: (which, { stale }) => ({
@@ -484,6 +497,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Quotes",
+    hook: "useQuotes.ts",
     step: "quotes",
     path: "/api/quotes/",
     body: (which, { stale, profiled }) => ({
@@ -521,6 +535,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Timeline",
+    hook: "useTimeline.ts",
     step: "timeline",
     path: "/api/timeline/",
     body: (which, { stale }) => ({
@@ -554,6 +569,7 @@ const ROWS: Row[] = [
   },
   {
     name: "FAQ",
+    hook: "useFaq.ts",
     step: "faq",
     path: "/api/faq/",
     body: (which, { stale }) => ({
@@ -581,6 +597,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Debate",
+    hook: "useDebate.ts",
     step: "debate",
     path: "/api/debate/",
     body: (which, { stale }) => ({
@@ -637,6 +654,7 @@ const ROWS: Row[] = [
   },
   {
     name: "Citations",
+    hook: "useCitations.ts",
     step: "citations",
     path: "/api/citations/",
     body: (which, { stale }) => ({
@@ -1168,5 +1186,131 @@ describe.each(ROWS)("$name", (mode) => {
     await press("Try again");
     expect(onScreen("new")).toBe(true);
     expect(buttons(label).filter((b) => !b.disabled), `${label} is offered again`).toHaveLength(1);
+  });
+});
+
+/* ------------------------------------------------------ the membership guard --
+
+   **A file under src/web that forces a step is a row above, or is named here
+   with its reason.** The rows prove the hold works where it is wired; nothing
+   in them notices a new forced verb that never asked for one, which is how
+   seven hooks came to have a forced run and no hold (plan 261007b).
+
+   What it reads is the syntax tree, with `@babel/parser` as
+   tests/use-copy.test.tsx does, because the text will not do: Skim forces
+   through a conditional spread (`...(again ? { force: true } : {})`), the
+   glossary passes it through a parameter (`queue.start({ force, … })`), and a
+   dozen comments say `force: true` without doing it. So a hit is **an object
+   literal with a `force` property** — written out, shorthand, or nested in a
+   spread — whose value is not `false` and not itself an object literal (which
+   is the force-directed diagram's table, a different word).
+
+   What it does not see: a request built some other way (a computed key, an
+   object handed in from another module), and whether every forced path in a
+   file goes through the hold rather than beside it. The second is each row's
+   own *holds the forced verb synchronously* test, for the control it names. */
+
+/** Whether this source writes a `force` into a request, and whether it calls `useRewriteHold`. */
+function forcing(code: string): { forces: boolean; holds: boolean } {
+  const tree = parse(code, { sourceType: "module", plugins: ["typescript", "jsx", "decorators-legacy"] });
+  let forces = false;
+  let holds = false;
+  const visit = (node: Node): void => {
+    if (node.type === "ObjectExpression") {
+      for (const p of node.properties) {
+        if (p.type !== "ObjectProperty" || p.computed) continue;
+        const key = p.key.type === "Identifier" ? p.key.name : p.key.type === "StringLiteral" ? p.key.value : null;
+        if (key !== "force") continue;
+        if (p.value.type === "ObjectExpression") continue;
+        if (p.value.type === "BooleanLiteral" && !p.value.value) continue;
+        forces = true;
+      }
+    }
+    if (node.type === "CallExpression" && node.callee.type === "Identifier" && node.callee.name === "useRewriteHold") {
+      holds = true;
+    }
+    const fields = node as unknown as Record<string, unknown>;
+    for (const key of VISITOR_KEYS[node.type] ?? []) {
+      const child = fields[key];
+      for (const item of Array.isArray(child) ? child : [child]) {
+        if (item != null) visit(item as Node);
+      }
+    }
+  };
+  visit(tree.program);
+  return { forces, holds };
+}
+
+/**
+ * **Every other file that forces a step, and why it holds nothing.** A new one
+ * is red until it is a row above or a line here.
+ */
+const NOT_HELD: Record<string, string> = {
+  "useSkim.ts":
+    "pending C10b: Skim's forced run has no hold yet. It is the one artefact hook left, and it waits on the change to the same hook in docs/plans/261006n-one-type-for-a-read-spiked-on-useideas.md. Delete this line when it is a row.",
+  "useStepJob.ts": "the transport: it turns a hook's `force: true` into the request's `force: [step]`, and decides nothing.",
+  "Metadata.tsx":
+    "the Metadata page's *AI processing* re-run rows, not a mode's artefact hook: no artefact is on screen beside the button to be mistaken for the new one, and the row has a press latch of its own (§ `RerunRow`).",
+  "CommandBar.tsx":
+    "the command bar's *Run again* rows, which are Metadata's re-runs reached by typing: the press leaves for the Metadata section, where the row above shows the job.",
+  "StructureNotice.tsx":
+    "the Structure notice's press for the real tree, with `RerunRow`'s press latch (§ `run`). The tree is part of the article, not a mode artefact with a read of its own for a hold to watch.",
+  "ShelfEntry.tsx":
+    "the shelf card's rebuild of a whole article (`force: [\"fetch\"]` or `[\"extract\"]`), posted to the queue by hand. Nothing it replaces is drawn on the card.",
+};
+
+describe("every file under src/web that forces a step", () => {
+  const web = nodePath.resolve(import.meta.dirname, "..", "src", "web");
+  const files = (readdirSync(web, { recursive: true }) as string[]).filter((f) => /\.tsx?$/.test(f)).sort();
+  const read = Object.fromEntries(files.map((f) => [f, forcing(readFileSync(nodePath.join(web, f), "utf8"))]));
+  const forcers = files.filter((f) => read[f]?.forces);
+  const rows = new Set(ROWS.map((r) => r.hook));
+
+  it.each([
+    ["queue.start({ force: true });", true],
+    ["start({ force: true, useProfile });", true],
+    ["queue.start({ ...(kind === 'regenerate' ? { force: true } : {}), ...rest });", true],
+    ["const run = (force: boolean) => queue.start({ force, useProfile });", true],
+    ["post({ slug, 'force': [step] });", true],
+    ["queue.start({ force: again });", true],
+    ["queue.start({ force: false });", false],
+    ["const SIZES = { force: { title: 12 } };", false],
+    ["/* queue.start({ force: true }) */ queue.start();", false],
+    ["function start({ force = false }: Run = {}) {}", false],
+    ["const { force } = run;", false],
+  ] as const)("reads %s as forcing: %s", (code, expected) => {
+    expect(forcing(code).forces).toBe(expected);
+  });
+
+  it("is a row in the table or a named exclusion, and never both", () => {
+    expect(forcers.length, "the search found nothing, so it proves nothing").toBeGreaterThanOrEqual(ROWS.length);
+    /* The two forms a search of the text misses: without these two hits the
+       scan is the literal scan again. */
+    expect(forcers, "Skim's conditional spread").toContain("useSkim.ts");
+    expect(forcers, "the glossary's shorthand `force`").toContain("useGlossary.ts");
+    expect(
+      forcers.filter((f) => !rows.has(f) && !(f in NOT_HELD)),
+      "a forced run with no row here can be pressed twice for one result — give its hook the hold and a row, or an exclusion with its reason",
+    ).toEqual([]);
+    expect(forcers.filter((f) => rows.has(f) && f in NOT_HELD)).toEqual([]);
+  });
+
+  it("names no file that does not force one", () => {
+    const named = [...rows, ...Object.keys(NOT_HELD)];
+    expect(named.filter((f) => !forcers.includes(f))).toEqual([]);
+  });
+
+  it("finds useRewriteHold called in every row's hook, and in no excluded file", () => {
+    expect([...rows].filter((f) => !read[f]?.holds), "a row whose hook does not call the hold").toEqual([]);
+    expect(
+      Object.keys(NOT_HELD).filter((f) => read[f]?.holds),
+      "an excluded file that has the hold now: make it a row and delete its exclusion",
+    ).toEqual([]);
+  });
+
+  it("gives every exclusion a reason", () => {
+    for (const [file, why] of Object.entries(NOT_HELD)) {
+      expect(why.length, `${file} is excused with no reason`).toBeGreaterThan(10);
+    }
   });
 });

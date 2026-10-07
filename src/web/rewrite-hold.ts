@@ -8,8 +8,10 @@
  * is slow, fails, or is answered from the offline copy keeps the old artefact
  * on screen with Regenerate enabled. Pressing it is a second paid run for one
  * result. Quiz grew a hold for this alone (plan 261002f); this is that rule,
- * with the holes GPT Sol found in it closed, for Quiz, Summary, Ideas,
- * Glossary, Thread and Sketch.
+ * with the holes GPT Sol found in it closed, for every mode hook with a forced
+ * verb. Which those are is not listed here: tests/rewrite-hold.test.tsx § ROWS
+ * has a row for each, and § the membership guard names the files that force a
+ * step and are outside it, each with its reason.
  * docs/plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md § 2a.
  *
  * ## Where it lives, and why not in a band or a read

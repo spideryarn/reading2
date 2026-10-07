@@ -450,8 +450,10 @@ Then the residue nothing refuses at compile time:
   ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);
   [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)),
   every forced control in the panel honours `rewriting`, and the mode is a row in
-  *[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)* — which nothing checks you
-  added.
+  *[`tests/rewrite-hold.test.tsx`](../../tests/rewrite-hold.test.tsx)*, whose second half (since
+  2026-10-07) fails a file under `src/web` that writes a `force` into a request and is neither a
+  row's hook nor a named exclusion. It cannot see whether each forced control in your panel honours
+  `rewriting`; the row's `forced` list is where you say which they are.
 - **Pressing the control that opens it — a mode button, a sub-mode chip — runs the job when there
   is nothing there**; arriving does not. (One view starts on arrival instead: the thread, since
   2026-10-03 Summary's Thread view rather than a mode, kept the rule Greg asked of its page on
