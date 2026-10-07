@@ -77,7 +77,8 @@ let readResponse: GlossaryResponse = GLOSSARY;
 /** A JSON refusal the lookup POST answers before any stream, or `null` for a stream. */
 let refuse: { status: number; error: string } | null = null;
 
-vi.mock("../src/web/lib/api.js", () => {
+vi.mock("../src/web/lib/api.js", async () => {
+  const { ReaderFacingError } = await import("../src/web/lib/reader-facing.js");
   const api = {
     apiFetch: async (input: string, init?: RequestInit) => {
       if (!input.endsWith("/lookup")) {
@@ -112,7 +113,7 @@ vi.mock("../src/web/lib/api.js", () => {
     /* The real one throws the body's sentence on a refusal (`errorFor`). */
     readJson: async (res: Response) => {
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(data.error ?? String(res.status));
+      if (!res.ok) throw new ReaderFacingError(data.error ?? String(res.status));
       return data;
     },
     failure: async (res: Response) => new Error(String(res.status)),

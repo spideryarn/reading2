@@ -34,6 +34,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SimilarPair, SimilarResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type SimilarStatus = "idle" | "loading" | "ready" | "error";
 
@@ -174,7 +175,7 @@ export function useSimilar(slug: string, enabled: boolean): UseSimilar {
                 pairs: NONE,
                 model: null,
                 blocks: 0,
-                error: (err as Error).message,
+                error: describeFetchFailure(err as Error),
               },
         );
       } finally {
