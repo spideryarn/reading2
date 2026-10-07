@@ -61,86 +61,115 @@ Both reports are an admin's (`feedback-reporter.ts` exit 0 on each production ro
    question file ──────────▶  docs/user-feedback/questions/q-….md
                                  │  (compiled to *.generated.ts)
                                  └──── the Overseer's deploy ──▶ server imports them
-                                                                 GET /api/feedback  ───────▶ Earlier tab:
+                                                  GET  /api/admin/feedback/earlier ───────▶ Earlier tab:
                                                                                              status, #number,
-                                                                                             comment, question
-                                                                 POST /api/feedback ◀─────── reply box (+ mic)
-                                                                 feedback row, answers = q-…
-   feedback-unswept.ts  ◀── read-only, as today ─────────────────┘
-   (the answer is an admin's report like any other: provenance proven, queued, dispatched)
+                                                                                             comment, questions
+                                                  POST /api/admin/feedback/answers ◀─────── reply box (+ mic)
+                                                  row in feedback_question_answers
+   feedback-questions.ts --answers  ◀── read-only, like feedback-unswept ──┘
 ```
 
-**Agent to Greg goes through git and the deploy; Greg to agent is an ordinary feedback row.** No
-new credential, no new endpoint outside the user gate, no agent write to production. The cost is
-latency: a question appears in the dialog only once the commit carrying it has been deployed
-(the Overseer deploys ready work from `dev` on its own, usually within hours).
+**Agent to Greg goes through git and the deploy; Greg to agent is a row he writes himself, which
+an agent reads.** No new credential, no endpoint outside the user gate, no agent write to
+production, and no admin check outside the `/api/admin/` prefix gate. The cost is latency: a
+question appears in the dialog only once the commit carrying it has been deployed (the Overseer
+deploys ready work from `dev` on its own, usually within hours).
 
 ## Decisions, and the simpler option passed over each time
 
-1. **Four statuses, derived, no new ending.** `shipped` · `open` (no note yet: new or in hand) ·
-   `waiting` (a note says `awaiting`; shown as *Needs a decision*) · `aside` (a note says
-   `declined`, or an admin pressed Ignore; shown as *Set aside*). Precedence when several hold:
-   shipped, then waiting, then aside, then open. Pills: **All · Open · Needs a decision · Set aside
-   · Shipped**, each with its count.
-   *Passed over:* a new `deferred` ending in the notes. "Every report ends in exactly one of three"
-   is load-bearing for the sweep, the shipped email and `feedback-unswept.ts`; a fourth ending
-   touches all of them, and what Greg described as deferred is today either *awaiting* (needs him)
-   or *shipped with a half queued*. The comment line covers the second (decision 2).
-   *Passed over:* separate pills for declined and ignored. Greg said "deferred or ignored, or maybe
-   even both"; one pill with the reason on each row answers "why is this still here" with fewer
-   controls. Easy to split later.
-2. **A `comment:` line in the note header**, one line, at most 240 characters, plain text: why it
+Revised after GPT Sol's plan review (§ What the plan review changed).
+
+1. **All of this is an admin's view; other readers' Earlier tab does not change.** Both reports
+   are Greg's, about his own list. `GET /api/feedback` and `POST /api/feedback` are not edited.
+   A non-admin keeps **All · Shipped · Not shipped**, and receives no `ignored_at`, no
+   declined/awaiting distinction, no number, no comment and no question. `feedback.md` says today
+   that Ignore changes nothing a reader sees, and that stays true. Showing richer outcomes to
+   every report's owner is a product decision for Greg (Question 2).
+2. **Everything new is under `/api/admin/feedback/…`**, rows in the existing authenticated route
+   table behind the unchanged prefix gate ([admin.md](../project/admin.md): the namespace check is
+   the whole server-side admin gate). No handler calls `isAdmin` to authorise. The builder does
+   not edit `requireUser`, `serveAuthenticatedApi`'s namespace check, or any other listed defence.
+   The client picks the route from its cosmetic `isAdmin`; picking wrong gets a 403, not data.
+   - `GET /api/admin/feedback/earlier?show=all|open|waiting|aside|shipped` — the signed-in
+     admin's **own** reports (owner-scoped in the store exactly as `listMine` is), each with
+     `number`, `status`, `comment`; `counts` per status; `more`; and `questions` (every open
+     question, each with its newest answer if any).
+   - `POST /api/admin/feedback/answers` — `{ id, question, body }`.
+
+   If the admin route answers 404 (new client, old server, or a rollback) the client falls back
+   to the plain `/api/feedback` list and three pills. An old client with a new server is
+   untouched, because the route it calls is.
+3. **Four statuses, derived, no new ending.** `shipped` when the combined ending is shipped;
+   otherwise `aside` (shown *Set aside*) when `ignored_at` is set or the ending is declined;
+   otherwise `waiting` (shown *Needs a decision*) when the ending is awaiting; otherwise `open`
+   (no note yet: new or in hand). An ignored report cannot still demand a decision, which matches
+   `feedback-unswept.ts` dropping it. Pills: **All · Open · Needs a decision · Set aside ·
+   Shipped**. **Pill counts are report counts** and sum to All.
+   *Passed over:* a `deferred` ending in the notes. "Every report ends in exactly one of three"
+   is load-bearing for the sweep, the shipped email and `feedback-unswept.ts`; what Greg described
+   as deferred is today either *awaiting* or *shipped with a half queued*, and the comment line
+   covers the second.
+   *Passed over:* separate pills for declined and ignored. Greg said "deferred or ignored, or
+   maybe even both"; one pill with the reason on each row has fewer controls and splits easily
+   later.
+4. **A `comment:` line in the note header**, one line, at most 240 characters, plain text: why it
    was set aside, what the open question is, or what half is still queued. Compiled into the
-   generated module beside the ending and shown under the report. Several notes for one report: the
-   comment of the note whose ending decided the combined ending, newest file name first.
-   **Shown to admins only in this version.** An agent's sentence about a stranger's report, shown
-   to that stranger unreviewed, is a published sentence, and those are Greg's
-   ([overseer.md](../project/overseer.md)); a declined abuse report's note is exactly where a
-   comment could say too much. Readers get the four statuses, which say nothing a note does not
-   already decide. Whether readers should see comments is Question 2 below.
-3. **A number for every report, stored.** A new column `feedback.number`, an integer from a
+   generated module beside the ending. Which note's comment, for a report with several: the
+   newest note that says `awaiting`; otherwise, when there are fewer notes than `parts`, the
+   newest note declaring the largest `parts`; otherwise the newest `shipped` note when the result
+   is shipped; otherwise the newest `declined` note. An ignored report with no comment shows the
+   fixed line *Set aside on /admin/feedback, <date>*. The generated files are imported by server
+   code only; a test asserts no module under `src/web/` imports them.
+5. **A number for every report, stored.** A new column `feedback.number`, an integer from a
    Postgres sequence, unique across all owners, backfilled in the order the reports were filed.
    Shown as `#212` at the start of the row's meta line; said as "feedback 212".
    `feedback-unswept.ts --show` and `feedback-reporter.ts --report-id` accept `212` or `#212` as
    well as the `spya-` id, and print the number.
-   *Passed over:* a rank computed per owner (`row_number()` by filing time), with no schema change.
-   It is not unique across owners, which is the ambiguity `feedback-reports.md` already warns about
-   for `spya-` ids, and it renumbers every later report if a row is ever deleted (an account
-   deletion cascades). A number said in conversation has to mean the same report next month.
-   *Cost named:* a reader sees a global number, so can infer roughly how many reports exist
-   (about 500 today). Accepted for a beta; said here so it is decided rather than inherited.
-   *Passed over:* showing the six characters of the existing id. Not sayable.
-4. **A question is a file**, `docs/user-feedback/questions/q-<6 chars>.md`, with a header
-   (`id`, `report: spya-…|none`, `status: open|answered`, `asked: <ISO date>`, `title:` one line)
-   and a plain-text body written to
-   [ask-me-questions.md](../reusable/ask-me-questions.md)'s shape. `scripts/feedback-endings.ts`
-   compiles open ones into `src/feedback-questions.generated.ts`. A body cap (4,000 characters)
-   keeps the bundle and the screen honest.
+   The migration: create the sequence; backfill in `(created_at, owner_id, id)` order consuming
+   `nextval`; attach the default; `not null`; unique index. Drizzle applies it in one transaction,
+   so no live insert lands between statements, and unchanged pre-deploy code inserting afterwards
+   gets the next number from the default (tested).
+   **The production-reading scripts run from `dev` before the deploy**, so they read the column
+   absent-safely (`to_jsonb(f)->>'number'`, as `ignored_at` already is) and a numeric lookup
+   before the deploy says *numbering is not deployed yet* rather than failing every lookup.
+   *Passed over:* a rank computed per owner, with no schema change. Not unique across owners
+   (the ambiguity `feedback-reports.md` already warns about for `spya-` ids), and it renumbers
+   every later report if a row is ever deleted. A number said in conversation has to mean the
+   same report next month.
+6. **A question is a file, and the file is the only live record.**
+   `docs/user-feedback/questions/q-<6 chars>.md`: a header (`id`, `report: spya-…|none`,
+   `status: open|answered`, `asked: <date>`, `title:` one line, `refs:` one line for agents —
+   queue item, plan doc, note, Sentry id — not sent to the browser) and a plain-text body, at most
+   4,000 characters, written to [ask-me-questions.md](../reusable/ask-me-questions.md)'s shape.
+   `scripts/feedback-endings.ts` compiles the open ones into
+   `src/feedback-questions.generated.ts`.
+   **`awaiting-approval.md`'s *Waiting on Greg now* list moves into these files** and the section
+   becomes a signpost to the directory; its other sections (attempted abuse, the answered
+   history) stay. `feedback-reports.md` is updated so the sweep reads the directory. One home.
    *Passed over:* the question as the note's `comment:` line. A question Greg can answer needs
-   background and options; one line is the shape he has said he cannot answer.
-5. **Questions are for admins.** `GET /api/feedback` adds `questions` to its answer only when
-   `isAdmin(user.id)`; a non-admin's answer has an empty list and the client draws nothing. A
-   question naming a report is drawn under that report; one naming none is drawn at the top of the
-   *Needs a decision* view. The count on that pill includes report-free open questions.
-6. **The answer is a feedback report with one more column**, `feedback.answers` (text, null, the
-   question id). The reply box posts to the existing `POST /api/feedback` with `answers: "q-…"`.
-   The server takes that field only from an admin and only when it names a question in the
-   generated list; otherwise 400. So the answer inherits everything a report has: owner scoping,
-   rate limit, the Sentry copy, provenance by `feedback-reporter.ts`, and the sweep, which already
-   treats an admin's report as trusted input. `feedback-unswept.ts` prints `answers q-…` on the
-   line and in `--show`, with the question's title.
-   In the dialog a question with an answer row reads *Answered · <time>* with Greg's words under
-   it, and can be answered again (a second row; the newest is shown). The agent that acts on the
-   answer sets the file to `status: answered`, and the question leaves the list at the next deploy.
-   *Passed over:* a `feedback_answers` table. A second store for words Greg typed into the same
-   dialog, with its own route, isolation test and sweep.
-7. **Dictation on the reply box** is a second `useDictationField` with its own keeper name, one
+   background and options.
+7. **The *Needs a decision* view starts with every open question**, whether or not it names a
+   report, each under its title with the report's `#number` and first line when it has one, and
+   says "N open questions" beside the pill's report count. A question's report may itself be
+   Shipped (a deferred half); the question shows regardless. Report status and question status
+   are separate facts.
+8. **An answer is a row in a new table, `feedback_question_answers`**: `(owner_id, id)` primary
+   key with the id minted by the browser as a feedback id is (so a retried POST is idempotent),
+   `question_id`, `body` (same cap as a report's), `created_at`. Written only by the admin POST,
+   after checking the question id is in the generated list. It never enters the Earlier report
+   list, `/admin/feedback`, Sentry, the endings map or the shipped email.
+   The dialog shows *Answered · <time>* and Greg's words under the question, with *Reply again*.
+   `npx tsx scripts/feedback-questions.ts --answers` reads production read-only (the same
+   guarded client as `feedback-unswept.ts`), keeps only rows whose owner `isAdmin`, and prints
+   every answer whose question file is still `status: open`. The sweep runs it each time; the
+   agent that acts on an answer sets the file to `status: answered` with the answer quoted, and
+   the question leaves the dialog at the next deploy.
+   *Passed over (my first design, refused in review):* the answer as a `feedback` row with an
+   `answers` column. It would have appeared as a second Open report, in `/admin/feedback` and in
+   Sentry, and started a second report workflow.
+9. **Dictation on the reply box** is a second `useDictationField` with its own keeper name, one
    reply box open at a time (the others show a *Reply* button), stopped on tab change and close
    exactly as Write's is.
-8. **An old tab during the deploy.** The server keeps answering `?show=unshipped` and keeps sending
-   `shipped` and `counts.unshipped` if the old client's validator tolerates the added fields; if it
-   does not, the old tab's Earlier list says *Try again* until reload, which the beta's licence
-   covers. The builder checks which and writes it here.
 
 ## What an unattended run may not build: the fast path
 
@@ -168,64 +197,74 @@ Greg would have waited, C is the smaller step. B buys nothing C does not.
 
 1. **Is a wait until the next deploy acceptable for a question to appear?** Options A, B, C above.
    Recommended: A now, C if the wait bites.
-2. **Should a reader who is not an admin see the comment on their own report?** Today (as built)
-   they see only the status: *Open*, *Needs a decision*, *Set aside*, *Shipped*.
-   (a) Leave it: admins only. Nothing an agent wrote reaches a stranger unreviewed.
-   (b) Show it to the report's owner. A reader learns *why* their suggestion was set aside, which
-   is kinder; the risk is an agent's sentence that is curt, internal, or says more than it should
-   about an abuse report. Would want a rule that a comment is written for the reader, and
-   `/admin/feedback` showing every comment so Greg can read them.
-   Recommended: (a) until comments have been read for a few weeks, then (b).
+2. **Should other readers get the richer Earlier tab too?** As built, only an admin sees the four
+   statuses, the number and the comment; everyone else still sees *Shipped* or *Not shipped*.
+   (a) Leave it. Nothing an agent wrote, and nothing about Ignore, reaches a stranger.
+   (b) Statuses and number for everyone, comments still admin-only. A reader learns their
+   suggestion was set aside rather than wondering; it also tells them when an admin pressed
+   Ignore, which today is invisible to them by design.
+   (c) Comments too. Kinder still; the risk is an agent's sentence that is curt, internal, or
+   says more than it should about an abuse report. Would want a rule that a comment is written
+   for the reader, and `/admin/feedback` showing every comment so Greg can read them.
+   Recommended: (a) until Greg has read a few weeks of comments, then (b) or (c).
 
-Both go on `awaiting-approval.md`, and, once this ships, into `questions/` as the first two files
-that are not tied to a single report's ending.
+Both become question files in stage 2, which is where a waiting item now lives.
+
+## What the plan review changed
+
+GPT Sol refused the first draft (`261007d-…-plan-review-sol.md`, F1 to F11). All eleven accepted:
+F1 no `isAdmin` branch in the ordinary feedback routes, everything under `/api/admin/`; F2 answers
+in their own table, not as feedback rows; F3 questions listed whatever their report's status;
+F4 non-admins unchanged; F5 ignored outranks awaiting; F6 the backfill consumes the sequence;
+F7 scripts read new columns absent-safely; F8 question files replace the waiting list rather than
+copying it; F9 pill counts stay report counts; F10 the comment rule for an incomplete split
+report; F11 the skew that matters is new client on old server, handled by the 404 fallback.
 
 ## Stages
 
 ### Stage 1 — statuses, comments and numbers (`spya-cnbv8f`)
 
-- [ ] Tests first, red: `tests/feedback-endings.test.ts` (the `comment` field, its cap, the
-      combining rule), `tests/feedback-route.test.ts` (status per report, `?show=` for each
-      status, counts, comment present for an admin and absent otherwise),
-      `tests/feedback-store.test.ts` (status precedence in SQL including `ignored_at`; `number`
-      assigned on insert, unique, and backfilled in filing order),
-      `tests/feedback-dialog.test.tsx` (five pills, the status word, `#number`, the comment).
-- [ ] `scripts/feedback-endings.ts`: `comment` in `HEADER_FIELDS`; the generated module becomes
-      `Record<string, { ending, comment? }>`; fix `REPORT_ID` to the real id rule (`src/ids.ts`).
-      Every consumer of the generated map updated (`src/feedback-ending.ts`,
-      `scripts/feedback-shipped-emails.ts`, `scripts/feedback-unswept.ts`).
-- [ ] Migration (hand-written, `npm run db:generate -- --custom --name feedback_number`): add
-      `number`, backfill by `(created_at, owner_id, id)`, then the sequence default, `not null`
-      and a unique index. Applied locally only; production gets it from the deploy.
-- [ ] Store and route: `listMine` selects `number` and computes the status from the three id
-      lists and `ignored_at`; counts for every status in the same snapshot.
-- [ ] Wire types (`EarlierFeedback.status`, `number`, `comment?`), the strict client validator,
-      `EarlierFilter`, `EarlierList`, CSS.
-- [ ] Scripts: `--show` and `--report-id` take a number.
-- [ ] Add `comment:` to the existing declined and awaiting notes (12 notes) and to the five
-      shipped notes with a half waiting on Greg, from what each note already says.
+- [ ] Tests first, red: `tests/feedback-endings.test.ts` (`comment`, its cap, the selection rule
+      including a lone `ending: shipped, parts: 2` note); the admin route (status per report,
+      each `?show=`, counts summing to All, 403 for a non-admin, owner scoping);
+      `tests/feedback-store.test.ts` (status in SQL including `ignored_at` over `awaiting`;
+      `number` assigned by the default, unique, backfilled in filing order);
+      `tests/authenticated-api-route-contract.test.ts` (the new rows);
+      `tests/feedback-dialog.test.tsx` (an admin gets five pills, the status word, `#number`, the
+      comment; a non-admin's tab is unchanged; a 404 from the admin route falls back).
+- [ ] `scripts/feedback-endings.ts`: `comment` in `HEADER_FIELDS`; the generated module carries
+      it; `REPORT_ID` fixed to the real id rule (`src/ids.ts`). Every consumer of the generated
+      map updated (`src/feedback-ending.ts`, `scripts/feedback-shipped-emails.ts`, which reads
+      the file at a commit and so must read both shapes, `scripts/feedback-unswept.ts`).
+- [ ] Migration `feedback_number` (hand-written, `npm run db:generate -- --custom`). Applied
+      locally only; production gets it from the deploy.
+- [ ] Store, route, wire types, client, CSS.
+- [ ] Scripts: `--show` and `--report-id` take a number, absent-safe.
+- [ ] `comment:` on the existing declined and awaiting notes and on the shipped notes with a half
+      waiting on Greg, from what each note already says.
 - [ ] Docs: `feedback.md` (and its stale "fifth field" wording), `feedback-reports.md` § The
-      note, `/help` if it describes the tab.
+      note, `admin.md`, `/help` if it describes the tab.
 - [ ] Gates: typecheck, the touched suites, doc-links. Sol code review. Commit.
 
 ### Stage 2 — needs input (`spya-sshjd2`)
 
-- [ ] Tests first, red: the question header parser and compile (bad id, unknown report, body
-      over the cap, answered ones left out); the route (questions for an admin only; `answers`
-      refused from a non-admin and for an unknown id); the store (`answers` stored and read back,
-      owner-scoped); the dialog (a question under its report, a report-free question, the reply
-      box, dictation wiring, answered state).
+- [ ] Tests first, red: the question parser and compile (bad id, unknown field, body over the
+      cap, answered ones left out, `refs` not in the wire shape); the routes (questions and
+      answers for an admin, 403 otherwise, an unknown question id refused, a retried POST
+      idempotent); the store (answers owner-scoped; `tests/owner-isolation.test.ts`); the dialog
+      (questions first in *Needs a decision*, a linked report's number, the reply box, dictation
+      wiring, answered state); the script (non-admin rows dropped, answered files dropped).
 - [ ] `docs/user-feedback/questions/`, the compile step, `src/feedback-questions.generated.ts`.
-- [ ] Migration: `feedback.answers` text null.
-- [ ] `POST /api/feedback` takes `answers`; `GET /api/feedback` sends `questions` and each
-      one's newest answer.
-- [ ] The dialog: question cards, reply box with dictation, answered state.
-- [ ] `feedback-unswept.ts` prints `answers q-…` and the title.
-- [ ] Seed question files for what is on `awaiting-approval.md` now, from each bullet's own
-      words, plus the two questions above.
-- [ ] Docs: `feedback-reports.md` (§ Three ways a report ends: *Awaiting Greg* also writes a
-      question file; a new short section on asking and on acting on an answer), `feedback.md`,
-      `/help`.
+- [ ] Migration: `feedback_question_answers`, with the app role's grants checked against
+      `database.md`.
+- [ ] Route, store, dialog, `scripts/feedback-questions.ts`.
+- [ ] Move *Waiting on Greg now* into question files, each bullet's own words reshaped only as
+      far as ask-me-questions.md needs, plus the two questions below; the section becomes a
+      signpost.
+- [ ] Docs: `feedback-reports.md` (*Awaiting Greg* writes a question file; a short section on
+      asking and on acting on an answer; the sweep reads the directory and runs `--answers`),
+      `feedback.md`, `admin.md`, `overseer.md` only where it names `awaiting-approval.md` as a
+      signpost, `/help`.
 - [ ] Gates, Sol code review, a browser pass in a Sonnet subagent, commit.
 
 ### Finish
@@ -236,9 +275,7 @@ that are not tied to a single report's ending.
 ## Deferred, each to get its own queue entry
 
 - The fast path (Question 1).
-- Comments shown to readers (Question 2).
-- One home for a waiting item: generate `awaiting-approval.md`'s waiting list from `questions/`
-  so the two cannot drift.
+- The richer tab for other readers (Question 2).
 - Multiple-choice options as buttons in a question card (today: Greg types or says "1A").
 
 ## Progress
