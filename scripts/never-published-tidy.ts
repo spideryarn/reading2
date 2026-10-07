@@ -1,0 +1,550 @@
+/**
+ * Delete the article rows whose first import never finished — **a pinned,
+ * reviewed list of them, once, and a dry run unless told otherwise**.
+ *
+ *     npx tsx scripts/never-published-tidy.ts                       # local, dry run
+ *     npx tsx scripts/never-published-tidy.ts --prod                # production, dry run (read-only)
+ *     npx tsx scripts/never-published-tidy.ts --prod --delete \
+ *       --ids <file of article ids> --backup-dir <dir outside the repo>
+ *
+ * `beginRevision`/`lockOrCreateArticle` write the `articles` row before there
+ * is anything in it, so a first import that fails leaves a row no reader can
+ * see (every shelf read inner-joins the current revision) and nothing removes
+ * it. Greg, 2026-10-07, relayed by the Overseer: *"yes, tidy them"*.
+ * docs/plans/261007f-tidy-the-never-published-production-articles.md is the
+ * plan, the evidence and the rule; read it before running `--delete`.
+ *
+ * **The dry run cannot write.** One `begin read only`, checked with
+ * `transaction_read_only` before anything is read, as
+ * scripts/draft-sweep-backlog.ts does. Never a `SET`: `.env.prod` is the
+ * transaction pooler, where a `SET` outlives the connection
+ * (docs/project/database.md § Which host).
+ *
+ * **The delete is the store's own `pgShelfStore.destroy`, one article per
+ * transaction**, run as that article's owner (`runAsOwner`). So the billing
+ * lock, the article lock, the refusal of a live job or a stranded reservation,
+ * the terminal-job delete and the cascade are the same code a reader's Delete
+ * button runs (src/store/pg-shelf.ts). Nothing here writes SQL that deletes.
+ *
+ * **It acts only on a list it has proved twice and you have pinned.** The
+ * candidates come from one query; a second, hand-written one re-asks every
+ * protection of exactly those ids and must agree. `--delete` then refuses
+ * unless the eligible set equals the ids in `--ids` exactly, is no larger than
+ * `MAX_PER_RUN`, and a backup of every row that will go has been written. Each
+ * article is re-proved immediately before its own `destroy`.
+ *
+ * **It prints ids, short ids, counts and timestamps** — never a slug (made
+ * from a title), a URL or any content. The backup file holds content (a
+ * checkpoint is a transcription of the reader's document), so it is written
+ * `0600` to a directory outside this repository and must never be committed.
+ *
+ * `console.log`, not `log()` — this is a CLI. CLAUDE.md § Writing code.
+ */
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+
+import type { Db } from "../src/db/client.js";
+import * as schema from "../src/db/schema.js";
+import { sslDecisionFor, withoutPassword } from "../src/db/ssl.js";
+import { loadEnvLocal } from "../src/env.js";
+import { isMain } from "../src/is-main.js";
+import { type OwnerId, runAsOwner } from "../src/owner.js";
+import { pgShelfStore } from "../src/store/pg-shelf.js";
+import { draftBacklogTarget } from "./draft-sweep-backlog.js";
+
+/** The most articles one `--delete` will touch. The reviewed set was 13. */
+export const MAX_PER_RUN = 20;
+
+/** Nothing attached may have moved for this long. The plan says why seven. */
+export const DEFAULT_QUIET_DAYS = 7;
+
+/** Why a never-published article is left alone. Empty means eligible. */
+export type HoldReason =
+  | "has-revisions"
+  | "has-jobs"
+  | "has-reservations"
+  | "has-reader-state"
+  | "recent";
+
+export interface Attached {
+  readonly revisions: number;
+  readonly blockIdentities: number;
+  readonly checkpoints: number;
+  readonly aiCalls: number;
+  readonly jobs: number;
+  readonly reservations: number;
+  readonly uploadsBySlug: number;
+  /** Every reader-made row or shelf setting, summed: comments, chat, notes, tags, title… */
+  readonly readerState: number;
+}
+
+export interface Candidate {
+  readonly articleId: string;
+  readonly shortId: string | null;
+  readonly ownerId: string;
+  /** Internal only: `destroy` takes a slug. Never printed. */
+  readonly slug: string;
+  readonly createdAt: Date;
+  readonly newestActivity: Date;
+  readonly attached: Attached;
+  readonly hold: readonly HoldReason[];
+}
+
+/** What the second query found among the eligible ids. All but `seen` must be zero. */
+export interface EligibleProof {
+  readonly seen: number;
+  readonly published: number;
+  readonly revisions: number;
+  readonly jobs: number;
+  readonly reservations: number;
+  readonly readerState: number;
+  readonly recent: number;
+}
+
+export interface NeverPublishedSurvey {
+  readonly candidates: readonly Candidate[];
+  readonly eligible: readonly Candidate[];
+  readonly proof: EligibleProof;
+  readonly proven: boolean;
+  readonly role: string;
+  readonly quietDays: number;
+}
+
+export interface SurveyOptions {
+  readonly quietDays?: number;
+  /** Restrict to one owner. For tests, so a peer's rows can never join the set. */
+  readonly ownerId?: string;
+}
+
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type Row = Record<string, unknown>;
+const num = (v: unknown) => Number(v ?? 0);
+const when = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
+
+/**
+ * **The reader-made tables**, written out once and used by both queries. Every
+ * table with an `article_id` foreign key that a reader's own action fills.
+ * A never-published article cannot be opened, so each should be zero; one that
+ * is not is held back rather than deleted, because the reader made it.
+ */
+const READER_TABLES = [
+  "comments", "chat_threads", "search_runs", "referee_criteria", "referee_claims",
+  "glossary_lookups", "glossary_hidden_entries", "citation_finds", "citation_investigations",
+  "reading_time", "quiz_attempts", "link_summaries", "article_tags", "upload_source_guesses",
+] as const;
+
+function readerRowsOf(alias: string) {
+  return sql.raw(
+    READER_TABLES.map((t) => `(select count(*) from spideryarn.${t} x where x.article_id = ${alias}.id)`).join(" + "),
+  );
+}
+
+/** Shelf state a reader set by hand: a title, a purpose, archiving, sharing, an open. */
+function shelfStateOf(alias: string) {
+  return sql.raw(
+    `(case when ${alias}.title_override is not null or ${alias}.purpose is not null or ` +
+      `${alias}.archived_at is not null or ${alias}.share_token is not null or ` +
+      `${alias}.visibility <> 'private' or ${alias}.public_at is not null or ${alias}.opens > 0 ` +
+      `then 1 else 0 end)`,
+  );
+}
+
+/**
+ * Every never-published article, what is attached to it, and whether the rule
+ * admits it. Read-only: it opens its own `begin read only` and refuses to go on
+ * if the transaction is anything else.
+ */
+export async function surveyNeverPublished(
+  db: Db,
+  opts: SurveyOptions = {},
+): Promise<NeverPublishedSurvey> {
+  const quietDays = opts.quietDays ?? DEFAULT_QUIET_DAYS;
+  return await db.transaction(
+    async (tx) => {
+      const [ro] = (await tx.execute(sql`select current_setting('transaction_read_only') as ro`)).rows as Row[];
+      if (ro?.ro !== "on") throw new Error(`refusing to go on: the transaction is not read-only (${String(ro?.ro)})`);
+      const [who] = (await tx.execute(sql`select current_user::text as role`)).rows as Row[];
+
+      /* Never published: no current revision, and no revision that ever was
+         published (a status other than draft/failed, or a publication time). */
+      const rows = (
+        await tx.execute(sql`
+          select a.id, a.short_id, a.owner_id, a.slug, a.created_at,
+            (select count(*) from spideryarn.article_revisions r where r.article_id = a.id) as revisions,
+            (select count(*) from spideryarn.block_identities b where b.article_id = a.id) as block_identities,
+            (select count(*) from spideryarn.checkpoints c where c.article_id = a.id) as checkpoints,
+            (select count(*) from spideryarn.ai_calls c where c.article_id = a.id) as ai_calls,
+            (select count(*) from spideryarn.jobs j where j.slug = a.slug and j.owner_id = a.owner_id) as jobs,
+            (select count(*) from spideryarn.ingest_events e
+               where e.article_id = a.id or (e.slug = a.slug and e.owner_id = a.owner_id)) as reservations,
+            (select count(*) from spideryarn.uploads u where u.slug = a.slug) as uploads_by_slug,
+            ${readerRowsOf("a")} + ${shelfStateOf("a")} as reader_state,
+            greatest(a.created_at, coalesce(a.updated_at, a.created_at), coalesce(a.last_opened_at, a.created_at),
+              coalesce((select max(greatest(j.created_at, coalesce(j.started_at, j.created_at), coalesce(j.finished_at, j.created_at)))
+                        from spideryarn.jobs j where j.slug = a.slug and j.owner_id = a.owner_id), a.created_at),
+              coalesce((select max(c.last_used_at) from spideryarn.checkpoints c where c.article_id = a.id), a.created_at),
+              coalesce((select max(coalesce(c.finished_at, c.started_at)) from spideryarn.ai_calls c where c.article_id = a.id), a.created_at),
+              coalesce((select max(u.minted_at) from spideryarn.uploads u where u.slug = a.slug), a.created_at),
+              coalesce((select max(r.created_at) from spideryarn.article_revisions r where r.article_id = a.id), a.created_at)
+            ) as newest,
+            now() as now
+          from spideryarn.articles a
+          where a.current_revision_id is null
+            and not exists (select 1 from spideryarn.article_revisions r
+                            where r.article_id = a.id and (r.status not in ('draft', 'failed') or r.published_at is not null))
+            ${opts.ownerId === undefined ? sql`` : sql`and a.owner_id = ${opts.ownerId}::uuid`}
+          order by a.created_at, a.id`)
+      ).rows as Row[];
+
+      const candidates: Candidate[] = rows.map((row) => {
+        const attached: Attached = {
+          revisions: num(row.revisions),
+          blockIdentities: num(row.block_identities),
+          checkpoints: num(row.checkpoints),
+          aiCalls: num(row.ai_calls),
+          jobs: num(row.jobs),
+          reservations: num(row.reservations),
+          uploadsBySlug: num(row.uploads_by_slug),
+          readerState: num(row.reader_state),
+        };
+        const newestActivity = when(row.newest);
+        const ageMs = when(row.now).getTime() - newestActivity.getTime();
+        const hold: HoldReason[] = [];
+        if (attached.revisions > 0) hold.push("has-revisions");
+        if (attached.jobs > 0) hold.push("has-jobs");
+        if (attached.reservations > 0) hold.push("has-reservations");
+        if (attached.readerState > 0) hold.push("has-reader-state");
+        if (ageMs < quietDays * 86_400_000) hold.push("recent");
+        return {
+          articleId: String(row.id),
+          shortId: row.short_id === null ? null : String(row.short_id),
+          ownerId: String(row.owner_id),
+          slug: String(row.slug),
+          createdAt: when(row.created_at),
+          newestActivity,
+          attached,
+          hold,
+        };
+      });
+      const eligible = candidates.filter((c) => c.hold.length === 0);
+      const proof = await proveEligible(tx, eligible.map((c) => c.articleId), quietDays);
+      return {
+        candidates,
+        eligible,
+        proof,
+        proven: proofIsClean(proof, eligible.length),
+        role: String(who?.role ?? "(unknown)"),
+        quietDays,
+      };
+    },
+    { accessMode: "read only" },
+  );
+}
+
+const NOTHING_SEEN: EligibleProof = {
+  seen: 0, published: 0, revisions: 0, jobs: 0, reservations: 0, readerState: 0, recent: 0,
+};
+
+export function proofIsClean(proof: EligibleProof, expected: number): boolean {
+  return proof.seen === expected && proof.published === 0 && proof.revisions === 0 &&
+    proof.jobs === 0 && proof.reservations === 0 && proof.readerState === 0 && proof.recent === 0;
+}
+
+/**
+ * **The second query.** It shares the reader-table list with the first and
+ * nothing else: no candidate predicate, and the recency is asked of the four
+ * clocks most likely to move (job, checkpoint, model call, upload) by a
+ * different shape of SQL. Disagreement is the only way agreement means
+ * anything — docs/reusable/silent-success.md.
+ */
+export async function proveEligible(
+  tx: Pick<Tx, "execute">,
+  ids: readonly string[],
+  quietDays: number,
+): Promise<EligibleProof> {
+  if (ids.length === 0) return NOTHING_SEEN;
+  const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  const days = sql.raw(`interval '${Math.floor(quietDays)} days'`);
+  const [row] = (
+    await tx.execute(sql`
+      select
+        count(*)::int as seen,
+        count(*) filter (where a.current_revision_id is not null
+          or exists (select 1 from spideryarn.article_revisions r where r.article_id = a.id and r.status = 'published'))::int as published,
+        count(*) filter (where exists (select 1 from spideryarn.article_revisions r where r.article_id = a.id))::int as revisions,
+        count(*) filter (where exists (select 1 from spideryarn.jobs j where j.slug = a.slug))::int as jobs,
+        count(*) filter (where exists (select 1 from spideryarn.ingest_events e where e.article_id = a.id or e.slug = a.slug))::int as reservations,
+        count(*) filter (where ${readerRowsOf("a")} + ${shelfStateOf("a")} > 0)::int as reader_state,
+        count(*) filter (where a.created_at >= now() - ${days}
+          or exists (select 1 from spideryarn.jobs j where j.slug = a.slug and j.created_at >= now() - ${days})
+          or exists (select 1 from spideryarn.checkpoints c where c.article_id = a.id and c.last_used_at >= now() - ${days})
+          or exists (select 1 from spideryarn.ai_calls c where c.article_id = a.id and c.started_at >= now() - ${days})
+          or exists (select 1 from spideryarn.uploads u where u.slug = a.slug and u.minted_at >= now() - ${days}))::int as recent
+      from spideryarn.articles a
+      where a.id in (${list})`)
+  ).rows as Row[];
+  return {
+    seen: num(row?.seen),
+    published: num(row?.published),
+    revisions: num(row?.revisions),
+    jobs: num(row?.jobs),
+    reservations: num(row?.reservations),
+    readerState: num(row?.reader_state),
+    recent: num(row?.recent),
+  };
+}
+
+export class TidySafetyError extends Error {}
+
+/** The ids in a pinned file: one uuid per line, `#` comments and blanks ignored. */
+export function parseIdsFile(text: string): string[] {
+  const ids = text
+    .split("\n")
+    .map((line) => line.replace(/#.*/, "").trim())
+    .filter((line) => line !== "");
+  const bad = ids.filter((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id));
+  if (bad.length > 0) throw new TidySafetyError(`--ids: ${bad.length} line(s) are not article ids`);
+  if (new Set(ids).size !== ids.length) throw new TidySafetyError("--ids: an id appears twice");
+  return ids;
+}
+
+/**
+ * Everything `--delete` checks before it opens a deleting transaction. Throws
+ * `TidySafetyError` with the reason; returns the articles to destroy, in order.
+ */
+export function checkDeletion(survey: NeverPublishedSurvey, pinned: readonly string[]): Candidate[] {
+  if (!survey.proven || !proofIsClean(survey.proof, survey.eligible.length)) {
+    throw new TidySafetyError("refusing: the two queries disagree about the eligible set");
+  }
+  if (survey.eligible.length > MAX_PER_RUN) {
+    throw new TidySafetyError(`refusing: ${survey.eligible.length} eligible is more than the cap of ${MAX_PER_RUN}`);
+  }
+  const eligible = new Set(survey.eligible.map((c) => c.articleId));
+  const pin = new Set(pinned);
+  const missing = [...pin].filter((id) => !eligible.has(id));
+  const extra = [...eligible].filter((id) => !pin.has(id));
+  if (missing.length > 0 || extra.length > 0) {
+    throw new TidySafetyError(
+      `refusing: the eligible set is not the pinned list — ${missing.length} pinned id(s) not eligible ` +
+        `(${missing.join(", ") || "none"}), ${extra.length} eligible id(s) not pinned (${extra.join(", ") || "none"})`,
+    );
+  }
+  return [...survey.eligible];
+}
+
+/**
+ * **The backup: every row the delete removes, and the ids of every row it
+ * unlinks**, read in one read-only transaction and written as one JSON file.
+ * Restoring is inserting these back (articles, then block_identities and
+ * checkpoints) and re-pointing `ai_calls.article_id`; the plan has the order.
+ * Refuses a directory inside this repository, because the file holds content.
+ */
+export async function writeBackup(db: Db, ids: readonly string[], dir: string): Promise<string> {
+  const repo = path.resolve(import.meta.dirname, "..");
+  const abs = path.resolve(dir);
+  if (abs === repo || abs.startsWith(repo + path.sep)) {
+    throw new TidySafetyError("refusing: --backup-dir is inside the repository, and the backup holds content");
+  }
+  const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  const dump = await db.transaction(
+    async (tx) => {
+      const rows = async (q: ReturnType<typeof sql>) => ((await tx.execute(q)).rows as Row[]).map((r) => r.j);
+      return {
+        articles: await rows(sql`select row_to_json(t) as j from spideryarn.articles t where t.id in (${list}) order by t.id`),
+        block_identities: await rows(sql`select row_to_json(t) as j from spideryarn.block_identities t where t.article_id in (${list}) order by t.article_id, t.block_id`),
+        checkpoints: await rows(sql`select row_to_json(t) as j from spideryarn.checkpoints t where t.article_id in (${list}) order by t.article_id, t.namespace, t.key`),
+        ai_calls_unlinked: await rows(sql`select json_build_object('id', t.id, 'article_id', t.article_id) as j from spideryarn.ai_calls t where t.article_id in (${list}) order by t.id`),
+        uploads_left_with_a_stale_slug: await rows(sql`select json_build_object('id', u.id, 'article_id', a.id) as j from spideryarn.uploads u join spideryarn.articles a on a.slug = u.slug where a.id in (${list}) order by u.id`),
+      };
+    },
+    { accessMode: "read only" },
+  );
+  mkdirSync(abs, { recursive: true, mode: 0o700 });
+  const file = path.join(abs, `never-published-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
+  writeFileSync(file, JSON.stringify({ written_at: new Date().toISOString(), ids, ...dump }), { mode: 0o600, flag: "wx" });
+  chmodSync(file, 0o600);
+  const counted = dump.articles.length;
+  if (counted !== ids.length) {
+    throw new TidySafetyError(`refusing: the backup holds ${counted} article rows for ${ids.length} ids`);
+  }
+  return file;
+}
+
+export interface Destroyed {
+  readonly articleId: string;
+  readonly shortId: string | null;
+  readonly attached: Attached;
+}
+
+/**
+ * One `destroy` per article, each re-proved first, stopping at the first
+ * refusal. `destroy` opens its own transaction through `getDb()`, so the caller
+ * must have aimed `getDb()` at the same database `db` reads (see `main`).
+ */
+export async function destroyEach(
+  db: Db,
+  targets: readonly Candidate[],
+  quietDays: number,
+  destroy: (slug: string) => Promise<unknown> = (slug) => pgShelfStore.destroy(slug),
+  onDestroyed: (d: Destroyed) => void = () => {},
+): Promise<Destroyed[]> {
+  const done: Destroyed[] = [];
+  for (const c of targets) {
+    /* Re-proved now, not trusted from the survey. Publishing needs a job, and a
+       job that appeared since would show here (and a live one is refused again
+       by `destroy` under its lock), so a publication cannot slip between this
+       check and the delete without a job this or `destroy` sees. */
+    const proof = await db.transaction(async (tx) => await proveEligible(tx, [c.articleId], quietDays), {
+      accessMode: "read only",
+    });
+    if (!proofIsClean(proof, 1)) {
+      throw new TidySafetyError(`refusing ${c.articleId}: it is no longer eligible; ${done.length} already deleted`);
+    }
+    await runAsOwner(c.ownerId as OwnerId, () => destroy(c.slug));
+    const d = { articleId: c.articleId, shortId: c.shortId, attached: c.attached };
+    done.push(d);
+    onDestroyed(d);
+  }
+  return done;
+}
+
+const days = (ms: number) => `${Math.floor(ms / 86_400_000)}d`;
+
+function printSurvey(survey: NeverPublishedSurvey): void {
+  console.log(`Role:   ${survey.role}`);
+  console.log(`Rule:   never published; no revision, job or reservation; no reader state; nothing moved for ${survey.quietDays} days`);
+  console.log(`\nNever-published articles: ${survey.candidates.length}, eligible: ${survey.eligible.length}`);
+  console.log("  article id                            short id     created     quiet  ids    ckpt  calls  uploads  held because");
+  const now = Date.now();
+  for (const c of survey.candidates) {
+    const a = c.attached;
+    console.log(
+      `  ${c.articleId}  ${(c.shortId ?? "-").padEnd(11)}  ${c.createdAt.toISOString().slice(0, 10)}  ` +
+        `${days(now - c.newestActivity.getTime()).padStart(5)}  ${String(a.blockIdentities).padStart(5)}  ` +
+        `${String(a.checkpoints).padStart(4)}  ${String(a.aiCalls).padStart(5)}  ${String(a.uploadsBySlug).padStart(7)}  ` +
+        `${c.hold.length === 0 ? "(eligible)" : c.hold.join(", ")}`,
+    );
+  }
+  const sum = (k: keyof Attached) => survey.eligible.reduce((n, c) => n + c.attached[k], 0);
+  console.log(
+    `\nThe eligible ${survey.eligible.length} would delete: ${sum("blockIdentities")} block identities, ` +
+      `${sum("checkpoints")} checkpoints, ${sum("revisions")} revisions, ${sum("jobs")} jobs (cascade / destroy);` +
+      ` and unlink ${sum("aiCalls")} ai_calls (kept, article_id set null) and ${sum("uploadsBySlug")} uploads (kept, stale slug).`,
+  );
+  const p = survey.proof;
+  console.log(`\nThe second query, over those ${survey.eligible.length} ids:`);
+  console.log(`  found ${p.seen}; published ${p.published}; revisions ${p.revisions}; jobs ${p.jobs}; ` +
+    `reservations ${p.reservations}; reader state ${p.readerState}; recent ${p.recent}`);
+  console.log(survey.proven ? `✓ all ${p.seen} found, none protected` : "✗ the two queries disagree. Nothing should be deleted.");
+}
+
+async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const flag = (name: string) => args.includes(name);
+  const value = (name: string) => {
+    const i = args.indexOf(name);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const known = new Set(["--prod", "--delete", "--ids", "--backup-dir", "--quiet-days"]);
+  const unknown = args.filter((arg, i) => arg.startsWith("--") ? !known.has(arg) : !["--ids", "--backup-dir", "--quiet-days"].includes(args[i - 1] ?? ""));
+  if (unknown.length > 0) {
+    console.error("Unknown arguments. This takes --prod, --delete, --ids <file>, --backup-dir <dir>, --quiet-days <n>.");
+    process.exit(1);
+  }
+  const prod = flag("--prod");
+  const doDelete = flag("--delete");
+  const quietDays = value("--quiet-days") === undefined ? DEFAULT_QUIET_DAYS : Number(value("--quiet-days"));
+  if (!Number.isInteger(quietDays) || quietDays < 1) {
+    console.error("--quiet-days must be a whole number of days, at least 1.");
+    process.exit(1);
+  }
+
+  /* `.env.prod` read directly with --prod, `.env.local` without; a shell
+     `DATABASE_URL` aims nothing. The same resolution as draft-sweep-backlog. */
+  const { url, file } = draftBacklogTarget(prod);
+  if (!url) {
+    console.error(prod ? "--prod needs a .env.prod with a DATABASE_URL." : "DATABASE_URL is not set in .env.local.");
+    process.exit(1);
+  }
+  console.log(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
+  console.log(`Env:    ${file}`);
+  console.log(`Mode:   ${doDelete ? "DELETE" : "dry run (read-only transaction; see the header for --delete)"}`);
+
+  const pool = new Pool({
+    connectionString: url,
+    max: 1,
+    ssl: sslDecisionFor(url).ssl,
+    application_name: `spideryarn never-published-tidy (${doDelete ? "delete" : "dry run"})`,
+  });
+  const db: Db = drizzle(pool, { schema });
+
+  try {
+    const before = await surveyNeverPublished(db, { quietDays });
+    printSurvey(before);
+    if (!before.proven) {
+      process.exitCode = 1;
+      return;
+    }
+    if (!doDelete) {
+      console.log("\nNothing deleted.");
+      return;
+    }
+
+    const idsFile = value("--ids");
+    const backupDir = value("--backup-dir");
+    if (!idsFile || !backupDir) {
+      throw new TidySafetyError("--delete needs --ids <file> (the reviewed list) and --backup-dir <dir>");
+    }
+    const targets = checkDeletion(before, parseIdsFile(readFileSync(idsFile, "utf8")));
+    if (targets.length === 0) {
+      console.log("\nNothing to delete.");
+      return;
+    }
+    const backup = await writeBackup(db, targets.map((t) => t.articleId), backupDir);
+    console.log(`\nBackup: ${backup} (0600; holds content — never commit it)`);
+
+    /* `destroy` reaches the database through `getDb()`, which reads
+       `process.env.DATABASE_URL` after `loadEnvLocal()`. Load the file first,
+       then assign, so `.env.local` cannot replace the target afterwards; nothing
+       in this process has called `getDb()` yet, so its pool is built from this. */
+    loadEnvLocal();
+    process.env.DATABASE_URL = url;
+
+    console.log("\nDeleting, by pgShelfStore.destroy, one transaction each (counts as surveyed):");
+    await destroyEach(db, targets, quietDays, undefined, (d) => {
+      console.log(`    ${d.articleId}  ${(d.shortId ?? "-").padEnd(11)}  ${d.attached.blockIdentities} ids, ${d.attached.checkpoints} checkpoints`);
+    });
+
+    const after = await surveyNeverPublished(db, { quietDays });
+    const gone = targets.filter((t) => !after.candidates.some((c) => c.articleId === t.articleId));
+    const [kept] = (
+      await pool.query(
+        "select count(*)::int as n from spideryarn.ai_calls where article_id is null and id = any($1::uuid[])",
+        [JSON.parse(readFileSync(backup, "utf8")).ai_calls_unlinked.map((r: { id: string }) => r.id)],
+      )
+    ).rows as { n: number }[];
+    const unlinked = targets.reduce((n, t) => n + t.attached.aiCalls, 0);
+    console.log(`  ${gone.length} of ${targets.length} gone; ${after.candidates.length} never-published left (${after.eligible.length} eligible)`);
+    console.log(`  ai_calls kept with article_id null: ${kept?.n ?? 0} of ${unlinked}`);
+    if (gone.length !== targets.length || (kept?.n ?? 0) !== unlinked) process.exitCode = 1;
+  } finally {
+    await pool.end();
+  }
+}
+
+if (isMain(import.meta.url)) {
+  try {
+    await main();
+  } catch (err) {
+    // Driver errors can carry query text and parameters.
+    console.error(err instanceof TidySafetyError ? err.message :
+      `Never-published tidy failed (${err instanceof Error ? err.name : typeof err}); any article listed above as deleted is deleted.`);
+    process.exitCode = 1;
+  } finally {
+    const { closeDb } = await import("../src/db/client.js");
+    await closeDb();
+  }
+}
