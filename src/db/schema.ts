@@ -3007,6 +3007,42 @@ export const jobs = spideryarn.table(
     uniqueIndex("jobs_ingest_event_unique")
       .on(t.ingestEventId)
       .where(sql`${t.ingestEventId} is not null`),
+    /**
+     * **The three below were made by hand in drizzle/0001_auth_fks_and_guards.sql
+     * and were in the database, and not in this file, until 2026-10-07.**
+     * Declaring them ran no SQL
+     * (drizzle/20261007012654_declare_migration_only_indexes_and_checks.sql is
+     * empty on purpose); it means a reader of this table learns its queue is
+     * indexed, and a table regenerated from this file keeps them.
+     * tests/db-schema.test.ts holds each by definition.
+     *
+     * The queued rows, oldest first. Made when claiming scanned for the oldest
+     * queued job; a claim names its job by id now, and the planner still reads
+     * the small queued subset through this (361 scans or more in production by
+     * 2026-10-06). Partial, because finished rows accumulate and are never what
+     * a question about the queue is asking for.
+     */
+    index("jobs_queued_idx")
+      .on(t.createdAt)
+      .where(sql`${t.status} = 'queued'`),
+    /** The running rows by lease: the rescue sweep looks for the ones whose lease has expired. */
+    index("jobs_lease_idx")
+      .on(t.leaseExpiresAt)
+      .where(sql`${t.status} = 'running'`),
+    /**
+     * The job list, newest first (src/store/pg-jobs.ts § `list`).
+     *
+     * **`.nullsFirst()` is the declaration being true, not a preference.** The
+     * hand-written SQL said `"created_at" DESC`, and a bare `DESC` in Postgres
+     * is `NULLS FIRST`. Drizzle's `.desc()` alone writes `DESC NULLS LAST`,
+     * which is a different index: declared that way, a database rebuilt from
+     * this file would not match the one that exists, and a plain `order by
+     * created_at desc` could not walk it. The same goes for
+     * `chat_threads_article_updated_idx` and `search_runs_article_created_idx`.
+     * (An index drizzle generated itself from a `.desc()`, such as
+     * `uploads_owner_minted`, really is `NULLS LAST` in the database.)
+     */
+    index("jobs_owner_created_idx").on(t.ownerId, t.createdAt.desc().nullsFirst()),
   ],
 );
 
@@ -3724,6 +3760,46 @@ export const aiCalls = spideryarn.table(
       .on(t.realtimeSessionId, t.providerEventId, t.eventKind)
       .where(sql`${t.realtimeSessionId} is not null`),
     /**
+     * **The five below were written by hand in four migrations and were in the
+     * database, and not in this file, until 2026-10-07**: drizzle/0023 (the
+     * first, second and third), 0025 (the fourth), 20260902141103 (the fifth),
+     * and 20260902150952, which widened the first to its third account.
+     * Declaring them ran no SQL; see `jobs_queued_idx`. They are the ledger's
+     * money rules, and tests/db-schema.test.ts holds each by what it refuses.
+     *
+     * Only three spellings each. A typo in either is a row that silently drops
+     * out of whichever half of the report filters on it, and widening
+     * `ProviderAccount` or `CostSource` in TypeScript is not enough without the
+     * matching edit here.
+     */
+    check("ai_calls_provider_account_known", sql`${t.providerAccount} in ('openrouter', 'anthropic', 'openai')`),
+    check("ai_calls_cost_source_known", sql`${t.costSource} in ('provider', 'computed', 'none')`),
+    /**
+     * **The two numbers are different claims and exactly one can be true of a
+     * row**: `credits_used_nanos` is what OpenRouter deducted,
+     * `computed_cost_nanos` is what we worked out because nobody could be
+     * asked. A row carrying both would invite a reader to pick, and a `SUM` over
+     * both would double-count.
+     */
+    check(
+      "ai_calls_one_cost_source",
+      sql`(${t.costSource} = 'provider' and ${t.creditsUsedNanos} is not null and ${t.computedCostNanos} is null)
+          or (${t.costSource} = 'computed' and ${t.creditsUsedNanos} is null and ${t.computedCostNanos} is not null)
+          or (${t.costSource} = 'none' and ${t.creditsUsedNanos} is null and ${t.computedCostNanos} is null)`,
+    ),
+    /** A computed figure without a version cannot be re-checked when a rate changes. */
+    check(
+      "ai_calls_price_version_iff_computed",
+      sql`(${t.costSource} = 'computed' and ${t.priceVersion} is not null)
+          or (${t.costSource} <> 'computed' and ${t.priceVersion} is null)`,
+    ),
+    /** The BYOK pocket: only a provider-priced, bring-your-own-key OpenRouter row has an upstream figure. */
+    check(
+      "ai_calls_byok_upstream_only",
+      sql`${t.byokUpstreamNanos} is null
+          or (${t.costSource} = 'provider' and ${t.isByok} is true and ${t.providerAccount} = 'openrouter')`,
+    ),
+    /**
      * **A realtime row is fully identified or it is not a realtime row.**
      *
      * The three parts of the idempotency key arrive or refuse together. Without
@@ -4074,6 +4150,12 @@ export const chatThreads = spideryarn.table(
     uniqueIndex("chat_threads_one_explore")
       .on(t.articleId)
       .where(sql`${t.kind} = 'explore'`),
+    /**
+     * The thread list, newest first — what the chat panel opens with. Made by
+     * hand in drizzle/0003_reader_state_owner_fks.sql and declared here on
+     * 2026-10-07, with no SQL run; see `jobs_queued_idx`.
+     */
+    index("chat_threads_article_updated_idx").on(t.articleId, t.updatedAt.desc().nullsFirst()),
   ],
 );
 
@@ -4432,6 +4514,13 @@ export const searchRuns = spideryarn.table(
       "search_runs_attempt_both",
       sql`(${t.attemptId} is null) = (${t.attemptStartedAt} is null)`,
     ),
+    /**
+     * The saved-search list, newest first, and the input to the trim that keeps
+     * the newest `MAX_RUNS`. Made by hand in
+     * drizzle/0003_reader_state_owner_fks.sql and declared here on 2026-10-07,
+     * with no SQL run; see `jobs_queued_idx`.
+     */
+    index("search_runs_article_created_idx").on(t.articleId, t.createdAt.desc().nullsFirst()),
   ],
 );
 

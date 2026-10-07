@@ -253,6 +253,53 @@ order*, the same grouping query, asked of the catalog so it holds for the next t
 two indexes left on `chat_messages`, by definition. **Red before the drop**, naming exactly this
 pair.
 
+## Stage 6: the file declares what the database has
+
+**Recounted, 2026-10-07**, by comparing the local catalog with `getTableConfig` over every table in
+`schema.ts`: **five** indexes and **five** CHECKs undeclared, as U3 says (six indexes before stage
+5). Nothing declared was missing from the catalog.
+
+| Object | Made in |
+|---|---|
+| `jobs_queued_idx`, `jobs_lease_idx`, `jobs_owner_created_idx` | `0001` |
+| `chat_threads_article_updated_idx`, `search_runs_article_created_idx` | `0003` |
+| `ai_calls_provider_account_known` | `0023`, widened in `20260902150952` |
+| `ai_calls_cost_source_known`, `ai_calls_one_cost_source` | `0023` |
+| `ai_calls_price_version_iff_computed` | `0025` |
+| `ai_calls_byok_upstream_only` | `20260902141103` |
+
+**Production, read 2026-10-07 01:28 UTC:** all ten present, valid and validated, each with the same
+`pg_get_indexdef` / `pg_get_constraintdef` text as locally. 104 indexes and 225 CHECKs in the
+schema.
+
+**No DDL runs, and the house process can say so.** `drizzle/20261007012654_declare_migration_only_indexes_and_checks.sql`
+is a comment-only file. An ordinary `db:generate` wrote five `CREATE INDEX` and five `ADD
+CONSTRAINT` for objects that exist (a database built from the chain refused the first with
+`already exists`: tried). The statements were deleted and the snapshot kept as generated, which is
+what `0030_drop_summary_steer.sql` did for the same reason. `--custom` would not have done:
+it writes a copy of the *previous* snapshot (read in `drizzle-kit/bin.cjs`), so the ten would have
+stayed undeclared as far as the next generate knew. Afterwards `db:generate -- --allow-empty`
+answers *no schema changes*.
+
+**That the declarations are the objects, and not ten near misses, was measured.** In a scratch
+database minted from the chain (`scripts/db-test-create.ts`, dropped afterwards), inside one
+rolled-back transaction: read each object's catalog text, drop all ten, run the ten generated
+statements, read again. **10 of 10 identical**, including `indoption`.
+
+It was 7 of 10 on the first try. Drizzle's `.desc()` generates `DESC NULLS LAST`; the hand-written
+SQL said `DESC`, which Postgres takes as `NULLS FIRST`. The three DESC indexes are declared
+`.desc().nullsFirst()`. A name check would have passed either way.
+
+**Tested** (`tests/db-schema.test.ts`, the existing file, no second inventory): the five indexes by
+their definition as Postgres prints it; **every** declared CHECK by name and table, validated, and
+in the other direction every CHECK in the database is declared (derived from `schema.ts`, so 226
+today and the next one free; watched red by renaming one declaration); and the ledger's five by
+what they refuse, one forbidden row each after one row of every legal kind.
+
+**What the docs got wrong:** `schema.ts` § `revision_step_runs_step` says `generate` *"knows
+nothing about a CHECK expression"*; it generated all five here. That comment is stage 8's.
+`database.md` said `--custom` *"writes the snapshot"* without saying whose contents; it now does.
+
 ## Waiting to be applied to production
 
 In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
@@ -267,3 +314,5 @@ commits; the others are metadata changes on tables of 4 to 200 rows.
 3. `20261007010954_referee_claims_empty_unless_done`
 4. `20261007011627_upload_source_guesses_created_at`
 5. `20261007012047_drop_duplicate_chat_messages_index`
+6. `20261007012654_declare_migration_only_indexes_and_checks` (comment-only: it records a ledger
+   row and runs nothing)

@@ -752,6 +752,39 @@ repair is written up at the top of
 [`drizzle/0030_drop_summary_steer.sql`](../../drizzle/0030_drop_summary_steer.sql), and that hole is
 still in the folder as a named exception today.
 
+**The snapshot `--custom` writes is a copy of the previous one, not a picture of `schema.ts`.**
+Read in `node_modules/drizzle-kit/bin.cjs` § `preparePgMigrationSnapshot`: `custom` is the previous
+snapshot with a new `id`. So `--custom` is for SQL that changes nothing drizzle can see (a grant, a
+trigger, dropping an index that was never declared). Edit `schema.ts` and reach for `--custom` in
+the same breath and the edit is recorded nowhere, and the next ordinary `generate` emits it.
+
+### Declaring something the database already has
+
+`schema.ts` is the source of truth only for what is declared in it, and hand-written migrations
+have made objects it never heard of. Five indexes and five CHECKs were like that until 2026-10-07
+([261007c](../plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md)
+§ Stage 6). Declaring one is three steps, and the second is the one that looks wrong:
+
+1. Declare it in `schema.ts` and run an ordinary `npm run db:generate -- --name <what>`. Drizzle
+   diffs against a snapshot that lacks the object, so the `.sql` it writes is a `CREATE` or an `ADD
+   CONSTRAINT` for something that exists. Applied, it fails on `already exists`.
+2. **Delete those statements and leave a comment-only file**, saying why. Not `IF NOT EXISTS`: an
+   earlier migration did the work, on every database this chain builds, and a second one claiming to
+   is a lie about what changed when ([`0030`](../../drizzle/0030_drop_summary_steer.sql) set the
+   precedent). Keep the snapshot exactly as generated. It is the point of the migration.
+3. Prove the declaration is the object and not a near miss. `npm run db:generate -- --allow-empty`
+   says the snapshot equals `schema.ts`; it says nothing about the database. For that, build a
+   scratch database (`npx tsx scripts/db-test-create.ts`, dropped again with `--drop <name>`), and
+   in one rolled-back transaction drop the objects, run the statements drizzle generated, and
+   compare `pg_get_indexdef` / `pg_get_constraintdef` before and after.
+
+Step 3 found something. **Drizzle's `.desc()` means `DESC NULLS LAST`; a bare `DESC` in hand-written
+SQL means `NULLS FIRST`.** They are different indexes (a plain `order by x desc` cannot walk the
+first), and a declaration with a plain `.desc()` over a hand-made `DESC` index describes one that
+is not in the database. Write `.desc().nullsFirst()`. [`tests/db-schema.test.ts`](../../tests/db-schema.test.ts)
+holds the five indexes by definition, every declared CHECK by name and table in both directions,
+and the ledger's five by what they refuse.
+
 ### Two facts about a fork repair, both learned the hard way on 2026-09-02
 
 Written down because both were reverse-engineered under pressure, by two agents independently, on

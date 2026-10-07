@@ -19,9 +19,15 @@
  * left exactly as found and the tests do not care what order they run in.
  */
 
+import { randomUUID } from "node:crypto";
+
 import { afterAll, describe, expect, it } from "vitest";
 import type { PoolClient } from "pg";
 
+import { is } from "drizzle-orm";
+import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
+
+import * as schema from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { UPLOAD_STATUSES } from "../src/source.js";
 import { CHECKPOINT_NAMESPACES } from "../src/store/checkpoints.js";
@@ -459,7 +465,8 @@ describe("the schema keeps the promises the plan makes", () => {
     );
     expect(rows).toEqual([]);
 
-    /* And the one that stays is the one that enforces something. */
+    /* And the one that stays, on the table that had the twin, is the one that
+       enforces something. */
     const kept = await pool.query<{ indexname: string; indexdef: string }>(
       `select indexname, indexdef from pg_indexes
         where schemaname = 'spideryarn' and tablename = 'chat_messages' order by indexname`,
@@ -468,6 +475,146 @@ describe("the schema keeps the promises the plan makes", () => {
       "CREATE UNIQUE INDEX chat_messages_article_id_thread_id_id_pk ON spideryarn.chat_messages USING btree (article_id, thread_id, id)",
       "CREATE UNIQUE INDEX chat_messages_thread_ordinal ON spideryarn.chat_messages USING btree (article_id, thread_id, ordinal)",
     ]);
+  });
+
+  /**
+   * **The five indexes that were in the database and not in src/db/schema.ts.**
+   *
+   * The job queue's three (drizzle/0001) and two reader-state ones (0003) were
+   * made by hand and never declared, so a reader of the `jobs` table in the
+   * file did not learn its queue was indexed, and `npm run db:check` — which
+   * compares columns and defaults and nothing else — would not have noticed
+   * one going missing. Declared on 2026-10-07 with no SQL run
+   * (drizzle/20261007012654_declare_migration_only_indexes_and_checks.sql).
+   *
+   * By definition, as Postgres prints it, because the name is the least of it:
+   * `jobs_lease_idx` without its `WHERE` would index every finished job, and a
+   * bare `DESC` is `NULLS FIRST`, which is not what drizzle's `.desc()` writes
+   * (the declarations say `.nullsFirst()` for that reason).
+   */
+  it("the five hand-made indexes are still there, as they were made", async () => {
+    const { rows } = await pool.query<{ indexname: string; indexdef: string }>(
+      `select indexname, indexdef from pg_indexes
+        where schemaname = 'spideryarn'
+          and indexname in ('jobs_queued_idx', 'jobs_lease_idx', 'jobs_owner_created_idx',
+                            'chat_threads_article_updated_idx', 'search_runs_article_created_idx')
+        order by indexname`,
+    );
+    expect(rows.map((r) => r.indexdef)).toEqual([
+      "CREATE INDEX chat_threads_article_updated_idx ON spideryarn.chat_threads USING btree (article_id, updated_at DESC)",
+      "CREATE INDEX jobs_lease_idx ON spideryarn.jobs USING btree (lease_expires_at) WHERE (status = 'running'::text)",
+      "CREATE INDEX jobs_owner_created_idx ON spideryarn.jobs USING btree (owner_id, created_at DESC)",
+      "CREATE INDEX jobs_queued_idx ON spideryarn.jobs USING btree (created_at) WHERE (status = 'queued'::text)",
+      "CREATE INDEX search_runs_article_created_idx ON spideryarn.search_runs USING btree (article_id, created_at DESC)",
+    ]);
+  });
+
+  /**
+   * **Every CHECK src/db/schema.ts declares is in the database, on its table,
+   * and validated.** The same gap as the indexes above: five CHECKs on
+   * `ai_calls`, the ledger's money rules, were written by hand in four
+   * migrations and never declared. They are now.
+   *
+   * By name and table here, because an expression's text is the deparser's;
+   * what each of the five *means* is the next case, by what it refuses.
+   */
+  it("every declared CHECK exists on its table and is validated", async () => {
+    const declared: string[] = [];
+    for (const value of Object.values(schema)) {
+      if (!is(value, PgTable)) continue;
+      const config = getTableConfig(value);
+      for (const c of config.checks) declared.push(`${config.name}.${c.name}`);
+    }
+    expect(declared.length).toBeGreaterThan(200);
+    expect(declared).toContain("ai_calls.ai_calls_one_cost_source");
+
+    const { rows } = await pool.query<{ key: string; validated: boolean }>(
+      `select t.relname::text || '.' || k.conname::text as key, k.convalidated as validated
+         from pg_constraint k join pg_class t on t.oid = k.conrelid
+        where k.connamespace = 'spideryarn'::regnamespace and k.contype = 'c'`,
+    );
+    const validated = new Set(rows.filter((r) => r.validated).map((r) => r.key));
+    expect(declared.filter((d) => !validated.has(d)).sort()).toEqual([]);
+    /* And the other direction, which is the one that was open: a CHECK in the
+       database that the file does not declare is a rule nobody reading the
+       file can see, and one a regenerated table would lose. */
+    const known = new Set(declared);
+    expect(rows.map((r) => r.key).filter((k) => !known.has(k)).sort()).toEqual([]);
+  });
+
+  /**
+   * **What the ledger's five hand-written CHECKs refuse**, since a name proves
+   * a constraint is there and not what it says. One forbidden row each, and one
+   * row of every legal kind first, so a constraint that refused everything
+   * would not pass.
+   */
+  it("the ledger's money rules refuse what they say they refuse", async () => {
+    await inRollback(async (c) => {
+      await seed(c);
+      const now = new Date().toISOString();
+      const insert = (over: Record<string, unknown>) => {
+        /* Every NOT NULL column with no default, and `duration_ms`, which a
+           row off the realtime wire must carry. */
+        const row: Record<string, unknown> = {
+          id: randomUUID(),
+          run_id: randomUUID(),
+          owner_id: OWNER,
+          purpose: "schema-test",
+          scope_kind: "product",
+          wire: "chat",
+          requested_model: "a-model",
+          outcome: "ok",
+          duration_ms: 1,
+          started_at: now,
+          finished_at: now,
+          provider_account: "openrouter",
+          cost_source: "none",
+          ...over,
+        };
+        const cols = Object.keys(row);
+        return c.query(
+          `insert into spideryarn.ai_calls (${cols.join(", ")}) values (${cols.map((_, i) => `$${i + 1}`).join(", ")})`,
+          Object.values(row),
+        );
+      };
+
+      // The legal kinds: unpriced, provider-priced, provider-priced BYOK, computed.
+      await insert({});
+      await insert({ cost_source: "provider", credits_used_nanos: 5 });
+      await insert({ cost_source: "provider", credits_used_nanos: 0, is_byok: true, byok_upstream_nanos: 7 });
+      await insert({ cost_source: "computed", computed_cost_nanos: 5, price_version: "2026-10-01" });
+      await insert({ provider_account: "anthropic" });
+      await insert({ provider_account: "openai" });
+
+      await expectViolation(c, /ai_calls_provider_account_known/, () => insert({ provider_account: "azure" }));
+      await expectViolation(c, /ai_calls_cost_source_known/, () => insert({ cost_source: "guessed" }));
+      // Both numbers; a provider row with neither; an unpriced row with one.
+      await expectViolation(c, /ai_calls_one_cost_source/, () =>
+        insert({ cost_source: "provider", credits_used_nanos: 5, computed_cost_nanos: 5 }),
+      );
+      await expectViolation(c, /ai_calls_one_cost_source/, () => insert({ cost_source: "provider" }));
+      await expectViolation(c, /ai_calls_one_cost_source/, () => insert({ credits_used_nanos: 5 }));
+      // A computed figure with no version, and a version on a figure that was not computed.
+      await expectViolation(c, /ai_calls_price_version_iff_computed/, () =>
+        insert({ cost_source: "computed", computed_cost_nanos: 5 }),
+      );
+      await expectViolation(c, /ai_calls_price_version_iff_computed/, () =>
+        insert({ cost_source: "provider", credits_used_nanos: 5, price_version: "2026-10-01" }),
+      );
+      // An upstream figure off the BYOK pocket: not BYOK, and not OpenRouter.
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({ cost_source: "provider", credits_used_nanos: 5, byok_upstream_nanos: 7 }),
+      );
+      await expectViolation(c, /ai_calls_byok_upstream_only/, () =>
+        insert({
+          provider_account: "anthropic",
+          cost_source: "provider",
+          credits_used_nanos: 5,
+          is_byok: true,
+          byok_upstream_nanos: 7,
+        }),
+      );
+    });
   });
 
   /**

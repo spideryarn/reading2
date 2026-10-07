@@ -1107,6 +1107,13 @@
       "when": 1791336047829,
       "tag": "20261007012047_drop_duplicate_chat_messages_index",
       "breakpoints": true
+    },
+    {
+      "idx": 158,
+      "version": "7",
+      "when": 1791336414855,
+      "tag": "20261007012654_declare_migration_only_indexes_and_checks",
+      "breakpoints": true
     }
   ]
 }
