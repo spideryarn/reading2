@@ -335,7 +335,8 @@ SELECT c.relname, pg_get_userbyid(c.relowner) AS owner,
 FROM pg_class c
 WHERE c.oid IN ('spideryarn.revision_blocks'::regclass,'spideryarn.referee_criteria'::regclass,
  'spideryarn.referee_claims'::regclass,'spideryarn.upload_source_guesses'::regclass,
- 'spideryarn.chat_messages'::regclass,'spideryarn.queue_state'::regclass,'spideryarn.jobs'::regclass)
+ 'spideryarn.chat_messages'::regclass,'spideryarn.queue_state'::regclass,'spideryarn.jobs'::regclass,
+ 'spideryarn.billing_vouchers'::regclass)
 ORDER BY c.relname;
 
 -- Inspect immediately before applying: SHARE conflicts with writers to blocks;
@@ -344,7 +345,8 @@ ORDER BY c.relname;
 -- claims wait for the table lock until commit/rollback and can occupy runtime pool
 -- connections. Dropping the foreign key also locks jobs. This is a point-in-time
 -- sample, not a guarantee: use finite lock_timeout and statement_timeout on the
--- migration connection.
+-- migration connection. The voucher migration's ADD CHECK takes ACCESS EXCLUSIVE on
+-- billing_vouchers and scans it, so that table is inspected here too.
 -- pg_stat_activity text is intentionally not selected (reader data may appear in it).
 SELECT l.relation::regclass AS relation, l.mode, l.granted, l.pid,
        a.state, clock_timestamp()-a.xact_start AS transaction_age,
@@ -354,7 +356,8 @@ WHERE l.pid IS DISTINCT FROM pg_backend_pid()
   AND l.relation IN ('spideryarn.revision_blocks'::regclass,'spideryarn.referee_criteria'::regclass,
     'spideryarn.referee_claims'::regclass,'spideryarn.upload_source_guesses'::regclass,
     'spideryarn.chat_messages'::regclass,'spideryarn.chat_messages_thread_ordinal_idx'::regclass,
-    'spideryarn.queue_state'::regclass,'spideryarn.jobs'::regclass)
+    'spideryarn.queue_state'::regclass,'spideryarn.jobs'::regclass,
+    'spideryarn.billing_vouchers'::regclass)
 ORDER BY a.xact_start NULLS FIRST, relation, l.mode;
 SELECT pid, state, clock_timestamp()-xact_start AS transaction_age, wait_event_type, wait_event
 FROM pg_stat_activity
