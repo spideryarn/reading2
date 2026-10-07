@@ -263,3 +263,17 @@ on 2026-10-07.
     (the import box promises `go`), `doc-links`, `admin-only-routes`, `client-imports`,
     `voices-css` green. Biome on the four files: one info, `VoucherRow`'s complexity 28 (27 at
     HEAD).
+- 2026-10-07: GPT Sol's stage 1 code review ([prompt](261007j-stage-1-code-review-prompt.md),
+  [answer](261007j-stage-1-code-review-sol.md)): *land with the fixes made*. F6 (P1) a concurrent
+  identical create was refused when the starter was not ready; F7 (P1) a readdress could email a
+  replacement article imported at a deleted starter's slug, now checked by article id under the
+  lock; F8 (P3) a comment. Fixed by the reviewer, red first (`tests/voucher-starter-races.test.ts`),
+  gates rerun here: 7 suites, 182 tests. Postmortem `261007n`.
+- 2026-10-07: GPT Sol's stage 2 code review ([prompt](261007j-stage-2-code-review-prompt.md),
+  [answer](261007j-stage-2-code-review-sol.md)): *land with the fixes made*. Fixed by the reviewer,
+  red first: F9 (P1) a lost answer's replay was blocked by the starter's live state; F10 (P1) the
+  import box's `type="url"` validation blocked Create; F11 (P1) the sketch drew the author's title
+  in the app's font; F12 (P2) a renamed shelf title now says the email uses the original. F13 (P1,
+  from before this job) a create's answer cleared a draft typed while it was in flight: reported,
+  then fixed here red first (the form clears only the draft it sent). Postmortems `261007o`–`r`.
+  Sol on Refresh: enough for the new-tab flow; a reload on focus would be a convenience, not built.

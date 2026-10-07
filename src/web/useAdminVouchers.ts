@@ -75,6 +75,8 @@ export interface UseAdminVouchers {
   reload: () => Promise<void>;
   /** Never rejects. */
   create: (input: NewVoucherInput) => Promise<CreateAnswer>;
+  /** An unchanged pending attempt may be replayed even if its starter is no longer eligible. */
+  canReplay: (input: NewVoucherInput) => boolean;
   /** Never rejects. */
   update: (id: string, patch: VoucherPatchInput) => Promise<UpdateAnswer>;
   /** Send one voucher email again, by its id. Resolves to null on success, or the server's sentence. Never rejects. */
@@ -98,6 +100,18 @@ function emailField(body: unknown): unknown {
 function starterField(body: unknown): NonNullable<VoucherUpdated["starter"]> | null {
   const said = typeof body === "object" && body !== null ? (body as { starter?: unknown }).starter : undefined;
   return said === "kept" || said === "dropped" ? said : null;
+}
+
+/** The identity used both for sending again and for the form's replay exception. */
+function createKey(input: NewVoucherInput): string {
+  return JSON.stringify([
+    input.email,
+    input.articles,
+    input.note,
+    input.recipientNote,
+    input.recipientName,
+    input.starterSlug,
+  ]);
 }
 
 export function useAdminVouchers(): UseAdminVouchers {
@@ -183,14 +197,7 @@ export function useAdminVouchers(): UseAdminVouchers {
 
   const create = useCallback(
     async (input: NewVoucherInput): Promise<CreateAnswer> => {
-      const key = JSON.stringify([
-        input.email,
-        input.articles,
-        input.note,
-        input.recipientNote,
-        input.recipientName,
-        input.starterSlug,
-      ]);
+      const key = createKey(input);
       const pending =
         pendingCreate.current?.key === key ? pendingCreate.current : { key, id: crypto.randomUUID() };
       pendingCreate.current = pending;
@@ -203,6 +210,8 @@ export function useAdminVouchers(): UseAdminVouchers {
     },
     [write, readAgainLater],
   );
+
+  const canReplay = useCallback((input: NewVoucherInput) => pendingCreate.current?.key === createKey(input), []);
 
   const update = useCallback(
     async (id: string, patch: VoucherPatchInput): Promise<UpdateAnswer> => {
@@ -225,5 +234,5 @@ export function useAdminVouchers(): UseAdminVouchers {
     [write, readAgainLater],
   );
 
-  return { vouchers, error, loading, reload, create, update, retry };
+  return { vouchers, error, loading, reload, create, canReplay, update, retry };
 }

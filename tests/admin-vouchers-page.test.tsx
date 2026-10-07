@@ -96,7 +96,7 @@ type Call = { method: string; url: string; body: unknown };
 let calls: Call[];
 let patchAnswer: { status: number; body: unknown };
 /** Status 0 is a network failure: `fetch` throws. */
-let postAnswer: { status: number; body: unknown };
+let postAnswer: { status: number; body: unknown } | Promise<{ status: number; body: unknown }>;
 let retryAnswer: { status: number; body: unknown } | Promise<{ status: number; body: unknown }>;
 let listAnswer: unknown[];
 /** What `GET /api/library` answers: the administrator's own shelf, for the starter picker. */
@@ -150,8 +150,9 @@ beforeEach(() => {
       return json(answer.status, answer.body);
     }
     if (method === "POST") {
-      if (postAnswer.status === 0) throw new TypeError("Failed to fetch");
-      return json(postAnswer.status, postAnswer.body);
+      const answer = await postAnswer;
+      if (answer.status === 0) throw new TypeError("Failed to fetch");
+      return json(answer.status, answer.body);
     }
     if (url.startsWith("/api/library")) return json(200, { articles: shelfAnswer });
     return json(200, { vouchers: listAnswer });
@@ -649,6 +650,30 @@ describe("/admin/vouchers", () => {
     });
     const idOf = (call: Call | undefined) => (call?.body as { id?: unknown } | undefined)?.id;
 
+    /* Sol's F13 on 261007j: the inputs stay editable while a create is in
+       flight, so the answer to the first must not wipe a second draft typed
+       meanwhile. */
+    it("keeps a draft typed while the create was in flight", async () => {
+      await mount();
+      await fill("first@example.test");
+      let answer: (value: { status: number; body: unknown }) => void = () => {};
+      postAnswer = new Promise((resolve) => {
+        answer = resolve;
+      });
+      await act(async () => form().requestSubmit());
+      await fill("second@example.test");
+      await act(async () => answer({ status: 201, body: { id: "new", email: "queued" } }));
+      await settle();
+      expect((host.querySelector("#voucher-new-email") as HTMLInputElement).value).toBe("second@example.test");
+    });
+
+    it("still clears the form when nothing changed while the create was in flight", async () => {
+      await mount();
+      await fill("first@example.test");
+      await submit();
+      expect((host.querySelector("#voucher-new-email") as HTMLInputElement).value).toBe("");
+    });
+
     it("sends an id it minted, and the same one again when the same form is resubmitted", async () => {
       await mount();
       await fill("new@example.test");
@@ -1070,6 +1095,60 @@ describe("/admin/vouchers", () => {
       await choose("the-bitter-lesson");
       await submit();
       expect(form().querySelector('[role="alert"]')?.textContent).toBe(sentence);
+    });
+
+    it.each(["link-off", "deleted", "minimal"])("replays a lost create answer even after its starter becomes %s", async (state) => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      await choose("the-bitter-lesson");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      shelfAnswer = state === "deleted"
+        ? SHELF.filter((row) => row.slug !== "the-bitter-lesson")
+        : SHELF.map((row) => row.slug === "the-bitter-lesson"
+          ? { ...row, privateLinkOn: false, ...(state === "minimal" ? { processing: "minimal" } : {}) }
+          : row);
+      await act(async () => buttonIn(form(), "Refresh")?.click());
+      await settle();
+      expect(createButton().disabled).toBe(false);
+      expect(statusLine()?.textContent).toContain("retry the unchanged voucher");
+      /* A changed draft is a new create and still needs an eligible starter. */
+      await fill("changed@example.test");
+      expect(createButton().disabled).toBe(true);
+      await submit();
+      expect(creates()).toHaveLength(1);
+      await fill("new@example.test");
+      expect(createButton().disabled).toBe(false);
+      postAnswer = { status: 200, body: { id: "x", email: "replayed" } };
+      await submit();
+      expect(creates()).toHaveLength(2);
+      expect(creates()[1]?.body).toEqual(creates()[0]?.body);
+      expect(form().textContent).toContain("already been created");
+    });
+
+    it("keeps an import draft out of voucher validation", async () => {
+      await mountWithShelf();
+      await fill("new@example.test");
+      const box = host.querySelector("#voucher-new-import") as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(box, "example.test/essay");
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      expect(linkNamed("Import in a new tab")?.getAttribute("href")).toBe("/add/example.test%2Fessay");
+      expect(form().checkValidity()).toBe(true);
+      await submit();
+      expect(creates()).toHaveLength(1);
+      expect(creates()[0]?.body).toMatchObject({ starterSlug: null });
+    });
+
+    it.each([false, true])("voices the sketch title according to its rename flag (%s)", async (renamed) => {
+      shelfAnswer = SHELF.map((row) => row.slug === "the-bitter-lesson" ? { ...row, titleOverridden: renamed } : row);
+      await mountWithShelf();
+      await choose("the-bitter-lesson");
+      const sketch = host.querySelector('[aria-label="What their email will look like"]');
+      expect(sketch?.querySelector(renamed ? ".voice-reader" : ".voice-author")?.textContent).toBe("The Bitter Lesson");
+      if (renamed) expect(sketch?.textContent).toContain("Their email uses the article’s original title.");
     });
 
     it("sketches the starter line, title only, after the note", async () => {

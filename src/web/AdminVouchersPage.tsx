@@ -46,6 +46,7 @@ import { ADMIN_HREF, addHref, readHref } from "./router.js";
 import {
   type AdminVoucherRow,
   type CreateAnswer,
+  type NewVoucherInput,
   type UpdateAnswer,
   type UseAdminVouchers,
   useAdminVouchers,
@@ -78,6 +79,9 @@ const STARTER_STATUS = "voucher-new-starter-status";
 const STARTER_DROPPED =
   "Saved. The email to the new address went without the starter article: it can no longer be " +
   "linked (deleted, not yet readable, or its private link is off).";
+/* Keep the email's shared sentence while letting JSX voice only the title.
+   The separator is in our template, never in the article's text. */
+const [STARTER_LEAD, STARTER_TAIL] = giftEmailStarterLine("\u0000").split("\u0000");
 
 function recipientNameTooLong(name: string): boolean {
   return [...name].length > RECIPIENT_NAME_MAX;
@@ -174,7 +178,15 @@ function EntryTitle({ entry }: { entry: LibraryEntry }) {
 }
 
 /** The line under the picker: what the email will do with the chosen article, and what waits. */
-function StarterStatus({ state, id }: { state: StarterState; id: string }) {
+function StarterStatus({ state, id, replay }: { state: StarterState; id: string; replay: boolean }) {
+  if (replay && !starterReady(state)) {
+    return (
+      <p id={id} className="tw:m-0 tw:break-words tw:text-xs tw:text-muted-foreground">
+        The starter is no longer ready for a new voucher. You can retry the unchanged voucher to
+        recover its first answer. This sends no second email if it was already created.
+      </p>
+    );
+  }
   const waits = <> Create voucher waits until it has one.</>;
   let said: ReactNode;
   switch (state.kind) {
@@ -252,6 +264,7 @@ function StarterPicker({
   statusId,
   shelfError,
   reload,
+  replay,
 }: {
   choices: readonly LibraryEntry[];
   slug: string;
@@ -260,6 +273,7 @@ function StarterPicker({
   statusId: string;
   shelfError: string | null;
   reload: () => void;
+  replay: boolean;
 }) {
   const [url, setUrl] = useState("");
   const importLink = useRef<HTMLAnchorElement>(null);
@@ -297,7 +311,9 @@ function StarterPicker({
           Or import one (it opens the add page; choose it here once it is on your shelf)
           <input
             id="voucher-new-import"
-            type="url"
+            /* This separate action must not add URL validation to the voucher form.
+               Like AddArticle, it also accepts addresses without a scheme. */
+            type="text"
             inputMode="url"
             enterKeyHint="go"
             autoComplete="off"
@@ -325,12 +341,16 @@ function StarterPicker({
         </a>
       </div>
       {shelfError && <p className="tw:m-0 tw:text-destructive">Couldn’t read your articles. {shelfError}</p>}
-      <StarterStatus state={state} id={statusId} />
+      <StarterStatus state={state} id={statusId} replay={replay} />
     </div>
   );
 }
 
-function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; readerId: string }) {
+function CreateForm({ create, canReplay, readerId }: {
+  create: UseAdminVouchers["create"];
+  canReplay: UseAdminVouchers["canReplay"];
+  readerId: string;
+}) {
   const [email, setEmail] = useState("");
   const [articles, setArticles] = useState(String(DEFAULT_ARTICLES));
   const [note, setNote] = useState("");
@@ -340,6 +360,12 @@ function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; 
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  /* The draft as it stands now, read when a create answers: the fields stay
+     editable while it is in flight, and a draft typed meanwhile is not the
+     one that was sent, so it is not cleared (Sol's F13 on 261007j). */
+  const draft = JSON.stringify([email, articles, note, recipientNote, recipientName, starterSlug]);
+  const draftNow = useRef(draft);
+  draftNow.current = draft;
 
   /* The administrator's own shelf, for the starter. Read again when an import
      finishes (the shelf page's own wiring, Library.tsx) and on Refresh. */
@@ -350,15 +376,26 @@ function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; 
   useJobs("watches-queue", readShelfAgain);
   const choices = useMemo(() => starterChoices(shelf.articles), [shelf.articles]);
   const starter = starterState(starterSlug, shelf.articles);
-  const starterOk = starterReady(starter);
+  const count = wholeNumber(articles);
+  const input: NewVoucherInput | null = count === null ? null : {
+    email,
+    articles: count,
+    note: note.trim() === "" ? null : note,
+    recipientNote: recipientNote.trim() === "" ? null : recipientNote,
+    recipientName: cleanRecipientName(recipientName),
+    starterSlug: starterSlug === "" ? null : starterSlug,
+  };
+  /* The server answers an unchanged replay before checking today's article.
+     A lost answer must remain recoverable after its link is off or it is gone. */
+  const replay = input !== null && canReplay(input);
+  const starterOk = starterReady(starter) || replay;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setDone(null);
     /* The button is disabled too; this is Enter in a field. */
     if (!starterOk) return;
-    const count = wholeNumber(articles);
-    if (count === null) {
+    if (input === null) {
       setRefusal("Articles must be a whole number.");
       return;
     }
@@ -368,18 +405,13 @@ function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; 
       return;
     }
     setBusy(true);
-    const answer = await create({
-      email,
-      articles: count,
-      note: note.trim() === "" ? null : note,
-      recipientNote: recipientNote.trim() === "" ? null : recipientNote,
-      recipientName: cleanRecipientName(recipientName),
-      starterSlug: starterSlug === "" ? null : starterSlug,
-    });
+    const sent = draft;
+    const answer = await create(input);
     setBusy(false);
     setRefusal(answer.kind === "refused" ? answer.message : null);
     if (answer.kind === "created") {
       setDone(createdSentence(answer));
+      if (draftNow.current !== sent) return;
       setEmail("");
       setArticles(String(DEFAULT_ARTICLES));
       setNote("");
@@ -483,7 +515,7 @@ function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; 
           articles={wholeNumber(articles)}
           name={recipientName}
           note={recipientNote}
-          starterTitle={"entry" in starter ? starter.entry.title : null}
+          starterEntry={"entry" in starter ? starter.entry : null}
         />
       </div>
       <StarterPicker
@@ -494,6 +526,7 @@ function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; 
         statusId={STARTER_STATUS}
         shelfError={shelf.error}
         reload={readShelfAgain}
+        replay={replay}
       />
       {/* The submit is the form's last control and its one filled button —
           *"Make the 'Create voucher' button more visible"*, the same report.
@@ -540,19 +573,20 @@ function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; 
  * email has no such line otherwise (plan 261007f). **The starter's line** is
  * `giftEmailStarterLine` with the title as the shelf has it, drawn only when
  * one is chosen (plan 261007j). The email uses the article's own title, so a
- * title the administrator renamed on the shelf reads differently there.
+ * title the administrator renamed on the shelf reads differently there; the
+ * sketch says so beside that title rather than promising it will be sent.
  */
 function EmailSketch({
   articles,
   name,
   note,
-  starterTitle,
+  starterEntry,
 }: {
   articles: number | null;
   name: string;
   note: string;
   /** The chosen starter's title, for its line; never its link (plan 261007j). */
-  starterTitle: string | null;
+  starterEntry: LibraryEntry | null;
 }) {
   const n = articles !== null && articles >= 1 ? articles : 1;
   const trimmed = note.trim();
@@ -578,10 +612,17 @@ function EmailSketch({
       )}
       {/* The email's own line, then its button; the address stays out of
           this page, key and all (plan 261007j). */}
-      {starterTitle !== null && (
+      {starterEntry !== null && (
         <>
-          <p className="tw:m-0 tw:break-words tw:text-foreground">{giftEmailStarterLine(starterTitle)}</p>
+          <p className="tw:m-0 tw:break-words tw:text-foreground">
+            {STARTER_LEAD}<EntryTitle entry={starterEntry} />{STARTER_TAIL}
+          </p>
           <p className="tw:m-0 tw:mb-2">…and a “Read it” button that opens it.</p>
+          {starterEntry.titleOverridden && (
+            <p className="tw:m-0 tw:mb-2">
+              Your shelf title is shown here. Their email uses the article’s original title.
+            </p>
+          )}
         </>
       )}
       <p className="tw:m-0">
@@ -1001,7 +1042,7 @@ function VoucherRow({
 
 export function AdminVouchersPage() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "vouchers" }));
-  const { vouchers, error, loading, reload, create, update, retry } = useAdminVouchers();
+  const { vouchers, error, loading, reload, create, canReplay, update, retry } = useAdminVouchers();
   /* Whose shelf the starter picker reads. App draws every admin page signed
      in, inside this provider; null would be a page drawn outside it. */
   const readerId = useContext(SignedInReader);
@@ -1018,7 +1059,7 @@ export function AdminVouchersPage() {
       {readerId === null ? (
         <Refusal message="Sign in again to create a voucher." />
       ) : (
-        <CreateForm create={create} readerId={readerId} />
+        <CreateForm create={create} canReplay={canReplay} readerId={readerId} />
       )}
 
       {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}
