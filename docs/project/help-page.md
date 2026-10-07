@@ -1,6 +1,7 @@
 # The Help page
 
-`/help` — one page, for readers, that explains what Spideryarn does and how to get the most from it.
+`/help` — contents and short pages for readers, explaining what Spideryarn does and how to get the
+most from it.
 Up: [reading-view-overview.md](reading-view-overview.md)
 
 Greg, 2026-10-01 (SPIDERYARN-READING2-85, `spya-p2hamn`):
@@ -50,14 +51,15 @@ Greg asked for it, 2026-10-06 (`spya-ucftjt`):
 > would be easier probably to feed those in to the help chatbot.
 
 **A file is front matter and CommonMark**, and the renderer refuses anything else, so a test that
-draws every file catches a slip. Front matter: `title`, `summary` (the line on the contents page) and
-`keywords` (words a reader brings that the title does not say), and optionally `related` (anchors,
-for *See also*). A mode's file has `keywords` only, and its body is up to two sections,
-`## When to use it` and `## Reading it`. Links are site paths (`/help/spine`, `/pricing`), so a file
-reads the same on GitHub and to a model handed it raw. The only HTML is `<kbd>`. Four tokens stand for
-facts kept in code — `{{experimental-modes}}`, `{{public-shelf-label}}`, `{{whats-new-label}}` and
-`{{modes-table}}` — and `help-markdown.tsx` § `expandHelpTokens` gives the plain text with them filled
-in, for anything that wants to read Help rather than draw it.
+draws every file catches a slip. A topic or guide has `title`, `summary` (the line on the contents
+page) and `keywords` (words a reader brings that the title does not say); a question has `title` and
+`keywords`; a mode has `keywords` only. Any of them may have `related` (anchors, for *See also*). A
+mode's body is up to two sections, `## When to use it` and `## Reading it`. Links are site paths
+(`/help/spine`, `/pricing`), so a file reads the same on GitHub and to a model handed it raw. The only
+HTML is `<kbd>`. Four tokens stand for facts kept in code — `{{experimental-modes}}`,
+`{{public-shelf-label}}`, `{{whats-new-label}}` and `{{modes-table}}` — and `help-markdown.tsx` §
+`expandHelpTokens` gives the plain text with them filled in, for anything that wants to read Help
+rather than draw it.
 
 The groups: Start here · Ways to read (the four guides: your first article, studying a topic,
 reviewing a paper, reading in your own field) · Reading an article · The modes · Your shelf and your

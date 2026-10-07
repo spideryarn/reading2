@@ -11,6 +11,7 @@
  * happen, and the 50 real files are all well formed, so none of them shows
  * one. These are the refusals, each seen.
  */
+import { globSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -19,7 +20,13 @@ import { MODE_CATALOG } from "../src/mode-catalog.js";
 import { MODES } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { CHANGELOG_LABEL } from "../src/web/router.js";
-import { HELP_ANCHORS, helpHref } from "../src/web/help/help-anchors.js";
+import {
+  FAQ_IDS,
+  HELP_ANCHORS,
+  HELP_GUIDE_IDS,
+  HELP_TOPIC_IDS,
+  helpHref,
+} from "../src/web/help/help-anchors.js";
 import { readFrontMatter } from "../src/web/help/help-front-matter.js";
 import {
   expandHelpTokens,
@@ -31,6 +38,20 @@ import {
 import { HELP_TOPIC_FILES, HELP_TOPIC_PAGES } from "../src/web/help/help-pages.js";
 
 const html = (md: string): string => renderToStaticMarkup(<>{renderHelpMarkdown(md, "t")}</>);
+
+describe("the page files", () => {
+  it("registers every Markdown file under pages", () => {
+    const registered = [
+      ...HELP_TOPIC_IDS.map((id) => `${id}.md`),
+      ...MODES.map((mode) => `modes/${mode}.md`),
+      ...FAQ_IDS.map((id) => `questions/${id}.md`),
+      ...HELP_GUIDE_IDS.map((id) => `guides/${id}.md`),
+    ].sort();
+    const onDisk = globSync("**/*.md", { cwd: "src/web/help/pages" }).sort();
+
+    expect(onDisk).toEqual(registered);
+  });
+});
 
 describe("the front matter", () => {
   const shape = { required: ["title", "keywords"], optional: ["related"] } as const;

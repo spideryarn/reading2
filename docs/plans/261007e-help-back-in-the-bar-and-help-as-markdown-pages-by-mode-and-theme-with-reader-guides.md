@@ -321,4 +321,20 @@ returns a verdict"; and a term stays underlined once the article has a glossary.
 
 ## Reviews
 
-(code review to come)
+**Plan, GPT Sol, read-only: not ready**, seven findings, all taken — above.
+
+**Code, GPT Sol, fixing, 2026-10-07: ready after its fixes.**
+[prompt](261007e-help-pages-code-review-prompt.md), [answer](261007e-help-pages-code-review-sol.md).
+No P0 or P1, and no unsupported sentence in the four guides. Two fixes, both read by me and rerun:
+C1 (P2), a Markdown file nobody registered would have been ignored in silence, so a test now holds
+the files on disk equal to the registered ones (red on a stray file first); C2 (P3), `help-page.md`'s
+opening line and its front-matter sentence, which gave every kind of file the same keys.
+
+**Browser, a Sonnet subagent with Playwright, 2026-10-07: all nine checks passed.** Signed out: the
+contents page's six groups; `/help/spine` with *See also*, next, and the current row marked; a mode's
+page; a guide whose links move without a reload; `/help#spine`, `/help#mode-trajectory` and
+`/help#faq-older-profile` landing on their new addresses; `/help/nonsense`; Back and Forward between
+pages, each at the top; search by keyword and by a phrase only in a body; 390px with no sideways
+scroll. Signed in, in Glossary: Help in the bar before Feedback, opening `/help/mode-glossary`. No
+console errors. One thing seen: an old `/help#…` address is corrected only once the Help chunk has
+loaded, about a second on the dev server, with the right words already on screen.
