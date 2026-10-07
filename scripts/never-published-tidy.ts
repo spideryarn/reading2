@@ -341,13 +341,15 @@ export async function proveEligible(
 
 export class TidySafetyError extends Error {}
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 /** The ids in a pinned file: one uuid per line, `#` comments and blanks ignored. */
 export function parseIdsFile(text: string): string[] {
   const ids = text
     .split("\n")
     .map((line) => line.replace(/#.*/, "").trim())
     .filter((line) => line !== "");
-  const bad = ids.filter((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id));
+  const bad = ids.filter((id) => !UUID.test(id));
   if (bad.length > 0) throw new TidySafetyError(`--ids: ${bad.length} line(s) are not article ids`);
   if (new Set(ids).size !== ids.length) throw new TidySafetyError("--ids: an id appears twice");
   return ids;
@@ -491,8 +493,8 @@ export async function writeBackup(
   if ((statSync(file).mode & 0o777) !== 0o600) throw new TidySafetyError(`refusing: ${file} is not 0600`);
   const backup = readBackup(file);
   const wrong = (Object.keys(dump) as (keyof BackupRows)[]).filter((k) => backup[k].length !== dump[k].length);
-  const sameIds = [...ids].sort().join() === backup.articles.map((r) => String(r.id)).sort().join() &&
-    [...ids].sort().join() === [...backup.ids].sort().join();
+  const sameIds = isDeepStrictEqual([...ids].sort(), backup.articles.map((r) => String(r.id)).sort()) &&
+    isDeepStrictEqual([...ids].sort(), [...backup.ids].sort());
   if (wrong.length > 0 || !sameIds || backup.source !== source) {
     throw new TidySafetyError(`refusing: the backup read back from ${file} does not match what was written (${wrong.join(", ") || "article ids or source"})`);
   }
@@ -517,7 +519,9 @@ export function readBackup(file: string): Backup {
   const backup = parsed as Backup;
   const header = [...backup.ids].map(String).sort();
   const rows = backup.articles.map((r) => String(r.id)).sort();
-  if (new Set(header).size !== header.length || header.join() !== rows.join()) {
+  /* Element by element, and each header id a uuid: compared by `.join()`, a
+     header `["A,B"]` equalled rows `["A", "B"]` (GPT Sol's round-3 residue). */
+  if (header.some((id) => !UUID.test(id)) || new Set(header).size !== header.length || !isDeepStrictEqual(header, rows)) {
     throw new TidySafetyError(`refusing: ${file}'s header names ${header.length} article(s), its article rows ${rows.length}, and they are not the same ids`);
   }
   const held = new Set(rows);
@@ -559,8 +563,12 @@ export interface Restored {
  * Exercised on throwaway local data by tests/never-published-tidy.test.ts §
  * "restore". It has not been, and is not to be, run against production
  * except to undo this plan's delete, by somebody cleared to write there.
+ *
+ * **Not exported**: it trusts the `Backup` it is handed, and the file checks
+ * (`readBackup`) and the remote `--ids` pin live in `main`, so the command is
+ * the only way in (GPT Sol's round-3 residue).
  */
-export async function restoreBackup(db: Db, backup: Backup, only?: readonly string[]): Promise<Restored> {
+async function restoreBackup(db: Db, backup: Backup, only?: readonly string[]): Promise<Restored> {
   let rows: BackupRows = backup;
   if (only !== undefined) {
     const inBackup = new Set(backup.articles.map((r) => String(r.id)));

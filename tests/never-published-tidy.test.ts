@@ -929,6 +929,34 @@ describe("restore refuses a backup that is not this database's, or not what it s
     }
   });
 
+  it("a header whose one id is two of the article rows' ids joined by a comma (Sol's round-3 residue)", async () => {
+    /* Two articles deleted in one run, then the header rewritten as the single
+       string "A,B". Compared by `.join()`, that equals the rows ["A", "B"]. */
+    const a = await failedFirstImport("d4-comma-a", { identities: 1 });
+    const b = await failedFirstImport("d4-comma-b", { identities: 1 });
+    await age([a.id, b.id]);
+    const s = scratch([a.id, b.id]);
+    let file = "";
+    const h = harness({
+      writeBackup: async (...args) => {
+        const written = await writeBackup(...args);
+        file = written.file;
+        return written;
+      },
+    });
+    try {
+      expect(await main(["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], h.deps)).toBe(0);
+      const backup = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+      backup.ids = [[a.id, b.id].sort().join(",")];
+      writeFileSync(file, JSON.stringify(backup));
+      await expect(main(["--restore", file], harness().deps)).rejects.toThrow(/header names/);
+      expect(await stillThere(a.id)).toBe(false);
+      expect(await stillThere(b.id)).toBe(false);
+    } finally {
+      s.done();
+    }
+  });
+
   it("a ledger link that points at an article the backup does not hold", async () => {
     /* The damage this prevents: re-pointing somebody's unlinked model call at
        another article. Here, a real unlinked call of this owner and a real

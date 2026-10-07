@@ -319,7 +319,8 @@ and a single-identity reading-time add, each hold one row — no cycle. What rem
 multi-row writers, the checkpoint store's `read` (`UPDATE … SET last_used_at` over several keys)
 and a reading-time `add` of several blocks, which lock in scan or batch order rather than key order
 and so *could*, in principle, interleave with ours into a cycle. Postgres's detector then aborts one
-side within `deadlock_timeout` (1 s): if it is ours, `destroy` rolls back and the run stops with
+side — it starts checking once a lock wait has lasted `deadlock_timeout` (1 s); that is when the
+check begins, not a deadline for it to finish — and if it is ours, `destroy` rolls back and the run stops with
 nothing of that article deleted; if it is theirs, it committed nothing. Neither commits a row the
 cascade then takes unseen. And neither writer has a reason to touch these articles: no reader can
 open a never-published article (so no reading time), and no import is running for one (the rule).
@@ -455,29 +456,79 @@ Discovery closed with it; D1–D4 were then fixed, each red first and in its own
 | **D4** (P2) | A backup from another database or run is accepted; header ids and child references unchecked; no pinned set for a production restore. | `source` identity in the header, compared before writing; header ids equal to the article rows; every child row names a held article; `--restore` on a non-local target needs `--ids`, refused before connecting (§ 6). Seven tests, red first; each of the four guards removed turns its test red. |
 | **D1** (P1) | The article lock does not freeze checkpoints (updated without a parent lock) or block identities (which a reading-time insert's foreign key locks); either write could commit after the comparison and be cascaded away. | The hook locks identities and checkpoints `FOR UPDATE`, key order, before the proof and comparison, held through the delete (§ 5, with the lock-order reasoning). Three controlled concurrency tests; the first two red first; each lock removed turns its tests red. |
 
-Sol listed the plan conditions to keep after these fixes; they are § How to run it, unchanged.
+Sol listed the plan conditions to keep after these fixes; they are § How to run it.
+
+**Round 3.** A third, narrow GPT Sol check of the D1–D4 fixes at `abb4414f3`, read-only
+([prompt](261007f-tidy-the-never-published-production-articles-review-3-prompt.md),
+[answer](261007f-tidy-the-never-published-production-articles-review-3-sol.md)). Verdict: **"safe
+to run under the plan's conditions."** D1–D4 closed. It found no third cascade table left
+unprotected, and confirmed the deadlock reasoning and that every D2 table feeds both queries. Two
+residues, and one note, all closed after it:
+
+| residue | what it said | what was done |
+|---|---|---|
+| **Header ids compared by `.join()`** (D4) | A header `["A,B"]` compared equal to article rows `["A", "B"]`. Not a bypass of production's separately parsed `--ids`. | `readBackup` compares the sorted arrays element by element (`isDeepStrictEqual`) and refuses a header id that is not a uuid; `writeBackup`'s read-back check uses the same comparison. Test: two articles deleted, the header rewritten as one comma-joined string, the restore refused and both still absent — red first (the restore returned 0). |
+| **"within `deadlock_timeout`"** (D1) | `deadlock_timeout` is when Postgres starts checking, not a deadline. | § 5 corrected. |
+| **`restoreBackup` exported** | Called directly, it would skip the file checks and the remote `--ids` pin. | No longer exported; `main` is the only way in, and only `main` called it. |
 
 ## How to run it
 
-**Once**, by the Overseer, with Greg's knowledge, and only when **all** of these are true:
+**For the Overseer.** This deletes 13 of Greg's own failed first imports from production — rows
+no reader can open — **once**. Every command below runs from a checkout of `dev` at or after the
+commit that added this paragraph, on the box, and reads `/home/greg/code/spideryarn2/.env.prod`;
+check the `Target:` and `Source:` lines of every run, not its last line.
 
-1. **The production deploy that applies `revision_blocks_article_block` has happened, and the index
-   is verified in production** — not inferred from the deploy. Read-only, as `spideryarn_app`:
+### Before: all six must be true, or stop
+
+1. **The index `revision_blocks_article_block` is in production**, seen in the catalog, not inferred
+   from a deploy. Read-only, as `spideryarn_app` (the way the Appendix ran its queries: `psql`
+   inside the local Supabase container, `DATABASE_URL` from `.env.prod`, never printed):
 
    ```sql
    begin read only;
+   select current_user, current_setting('transaction_read_only');
    select indexname, indexdef from pg_indexes
     where schemaname = 'spideryarn' and tablename = 'revision_blocks' order by 1;
    rollback;
    ```
 
-   It must list `revision_blocks_article_block` on `(article_id, block_id)`. On 2026-10-07 06:49
-   UTC it did **not** (three rows: `revision_blocks_fts`, `revision_blocks_revision_id_block_id_pk`,
-   `revision_blocks_revision_ordinal`).
+   It must say `spideryarn_app | on`, then list `revision_blocks_article_block` with `(article_id,
+   block_id)` in its `indexdef`. On 2026-10-07 06:49 UTC it did **not** (three rows:
+   `revision_blocks_fts`, `revision_blocks_revision_id_block_id_pk`,
+   `revision_blocks_revision_ordinal`). Without it the run still works but holds Greg's billing row
+   for up to ~20 s per article (§ 5).
 2. **It is after 2026-10-08 18:31 UTC**, so `spya-xytyjz` has had its seven quiet days.
-3. **A fresh `--prod` dry run** says 13 eligible, `found 13; published 0; revisions 0; jobs 0;
-   reservations 0; reader state 0; recent 0`, and the 13 are exactly these.
-4. **The ids file holds exactly the 13 Sol allowed**, one per line:
+3. **A fresh read-only dry run, today**, shows exactly the 13 below eligible and every protection
+   count 0 — step 1 of the commands. In its output, all of:
+   - `Source: system 7676203829645141156, database postgres (oid 5)` (production);
+   - `Never-published articles: 13, eligible: 13`, every row `(eligible)`, and its 13 article ids
+     exactly the 13 in the ids file below — no more, no fewer;
+   - `found 13; published 0; revisions 0; jobs 0; reservations 0; reader state 0; recent 0` and
+     `✓ all 13 found, none protected`;
+   - for the record, the summary line should read `9303 block identities, 196 checkpoints, 0
+     revisions, 0 jobs … 332 ai_calls … 6 uploads`; a small drift there is not a stop, a different
+     set of articles is.
+4. **The backup directory is outside the repository**:
+   `/var/tmp/spideryarn-backups/261007f-never-published/`. The script refuses one inside it anyway;
+   the file holds the content of Greg's PDFs and must never be committed.
+5. **Greg, the owner of all 13, has been told** that it is about to run, before it runs.
+6. **The script is the reviewed one**: round 3's verdict, "safe to run under the plan's conditions",
+   was on `abb4414f3` plus the round-3 fixes (§ Review status); nothing in
+   `scripts/never-published-tidy.ts` has changed since without another review.
+
+If any is false, or any output below disagrees with what it says to expect, **stop and tell Greg**.
+Do not edit the ids file to fit the dry run.
+
+### The commands, in order
+
+**1. The dry run** (read-only; it deletes nothing):
+
+```
+npx tsx scripts/never-published-tidy.ts --prod
+```
+
+**2. The ids file** — write exactly this to
+`/var/tmp/spideryarn-backups/261007f-never-published/ids.txt` (the `#` comments are ignored):
 
    ```
    992df6bf-77c6-4dab-9879-8360f3e28bae  # spya-np5eep
@@ -495,27 +546,57 @@ Sol listed the plan conditions to keep after these fixes; they are § How to run
    82b5bb6c-e603-404c-94da-036719cda430  # spya-xytyjz (only after 2026-10-08 18:31 UTC)
    ```
 
-   No additions. If the dry run disagrees in any way, stop and ask; do not edit the list to fit.
-5. **The script run is the reviewed one, with round 2's D1–D4 in it** (§ Review status): Sol's
-   round-2 verdict was "safe after these changes", and they are made.
-
-Then:
+**3. The delete:**
 
 ```
 npx tsx scripts/never-published-tidy.ts --prod --delete \
-  --ids <that file> --backup-dir /var/tmp/spideryarn-backups/261007f-never-published/
+  --ids /var/tmp/spideryarn-backups/261007f-never-published/ids.txt \
+  --backup-dir /var/tmp/spideryarn-backups/261007f-never-published/
 ```
 
-The backup is written and verified before the first delete, by the command itself. Paste its
-whole output under Results, with exactly what was deleted. To undo, naming the articles to put
-back — all 13 if it finished, only those it printed as deleted if it stopped part-way:
-`npx tsx scripts/never-published-tidy.ts --prod --restore <the backup file it printed> --ids <file>`.
-The restore refuses a backup whose `source` is not production's.
+It surveys again, refuses unless the eligible set equals the ids file exactly, writes and verifies
+the backup (it prints `Backup: <file>`), then deletes one article per transaction, re-checking each
+under its locks. It ends with `13 of 13 gone; …` and `ai_calls kept with article_id null: 332 of
+332`, exit code 0. Any refusal is a `refusing: …` line and exit code 1; the articles it printed as
+deleted before it are deleted, the rest are not.
+
+**4. The census afterwards** — the dry run again, read-only:
+
+```
+npx tsx scripts/never-published-tidy.ts --prod
+```
+
+None of the 13 ids may appear. A never-published article that is not one of the 13 (a new failed
+import since) may, and is not to be touched.
+
+**To undo** — only if Greg asks, or a check above fails after the delete. Name the articles to put
+back in an ids file: all 13 if it finished, only those it printed as deleted if it stopped
+part-way. `--ids` is required against production.
+
+```
+npx tsx scripts/never-published-tidy.ts --prod \
+  --restore <the backup file it printed> --ids <file of the articles to put back>
+```
+
+The restore refuses a backup whose `source` is not production's, and any named article that is
+already there.
+
+### What to send back
+
+To Greg, and pasted whole under § Results:
+
+- **Deleted, per table**: articles (13), block identities, checkpoints, revisions (0), jobs (0); and
+  kept but changed: `ai_calls` unlinked, uploads left with a stale slug — from the delete's own
+  output.
+- **The backup file's path**, as printed after `Backup:`.
+- **Any refusal**, its `refusing: …` line word for word, and which articles (if any) it had already
+  deleted.
+- The `Target:` and `Source:` lines of the delete, and the census's article count.
 
 ## Done means
 
 - GPT Sol's review — done, findings dealt with above; the narrow second review — done, D1–D4
-  dealt with above.
+  dealt with above; the third — "safe to run under the plan's conditions", its residues closed.
 - The run in [§ How to run it](#how-to-run-it), its output pasted under Results.
 
 ## Results
@@ -674,6 +755,9 @@ no source, a header whose ids are not its rows', a stray ledger link, a stray id
 restore without `--ids` — and a same-database round trip (D4); and the three lock interleavings of
 § 5 (D1). Each was red before its fix (D1's third test is the outcome check, and is red only with the
 identity lock removed); each new guard removed in turn turns its own tests red.
+
+**After round 3: 62 tests.** Added: a backup whose header is the two article ids joined into one
+comma-separated string, refused on restore — red before `readBackup` compared element by element.
 
 ## Appendix: every statement run against production, with its output
 
