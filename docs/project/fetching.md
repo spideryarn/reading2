@@ -498,11 +498,12 @@ read off the pasted address. A link that names its paper only once it has been f
 link, a `doi.org` link that redirects to a publisher) is not a source and needs no object:
 [§ A link that leads to a paper](#a-link-that-leads-to-a-paper).
 
-**And one address of it to `tests/jobs-lease-budget.test.ts`**, whose `fetch` case counts the most
-candidates any source gives. Each candidate is a `fetchDocument` of up to 110 s, so the step can
-take one more of those than that count, and `STEP_BUDGET_MS.fetch` in
-[`src/jobs.ts`](../../src/jobs.ts) is sized to it (360 s for two). The registry is not exported, so
-a source that is not listed there is not counted.
+**And a sample of its longest candidate list to `tests/jobs-lease-budget.test.ts`**. Its `fetch`
+case checks samples against the exported `SOURCES` registry, so adding a source without a sample
+fails. It derives a floor for `STEP_BUDGET_MS.fetch` in [`src/jobs.ts`](../../src/jobs.ts) from
+the request clocks and sampled candidate counts; this remains a sample of address shapes,
+not proof of a hard elapsed-time ceiling. See
+[261007g](../plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md).
 
 ### The sources
 

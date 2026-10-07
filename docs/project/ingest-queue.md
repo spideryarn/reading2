@@ -1985,15 +1985,20 @@ again in the next window, on a draft that still holds every step before it.
 **And the budget that let `assets` start on a remnant was raised the same day.**
 `STEP_BUDGET_MS` in [`src/jobs.ts`](../../src/jobs.ts) is what the walk checks between steps: the
 next step starts only if that much of the claim is left, and otherwise the claim is handed back
-intact. A step admitted on less than its own clocks allow meets our deadline instead of its own,
+intact; the first runnable step starts ungated. A step admitted on less than its own clocks allow
+can meet our deadline instead of its own,
 and each such overrun spends one of `REQUEUE_BUDGET`'s windows, so a slow PDF could lose the
 import. `assets` went 185 s → **400 s** (its `collectAssets` cap and its PDF-figures cap, 180 s
 each, with unwinding and the storage read the figures clock does not cover) and `fetch` 150 s →
 **360 s** (three `fetchDocument`s of 110 s since a pasted address can lead to a paper source with
 two candidates). `tests/jobs-lease-budget.test.ts` derives both floors from the constants that
-enforce the clocks. Measured, production's worst `assets` is 92.8 s and its worst `fetch` 4.3 s,
-so the numbers are the clocks' and not the data's; what the raise costs is one more request when
-`structure` leaves under 400 s. `fetch`'s row decides nothing today, since it is always a claim's
+enforce the clocks. These are admission estimates with slack, not hard upper bounds: `assets`
+reads blocks, its raw manifest and PDF bytes outside its collector races; `fetch` has untimed
+storage and cleanup, and page counting has only the claimant's signal. Image/figure puts are
+inside the collector races. Measured, production's worst `assets` is 92.8 s and its worst `fetch`
+4.3 s, so the estimates use the clocks rather than the measured tail; the raise adds a request
+when `structure` leaves 185–400 s (excluding 400 s). Below 185 s it already deferred.
+`fetch`'s row decides nothing today, since it is always a claim's
 first step and the first step runs ungated.
 [261007g](../plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md).
 

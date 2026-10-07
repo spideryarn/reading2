@@ -567,7 +567,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
 
      `fetchDocument` took 107–893 ms over five real addresses off this box
      (paulgraham, gwern, a 1.3 MB Wikipedia article, slatestarcodex, a 5.6 MB
-     arXiv PDF). What bounds the step is not that: it is `DEFAULTS` in
+     arXiv PDF). The nominal request clocks come from `DEFAULTS` in
      src/fetch.ts, **three attempts of 30 s each** with a backoff capped at 10 s
      between them, so a hanging retryable origin costs about **110 s**. An
      earlier draft of this comment said 30 s, having read `timeoutMs` and not the
@@ -579,7 +579,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      process sees, because that is when pdf.js loads, and 17–33 ms after —
      measured on four files from 8 to 144 pages and 0.1 MB to 11 MB, with no
      trend against either. The storage put is the one part still unmeasured, and
-     it is the reason for the rounding rather than a gap.
+     it contributes estimated slack rather than an enforced bound.
 
      It read *"GUESS, generous. Network only, no model call. Never measured"*
      until then, and 10 s was under a single one of its own three timeouts.
@@ -591,15 +591,21 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      is 3 × 110 = **330 s**. 150 s did not cover it.
 
      **Raised to 360 s on 2026-10-07**: the 330 s the clocks allow, plus the
-     page count and the storage put above, rounded up.
+     page count and storage work above, with estimated slack. This covers the
+     configured clocks, not a hard return-time ceiling: response cleanup and
+     dispatcher shutdown are awaited without a race, page counting has only
+     the claimant's signal, and storage has no step timer.
      tests/jobs-lease-budget.test.ts derives the 330 s from src/fetch.ts's
      `DEFAULTS` and `retryDelayMs` and from the paper sources' candidate
-     lists, so a fourth attempt or a third candidate turns it red.
+     lists, requiring a sample for every registered source. A fourth attempt
+     or a third candidate in a sampled address turns it red; a new address
+     shape with a longer list still needs a corresponding sample.
 
-     **Measured the same day, and the clocks are the whole of the number.**
+     **Measured the same day; the clocks drive the estimate rather than this tail.**
      `revision_step_runs`, rows this step ran (not carried forward): production
      45 runs, median 1.0 s, p99 3.6 s, max **4.3 s**; local 160 runs, max
-     10.7 s. Nothing has come near one timeout, let alone three.
+     10.7 s. These recorded runs came nowhere near one timeout, let alone three;
+     paused overruns leave no completed step-run row in this sample.
 
      **And this row decides nothing today**, which is worth knowing before
      tuning it: `fetch` is first in `STEP_ORDER`, so it is the first step of
@@ -739,7 +745,7 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      publisher that hangs. Not imported, deliberately: this file would then
      depend on a pipeline stage's module for a constant it only compares
      against, and the two are allowed to differ — this one has to be the
-     *claimant's* worst case, which is the cap plus whatever unwinding costs.
+     claimant's conservative estimate, including time outside the cap.
 
      **That was the worst case of the first half of the step only, and the
      row said 185 s until 2026-10-07.** The step goes on to
@@ -751,21 +757,24 @@ export const STEP_BUDGET_MS: Record<StepName, number> = {
      pause and re-run the step, spending one of `REQUEUE_BUDGET`'s windows
      each time; three, and the import ended interrupted.
 
-     **400 s since 2026-10-07**: the two caps (360 s) with the 5 s of
-     unwinding each that 185 s already allowed the first one (370 s), and the
-     storage read rounded up into the rest. Under the claimant's 740 s with
+     **400 s since 2026-10-07**: the two caps (360 s) with an estimated 5 s of
+     unwinding each that 185 s already allowed the first one (370 s), and
+     estimated slack for storage reads. This is no hard upper bound: the
+     blocks, raw manifest and PDF bytes are read outside the collector races.
+     Internal image/figure puts are inside those races, so a hung put does not
+     delay a collector's return indefinitely. Under the claimant's 740 s with
      340 s to spare. tests/jobs-lease-budget.test.ts holds it at or over
      `ASSETS_BUDGET_MS + PDF_FIGURES_BUDGET_MS`, read from the two modules.
 
      **Measured the same day**, `revision_step_runs`, rows this step ran:
      production 47 runs, a PDF's median 2.2 s, p90 40.0 s, max **92.8 s**
-     (27 runs), a web page's max 4.2 s (20); local 131 runs, a PDF's max
+     (27 runs), a web page's max 4.2 s (20); local 130 runs, a PDF's max
      **184.3 s**, which is the figures clock running out on a local paper.
      The two halves are alternatives in practice (a PDF's blocks carry no
-     `<img>`, a web page has no figure markers), so no run has spent both
+     `<img>`, a web page has no figure markers), so no recorded run exhausted both
      caps; nothing in the code stops one, and rounding up is the cheap
-     direction. What the raise costs is a hand-back before `assets` when
-     `structure` left less than 400 s, which is one more request.
+     direction. The raise adds a hand-back before `assets` when `structure`
+     left at least 185 s but less than 400 s, which is one more request.
      docs/plans/261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md. */
   assets: 400_000,
   /* MEASURED 2026-08-29, one call: 10.4s on the bigger-brains article. Rounded
@@ -2976,8 +2985,8 @@ async function walkClaim(
          steps are kept. It was reachable: `assets` answers an abort by
          returning, and its two clocks allow 360 s against what was then a
          185 s budget. The budget covers them since 2026-10-07
-         (`STEP_BUDGET_MS.assets`); it is still reachable through what no
-         clock bounds, a storage read or put that hangs.
+         (`STEP_BUDGET_MS.assets`); it is still reachable through storage reads
+         outside the collector clocks. Image/figure puts are raced inside them.
 
          **Not kept, deliberately.** What such a step returns is what it had
          when it was told to stop. `assets` returns a manifest whose unfetched
