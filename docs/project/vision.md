@@ -84,6 +84,11 @@ quality usually feeds all of them, which is the stronger argument for it.
    always reach the passage it came from in one action. See [block-ids.md](block-ids.md).
 5. **No hidden reformulation.** We never silently rewrite the author's prose in the reading view.
    Generated text lives at generated altitudes; the rightmost level is verbatim, always.
+6. **Never lose what the reader gave us.** A dictation, a draft, a note, a criterion, a pasted
+   article: anything the reader typed, said or chose is kept, not silently cut, capped away or
+   overwritten. A limit refuses with a sentence saying why, never by dropping the oldest. Greg,
+   2026-10-07: *"try hard to avoid ever losing/throwing away (especially important) user
+   data/input"*. Production data has its own rule in AGENTS.md § Real data belongs to the reader.
 
 ## Prefer boring
 
