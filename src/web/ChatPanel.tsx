@@ -136,7 +136,7 @@ import { useRenderCount } from "./perf.js";
 import { useMedia } from "./media.js";
 import { chatDraftsFor } from "./chat-draft.js";
 import type { Answered } from "./chat/controller.js";
-import { answerMayAct, type GuideAct, GuideActContext } from "./guide-acts.js";
+import { type GuideAct, GuideActContext, useGuideAct } from "./guide-acts.js";
 import { rowTitle } from "./chat-list-row.js";
 
 interface Props {
@@ -452,6 +452,8 @@ export function ChatPanel({
   /* Among `threads`, never among `listed`: what the list draws and what may
      be open here are two sets (Props § `listed`). */
   const open = threads.find((t) => t.id === threadId) ?? null;
+  /* The event and its act outlive the transcript's server-id remount. */
+  const guideAct = useGuideAct(open?.id ?? null, open?.kind, true, onAnswered);
   /** What the list draws. */
   const rows = listed ?? threads;
   // A stopped session retains recovery text. It must never appear in a different thread.
@@ -707,7 +709,7 @@ export function ChatPanel({
           kind={open.kind}
           live={shownLive}
           onStartLive={onStartLive ? () => onStartLive(open.id) : undefined}
-          onAnswered={onAnswered}
+          guideAct={guideAct}
         />
       ) : learn ? (
         /* **Learn never draws a list, not even for a frame.** The band
@@ -1366,6 +1368,7 @@ export function Conversation({
   live,
   onStartLive,
   onAnswered,
+  guideAct,
 }: {
   /** The article, so the composer's dictation can be primed with its vocabulary. */
   slug: string;
@@ -1410,6 +1413,8 @@ export function Conversation({
   onStartLive?: (() => void) | undefined;
   /** See `onAnswered` in Props. */
   onAnswered?: ((listener: (answered: Answered) => void) => () => void) | undefined;
+  /** Owned by ChatPanel so a server-id correction cannot discard it with this keyed transcript. */
+  guideAct?: GuideAct | null | undefined;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   /**
@@ -1420,15 +1425,8 @@ export function Conversation({
    * alone. The effect after it spends it once the commit its chips' effects
    * ran in is over, so nothing that mounts later can act on it.
    */
-  const [act, setAct] = useState<GuideAct | null>(null);
-  const threadId = thread.id;
-  useEffect(() => {
-    if (kind !== "guide" || onAnswered === undefined || !visible) return;
-    return onAnswered((answered) => {
-      if (answered.threadId !== threadId || !answerMayAct(answered.message)) return;
-      setAct({ messageId: answered.message.id, used: false });
-    });
-  }, [kind, onAnswered, visible, threadId]);
+  const ownAct = useGuideAct(thread.id, kind, visible, onAnswered);
+  const act = guideAct ?? ownAct;
   /* **Offered, and spent, only once this conversation draws that answer as
      finished.** The `Answered` event can land before the store's notification
      does (chat/controller.ts batches those), and then this render still has

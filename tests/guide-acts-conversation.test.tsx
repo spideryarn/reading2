@@ -72,9 +72,9 @@ function answeredHub() {
         listeners.delete(listener);
       };
     },
-    fire(a: Answered) {
+    fire(a: Omit<Answered, "startedThreadId">) {
       act(() => {
-        for (const l of [...listeners]) l(a);
+        for (const l of [...listeners]) l({ ...a, startedThreadId: a.threadId });
       });
     },
     get size() {
@@ -91,9 +91,7 @@ let executor: CommandExecutor;
 function paint(t: ChatThread, hub: ReturnType<typeof answeredHub>, over: { visible?: boolean } = {}): void {
   act(() => {
     root.render(
-      createElement(ChatCommands, {
-        executor,
-        children: createElement(Conversation, {
+      <ChatCommands executor={executor}>{createElement(Conversation, {
           slug: "a-piece",
           thread: t,
           onJump: () => {},
@@ -110,8 +108,7 @@ function paint(t: ChatThread, hub: ReturnType<typeof answeredHub>, over: { visib
           kind: t.kind,
           visible: over.visible ?? true,
           onAnswered: hub.subscribe,
-        }),
-      }),
+        })}</ChatCommands>,
     );
   });
 }
@@ -182,6 +179,20 @@ describe("the guide's conversation", () => {
     paint(thread("guide"), hub, { visible: false });
     expect(hub.size).toBe(0);
     hub.fire({ threadId: THREAD, message: reply() });
+    expect(mode).not.toHaveBeenCalled();
+  });
+
+  it("does not act later when a chip disabled at completion becomes enabled", () => {
+    const hub = answeredHub();
+    const enabled = executor;
+    executor = { ...enabled, runners: {} };
+    paint(thread("guide"), hub);
+    hub.fire({ threadId: THREAD, message: reply() });
+    expect(chips()[0]?.disabled).toBe(true);
+    expect(mode).not.toHaveBeenCalled();
+    executor = enabled;
+    paint(thread("guide"), hub);
+    expect(chips()[0]?.disabled).toBe(false);
     expect(mode).not.toHaveBeenCalled();
   });
 });

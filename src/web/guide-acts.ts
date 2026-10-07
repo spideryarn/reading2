@@ -26,17 +26,18 @@
  * The act *is* the chip's own press (CommandChip.tsx § `press`), so it is
  * checked by `chipFor` again at that moment, exactly as a press is.
  *
- * `GuideAct` is one object per finished answer, made by the conversation that
- * heard it and handed to that answer's chips through `GuideActContext`. The
+ * `GuideAct` is one object per finished answer, owned above the keyed
+ * conversation and handed to that answer's chips through `GuideActContext`. The
  * first eligible chip's effect sets `used`; the conversation's own effect,
  * which React runs after its children's in the same commit, sets it too, so a
  * chip that mounts later — a re-render that redraws the answer — finds it spent
  * rather than acting late. StrictMode's second effect run finds it spent.
  */
-import { createContext } from "react";
+import { createContext, useEffect, useState } from "react";
 import { modeActsAlone } from "../acts-alone.js";
-import type { ChatMessage } from "../types.js";
+import type { ChatMessage, ThreadKind } from "../types.js";
 import type { ChatChip } from "./chat-commands.js";
+import type { Answered } from "./chat/controller.js";
 
 /** One finished answer's single act, and whether it has been spent. */
 export interface GuideAct {
@@ -46,6 +47,35 @@ export interface GuideAct {
 
 /** The act for the answer a chip is drawn in, or `null`: every chip outside a guide's just-finished answer. */
 export const GuideActContext = createContext<GuideAct | null>(null);
+
+/**
+ * Listen above the keyed transcript: `begin` may rename and remount it in the
+ * same buffered task as `done`. Match both names, but offer the act only to
+ * the confirmed conversation. This is a live event, never replayed on mount.
+ */
+export function useGuideAct(
+  threadId: string | null,
+  kind: ThreadKind | undefined,
+  visible: boolean,
+  onAnswered: ((listener: (answered: Answered) => void) => () => void) | undefined,
+): GuideAct | null {
+  const [finished, setFinished] = useState<{ answered: Answered; act: GuideAct } | null>(null);
+  useEffect(() => {
+    if (kind !== "guide" || onAnswered === undefined || !visible || threadId === null) return;
+    return onAnswered((answered) => {
+      if (answered.threadId !== threadId && answered.startedThreadId !== threadId) return;
+      if (!answerMayAct(answered.message)) return;
+      setFinished({ answered, act: { messageId: answered.message.id, used: false } });
+    });
+  }, [kind, onAnswered, visible, threadId]);
+  useEffect(() => {
+    if (finished === null) return;
+    if (!visible || kind !== "guide" || (threadId !== finished.answered.threadId && threadId !== finished.answered.startedThreadId)) {
+      finished.act.used = true;
+    }
+  }, [finished, visible, kind, threadId]);
+  return visible && kind === "guide" && finished?.answered.threadId === threadId ? finished.act : null;
+}
 
 /**
  * **May this finished answer act at all?** Not one the reader stopped, and not

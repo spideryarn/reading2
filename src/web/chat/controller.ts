@@ -183,10 +183,13 @@ export type SpokenLanded =
  * a refused retry puts an old answer back without a `done`, and a transcript
  * loaded from the server never streams at all, so none of them is one.
  *
- * Both ids are the server's: the `begin` frame swapped them before any `done`.
+ * The thread and message ids are the server's: `begin` swapped them before
+ * any `done`. `startedThreadId` also names the turn before that correction.
  */
 export interface Answered {
   readonly threadId: string;
+  /** The name at Send, before `begin` corrected it; a mounted panel may still hold that name. */
+  readonly startedThreadId: string;
   readonly message: ChatMessage;
 }
 
@@ -242,6 +245,8 @@ export class ChatController {
   #spokenWaiters = new Map<OpId, (landed: SpokenLanded) => void>();
   /** Who is told of each `Answered` — an event, so nobody mounted later hears an old one. */
   #answered = new Set<(answered: Answered) => void>();
+  /** The starting name of each live turn, retained through its server-id correction. */
+  #startedThreadIds = new Map<OpId, string>();
 
   /** No side effects here — the hook builds one during a render. */
   constructor(slug: string, effects: ChatEffects, onSettled?: () => void) {
@@ -348,6 +353,10 @@ export class ChatController {
     const before = this.#current;
     const { state, commands } = reduce(before.state, event);
     const operation = "opId" in event ? before.state.operations.get(event.opId) : undefined;
+    const startedThreadId = operation?.kind === "turn" ? this.#startedThreadIds.get(operation.id) ?? operation.threadId : null;
+    if (event.type === "turn.started" && state !== before.state && state.operations.has(event.op.id)) {
+      this.#startedThreadIds.set(event.op.id, event.op.threadId);
+    }
     /* A lost stream or refused write is still being reconciled. Its recovery
        or repair will notify when it finishes, including after detach. */
     const handedOver = event.type === "turn.disconnected" && state.operations.has(event.recovery.id)
@@ -388,7 +397,7 @@ export class ChatController {
         .find((t) => t.id === operation.threadId)
         ?.messages.find((m) => m.id === operation.replyId);
       if (message?.status === "done") {
-        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, message });
+        for (const listener of [...this.#answered]) listener({ threadId: operation.threadId, startedThreadId: startedThreadId ?? operation.threadId, message });
       }
     }
     for (const command of commands) this.#perform(command);
@@ -495,9 +504,9 @@ export class ChatController {
     this.#onThreadId.clear();
   }
 
-  /** Forget the callbacks of turns that have finished. */
+  /** Forget the callbacks and starting names of turns that have finished. */
   #prune(state: ChatState): void {
-    for (const callbacks of [this.#onThreadId, this.#onConfirmed]) {
+    for (const callbacks of [this.#onThreadId, this.#onConfirmed, this.#startedThreadIds]) {
       for (const id of [...callbacks.keys()]) {
         if (!state.operations.has(id)) callbacks.delete(id);
       }

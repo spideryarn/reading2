@@ -33,7 +33,7 @@ const micro = async (n = 8) => {
 /** A controller with one guide turn open and its `begin` frame received. */
 async function opened(
   settledAnswer: ChatEffects["settledAnswer"] = async () => null,
-): Promise<{ c: ChatController; sink: TurnSink }> {
+): Promise<{ c: ChatController; sink: TurnSink; latestSink(): TurnSink }> {
   let sink: TurnSink | null = null;
   const effects: ChatEffects = {
     loadThreads: () => new Promise(() => {}),
@@ -74,10 +74,32 @@ async function opened(
   if (!s) throw new Error("the turn did not open its stream");
   s.began({ threadId: SERVER_THREAD, title: "Guide", messageId: SERVER_REPLY, questionId: "spya-gds1qn" });
   await task();
-  return { c, sink: s };
+  return { c, sink: s, latestSink: () => {
+    if (!sink) throw new Error("the turn did not open its stream");
+    return sink;
+  } };
 }
 
 const ANSWER = "I've opened Structure for you.\n\n[cmd:mode:mode%3Astructure]";
+
+function replaceAnswer(c: ChatController, shape: "retry" | "edit") {
+  const question = c.threads[0]?.messages[0];
+  if (!question) throw new Error("there is no question to replace");
+  const replyId = shape === "retry" ? SERVER_REPLY : "spya-gdedrp";
+  c.startTurn({
+    type: "turn.started",
+    op: {
+      id: asOpId(`spya-gd-${shape}`), kind: "turn", shape,
+      threadId: SERVER_THREAD, replyId,
+      reply: { id: replyId, role: "assistant", text: "", createdAt: AT, status: "pending" },
+      question: shape === "edit" ? { ...question, text: "Show the structure" } : null,
+      editing: shape === "edit" ? question.id : null,
+      opening: null, title: null, at: AT, began: false, attempt: null,
+    },
+    payload: {},
+  });
+  return replyId;
+}
 
 describe("the controller's Answered event", () => {
   it("tells a listener once when the stream ends with done, with the server's ids", async () => {
@@ -89,6 +111,7 @@ describe("the controller's Answered event", () => {
     sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
     expect(heard).toHaveLength(1);
     expect(heard[0]?.threadId).toBe(SERVER_THREAD);
+    expect(heard[0]?.startedThreadId).toBe(LOCAL_THREAD);
     expect(heard[0]?.message.id).toBe(SERVER_REPLY);
     expect(heard[0]?.message.status).toBe("done");
     expect(heard[0]?.message.text).toBe(ANSWER);
@@ -168,5 +191,42 @@ describe("the controller's Answered event", () => {
     sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
     expect(gone).not.toHaveBeenCalled();
     expect(stays, "the others still hear it").toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["retry", "edit"] as const)("tells the committed answer for a successful %s", async (shape) => {
+    const { c, sink, latestSink } = await opened();
+    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
+    const heard: Answered[] = [];
+    c.onAnswered((a) => heard.push(a));
+    const replyId = replaceAnswer(c, shape);
+    const next = latestSink();
+    next.began({ threadId: SERVER_THREAD, title: "Guide", messageId: replyId });
+    next.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
+    expect(heard).toHaveLength(1);
+    expect(heard[0]?.startedThreadId).toBe(SERVER_THREAD);
+    expect(heard[0]?.message).toBe(c.threads[0]?.messages.at(-1));
+  });
+
+  it.each(["retry", "edit"] as const)("does not announce an old answer restored by a refused %s", async (shape) => {
+    const { c, sink, latestSink } = await opened();
+    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
+    const heard = vi.fn();
+    c.onAnswered(heard);
+    replaceAnswer(c, shape);
+    expect(c.threads[0]?.messages.at(-1)?.status).toBe("pending");
+    latestSink().refused("try again");
+    expect(c.threads[0]?.messages.at(-1)?.text).toBe(ANSWER);
+    expect(c.threads[0]?.messages.at(-1)?.status).toBe("done");
+    expect(heard).not.toHaveBeenCalled();
+  });
+
+  it("does not announce a done frame from a turn superseded by deletion", async () => {
+    const { c, sink } = await opened();
+    const heard = vi.fn();
+    c.onAnswered(heard);
+    c.dispatch({ type: "delete.started", op: { id: asOpId("spya-gddltd"), kind: "delete", threadId: SERVER_THREAD } });
+    sink.done({ text: ANSWER, citations: [], searches: 0, model: "m" });
+    expect(c.threads).toHaveLength(0);
+    expect(heard).not.toHaveBeenCalled();
   });
 });

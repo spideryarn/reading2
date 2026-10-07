@@ -15,7 +15,7 @@
  * and the `done` frame in the same task as the last delta (window open, so
  * React hears of the finished answer only at the window's end).
  */
-import { createElement, useSyncExternalStore } from "react";
+import { createElement, useEffect, useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatMessage } from "../src/types.js";
@@ -38,7 +38,7 @@ vi.mock("../src/web/lib/api.js", async () => {
   };
 });
 
-const { Conversation } = await import("../src/web/ChatPanel.js");
+const { ChatPanel, Conversation } = await import("../src/web/ChatPanel.js");
 const { ChatCommands } = await import("../src/web/CommandChip.js");
 
 const SLUG = "a-guided-article";
@@ -71,7 +71,7 @@ afterEach(async () => {
   await settle(2);
 });
 
-function setUp() {
+function setUp(panel = false) {
   let sink: TurnSink | null = null;
   const effects: ChatEffects = {
     loadThreads: () => new Promise(() => {}),
@@ -90,14 +90,40 @@ function setUp() {
   const c = new ChatController(SLUG, effects);
   const mode = vi.fn((_p: { key: string }) => CLOSE);
   const executor = { runners: { mode }, sources: { modes: MODES } };
+  let select: (id: string | null) => void = () => {};
 
   function Band() {
     const snap = useSyncExternalStore(c.subscribe, c.getSnapshot);
-    const thread = snap.threads.find((t) => t.id === THREAD);
+    const [selected, setSelected] = useState<string | null>(THREAD);
+    useEffect(() => { select = setSelected; }, []);
+    const thread = snap.threads[0];
     if (!thread) return null;
-    return createElement(ChatCommands, {
-      executor,
-      children: createElement(Conversation, {
+    if (panel) return <ChatCommands executor={executor}>{createElement(ChatPanel, {
+        slug: SLUG,
+        threads: [...snap.threads],
+        threadId: selected,
+        loaded: true,
+        loadFailed: false,
+        onThread: () => {},
+        onJump: () => {},
+        recovering: snap.recovering,
+        blocks: new Map<string, string>(),
+        onSend: () => {},
+        onSendNew: () => {},
+        onNew: () => {},
+        onDiscard: () => {},
+        onRename: () => {},
+        onDelete: () => {},
+        canStartOver: false,
+        onRetry: () => {},
+        onEdit: () => {},
+        onStop: () => {},
+        focusNonce: 0,
+        error: null,
+        kind: "chat",
+        onAnswered: c.onAnswered,
+      })}</ChatCommands>;
+    return <ChatCommands executor={executor}>{createElement(Conversation, {
         slug: SLUG,
         thread,
         onJump: () => {},
@@ -113,8 +139,7 @@ function setUp() {
         onDraft: () => {},
         kind: thread.kind,
         onAnswered: c.onAnswered,
-      }),
-    });
+      })}</ChatCommands>;
   }
 
   const reply: ChatMessage = { id: REPLY, role: "assistant", text: "", createdAt: AT, status: "pending" };
@@ -136,11 +161,11 @@ function setUp() {
       attempt: null,
     },
     payload: {},
-  });
+  }, (id) => select(id));
   root.render(createElement(Band));
   const s = sink as TurnSink | null;
   if (!s) throw new Error("the turn did not open its stream");
-  return { sink: s, mode };
+  return { sink: s, mode, select: (id: string | null) => select(id) };
 }
 
 const LINES = ["I've opened Structure for you, so you can see how the parts fit.", "", "[cmd:mode:mode%3Astructure]"];
@@ -148,6 +173,58 @@ const TEXT = LINES.join("\n");
 const chips = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonElement>("button.cmd-chip")];
 
 describe("a guide answer streamed through the controller", () => {
+  it("acts through the real panel when a new guide is named and finishes in one buffered task", async () => {
+    const { sink, mode } = setUp(true);
+    await settle();
+    sink.began({ threadId: "spya-gdsvth", title: "Guide", messageId: "spya-gdsvrp" });
+    sink.delta(TEXT);
+    sink.done({ text: TEXT, citations: [], searches: 0, model: "m" });
+    await settle();
+    expect(chips(), "the server-named conversation drew the finished answer").toHaveLength(1);
+    expect(mode).toHaveBeenCalledTimes(1);
+  });
+
+  it("acts through the real panel after the corrected thread id has committed", async () => {
+    const { sink, mode } = setUp(true);
+    await settle();
+    sink.began({ threadId: "spya-gdsvth", title: "Guide", messageId: "spya-gdsvrp" });
+    await settle();
+    sink.done({ text: TEXT, citations: [], searches: 0, model: "m" });
+    await settle();
+    expect(chips()).toHaveLength(1);
+    expect(mode).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not release a completion after leaving the guide and reopening it", async () => {
+    const { sink, mode, select } = setUp(true);
+    await settle();
+    sink.began({ threadId: "spya-gdsvth", title: "Guide", messageId: "spya-gdsvrp" });
+    await settle();
+    select(null);
+    await settle();
+    sink.done({ text: TEXT, citations: [], searches: 0, model: "m" });
+    await settle();
+    select("spya-gdsvth");
+    await settle();
+    expect(chips()).toHaveLength(1);
+    expect(mode).not.toHaveBeenCalled();
+  });
+
+  it("spends a completion in a hidden band and does not release it when shown", async () => {
+    const { sink, mode } = setUp(true);
+    await settle();
+    host.style.display = "none";
+    sink.began({ threadId: "spya-gdsvth", title: "Guide", messageId: "spya-gdsvrp" });
+    sink.done({ text: TEXT, citations: [], searches: 0, model: "m" });
+    await settle();
+    expect(chips()).toHaveLength(1);
+    expect(mode).not.toHaveBeenCalled();
+    host.style.display = "block";
+    sink.delta("ignored after done");
+    await settle();
+    expect(mode).not.toHaveBeenCalled();
+  });
+
   it("opens the mode when done arrives in a later task than the last delta", async () => {
     const { sink, mode } = setUp();
     await settle();

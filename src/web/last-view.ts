@@ -762,11 +762,11 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
        needs there to be none. */
     firstOpenFor.current =
       view === "article" && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
-    /* **The add page's mark holds the default** until the purpose read has
-       answered, because no reason stored may mean the guide rather than
-       Summary (first-open-purpose.ts, plan 261007j F4). Measured here, at the
-       claim, so `PurposePrompt` can know whether to ask before the settings
-       store has answered. Every arrival holds afresh or drops the hold. */
+    /* **The add page's mark holds this arrival's decision**, so it can apply
+       the guide immediately and let the purpose read decide only the modal
+       (first-open-purpose.ts, plan 261007o). Measured here, at the claim, so
+       `PurposePrompt` can know whether a band fits before the settings store
+       has answered. Every arrival holds afresh or drops the hold. */
     holdFirstOpen(
       firstOpenFor.current !== null && peekAskPurpose(slug)
         ? { slug, readerId, ordinary: firstOpenSearch(usableWidth(), rootFontPx()) }
@@ -799,7 +799,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
      the mark and suppressed its modal, but no guide/default can ever be
      released. `App` hands this hook a null slug until the session is known, so
      `readerId` already answers signed-in status for this held path. The apply
-     still waits for the purpose outcome in first-open-purpose.ts.
+     no longer waits for the purpose outcome (first-open-purpose.ts, plan 261007o).
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never
@@ -823,9 +823,9 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
       );
       if (href !== null) history.replaceState(history.state, "", href);
     };
-    /* Held by the add page's mark: applied when the purpose read answers,
-       which may be now (first-open-purpose.ts). `firstOpenHref` is asked
-       then, so a reader who moved meanwhile is still left alone. */
+    /* Held by the add page's mark: applied immediately, without waiting on
+       either read (first-open-purpose.ts). `firstOpenHref` still checks that
+       the address names this arrival and carries no explicit article state. */
     if (held) releaseWhenDecided(slug, readerId, apply);
     else apply(firstOpenSearch(usableWidth(), rootFontPx()));
   }, [slug, view, readerId, loaded, signedIn]);

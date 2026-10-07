@@ -90,7 +90,7 @@ export function holdFirstOpen(next: { slug: string; readerId: string | null; ord
   hold = next === null ? null : { ...next, outcome: null, apply: null, applied: false };
 }
 
-/** Whether this slug and reader's first-open default is waiting on the purpose read. */
+/** Whether this slug and reader have the marked first-open decision, independent of settings readiness. */
 export function firstOpenHeld(slug: string, readerId: string | null): boolean {
   return hold !== null && hold.slug === slug && hold.readerId === readerId;
 }
