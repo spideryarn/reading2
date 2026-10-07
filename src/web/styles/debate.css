@@ -26,11 +26,11 @@
    there is deliberately nothing here that draws a *proportion* — no width driven
    by a value, no gradient, no `--heat-*`.
 
-   **The exception, and why it is not one.** `.dbt-bar` below is a threshold the
-   reader drags, and it stands on the same ground as `.gloss-gate`, `.srch-gate`
-   and `.quotes-bar`: it is a **control**, not a reading. What it moves over is
-   how directly the AI judged a claim row to bear on its claim — *loosely*,
-   *partly*, *directly* — and the three are drawn **identically**: ordered, but
+   **The exception, and why it is not one.** Claims' relevance bar is a
+   threshold the reader drags, and it is the same control every other band's
+   slider is (`.gloss-gate`, glossary.css): a **control**, not a reading. What
+   it moves over is how directly the AI judged a claim row to bear on its claim
+   — *loosely*, *partly*, *directly* — and the three are drawn **identically**: ordered, but
    not coloured or sized along that order. A ramp over one judgment would be the
    composite docs/project/quotes.md refuses, drawn instead of computed. Its
    value reads in words rather than digits for the same reason. Adding a
@@ -68,64 +68,20 @@
 
 /* ---- the debate panel's relevance bar ----
    How directly a page has to bear on its claim to stay on Claims' list
-   (DebatePanel.tsx § RelevanceBar). Deliberately the same rules as `.gloss-gate`,
-   `.srch-gate` and `.quotes-bar` above — one idea in the reader's hands, one
-   look, whichever band it is in — and grouped by selector rather than merged
-   into one class for the reason recorded there: the four panels' paddings differ
-   and always have.
+   (DebatePanel.tsx § RelevanceBar). It is drawn with the glossary's slider
+   classes, `.gloss-gate*` in glossary.css — one idea in the reader's hands, one
+   look, whichever band it is in — and has no rule of its own here. Until
+   2026-10-07 it had a copy of all ten under `.dbt-bar*` (plan 261007a § K5).
 
    The one visual difference is the value, which is **words rather than a
-   number**, so it is not mono: a proportional face is what stops
-   *"bears partly · 2 of 3"* reading as a reading off an instrument. The count
-   after it is short enough to live in the same run of text. */
-.dbt-bar {
-  padding: 0.4rem 0.7rem 0.5rem;
-  border-bottom: 1px solid var(--rule);
-}
-.dbt-bar-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.dbt-bar-label {
-  color: var(--ink-faint);
-  font-size: 0.83rem;
-  text-transform: lowercase;
-}
-.dbt-bar-value {
-  margin-left: auto;
-  color: var(--ink-soft);
-  font-size: 0.79rem;
-  white-space: nowrap;
-}
-.dbt-bar-reset {
-  display: flex;
-  align-items: center;
-  padding: 0.1rem;
-  border: none;
-  background: none;
-  color: var(--ink-faint);
-  cursor: pointer;
-}
-.dbt-bar-reset:hover { color: var(--ink); }
-.dbt-bar-reset:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.dbt-bar-range {
-  display: block;
-  width: 100%;
-  margin: 0.3rem 0 0;
-  accent-color: var(--highlight-text);
-  cursor: pointer;
-}
-.dbt-bar-range:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 2px; }
-/* Said in words, because a bar that is hiding every response looks exactly like
-   a search that found none — which on this panel is a real and common answer,
-   and the one thing it must never be confused with. */
-.dbt-bar-note {
-  margin: 0.3rem 0 0;
-  color: var(--ink-faint);
-  font-size: 0.81rem;
-  line-height: 1.35;
-}
+   number**, so it is not mono: `.gloss-gate-value.in-words`, beside the rule it
+   modifies. The count after it is short enough to live in the same run of
+   text.
+
+   Its foot line is printed only when the bar is hiding something, because a bar
+   that is hiding every response looks exactly like a search that found none —
+   which on this panel is a real and common answer, and the one thing it must
+   never be confused with. */
 
 /* **Only headings we can stand behind** (DebatePanel.tsx § Two sub-modes):
    *Names this piece by its title only* over Reception's title-only rows, and in
