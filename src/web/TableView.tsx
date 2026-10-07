@@ -72,6 +72,7 @@ import {
 import { hasOriginalPdf, PdfFigureNotes, pdfFigureNotesIn } from "./PdfFigureNote.js";
 import { useFoldArticle } from "./fold.js";
 import { FoldToggle } from "./FoldToggle.js";
+import { mastheadEcho } from "./masthead-echo.js";
 
 /**
  * How long the live region stays empty between two announcements.
@@ -781,9 +782,23 @@ function TableViewInner({
 }: Props) {
   useRenderCount("TableView");
   const { blocks } = article;
+  /* **The leading rows that only repeat the masthead are not drawn** (Greg,
+     spya-t6cdve: the title was on the page twice). They keep their rows, and
+     the fold store hides their cells and answers for them, so everything that
+     measures a row already knows (fold.ts § The masthead's echo). For an
+     owner and a visitor alike: both come through this table. Keyed on the
+     title and the rename as well as the blocks, because a rename changes the
+     answer and leaves `blocks` the same array.
+     docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md */
+  const title = article.meta.title;
+  const { titleOverridden } = article;
+  const echo = useMemo(
+    () => mastheadEcho({ blocks, meta: { title }, titleOverridden }),
+    [blocks, title, titleOverridden],
+  );
   /* Which article the fold store is about, and ⌘⌥T — fold.ts. Subscribes to
      nothing, so folding never re-renders this table; the chevrons do that. */
-  useFoldArticle(slug, blocks);
+  useFoldArticle(slug, blocks, echo);
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
   /**
    * The figure the reader asked to see larger, or null. A *copy* of the html
