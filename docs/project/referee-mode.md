@@ -461,7 +461,8 @@ was. Whether Delete should instead detach the comments was question 3b, and the 
 | deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
 | places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
 
-The sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts). The two
+The ceiling sentence is in [`src/saved-criteria.ts`](../../src/saved-criteria.ts); the other
+sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts). The two
 foreign-key refusals are matched **by name**, before the store guard drops the name, with
 `violatesForeignKey` ([`src/store/db-errors.ts`](../../src/store/db-errors.ts)). They are caught
 rather than checked for in advance: a read for comments followed by the delete can be raced by a

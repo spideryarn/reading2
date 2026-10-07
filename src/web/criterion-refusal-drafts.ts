@@ -7,8 +7,7 @@
  */
 import { isSpideryarnId } from "../ids.js";
 import { isDivergingScale, isRefereeCriterionKind } from "../referee-criteria.js";
-import { isCriteriaAtCeiling } from "../referee-criteria-store.js";
-import type { SavedCriterion } from "../saved-criteria.js";
+import { isCriteriaAtCeiling, type SavedCriterion } from "../saved-criteria.js";
 import { storageReader } from "./lib/storage-reader.js";
 
 function isDraft(value: unknown): value is SavedCriterion {
