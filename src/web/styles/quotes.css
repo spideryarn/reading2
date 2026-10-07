@@ -192,14 +192,17 @@
 
 /* **Under a finger, the ⓘ sits above its id rather than beside it.** Both
    carry `.tap-target` (tap-target.css): the ⓘ's reaches 40 × 40, the id's is
-   bounded to its own width and 24px tall. Side by side they were 2.3px apart,
+   bounded to its own width and 1.3rem tall. Side by side they were 2.3px apart,
    so the ⓘ's target would have taken the id's left half; Greg's rule for that
    is "the row grows instead" (2026-10-07). Stacked, the column is 40px wide —
    narrower than the 54px pair it replaces, so the quote gets wider — and the
-   gap holds both targets' overhang: 11.6px below the ⓘ and 5.75px above the
-   id at a 16px root, 12.2 and 4.3 at the 12px root the app supports.
+   gap holds both targets' overhang. Row padding contains the first and last
+   targets too: otherwise a short row's id overlaps the next row's ⓘ, and
+   the first ⓘ is clipped at the list's top. At a 12px root the info target
+   reaches 12.2px above its button, held by 8px row + 6px side padding.
    Plan 261007h § F5a. */
 @media (any-pointer: coarse) {
+  .quotes-row { padding-block: 8px; }
   .quotes-row-side {
     flex-direction: column;
     align-items: center;

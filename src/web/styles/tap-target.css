@@ -59,4 +59,19 @@
     --tap-w: 0px;
     --tap-h: 1.3rem;
   }
+
+  /* Chip-only flex lines can be much shorter than a prose line. Reserve
+     each id's overhang between wrapped lines AND at the container edges:
+     .58rem type + .75rem gap exceeds the 1.3rem target; .4rem padding holds
+     its .36rem overhang. This also separates spoken pointers without `why`
+     across adjacent li elements. :has() outranks the later component gaps,
+     and limits the spacing to rows with real links. */
+  .gloss-where:has(> .tap-target),
+  .tweets-from:has(> .tap-target),
+  .chat-pointed li:has(> .tap-target),
+  .simple-refs:has(> .tap-target),
+  .quiz-evidence:has(> .tap-target) {
+    row-gap: 0.75rem;
+    padding-block: 0.4rem;
+  }
 }

@@ -180,7 +180,7 @@ export function BlockRef({ id, onJump, quotes, className, linkBase, children, pr
   }
   const href = blockHref(id, linkBase);
   /* **A finger's target, on the bare id only** (tap-target.css, bounded there
-     to the id's width and 24px tall). Not on a phrase: it is already a line of
+     to the id's width and 1.3rem tall). Not on a phrase: it is already a line of
      text tall, and an inline link that wraps would stretch its `::after` from
      its first line to its last, over everything between. Not on the missing
      span above, which is not a link. Plan 261007h § F5a. */

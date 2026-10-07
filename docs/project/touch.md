@@ -483,20 +483,25 @@ controls the sweep measured as small at 390: Quotes' ⓘ (17px), a bare passage 
 in" (18px). **`any-pointer`, not `pointer`**, for close.css's reason: nothing is drawn, so there is
 no chrome to ration, and an iPad with a keyboard still has a reader tapping the glass.
 
-What it took to keep one target from taking another's taps, measured with `elementFromPoint` at 390
-under a touch pointer:
+The original sweep measured the gaps below with `elementFromPoint` at 390 under a touch pointer.
+The [F5a review](../plans/261007h-f5a-code-review-sol.md) then added clearance at row boundaries;
+its root-size arithmetic is guarded, but its sandbox could not launch Chrome.
 
 - **Quotes' ⓘ sat 2.3px left of its passage id**, so a 40px target would have taken the id's left
   half. Under a finger the two stack in a 40px column with 18px between them (quotes.css § a
   finger) — the row grows instead, and the quote gets wider, since the column is narrower than the
-  pair was.
+  pair was. Row padding also contains their targets at the list's top and between adjacent short
+  rows; stacking alone left the previous row's id under the next row's ⓘ.
 - **A passage id is bounded**: its own width, 1.3rem tall. Ids sit 3.2px apart in a chip row, and a
   chat answer can put two runs of chips on consecutive lines 8.8px apart; 24px tall overlapped
   there. A phrase link does not take the class (it is a line tall already, and an inline link that
   wraps would stretch its `::after` across the lines between), nor does an id the article no longer
-  has, which is not a link.
+  has, which is not a link. Chip-only flex lines can be shorter than that prose line: the coarse
+  rules in `tap-target.css` give wrapped Glossary, Tweets, spoken pointers, Simple references and
+  Quiz evidence room between lines and at the row edges.
 - **A section heading's 13px overhang** would have reached the body under it by 1px, so a
-  collapsible heading takes 16px below it instead of 12 under a finger.
+  collapsible heading takes `max(1rem, 14px)` below it under a finger. The physical floor also
+  clears the fixed-size chevron at the supported 12px root.
 
 [controls.md](controls.md) has the row; [261007h § F5a](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md)
 has the numbers.

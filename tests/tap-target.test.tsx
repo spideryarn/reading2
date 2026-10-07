@@ -149,6 +149,39 @@ describe("the class", () => {
     const gap = /(?:^|;|\s)gap:\s*([\d.]+)px/.exec(side ?? "");
     expect(Number(gap?.[1]), "the gap between ⓘ and id is too small for both targets").toBeGreaterThanOrEqual(18);
   });
+
+  it.each([
+    ".gloss-where:has(> .tap-target)",
+    ".tweets-from:has(> .tap-target)",
+    ".chat-pointed li:has(> .tap-target)",
+    ".simple-refs:has(> .tap-target)",
+    ".quiz-evidence:has(> .tap-target)",
+  ])("%s reserves space between wrapped ids and at both container edges", (selector) => {
+    const rule = declsFor(coarse, selector);
+    expect(rule, "chip-only wrapped rows need their own coarse clearance").toBeDefined();
+    const gap = /row-gap:\s*([\d.]+)rem/.exec(rule ?? "");
+    const padding = /padding-block:\s*([\d.]+)rem/.exec(rule ?? "");
+    /* The smallest bare id is .58rem high; its target is 1.3rem. Chip
+       borders and larger caller type only add room. Padding contains the
+       edge halos too, including adjacent spoken pointers with no `why`. */
+    for (const rootSize of [12, 16]) {
+      expect((0.58 + Number(gap?.[1])) * rootSize, "wrapped targets intersect").toBeGreaterThanOrEqual(1.3 * rootSize);
+      expect(Number(padding?.[1]) * rootSize, "target leaves the container").toBeGreaterThanOrEqual((1.3 - 0.58) * rootSize / 2);
+    }
+  });
+
+  it("contains the info and id targets inside even a shortest Quotes row", () => {
+    const row = declsFor(coarse, ".quotes-row");
+    const padding = /padding-block:\s*([\d.]+)px/.exec(row ?? "");
+    expect(padding, "the internal 18px gap does not protect adjacent rows").not.toBeNull();
+    for (const rootSize of [12, 16]) {
+      const edge = Number(padding?.[1]);
+      const infoHeight = 12 + 0.3 * rootSize;
+      /* .quotes-row-side already has .5rem padding above its info button. */
+      expect(edge + 0.5 * rootSize, "first info target is outside its row").toBeGreaterThanOrEqual((40 - infoHeight) / 2);
+      expect(edge, "last id target is outside its row").toBeGreaterThanOrEqual((1.3 - 0.58) * rootSize / 2);
+    }
+  });
 });
 
 describe("the controls that carry it", () => {
@@ -200,6 +233,21 @@ describe("the controls that carry it", () => {
     );
     const button = host.querySelector("h2 > button");
     expect(button?.classList.contains("tap-target")).toBe(true);
+  });
+
+  it("reserves physical clearance below a collapsible heading even at a 12px root", () => {
+    mount(<>
+      <Section label="Foldable" keywords="x" collapsible>body</Section>
+      <Section label="Plain" keywords="x">body</Section>
+    </>);
+    const [foldable, plain] = [...host.querySelectorAll("h2")];
+    const clearance = "tw:any-pointer-coarse:mb-[max(1rem,14px)]";
+    expect(foldable?.classList.contains(clearance)).toBe(true);
+    expect(plain?.classList.contains(clearance)).toBe(false);
+    expect(plain?.querySelector(".tap-target")).toBeNull();
+    for (const rootSize of [12, 16]) {
+      expect(Math.max(rootSize, 14)).toBeGreaterThanOrEqual((40 - 13) / 2);
+    }
   });
 
   it("'Forgot your password?' and 'back to sign in' do", async () => {
