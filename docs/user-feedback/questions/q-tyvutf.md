@@ -1,7 +1,7 @@
 ---
 id: q-tyvutf
 report: spya-tddvg2
-status: open
+status: answered
 asked: 2026-10-07
 title: May the guide open a mode itself, rather than offering a button?
 refs: SPIDERYARN-READING2-E7 · qi-kc47m5pw · docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md · docs/user-feedback/261006_2201-a-guide-in-chat-that-knows-why-you-are-reading.md
@@ -19,3 +19,9 @@ C. The guide may also start searches itself. Closest to your description. A host
 What decides it: how much a press per suggestion bothers you in use, against how much you trust the article not to steer.
 
 Recommendation: A for a week of use, then B if the presses feel like friction. Not C.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> q-tyvutf yes. err on the side of capability for the guide, unless there's high risk/stakes
+
+The guide may open modes and run free actions itself; anything that spends money or acts outside the article stays a button. qi-kc47m5pw.

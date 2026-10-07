@@ -1,7 +1,7 @@
 ---
 id: q-kgrhm4
 report: spya-tddvg2
-status: open
+status: answered
 asked: 2026-10-07
 title: Should the guide be the first thing a new article opens on, and speak first?
 refs: SPIDERYARN-READING2-E7 · qi-yfa6gs7m · docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md · docs/user-feedback/261006_2201-a-guide-in-chat-that-knows-why-you-are-reading.md
@@ -21,3 +21,9 @@ D. B or C only for new readers (no other article opened yet), Summary for everyo
 What decides it: whether the first screen should orient the piece (Summary) or orient the reader (the guide), and whether 10 cents an article is worth an unprompted opening.
 
 Recommendation: D with B's free greeting. New readers get the guide, experienced ones keep Summary, and nothing is spent unasked.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> q-kgrhm4 yes. but perhaps with a fixed starting message?
+
+The guide opens on every new article, with a fixed (free) greeting rather than a model-written one. qi-yfa6gs7m.
