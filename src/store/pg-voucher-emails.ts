@@ -35,7 +35,8 @@
  *
  * Everything after the event — reserve, the creator lookup, the send, complete
  * — is caught here and logged with a label and the delivery id, never an
- * address, a body, the note or the recipient's name (a database error's message can quote a query's
+ * address, a body, the note, the recipient's name or a starter's link, which
+ * may carry a private link's key (a database error's message can quote a query's
  * parameters, so only its `name` is logged). It never throws to its caller. A
  * failure leaves `queued` (never reserved) or `sending` (never completed), and
  * both can be retried.
@@ -58,6 +59,7 @@ import {
   freeArticles,
   giftEmailGreeting,
   giftEmailHeading,
+  giftEmailStarterLine,
   giftEmailSubject,
 } from "../admin-vouchers.js";
 import { type Articles, type Points, articles as toArticles, budgetFor, ingestHeadroom } from "../billing/points.js";
@@ -183,23 +185,60 @@ function greetingRow(name: string | null): string {
 }
 
 /**
- * **What the administrator wrote for the recipient**: their name and the note
- * to them. One named object rather than two adjacent `string | null`
- * arguments, which could be swapped without a type error (261007f, Sol's F9).
+ * **The starter article, as the email links it** (plan 261007j): its title,
+ * which is the author's text, and its address — the plain public one, or the
+ * private link with its key on, which is why this is rendered here and kept in
+ * the one email and nowhere else. Resolved by src/store/voucher-starter.ts.
+ */
+export interface GiftStarter {
+  readonly title: string;
+  readonly url: string;
+}
+
+/**
+ * **What the administrator chose for the recipient**: their name, the note to
+ * them, and the article to start with. One named object rather than adjacent
+ * `string | null` arguments, which could be swapped without a type error
+ * (261007f, Sol's F9).
  */
 export interface GiftWords {
   /** Their name, raw; null for no greeting. */
   readonly recipientName: string | null;
   /** The note to them, raw; null for none. */
   readonly recipientNote: string | null;
+  /**
+   * The starter article; absent or null for none, and then the email is byte
+   * for byte what it was before starters existed. Optional so that the golden
+   * assertions from 261007f, which predate it, still say exactly that.
+   */
+  readonly starter?: GiftStarter | null;
 }
 
 const NO_WORDS: GiftWords = { recipientName: null, recipientNote: null };
 
+/** The orange button, for the email's own action and for the starter's link. */
+function buttonHtml(button: { readonly label: string; readonly url: string }): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${button.url}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">${button.label}</a></td></tr></table>`;
+}
+
+/**
+ * The starter's line and its *Read it* button, between the note and our own
+ * words, or nothing at all. The title is the author's text and the address
+ * carries a key: both escaped here, though neither should need it — an address
+ * we built has no quote or ampersand in it today. Plan 261007j.
+ */
+function starterRows(starter: SaidStarter | null): string {
+  if (starter === null) return "";
+  return (
+    `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 12px 0;">${escapeNoteHtml(starter.line)}</td></tr>\n` +
+    `<tr><td style="padding:0 0 24px 0;">${buttonHtml({ label: "Read it", url: escapeNoteHtml(starter.url) })}</td></tr>\n`
+  );
+}
+
 /**
  * One email in the shape of supabase/templates/confirmation.html. Every value
- * interpolated is ours, **except `name` and `note`**, which are escaped here,
- * at the one place they meet markup.
+ * interpolated is ours, **except `name`, `note` and `starter`**, which are
+ * escaped here, at the one place they meet markup.
  */
 function giftHtml(parts: {
   readonly subject: string;
@@ -208,6 +247,8 @@ function giftHtml(parts: {
   readonly name: string | null;
   /** The note to the recipient, raw; null for none. */
   readonly note: string | null;
+  /** The starter article's line and address, cleaned and otherwise raw; null for none. */
+  readonly starter: SaidStarter | null;
   readonly paragraphs: readonly string[];
   readonly button: { readonly label: string; readonly url: string };
   readonly after: string;
@@ -234,9 +275,9 @@ function giftHtml(parts: {
 <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
 </td></tr>
 <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">${parts.heading}</td></tr>
-${greetingRow(parts.name)}${noteRow(parts.note)}${paragraphs.join("\n")}
+${greetingRow(parts.name)}${noteRow(parts.note)}${starterRows(parts.starter)}${paragraphs.join("\n")}
 <tr><td style="padding:0 0 28px 0;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="${parts.button.url}" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">${parts.button.label}</a></td></tr></table>
+${buttonHtml(parts.button)}
 </td></tr>
 <tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">${parts.after}</td></tr>
 <tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
@@ -259,9 +300,17 @@ const FOOTER_TEXT =
  * (plan 261002b). Both are escaped where they meet the HTML
  * (`escapeNoteHtml`). They go directly under the heading, the greeting first,
  * above anything we wrote, in both audiences, and never in the subject.
+ *
+ * **And the starter article** (plan 261007j), after the note and before our own
+ * words: one line naming it, and its address — on a line of its own in the
+ * text, behind a *Read it* button in the HTML. Its title is the author's text,
+ * treated as the name is. Its address may carry a private link's key, so it is
+ * never logged, never in the subject, and this rendered email is the one copy
+ * of ours (tests/voucher-starter.test.ts).
+ *
  * **Never the private note, the creator or the voucher id** —
  * tests/billing-voucher-emails.test.ts pins that, for both audiences. With
- * neither, the email is byte for byte what it was before either existed.
+ * none of the three, the email is byte for byte what it was before any existed.
  */
 export function giftMessage(
   articles: number,
@@ -275,26 +324,50 @@ export function giftMessage(
   const said: Said = {
     name: cleanRecipientName(words.recipientName),
     note: cleanedNote === "" ? null : cleanedNote,
+    starter: words.starter ? { line: starterLine(words.starter.title), url: words.starter.url } : null,
   };
   return audience.kind === "reader"
     ? readerGiftMessage(articles, audience.plan, said)
     : inviteGiftMessage(articles, said);
 }
 
+/** The starter once its title is cleaned: the sentence, and where it points. */
+interface SaidStarter {
+  readonly line: string;
+  readonly url: string;
+}
+
 /** `GiftWords` once cleaned: what the two letters below are written from. */
 interface Said {
   readonly name: string | null;
   readonly note: string | null;
+  readonly starter: SaidStarter | null;
+}
+
+/** Formatting that could reorder the sentence around a title: dropped, as a name's is. */
+const BIDI_CONTROLS = /\p{Bidi_Control}/gu;
+
+/**
+ * **The starter's sentence, from the author's title**: one line (`oneLine`, so
+ * a line break in a title cannot draw a line of its own, and a very long one is
+ * cut with an ellipsis), with bidi controls gone. A title that cleans to
+ * nothing says *an article* rather than an empty pair of quotes.
+ */
+function starterLine(title: string): string {
+  const flat = oneLine(title.replace(BIDI_CONTROLS, " "), 200);
+  return flat === "" ? "Here is an article in Spideryarn, to start with:" : giftEmailStarterLine(flat);
 }
 
 /**
- * The text part's greeting and note, each on its own lines between the heading
- * and the intro, or nothing.
+ * The text part's greeting, note and starter, each on its own lines between
+ * the heading and the intro, or nothing. The starter's address goes on the line
+ * under its sentence, so a mail client makes it a link by itself.
  */
 function saidLines(said: Said): string[] {
   return [
     ...(said.name === null ? [] : [giftEmailGreeting(said.name), ""]),
     ...(said.note === null ? [] : [said.note, ""]),
+    ...(said.starter === null ? [] : [said.starter.line, said.starter.url, ""]),
   ];
 }
 
@@ -326,6 +399,7 @@ function inviteGiftMessage(articles: number, said: Said): RenderedEmail {
     heading: giftEmailHeading(articles),
     name: said.name,
     note: said.note,
+    starter: said.starter,
     paragraphs: [intro, how],
     button: { label: "Sign in or create an account", url: LOGIN_URL },
     after,
@@ -383,6 +457,7 @@ function readerGiftMessage(articles: number, plan: ReaderStanding, said: Said): 
     heading: giftEmailHeading(articles),
     name: said.name,
     note: said.note,
+    starter: said.starter,
     paragraphs,
     button: { label: "Open Spideryarn", url: HOME_URL },
     after,

@@ -193,3 +193,41 @@ on 2026-10-07.
   starter on readdress needs a typed result to reach the page: done. F4 and F5 (P2) the link and
   import chains would copy delicate client code: taken further than asked, by linking out to the
   add page and the article's card, which is Sol's own simpler version.
+- 2026-10-07: **Stage 1 built** by an Opus subagent, not committed. Migration
+  `drizzle/20261007110028_billing_voucher_starter_article.sql` (two nullable columns, the FK
+  `on delete set null`, and a CHECK `billing_vouchers_starter_has_slug`: an id without its slug
+  would make a replay look starter-less). Not applied to the shared local database; the suites
+  build their own from this tree's `drizzle/`.
+  - **Where it went.** Resolution is a new file, `src/store/voucher-starter.ts` (`resolveStarter`):
+    one owner-scoped named-column read of the article, the title from the existing
+    `loadArticleIdentity` (the revision's own title, never the owner's rename), the key from
+    `pgShareLinkStore.read`, the address from `articleUrl` + `withShareKey`. `createVoucher` runs
+    the replay comparison first (`replayOf`, shared with the lost-insert path) and only then
+    resolves; `updateVoucher` resolves in its unlocked pre-read when the change will send, and an
+    attempt whose locked read disagrees retries rather than send without asking. Both go through
+    the injectable `deps.resolveStarter`. The routes call `pgVoucherStore`, a new
+    `guardDbStore("vouchers", { listVouchers, createVoucher, updateVoucher })`; the claim stays
+    unguarded, since its route already logs the error's name alone. The sketch's line is
+    `giftEmailStarterLine` in `src/admin-vouchers.ts`, ready for stage 2; `VoucherUpdated` is the
+    PATCH answer's wire type. `useAdminVouchers` is unchanged: its `update` still returns
+    `string | null`, and making it return the typed `starter` is stage 2's, with the page.
+  - **What the plan did not know.** The new key makes `billing_vouchers` article-scoped by the
+    export guard's rule, which drags in `billing_voucher_emails` and `billing_accounts`: all three
+    are declared not exported in `src/store/article-rows.ts`. `tests/store-shelf-pg.test.ts` gained
+    the voucher as a fifth deliberate `set null` survivor of an article delete. The list shows a
+    revision with no stored title by its slug, where the email falls back to the first heading
+    (`loadArticleIdentity`); a deleted starter is `{ slug, title: null }`. `LAST_UPDATED` on
+    `/privacy` was already 7 October 2026.
+  - **Red first.** `tests/voucher-starter.test.ts` (18 cases) went red before any code (400
+    *Unexpected field*, missing paragraph). F1 was then watched red for the real reason: with the
+    starter built and the routes on the bare functions, both the create and the readdress case
+    failed with the sentinel key in the logged Drizzle error (`params: … ?key=SENTINEL…`) and in
+    what `captureFailure` was handed; the HTTP body did not carry it. Green after the routes moved
+    to `pgVoucherStore`. Five deliberate breaks each failed exactly their test: the replay check
+    removed (replay after link off/rotated/deleted), the starter slug out of the replay comparison
+    (different starter → 409), the readdress email without the starter (reads the key afresh),
+    `sendsGift` always true (unchanged address resolves nothing), `e.body_text` added to
+    `latestVoucherEmails` (bodies pin). The privacy clause test was red before the page changed.
+    The no-starter goldens in `tests/billing-voucher-emails.test.ts` pass unedited.
+  - **Gates.** `npm run typecheck` green; the touched suites green; full `npm test` 1800 of 1806
+    files before the export/shelf fixes above, the rest listed in the stage report.

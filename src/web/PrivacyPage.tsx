@@ -294,7 +294,8 @@ export function PrivacyPage() {
               (docs/plans/261002a), hence its second clause; and since the same day
               it may carry a note from whoever gave it (docs/plans/261002b),
               and since 2026-10-07 the recipient's name as that person typed it
-              (docs/plans/261007f). The
+              (docs/plans/261007f) and a link to a starter article, private
+              or public (docs/plans/261007j). The
               copy of each reader's feedback mailed to us is docs/plans/261002j. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
@@ -304,7 +305,8 @@ export function PrivacyPage() {
             our domain’s mail forwarding at Namecheap, to our own inbox. An administrator can also give
             a gift of free articles to an email address, and that address is sent one email saying
             so, with a short note from whoever gave it, if they wrote one, and the recipient’s name as that person
-            gave it, if they gave one — if it is already your account’s, the email also says how many articles you had left
+            gave it, if they gave one, and a link to one of their articles, if they chose one — for an article that
+            is not public, a private link that lets whoever holds it read that article — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
             it. When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you
             were on, and your email address — the same way. If you send us feedback through the Feedback button and we

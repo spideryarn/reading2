@@ -6,8 +6,11 @@
  * (docs/plans/261005e-share-an-article-with-some-people-a-private-link-first.md):
  * anybody holding it and the slug can read the article. One response in the
  * app is allowed to carry it, the owner's
- * `GET`/`POST`/`DELETE /api/article/:slug/share-link`, and this file is what
- * holds the rest of the tree to that.
+ * `GET`/`POST`/`DELETE /api/article/:slug/share-link`; and one other thing,
+ * which is not a response: the gift voucher email that links a private starter
+ * article, rendered and kept in `billing_voucher_emails` and sent through
+ * Resend (docs/plans/261007j-gift-voucher-starter-article-by-private-link.md).
+ * This file is what holds the rest of the tree to that.
  *
  * ## What it can see, and what it cannot
  *
@@ -68,6 +71,25 @@ describe("the private link's key", () => {
       "src/store/link-shared-slug.ts",
       /* The owner's store: the one place that selects it and writes it. */
       "src/store/pg-share-link.ts",
+    ]);
+  });
+
+  /**
+   * **Who asks the owner's store for the key.** The first case pins who may
+   * *name* the column; this pins who may call the one read that *returns* it,
+   * so a third caller — a third place the key can be carried from — is a line
+   * somebody has to add here.
+   */
+  it("is read out of the store by two callers, and each says where it goes", () => {
+    const READ = /\b(?:pgS|s)hareLinkStore\.read\(/;
+    const callers = SOURCES.filter((file) => READ.test(code.get(file) ?? ""));
+    expect(callers).toEqual([
+      /* The owner's `GET /api/article/:slug/share-link`: to the owner's card. */
+      "src/routes.ts",
+      /* A gift voucher's starter (261007j): into that voucher's email, which is
+         kept in `billing_voucher_emails` and sent through Resend, and nowhere
+         else — not the voucher's row, its list or a log. tests/voucher-starter.test.ts. */
+      "src/store/voucher-starter.ts",
     ]);
   });
 

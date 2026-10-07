@@ -207,7 +207,15 @@ review that reshaped it):
   nothing. The renderer takes the
   two as one object, `{ recipientName, recipientNote }`, so they cannot be passed the wrong way
   round. With no name the email is byte for byte what it was, which
-  `tests/billing-voucher-emails.test.ts` holds as whole-email snapshots. It is one of two letters, chosen before the
+  `tests/billing-voucher-emails.test.ts` holds as whole-email snapshots. And it may link a
+  **starter article** ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)):
+  after the note, *Here is "<title>" in Spideryarn, to start with:* and a *Read it* button (the
+  address on its own line in the text part), to the public page or, for a private article, its
+  private link — so this kept email holds a key, which is why the voucher writes go through
+  `guardDbStore` and nothing logs the address
+  ([security-map.md](security-map.md#and-since-2026-10-05-there-is-a-second-way-in-which-is-a-key)).
+  The title is the author's, cleaned to one line and escaped; never in the subject. A readdress
+  resolves the starter afresh and leaves it out if it can no longer be linked. It is one of two letters, chosen before the
   event's transaction by `giftAudienceFor` ([261002a](../plans/261002a-fb99-voucher-email-for-existing-user.md)):
   - **An existing reader** — exactly one account with that address *confirmed*, found in the same
     count-checked account list `/admin/users` reads — is told the articles they had left on Free and

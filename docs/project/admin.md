@@ -811,10 +811,10 @@ checks for each of them:
 
 | Route | Does |
 |---|---|
-| `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`) and free usage — `private, no-store` |
-| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id` |
-| `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued; a different body under that id → 409 |
-| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, recipientName, email, revoked }`; the address only while unclaimed (409 after) |
+| `GET /api/admin/vouchers` | every voucher, newest first, with each claimant's current address (the Auth Admin API, `accountEmail`), free usage and `starter: { slug, title } \| null` (never its link) — `private, no-store` |
+| `POST /api/admin/vouchers` | `{ id, email, articles, note?, recipientNote?, recipientName?, starterSlug? }` → a waiting voucher, `created_by` the administrator's id, and its email to the recipient queued. The browser mints `id`. A starter must be one of the administrator's own articles (400 otherwise), published, and public or with its private link on (409 otherwise); the route reads the link, never makes one ([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)) |
+| `POST /api/admin/vouchers` (replayed) | the same `id` and the same body again → 200 and the original, nothing queued, whatever has happened to the starter since; a different body under that id → 409 |
+| `PATCH /api/admin/vouchers/:id` | any of `{ articles, note, recipientNote, recipientName, email, revoked }`, never the starter; the address only while unclaimed (409 after). A real change of address answers `email: "queued"`, and for a voucher with a starter `starter: "kept"` or `"dropped"` (no longer linkable, so the new email went without it) |
 | `POST /api/admin/voucher-emails/:id/retry` | send one of a voucher's emails again, when the server allows it → 202 |
 
 Bodies are validated strictly (`parseNewVoucher`, `parseVoucherPatch` in

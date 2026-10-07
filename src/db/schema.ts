@@ -6258,6 +6258,24 @@ export const billingVouchers = spideryarn.table(
      * render exactly as the note is. Null is no greeting. Plan 261007f.
      */
     recipientName: text("recipient_name"),
+    /**
+     * **The starter article**: one of the administrator's own, linked from the
+     * gift email (plan 261007j). Here for the voucher list's title; null when
+     * there was none, or once the article is deleted.
+     *
+     * **Which article, never the key.** A private article's link is read for
+     * the email when it is queued (src/store/voucher-starter.ts) and frozen
+     * into that one email, not kept here.
+     */
+    starterArticleId: uuid("starter_article_id").references(() => articles.id, { onDelete: "set null" }),
+    /**
+     * **The starter's slug, as the create named it**, kept when the article is
+     * deleted. Two jobs the id cannot do once it is nulled (Sol's F2 and F3 on
+     * the plan): a replayed create is the same create only if it names the same
+     * starter, and a readdress knows there *was* one, so it can say it dropped
+     * it. Key-free, like the id.
+     */
+    starterSlug: text("starter_slug"),
     createdAt: createdAt(),
     /** The administrator who made it. A plain uuid, like every admin id. */
     createdBy: uuid("created_by").notNull(),
@@ -6291,6 +6309,13 @@ export const billingVouchers = spideryarn.table(
     check(
       "billing_vouchers_recipient_name_length",
       sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 80`,
+    ),
+    /* An article without the slug it was named by would make a replay of its
+       create look like one with no starter. The other way round is the deleted
+       article, and is fine. */
+    check(
+      "billing_vouchers_starter_has_slug",
+      sql`${t.starterArticleId} is null or ${t.starterSlug} is not null`,
     ),
     /* A claim is an account and a moment, or neither. */
     check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),
