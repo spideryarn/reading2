@@ -22,7 +22,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LibraryEntry, LibraryTermsResponse } from "../src/types.js";
 
 function entry(slug: string, title: string, over: Partial<LibraryEntry> = {}): LibraryEntry {
@@ -47,11 +47,14 @@ function entry(slug: string, title: string, over: Partial<LibraryEntry> = {}): L
    Unopened is outside both and has never been opened. */
 const SHELF = [
   entry("inside", "Inside", { tags: ["ai"] }),
-  entry("outside", "Outside"),
+  entry("outside", "Outside", { tags: ["other"] }),
   entry("unopened", "Unopened", { opens: 0 }),
 ];
 const TERMS: LibraryTermsResponse = {
-  terms: [{ key: "bees", label: "Bees", articles: [{ slug: "inside", count: 3 }] }],
+  terms: [
+    { key: "bees", label: "Bees", articles: [{ slug: "inside", count: 3 }] },
+    { key: "hives", label: "Hives", articles: [{ slug: "unopened", count: 1 }] },
+  ],
   scope: { articles: 3, works: 3, skipped: 0 },
   pending: 0,
   chosenBy: "program",
@@ -65,15 +68,35 @@ const HITS = SHELF.map((e, i) => ({
   rank: 1,
 }));
 
+const ARCHIVED = entry("archived", "Archived", { opens: 0, tags: ["ai"], archivedAt: "2026-10-01T00:00:00Z" });
+let archiveState: "loaded" | "loading" | "failed";
+let topicState: "loaded" | "loading" | "failed";
+beforeEach(() => {
+  archiveState = "loaded";
+  topicState = "loaded";
+});
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
+}
+
+function listingResponse(state: "loaded" | "loading" | "failed", body: unknown): Response | Promise<Response> {
+  if (state === "loading") return new Promise<Response>(() => {});
+  if (state === "failed") return json({ error: "listing unavailable" }, 503);
+  return json(body);
+}
+
 vi.mock("../src/web/lib/api.js", () => ({
   apiFetch: async (url: string) => {
-    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-    if (url.startsWith("/api/library/terms")) return json(TERMS);
+    if (url.startsWith("/api/library/terms")) return listingResponse(topicState, TERMS);
     if (url === "/api/library") return json({ articles: SHELF });
+    if (url === "/api/library?archived=1") return listingResponse(archiveState, { articles: [ARCHIVED] });
     if (url.startsWith("/api/library/search?")) {
-      const query = new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("q") ?? "";
-      const hits = query === "zibble" ? HITS : [];
-      return json({ query, archived: false, hits, articles: hits.length, capped: false, archivedArticles: 0 });
+      const params = new URLSearchParams(url.slice(url.indexOf("?") + 1));
+      const query = params.get("q") ?? "";
+      const archived = params.get("archived") === "1";
+      const hits = query === "zibble" ? [...HITS, ...(archived ? [{ slug: ARCHIVED.slug, title: ARCHIVED.title, blockId: "spya-k3m9qx", text: "a zibble in Archived", rank: 1, archived: true }] : [])] : [];
+      return json({ query, archived, hits, articles: hits.length, capped: false, archivedArticles: 0 });
     }
     return json({ error: "unmocked" }, 404);
   },
@@ -144,7 +167,8 @@ async function show(path: string) {
     root.render(createElement(NuqsAdapter, null, createElement(Library, { readerId: "reader" })));
   });
   const until = Date.now() + 3000;
-  while (!host.textContent?.includes("zibble in") && !host.textContent?.includes("passages found")) {
+  while (!host.textContent?.includes("zibble in") && !host.textContent?.includes("passages found") &&
+         !host.textContent?.includes("Nothing in the articles' text matches")) {
     if (Date.now() > until) throw new Error(`timed out waiting for the passages at ${path}`);
     await settle(20);
   }
@@ -154,11 +178,83 @@ async function show(path: string) {
 const passageTitles = () =>
   [...host.querySelectorAll("section li a")]
     .filter((a) => a.textContent?.includes("zibble"))
-    .map((a) => a.querySelector("span")?.textContent?.trim());
+    .map((a) => a.querySelector("span > span")?.textContent?.trim());
 const cardTitles = () =>
   [...host.querySelectorAll("main > ul:not([aria-label]) > li h2")].map((h) => h.textContent?.trim());
 
 describe("the passages under the cards", () => {
+  it("can observe a matching card, so the body-only cases' empty card assertions have a positive control", async () => {
+    await show("/?q=inside");
+    expect(cardTitles()).toEqual(["Inside"]);
+    expect(passageTitles()).toEqual([]);
+  });
+  const combinations = [false, true].flatMap((archived) =>
+    [false, true].flatMap((unread) =>
+      [false, true].flatMap((topic) =>
+        [false, true].map((tag) => ({ archived, unread, topic, tag })),
+      ),
+    ),
+  );
+  it.each(combinations)("combines archived=$archived, unread=$unread, topic=$topic and tag=$tag", async ({ archived, unread, topic, tag }) => {
+    const params = new URLSearchParams({ q: "zibble" });
+    if (archived) params.set("archived", "1");
+    if (unread) params.set("show", "unread");
+    if (topic) params.set("topics", "bees");
+    if (tag) params.set("tags", "ai");
+    await show(`/?${params}`);
+    const expected = [
+      ...(!unread ? ["Inside"] : []),
+      ...(!unread && !topic && !tag ? ["Outside"] : []),
+      ...(!topic && !tag ? ["Unopened"] : []),
+      ...(archived && !topic ? ["Archived"] : []),
+    ];
+    expect(passageTitles()).toEqual(expected);
+  });
+
+  it.each(["loading", "failed"] as const)("while topics are %s, applies tags and Unread but ignores the unknown topic", async (state) => {
+    topicState = state;
+    await show("/?topics=bees&tags=ai&show=unread&q=zibble");
+    expect(passageTitles()).toEqual([]);
+    expect(host.textContent).toContain("None of the passages found");
+    expect(host.textContent).toContain("do not match everything chosen above");
+  });
+
+  it.each(["loading", "failed"] as const)("while topics are %s, leaves passages unfiltered just as the cards are", async (state) => {
+    topicState = state;
+    await show("/?topics=bees&q=zibble");
+    expect(passageTitles()).toEqual(["Inside", "Outside", "Unopened"]);
+  });
+
+  it.each(["topics=bees,hives", "tags=ai,other", "topics=bees&tags=other"])("requires every selected set: %s", async (filters) => {
+    await show(`/?${filters}&q=zibble`);
+    expect(passageTitles()).toEqual([]);
+  });
+
+  it.each(["loading", "failed"] as const)("does not call an unread archived hit already opened when the archive is %s", async (state) => {
+    archiveState = state;
+    await show("/?archived=1&show=unread&q=zibble");
+    expect(passageTitles()).toEqual(["Unopened"]);
+    expect(host.textContent).not.toContain("already opened");
+    expect(host.textContent).toContain("3 more passages found are not shown.");
+  });
+
+  it.each(["loading", "failed"] as const)("does not call an archived hit outside its chosen tag when the archive is %s", async (state) => {
+    archiveState = state;
+    await show("/?archived=1&tags=ai&q=zibble");
+    expect(passageTitles()).toEqual(["Inside"]);
+    expect(host.textContent).not.toContain("do not match everything chosen above");
+    expect(host.textContent).toContain("3 more passages found are not shown.");
+  });
+
+  it.each(["loading", "failed"] as const)("when every hit is hidden and the archive is %s, reports only what is shown", async (state) => {
+    archiveState = state;
+    await show("/?archived=1&tags=ai&show=unread&q=zibble");
+    expect(passageTitles()).toEqual([]);
+    expect(host.textContent).toContain("None of the passages found for “zibble” is shown.");
+    expect(host.textContent).toContain("4 more passages found are not shown.");
+    expect(host.textContent).not.toContain("an article that matches everything chosen above");
+  });
+
   it("lists every article's passages when nothing is chosen", async () => {
     await show("/?q=zibble");
     expect(passageTitles()).toEqual(["Inside", "Outside", "Unopened"]);

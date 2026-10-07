@@ -676,11 +676,12 @@ pen pressed it. Plan
 **The passages obey Unread, the topics and the tags, and not the box a second time.** The allowed
 articles are `narrowShelf` with an empty query (`passagesIn` in `Library.tsx`), not the cards on
 screen: the cards have the box's match on title, author and blurb applied, and taking them would
-hide the passage of an article whose body matches and whose card does not. Until 2026-10-07 only
-Unread reached the passages, so a chosen topic listed passages from articles outside it. The
+hide the passage of an article whose body matches and whose card does not. The
 narrowing is in the browser, after the server's cap, so the lines under the list count what was left
 out (*"3 more passages are in articles that do not match everything chosen above"*) and never say
-that nothing matches. `tests/shelf-passages-obey-the-filters.test.tsx`; plan
+that nothing matches. While the archived listing is loading or unavailable, those lines say only
+that passages found are not shown: missing shelf details establish neither reading history nor
+filter membership. `tests/shelf-passages-obey-the-filters.test.tsx`; plan
 [261007a K3](../plans/261007a-ui-sweep-k3-shelf-filter-and-false-copy.md).
 
 | Store | How |

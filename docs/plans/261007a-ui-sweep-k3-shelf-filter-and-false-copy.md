@@ -75,8 +75,10 @@ tag chips' count in `ShelfTagFilter.tsx`, on the same `chipClass`, and went with
 
 Handed over from K2 (it is in no cluster's manifest). With the suggestion list hidden, an Escape an
 input method was using closed the tag popover and dropped the half-typed tag: Radix hears Escape on
-the document before `TagEditor` can. One `isImeComposing` check at the top of `onEscapeKeyDown`.
-Red first, in `tests/shelf-tags-popover.test.tsx`.
+the document before `TagEditor` can. The initial `onEscapeKeyDown` guard prevented dismissal but
+also cancelled the native key. Review replaced it with window capture scoped to this popover,
+stopping propagation without cancelling the input method's default. The callback ref follows the
+portal's actual mount and cleans up the listener. Red first, in `tests/shelf-tags-popover.test.tsx`.
 
 ## Measured in the browser
 
@@ -142,4 +144,39 @@ flags ("Built no arc, thread or glossary"). Not read on screen: the Learn band's
 
 ## Review status
 
-*(filled in after GPT Sol's code review)*
+[GPT Sol's code review](261007a-ui-sweep-k3-code-review-sol.md)
+([prompt](261007a-ui-sweep-k3-code-review-prompt.md)), write-capable, of `c25a46a8d...3aad96ec5`.
+Verdict **ready with these fixes**. Three findings; each checked by the builder against the code,
+all three accepted, none overruled. One round: neither fix that landed is one the review did not
+see.
+
+- **K3-F1:** unavailable archive details made omitted passages sound opened or outside their
+  chosen tag. Four new cases failed, then passed with neutral omission copy; filtering is
+  unchanged. [Root cause](../postmortems/261007b-filter-explanations-turn-missing-article-details-into-evidence-of-exclusion.md).
+- **K3-F2:** composing Escape was cancelled, despite keeping the popover open. The native-default
+  assertion failed, then passed with window capture containment. [Root cause](../postmortems/261007c-cancelling-an-input-method-key-to-suppress-application-dismissal.md).
+- **K3-F3:** `rounded-xs` changes the details trigger's own corners as well as its focus outline.
+  Reported, not fixed, by the reviewer. **Accepted: the builder removed the class.** The outline's
+  corners are square; nothing but the outline and the ink changes on focus.
+
+What the builder checked before keeping each:
+
+- **F1** is real and older than this stage for Unread (an unread archived hit was called "already
+  opened" while the archive loaded); this stage widened it to topics and tags. The two neutral
+  lines are shown only while Include archived is on and its listing is missing
+  (`archivedOn && archivedList === null`).
+- **F2** costs a window listener and a callback ref where the first version was four lines. Kept
+  because the first version had no way to decline Radix's dismissal without cancelling the key:
+  Radix's own dismissal cancels it too, so before this stage a composing Escape was already
+  cancelled *and* the popover closed. The rule in keyboard.md is that a composing key is left
+  untouched, and the capture listener is the only form here that keeps it.
+
+The filter suite now covers all sixteen loaded-scope combinations of Unread, topic, tag and
+Include archived, topics loading/failing, disjoint selected sets, and a positive control for the
+card-title selector. The installed Tailwind compiler confirmed the `outline-none` explanation.
+Native IME interaction and mouse-focus appearance were not measured by this review.
+
+Validation: seven test files run individually, 145 tests passed; all four typecheck projects and
+the coverage check passed. Scoped lint retains the existing `escape` helper-name error in
+`shelf-tags-popover.test.tsx` and the Library complexity advisory, with no new findings.
+No commits were made by the reviewer.

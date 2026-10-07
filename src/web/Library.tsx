@@ -940,6 +940,7 @@ export function Library({
           only={passagesIn}
           chosen={chosenSets.length > 0}
           archived={archivedOn}
+          archiveUnavailable={archivedOn && archivedList === null}
         />
       )}
 
@@ -1327,11 +1328,14 @@ function Passages({
   only,
   chosen,
   archived,
+  archiveUnavailable,
 }: {
   state: ReturnType<typeof useLibrarySearch>;
   query: string;
   /** The Include archived chip — what the search was asked, and what "nothing" means. */
   archived: boolean;
+  /** Search can return archived hits before their shelf details arrive. */
+  archiveUnavailable: boolean;
   /**
    * The slugs the Unread chip and the chosen topics and tags are letting
    * through, or `null` for "everything".
@@ -1395,8 +1399,14 @@ function Passages({
      `nothingLeft`'s phrase for the same filters. */
   const alsoIn = hidden > 0 && (
     <p className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-muted-foreground">
-      {hidden} more {hidden === 1 ? "passage is" : "passages are"} in articles{" "}
-      {chosen ? "that do not match everything chosen above" : "you have already opened"}.
+      {archiveUnavailable ? (
+        <>{hidden} more {hidden === 1 ? "passage found is" : "passages found are"} not shown.</>
+      ) : (
+        <>
+          {hidden} more {hidden === 1 ? "passage is" : "passages are"} in articles{" "}
+          {chosen ? "that do not match everything chosen above" : "you have already opened"}.
+        </>
+      )}
     </p>
   );
 
@@ -1407,8 +1417,12 @@ function Passages({
             caps the list before the filters see it, so "nothing in an
             unopened article matches" is more than this can know. */}
         <p className="tw:m-0 tw:text-sm tw:text-muted-foreground">
-          None of the passages found for “{query.trim()}” is in{" "}
-          {chosen ? "an article that matches everything chosen above" : "an unopened article"}.
+          None of the passages found for “{query.trim()}” is{" "}
+          {archiveUnavailable
+            ? "shown"
+            : chosen
+              ? "in an article that matches everything chosen above"
+              : "in an unopened article"}.
         </p>
         {alsoIn}
       </section>

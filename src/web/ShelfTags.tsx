@@ -14,6 +14,7 @@
  * link's hit area rather than making dead patches on the card.
  */
 
+import { useCallback } from "react";
 import { Plus, Tag } from "lucide-react";
 import { Popover } from "radix-ui";
 
@@ -33,6 +34,28 @@ export function ShelfTags({
   /* On the shelf hook, not here: the table's cells remount on every tag edit
      (useShelf.ts § `tagging`). */
   const open = shelf.tagging === entry.slug;
+  /* Radix's document capture listener cancels Escape to dismiss. Contain a
+     composing Escape before it gets there, leaving the IME's default intact.
+     A callback ref follows the portal's actual mount, which can happen after
+     this component's effects. React 19 runs its returned cleanup on unmount. */
+  const protectComposition = useCallback(
+    (content: HTMLDivElement | null) => {
+      if (!content || !open) return;
+      const view = content.ownerDocument.defaultView;
+      if (!view) return;
+      const contain = (event: KeyboardEvent) => {
+        if (
+          event.key === "Escape" && isImeComposing(event) &&
+          event.target instanceof Node && content.contains(event.target)
+        ) {
+          event.stopPropagation();
+        }
+      };
+      view.addEventListener("keydown", contain, true);
+      return () => view.removeEventListener("keydown", contain, true);
+    },
+    [open],
+  );
   const setOpen = (next: boolean) => shelf.setTagging(next ? entry.slug : null);
   const tags = entry.tags ?? [];
   return (
@@ -62,6 +85,7 @@ export function ShelfTags({
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Content
+            ref={protectComposition}
             side="bottom"
             align="start"
             sideOffset={6}
@@ -70,15 +94,6 @@ export function ShelfTags({
                hears Escape on the document before the editor's own handler can
                stop it, so ask the focused box whether its list is open. */
             onEscapeKeyDown={(e) => {
-              /* Nor does an Escape an input method is using close anything: it
-                 dismisses the candidate words, and with the list hidden it
-                 used to take the popover and the half-typed tag with it.
-                 docs/project/keyboard.md § A key an input method is using is
-                 not ours. */
-              if (isImeComposing(e)) {
-                e.preventDefault();
-                return;
-              }
               const box = document.activeElement;
               if (box?.getAttribute("role") === "combobox" && box.getAttribute("aria-expanded") === "true") {
                 e.preventDefault();

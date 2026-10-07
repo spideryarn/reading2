@@ -102,7 +102,9 @@ describe("ShelfTags' popover", () => {
     });
     const pressEscape = (init: KeyboardEventInit) =>
       act(async () => {
-        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init }));
+        const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+        input.dispatchEvent(event);
+        if (init.isComposing || init.keyCode === 229) expect(event.defaultPrevented).toBe(false);
       });
     /* One Escape of ours shuts the list. It is hidden from here on, which is
        the case the open-list rule above misses. */

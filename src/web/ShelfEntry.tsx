@@ -407,7 +407,7 @@ export function ShelfCard({
           <button
             type="button"
             aria-label={`${note} — details of ${entry.title}`}
-            className="tw:relative tw:cursor-help tw:rounded-xs tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
+            className="tw:relative tw:cursor-help tw:border-b tw:border-dotted tw:border-border tw:bg-transparent tw:p-0 tw:text-xs tw:text-muted-foreground tw:focus-visible:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text"
           >
             {note}
           </button>
