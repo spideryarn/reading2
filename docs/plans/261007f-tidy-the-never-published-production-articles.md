@@ -207,7 +207,12 @@ again for each article **inside `destroy`'s own transaction, after its locks** (
 4. **No billing reservation**, by `article_id` or by slug, any owner.
 5. **No reader state**: zero rows in every reader table in § 2, and no title, purpose, archive,
    share token (now or ever), non-private visibility, publication time, open (count or time), or
-   high-powered-AI switch (`high_power_since`, added on Sol's R4).
+   high-powered-AI switch (`high_power_since`, added on Sol's R4). **And no history that outlives
+   the article** — no `article_share_link_events`, `article_visibility_changes` or
+   `realtime_sessions` row attached (all three `on delete set null`, so the delete would only null
+   their link and the backup cannot put it back). This is what makes "shared, ever" true: `turnOff`
+   clears both share columns without stamping `updated_at`, so a link made and turned off leaves the
+   article row as it was, and only the audit rows remember it (Sol's round-2 D2).
 6. **Quiet for seven days**: every clock is more than seven days old — the article's `created_at`,
    `updated_at` and `last_opened_at`; its jobs' created, started and finished; its checkpoints'
    `created_at` and `last_used_at`; its model calls' `created_at`, `started_at` and `finished_at`;
@@ -239,7 +244,8 @@ npx tsx scripts/never-published-tidy.ts                  # local, dry run
 npx tsx scripts/never-published-tidy.ts --prod           # production, dry run (read-only)
 npx tsx scripts/never-published-tidy.ts --prod --delete \
   --ids <file of reviewed article ids> --backup-dir <dir outside the repo>
-npx tsx scripts/never-published-tidy.ts --restore <backup file>   # the undo; --prod only to undo the real run
+npx tsx scripts/never-published-tidy.ts --restore <backup file> [--ids <subset>]   # the undo, local
+npx tsx scripts/never-published-tidy.ts --prod --restore <backup file> --ids <file>   # the real run's undo
 ```
 
 - **Target.** `--prod` reads `DATABASE_URL` from `.env.prod` directly (`draftBacklogTarget`, shared
@@ -289,6 +295,35 @@ and any row inserted with a foreign key to the article takes a key-share lock th
 so it waits too and then finds the article gone. Tested: a title PATCHed while `destroy` waits on a
 billing lock the test holds is refused under the lock, and the article survives with the title.
 
+**The article lock is not enough on its own** (Sol's round-2 D1). Two writers reach rows the proof
+and the comparison read without taking either parent lock: an `UPDATE` of a checkpoint's `value` or
+`last_used_at` (no foreign-key column changes, so no check of the article), and
+`pgReadingTimeStore.add`, whose composite foreign key key-share-locks the **block identity**, not
+the article. Either could commit after the comparison and be taken by the cascade unseen. So the
+hook first locks the target's `block_identities` and existing `checkpoints` `FOR UPDATE` — one
+statement each, ordered by primary key — and only then runs the proof and the comparison; the
+locks are held to the delete. A writer that got its row lock first is waited for, and its committed
+row is then seen and refused; one that comes later waits, and fails against the deleted row.
+Tested with a lock held on a separate connection and `pg_stat_activity` polled until the delete
+waits: a checkpoint updated after the backup and committed mid-delete is refused (red before); a
+reading-time row inserted before the identity lock is refused and survives (red before); a real
+`add` arriving while the hook holds the locks waits, then fails, and nothing committed is lost.
+
+**Can the lock order deadlock?** Our order is billing row → article row → (jobs) → block
+identities in key order → checkpoints in key order → the delete. Against `destroy`'s own locks and
+every writer that takes the article (a PATCH, an import, `lockOrCreateArticle`): they take billing
+before article too, or the article alone, so they queue at the article and hold nothing we want
+after it — no cycle. A checkpoint **insert** key-share-locks the article (which we hold first) and
+holds no row we lock — no cycle; it fails after our commit. A checkpoint upsert that **updates**,
+and a single-identity reading-time add, each hold one row — no cycle. What remains is two
+multi-row writers, the checkpoint store's `read` (`UPDATE … SET last_used_at` over several keys)
+and a reading-time `add` of several blocks, which lock in scan or batch order rather than key order
+and so *could*, in principle, interleave with ours into a cycle. Postgres's detector then aborts one
+side within `deadlock_timeout` (1 s): if it is ours, `destroy` rolls back and the run stops with
+nothing of that article deleted; if it is theirs, it committed nothing. Neither commits a row the
+cascade then takes unseen. And neither writer has a reason to touch these articles: no reader can
+open a never-published article (so no reading time), and no import is running for one (the rule).
+
 **Cost today, without the index.** `revision_blocks_article_block` (plan
 [261007c](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md) /
 `drizzle/20261007005448_revision_blocks_article_block_index.sql`) is on `dev` and **not** in
@@ -336,6 +371,25 @@ A delete cannot be undone by the app.
   `checkpoints` and the owner's `ai_calls` compared with a snapshot taken before — equal; a second
   restore refuses and changes nothing. **It has not been run against production**, and is to be
   only to undo this plan's delete, by whoever ran it.
+- **A restore of part of a backup** (Sol's round-2 D3). One backup covers every article and each is
+  deleted in its own transaction, so a run that stops at article 2 leaves a backup naming one
+  missing article and twelve present ones — which a whole restore refuses. `--restore <file> --ids
+  <subset>` restores exactly those: the subset must be in the backup, the article rows,
+  identities, checkpoints and ledger links are cut by one filter (`backupOf`, the one the check
+  under the lock uses), and only the selected articles must be absent. Tested: a delete interrupted
+  after the first article, then the second's restore refused, an id outside the backup refused,
+  and the first restored with every column equal.
+- **A backup restores only into its own database, and only what it says it holds** (Sol's round-2
+  D4). The header records `source`, the database's identity —
+  `system <pg_control_system().system_identifier>, database <name> (oid <oid>)`, nothing secret —
+  and a restore refuses unless the target gives the same, before it writes anything. Reading the
+  file refuses one whose header `ids` are not exactly its article rows' ids, or whose identities,
+  checkpoints, ledger links or uploads name an article it does not hold (before this, a hand-edited
+  ledger link re-pointed another article's unlinked model call — tested, red first). And
+  `--restore` against a database that is not local refuses without `--ids`, before connecting: the
+  undo of the real run names its articles, as the delete does. Production's identity is
+  `system 7676203829645141156, database postgres (oid 5)`; the box's local Supabase is
+  `system 7680206532414074919, database postgres (oid 5)`; the dry run prints it as `Source:`.
 
 ## 7. Going forwards
 
@@ -386,7 +440,22 @@ and that waiting for the index is right. Subject to fresh proofs it would allow 
 | **R6** (P2) | Tests did not cover `main`'s orchestration. | `main` takes its world as `MainDeps`; missing or wrong ids, a missing ids file, a remote target without `--prod`, a weak quiet window, a failing backup and a late title each stop it before `destroy`. Each guard removed in turn turns its test red. |
 | **R7** (P2) | No restore; the outside-repo check was lexical; the backup was not verified. | `--restore`, exercised on throwaway local rows, every column equal; real-path check; read-back verification before any delete (§ 6). |
 
-A second, narrow GPT review of R1 and R7 runs before the delete.
+**Round 2.** A second, narrow GPT Sol review of the fixes at `7dec41326`, read-only
+([prompt](261007f-tidy-the-never-published-production-articles-review-2-prompt.md),
+[answer](261007f-tidy-the-never-published-production-articles-review-2-sol.md)). Verdict: **"Safe
+after these changes … I would not run the current script."** It confirmed that a refusal in the
+hook really aborts `destroy`'s transaction, that the reader's Delete button is unchanged, that a
+timestamp formatted differently across connections refuses rather than admits, and R2–R4 and R6.
+Discovery closed with it; D1–D4 were then fixed, each red first and in its own commit:
+
+| finding | what it said | what was done |
+|---|---|---|
+| **D2** (P1) | Neither query refused attached `article_share_link_events`, `article_visibility_changes` or `realtime_sessions` (all `on delete set null`); a share link made and turned off after the backup leaves the article row identical. | Both queries count all three (§ 4, item 5). Tests: create-then-turn-off after the backup is refused, with the article row shown equal to the backup's; one row in each table alone is refused by both queries. Red first; each table removed turns its test red. |
+| **D3** (P2) | A run that stops part-way cannot be undone: `--restore` refuses if any backed-up article is present. | `--restore <file> --ids <subset>` (§ 6). Test: delete interrupted after article 1, restore of article 1 alone, every column equal; no `--ids`, a present id and an id outside the backup each refused. Red first; the subset check and the ledger filter each removed turn it red. |
+| **D4** (P2) | A backup from another database or run is accepted; header ids and child references unchecked; no pinned set for a production restore. | `source` identity in the header, compared before writing; header ids equal to the article rows; every child row names a held article; `--restore` on a non-local target needs `--ids`, refused before connecting (§ 6). Seven tests, red first; each of the four guards removed turns its test red. |
+| **D1** (P1) | The article lock does not freeze checkpoints (updated without a parent lock) or block identities (which a reading-time insert's foreign key locks); either write could commit after the comparison and be cascaded away. | The hook locks identities and checkpoints `FOR UPDATE`, key order, before the proof and comparison, held through the delete (§ 5, with the lock-order reasoning). Three controlled concurrency tests; the first two red first; each lock removed turns its tests red. |
+
+Sol listed the plan conditions to keep after these fixes; they are § How to run it, unchanged.
 
 ## How to run it
 
@@ -427,7 +496,8 @@ A second, narrow GPT review of R1 and R7 runs before the delete.
    ```
 
    No additions. If the dry run disagrees in any way, stop and ask; do not edit the list to fit.
-5. **The second GPT review of R1 and R7 has come back clean**, and the script run is the reviewed one.
+5. **The script run is the reviewed one, with round 2's D1–D4 in it** (§ Review status): Sol's
+   round-2 verdict was "safe after these changes", and they are made.
 
 Then:
 
@@ -437,13 +507,15 @@ npx tsx scripts/never-published-tidy.ts --prod --delete \
 ```
 
 The backup is written and verified before the first delete, by the command itself. Paste its
-whole output under Results, with exactly what was deleted. To undo:
-`npx tsx scripts/never-published-tidy.ts --prod --restore <the backup file it printed>`.
+whole output under Results, with exactly what was deleted. To undo, naming the articles to put
+back — all 13 if it finished, only those it printed as deleted if it stopped part-way:
+`npx tsx scripts/never-published-tidy.ts --prod --restore <the backup file it printed> --ids <file>`.
+The restore refuses a backup whose `source` is not production's.
 
 ## Done means
 
-- GPT Sol's review — done, findings dealt with above; the narrow second review of R1 and R7 —
-  pending.
+- GPT Sol's review — done, findings dealt with above; the narrow second review — done, D1–D4
+  dealt with above.
 - The run in [§ How to run it](#how-to-run-it), its output pasted under Results.
 
 ## Results
@@ -538,6 +610,44 @@ And the index, read-only (`begin read only` / `pg_indexes` / `rollback`, as `spi
 `transaction_read_only = on`, 06:49 UTC): **not yet in production** —
 `revision_blocks_fts`, `revision_blocks_revision_id_block_id_pk`, `revision_blocks_revision_ordinal`.
 
+### Production dry run after round 2's fixes, 2026-10-07, 07:28 UTC
+
+The same command, read-only, with D1–D4 in. Nothing changed; the new `Source:` line is the identity
+a backup taken now would record, and D2's three tables hold nothing back:
+
+```
+Target: postgresql://spideryarn_app.alschkahzfagtppxspfq@aws-0-eu-west-2.pooler.supabase.com:6543/postgres
+Env:    /home/greg/code/spideryarn2/.env.prod
+Mode:   dry run (read-only transaction; see the header for --delete)
+Role:   spideryarn_app
+Source: system 7676203829645141156, database postgres (oid 5)
+Rule:   never published; no revision, job or reservation; no reader state; nothing moved for 7 days
+
+Never-published articles: 13, eligible: 12
+  article id                            short id     created     quiet  ids    ckpt  calls  uploads  held because
+  992df6bf-77c6-4dab-9879-8360f3e28bae  spya-np5eep  2026-09-03    33d    195     0      1        0  (eligible)
+  d64ade3c-abbc-4622-a2cf-f66f4d5cd6a4  spya-ve4avb  2026-09-03    33d    695     0      1        0  (eligible)
+  f55a3fd4-9ed5-46e3-b975-3ed1de5fe1b8  spya-tx8r32  2026-09-03    33d      0     0      0        1  (eligible)
+  bf6cb59f-af56-4b57-9983-87117098f55d  spya-fwp82p  2026-09-04    32d   2024    56     88        1  (eligible)
+  dddf7746-b943-4671-aeab-312f28c1dfbc  spya-ssves7  2026-09-04    32d   2010    54     90        1  (eligible)
+  02e7bc66-67c4-49b5-983e-b240757cd806  spya-g4d2n9  2026-09-04    32d   2036    54     91        1  (eligible)
+  91f949a8-41dd-4fb9-a0f9-af8253e86873  spya-y3wj6a  2026-09-07    29d      0     0      0        1  (eligible)
+  4d91981f-9bb3-4e3a-8ccb-ae443ceeef30  spya-hwsqfk  2026-09-12    24d      0     0      0        0  (eligible)
+  3e954894-9b9d-4ff6-b349-94e5b988a101  spya-yn6pr0  2026-09-28     9d    245     0      1        0  (eligible)
+  60cbe2a2-ac22-444f-89b6-e2320f1d843c  spya-vj2z4v  2026-09-28     9d      0     0      0        0  (eligible)
+  f2b52cf2-0268-4703-bc3e-356b16f307f9  spya-x5ff2s  2026-09-28     9d      0     0      1        0  (eligible)
+  ce425589-a285-4675-9327-ff8794117c2c  spya-fdcs3c  2026-09-28     9d      0     0      0        0  (eligible)
+  82b5bb6c-e603-404c-94da-036719cda430  spya-xytyjz  2026-10-01     5d   2098    32     59        1  recent
+
+The eligible 12 would delete: 7205 block identities, 164 checkpoints, 0 revisions, 0 jobs (cascade / destroy); and unlink 273 ai_calls (kept, article_id set null) and 5 uploads (kept, stale slug).
+
+The second query, over those 12 ids:
+  found 12; published 0; revisions 0; jobs 0; reservations 0; reader state 0; recent 0
+✓ all 12 found, none protected
+
+Nothing deleted.
+```
+
 ### Tests
 
 [`tests/never-published-tidy.test.ts`](../../tests/never-published-tidy.test.ts), private Postgres
@@ -556,6 +666,14 @@ run; and delete-then-`--restore` gives back every column (R7). Seen red: each gu
 read-only re-proof, the hook call in `destroy`, the backup comparison, the real-path check and the
 restore's ledger relink, each removed in turn, fails its test; and the R1, R3 and R4 tests were red
 against the code before their fix.
+
+**After round 2: 61 tests.** Added: one row in each of D2's three tables refused by both queries
+(26 single-item cases now), and a share link made and turned off after the backup refused (D2); a
+partial run restored by `--ids` (D3); seven restore refusals — another database's backup, one with
+no source, a header whose ids are not its rows', a stray ledger link, a stray identity, a remote
+restore without `--ids` — and a same-database round trip (D4); and the three lock interleavings of
+§ 5 (D1). Each was red before its fix (D1's third test is the outcome check, and is red only with the
+identity lock removed); each new guard removed in turn turns its own tests red.
 
 ## Appendix: every statement run against production, with its output
 
