@@ -167,10 +167,41 @@ export const CRITERION_HAS_COMMENTS =
  *
  * The number is spelled from the constant, so the sentence cannot name a
  * ceiling the store does not enforce.
+ *
+ * **And it takes the real count, `n`.** A list can already be past the
+ * ceiling: the old trim spared criteria still being answered, so one could be
+ * inherited above 200 (production's largest was 4 on 2026-10-07, so this is
+ * for correctness, not for a reader we know of). There "200" and "Delete one"
+ * would both be false, so the sentence names `n` and how many deletes leave
+ * room for one more. At exactly the ceiling it is `CRITERIA_AT_CEILING`, word
+ * for word. GPT Sol's C2 in the plan above.
  */
-export const CRITERIA_AT_CEILING =
-  `This article already has ${MAX_CRITERIA} criteria, which is as many as it can hold. ` +
-  "Delete one to add another.";
+export function criteriaAtCeiling(n: number): string {
+  if (n <= MAX_CRITERIA) {
+    return (
+      `This article already has ${MAX_CRITERIA} criteria, which is as many as it can hold. ` +
+      "Delete one to add another."
+    );
+  }
+  return (
+    `This article already has ${n} criteria, and it can hold ${MAX_CRITERIA}. ` +
+    `Delete ${n - (MAX_CRITERIA - 1)} to add another.`
+  );
+}
+
+/** The sentence at exactly the ceiling — the one nearly every refusal says. */
+export const CRITERIA_AT_CEILING = criteriaAtCeiling(MAX_CRITERIA);
+
+/**
+ * **Is this the ceiling's refusal, at any count?** The browser keeps a refused
+ * add as a draft (src/web/criterion-refusal-drafts.ts) only for this refusal,
+ * and the sentence is the only thing the 409 carries. Read the count back out
+ * and rebuild the sentence, so the two forms stay one definition.
+ */
+export function isCriteriaAtCeiling(message: string): boolean {
+  const n = /^This article already has (\d+) criteria/.exec(message)?.[1];
+  return n !== undefined && criteriaAtCeiling(Number(n)) === message;
+}
 
 /**
  * **What a placement is told when its criterion is not there** — a 400, and

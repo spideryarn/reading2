@@ -39,16 +39,15 @@ The second supersedes the first's mechanism: there is no trim left to exempt any
 - **The trim is gone.** `begin` in `src/store/pg-referee-criteria.ts` deletes nothing, commented or
   not, pending or finished.
 - **`MAX_CRITERIA` is 200, a ceiling** (`src/saved-criteria.ts`). `begin` counts the article's
-  criteria and, at 200, throws `criterionRefusal(409, CRITERIA_AT_CEILING)` from inside the
-  transaction, so nothing is inserted. The route answers before any stream opens, as C5's refusal
-  did.
-- **What it counts: every row on the article.** Pending, failed, with comments or without. That is
-  the simplest honest rule. Each one is a criterion the referee asked for and can see and delete, so
-  "how many does this article have" has one answer and the sentence's way out is real. A raw
-  `count(*)`, not the length of the loaded list, because the loader drops a row whose config it
-  cannot read, and a ceiling that skipped those would let the table hold more than it says. Such a
-  row can only come from an import or a hand edit (check constraints forbid it); it counts without
-  being shown.
+  criteria and, at 200 or more, throws `criterionRefusal(409, criteriaAtCeiling(n))` from inside
+  the transaction, so nothing is inserted. The route answers before any stream opens, as C5's
+  refusal did. `n` is the real count, so a list inherited above 200 is told the truth (Review
+  status, C2).
+- **What it counts: every row on the article.** Pending, failed, with comments or without;
+  raw `count(*)`, not the loaded list. Current database constraints make every config readable.
+  A row written outside those constraints would count without being shown, so the sentence's
+  way out cannot be promised for such a database. A visible criterion with comments requires its
+  placements to be cleared before it can be deleted. The counting rule is the builder's choice.
 - **A retry is not an add.** Re-running a failed criterion (same id, same words) resets its row and
   is never refused, at the ceiling or anywhere else.
 - **The race.** `begin` already took `lockArticleRow` (`select … for update` on the article row) as
@@ -59,11 +58,15 @@ The second supersedes the first's mechanism: there is no trim left to exempt any
 - **C5's full-list refusal is deleted.** `CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS`, its sentence,
   the `catch` in `begin` that produced it, its info log line, its tests and its doc row. The client
   had no handling specific to it. `CRITERION_HAS_COMMENTS`, the hand delete's refusal, is unchanged.
-- **The client.** No new code. A 409 before the stream is the hook's ordinary pre-stream failure:
-  `useCriteria` § `send` keeps the typed criterion on screen as a failed row carrying the server's
-  sentence, with Retry, and sets the panel error. It is never shown as added, no other row is
-  touched, and the referee's words are not lost (until a reload: the row was never stored).
-  `tests/use-criteria-refusals.test.tsx` § *an add refused at the ceiling* pins that.
+- **The client.** The pre-stream failure keeps the typed criterion on screen with Retry and
+  the server's sentence. Review reproduced loss on reload and added
+  `src/web/criterion-refusal-drafts.ts`: ceiling refusals are retained in this tab's session
+  storage, keyed by reader and article, until acceptance (`begin`) or explicit deletion. Nothing
+  is automatically re-submitted. If storage is unavailable the hook still keeps the row while
+  mounted. `tests/use-criteria-refusals.test.tsx` pins reload, retry, owner/article separation and
+  draft consumption. This implementation is the reviewer's, not a further product-owner decision.
+  The client recognises the refusal at any count with `isCriteriaAtCeiling`, which reads the
+  number back out of the sentence and rebuilds it, so there is still one definition of the words.
 
 ## The simpler option passed over
 
@@ -78,12 +81,20 @@ one sentence.
 
 ## New reader-facing wording, for Greg to veto
 
-`CRITERIA_AT_CEILING`, in `src/referee-criteria-store.ts`, with the number spelled from the
-constant:
+`criteriaAtCeiling(n)`, in `src/referee-criteria-store.ts`, with the ceiling spelled from the
+constant and `n` the article's real count. Two forms. At exactly 200 (`CRITERIA_AT_CEILING`), which
+is every refusal a list built since 2026-10-07 can get:
 
 > This article already has 200 criteria, which is as many as it can hold. Delete one to add another.
 
-The orchestrator's proposed wording, kept as given. **One reachable case where "Delete one" is not
+Above 200, only for a list inherited from the old trim (for 201, 202, …):
+
+> This article already has 201 criteria, and it can hold 200. Delete 2 to add another.
+
+`Delete {n − 199}` is how many deletes leave 199, so the next add makes 200.
+
+The orchestrator's proposed wording, kept as given; the second form is the orchestrator's
+correction after review C2, the first form's words otherwise unchanged. **One reachable case where "Delete one" is not
 enough on its own:** if a criterion has comments placed on it, deleting it is refused with its own
 sentence (`CRITERION_HAS_COMMENTS`), which says to clear the placements first. Only if all 200 had
 comments would no delete succeed directly. The sentence is not false there, just one step short;
@@ -120,6 +131,7 @@ room has your comments placed on it…"*.
 | accepts the two-hundredth, refuses the next with a sentence, and lets a failed one run again (199 includes a pending, a failed and a commented one; refused twice with every column of every row unchanged; delete one and the add goes through; the pending one still lands its answer) | red | green |
 | lets one of several simultaneous adds at 199 through, and refuses the rest (four adds through the route at once) | red | green |
 | counts this article's criteria and nobody else's (another article of the reader's and another owner's article, each holding a criterion under the same id; untouched by the refusal; the other article still adds) | red | green |
+| tells an inherited list above the ceiling its real count, and how many to delete (202 seeded directly; the 202 and 201 sentences, then the 200 one, then the add goes through after the three deletes the first sentence asked for) — added after review C2 | — | green |
 
 The other owner is a random uuid seeded through `seedAuthUser` for the length of the case and
 deleted after it, so `OWNER_AUDIT` has nothing to account for.
@@ -141,4 +153,27 @@ the race, but a green run is evidence, not proof; the lock is the proof.
 
 ## Review status
 
-Not yet reviewed by GPT Sol. The orchestrator runs that before anything is pushed.
+GPT Sol code review of `a95dae313`, write-capable:
+[prompt](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead-code-review-prompt.md),
+[answer](261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead-code-review-sol.md).
+**Verdict: "do not ship yet", on C2 only.** C2 is now fixed, below.
+
+| | Finding | What happened |
+|---|---|---|
+| C1 | P0. A criterion refused at the ceiling stayed on screen, but its words and poles vanished on reload or a mode change: the server never stored it and the hook dropped it on unmount. | **Fixed by Sol**: `src/web/criterion-refusal-drafts.ts`, session storage keyed by reader and article, cleared on `begin` or an explicit delete, never re-sent by itself. Checked on landing: with `useCriteria.ts` hand-reverted, **3 failed, 17 passed** in `tests/use-criteria-refusals.test.tsx`; restored, all pass. No existing client mechanism does this (`chat-draft.ts` and `search-draft.ts` are in memory by design; there is no autosave helper), so the module stays. Added on landing: a case with `window.sessionStorage` throwing, red with the module's `try/catch` removed, green with it. [Postmortem](../postmortems/261007f-a-refused-row-on-screen-is-not-a-saved-draft.md). |
+| C2 | P1. A list already above 200 (reachable before 2026-10-07: the old trim spared pending rows) was told "already has 200 … Delete one", false twice. | **Fixed** (orchestrator's decision): `criteriaAtCeiling(n)` names the real count and `n − 199` deletes; at 200 the words are unchanged. Both forms are under *New reader-facing wording* above. Sol's characterisation test was turned into the assertion and was red first against Postgres (*Received: "This article already has 200 criteria, which is as many…"*). A hook case pins that the above-200 refusal is kept as a draft too, red first. Production's largest list was 4, so no reader is known to be in this state. |
+| C3 | P2. If every criterion has comments placed on it, "Delete one" omits that the placements must be cleared first. | **Left.** The delete's own refusal (`CRITERION_HAS_COMMENTS`) then says so; one step short rather than false. |
+| C4 | P2. Mirror sends the **oldest** 24 criteria by `(created_at, id)` when there are more, and says how many it left out but not which. | **Left**, reported, not changed. |
+| C5 | P3. Comments and docs claimed every counted row is visible and deletable. | **Fixed by Sol**; checked against `referee_criteria_kind` and `referee_criteria_diverging_shape`, which do make every config `configFromRow` reads valid. Greg's two quotes in referee-mode.md are byte-for-byte as committed in `a95dae313`. |
+
+**Postgres, run for real on landing** (Sol's sandbox had no database): Sol's characterisation as
+written passed (21 of 21 in `tests/referee-routes-postgres.test.ts`, asserting the false sentence);
+rewritten for C2 it went red (1 failed), then green with the fix. Final gates before landing:
+typecheck 4 projects, all 3,374 files covered; `tests/referee-*` **35 files, 627 passed**;
+`referee-routes-postgres`, `store-parity-referee`, `db-referee-criteria`,
+`store-migration-registry`, `doc-links` and `use-criteria-refusals` **6 files, 97 passed**, none
+skipped; Biome on the touched files, 1 info (the existing complexity advisory on `send`).
+
+The concurrent-add case can pass a lockless implementation when requests happen to serialise; its
+mutation reds are evidence rather than proof. The article lock and the sole insert path are the
+ordering argument.

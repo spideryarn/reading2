@@ -457,7 +457,7 @@ was. Whether Delete should instead detach the comments was question 3b, and the 
 
 | The referee | Gets | Sentence |
 |---|---|---|
-| adds a criterion to an article that already has 200 | 409, before any stream opens | `CRITERIA_AT_CEILING` |
+| adds a criterion to an article that already has 200 (or more, inherited from the old trim) | 409, before any stream opens | `criteriaAtCeiling(n)` — the real count, and how many to delete |
 | deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
 | places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
 

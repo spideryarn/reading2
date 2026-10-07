@@ -33,7 +33,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
-import { CRITERIA_AT_CEILING } from "../referee-criteria-store.js";
+import { isCriteriaAtCeiling } from "../referee-criteria-store.js";
 import { isStale } from "../search-stale.js";
 import { criterionRefusalDrafts } from "./criterion-refusal-drafts.js";
 import { apiFetch, failure, fetchOk, statusOf } from "./lib/api.js";
@@ -358,7 +358,7 @@ export function useCriteria(slug: string): CriteriaApi {
           };
           const removed = deleted.current.get(liveId);
           if (removed && removed.scope !== deletionScope) return;
-          if (!removed && (isAdd || wasDraft) && statusOf(e) === 409 && message === CRITERIA_AT_CEILING) {
+          if (!removed && (isAdd || wasDraft) && statusOf(e) === 409 && isCriteriaAtCeiling(message)) {
             drafts.put(failed, wasDraft);
           }
           if (removed) {

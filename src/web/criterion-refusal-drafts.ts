@@ -7,7 +7,7 @@
  */
 import { isSpideryarnId } from "../ids.js";
 import { isDivergingScale, isRefereeCriterionKind } from "../referee-criteria.js";
-import { CRITERIA_AT_CEILING } from "../referee-criteria-store.js";
+import { isCriteriaAtCeiling } from "../referee-criteria-store.js";
 import type { SavedCriterion } from "../saved-criteria.js";
 import { storageReader } from "./lib/storage-reader.js";
 
@@ -16,7 +16,7 @@ function isDraft(value: unknown): value is SavedCriterion {
   const row = value as Partial<SavedCriterion>;
   if (!isSpideryarnId(row.id) || typeof row.criterion !== "string" ||
       typeof row.createdAt !== "string" || row.status !== "error" ||
-      row.error !== CRITERIA_AT_CEILING || !Array.isArray(row.results) ||
+      typeof row.error !== "string" || !isCriteriaAtCeiling(row.error) || !Array.isArray(row.results) ||
       row.results.length !== 0 || !row.config || !isRefereeCriterionKind(row.config.kind)) return false;
   return row.config.kind !== "diverging" ||
     (!!row.config.poles && typeof row.config.poles.against === "string" &&

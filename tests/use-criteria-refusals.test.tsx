@@ -2,8 +2,8 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CRITERIA_AT_CEILING, CRITERION_HAS_COMMENTS } from "../src/referee-criteria-store.js";
-import type { SavedCriterion } from "../src/saved-criteria.js";
+import { CRITERIA_AT_CEILING, CRITERION_HAS_COMMENTS, criteriaAtCeiling } from "../src/referee-criteria-store.js";
+import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
 import type { CriteriaApi } from "../src/web/useCriteria.js";
 import { SignedInReader } from "../src/web/lib/made-for.js";
 
@@ -356,6 +356,19 @@ describe("an add refused at the ceiling", () => {
     expect(api.criteria.find((c) => c.id === id)).toMatchObject({ criterion: "My detailed criterion", config, status: "error", error: CRITERIA_AT_CEILING });
     expect(api.criteria.slice(0, 2)).toMatchObject([first, second]);
     expect(posts).toHaveLength(1);
+  });
+
+  it("keeps a draft refused by a list already past the ceiling, whose sentence names its count", async () => {
+    const above = criteriaAtCeiling(MAX_CRITERIA + 1);
+    expect(above).not.toBe(CRITERIA_AT_CEILING);
+    answer = (_url, init) => Promise.resolve(init.method === "POST"
+      ? json({ error: above }, 409)
+      : json({ criteria: [first, second], sourceHash: "h" }));
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("Past the ceiling", { kind: "single" }); }); await flush();
+    await remount();
+    expect(api.criteria.find((c) => c.id === id)).toMatchObject({ criterion: "Past the ceiling", error: above });
   });
 
   it("keeps a refused retry as a draft until a begin confirms the add", async () => {

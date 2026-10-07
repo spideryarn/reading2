@@ -612,12 +612,12 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       return done?.id as string;
     }
     /** An add that was refused at the ceiling, before any stream, and wrote nothing. */
-    async function refused(criterion: string): Promise<void> {
+    async function refused(criterion: string, sentence = CRITERIA_AT_CEILING): Promise<void> {
       const rowsBefore = await criteriaRows();
       const reply = await add(criterion);
       expect(reply.status, reply.text.slice(0, 300)).toBe(409);
       expect(reply.streamed, "a refusal must be JSON, before any header").toBe(false);
-      expect(reply.body.error).toBe(CRITERIA_AT_CEILING);
+      expect(reply.body.error).toBe(sentence);
       expect(await criteriaRows()).toEqual(rowsBefore);
     }
     /** `n` finished criteria, oldest first, through the store. */
@@ -694,6 +694,39 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
         SLUG, running.row.id, { status: "done", results: [] }, running.attempt,
       ));
       expect(landed?.status).toBe("done");
+    });
+
+    /**
+     * **A list already past the ceiling is told its real count**, and how many
+     * to delete. The former trim spared pending rows, so a list above 200 could
+     * be inherited (production's largest was 4 on 2026-10-07); `begin` now
+     * prevents creating one, so the state is seeded directly. GPT Sol's C2:
+     * the sentence used to say "200" and "Delete one" here, false twice.
+     */
+    it("tells an inherited list above the ceiling its real count, and how many to delete", async () => {
+      await fill(MAX_CRITERIA);
+      const [template] = await criteriaRows();
+      for (const id of ["spya-extraa", "spya-extrab"]) {
+        await getDb().insert(refereeCriteria).values({ ...template!, id, criterion: `inherited ${id}` });
+      }
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA + 2);
+      await refused(
+        "a new criterion",
+        "This article already has 202 criteria, and it can hold 200. Delete 3 to add another.",
+      );
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/spya-extraa`)).status).toBe(200);
+      await refused(
+        "still no room",
+        "This article already has 201 criteria, and it can hold 200. Delete 2 to add another.",
+      );
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/spya-extrab`)).status).toBe(200);
+      // At exactly 200 the sentence is the ordinary one, word for word.
+      await refused("and at the ceiling", CRITERIA_AT_CEILING);
+      const [oldest] = await criteriaIds();
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/${oldest}`)).status).toBe(200);
+      // The sentence's arithmetic was right: that many deletes, and the add goes through.
+      await added("room at last");
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA);
     });
 
     /**

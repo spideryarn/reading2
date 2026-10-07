@@ -51,9 +51,9 @@ import {
 } from "../referee-criteria.js";
 import {
   COMMENTS_CRITERION_FK,
-  CRITERIA_AT_CEILING,
   CRITERION_HAS_COMMENTS,
   CRITERION_SWEPT,
+  criteriaAtCeiling,
   criterionRefusal,
   withCriterion,
 } from "../referee-criteria-store.js";
@@ -234,17 +234,16 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
          drop one silently; hold up to `MAX_CRITERIA` (200) and refuse the next
          with a sentence. docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md
 
-         **It counts every row on the article** — pending, failed, unreadable,
-         with comments or without. Each is a criterion the referee asked for, so
-         "how many criteria does this article have" has one answer, and every
-         one the sentence asks them to delete is one they can see. (A criterion
-         with comments placed on it refuses a delete with its own sentence,
-         `CRITERION_HAS_COMMENTS`, which says what to clear first.)
-         A raw `count(*)`, not `existing.length`: `criteriaFor` drops a row it
-         cannot read, and a ceiling that skipped those would let the table hold
-         more than the constant says. The cost is that such a row, which only
-         an import or a hand edit can make, counts without being shown.
+         **It counts every row on the article** — pending, failed, with
+         comments or without. The current kind and diverging-shape constraints
+         ensure each config is readable. A raw `count(*)` also counts rows
+         outside that contract (e.g. written while constraints were disabled);
+         the loader hides those, so they cannot be deleted from the panel.
+         Counting them preserves the table bound, but cannot promise a visible
+         way out in a database that violates the contract.
 
+         A visible criterion with comments also refuses a delete until its
+         placements are cleared (`CRITERION_HAS_COMMENTS`).
          **Under the article lock, which is the mutex.** Every `begin` on this
          article takes `lockArticleRow` first, so two adds at 199 are counted
          one after the other and the second sees the first's insert: two adds
@@ -257,10 +256,12 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         .select({ n: count() })
         .from(refereeCriteria)
         .where(eq(refereeCriteria.articleId, articleId));
-      if ((counted?.n ?? 0) >= MAX_CRITERIA) {
-        logger.info({ slug, criteria: counted?.n }, "criterion not added: the article is at the ceiling");
-        // Thrown out of the callback, so nothing is written.
-        throw criterionRefusal(409, CRITERIA_AT_CEILING);
+      const n = counted?.n ?? 0;
+      if (n >= MAX_CRITERIA) {
+        logger.info({ slug, criteria: n }, "criterion not added: the article is at the ceiling");
+        // Thrown out of the callback, so nothing is written. The real count, so
+        // a list inherited above the ceiling is told the truth.
+        throw criterionRefusal(409, criteriaAtCeiling(n));
       }
 
       const [inserted] = await tx
