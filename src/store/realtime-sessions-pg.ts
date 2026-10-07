@@ -27,6 +27,7 @@ import type { AiCallRow } from "../ai-spend.js";
 import { getDb } from "../db/client.js";
 import { aiCalls, articles, realtimeSessions } from "../db/schema.js";
 import { aiCallInsertValues } from "./ai-calls-pg.js";
+import { isUuid } from "../ids.js";
 import type { OwnerId } from "../owner.js";
 import type { RealtimeSession, RealtimeSessionStore } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
@@ -111,6 +112,15 @@ const rawPgRealtimeSessionStore: RealtimeSessionStore = {
   },
 
   async find(id: string, ownerId: string): Promise<RealtimeSession | null> {
+    /* **An id that is not a UUID is no session, not a database error.** The id
+       comes off the URL (`/api/live/:sessionId/…`, whose patterns admit any
+       `[\w-]+`), and Postgres refuses to compare a `uuid` column with a string
+       that is not one (SQLSTATE 22P02) — a 500 and a Sentry report for a typo.
+       Every route that takes a session id calls `find` first and answers `null`
+       with its 404, so this one guard covers the writes below it as well.
+       `isUploadId` in [pg-uploads.ts](pg-uploads.ts) is the same guard for the
+       same reason. */
+    if (!isUuid(id)) return null;
     const rows = await getDb()
       .select()
       .from(realtimeSessions)
