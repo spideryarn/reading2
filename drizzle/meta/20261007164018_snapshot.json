@@ -1,5 +1,5 @@
 {
-  "id": "6d70b197-32e3-4b58-adb8-f6f9b52e0ebb",
+  "id": "64fa002c-ff8d-4203-8f9f-e2e14d7eacb9",
   "prevId": "8002ef28-09ea-4123-b19f-b8a9435eee60",
   "version": "7",
   "dialect": "postgresql",
@@ -3105,7 +3105,7 @@
       "checkConstraints": {
         "checkpoints_namespace": {
           "name": "checkpoints_namespace",
-          "value": "\"spideryarn\".\"checkpoints\".\"namespace\" in ('structure-deepen','structure-labels','structure-whole-document','pdf-chunk','illustrated-brief')"
+          "value": "\"spideryarn\".\"checkpoints\".\"namespace\" in ('structure-deepen','structure-labels','structure-whole-document','pdf-chunk')"
         },
         "checkpoints_key_format": {
           "name": "checkpoints_key_format",
@@ -5774,7 +5774,7 @@
       "checkConstraints": {
         "rate_limit_events_bucket": {
           "name": "rate_limit_events_bucket",
-          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice')"
+          "value": "\"spideryarn\".\"rate_limit_events\".\"bucket\" in ('link-preview-fetch', 'link-summary-fill', 'citation-find', 'shelf-topics', 'upload-source-guess', 'citation-investigate', 'dig-deeper', 'feedback-notice', 'help-chat')"
         }
       },
       "isRLSEnabled": false

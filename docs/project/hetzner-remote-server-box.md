@@ -1254,7 +1254,9 @@ is a commit: [`scripts/prune-old-screenshots.ts`](../../scripts/prune-old-screen
 `npm run screenshots:compress -- <file>` quantises a PNG with `pngquant`, about 40% of the size
 with its text unchanged, and `tests/screenshots-compressed.test.ts` fails on a tracked PNG under
 `docs/` that has not been through it
-([`scripts/compress-screenshots.ts`](../../scripts/compress-screenshots.ts)).
+([`scripts/compress-screenshots.ts`](../../scripts/compress-screenshots.ts)). A Claude Code hook runs
+it on the PNGs a `git commit` carries, so nobody has to remember —
+[browser-control.md](browser-control.md) has what it covers.
 
 ## Traps
 

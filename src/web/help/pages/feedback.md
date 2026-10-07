@@ -20,3 +20,7 @@ include your notes, comments, chats or profile.
 The **Earlier** tab lists what you have sent and the page you sent it from, and marks a report
 **Shipped** once a change made for it is live. Most things that go wrong here fail quietly, so even
 a two-line report helps.
+
+For a question about how something in Spideryarn works, try **Ask about Spideryarn** first: the box
+beside every Help page (under the search on [the contents page](/help)) answers from these pages and
+links the one it used. It is there once you are signed in.

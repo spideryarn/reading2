@@ -68,6 +68,7 @@
  * the sake of an effect dependency.
  */
 import {
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -82,6 +83,7 @@ import { DocumentPage } from "../DocumentPage.js";
 import { scrollToAndFlash } from "../flash.js";
 import { isImeComposing } from "../key-chord.js";
 import { Link } from "../Link.js";
+import { SignedInReader } from "../lib/made-for.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
 import { searchSections, type SearchableSection } from "../page-search.js";
 import { FEATURES_HREF, HELP_HREF, navigate, useRoute } from "../router.js";
@@ -106,6 +108,7 @@ import {
   helpPlace,
   helpSearchText,
 } from "./help-content.js";
+import { HelpAsk, useHelpAsk } from "./HelpAsk.js";
 import { HelpSub, PageLink } from "./help-parts.js";
 
 /**
@@ -169,7 +172,18 @@ function titleOf(shown: Shown): string | undefined {
   }
 }
 
+/**
+ * Help keeps its search and answer while a reader moves between Help pages,
+ * but never while the signed-in reader changes. The keyed child removes A's
+ * words before B's first paint and unmounts `useHelpAsk`, whose cleanup aborts
+ * A's paid request. `null` is the one signed-out reader.
+ */
 export function HelpPage() {
+  const readerId = useContext(SignedInReader);
+  return <HelpPageForReader key={readerId ?? "signed-out"} />;
+}
+
+function HelpPageForReader() {
   const route = useRoute();
   /* Mounted only for the `help` route (App.tsx); anything else is a frame of
      leaving, and the contents are as good a thing to draw in it as any. */
@@ -294,6 +308,10 @@ export function HelpPage() {
      the new page marked in it, and on a phone the page is not left under a
      list of matches. */
   const found = results === null ? null : <Results results={results} onTake={() => setQuery("")} />;
+  /* *Ask about Spideryarn*: held here, so the answer survives a move from the
+     contents page, where the box is under the search, to a page, where it is
+     in the column (HelpAsk.tsx § `useHelpAsk`). Plan 261007k, F10. */
+  const askState = useHelpAsk();
 
   return (
     /* The corner logo signed in, `SiteNav` signed out — DocumentPage.tsx,
@@ -321,13 +339,15 @@ export function HelpPage() {
             and why, see <Link href={FEATURES_HREF} className={HELP_LINK_CLASS}>Features</Link>.
           </p>
           {search}
-          {found ?? <ContentsPage />}
+          {found}
+          <HelpAsk state={askState} className="tw:mt-6" />
+          {found === null && <ContentsPage />}
         </div>
       ) : (
         <>
           <Crumb shown={shown} />
           <div className="tw:mt-6 tw:grid tw:grid-cols-1 tw:gap-8 tw:lg:grid-cols-[15rem_minmax(0,1fr)]">
-            <HelpSidebar current={shown} box={search} found={found} />
+            <HelpSidebar current={shown} box={search} found={found} ask={<HelpAsk state={askState} className="tw:mt-5" />} />
             {shown.kind === "questions" ? <QuestionsView /> : <PageView anchor={shown.anchor} />}
           </div>
         </>
@@ -622,8 +642,8 @@ const ROW_CLASS =
 const CURRENT_ROW_CLASS = `${ROW_CLASS} tw:bg-surface-raised tw:font-medium tw:text-foreground`;
 
 /**
- * **A page's left column**: the search box, and under it either the matches
- * or the contents with this page marked.
+ * **A page's left column**: the search box, the matches if it has any, the
+ * *Ask about Spideryarn* box, and the contents with this page marked.
  *
  * **The contents list is drawn twice, and only one is ever displayed**: open
  * in the sticky column at `lg`, and folded inside a `<details>` above the
@@ -637,12 +657,19 @@ function HelpSidebar({
   current,
   box,
   found,
+  ask,
 }: {
   current: Extract<Shown, { kind: "page" | "questions" }>;
   /** The search box. */
   box: ReactNode;
   /** The matches, or null while the box is empty and the contents show. */
   found: ReactNode;
+  /**
+   * *Ask about Spideryarn*, under the search and above the contents, where
+   * the column's first screen shows it. Drawn whether or not a search is
+   * open, so an answer arriving is not unmounted by a keystroke there.
+   */
+  ask: ReactNode;
 }) {
   const column = useRef<HTMLElement>(null);
   const at = current.kind === "page" ? current.anchor : null;
@@ -667,7 +694,9 @@ function HelpSidebar({
       className="tw:lg:sticky tw:lg:top-[calc(3.5rem_+_var(--safe-top))] tw:lg:max-h-[calc(100dvh_-_4.5rem_-_var(--safe-top))] tw:lg:self-start tw:lg:overflow-y-auto"
     >
       {box}
-      {found ?? (
+      {found}
+      {ask}
+      {found === null && (
         <>
           <details className="tw:mt-3 tw:lg:hidden">
             <summary className="tw:cursor-pointer tw:text-sm tw:text-muted-foreground">Contents</summary>

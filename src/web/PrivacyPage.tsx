@@ -488,7 +488,9 @@ export function PrivacyPage() {
           switched to High-powered AI; <code>gpt-5.6-luna</code> for quick jobs and for reading PDFs,
           and, when you ask the command bar to suggest what to do with an article, to write that short
           list, for which it is shown your profile and your reason for reading the article, with our
-          list of commands;{" "}
+          list of commands, and to answer a question you ask in Help’s <em>Ask about Spideryarn</em>{" "}
+          box, for which it is shown that question and the Help pages, and nothing of yours besides
+          (the question is not kept, and is not written to our logs);{" "}
           <code>gpt-6-luna</code> to name the topics above your shelf and sort your articles into them,
           for which it is shown your articles’ titles and one-line summaries (a paper’s abstract, when
           it has no summary yet) and your profile if you wrote one;{" "}

@@ -246,8 +246,8 @@ async function main(): Promise<string[]> {
    * ran over three fixtures of fourteen — and over the other eleven it was
    * false: `drop-every-short-block` removed 1,072 leaf elements and 1,393
    * gistable characters from `ar5iv-attention` with no metric and no gate
-   * moving. GPT Sol, 2026-09-05. So the claim is enforced here as well, over all
-   * fifteen, and this run **exits non-zero** when a pair loses nothing and is
+   * moving. GPT Sol, 2026-09-05. So the claim is enforced here as well, over
+   * every manifest-bearing fixture, and this run **exits non-zero** when a pair loses nothing and is
    * not in `HARMLESS_HERE`.
    */
   const flat: string[] = [];
@@ -483,7 +483,7 @@ async function main(): Promise<string[]> {
       : `\nAll ${polarity.length} fixtures move the card in both directions.`,
   );
 
-  /* -- the claim section B makes, enforced over all fifteen ----------------- */
+  /* -- the claim section B makes, enforced over the manifest-bearing set ----- */
   console.log(
     "\n=== EVERY DEGENERATE ARM HAS TO LOSE, ON EVERY FIXTURE WITH AN ARTICLE IT IS EXERCISED ON ===",
   );

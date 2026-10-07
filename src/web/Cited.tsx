@@ -119,6 +119,20 @@ interface Props {
    * else a `[cmd:…]` is the characters the model wrote. CommandChip.tsx.
    */
   commands?: CommandExecutor | undefined;
+  /**
+   * **Draw a `[label](url)` as a link of the caller's own**, or refuse it.
+   * Absent by default, and for `links`' reason. Given the model's `url` and
+   * the label already drawn, it returns the link, or `null` to have the link
+   * drawn as the characters the model typed. Only Markdown links reach it — a
+   * bare address is `links`' alone — and it is asked before `links` is.
+   *
+   * Written for *Ask about Spideryarn*, whose answer may link the Help's own
+   * pages and nothing else (src/web/help/help-answer-links.ts; plan
+   * docs/plans/261007k-help-chatbot.md, F4). The rule about which addresses
+   * are safe is the caller's, because it is a different rule from
+   * `drawLink`'s web one, not a looser copy of it.
+   */
+  ownLink?: ((url: string, label: ReactNode) => ReactNode | null) | undefined;
   /** Class for the chip wrapper, so each band can size its own. */
   className?: string;
 }
@@ -129,6 +143,7 @@ interface Ctx {
   onJump(id: BlockId, aim?: JumpAim): void;
   links: boolean;
   commands: CommandExecutor | undefined;
+  ownLink: Props["ownLink"];
   className: string | undefined;
   /** The source, for drawing a node as the characters the model wrote. */
   source: string;
@@ -170,6 +185,7 @@ function Drawn({
   partial = false,
   links = false,
   commands,
+  ownLink,
   className,
   flat,
 }: Props & { flat: boolean }): ReactElement {
@@ -183,6 +199,7 @@ function Drawn({
     onJump,
     links,
     commands,
+    ownLink,
     className,
     source: text,
     tail: partial ? lastText(tree, text) : null,
@@ -476,7 +493,9 @@ function drawPhrase(node: PhrasingContent, ctx: Ctx, label: boolean, edges: Edge
     case "link":
       // A link inside a link's own label is not a link. Nor is one at all
       // where the caller has not opted in.
-      return label || !ctx.links ? sourceOf(node, ctx) : drawLink(node, ctx);
+      if (label) return sourceOf(node, ctx);
+      if (ctx.ownLink) return ctx.ownLink(node.url, inline(node.children, ctx, true)) ?? sourceOf(node, ctx);
+      return !ctx.links ? sourceOf(node, ctx) : drawLink(node, ctx);
     default:
       // `image`, `html`, `linkReference`, `footnoteReference`, …
       return sourceOf(node, ctx);
