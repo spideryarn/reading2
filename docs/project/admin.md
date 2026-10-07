@@ -1,5 +1,7 @@
 # The admin page
 
+Up: [security-map.md](security-map.md)
+
 **`/admin`, and the pages under it.** One person can see them. `/admin/users` shows who has signed up
 and how much each has read — counts and dates. `/admin/feedback` shows the bug reports readers filed
 with the Feedback button, in their own words. The others are `/admin/vouchers` (below) and
@@ -15,6 +17,23 @@ Greg, 2026-08-27:
 
 Built the same day. The plan, the options weighed and the review are in
 [260827z-admin-page.md](../plans/260827z-admin-page.md).
+
+## In this doc
+
+- [§ Why this doc is filed under security](#why-this-doc-is-filed-under-security) — the one request that reads across owners
+- [§ The three refusals](#the-three-refusals-and-only-one-of-them-is-a-gate) — which check is the gate, which two are courtesies
+- [§ Who the administrator is](#who-the-administrator-is) — account ids, not an email address
+- [§ What it deliberately does not show](#what-it-deliberately-does-not-show) — the line between metadata and reading
+- [§ The accounts come from the Auth service](#the-accounts-come-from-the-auth-service-not-from-a-query) — why `auth.users` is not queried
+- [§ Where the numbers come from](#where-the-numbers-come-from) — joining the Auth service and our tables
+- [§ The spend column](#the-spend-column-and-the-two-things-that-keep-it-honest) — cost per account, and its two conditions
+- [§ One article's cost](#one-articles-cost-and-only-your-own) — the metadata page's admin-only section
+- [§ The plan and ingest columns](#the-plan-and-ingest-columns) — who is paying
+- [§ The page itself](#the-page-itself) — the `/admin` index and its layout
+- [§ How it is checked](#how-it-is-checked) — the suites, and what each catches
+- [§ `/admin/vouchers`](#adminvouchers-the-one-admin-page-that-writes) — the one admin page that writes
+- [§ What it cannot do](#what-it-cannot-do-and-what-is-not-built) — deliberate limits
+- [§ See also](#see-also) — neighbouring docs
 
 ## Why this doc is filed under security
 
@@ -627,7 +646,7 @@ without a database; the aggregate itself is checked against a real one in
 asked for the address, and because the second and third entries then have somewhere to be listed
 rather than somewhere to be remembered.
 
-**The third of those is `/design`, and it is not an admin page.** It moved here off the shelf's
+**The last entry on it is `/design`, and it is not an admin page.** It moved here off the shelf's
 masthead on 2026-09-05 — *"Move the Design link on the logged-in Homepage into /admin"* — because a
 page of colour tokens is developer furniture that every signed-in reader was being shown. The page
 itself is unchanged, and it is on `ADMIN_ONLY` since later the same day, so a reader who types the
@@ -687,7 +706,7 @@ Greg, 2026-09-04:
 
 > indicate somewhere in /admin exactly when the last deploy happened
 
-`Built 2 hours ago · 8ca6bc7`, faint, under the two entries on the index, with the exact compile
+`Built 2 hours ago · 8ca6bc7`, faint, under the entries on the index, with the exact compile
 time and the whole sha in the tooltip. Nothing new is collected to draw it: `vite.config.ts`
 compiles the commit **and the build time** into the bundle, from the stamp
 [`build-stamp.ts`](../../scripts/build-stamp.ts) resolves — the same one that goes into
@@ -827,8 +846,8 @@ a Retry where the server allows one. How they are kept to once each is
   ([ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not)).
 - **No pagination.** Nine accounts. When there are hundreds this becomes a server-side sort, and the
   URL state already says what to sort by.
-- **Soft-deleted accounts are filtered out**, on `auth.users.deleted_at`. The row survives a
-  deletion in Supabase's schema; a deleted user in a list of users is wrong in the direction nobody
+- **Soft-deleted accounts are filtered out**, on the `deleted_at` the Auth service returns
+  (`accountFrom`). The row survives a deletion in Supabase's schema; a deleted user in a list of users is wrong in the direction nobody
   checks.
 - **Accounts with no email address are filtered out.** They cannot sign in here — the gate refuses
   them by name, `[auth-noemail]` — and a row whose first column is blank is a blank line rather than

@@ -34,7 +34,7 @@ actually running, which has been the answer more than once.
 ## Something is wrong on my laptop
 
 - **[setup-dev.md](setup-dev.md)** — the variables without which you get a blank page.
-- **[supabase-local.md](supabase-local.md)** — the Docker stack, and the five ways it fails quietly.
+- **[supabase-local.md](supabase-local.md)** — the Docker stack, and the ways it fails quietly.
 - **[database.md](database.md)** — and read the `Target:` line, not the success line: which database
   a command reaches is not always the one on its command line.
 - **[logging.md](logging.md)** — `npm run dev:pretty` for readable output.

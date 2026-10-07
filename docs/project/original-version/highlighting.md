@@ -147,3 +147,7 @@ rescaled**, because rescaling is a guess. See [../search.md](../search.md#the-co
 - [../block-ids.md](../block-ids.md) — the contract any highlight must be anchored to
 - [glossary.md](glossary.md) — the other feature that wanted to mark up the same text
 - [search-and-chat.md](search-and-chat.md) — where the semantic-search endpoint is shared
+
+---
+
+Up: [overview.md](overview.md)

@@ -2,6 +2,29 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+- [§ It transcribes twice](#it-transcribes-twice) — why live words are decoration and the second pass is a vocabulary
+- [§ Why not OpenAI](#why-not-openai) — which model transcribes, and what was measured
+- [§ The ums come out](#the-ums-come-out-and-nothing-else-does) — filler words, and why it is not a prompt line
+- [§ What is in the vocabulary](#what-is-in-the-vocabulary) — the five sources, the cap, the guards
+- [§ Adding a box somewhere else](#adding-a-box-that-takes-dictation-somewhere-else) — a new vocabulary place
+- [§ One capture](#one-capture-and-it-is-always-ours) — one microphone track, per-browser differences, the `[mic-offline]` fallback
+- [§ The gap](#what-the-reader-sees-in-the-gap) — readOnly box and the one-span replace
+- [§ A double press on Stop](#a-double-press-on-stop-also-sends) — stop twice and it sends
+- [§ When it hears nothing](#when-it-hears-nothing-and-after) — the quiet warning and dismissing the message
+- [§ Adding it to a box](#adding-it-to-a-box) — the how-to for a new text box
+- [§ The hook does not know which server](#the-hook-does-not-know-which-server-it-is-talking-to) — the `transcribe` seam the fleet dashboard reuses
+- [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
+- [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
+- [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) — IndexedDB recovery, `keepDictation`
+- [§ The ways it fails](#the-ways-it-fails) — nine failure modes
+- [§ The codes](#the-codes) — every `[mic-…]` code and where it is raised
+- [§ Where the pieces are](#where-the-pieces-are) — file map
+- [§ What a browser pass could check](#what-a-browser-pass-could-and-could-not-check) (history)
+- [§ What is still open](#what-is-still-open) — unmeasured things
+- [§ This is not two-way voice](#this-is-not-two-way-voice) — Talk versus Live
+
 A microphone button beside a text box. Press it, talk, press it again, and your words are in the
 box. It is on nine boxes today — both profile boxes, the chat composer, the comment follow-up, the
 annotate box, the quiz answer box ([quiz.md](quiz.md)), the Feedback dialog
@@ -213,7 +236,7 @@ nothing rather than being conditionally skipped, so a recipe is only ever a list
 *source* is one entry in `SOURCES`: a name and an async function from a place to terms, which must
 never throw.
 
-`transcribeWith` takes the vocabulary as a plain string, so a caller that has words from somewhere
+`transcribeWith` takes the vocabulary as a plain list of terms, so a caller that has words from somewhere
 else entirely can send them without going near any of this.
 
 Every read is best-effort, wrapped, and bounded at 1.5 seconds. A reader who talks for a minute and
@@ -841,14 +864,11 @@ once for that origin. And the origin includes the port, which Vite moves.
 ## This is not two-way voice
 
 Worth saying plainly, because the UI implies otherwise. The chat composer's button says **"Talk"**
-and flips to **"Listening…"**, and Recall wears a `Speech` icon under *"Say what you took
-from this…"* — but every one of those is this feature: audio in, text out. **The app has never played a
-sound.** There is no text-to-speech, no WebRTC, no WebSocket, and no speech-to-speech anywhere.
-
-A voice-dialogue feature would be entirely greenfield, and the accounting for it has already been
-decided in [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the OpenAI
-Realtime API cannot go through OpenRouter, so it would be the first paid call in the product that
-does not.
+and flips to **"Listening…"** — but that is this feature: audio in, text out, nothing spoken back.
+The two-way kind is a separate button, **Live**, in [live-conversation.md](live-conversation.md); its
+accounting is [realtime-voice-cost-tracking.md](../plans/realtime-voice-cost-tracking.md) — the
+OpenAI Realtime and GPT-Live APIs cannot go through OpenRouter, so Live is the paid feature in the
+product that calls OpenAI directly.
 
 ## See also
 

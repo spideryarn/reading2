@@ -13,6 +13,20 @@ plus a hook, tested in [`tests/page-title.test.ts`](../../tests/page-title.test.
 >
 > — Greg, 2026-08-27
 
+## In this doc
+
+- [§ What it said before](#what-it-said-before) — (history) the title this replaced
+- [§ The one rule](#the-one-rule) — what goes first in a tab, and why the app name goes last
+- [§ What each page says](#what-each-page-says) — the title of a given page, and the cases that are deliberately not in it
+- [§ The separator](#the-separator-is-) — why ` · `
+- [§ The clamp](#the-clamp-and-why-it-is-not-a-character-limit) — how a long article title is shortened
+- [§ Setting the title is not the same as announcing it](#setting-the-title-is-not-the-same-as-announcing-it) — the live region for screen readers
+- [§ Where the title is set](#where-the-title-is-set) — adding a page, and why `ArticlePage` hands over
+- [§ The server writes the title first now](#the-server-writes-the-title-first-now-and-both-sides-use-one-function) — why a shared page's title must match what React sets (and the ten ways they once disagreed — history)
+- [§ What would go wrong quietly](#what-would-go-wrong-quietly) — the mistakes that look fine on any one page
+- [§ Still open](#still-open) — favicon state, error titles, no real screen-reader run
+- [§ See also](#see-also)
+
 ## What it said before
 
 `<title>Spideryarn — granularity zoom</title>`, in [`index.html`](../../index.html), on every page.
@@ -20,7 +34,7 @@ plus a hook, tested in [`tests/page-title.test.ts`](../../tests/page-title.test.
 Two things wrong with that, and the second is the expensive one.
 
 It **named one feature as though it were the product**. Granularity zoom is the first feature
-([granularity-zoom.md](granularity-zoom.md)) and there are now seven modes beside it
+([granularity-zoom.md](granularity-zoom.md)) and there were already seven modes beside it (there are more now, and the zoom columns themselves are gone)
 ([diagram.md](diagram.md), [glossary.md](glossary.md), [search.md](search.md),
 [summaries.md](summaries.md), [ideas.md](ideas.md), [chat-tools.md](chat-tools.md)).
 
@@ -75,8 +89,9 @@ you are looking at it.
 | An article that failed to load | `Couldn’t open · Spideryarn` | — |
 
 The mode and view names are the words the bottom bar uses ([`Dock.tsx`](../../src/web/Dock.tsx)), so
-the tab and the button you pressed to get there agree. `Tweets`, not `Thread`; `Metadata`, not
-`Details`.
+the tab and the button you pressed to get there agree: `MODE_LABEL` and `VIEW_LABEL` in
+[`src/title-text.ts`](../../src/title-text.ts). `Metadata`, not `Details`. (The thread has no label of
+its own since 2026-10-03: it is Summary's Thread view, so its tab says `Summary`.)
 
 ### The two homepages are the pages that lead with the app's name
 
@@ -271,7 +286,7 @@ it goes wrong by waiting. The table below is the ones worth a note, not an inven
 | [`article/ArticlePage.tsx`](../../src/web/article/ArticlePage.tsx) — `ArticlePage` | loading and error, **and nothing else** |
 | [`reader/Reader.tsx`](../../src/web/reader/Reader.tsx) — `Reader` | the reading view, with its mode |
 | [`Metadata.tsx`](../../src/web/Metadata.tsx) | `/read/<slug>/metadata` |
-| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the thread's band — Summary's Thread view, `?mode=summary&summary=thread` (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode, and a mode until 2026-10-03, [261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md); both old addresses redirect), so its title is Summary's |
+| [`Tweets.tsx`](../../src/web/Tweets.tsx) | the thread's band — Summary's Thread view, `?mode=summary&summary=thread` (a page at `/read/<slug>/tweets` until 2026-09-29, when [the plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md) made it a mode, and a mode until 2026-10-03, [261003l](../plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md); both old addresses redirect), so it sets no title of its own: `Reader`'s stands, with Summary as the mode |
 | [`AddPage.tsx`](../../src/web/AddPage.tsx) | both `/add/` routes |
 | [`ProfilePage.tsx`](../../src/web/ProfilePage.tsx) | `/profile` |
 | [`DesignPage.tsx`](../../src/web/DesignPage.tsx) | `/design` |

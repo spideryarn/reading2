@@ -27,6 +27,33 @@ are running under `tmux`. **So nothing survives a reboot yet**, and what retires
 paragraph is a unit that is `enabled` — not a process that happens to be up. [260908b](../plans/260908b-overseer-store-and-clock.md) is the plan and holds
 the evidence.
 
+## In this doc
+
+The page is long and was written in layers; a task usually lands in one section, so use this and
+jump. (Runbook for the Overseer itself: [overseer.md](overseer.md). Queue of deferred work:
+[overseer-queue.md](overseer-queue.md). Adding a dashboard tab:
+[fleet-dashboard-modes.md](fleet-dashboard-modes.md).)
+
+- [§ What we are going towards](#what-we-are-going-towards) — the aim, in a screen
+- [§ The horizon](#the-horizon) — Greg's tagged list of what the Overseer must eventually do; check a slice against it
+- [§ What the Overseer is](#what-the-overseer-is) — its job, its powers, what it is not
+- [§ The gates](#the-gates) — autonomy as principles, not a list of forbidden actions (the runbook form is overseer.md's four)
+- [§ The scheduler](#the-scheduler) — the library chosen and why (researched 2026-09-08)
+- [§ The store](#the-store) — `~/.overseer/`, what is written where
+- [§ Two tenses](#two-tenses-the-seam-between-the-overseer-and-the-dashboard) — the file seam between the actor and the page (`current.json`)
+- [§ The order of work](#the-order-of-work) — what to build first, and deferral rules
+- [§ Usage limits](#usage-limits) — what is observable about Claude's limits and why no API is called
+- [§ Reboot revival](#reboot-revival-and-the-thing-gjd-remote-resume-does-not-do) — surviving a reboot
+- [§ The four capabilities](#the-four-capabilities-and-what-each-really-needs) — what each needs
+- [§ What Greg asked for on 2026-09-08](#what-greg-asked-for-on-2026-09-08-in-his-own-words) — his words, kept whole
+- [§ A higher bar for robustness](#a-higher-bar-for-robustness-here-than-elsewhere-and-its-ceiling) — why the Overseer is held to more than dev
+- [§ Constraints already established](#constraints-already-established) — measured on the box; read before anything that talks to a session
+- [§ Attention, and who the Overseer is really watching](#attention-and-who-the-overseer-is-really-watching) — surfaces, push vs pull, the `idle` vocabulary, the work reading (the longest section)
+- [§ Access](#access) — Tailscale for now, and why
+- [§ The backlog, after the wide review](#the-backlog-after-the-wide-review) — what is built, what is not, and the next steps by priority
+- [§ Appendix: security and hardening, deferred](#appendix-security-and-hardening-deferred) — what was put off and why
+- [§ Principles](#principles) — the short list to check a design against
+
 ## What we are going towards
 
 > - running sessions, with an indicator of their status, and especially whether they need something

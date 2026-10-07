@@ -1,5 +1,7 @@
 # The marketing pages, and how to shoot them
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 `/`, `/features` and — since 2026-09-04 — `/pricing`: the pages a stranger sees before they sign in.
 This doc is the **how**: how the visual language works, how to take a screenshot that shows what it
 is meant to show, and how to photograph the pages themselves without a lying picture.
@@ -205,7 +207,3 @@ page said "six diagrams" for a day, having been written from a doc, when there w
 `npm test` and `npm run typecheck`; `tests/landing-assets.test.ts` specifically if any picture
 changed. Then look at all three pages at 1440 and at 390 wide, a viewport at a time, and ask of every
 screen: *what is this screen for, and is that the thing the eye lands on?*
-
----
-
-Up: [design-css-overview.md](design-css-overview.md)

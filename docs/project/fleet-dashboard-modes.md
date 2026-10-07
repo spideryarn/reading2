@@ -19,6 +19,25 @@ tabs in a different application; the two share a vocabulary and no code.
 Four sessions added tabs to this page on the night of 2026-09-08 and each worked the mechanism out
 for itself. Most of what is below is theirs, quoted and attributed.
 
+## In this doc
+
+**Only adding a datum to a panel that exists?** You need none of the tab checklist: go straight to
+[§ Where the panel's data comes from](#where-the-panels-data-comes-from-the-end-to-end-path), which
+is per datum. Readiness is the worked example: a run's `durationMs` rides on the record and is drawn
+by [`ReadinessPanel.tsx`](../../tools/fleet/web/src/ReadinessPanel.tsx) with no new route.
+
+- [§ What a mode is](#what-a-mode-is) — the four things a tab is made of
+- [§ The registrations](#the-registrations) — the five edits for a new tab, each of which the compiler now checks
+- [§ Ask this before you design the panel](#ask-this-before-you-design-the-panel-may-the-fleet-touch-what-your-tab-is-about) — whether the tab may touch the fleet at all
+- [§ Where the panel's data comes from](#where-the-panels-data-comes-from-the-end-to-end-path) — pushed, on-demand or a write; the path for each
+- [§ The seam, which is invisible from the panel](#the-seam-which-is-invisible-from-the-panel) — why a tab compiles and shows nothing
+- [§ Absence is stated, never drawn](#absence-is-stated-never-drawn) — empty, missing and failed states
+- [§ The card on the button](#the-card-on-the-button) — the tooltip each mode button carries
+- [§ The test](#the-test) — what a tab's test must prove
+- [§ When several sessions add a tab at once](#when-several-sessions-add-a-tab-at-once) — merge etiquette for the shared lists
+- [§ Seeing it](#seeing-it) — checking the tab in a browser, phone width included
+- [§ What this costs](#what-this-costs) — the known untidiness
+
 ## What a mode is
 
 Four things a reader can see, spread over five places a writer must edit:

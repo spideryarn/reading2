@@ -1,5 +1,7 @@
 # Usage history: the last 24 hours of Claude's limits
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
 The **Usage limits** tab in the fleet dashboard has two halves. The top is the current reading, and
 it is the same `UsageCard` the Overseer tab draws — one component, mounted twice, so the two can
 never disagree. The bottom is this: how utilisation moved and what was rejected, over the last day.
@@ -141,6 +143,3 @@ Beyond labels, a second account needs a collector that can see both. `collectUsa
 - [fleet-dashboard-modes.md](fleet-dashboard-modes.md) — how a tab is added, which is where the tab
   half of this feature is documented.
 
----
-
-Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)

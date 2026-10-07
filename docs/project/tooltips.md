@@ -2,6 +2,24 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
+## In this doc
+
+Code: [`Tooltip.tsx`](../../src/web/Tooltip.tsx) (`Tooltip`, `ControlTip`, `TooltipGroup`, `DELAY`), [`styles/tooltip.css`](../../src/web/styles/tooltip.css); the card copy for modes is [`mode-catalog.ts`](../../src/mode-catalog.ts).
+
+- [§ When something needs one](#when-something-needs-one) — deciding whether a control gets a tooltip at all
+- [§ Prefer the rich card to a native `title`](#prefer-the-rich-card-to-a-native-title) — Greg's rule
+- [§ Short paragraphs or bullets](#short-paragraphs-or-bullets-not-one-block) — how to write a card's text
+- [§ What we chose](#what-we-chose) — Floating UI, and what was rejected
+- [§ Where the code is](#where-the-code-is) — the table of every file that draws a card; open it to find the one to copy
+- [§ `ControlTip`](#controltip-which-is-what-most-of-them-are-now) — the common shape: a control described
+  - [A shortcut is named on its card](#a-shortcut-is-named-on-its-card) — the rule that a key is on its control's card
+  - [The bar, and the two shapes of the same modes](#the-bar-and-the-two-shapes-of-the-same-modes) — the Dock's mode buttons
+- [§ What the card says, and why that](#what-the-card-says-and-why-that) — the content of the spine's card and Structure's
+- [§ Five things that are load-bearing](#five-things-that-are-load-bearing) — the ways the obvious version fails silently
+- [§ Grouping, and why the delays are what they are](#grouping-and-why-the-delays-are-what-they-are) — 240ms/90ms and `TooltipGroup`
+- [§ A card the pointer can enter](#a-card-the-pointer-can-enter) — making a card interactive (links, buttons inside it)
+- [§ Checking it in a browser](#checking-it-in-a-browser) — why a screenshot lies about a fading card
+
 > In the left-most column, add a nice hover-tooltip to show more detail somehow.
 >
 > — Greg, 2026-08-25
@@ -125,7 +143,7 @@ Sources, read 2026-08-25: [Floating UI docs](https://floating-ui.com/docs/react)
 | [`src/web/BlockLinkCard.tsx`](../../src/web/BlockLinkCard.tsx) | the card every block link shares — section, then the paragraph cut short — one panel for the whole reading view, mounted by Reader. See below |
 | [`src/web/StructurePanel.tsx`](../../src/web/StructurePanel.tsx) | `RowCard` — what a row of Structure's two columns says on hover, and the only card here whose *contents* are decided by a projection rather than written beside the JSX. See [§ Structure's card](#structures-card-which-is-defined-by-subtraction) |
 | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) | the bottom bar — the mode buttons, twice over, and the experimental switch. See [§ The bar](#the-bar-and-the-two-shapes-of-the-same-modes) |
-| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those fourteen cards, both paragraphs of each — the bar holds none of its own copy |
+| [`src/mode-catalog.ts`](../../src/mode-catalog.ts) | the words in those cards (seventeen entries, one per `Mode`), both paragraphs of each — the bar holds none of its own copy |
 | [`src/web/Library.tsx`](../../src/web/Library.tsx) | the homepage masthead's links — Profile, plus Admin for the administrator — and the one place a tooltip's trigger is not a host element |
 | [`src/web/Masthead.tsx`](../../src/web/Masthead.tsx) | the two things said at the top of an article — where it came from, and who can read it. Both were `title` attributes or a bare sentence until 2026-09-06 and are `ControlTip`s now; the origin one is also the app's only tooltip on a line of *text* rather than on a glyph. Its trigger is the address's own anchor when there is an address, and a plain `<span>` with `cursor: help` and an `sr-only` pair of sentences when there is not — the second of those is the app's one tooltip a keyboard cannot open, which is why its content is duplicated rather than only shown |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under `/read/public`'s lede — **the app's only `ControlTip` on a link to a *page* rather than on a control**, and the only one whose reader may want nothing from us at all ([public-readable-sharing.md](public-readable-sharing.md)). Greg asked for five claims in it; two of the five were false, so the card carries the idiom's two paragraphs and the page carries the claims |
@@ -360,12 +378,12 @@ Three things about it are not true of any other set here.
 
 - **The copy is not in the component.** Both paragraphs come from `MODE_CATALOG`
   ([`src/mode-catalog.ts`](../../src/mode-catalog.ts)), which is a pure module the server can read
-  too, so a fifteenth mode is a compile error until somebody has written both halves. Everywhere
+  too, so a new mode is a compile error until somebody has written both halves. Everywhere
   else in this file the words sit beside the JSX. [mode.md § The card on the
   button](mode.md#the-card-on-the-button) is what a new mode's author is told to do, including
   the rule that **no card in this bar names a price** — the command bar says `generates` and no
   figure, and a tooltip on the button beside it must not be more disclosed than the bar is.
-- **The same fourteen modes are drawn by two different components**, and only one of them had a
+- **The same modes are drawn by two different components**, and only one of them had a
   card. On the reading view they are a `role="radiogroup"` segment; on the metadata page (and, until
   2026-09-29, the tweets page — now a mode, [plan](../plans/260929f-tweets-become-a-mode-with-a-wide-band-and-block-links.md))
   they are loose `DockLink`s, and those carried a `title` attribute while the segment had a panel.

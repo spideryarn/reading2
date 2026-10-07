@@ -24,6 +24,19 @@ One of the features the app is for is the article at several levels of compressi
 **[granularity-zoom.md](granularity-zoom.md)**, which [Structure](structure.md) now draws. It is one
 of several, not the reason the app exists; [vision.md](vision.md) has the rest.
 
+## In this doc
+
+- [§ True across the whole view](#true-across-the-whole-view) — the rules any change to the reader has to keep: block ids, URL state, streaming, when a press spends money
+- [§ The docs](#the-docs) — finding the doc for the surface you are about to change
+  - [The layout](#the-layout) — the columns, the margin, where the client code is, adding a mode
+  - [The article itself](#the-article-itself) — the prose: structure, reading time, maths
+  - [The modes in the band](#the-modes-in-the-band) — one line per mode; start here for "which doc owns this mode?"
+  - [Marking a passage, and asking about one](#marking-a-passage-and-asking-about-one) — comments, chat and its tools, voice, Learn
+  - [Hovering and moving around](#hovering-and-moving-around) — hover cards, tooltips, keys, touch, the URL
+  - [The command bar](#the-command-bar) — adding or changing a row in the bar, and what a row may claim
+  - [Getting in and out](#getting-in-and-out) — the shelf, the public pages, the profile, help and privacy
+- [§ Where the code is](#where-the-code-is) — which file to open first
+
 ## True across the whole view
 
 - **Text is addressed by block id, never by pixel offset or CSS selector** — scroll position, deep
@@ -113,7 +126,9 @@ readers never are.
   nested list, chosen by the band's width. Open it for which plan decided what, how Outline and
   Hierarchy folded into it, and where the code is.
 - **[glossary.md](glossary.md)** — the terms this piece uses, defined from the piece and underlined
-  wherever it uses them. Open it for the two bugs from the previous version it is shaped around.
+  wherever it uses them. Open it for the two bugs from the previous version it is shaped around,
+  and for the **Ask in chat** button on an entry (§ Asking about an entry in chat — the pattern for
+  any other mode that wants one).
 - **[summaries.md](summaries.md)** — the piece in plain words, at two lengths (Brief, Fuller), each
   paragraph linked to its passages and checked against them, or as a thread: one three-way control.
   Its Parts and Sections outline went on 2026-10-01; Structure draws that tree.
@@ -126,8 +141,9 @@ readers never are.
 - **[timeline.md](timeline.md)** — when the piece *says* these things happened, in the order it says
   they happened. Open it for the four dating states, which are the whole design: ten of twenty-six
   rows on the test article carry no date, and drawing them alike throws away what the article said.
-- **[search.md](search.md)** — one box, two matchers, hits marked in the prose, and the shape of a
-  search painted into the spine. Long; open it for the confidence unit or the colours.
+- **[search.md](search.md)** — one box, three matchers (words, quick, thorough), hits marked in the
+  prose, and the shape of a search painted into the spine. Long, with a section map at the top; open
+  it for the confidence unit, the colours, or the URL parameters.
 - **[referee-mode.md](referee-mode.md)** — helping a peer reviewer scan efficiently without handing
   them a verdict: four sub-modes, an evidence base with two numbers in it, and a confidentiality
   notice written in the past tense on purpose. Open it for how much of it is actually built.
@@ -151,7 +167,8 @@ readers never are.
   switch; a visitor to a public article sees the stored FAQ, while making it remains the owner's.
 - **[skim.md](skim.md)** — skim a paper at increasing depth: one route through its
   passages, not in the paper's order, walked with a handful of stops, then a dozen, then more. Open
-  it for Greg's dictated brief, verbatim, and the questions still waiting for him.
+  it for Greg's dictated brief, verbatim, and the defaults taken on his behalf to keep the build
+  moving, each cheap for him to change.
 - **[tweets.md](tweets.md)** — the article as a numbered thread, in a wide band beside the prose,
   each post linked to the passages it came from. Summary's Thread view since 2026-10-03, a mode of
   its own (Tweets) before; `?mode=tweets` lands there. **The one view that writes on arrival**
@@ -187,9 +204,12 @@ right instead, beside a band or without one.
 - **[comments.md](comments.md)** — select a sentence and it is yours: a bookmark, a note on it if
   you want one, and an answer from the model only if you tick the box. **Saving costs nothing.**
   Open it for the anchoring, the four store operations and why there are four, and the streaming.
-- **[chat-tools.md](chat-tools.md)** — the six tools chat can reach for and the filter they passed:
+- **[chat-tools.md](chat-tools.md)** — the tools chat can reach for and the filter they passed:
   *does it send the reader somewhere they could not otherwise get to?* Chat itself is in the plans:
   [260826a-chat-mode.md](../plans/260826a-chat-mode.md), [260826ab-chat-as-gateway.md](../plans/260826ab-chat-as-gateway.md).
+- **[chat-from-a-mode.md](chat-from-a-mode.md)** — an "Ask in chat" button on an item in a mode,
+  and the chat that remembers where it began: which modes have one, and the checklist of every place
+  a new one has to be told to, marked loud or silent. Open it before adding the button to a mode.
 - **[learn-mode.md](learn-mode.md)** — the other direction: the reader says what they took from
   the piece and the model shows them where it comes apart, then nudges them to remember more. One
   adaptive voice (four stances until 2026-10-02), a prompt rewritten after a cross-family review said
@@ -208,14 +228,15 @@ right instead, beside a band or without one.
   goes; also the measurement showing Readability-in-the-browser is a wall, not a decision.
 - **[cross-references.md](cross-references.md)** — the article linked to itself: a phrase that
   sums up what another passage shows in detail, underlined, previewed on hover, a jump on click.
-  Open it for why a forged mark cannot work, and the two defence edits still waiting on Greg.
+  Open it for why a forged mark cannot work, and the two defence edits Greg approved.
 - **[tooltips.md](tooltips.md)** — the library choice, and why there are two implementations: the
   glossary card's triggers are injected HTML with no React element to wrap.
 - **[keyboard.md](keyboard.md)** — every key the reading view answers to. Open it before binding a
   key or adding a focusable surface: the arrows, ⌘-K and the other chords, Tab, and the rules a
   handler has to keep.
 - **[touch.md](touch.md)** — reading on an iPad: the prose keeps momentum scrolling (a swipe over a
-  gist column stepped, before the columns were removed). Open it for why not `scroll-snap`.
+  gist column stepped, before the columns were removed). Open it for why not `scroll-snap`, and for
+  what a tap means on each surface, press-target sizes, the Enter key and the touch selection button.
 - **[phone-and-touch.md](phone-and-touch.md)** — the map for a phone, an iPad and a finger: what
   Greg has said he wants on each, every policy in a line with its owner, and where the code
   branches on the device. Open it first when a report says "on my iPhone".
@@ -303,7 +324,7 @@ rather than oversight —
 
 **Every mode Metadata can re-run has a *Run again* row since 2026-10-02** — Greg,
 SPIDERYARN-READING2-8D: *"Add a lot more Metadata functionality to Commands, e.g. to reprocess (a
-particular mode)"*. *Glossary › Run again*, *Thread › Run again* and twelve more, one per step of
+particular mode)"*. *Glossary › Run again*, *Thread › Run again* and the rest, one per step of
 `METADATA_RERUN_STEPS`, whatever the experimental switch says, as on the page. They are **shown only
 once something is typed** (`typedOnly`), so the list the bar opens on did not grow, and they answer
 to whole phrases — `rerun glossary`, `regenerate terms`, `glossary again` — because the ranking
@@ -477,7 +498,7 @@ Three pieces of it are worth knowing about:
   would be *more* disclosed than the button beside it, which reverses a decision Greg made on
   2026-09-06. For a mode it is derived from `MODE_TARGET`
   ([`src/web/activation.ts`](../../src/web/activation.ts) § `modeGenerates`), which is already total,
-  so a fifteenth mode cannot arrive unmarked; every other row carries a **required** boolean, so one
+  so a new mode cannot arrive unmarked; every other row carries a **required** boolean, so one
   cannot arrive unmarked either. Required rather than optional deliberately: an optional flag moves
   the failure from a check nobody would think to change to a field somebody could forget, which is
   quieter and not safer. It over-warns when the artefact is already there; the Dock under-warns in
@@ -490,9 +511,9 @@ The key itself, and the four things the chord refuses to do, are
 
 - **[library.md](library.md)** — the shelf: `/read/<slug>`, what a card says, what you can do to
   one, and three sorting rules that look right in a browser and are wrong.
-- **[shelf-terms.md](shelf-terms.md)** — the Topics row above the shelf: phrases picked by a
-  program from the articles' own words, one count formula for every chip, and why the archived list
-  now stays up during a search.
+- **[shelf-terms.md](shelf-terms.md)** — the Topics row above the shelf: topics a model names,
+  broad to fine, for shelves up to 150 works (the articles' own phrases, picked by a program, are
+  the fallback), one count formula for every chip, and your own tags beside them.
 - **[public-shelf.md](public-shelf.md)** — the *other* shelf: `/read/public`, every article anybody
   has shared, listed for strangers. Why it is not the owner's shelf narrowed, and what listing it
   changed about what sharing promises.
@@ -505,7 +526,7 @@ The key itself, and the four things the chord refuses to do, are
 - **[reader-profile.md](reader-profile.md)** — two boxes and one string telling the model who is
   reading, where it rides in a prompt, and the microphone that looked broken twice and was not.
 - **[experimental-features.md](experimental-features.md)** — the switch for features that are not
-  finished, on this page and at the end of the bottom bar. Off by default, some modes and four Diagram
+  finished, on /profile, at the end of the bottom bar and in the command bar. Off by default, some modes and four Diagram
   pictures behind it, and the rule that hiding a feature never breaks a link to it.
 - **[high-powered-ai.md](high-powered-ai.md)** — one article's capable-tier calls on Opus instead of
   Sonnet, for a difficult piece: the switch on `/metadata`, what moves and what does not, and why

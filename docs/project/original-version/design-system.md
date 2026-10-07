@@ -186,3 +186,7 @@ difference between the two is exactly the difference between a plan and a record
 - [../icons.md](../icons.md) — Lucide, the one stroke weight, and the spinner recipe
 - [../browser-testing.md](../browser-testing.md) — how to look at this app without being misled
 - [../../plans/260825a-shadcn-migration.md](../../plans/260825a-shadcn-migration.md) — our migration, written down afterwards
+
+---
+
+Up: [overview.md](overview.md)
