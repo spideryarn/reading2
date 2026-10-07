@@ -1634,6 +1634,13 @@ svg.band-waiting-ghost { flex: none; }
   min-width: 0;
 }
 .learn .chat-talk { order: 1; }
-.learn .chat-live { order: 2; }
+.learn .chat-live {
+  order: 2;
+  /* Live and its optional engine picker must also wrap: at a 288px band
+     their combined width exceeds the voice group's space beside Send. */
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
 .learn .chat-send { order: 4; margin-left: auto; }
 .learn .prof-listening { order: 6; }

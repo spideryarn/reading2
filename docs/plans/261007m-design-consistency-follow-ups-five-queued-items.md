@@ -98,7 +98,8 @@ item's natural width before shrinking anything, so the last item — Send — is
 composer. In Chat it is `display: contents`, so Chat's row is unchanged. In Learn it is the row's
 growing item (`flex: 1 1 0; min-width: 0; flex-wrap: wrap`): a zero basis means the row never
 breaks a line for it, so Send stays at the end of the line under the box, and the group wraps
-inside itself — Live (with its engine select) goes under Talk when there is no room. That holds
+inside itself — Live goes under Talk when there is no room, and its own row wraps the engine
+select below Live when the two cannot fit beside Send. That holds
 in every state Sol's M5 named ("Listening…", "Writing it down…", Hang up, Cancel), at 390 and in
 the iPad's 288px band, because it does not depend on any label's width. And the microphone, the
 Live button and the engine select take Send's 36px (`--control-h`) inside `.chat-composer` only,
@@ -136,3 +137,33 @@ GPT Sol on this plan (read-only), then one code review over all five commits.
   light block and 0.38 inside it. Sol favoured the factor over six tokens and agreed dark computes
   unchanged.
 - **M5** (S5 must hold through every state and a narrow band, not just idle at 390): taken into S5.
+
+## Code review of S1–S5
+
+**C1 — P1, fixed in the working tree:** wrapping `.chat-voice` alone still leaves Learn's
+`.chat-live` as one unwrapping flex item. With Experimental on, its Live button and engine picker
+can exceed the group's available width in the 288px band and extend into Send's space. The
+Learn-only rule now wraps that inner row and gives it `min-width: 0; max-width: 100%`. Chat's
+base row stays as it was. The added CSS-contract regression in `voice-row.test.tsx` was seen red
+before the fix and green afterwards; it does not measure browser layout. A second reviewer
+independently confirmed the cause and scope of the fix.
+
+The submitted S1–S5 tests were also run against an archived copy of `9b939b442`, with the candidate
+tests copied in: each item's new assertions fail on the old behavior. That reproduces red-before
+evidence, rather than relying on the commit messages. The S1 test covers the panel's immediate
+copy, S2 the shared Button configuration, S3 declared geometry, S4 shadow routing/theme factors,
+and S5 markup/declarations. They do not establish computed dimensions or pixel equivalence.
+Inspection of all seven S4 shadow declarations confirms that their original dark alpha and
+geometry are preserved. The anonymous Chat wrapper retains DOM focus order and the descendant
+`:has()` selectors; Learn's dictation strip and Live status retain their full-width rows and order.
+
+**C2 — P2, wider scope, unchanged:** Quotes and Skim still use `--control-h-lg` without Diagram's
+44px floor, giving 33px squares at a 12px root, as M3 already records above.
+
+Browser verification could not run in this review sandbox: system Chrome exits on a denied socket
+operation (`EPERM`), and the Sonnet browser dispatch timed out without an answer. The final run
+of the requested seven test files plus `learn-own-thread.test.tsx` passed all 119 tests, including
+the added C1 regression.
+Typechecking passed via `node --import tsx scripts/typecheck.ts` (the npm script's `tsx` launcher
+cannot create its IPC socket here). Full `npm test` is blocked by the unavailable local database;
+lint of the two changed code/test files reports only two existing specificity warnings.

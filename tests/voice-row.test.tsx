@@ -187,4 +187,15 @@ describe("the voice row's geometry", () => {
     expect(learn.get("flex")).toBe("1 1 0");
     expect(learn.get("min-width")).toBe("0");
   });
+
+  it("lets Learn's Live button and experimental engine picker wrap inside the space beside Send", () => {
+    /* The outer group has a zero basis, but an unwrapping .chat-live still
+       overflows that group at 288px. Its two controls must break independently.
+       Chat keeps its existing row. This checks the CSS contract, not layout. */
+    expect(decls(".chat-live").get("flex-wrap")).toBeUndefined();
+    const live = decls(".learn .chat-live");
+    expect(live.get("flex-wrap")).toBe("wrap");
+    expect(live.get("min-width")).toBe("0");
+    expect(live.get("max-width")).toBe("100%");
+  });
 });
