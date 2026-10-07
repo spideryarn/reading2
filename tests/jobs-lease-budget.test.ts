@@ -413,10 +413,10 @@ describe("the job lease and the platform's kill", () => {
   });
 
   /**
-   * **The same rule for the steps whose only stated limit is a token count.**
+   * **Admission estimates derived from the steps' token counts.**
    *
    * `ideas`, `tweets`, `sketch` and the `illustrated` brief are one streamed
-   * Messages call each, and `debate` three non-streamed ones; none has a wall
+   * Messages call each, and `debate` up to three non-streamed ones; none has a wall
    * clock of its own (`streamMessage` sets none, the SDK's timeout stops at
    * the response headers, `openRouterJson` fetches without one). What the code
    * does state is each call's `max_tokens`, and `deadlineFor` is this repo's
@@ -424,7 +424,9 @@ describe("the job lease and the platform's kill", () => {
    * the floor is the token time of the step's largest request, built from the
    * same exported sizing the step itself calls. Transport backoffs (a few
    * seconds), debate's searches and anything untimed are not in it; the rows
-   * in src/jobs.ts carry the headroom and say so.
+   * in src/jobs.ts carry estimated slack and say so. The rate was measured on
+   * Sonnet, not Opus; failed attempts, prefill and slower streams are outside
+   * this estimate. These assertions do not establish a wall-clock bound.
    *
    * Assumes the default `THINKING_HEADROOM` in `budgetFor`, which is what all
    * four call sites pass today. docs/plans/261007h-five-more-step-budgets-to-what-they-measure.md.
@@ -460,26 +462,32 @@ describe("the job lease and the platform's kill", () => {
   });
 
   /**
-   * **Illustrated is the one whose ceiling does not fit in a claim**, so its
-   * row is a reservation: large enough that every real Sketch run before it
-   * in one claim hands back, so `illustrated` starts as a fresh claim's first
-   * step with the whole window, rather than on a remnant it is certain to be
-   * able to outlive. The first assertion is the tripwire: the day the brief
-   * fits a claim, this row should be sized to it like the four above.
+   * PINS AN OPEN DEFECT: the brief's estimated full-token time alone exceeds
+   * the claim, before any plates. This is an estimate at the measured Sonnet
+   * rate, not a claim that every brief takes this long. See 261007h's
+   * "Open design question: Illustrated outlasts a claim".
+   *
+   * Pin the exact observed estimate so a larger allowance cannot quietly make
+   * this gap worse. A red pin is news, including an improvement; when the
+   * defect is fixed, replace it with brief time < claim and account for plates.
+   * This follows tests/adversarial-shapes.test.ts's open-defect pins.
    */
-  it("hands Illustrated a fresh claim after any measured Sketch, since its brief alone outlasts a claim", () => {
+  it("PINS AN OPEN DEFECT: Illustrated's brief is estimated at 948 s against a 740 s claim", () => {
     const briefMs = tokenTimeMs("illustrated", ILLUSTRATED_ANSWER_TOKENS);
-    expect(
-      briefMs,
-      "the brief's token time now fits a claim — size STEP_BUDGET_MS.illustrated to it, like ideas and sketch",
-    ).toBeGreaterThanOrEqual(claimMs);
+    expect(briefMs, "the known brief-time estimate changed — reassess the open defect").toBe(948_000);
+    expect(claimMs, "the claim changed — reassess the open defect").toBe(740_000);
+  });
+
+  /** Reserve a fresh claim after every Sketch duration in the recorded sample.
+   * This does not guarantee hand-back after an unmeasured, faster Sketch. */
+  it("hands Illustrated a fresh claim after any measured Sketch", () => {
     /* MEASURED 2026-10-07, production `revision_step_runs`: the fastest
        `sketch` that ran is 49.6 s (25 runs). A budget over what it leaves
-       hands every real chain back before `illustrated`. */
+       hands every chain in this sample back before `illustrated`. */
     const fastestMeasuredSketchMs = 49_600;
     expect(
       STEP_BUDGET_MS.illustrated,
-      "the walk would start `illustrated` after a real Sketch, on a remnant its brief alone can outlive",
+      "the walk would start `illustrated` after the fastest measured Sketch, on a remnant its brief can outlive",
     ).toBeGreaterThan(claimMs - fastestMeasuredSketchMs);
     expect(STEP_BUDGET_MS.illustrated).toBeLessThan(claimMs);
   });

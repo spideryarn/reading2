@@ -247,9 +247,10 @@ export function suggestedLength(words: number): number {
  * A thread is a bounded thing — `suggestedLength` caps it — so the answer is a
  * few thousand tokens whatever the article. The allowance still has to scale,
  * because the model reads the whole piece to write it and thinks about it
- * inside this same number. See src/token-budget.ts. Exported because the
- * call's `max_tokens` is also how long it may run, and `STEP_BUDGET_MS.tweets`
- * (src/jobs.ts) is held to that in tests/jobs-lease-budget.test.ts.
+ * inside this same number. See src/token-budget.ts. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate in
+ * `STEP_BUDGET_MS.tweets` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
  */
 export function threadAnswerTokens(posts: number): number {
   return 500 + posts * 140;

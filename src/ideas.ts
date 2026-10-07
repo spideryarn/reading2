@@ -122,9 +122,10 @@ export const MAX_OCCURRENCES = 6;
  * Each idea is a short proposition, two prose fields, an optional analogy and
  * up to five verbatim quotes — and the quotes are what makes this larger per
  * item than the glossary's. Undersizing does not degrade: it throws
- * `truncationFailure` and loses the whole pass. Exported because the call's
- * `max_tokens` is also how long it may run, and `STEP_BUDGET_MS.ideas`
- * (src/jobs.ts) is held to that in tests/jobs-lease-budget.test.ts.
+ * `truncationFailure` and loses the whole pass. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate
+ * in `STEP_BUDGET_MS.ideas` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
  */
 export function ideasAnswerTokens(count: number): number {
   return 400 + count * 420;

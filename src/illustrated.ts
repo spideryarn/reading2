@@ -190,9 +190,10 @@ export const IMAGE_MODEL = "google/gemini-3.1-flash-image";
  * plates of vignettes and 500-word compositions need several times that, and
  * undersizing does not degrade here, it throws and loses everything.
  *
- * Exported because the call's `max_tokens` is also how long it may run, and at
- * `STREAM_TOKENS_PER_SECOND` that is longer than a claim (src/jobs.ts §
- * `STEP_BUDGET_MS.illustrated`, tests/jobs-lease-budget.test.ts).
+ * Exported so tests/jobs-lease-budget.test.ts can pin the known gap: at the
+ * measured Sonnet `STREAM_TOKENS_PER_SECOND`, its full-token time estimate
+ * exceeds a claim (src/jobs.ts § `STEP_BUDGET_MS.illustrated`). This is not
+ * a wall-clock bound, nor a claim that every brief takes that long.
  */
 export const ILLUSTRATED_ANSWER_TOKENS = 32_000;
 export const ASPECT_RATIO = "2:3";

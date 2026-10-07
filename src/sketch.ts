@@ -94,9 +94,10 @@ export const OVERVIEW_MAX = 16;
  * The answer the Sketch asks room for. A scene is a few thousand tokens of
  * coordinates, and there may be four of them. Generous rather than tight:
  * undersizing does not degrade here, it throws `truncationFailure` and loses
- * the whole pass, and half a scene is not half a picture. Exported because the
- * call's `max_tokens` is also how long it may run, and `STEP_BUDGET_MS.sketch`
- * (src/jobs.ts) is held to that in tests/jobs-lease-budget.test.ts.
+ * the whole pass, and half a scene is not half a picture. Exported so
+ * tests/jobs-lease-budget.test.ts derives the admission estimate in
+ * `STEP_BUDGET_MS.sketch` (src/jobs.ts) from the call's actual token sizing.
+ * Token time is an estimate, not a wall-clock bound.
  */
 export const SKETCH_ANSWER_TOKENS = 12_000;
 
