@@ -2,7 +2,7 @@
 
 Owned by [plans.md](../project/plans.md). Overseer queue item `qi-gjvvvc6n`; reports `spya-tddvg2`,
 `spya-kfjrzv` and the guide-agent third of `spya-ucftjt` (SPIDERYARN-READING2-E7, -EA, -E9). Session
-`fbtddvg2-guide-agent-on-open`. **Status: planned; GPT Sol's plan review said *build with changes*, F1–F8 accepted (§ After the plan review, which overrides the design where they differ).**
+`fbtddvg2-guide-agent-on-open`. **Status: built, reviewed at every stage by GPT Sol, seen in a browser, and on `dev` (2026-10-07). Not deployed. Three questions for Greg (§ Questions).**
 
 ## What Greg asked for
 
@@ -175,6 +175,9 @@ seven.
 
 ## Questions for Greg (not waited on)
 
+Asked in the Feedback dialog as `q-tyvutf` (acts), `q-kgrhm4` (first open) and `q-jb5cnd` (the
+security-map.md rows, § A rule-doc edit proposed, not made).
+
 - **[Q-guide-acts]** May the guide run a search or open a mode *itself*, telling you after, rather
   than offering a button? Recommendation: moves (open a mode) yes; anything that spends stays a
   button for now.
@@ -217,7 +220,7 @@ seven.
       privacy page if the shelf count counts as new data sent (it is a number, not words).
 - [x] Sonnet subagent: desktop, iPad, phone (Log, 2026-10-07).
 - [x] Queue entries: qi-kc47m5pw (Q-guide-acts), qi-yfa6gs7m (Q-guide-first-open), qi-7cgxpdda (Help pages in the prompt), qi-263b6cpp (one agent behind the bar).
-- [ ] Full suite; push; note; `done qi-gjvvvc6n`.
+- [x] Full suite; push; note; `done qi-gjvvvc6n`.
 
 ### Stages as built (the boxes above are the plan's words; what differs is here)
 
@@ -248,6 +251,16 @@ and a new row:
 > the press. A press is the only way any of it runs
 
 ## Log
+
+- 2026-10-07: **merged with `dev`, full suite once, pushed.** The guide's migration was renumbered
+  `20261007123306` (dev landed `…094018` after it; see the merge commit). Full suite on the merged
+  tree: 41,425 passed, 6 failed in 8 files. Three were this branch's and are fixed (uncompressed
+  screenshots; two fixture uuids reused from `first-open-default-wiring`; a floating promise in a
+  test). Five were not: the MCP suites (a package dev added, missing until `npm install` here, then
+  81 green), `eager-client-graph` (`BandWaiting`/`useSlow` reached by dev's design-system work) and
+  `no-undeclared-spend` (`scripts/overseer-activate.ts`), both in files this branch does not touch,
+  and green after the second merge of `dev`. After that merge: typecheck, `db:chain`, and every
+  previously red file re-run, green. The full suite was not run a second time.
 
 - 2026-10-07: **seen in a browser**, Sonnet subagent, Playwright, 1440 / 820 / 390, on an owned
   local article; three paid turns. Passed: the pinned Guide row and `?guide=1`; the greeting's box

@@ -23,8 +23,8 @@ const { useLastView } = await import("../src/web/last-view.js");
 const { firstOpenWithPurpose, settleFirstOpen, holdFirstOpen, releaseWhenDecided } = await import("../src/web/first-open-purpose.js");
 const { parseRoute } = await import("../src/web/router.js");
 
-const A = "1a1a1a1a-1111-4111-8111-000000000001";
-const B = "2b2b2b2b-2222-4222-8222-000000000001";
+const A = "3c3c3c3c-3333-4333-8333-000000000001";
+const B = "4d4d4d4d-4444-4444-8444-000000000001";
 const MARK = "spideryarn.ask-purpose";
 
 describe("firstOpenWithPurpose: the table", () => {

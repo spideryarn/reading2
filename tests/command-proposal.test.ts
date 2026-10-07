@@ -118,8 +118,8 @@ describe("the two proposals chat and the guide share (plan 261007j)", () => {
   it("runs each through its own runner", () => {
     const mode = vi.fn(() => ({ kind: "close" }) as const);
     const quick = vi.fn(() => ({ kind: "close" }) as const);
-    runProposal({ mode, "quick-search": quick }, { id: "mode", key: "mode:glossary" });
-    runProposal({ mode, "quick-search": quick }, { id: "quick-search", words: "x" });
+    void runProposal({ mode, "quick-search": quick }, { id: "mode", key: "mode:glossary" });
+    void runProposal({ mode, "quick-search": quick }, { id: "quick-search", words: "x" });
     expect(mode).toHaveBeenCalledWith({ id: "mode", key: "mode:glossary" });
     expect(quick).toHaveBeenCalledWith({ id: "quick-search", words: "x" });
     expect(runProposal({}, { id: "mode", key: "mode:glossary" })).toBeNull();
