@@ -767,13 +767,17 @@ export function useComments(slug: string): CommentsApi {
              `sse(res)` beats every 15 seconds on this route too, so the same
              60-second silence means the same thing here. */
           for await (const event of readEvents(r.body, { stallMs: STREAM_STALL_MS })) {
-            /* **Read to the end even when the reader has deleted it.** Breaking
-               out here was the obvious thing and it loses the row: the server
-               writes the answer on its own `done`, *after* our DELETE has run,
-               so the comment comes back on the next reload. The `done` branch
-               below is what re-sends the DELETE once the write it is racing has
-               definitely landed — so the loop has to reach it. Until then the
-               deleted row is simply not drawn. */
+            /* **Read to the end even when the reader has deleted it.** The
+               reason given here until 2026-10-07 is no longer true: that the
+               server writes the answer on its own `done`, after our DELETE has
+               run, "so the comment comes back on the next reload". The answer's
+               write is an `UPDATE` (`pgCommentStore.patch`), which cannot bring
+               back a row a DELETE removed; pinned by
+               tests/comment-answer-stream-lifetime.test.ts § *a comment deleted
+               mid-answer*. What reading on still does is reach the `done`
+               branch, which sends the DELETE a second time. That is harmless (a
+               DELETE of a missing id answers 200) and is kept as it was. Until
+               then the deleted row is simply not drawn. */
             const gone = deleted.current.has(id);
             if (event.name === "begin") {
               const begun = event.data as Comment;
@@ -817,9 +821,10 @@ export function useComments(slug: string): CommentsApi {
               const done = event.data as Comment;
               if (deleted.current.has(done.id)) {
                 /* Deleted while the answer was in the air. The DELETE we sent
-                   may have run *before* the server finished writing, so the row
-                   can be back on disk; send it again now that nothing else will
-                   write it. */
+                   may have run *before* the server finished writing. That write
+                   is an `UPDATE` and matches no row, so nothing is back on disk
+                   (this comment said it could be until 2026-10-07); the second
+                   DELETE is a no-op kept from when it was needed. */
                 void forget(done.id);
                 return;
               }
@@ -1219,8 +1224,9 @@ export function useComments(slug: string): CommentsApi {
          DELETE here would race in front of a row that does not exist yet. */
       if (creating.current.has(id)) return;
       // An answer POST is not in `creating`: its `done` handler re-sends this
-      // DELETE once the write it is racing has definitely landed. Doing it only
-      // here would let that POST write the row back after we deleted it.
+      // DELETE once the write it is racing has landed. That write is an UPDATE,
+      // which cannot put a deleted row back, so this one is the delete that
+      // counts and the second is a no-op (`send`, the `done` branch).
       void forget(id);
     },
     [forget],

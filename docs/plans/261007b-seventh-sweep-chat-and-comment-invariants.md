@@ -203,6 +203,58 @@ it crossed the stream. And `begin`, `delta` and `done` now ignore the reader's f
 even when the frame is newer than the tab (a PATCH committed and not yet answered): the PATCH's own
 answer brings them a moment later.
 
+### D. Comments
+
+No code. Each corrected against the code it describes, and nothing here is a new rule.
+
+- **The chat guarantees.** Three comments in `streamChat` said the turn lock was the guarantee
+  (*"Whatever they would refuse, they refuse here"*, *"Read under `inTurnOrder`, so the thread
+  cannot be created between the look and the write"*, *"this one is the guarantee"*). They sat in
+  code that A and B rewrote, so they were corrected in those commits, not here. What was left for
+  this one: `ChatThread.anchor` in `src/types.ts` and `ChatStore.begin`'s `turn` in
+  `src/store/contracts.ts`, both of which still said only the route refuses a second anchor.
+- **The comment that comes back.** `useComments.ts` said in three places (the review counted two;
+  `remove` has the third) that an answer finishing after a DELETE writes the row back, so the
+  DELETE is sent again. The answer's write is an `UPDATE` and cannot. Checked two ways: the SQL, and
+  the new Postgres case *a comment deleted mid-answer still gets a frame*, which reads the store
+  afterwards and finds no row. The second DELETE is harmless and is left in; the comments now say
+  it is a no-op kept from when it was needed.
+- **SV4.** The Ask route *"writes nothing"* (a finished answer is added to the glossary:
+  `makeAskAboutTerm` calls `deps.lookups.addTerm`); *"there is none to reuse … `lookup` has none
+  either"* (`lookUpTerm` takes the `dig-deeper` allowance through `admitDig`); and
+  `streamTermLookup`'s *"nothing it produces outlives the page"*. Ask still has no limit; the
+  comment says so and says that whether it should is undecided, as
+  [glossary.md](../project/glossary.md#the-allowance-dig-deeper-has-and-look-up-does-not) already
+  does.
+
+## What the brief and the investigations got wrong
+
+- **Two tests asserted SV3's defect** and neither investigation saw them (`tests/chat-anchor.test.ts`,
+  under B).
+- **The review's fix for the reverse interleaving is one case short** (a counter bumped at the start
+  of `send` only; under C).
+- **`sameAnchor` already names something else on the client**: `src/web/selection.ts` exports a
+  `sameAnchor` over two `SelectionAnchor`s. Different type, different rule (both sides always have
+  a quote), no shared caller. Left alone; worth knowing when grepping.
+- **"Up to four" loads** (the umbrella, C4) is five: the read outside the lock, and four inside.
+- **The resurrection comments are three, not two.**
+- **Help needed a class, not only a predicate.** The brief asked for no new validator and for help
+  to stay a 400. `withTurn`'s only refusal class is a 409, so the 400 needed `ChatTurnRefused`.
+  It validates nothing; it carries a status.
+- Everything else reproduced as described: SV1, SV2, SV3/SVO4, SVO9's counts, WC1 and probes A to
+  D, and all three of SV4's comments.
+
+## Not done
+
+- No postmortem under `docs/postmortems/`. The class for B is already written up
+  ([261005h](../postmortems/261005h-a-per-process-origin-check-leaves-the-transaction-accepting-another-origin.md));
+  A and C are each a rule that existed at one layer and was not carried to the next, which is that
+  postmortem's class again and the umbrella's *One level up*. If one is wanted for C (two writers
+  replacing a shared row), it is not written.
+- A stream that drops while the server finishes still leaves "The answer stopped arriving" until a
+  reload or an uncrossed PATCH (under C, *Not changed*).
+- Not pushed; the GPT Sol code review is the orchestrator's next step.
+
 ## Mutations
 
 Each applied alone by exact string replacement, the named tests run, and the line edited back

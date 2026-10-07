@@ -2109,9 +2109,11 @@ async function streamAskedTerm(slug: string, term: unknown, res: ServerResponse)
  * was true of the JSON route only because nothing stopped the server when the
  * tab went. Cancelling here would turn a closed band into a paid call thrown
  * away and a promise broken; letting it finish buys the stored answer the
- * reader was told they would get. The asked term cancels, because nothing it
- * produces outlives the page. `answer` above makes the same choice for the
- * same reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
+ * reader was told they would get. The asked term cancels (`streamAskedTerm`
+ * passes `gone`), which is a choice and not a consequence of having nothing
+ * to keep: a finished one is stored as an added term, and only an unfinished
+ * one leaves nothing. `answer` above makes this function's choice, for this
+ * function's reason. docs/plans/260910g-stream-glossary-answers-as-they-arrive.md.
  */
 async function streamTermLookup(slug: string, termId: string, res: ServerResponse): Promise<void> {
   const { stream, release } = await lookUpTerm(slug, termId);
@@ -9594,10 +9596,14 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     },
   },
 
-  /* **The glossary's second POST, and it writes nothing.** A reader types a term
-     into the box and this finds it in the prose and explains the passage —
-     `lookup` above with the entry replaced by a phrase, so it is the same
-     `explain` call at the same cost with the same patient deadline.
+  /* **The glossary's second POST.** A reader types a term into the box and
+     this finds it in the prose and explains the passage — `lookup` above with
+     the entry replaced by a phrase, so it is the same `explain` call at the
+     same cost with the same patient deadline. **A finished answer is stored**:
+     the term is added to the glossary (`deps.lookups.addTerm`,
+     src/term-lookup.ts § `makeAskAboutTerm`, plan 261002f). An answer that
+     does not finish writes nothing. This sentence said "it writes nothing"
+     until 2026-10-07, which was true before that plan.
 
      The term is in the **body**, never the path. It is the reader's own words,
      which docs/project/logging.md keeps out of an address, and it can carry
@@ -9620,9 +9626,13 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          choosing. `askAboutTerm` validates and normalises it; the route does
          not pre-judge it, so there is one bound in one place.
 
-         **No rate limit, and there is none to reuse.** The sibling `lookup`
-         POST has none either, and feedback's hourly cap is the only limiter in
-         this file (`fileFeedback`). So an owner with one article of their own
+         **No rate limit here.** The sibling `lookup` POST has had one since
+         plan 261001p: it takes the shared `dig-deeper` allowance (`admitDig`,
+         src/dig-deeper.ts, through `lookUpTerm`), and this route does not.
+         Whether it should is not decided, and sharing that allowance would
+         have ordinary explanations spend what deeper searches are counted
+         against. (Until 2026-10-07 this said there was none to reuse and that
+         `lookup` had none either.) So an owner with one article of their own
          can drive paid `explain` calls as fast as they can post: ownership says
          *which* article, not *how many* requests, and the row's
          `article: "first-capture"` records the spend rather than authorising it. **This request never

@@ -4271,8 +4271,9 @@ export interface ChatThread {
    * up, and for a sharper reason here: the anchor is what draws a mark in the
    * prose, so a thread that re-anchored itself would move its mark to a
    * paragraph the reader is not looking at. `withTurn` sets it only on the
-   * branch that builds a new thread, and the route refuses an anchor sent for a
-   * thread that already has one.
+   * branch that builds a new thread, and refuses a different one offered for a
+   * thread that exists (`sameAnchor`, below); the route refuses it first, for
+   * the sentence. A thread with **no** anchor is refused one too.
    */
   anchor?: ChatAnchor;
   /**
