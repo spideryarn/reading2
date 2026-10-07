@@ -190,7 +190,11 @@ read by `GET /api/feedback`, which is owner-scoped in the store like every other
 **seven fields a report and nothing else**: the report's id, those five (the date, the kind, the
 page, the paragraph, the words), and whether it shipped. Not the email, the address, the
 diagnostics or the screenshot (`EarlierFeedback` in [`src/types.ts`](../../src/types.ts) says why).
-Fifty at most, and the list says so when there were more.
+Fifty at most, and the list says so when there were more. **Fewer, when they are long**: a report
+may be 20,000 characters, so fifty can pass the 4.5 MB a response may be, and the list stops at the
+last whole report that fits 3 MiB (`FEEDBACK_LIST_BYTES`; `/admin/feedback` and the admin's own
+Earlier view use the same budget). No report is shortened, and the line then counts what it shows —
+[261007j](../plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md).
 
 **The page is a label, not the address**, since 2026-10-03. Greg asked that a report carry the page
 he was on (`spya-y4upzw`); it had since 2026-09-02, to the row, Sentry, `/admin/feedback` and the
@@ -244,7 +248,8 @@ split reports (`parts:`), the accepted limits, and why this beat a status column
 
 **Each pill says how many, since 2026-10-03**: every answer carries `counts` for all three
 filters, uncapped, counted over the same ids the filter uses and in the same snapshot as the list,
-and the cap line reads "Showing the 50 most recent of your N not-shipped reports" —
+and the cap line reads "Showing the 50 most recent of your N not-shipped reports" (fewer than 50 when
+the size budget cut the list) —
 [261003b](../plans/261003b-earlier-tab-counts-on-the-pills.md).
 `tests/feedback-endings.test.ts` goes red when a header does not parse or the committed map is stale.
 **The same flip emails the reader**, since 2026-10-02, if they are not an admin: the deploy that
@@ -513,6 +518,14 @@ FeedbackDialog.tsx  ──POST /api/feedback──▶  routes.ts  ──▶  Pos
 row landed; the Sentry item is a mirror for the sake of the tools that already watch Sentry, and it
 cannot fail the request. Only a *newly created* row is mirrored — Sentry does not dedupe feedback
 events, so a retry would otherwise file the same bug twice there while filing it once here.
+
+**Sentry's copy of a long report may be cut short; the row never is.** Upstream Relay gives the
+feedback context an 8,192-byte budget and trims strings against it
+([contexts/mod.rs](https://github.com/getsentry/relay/blob/master/relay-event-schema/src/protocol/contexts/mod.rs),
+[trimming.rs](https://github.com/getsentry/relay/blob/master/relay-event-normalization/src/trimming.rs)),
+so a report much past 8,000 characters (the box takes 20,000) probably arrives in Sentry
+shortened. Not yet observed on our hosted ingestion — GPT Sol's reading of the source, 2026-10-07.
+For the whole of a long report, read `/admin/feedback` or the row.
 
 **A reader's report is also mailed to us, since 2026-10-02**, at Greg's request (report
 `spya-wwx6ks`): *"Anytime someone submits feedback that isn't from me, the admin, please send me an
