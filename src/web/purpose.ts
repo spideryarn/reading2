@@ -128,7 +128,9 @@ export function leavePurpose(slug: string, text: string, madeFor: string | null 
  */
 export type PurposeRead =
   | { state: "loading" }
-  | { state: "ready"; purpose: string | null; purposeFailed: boolean }
+  /* `profile` is *About you*, which the same answer carries: the guide's
+     greeting asks for it only when it is empty (plan 261007j). */
+  | { state: "ready"; purpose: string | null; purposeFailed: boolean; profile: string | null }
   | { state: "failed" };
 
 /** Read the purpose for `slug`, once per slug. For Skim's line (stage 2). */
@@ -141,7 +143,7 @@ export function usePurpose(slug: string): PurposeRead {
     const mine = ++generation.current;
     setRead({ state: "loading" });
     apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`)
-      .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean }>(r))
+      .then((r) => readJson<{ purpose: string | null; purposeFailed?: boolean; profile?: string | null }>(r))
       .then(
         (body) =>
           mine === generation.current &&
@@ -149,6 +151,7 @@ export function usePurpose(slug: string): PurposeRead {
             state: "ready",
             purpose: body.purpose ?? null,
             purposeFailed: body.purposeFailed === true,
+            profile: typeof body.profile === "string" && body.profile !== "" ? body.profile : null,
           }),
       )
       .catch(() => mine === generation.current && setRead({ state: "failed" }));

@@ -338,13 +338,31 @@
 /* Three lines: the title, where the conversation got to, and when. `flex-start`
    rather than `center` because the two icons belong beside the *title*, not
    halfway down a row whose height now depends on how long the title is. */
-.chat-thread {
+.chat-thread,
+.chat-guide {
   display: flex;
   align-items: flex-start;
   gap: 0.15rem;
   border-radius: var(--radius);
 }
-.chat-thread:hover { background: var(--surface-raised); }
+.chat-thread:hover,
+.chat-guide:hover { background: var(--surface-raised); }
+/* **The guide, pinned above the list** (plan 261007j): outside `.chat-threads`,
+   so it takes that list's inset itself, and a rule under it says the rows
+   below are the ordinary list it is not part of. A class of its own rather
+   than `chat-thread`, which means *one of the list's conversations* to
+   everything that counts them. */
+.chat-guide {
+  margin: 0.35rem 0.35rem 0;
+  padding-bottom: 0.2rem;
+  border-bottom: 1px solid var(--rule);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.chat-guide-mark {
+  display: inline-flex;
+  padding: 0.55rem 0.25rem 0.25rem;
+  color: var(--ink-faint);
+}
 /* Rows are three lines now, so they need a hairline of air between them or
    two conversations read as one. */
 .chat-threads li + li { margin-top: 0.1rem; }

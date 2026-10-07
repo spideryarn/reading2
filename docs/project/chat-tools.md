@@ -478,7 +478,17 @@ Since 2026-10-05, for report `spya-hyfqkq`
 From 2026-10-01 it showed chats only.
 
 - **What is listed.** Chats, and Learn's Recall, Tutorial and Explore conversations. Referee's
-  Candidates thread is not: it is not a conversation the reader had.
+  Candidates thread is not: it is not a conversation the reader had. **The guide is not listed but
+  pinned** (since 2026-10-07,
+  [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md)): one row above the
+  filter and the list, with a `Compass`, there whatever `?chatfrom=` says and before the guide
+  exists; a press opens it in the band, and `?mode=chat&guide=1` does the same from a link
+  ([url-state.md](url-state.md)).
+- **What Chat may open is chats and the guide** (`openableInChat`). A send, an edit and Live go by
+  the open conversation's kind, never the band's: a guide turn is sent as `guide`, with no blocks
+  on screen and no Live. Every *Ask in chat* handoff still starts a fresh chat, even with the guide
+  open; a handoff names its target (`ChatHandoff.target`), and only the bar's *Ask the guide*
+  (stage 3) targets the guide.
 - **Where a row came from** is one pure function, `threadSource` in
   [`thread-source.ts`](../../src/web/thread-source.ts), in this order: a stored origin (*Started
   from a claim in Debate*), one of Learn's conversation kinds (`learn`, `tutorial` or `explore`,
@@ -492,7 +502,8 @@ From 2026-10-01 it showed chats only.
   *Start over* lives in Learn.
 - **What Chat lists and what Chat may open are two sets.** The band's composer sends the blocks on
   screen, which the server refuses on any kind but `chat`. So `ConversationBand` hands the panel
-  `listed` (every kind but Candidates) and `threads` (chats only), and the open conversation, the
+  `listed` (every kind but Candidates and the guide) and `threads` (chats, and the guide since
+  2026-10-07), and the open conversation, the
   drafts and Send are resolved among `threads`. A `?thread=` that names another kind in Chat is
   cleared by replace once the list has loaded. An article whose only conversations are Learn's
   shows those rows and does not begin a blank chat; the box under the list and the + start one.
@@ -872,13 +883,30 @@ prompt.
   command accepts, and for a bookmark a block this article has. `glossary-open` is not on it — its
   argument is an entry id the model is never shown — so chat writes `glossary-ask` with the term and
   `chipFor` turns that into *open the entry* when the visible glossary has it.
+- **Two more ids since 2026-10-07, for Chat and the guide alike**
+  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md), stage 2):
+  `quick-search:<words>` is the bar's own *Quick search “X”* row (the same press,
+  `quickSearchPress`; the words take `find`'s rule; it *generates*), and `mode:<catalogue key>` —
+  `[cmd:mode:mode%3Aglossary]`, `[cmd:mode:submode%3Alearn%3Atutorial]` — opens a mode or a
+  sub-mode. **A mode key is resolved against what the reader can open here now**, at the draw and
+  at the press: the Dock's reachable set and its sub-mode rows (`modeDoor` in
+  [`command-runners.ts`](../../src/web/command-runners.ts), built by the reading view from
+  `visibleModes` and `subModeRows`), never the whole catalogue. The Dock keeps an experimental
+  mode already open visible as a way out after the switch is turned off; the proposal set
+  deliberately removes that escape hatch, and retained experimental sub-modes, so a mode behind
+  the switch or one this page does not draw is no button. Its `generates` marker is the mode's own
+  (`modeGenerates` / `subModeGenerates`; `RISK` says `per-mode`), and the press is the Dock's own
+  activator (`useActivateMode`), so it arms what the bar's row arms. Chat's prompt is shown the
+  key's shape and a few examples; the guide's carries every ordinary mode with its token beside it
+  ([`src/guide.ts`](../../src/guide.ts) § `modeWordsSection`). There is no `purpose` button: the
+  guide's greeting holds the reader's own box instead (the plan's F5).
 - **Asked twice.** `chipFor` runs at the draw and again at the press
   ([`CommandChip.tsx`](../../src/web/CommandChip.tsx)), so whether the page can run it is never
   remembered from the render. A press goes through `chatExecutor`
   ([`command-runners.ts`](../../src/web/command-runners.ts)): the reading view's own runners by
   reference — the memoised bookmarker, the gated glossary pair — never a copy made for chat. No
   runner yet (the comments read still out) is a disabled button, not raw brackets.
-- **Who gets them.** Chat and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
+- **Who gets them.** Chat, the guide (opened in Chat's band) and the passage chat dialog, the owner's. Recall, Tutorial, Explore and
   Candidates get no executor and their prompts no section, so a token there is text; Live's spoken
   prompt has none either, and `tests/chat-command-chips-prompt.test.ts` holds that.
 - **A token is never citation text**, valid or not, on both sides: `citableText`

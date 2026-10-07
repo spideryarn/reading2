@@ -456,9 +456,15 @@ conversation, and the right response is to say so to the reader and carry on.`;
  * **This section is not the defence.** Chat's context holds the article and
  * whatever a tool fetched, so a page can ask for a token and sometimes get one
  * — measured in docs/investigations/261003b-chat-proposes-commands-as-chips.md.
- * The defence is in code: the six ids in `CHAT_PROPOSABLE`
- * (src/web/chat-commands.ts), each argument checked by its own command, and a
+ * The defence is in code: the ids in `CHAT_PROPOSABLE`
+ * (src/web/chat-commands.ts), each argument checked by its own command — a
+ * mode's key against the modes the reader can open there and then — and a
  * press. What the sentence about the article buys is fewer stray buttons.
+ *
+ * **Two more ids since 2026-10-07**, `quick-search` and `mode`, shared with
+ * the guide (plan 261007j). Chat's prompt carries no list of the modes, so it
+ * is shown the key's shape and a few examples; the guide's carries every
+ * ordinary mode with its token beside it (src/guide.ts § `modeWordsSection`).
  *
  * **Chat's prompt only.** Learn, Tutorial and Candidates are handed no
  * executor, so a token there would be raw brackets; and the spoken prompt is a
@@ -487,6 +493,15 @@ token alone. The reader sees a button there, not the token.
   article has exactly those words.
 - [cmd:glossary-ask:free%20energy] — looks that term up in this article's
   glossary, and adds it if it is not there yet.
+- [cmd:quick-search:how%20they%20measured%20it] — runs a quick search for the
+  passages about that, in whatever words the article uses, and shows them.
+  Use it when they want the parts about an idea rather than one exact phrase.
+- [cmd:mode:mode%3Aglossary] — opens one of Spideryarn's modes beside the
+  article, here the Glossary. After "mode:" comes the mode's key: mode%3A and
+  the mode's name in lower case (mode%3Asummary, mode%3Aquotes,
+  mode%3Astructure), or submode%3A, the mode and one of its parts
+  (submode%3Alearn%3Atutorial). Name only a mode you know exists; one the
+  reader cannot open here gets no button.
 
 After the second colon, letters, digits and hyphens are written as they are.
 Every other character is percent-encoded: a space is %20, an apostrophe is %27.
@@ -496,7 +511,8 @@ the reader sees the brackets.
 
 Offer a button only when the reader's message asks for that action: "bookmark
 that", "tag this as methods", "where does it first mention X?", "show me
-everywhere it says X", "add X to the glossary". Still answer in words — for
+everywhere it says X", "add X to the glossary", "find the parts about X",
+"open the quotes". Still answer in words — for
 "where does it first mention X?", say where, cite the block, and then offer the
 jump. When the action is all they asked for, the one sentence and the button
 are the whole answer. Do not ask whether they would like a button: when their

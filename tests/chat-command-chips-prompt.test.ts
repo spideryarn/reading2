@@ -18,6 +18,7 @@ import { LIVE_SYSTEM } from "../src/live.js";
 import type { Block, Meta } from "../src/types.js";
 import { CHAT_PROPOSABLE } from "../src/web/chat-commands.js";
 import { parseProposalToken } from "../src/web/command-proposal.js";
+import catalogue from "../src/command-pick-catalogue.generated.json" with { type: "json" };
 
 const meta = { slug: "a-piece", title: "A piece", url: "https://example.com/a" } as unknown as Meta;
 const blocks = [{ id: "spya-k3m9qt", text: "A paragraph." }] as unknown as Block[];
@@ -74,6 +75,21 @@ describe("the chat prompt's section on offering an action", () => {
     for (const raw of tokensIn(rules("guide"))) {
       expect(CHAT_PROPOSABLE, raw).toContain(parseProposalToken(raw)?.id);
     }
+  });
+
+  /* Plan 261007j: the guide is handed a `mode` button beside every ordinary
+     mode, and none beside an experimental one, which the reader may not have. */
+  it("gives the guide a mode button for every ordinary mode, each a real catalogue key, and none for an experimental one", () => {
+    const keys = tokensIn(rules("guide"))
+      .map((raw) => parseProposalToken(raw))
+      .flatMap((p) => (p?.id === "mode" ? [p.key] : []));
+    const rows = catalogue.filter(
+      (r) => (r.kind === "mode" || r.kind === "submode") && r.contexts.includes("owner-article"),
+    );
+    const ordinary = rows.filter((r) => r.contexts.includes("owner-article-experimental-off")).map((r) => r.id);
+    for (const id of ordinary) expect(keys, id).toContain(id);
+    for (const key of keys) expect(ordinary, key).toContain(key);
+    expect(keys).not.toContain("mode:debate");
   });
 
   it.each(["learn", "tutorial", "explore", "candidates"] as const)("is not in the %s prompt", (kind) => {

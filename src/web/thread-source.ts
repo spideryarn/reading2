@@ -89,6 +89,20 @@ export function listedInChat(thread: { kind: ThreadKind }): boolean {
   return thread.kind !== "candidates" && thread.kind !== "guide";
 }
 
+/**
+ * **Can Chat's band open this conversation, and send to it?** A chat, and the
+ * guide (plan 261007j, GPT Sol's F2: *openable in Chat* is its own idea, apart
+ * from single-thread and from Learn). Not the same set as `listedInChat`: a
+ * Learn row is listed and opens Learn; the guide is pinned rather than listed,
+ * and opens here.
+ */
+export function openableInChat(kind: ThreadKind): boolean {
+  return kind === "chat" || kind === "guide";
+}
+
+/** What the pinned row and the open guide's header call it. */
+export const GUIDE_LABEL = "Guide";
+
 export function threadSource(thread: SourcedThread): ThreadSource | null {
   const { origin, kind, anchor } = thread;
   if (origin) {

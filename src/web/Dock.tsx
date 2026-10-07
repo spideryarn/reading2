@@ -1725,7 +1725,7 @@ function useMetadataEscape(enabled: boolean, href: string): void {
  * as the owner and spend on what was only an arrival. GPT Sol's plan review of
  * docs/plans/261002a-summary-generates-on-open.md, P1.
  */
-function useActivateMode(
+export function useActivateMode(
   slug: string,
   search: string,
   diagram: DiagramKind,
@@ -1784,7 +1784,7 @@ function useActivateMode(
  * Off the reading view it is a link to the article in that sub-mode and arms
  * nothing, as a mode row there is (§ `useActivateMode`).
  */
-function useActivateSubMode(
+export function useActivateSubMode(
   slug: string,
   search: string,
   onMode: Props["onMode"],

@@ -45,6 +45,15 @@ const EXPERIMENTAL_OFF = "owner-article-experimental-off";
  * nothing but that file: a regenerated catalogue is the only thing that moves
  * them. A sub-mode follows its mode. A mode that only shows with experimental
  * features on says so, because the reader may not see it in their bar.
+ *
+ * **Each ordinary one carries its button**, since stage 2 of the plan: the
+ * `mode` proposal's token with the row's own catalogue key already encoded
+ * (`modeToken`), so the model copies a token rather than spelling one. An
+ * experimental one carries none, and the section says to name it in words:
+ * whether the reader can open it is the switch's to say, and a token the
+ * reader's page refuses is drawn as its raw brackets
+ * (src/web/chat-commands.ts § `chipFor`). The page resolves every key against
+ * what it can open now in any case; this only keeps the stray brackets down.
  */
 export function modeWordsSection(rows: readonly CatalogueRow[] = catalogue): string {
   const ours = rows.filter(
@@ -54,10 +63,10 @@ export function modeWordsSection(rows: readonly CatalogueRow[] = catalogue): str
   const lines: string[] = [];
   for (const mode of modes) {
     const name = mode.id.slice("mode:".length);
-    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.`);
+    lines.push(`- ${mode.label}${experimental(mode)}: ${mode.description}.${button(mode)}`);
     for (const sub of ours) {
       if (sub.kind !== "submode" || !sub.id.startsWith(`submode:${name}:`)) continue;
-      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.`);
+      lines.push(`  - ${mode.label} › ${sub.label}${experimental(sub)}: ${sub.description}.${button(sub)}`);
     }
   }
   return `WHAT SPIDERYARN CAN SHOW THEM
@@ -69,7 +78,30 @@ these names exactly, so the reader can find what you mean. "(experimental)"
 means the reader sees it only once they have turned on experimental features on
 their profile page.
 
+When you suggest a mode, you may put its button on a line of its own, after the
+sentence saying what it would do for them: suggesting where to go is answering
+here, so this is one of the times a button needs no asking. Copy the token
+shown beside the mode exactly. A mode marked "(experimental)" has no button:
+name it in words. The same holds for a quick search when you suggest one.
+
 ${lines.join("\n")}`;
+}
+
+/**
+ * **The `mode` proposal's token for one catalogue row** — `[cmd:mode:<key>]`
+ * with the key percent-encoded the way src/web/command-proposal.ts §
+ * `formatProposalToken` encodes it. A key is lower-case letters, `-` and `:`
+ * (command-match.ts § `commandId`), so `:` is the one character to encode.
+ * tests/chat-command-chips-prompt.test.ts runs every token through the real
+ * parser, so a key that ever needed more would fail there.
+ */
+export function modeToken(key: string): string {
+  return `[cmd:mode:${key.replaceAll(":", "%3A")}]`;
+}
+
+/** ` Button: [cmd:mode:…]` for an ordinary row, nothing for an experimental one. */
+function button(row: CatalogueRow): string {
+  return experimental(row) === "" ? ` Button: ${modeToken(row.id)}` : "";
 }
 
 function experimental(row: CatalogueRow): string {

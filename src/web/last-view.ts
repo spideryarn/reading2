@@ -145,6 +145,10 @@ export const NEVER_REMEMBERED = [
   /* Names an open conversation. `NEEDS_AN_EXPLICIT_PRESS` below is why we do
      not put the reader back into a conversation mode at all, either. */
   "thread",
+  /* "Open the guide", which Chat turns into `thread=<the guide's id>` the
+     moment its list answers (params.ts § `guideParam`): an instruction, not a
+     place, and gone from the address before anything could remember it. */
+  "guide",
   /* Search mode's matcher, the thing being matched, and the ordering of its
      results. A search *outlines* the passages that match, so replaying last
      week's over the prose changes what the article looks like on arrival.

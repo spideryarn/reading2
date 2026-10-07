@@ -25,7 +25,7 @@ import { MODE_CATALOG } from "../src/mode-catalog.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeDoor } from "./helpers/dock-more.js";
-import type { Article } from "../src/types.js";
+import type { Article, ChatThread } from "../src/types.js";
 
 /** Who `useSession` says is here. Hoisted, because `vi.mock` is. */
 const who = vi.hoisted(() => {
@@ -174,6 +174,7 @@ const OWNED: Article = {
 
 /** The experimental switch, off unless a case turns it on. */
 let experimentalSince: string | null = null;
+let chatThreads: ChatThread[] = [];
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -188,7 +189,7 @@ function reply(url: string, method: string): Response {
   if (url === "/api/reader") return json({ experimentalSince });
   if (method === "POST") return new Response(null, { status: 204 });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
-  if (url.startsWith("/api/chat/")) return json({ threads: [] });
+  if (url.startsWith("/api/chat/")) return json({ threads: chatThreads });
   if (url === "/api/jobs") return json({ jobs: [] });
   return json({});
 }
@@ -206,6 +207,7 @@ beforeEach(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   who.set({ id: "herald-owner", email: "owner@example.com" });
   experimentalSince = null;
+  chatThreads = [];
   resetExperimental();
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
     Promise.resolve(reply(String(input), init?.method ?? "GET")),
@@ -363,5 +365,48 @@ describe("the command bar's quick search through Reader", () => {
     await until(() => new URLSearchParams(location.search).get("match") === matcher);
     expect(modeInUrl()).toBe("search");
     expect(new URLSearchParams(location.search).get("find")).toBe("entropy");
+  });
+});
+
+const CHIP_THREAD = "spya-k3m9qt";
+const CHIP_AT = "2026-10-07T09:00:00.000Z";
+
+function chatWith(token: string): ChatThread {
+  return {
+    id: CHIP_THREAD,
+    kind: "chat",
+    title: "Where should I go?",
+    createdAt: CHIP_AT,
+    updatedAt: CHIP_AT,
+    messages: [
+      { id: "spya-qestaa", role: "user", text: "Where should I go?", createdAt: CHIP_AT, status: "done" },
+      { id: "spya-answaa", role: "assistant", text: token, createdAt: CHIP_AT, status: "done" },
+    ],
+  };
+}
+
+describe("a mode chip through Reader's live mode door", () => {
+  it("reaches the Dock activator and opens an ordinary mode", async () => {
+    chatThreads = [chatWith("[cmd:mode:mode%3Aquotes]")];
+    await open(`?mode=chat&thread=${CHIP_THREAD}`);
+    const chip = host.querySelector<HTMLButtonElement>("button.cmd-chip");
+    expect(chip?.textContent).toContain("Open Quotes");
+    await act(async () => chip?.click());
+    await until(() => modeInUrl() === "quotes");
+    expect(herald()).toContain(MODE_LABEL.quotes);
+  });
+
+  it("does not make a current experimental mode runnable when the switch is off", async () => {
+    chatThreads = [chatWith("[cmd:mode:mode%3Atimeline]")];
+    await open(`?mode=timeline&thread=${CHIP_THREAD}`);
+    expect(host.querySelector("button.cmd-chip")).toBeNull();
+    expect(text()).toContain("[cmd:mode:mode%3Atimeline]");
+  });
+
+  it("does not make a retained experimental sub-mode runnable when the switch is off", async () => {
+    chatThreads = [chatWith("[cmd:mode:submode%3Adiagram%3Aforce]")];
+    await open(`?mode=chat&diagram=force&thread=${CHIP_THREAD}`);
+    expect(host.querySelector("button.cmd-chip")).toBeNull();
+    expect(text()).toContain("[cmd:mode:submode%3Adiagram%3Aforce]");
   });
 });

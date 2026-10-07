@@ -167,7 +167,7 @@ const posts = () => calls.filter((c) => c.method === "POST");
  */
 describe("ConversationBand's handoff that sends", () => {
   it("sends the question once under StrictMode, to the one conversation it began", async () => {
-    await mount({ slug: SLUG, question: QUESTION, send: true });
+    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: true });
 
     expect(threads()).toHaveLength(1);
     const fresh = threads()[0] as ChatThread;
@@ -185,7 +185,7 @@ describe("ConversationBand's handoff that sends", () => {
 
   it("sends the origin with it", async () => {
     const origin = { mode: "glossary", itemId: "spya-aaaaaa", quote: "axiom" } as const;
-    await mount({ slug: SLUG, question: QUESTION, send: true, origin });
+    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: true, origin });
     expect(posts()).toHaveLength(1);
     expect(posts()[0]?.body).toMatchObject({ question: QUESTION, origin });
   });
@@ -194,6 +194,7 @@ describe("ConversationBand's handoff that sends", () => {
     const anchor = { blockId: "spya-bbbbbb", quote: "a passage", start: 4 } as const;
     const handoff = {
       slug: SLUG,
+      target: "chat" as const,
       question: QUESTION,
       send: true,
       anchor,
@@ -213,7 +214,7 @@ describe("ConversationBand's handoff that sends", () => {
   });
 
   it("does not send again when the band re-renders with the same handoff", async () => {
-    const handoff = { slug: SLUG, question: QUESTION, send: true };
+    const handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: true };
     await mount(handoff);
     await act(async () => root.render(band(handoff)));
     await settle();
@@ -231,7 +232,7 @@ describe("ConversationBand's handoff that sends", () => {
   it("sends once while the list is still loading, and begins no second conversation when it lands", async () => {
     holdList = true;
     history.replaceState(null, "", "/a-piece?mode=chat");
-    await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: true })));
+    await act(async () => root.render(band({ slug: SLUG, target: "chat" as const, question: QUESTION, send: true })));
     await settle();
     expect(posts()).toHaveLength(1);
     const sentTo = (posts()[0]!.body as { threadId: string }).threadId;
@@ -246,14 +247,14 @@ describe("ConversationBand's handoff that sends", () => {
   });
 
   it("sends nothing for a question asked in another article", async () => {
-    await mount({ slug: "another-piece", question: QUESTION, send: true });
+    await mount({ slug: "another-piece", target: "chat" as const, question: QUESTION, send: true });
     expect(posts()).toHaveLength(0);
   });
 });
 
 describe("ConversationBand's handoff", () => {
   it("mints one conversation under StrictMode, seeds it, and opens it", async () => {
-    await mount({ slug: SLUG, question: QUESTION, send: false });
+    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: false });
 
     /* One, not two — and not a second, empty one from the arrival rule either,
        which fires on exactly this state (no conversations, list loaded). */
@@ -281,7 +282,7 @@ describe("ConversationBand's handoff", () => {
         messages: [],
       },
     ];
-    await mount({ slug: SLUG, question: QUESTION, send: false });
+    await mount({ slug: SLUG, target: "chat" as const, question: QUESTION, send: false });
     expect(threads().map((t) => t.id)).toContain("spya-k3m9qt");
     expect(threads()).toHaveLength(2);
     expect(panel?.threadId).not.toBe("spya-k3m9qt");
@@ -290,7 +291,7 @@ describe("ConversationBand's handoff", () => {
   });
 
   it("does not take the same handoff twice when the band re-renders with it", async () => {
-    const handoff = { slug: SLUG, question: QUESTION, send: false };
+    const handoff = { slug: SLUG, target: "chat" as const, question: QUESTION, send: false };
     await mount(handoff);
     await act(async () => root.render(band(handoff)));
     await settle();
@@ -308,7 +309,7 @@ describe("ConversationBand's handoff", () => {
   it("does not reopen an empty conversation after the reader closes the handed-over one", async () => {
     holdList = true;
     history.replaceState(null, "", "/a-piece?mode=chat");
-    await act(async () => root.render(band({ slug: SLUG, question: QUESTION, send: false })));
+    await act(async () => root.render(band({ slug: SLUG, target: "chat" as const, question: QUESTION, send: false })));
     await settle();
     expect(threads()).toHaveLength(1);
     const fresh = (threads()[0] as ChatThread).id;
@@ -330,7 +331,7 @@ describe("ConversationBand's handoff", () => {
   });
 
   it("drops a question asked in another article, and starts only the ordinary empty one", async () => {
-    await mount({ slug: "another-piece", question: QUESTION, send: false });
+    await mount({ slug: "another-piece", target: "chat" as const, question: QUESTION, send: false });
     expect(taken, "refused, but still handed back").toBeGreaterThan(0);
     for (const t of threads()) expect(chatDraftsFor(SLUG).thread(t.id)).toBeUndefined();
     for (const t of threads()) expect(chatDraftsFor("another-piece").thread(t.id)).toBeUndefined();

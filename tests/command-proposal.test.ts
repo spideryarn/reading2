@@ -22,6 +22,7 @@ import {
   PROPOSAL_IDS,
   RISK,
   formatProposalToken,
+  proposalRisk,
   parseProposalToken,
   proposalWords,
   resolveArgument,
@@ -47,8 +48,81 @@ describe("RISK", () => {
       "tag-add": "writes",
       "tag-remove": "writes",
       bookmark: "writes",
+      mode: "per-mode",
+      "quick-search": "spends",
     });
     expect([...PROPOSAL_IDS].sort()).toEqual(Object.keys(RISK).sort());
+  });
+
+  /* GPT Sol's F3 on plan 261007j: one `mode` id cannot honestly carry one
+     marker, so the answer is the target's own. */
+  it("asks a mode's own target whether opening it spends, and over-warns without one", () => {
+    const target = (generates: boolean) => ({ key: "mode:x", label: "X", description: "", generates });
+    expect(proposalRisk({ id: "mode", key: "mode:summary" }, target(true))).toBe("spends");
+    expect(proposalRisk({ id: "mode", key: "mode:structure" }, target(false))).toBe("navigate");
+    expect(proposalRisk({ id: "mode", key: "mode:structure" })).toBe("spends");
+    expect(proposalRisk({ id: "quick-search", words: "x" })).toBe("spends");
+  });
+});
+
+describe("the two proposals chat and the guide share (plan 261007j)", () => {
+  it("parses a mode key of either shape, and nothing else", () => {
+    expect(parseProposalToken("[cmd:mode:mode%3Aglossary]")).toEqual({ id: "mode", key: "mode:glossary" });
+    expect(parseProposalToken("[cmd:mode:submode%3Alearn%3Atutorial]")).toEqual({
+      id: "mode",
+      key: "submode:learn:tutorial",
+    });
+    for (const raw of [
+      "[cmd:mode:glossary]",
+      "[cmd:mode:page%3A%2Fprofile]",
+      "[cmd:mode:action%3Aarchive]",
+      "[cmd:mode:mode%3AGlossary]",
+      "[cmd:mode:mode%3A]",
+      "[cmd:mode:]",
+    ]) {
+      expect(parseProposalToken(raw), raw).toBeNull();
+    }
+  });
+
+  it("parses a quick search's words with find's rule, and round-trips both", () => {
+    expect(parseProposalToken("[cmd:quick-search:how%20%20they%20measured]")).toEqual({
+      id: "quick-search",
+      words: "how they measured",
+    });
+    expect(parseProposalToken("[cmd:quick-search:%20%20]")).toBeNull();
+    expect(parseProposalToken(`[cmd:quick-search:${"a".repeat(201)}]`)).toBeNull();
+    for (const proposal of [
+      { id: "mode", key: "submode:learn:tutorial" },
+      { id: "quick-search", words: "rock & roll" },
+    ] as const) {
+      expect(parseProposalToken(formatProposalToken(proposal))).toEqual(proposal);
+    }
+  });
+
+  it("words them as the bar's own rows do, the mode's marker its own", () => {
+    const summary = { key: "mode:summary", label: "Summary", description: "The piece restated", generates: true };
+    const structure = { key: "mode:structure", label: "Structure", description: "Its shape", generates: false };
+    expect(proposalWords({ id: "mode", key: summary.key }, undefined, summary)).toEqual({
+      label: "Open Summary",
+      description: "The piece restated",
+      generates: true,
+    });
+    expect(proposalWords({ id: "mode", key: structure.key }, undefined, structure).generates).toBe(false);
+    expect(proposalWords({ id: "quick-search", words: "priors" })).toEqual({
+      label: "Quick search “priors”",
+      description: "Search mode, a fast first pass for the passages about this.",
+      generates: true,
+    });
+  });
+
+  it("runs each through its own runner", () => {
+    const mode = vi.fn(() => ({ kind: "close" }) as const);
+    const quick = vi.fn(() => ({ kind: "close" }) as const);
+    runProposal({ mode, "quick-search": quick }, { id: "mode", key: "mode:glossary" });
+    runProposal({ mode, "quick-search": quick }, { id: "quick-search", words: "x" });
+    expect(mode).toHaveBeenCalledWith({ id: "mode", key: "mode:glossary" });
+    expect(quick).toHaveBeenCalledWith({ id: "quick-search", words: "x" });
+    expect(runProposal({}, { id: "mode", key: "mode:glossary" })).toBeNull();
   });
 });
 
@@ -202,6 +276,7 @@ describe("proposalWords", () => {
       { id: "tag-add", tag: "x" },
       { id: "tag-remove", tag: "x" },
       { id: "bookmark", blockId: BLOCK },
+      { id: "quick-search", words: "x" },
     ] as const) {
       expect(words(proposal).generates, proposal.id).toBe(RISK[proposal.id] === "spends");
     }
