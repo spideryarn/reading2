@@ -11,7 +11,7 @@
  * docs/plans/261007f-tidy-the-never-published-production-articles.md.
  */
 
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -48,7 +48,7 @@ import {
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { type OwnerId, runAsOwner } from "../src/owner.js";
-import { aiCallInsertValues } from "../src/store/ai-calls-pg.js";
+import { aiCallInsertValues, pgCostStore } from "../src/store/ai-calls-pg.js";
 import { createPgCheckpointStore } from "../src/store/checkpoints-pg.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { lockOrCreateArticle } from "../src/store/pg-revisions.js";
@@ -93,6 +93,7 @@ async function age(ids: readonly string[]) {
   await getDb().update(articles).set({ createdAt: then }).where(inArray(articles.id, [...ids]));
   await getDb().update(checkpoints).set({ createdAt: then, lastUsedAt: then }).where(inArray(checkpoints.articleId, [...ids]));
   await getDb().update(blockIdentities).set({ firstSeenAt: then }).where(inArray(blockIdentities.articleId, [...ids]));
+  await getDb().update(aiCalls).set({ createdAt: then }).where(inArray(aiCalls.articleId, [...ids]));
 }
 
 /** One model call of this file's owner, as the ledger writes it; the shape of tests/store-ai-calls.test.ts's. */
@@ -353,6 +354,18 @@ describe("--delete refuses", () => {
   it("a backup directory inside the repository", async () => {
     await expect(writeBackup(getDb(), [A], path.resolve(import.meta.dirname, "..", "data"))).rejects.toThrow(/inside the repository/);
   });
+
+  it("a backup directory outside the repository by name that is the repository by real path", async () => {
+    /* Sol's R7: the old check was lexical, and a symlink got past it. */
+    const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-link-"));
+    try {
+      const link = path.join(dir, "looks-outside");
+      symlinkSync(path.resolve(import.meta.dirname, ".."), link);
+      await expect(writeBackup(getDb(), [A], link)).rejects.toThrow(/inside the repository/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("--delete", () => {
@@ -560,5 +573,76 @@ describe("the command, when nothing is in the way", () => {
     expect([h.calls.backup, h.calls.destroy]).toEqual([0, []]);
     expect(await stillThere(a.id)).toBe(true);
     expect(h.lines.join("\n")).toMatch(/Nothing deleted/);
+  });
+});
+
+describe("restore", () => {
+  /** Every row the delete touches, every column, as Postgres sees it now. */
+  async function everything(ids: readonly string[]) {
+    const list = ids.map((id) => `'${id}'::uuid`).join(", ");
+    const q = async (text: string) => (await pool.query(text)).rows.map((r: { j: unknown }) => r.j);
+    return {
+      articles: await q(`select row_to_json(t) as j from spideryarn.articles t where id in (${list}) order by id`),
+      block_identities: await q(`select row_to_json(t) as j from spideryarn.block_identities t where article_id in (${list}) order by article_id, block_id`),
+      checkpoints: await q(`select row_to_json(t) as j from spideryarn.checkpoints t where article_id in (${list}) order by article_id, namespace, key`),
+      ai_calls: await q(`select row_to_json(t) as j from spideryarn.ai_calls t where owner_id = '${OWNER}' order by id`),
+    };
+  }
+
+  it("puts back exactly what the delete took, every column, and re-links the ledger", async () => {
+    /* Throwaway never-published articles made the way a failed first import
+       makes them: `lockOrCreateArticle` for the row, the checkpoint store for
+       a PDF chunk, and the cost ledger's own `record` for the model calls
+       (which finds the article id from the slug). Identities are inserted
+       directly — the store mints them only inside a draft, which these rows
+       must not have. */
+    const a = await failedFirstImport("restore-a", { identities: 4, checkpoint: true });
+    const b = await failedFirstImport("restore-b", { identities: 0 });
+    await asOwner(() => getDb().update(articles).set({ askedUrl: "https://example.org/paper" }).where(eq(articles.id, a.id)));
+    for (const slug of [a.slug, a.slug, b.slug]) {
+      await pgCostStore.record(aiCall({ articleSlug: slug, finishedAt: new Date(Date.now() - 30 * DAY).toISOString() }));
+    }
+    await age([a.id, b.id]);
+    const before = await everything([a.id, b.id]);
+    expect([before.articles.length, before.block_identities.length, before.checkpoints.length, before.ai_calls.length]).toEqual([2, 4, 1, 3]);
+    expect(before.ai_calls.every((r) => (r as { article_id: string | null }).article_id !== null)).toBe(true);
+
+    const s = scratch([a.id, b.id]);
+    let backupFile = "";
+    const h = harness({
+      writeBackup: async (...args) => {
+        const written = await writeBackup(...args);
+        backupFile = written.file;
+        return written;
+      },
+    });
+    try {
+      expect(await main(["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], h.deps)).toBe(0);
+      const gone = await everything([a.id, b.id]);
+      expect([gone.articles.length, gone.block_identities.length, gone.checkpoints.length]).toEqual([0, 0, 0]);
+      expect(gone.ai_calls.map((r) => (r as { article_id: string | null }).article_id)).toEqual([null, null, null]);
+
+      const r = harness();
+      expect(await main(["--restore", backupFile], r.deps)).toBe(0);
+      expect(r.lines.join("\n")).toMatch(/2 articles, 4 block identities, 1 checkpoints; 3 ai_calls re-linked/);
+      expect(await everything([a.id, b.id])).toEqual(before);
+
+      /* And a second restore refuses, changing nothing. */
+      await expect(main(["--restore", backupFile], harness().deps)).rejects.toThrow(/already there/);
+      expect(await everything([a.id, b.id])).toEqual(before);
+    } finally {
+      s.done();
+    }
+  });
+
+  it("refuses a file that is not a backup, before connecting", async () => {
+    const s = scratch([]);
+    const h = harness();
+    try {
+      await expect(main(["--restore", s.idsFile], h.deps)).rejects.toThrow();
+      expect(h.calls.connect).toBe(0);
+    } finally {
+      s.done();
+    }
   });
 });

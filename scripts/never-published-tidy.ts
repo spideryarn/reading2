@@ -6,6 +6,7 @@
  *     npx tsx scripts/never-published-tidy.ts --prod                # production, dry run (read-only)
  *     npx tsx scripts/never-published-tidy.ts --prod --delete \
  *       --ids <file of article ids> --backup-dir <dir outside the repo>
+ *     npx tsx scripts/never-published-tidy.ts --restore <backup file>  # the undo (add --prod only to undo the real run)
  *
  * `beginRevision`/`lockOrCreateArticle` write the `articles` row before there
  * is anything in it, so a first import that fails leaves a row no reader can
@@ -43,7 +44,7 @@
  *
  * `console.log`, not `log()` — this is a CLI. CLAUDE.md § Writing code.
  */
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { sql } from "drizzle-orm";
@@ -420,21 +421,109 @@ export async function writeBackup(
   ids: readonly string[],
   dir: string,
 ): Promise<{ file: string; backup: Backup }> {
-  const repo = path.resolve(import.meta.dirname, "..");
-  const abs = path.resolve(dir);
-  if (abs === repo || abs.startsWith(repo + path.sep)) {
+  /* Lexically first, so a directory inside the repository is never even
+     created; then by real path, once it exists, so a symlink from outside
+     that points in is caught too (Sol's R7). */
+  const repo = realpathSync(path.resolve(import.meta.dirname, ".."));
+  const inside = (p: string) => p === repo || p.startsWith(repo + path.sep);
+  const refuseInside = () => {
     throw new TidySafetyError("refusing: --backup-dir is inside the repository, and the backup holds content");
-  }
+  };
+  if (inside(path.resolve(dir))) refuseInside();
+  mkdirSync(path.resolve(dir), { recursive: true, mode: 0o700 });
+  const abs = realpathSync(path.resolve(dir));
+  if (inside(abs)) refuseInside();
+
   const dump = await db.transaction(async (tx) => await dumpRows(tx, ids), { accessMode: "read only" });
-  mkdirSync(abs, { recursive: true, mode: 0o700 });
+  if (dump.articles.length !== ids.length) {
+    throw new TidySafetyError(`refusing: the backup would hold ${dump.articles.length} article rows for ${ids.length} ids`);
+  }
   const file = path.join(abs, `never-published-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   writeFileSync(file, JSON.stringify({ written_at: new Date().toISOString(), ids, ...dump }), { mode: 0o600, flag: "wx" });
   chmodSync(file, 0o600);
-  const counted = dump.articles.length;
-  if (counted !== ids.length) {
-    throw new TidySafetyError(`refusing: the backup holds ${counted} article rows for ${ids.length} ids`);
+
+  /* **Verified from the disk, not from memory**: read back, parsed, and every
+     table's count and every article id checked against what was read from the
+     database. The copy the delete compares against under the lock is this
+     one, the file. */
+  if ((statSync(file).mode & 0o777) !== 0o600) throw new TidySafetyError(`refusing: ${file} is not 0600`);
+  const backup = readBackup(file);
+  const wrong = (Object.keys(dump) as (keyof BackupRows)[]).filter((k) => backup[k].length !== dump[k].length);
+  const sameIds = [...ids].sort().join() === backup.articles.map((r) => String(r.id)).sort().join() &&
+    [...ids].sort().join() === [...backup.ids].sort().join();
+  if (wrong.length > 0 || !sameIds) {
+    throw new TidySafetyError(`refusing: the backup read back from ${file} does not match what was written (${wrong.join(", ") || "article ids"})`);
   }
-  return { file, backup: JSON.parse(readFileSync(file, "utf8")) as Backup };
+  return { file, backup };
+}
+
+/** A backup file, parsed, with its shape checked. Throws `TidySafetyError` on anything else. */
+export function readBackup(file: string): Backup {
+  const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<Backup>;
+  const tables: (keyof BackupRows)[] = ["articles", "block_identities", "checkpoints", "ai_calls_unlinked", "uploads_left_with_a_stale_slug"];
+  if (!Array.isArray(parsed.ids) || typeof parsed.written_at !== "string" || tables.some((t) => !Array.isArray(parsed[t]))) {
+    throw new TidySafetyError(`refusing: ${file} is not a never-published backup`);
+  }
+  return parsed as Backup;
+}
+
+export interface Restored {
+  readonly articles: number;
+  readonly blockIdentities: number;
+  readonly checkpoints: number;
+  readonly aiCallsRelinked: number;
+}
+
+/**
+ * **The undo**: the backed-up `articles`, `block_identities` and `checkpoints`
+ * rows inserted back exactly as `row_to_json` wrote them
+ * (`json_populate_recordset` over each table's own row type, so every column
+ * comes back), and each unlinked `ai_calls` row pointed at its article again —
+ * only where its `article_id` is still null. One transaction, and every count
+ * must match the file or it all rolls back. Refuses if any article is already
+ * there. The `uploads` rows were never changed, so there is nothing to put
+ * back for them.
+ *
+ * Exercised on throwaway local data by tests/never-published-tidy.test.ts §
+ * "restore". It has not been, and is not to be, run against production
+ * except to undo this plan's delete, by somebody cleared to write there.
+ */
+export async function restoreBackup(db: Db, backup: Backup): Promise<Restored> {
+  return await db.transaction(async (tx) => {
+    const ids = backup.articles.map((r) => String(r.id));
+    if (ids.length === 0) throw new TidySafetyError("refusing: the backup holds no articles");
+    const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+    const [present] = (await tx.execute(sql`select count(*)::int as n from spideryarn.articles where id in (${list})`)).rows as Row[];
+    if (num(present?.n) > 0) throw new TidySafetyError(`refusing: ${num(present?.n)} of the backed-up articles are already there`);
+
+    const put = async (table: "articles" | "block_identities" | "checkpoints", rows: Row[]) => {
+      if (rows.length === 0) return 0;
+      const done = await tx.execute(sql`
+        insert into ${sql.raw(`spideryarn.${table}`)}
+        select * from json_populate_recordset(null::${sql.raw(`spideryarn.${table}`)}, ${JSON.stringify(rows)}::json)`);
+      if (done.rowCount !== rows.length) {
+        throw new TidySafetyError(`refusing: ${table} put back ${done.rowCount} of ${rows.length}`);
+      }
+      return rows.length;
+    };
+    const restored = {
+      articles: await put("articles", backup.articles),
+      blockIdentities: await put("block_identities", backup.block_identities),
+      checkpoints: await put("checkpoints", backup.checkpoints),
+      aiCallsRelinked: 0,
+    };
+    if (backup.ai_calls_unlinked.length > 0) {
+      const relinked = await tx.execute(sql`
+        update spideryarn.ai_calls c set article_id = x.article_id
+        from json_to_recordset(${JSON.stringify(backup.ai_calls_unlinked)}::json) as x(id uuid, article_id uuid)
+        where c.id = x.id and c.article_id is null`);
+      if (relinked.rowCount !== backup.ai_calls_unlinked.length) {
+        throw new TidySafetyError(`refusing: ${relinked.rowCount} of ${backup.ai_calls_unlinked.length} ai_calls rows could be re-linked`);
+      }
+      restored.aiCallsRelinked = backup.ai_calls_unlinked.length;
+    }
+    return restored;
+  });
 }
 
 export interface Destroyed {
@@ -617,13 +706,17 @@ export async function main(args: readonly string[], deps: MainDeps = realDeps())
     const i = args.indexOf(name);
     return i >= 0 ? args[i + 1] : undefined;
   };
-  const known = new Set(["--prod", "--delete", "--ids", "--backup-dir", "--quiet-days"]);
-  const unknown = args.filter((arg, i) => arg.startsWith("--") ? !known.has(arg) : !["--ids", "--backup-dir", "--quiet-days"].includes(args[i - 1] ?? ""));
+  const known = new Set(["--prod", "--delete", "--ids", "--backup-dir", "--quiet-days", "--restore"]);
+  const unknown = args.filter((arg, i) => arg.startsWith("--") ? !known.has(arg) : !["--ids", "--backup-dir", "--quiet-days", "--restore"].includes(args[i - 1] ?? ""));
   if (unknown.length > 0) {
-    throw new TidySafetyError("Unknown arguments. This takes --prod, --delete, --ids <file>, --backup-dir <dir>, --quiet-days <n>.");
+    throw new TidySafetyError("Unknown arguments. This takes --prod, --delete, --ids <file>, --backup-dir <dir>, --quiet-days <n>, --restore <backup file>.");
   }
   const prod = flag("--prod");
   const doDelete = flag("--delete");
+  const restoreFile = value("--restore");
+  if (flag("--restore") && (!restoreFile || doDelete)) {
+    throw new TidySafetyError("--restore takes one backup file, and not --delete as well.");
+  }
   const quietDays = value("--quiet-days") === undefined ? DEFAULT_QUIET_DAYS : Number(value("--quiet-days"));
   if (!Number.isInteger(quietDays) || quietDays < 1) {
     throw new TidySafetyError("--quiet-days must be a whole number of days, at least 1.");
@@ -642,12 +735,27 @@ export async function main(args: readonly string[], deps: MainDeps = realDeps())
   }
   out(`Target: ${withoutPassword(url) ?? "(a DATABASE_URL that is not a parsable URL)"}`);
   out(`Env:    ${file}`);
-  out(`Mode:   ${doDelete ? "DELETE" : "dry run (read-only transaction; see the header for --delete)"}`);
+  out(`Mode:   ${restoreFile ? "RESTORE" : doDelete ? "DELETE" : "dry run (read-only transaction; see the header for --delete)"}`);
   /* **Production only when asked for by name.** Without this, a production URL
      pasted into `.env.local` is reached with no `--prod` on the command line
      at all. Before connecting. GPT Sol's R2. */
   if (!prod && !isLocalDatabaseUrl(url)) {
     throw new TidySafetyError(`refusing: ${file} points at a database that is not local, and --prod was not given`);
+  }
+
+  if (restoreFile) {
+    /* Read and checked before connecting: a file that is not a backup is
+       refused without touching the database. */
+    const backup = readBackup(restoreFile);
+    const { db, end } = deps.connect(url, true);
+    try {
+      const r = await restoreBackup(db, backup);
+      out(`Restored from ${restoreFile}: ${r.articles} articles, ${r.blockIdentities} block identities, ` +
+        `${r.checkpoints} checkpoints; ${r.aiCallsRelinked} ai_calls re-linked.`);
+      return 0;
+    } finally {
+      await end();
+    }
   }
 
   const { db, end } = deps.connect(url, doDelete);
