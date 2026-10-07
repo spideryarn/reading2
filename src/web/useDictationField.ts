@@ -379,6 +379,13 @@ export function useDictationField<C>({
   });
 
   const toggle = useCallback(() => {
+    /* **A press at or past the cap was aimed at a Stop the cap has already
+       pressed.** This render still says `armed`, so without this the press
+       would open the double-press window, and a second one would send a
+       dictation nobody asked to send. The hook ignores the press too
+       (`CAP_PRESS_GRACE_MS`); this is the half that keeps the field's own
+       state out of it. GPT Sol's code review of 261007b, C1. */
+    if (dictation.armed && dictation.endsAt !== null && Date.now() >= dictation.endsAt) return;
     if (dictation.armed) {
       /* The Stop press: a second one counts from now, for a moment. */
       closeAgain();

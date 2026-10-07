@@ -6201,8 +6201,9 @@ export type CrossrefsFound = CrossrefsResponse;
  * because the offline cache and several tests match these URLs by a pattern
  * that ends at the slug. "No such article" is a 404 either way.
  *
- * **Not every artefact read**: tweets, relations, Skim, Sketch and Arc still
- * answer a plain 404 and do not look at this header.
+ * **Not every artefact read.** Six still answer a 404 whatever is sent; they
+ * are named, with what is left to do for each, in
+ * src/store/artefact-not-made-yet.ts, which is the one list.
  *
  * The server's half is `orNullWhenNotMadeYet` in src/routes.ts. It goes, and
  * `200 null` becomes unconditional, the day there is a client-version
@@ -7290,21 +7291,34 @@ export const EARLIER_FEEDBACK_LIMIT = 50;
  * pasted article cannot become an attachment, which is the case the cap is
  * really for.
  *
- * It used to be *per answer*, and there were three of them, so the reader's
- * ceiling has quietly dropped from 12,000 characters to 4,000. Left where it is
- * on purpose: 4,000 characters is a very long report, the number is written into
- * a CHECK constraint by hand, and the failure is a sentence asking the reader to
- * trim rather than a report that goes missing.
+ * **12,000 since 2026-10-07; it was 4,000**, and the reason is dictation. A
+ * dictation may now run fifteen minutes (`MAX_MS`, src/web/mic-recording.ts),
+ * which at an even 150 words a minute is about 13,000 characters, and Greg was
+ * cut off dictating a long report into this box (spya-n8cuqq). At 4,000 the box
+ * would have refused what the microphone had just been allowed to take.
+ * 12,000 is what the column's CHECK already admits (`MAX_FEEDBACK_BODY_CHARS`
+ * below), so no migration went with it. Past it the failure is a sentence
+ * asking the reader to trim, with every word still in the box. Plan
+ * docs/plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md.
  */
-export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
+export const MAX_FEEDBACK_ANSWER_CHARS = 12_000;
+
+/**
+ * The cap on **each of the three answers a stale client sends** — the dialog's
+ * shape before 2026-09-02, still folded into one `body` by src/routes.ts §
+ * `feedbackBody`. It was `MAX_FEEDBACK_ANSWER_CHARS` until that one went up;
+ * these stay at the 4,000 they were written under, because three at 12,000
+ * would pass the route and then fail the column's CHECK as a database error.
+ */
+export const MAX_LEGACY_FEEDBACK_ANSWER_CHARS = 4_000;
 
 /**
  * The longest a `feedback.body` may be **in the database**, which is three times
- * the number above plus the headings — and that is not sloppiness, it is what
+ * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` plus the headings — and that is not sloppiness, it is what
  * the backfill needs.
  *
  * Reports filed before 2026-09-02 are three answers, each capped at
- * `MAX_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
+ * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS` separately, glued under the headings src/feedback.ts
  * used to write. Three full ones come to exactly 12,072 characters. The column's
  * CHECK has to admit that, or the migration that wrote them into `body` would
  * fail on a row that was legal when it was filed — and the alternative, cutting
@@ -7313,7 +7327,7 @@ export const MAX_FEEDBACK_ANSWER_CHARS = 4_000;
  * **The reader's limit is still `MAX_FEEDBACK_ANSWER_CHARS`**: the route refuses
  * more and the dialog says so. This one is the ceiling under which no historical
  * row is illegal, and it is also what a report from a *stale client* folds into
- * — src/routes.ts § `legacyBody`.
+ * — src/routes.ts § `feedbackBody`.
  */
 export const MAX_FEEDBACK_BODY_CHARS = 12_072;
 
@@ -7444,10 +7458,11 @@ export interface AdminFeedbackReport {
    *
    * **Not length-capped on the way out.** Reports filed before 2026-09-02 carry
    * the three old answers glued together with their headings, so a legacy body
-   * can legitimately be three times the dialog's current limit. A renderer that
-   * truncates to `MAX_FEEDBACK_ANSWER_CHARS` would silently cut the oldest
-   * reports — the ones most likely to be the reason somebody opened this page.
-   * GPT Sol, 2026-09-02.
+   * can legitimately be longer than the dialog's limit (`MAX_FEEDBACK_BODY_CHARS`
+   * against `MAX_FEEDBACK_ANSWER_CHARS`: three times it until 2026-10-07, 72
+   * characters over it since). A renderer that truncates to the dialog's limit
+   * would silently cut the oldest reports — the ones most likely to be the
+   * reason somebody opened this page. GPT Sol, 2026-09-02.
    */
   body: string;
   /**

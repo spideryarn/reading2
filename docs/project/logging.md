@@ -183,7 +183,7 @@ the name you meant.
 
 | component | file | what it says |
 |---|---|---|
-| `http` | [`src/routes.ts`](../../src/routes.ts) | one line per API request: method, path, status, `ms`. Level follows the status — 4xx is the client's fault and is not an alarm, 5xx is ours and is |
+| `http` | [`src/routes.ts`](../../src/routes.ts) | one line per API request: method, path, status, `ms`. Level follows the status — 4xx is the client's fault and is not an alarm, 5xx is ours and is. One exception: a handler that fails after its response has started keeps the status it sent (a stream's 200) in `status` and takes its level from the failure, so a fault there is still `error` ([sentry-error-monitoring.md § What reaches it](sentry-error-monitoring.md#what-reaches-it-and-what-does-not)) |
 | `jobs` | [`src/jobs.ts`](../../src/jobs.ts) | the queue: enqueued, each step's transition, the outcome — and **what the step cost in money**, on every one of those three. See [ingest-queue.md](ingest-queue.md) |
 | `pipeline` | [`src/pipeline.ts`](../../src/pipeline.ts) | **what a step cost in tokens** — model, tokens in and out, `ms`. Its `model` is the stamp name (`claude-sonnet-5`), not the wire id the request carried; [setup-dev.md](setup-dev.md) says why those differ |
 | `store` | [`src/store/pg.ts`](../../src/store/pg.ts) and the rest of `src/store/`; [`src/comments.ts`](../../src/comments.ts) and its siblings only for their surviving fixture readers | store-level failures — historically chiefly the fixture fallback, below, which no longer exists now the store is Postgres-only |

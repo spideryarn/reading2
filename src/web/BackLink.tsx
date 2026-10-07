@@ -46,6 +46,8 @@
  * **The house is drawn only where there is no corner logo** — `HomeLink`
  * below, since 2026-10-05. `/profile` and the admin index lost their arrow to
  * the library the same day, for the same reason: `HomeLogo` is beside both.
+ * The reading view's masthead lost its arrow on 2026-10-07 (spya-us7e4v):
+ * there the logo is `DockHome` in the bottom bar.
  */
 import { createContext, useContext } from "react";
 import { ArrowLeft, House } from "lucide-react";

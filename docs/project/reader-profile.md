@@ -874,7 +874,25 @@ state: it is not in the URL and is not remembered, so the three start shut on ev
 read-outs are fed by fetches the page owns, so shutting a section cancels nothing.
 
 **The contents list and its search box are in the left margin**, as on Metadata, from 1024px wide
-up; an iPad in portrait and a phone do not get them. Pressing an entry opens that section if it is
+up. **Below that they are above the page**, in its own column: the search box, then a *Contents*
+button that opens the list, shut until pressed. On `/profile` that is under the one-line
+introduction and above *Account*; on Metadata, under the title and the Archive/Share row and above
+the first section. An iPad in portrait and a phone did not get them at all until 2026-10-07:
+
+> On something like a portrait iPhone, obviously it's not wide enough. So perhaps we should then
+> put the search bar and table of contents above the actual contents of the page, like the metadata
+> or the profile page, because I think that's a useful piece of functionality for helping people
+> navigate.
+>
+> — Greg, 2026-10-06, feedback report `spya-vwf00u`
+
+It is one `<nav>` with two placements, not two lists, which is why each page mounts it inside
+`<main>` at the narrow one's spot. A typed query shows its matches without *Contents* being
+pressed, and the button is not drawn while it does. Shut by default is the one product choice in
+it: about fifteen rows a finger can press are a phone's whole first screen.
+[Plan 261007c](../plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md).
+
+Pressing an entry opens that section if it is
 shut, scrolls to it and flashes it. 261003k left this as a question, and Greg's answer was:
 
 > Q-profile-contents-list I don't understand the question. Probably B

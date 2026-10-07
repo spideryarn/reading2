@@ -27,6 +27,16 @@
  * aim the glide's first frame at a zero-height row. React only hears about the
  * change for the chevrons, through `useFold`.
  *
+ * ## The masthead's echo: hidden here, and not a fold
+ *
+ * The leading blocks that only repeat the masthead (masthead-echo.ts; Greg,
+ * spya-t6cdve) are hidden by this store too, always, because a zero-height row
+ * only keeps working for the consumers that ask the store about it.
+ * `isFolded` is true for them; they are never foldable and never revealed.
+ * The one way they differ from a fold is `isFoldedAway`, below.
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
+ * § How a row is hidden, and what has to know.
+ *
  * ## What it is not
  *
  * Not persisted and not in the URL: reload and everything is open again (plan
@@ -126,10 +136,14 @@ export interface FoldState {
 }
 
 const EMPTY: FoldState = { folded: new Set(), foldable: new Set() };
+const NO_ECHO: ReadonlySet<BlockId> = new Set();
 
-let article: { key: string; blocks: readonly Block[] } | null = null;
+let article: { key: string; blocks: readonly Block[]; echo: ReadonlySet<BlockId> } | null = null;
 let state: FoldState = EMPTY;
+/** Every row whose cells the stylesheet hides: `foldedAway` and the echo. */
 let hidden: ReadonlySet<BlockId> = new Set();
+/** The rows a folded heading hides, the echo not among them unless a fold covers it too. */
+let foldedAway: ReadonlySet<BlockId> = new Set();
 const listeners = new Set<() => void>();
 /* The mounted TableView that most recently installed this singleton. A route
    change replaces keyed Readers: the new table's layout effect runs before the
@@ -170,7 +184,11 @@ function commit(folded: ReadonlySet<BlockId>): void {
   const blocks = article?.blocks ?? [];
   const foldable = state.foldable;
   state = { folded, foldable };
-  hidden = hiddenBlocks(blocks, folded);
+  foldedAway = hiddenBlocks(blocks, folded);
+  const echo = article?.echo ?? NO_ECHO;
+  /* The echo first: it is the first rows of the article, so the rules stay in
+     document order. */
+  hidden = echo.size === 0 ? foldedAway : new Set([...echo, ...foldedAway]);
   writeStyle();
   for (const l of listeners) l();
 }
@@ -180,16 +198,35 @@ function commit(folded: ReadonlySet<BlockId>): void {
  * its blocks change. A different `key` (the slug) starts with nothing folded;
  * the same key with new blocks — a re-extraction — keeps the folds whose
  * headings are still foldable.
+ *
+ * `echo` is the masthead's echo (masthead-echo.ts): rows hidden for as long as
+ * this article is on screen. **It is part of what "the same article" means
+ * here**, compared by what is in it: renaming an article changes its echo and
+ * leaves the `blocks` array the very same object, and without this the rename
+ * would not show until a reload (GPT Sol, plan review of 261007b, F8). An echo
+ * heading is not foldable: it has no row to put a chevron on, and Fold all
+ * would otherwise shut the whole article behind a control nobody can see.
  */
-export function setFoldArticle(key: string, blocks: readonly Block[]): void {
+export function setFoldArticle(
+  key: string,
+  blocks: readonly Block[],
+  echo: ReadonlySet<BlockId> = NO_ECHO,
+): void {
   /* `article !== null` spelled out: `article?.key === key` is true for no
      article and an undefined key, which a test rendering without a slug does. */
   const same = article !== null && article.key === key;
-  if (same && article?.blocks === blocks) return;
-  article = { key, blocks };
+  if (same && article?.blocks === blocks && sameIds(article.echo, echo)) return;
+  article = { key, blocks, echo };
   const foldable = foldableHeadings(blocks);
+  for (const id of echo) foldable.delete(id);
   state = { folded: state.folded, foldable };
   commit(same ? new Set([...state.folded].filter((id) => foldable.has(id))) : new Set());
+}
+
+function sameIds(a: ReadonlySet<BlockId>, b: ReadonlySet<BlockId>): boolean {
+  if (a.size !== b.size) return false;
+  for (const id of a) if (!b.has(id)) return false;
+  return true;
 }
 
 /** The reader is gone: nothing folded, and the style element removed. */
@@ -222,16 +259,54 @@ export function toggleFoldAll(): void {
  * **Unfold whatever hides `id`**, synchronously, so the caller can measure its
  * row on the next line. `scrollToBlock` calls this before every jump: a jump
  * to a block is a request to see it.
+ *
+ * **An echo row is not revealed, and asking opens nothing.** It stays hidden,
+ * and `scrollToBlock` sends a jump to it to the top of the page, where the
+ * masthead is the visible copy of its words.
  */
 export function revealBlock(id: string): void {
-  if (!hidden.has(id as BlockId) || !article) return;
+  if (!article || article.echo.has(id as BlockId)) return;
+  if (!foldedAway.has(id as BlockId)) return;
   const opening = new Set(foldsHiding(article.blocks, state.folded, id as BlockId));
   commit(new Set([...state.folded].filter((h) => !opening.has(h))));
 }
 
-/** Whether `id`'s row is folded away right now. */
+/**
+ * **Whether `id`'s row is hidden right now**: inside a folded section, or one
+ * of the masthead's echo rows. The question for anything that measures a row,
+ * draws on it or puts something in its cell.
+ */
 export function isFolded(id: string): boolean {
   return hidden.has(id as BlockId);
+}
+
+/** Whether `id` is one of the leading rows represented by the masthead. */
+export function isMastheadEcho(id: string): boolean {
+  return article?.echo.has(id as BlockId) ?? false;
+}
+
+/**
+ * **Whether the section that starts at `id` is folded away**: true only when a
+ * fold hides the row. An echo alone is false; an echo inside a real fold is
+ * true, because navigation must still skip a row the fold covers.
+ *
+ * Two questions, because the two kinds of hiding differ in what else is gone.
+ * A fold hides a whole section, so a section whose start row is folded has
+ * nothing on screen and must not be named, focused or stepped to. An echo on
+ * its own hides one row whose section is still on screen, and that row is block 0:
+ * the start of the first section of every article. Asked `isFolded`, the
+ * reading position wrote `?at=` as the second section while the reader was in
+ * the first, Structure marked the second as current, and ↑ could not reach the
+ * start of the article. So the three callers that ask about a section's start
+ * ask this: `useReadingPosition`, `useColumnContext`, and `step` in keynav.ts.
+ * An echo row that is hidden only because it is an echo needs no skipping
+ * there: it has no height and sits at the top of the first visible row, which
+ * is in its own section. A real fold can still cover that row, in which case
+ * this function returns true.
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
+ */
+export function isFoldedAway(id: string): boolean {
+  return foldedAway.has(id as BlockId);
 }
 
 /**
@@ -264,12 +339,16 @@ export function useFold(): FoldState {
  * nearer the press has claimed it, and `preventDefault()` only when there is
  * something to fold.
  */
-export function useFoldArticle(key: string, blocks: readonly Block[]): void {
+export function useFoldArticle(
+  key: string,
+  blocks: readonly Block[],
+  echo: ReadonlySet<BlockId> = NO_ECHO,
+): void {
   const mounted = useRef(Symbol("fold article"));
   useLayoutEffect(() => {
     mountedBy = mounted.current;
-    setFoldArticle(key, blocks);
-  }, [key, blocks]);
+    setFoldArticle(key, blocks, echo);
+  }, [key, blocks, echo]);
   useEffect(
     () => () => {
       if (mountedBy === mounted.current) clearFoldArticle();

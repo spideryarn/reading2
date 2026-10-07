@@ -923,15 +923,6 @@ export function Metadata({
           gone and the clock has not: this page has no sticky bar of its own, so
           y=0 here is under the status bar and the term is what keeps the back
           link out from under it. */}
-      {/* The contents list in the left margin. It reads its entries off the
-          `[data-section]` elements inside `main`, so there is no second list of
-          section names to keep in step — PageContents.tsx says why that matters
-          more here than usual. Hidden below `lg`, where there is no margin to
-          put it in; from `lg` until the centred margin is wide enough there is
-          only room once `main` steps right to clear it, which is
-          `CONTENTS_MARGIN` below. */}
-      <PageContents containerRef={body} label="Sections of this page" />
-
       {/* `metadata-page` carries no rule now. It once held a typography fix —
           every `<button>` on this page inheriting its font, because we import
           no preflight and a button otherwise keeps the UA's 13.3px Arial
@@ -1067,6 +1058,25 @@ export function Metadata({
         {/* The two acts people come here for most often, under the title —
             `TopActions`. */}
         <TopActions archive={archive} fixture={showingFixture} onShare={goToSharing} />
+
+        {/* **The contents list and its search box.** It reads its entries off
+            the `[data-section]` elements inside `main`, so there is no second
+            list of section names to keep in step — PageContents.tsx says why
+            that matters more here than usual. It is not a `[data-section]`
+            itself, so it does not list itself.
+
+            **Mounted here, under the title and its two buttons, because below
+            `lg` this is where it is drawn**: the search box, then a *Contents*
+            button that opens the list, above the first section. Greg,
+            2026-10-06, report `spya-vwf00u`: *"put the search bar and table of
+            contents above the actual contents of the page"*. Until then it was
+            `main`'s sibling and not drawn at all on a narrow window. From `lg`
+            it is fixed in the left margin, so its place in the markup does not
+            move it; until the centred margin is wide enough there is only room
+            once `main` steps right to clear it, which is `CONTENTS_MARGIN`
+            above.
+            docs/plans/261007c-contents-list-and-search-above-the-page-on-a-narrow-window.md. */}
+        <PageContents containerRef={body} label="Sections of this page" />
 
         {/* --------------------------------------------- 2. in one sentence --
             Serif, because this is the article talking rather than the app —
