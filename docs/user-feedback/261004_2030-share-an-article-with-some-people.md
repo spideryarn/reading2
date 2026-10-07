@@ -1,6 +1,6 @@
 ---
 reports: spya-hwdefp, spya-v322fd
-ending: awaiting
+ending: shipped
 ---
 # Share an article with some people
 
@@ -31,20 +31,20 @@ words are from the reports' production rows, as the Overseer relayed them.
 
 > In a previous feedback report, I talked a lot about being able to share articles. I think one of the most important things is that people can comment on them and highlight stuff. I guess if it doesn't involve AI processing, then we should let them. It's tricky. I would like to allow people to do it, even if they aren't logged in, but then we won't know who did it. So I guess only if they're logged in can they actually comment or highlight or anything else.
 
-**Ending: Awaiting Greg.** Nothing built. Mark both ignored in Sentry, with this reason; the next
-feedback sweep does the status write.
+**Ending: Shipped**, the first of three stages, on `dev` and in production. (This note said
+*Awaiting Greg* until 2026-10-07, two days after he answered; corrected then.)
 
-Two things stopped it. Greg asked to stop and discuss if it adds substantial complexity, and the
-email version does. And every version changes who may read an article, which is a listed security
-defence that an unattended session does not edit.
+Greg answered all three questions on 2026-10-05: *"A and write the other stuff up, but we'll make
+do with the private link for now."* So the private link was built: anyone holding it can read the
+article, it is listed nowhere, there is no AI for them, and the owner can turn it off or replace
+it. It is on the article's Access & Sharing card.
 
-The plan sets out three stages and recommends the first: a private link that anyone holding it can
-read, not listed, no AI, which the owner can turn off. Then comments and highlights for signed-in
-people who have the link. Then named email addresses, with an invitation and AI charged to whoever
-ran it, which is the large one. Three questions are put to Greg: which to build first, who sees a
-sharee's comment, and whether a link-shared article counts against the allowance as private.
+The two later stages are written up in the plan and not built, each with its own queue entry:
+comments and highlights for signed-in people who have the link (`qi-6jwj562v`), and sharing with
+named email addresses, with an invitation and AI charged to whoever ran it (`qi-mgxnj233`).
 
-Queue entry `qi-98933vdd`. Plan:
-[261005e § Questions for Greg](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md#questions-for-greg),
-reviewed by GPT Sol
-([review](../plans/261005e-share-an-article-with-some-people-review-sol.md)).
+Plan:
+[261005e](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md), reviewed by
+GPT Sol at the plan
+([review](../plans/261005e-share-an-article-with-some-people-review-sol.md)) and at the code. The
+original queue entry was `qi-98933vdd`.

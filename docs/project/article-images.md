@@ -340,6 +340,13 @@ ever. Stamping what the step actually consumes is the rule `articleFingerprint` 
 other stages had already broken —
 [260906a](../plans/260906a-figures-from-a-pdf-are-placeholders-with-no-image.md).
 
+**A manifest made after the reader pressed Stop is stamped `"stopped-part-way"`**, since
+2026-10-07, so it is kept and published but never current. The step answers a Stop by returning,
+with every image it had not fetched recorded as a failure, and the queue now keeps what a last step
+returns after a Stop ([ingest-queue.md § A Stop during the last step keeps the
+article](ingest-queue.md#a-stop-during-the-last-step-keeps-the-article)). With the real hash, the
+next run would have skipped the step and never fetched them.
+
 ## See also
 
 - [fetching.md](fetching.md) — stage 1, and the address guard these URLs made necessary
