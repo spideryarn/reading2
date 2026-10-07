@@ -354,6 +354,10 @@ which is what they are for.
   `STEP_BUDGET_MS.fetch` is 150 s against a paper source that tries several candidates. Both are
   in [PQ4 + PQO4](#pq4-pqo4-the-comments-that-describe-a-queue-and-a-store-that-are-gone). A
   budget is a measurement to make, not a comment to correct, so this stage changed neither.
+  **Done 2026-10-07** in
+  [261007g](261007g-raise-the-images-and-fetch-step-budgets-to-what-they-measure.md): `assets`
+  185 s → 400 s and `fetch` 150 s → 360 s, sized to the clocks each step sets on itself and held
+  there by `tests/jobs-lease-budget.test.ts`.
 - **Not closed in PQ1:** a failure of the write that settles the job (`pauseForDeadline`, or
   `settleJob` after a cancel or a failure) still leaves the row to the lease. Closing it needs a
   fourth storage-failure door and a sentence for the reader's card.

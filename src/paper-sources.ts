@@ -405,8 +405,9 @@ const nber: PaperSource = {
  * In order, though no address is recognised by two: each source names its own
  * hosts, and the one host three of them share (`doi.org`) is told apart by the
  * DOI's prefix.
+ * Exported so the job-budget test can require a sample for every source.
  */
-const SOURCES: readonly PaperSource[] = [arxiv, acl, pmlr, neurips, cvf, jmlr, nber];
+export const SOURCES: readonly PaperSource[] = [arxiv, acl, pmlr, neurips, cvf, jmlr, nber];
 
 function parsed(url: string): URL | null {
   try {

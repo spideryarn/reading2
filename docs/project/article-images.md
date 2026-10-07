@@ -230,9 +230,12 @@ the whole defence. [silent-success.md](../reusable/silent-success.md) is the fam
   inventing parallel ones: `PDF_FIGURES_BUDGET_MS` races the whole run and finalises every marker the
   race left behind, and `MAX_ARTICLE_FIGURE_BYTES` bounds what one document may store, because
   capping the marker count and the per-figure size still let 100 × 12 MiB through. Both numbers match
-  their `collect-assets.ts` counterparts deliberately: the two halves are **alternatives**, since a
-  PDF-made article has no `<img>` and a web article has no PDF, so an article costs at most one of
-  them. The reasons are a vocabulary rather than a catch-all — `no-source`, `unreadable-pdf`,
+  their `collect-assets.ts` counterparts deliberately: the two halves are **alternatives in the
+  ordinary ingestion paths**, since a PDF-made article has no `<img>` and a web article has no PDF.
+  The queue's admission estimate for `assets`
+  (`STEP_BUDGET_MS`, [ingest-queue.md](ingest-queue.md)) counts both clocks, since nothing in the
+  code stops both running, and it covered only the first until 2026-10-07. The reasons are a
+  vocabulary rather than a catch-all — `no-source`, `unreadable-pdf`,
   `storage`, `budget` and `out-of-time` say *whose* problem it is, for the reason `AssetFailure`
   keeps `storage` apart from `network`: the two need different people. All four were once spelled
   `out-of-time` (GPT Sol, C-4).
