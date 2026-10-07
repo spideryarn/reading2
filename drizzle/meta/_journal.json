@@ -1170,6 +1170,13 @@
       "when": 1791386007461,
       "tag": "20261007151327_billing_voucher_starter_article",
       "breakpoints": true
+    },
+    {
+      "idx": 167,
+      "version": "7",
+      "when": 1791390596808,
+      "tag": "20261007162956_checkpoints_illustrated_brief",
+      "breakpoints": true
     }
   ]
 }

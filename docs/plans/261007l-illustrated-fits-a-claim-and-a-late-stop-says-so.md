@@ -108,8 +108,10 @@ And one number moved with finding 2: the brief is **50,000 tokens in all** (`ILL
 back. Production's largest brief, 45,070 tokens, still fits; its visible answer was about 8,000.
 
 **Where the migration stands.** It widens `checkpoints_namespace` by one name and is additive. It is
-not applied to the shared local database yet: a peer worktree (`fbtddvg2-guide-agent`) applied its own
-unlanded migration there, and `db:migrate` rightly refuses until that lands
+`drizzle/20261007162956_checkpoints_illustrated_brief.sql` (regenerated after merging `dev`, so it is
+stamped after everything there). It is not applied to the shared local database yet: peer worktrees
+applied their own unlanded migrations there (`fbtddvg2-guide-agent`, then `fbucftjt-help-chatbot`), and
+`db:migrate` rightly refuses until those land
 ([database.md § A watermark is not a ledger](../project/database.md#a-watermark-is-not-a-ledger)). The
 step test uses an in-memory checkpoint store. **In production the migration must ship with the code**:
 without it every `illustrated-brief` write is refused, and a long brief whose plates must wait then
