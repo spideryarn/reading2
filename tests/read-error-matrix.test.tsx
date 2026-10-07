@@ -42,7 +42,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { act, createElement, type ReactElement } from "react";
+import { act, createElement, StrictMode, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -459,6 +459,10 @@ const BROWSER_WORDS = "Load failed";
 const FAULT_WORDS = "zq-internal: cannot read properties of undefined";
 
 let answers: Record<string, Answer> = {};
+/** What another article's artefact GETs answer, by slug then kind — the slug-change rows. */
+let elsewhere: Record<string, Record<string, Answer>> = {};
+/** What `GET /api/jobs` lists — empty unless a test runs a job to make a read refresh. */
+let jobs: unknown[] = [];
 /** Every artefact GET, by kind — the exact `/api/<kind>/<slug>` and nothing under it. */
 let gets: Record<string, number> = {};
 /** Every `POST /api/jobs` body, in order. */
@@ -490,7 +494,7 @@ async function reply(url: string, method: string, body: string | null): Promise<
     });
   }
   if (method !== "GET") return new Response(null, { status: 204 });
-  if (url === "/api/jobs") return json({ jobs: [] });
+  if (url === "/api/jobs") return json({ jobs });
   if (url.startsWith("/api/comments/")) return json({ comments: [] });
   if (url.startsWith("/api/chat/")) return json({ threads: [] });
   if (url.startsWith("/api/search/")) return json({ runs: [] });
@@ -498,6 +502,9 @@ async function reply(url: string, method: string, body: string | null): Promise<
      DOI. A 404 here would be its `unavailable`, which draws a second *Try
      again* in Debate's band beside the one this file counts (plan 261004h). */
   if (url.startsWith("/api/citers/")) return json({ kind: "no-doi" });
+  const other = /^\/api\/([a-z]+)\/([^/]+)$/.exec(url);
+  const there = other?.[2] === undefined ? undefined : elsewhere[other[2]];
+  if (there && other?.[1] && other[1] in there) return artefactResponse(other[1], there[other[1]] as Answer);
   const kind = new RegExp(`^/api/([a-z]+)/${SLUG}$`).exec(url)?.[1];
   if (kind && kind in BODIES) {
     gets[kind] = (gets[kind] ?? 0) + 1;
@@ -513,7 +520,7 @@ async function reply(url: string, method: string, body: string | null): Promise<
 
 const { App } = await import("../src/web/App.js");
 const { resetForTests: resetExperimental } = await import("../src/web/experimental-store.js");
-const { resetActivations } = await import("../src/web/activation.js");
+const { armActivation, resetActivations } = await import("../src/web/activation.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useArc } = await import("../src/web/useArc.js");
 const { SketchView } = await import("../src/web/SketchView.js");
@@ -526,6 +533,11 @@ const { useTweets } = await import("../src/web/useTweets.js");
 const { useSkim } = await import("../src/web/useSkim.js");
 const { useSketch } = await import("../src/web/useSketch.js");
 const { useIllustrated } = await import("../src/web/useIllustrated.js");
+const { useFaqRead } = await import("../src/web/useFaq.js");
+const { useTimelineRead } = await import("../src/web/useTimeline.js");
+const { useDebateRead } = await import("../src/web/useDebate.js");
+const { useCitationsRead } = await import("../src/web/useCitations.js");
+const { useSimple } = await import("../src/web/useSimple.js");
 
 let host: HTMLDivElement;
 let root: Root;
@@ -535,6 +547,8 @@ enableHistorySync();
 beforeEach(() => {
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   answers = {};
+  elsewhere = {};
+  jobs = [];
   gets = {};
   posts = [];
   resetActivations();
@@ -579,11 +593,12 @@ async function settle(turns = 8): Promise<void> {
   }
 }
 
-/** The whole app at the owner's article. Not under `<StrictMode>`: requests are counted. */
-async function open(search = ""): Promise<void> {
+/** The whole app at the owner's article; StrictMode is opt-in for its control. */
+async function open(search = "", strict = false): Promise<void> {
   history.replaceState(null, "", `/read/${SLUG}${search}`);
   await act(async () => {
-    root.render(createElement(NuqsAdapter, null, createElement(App, null)));
+    const app = createElement(NuqsAdapter, null, createElement(App, null));
+    root.render(strict ? createElement(StrictMode, null, app) : app);
   });
   await act(async () => {
     for (const fn of [...authListeners]) fn("SIGNED_IN", { user: OWNER });
@@ -1216,6 +1231,27 @@ describe("Try again answered by a 404", () => {
   const ideasBand = () => host.querySelector(".mode-band.ideas");
   const threadBand = () => host.querySelector(".mode-band.summ.tweets");
 
+  it("an armed press over none plus a failed read spends once in StrictMode, even after another failed retry", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { ideas: "missing" };
+    await open("?mode=ideas", true);
+    expect(posts).toEqual([]);
+    answers = { ideas: "transport" };
+    await finishes("ideas");
+    await press(tryAgain(ideasBand()));
+    expect(posts).toEqual([]);
+    expect(readable(ideasBand())).toContain(COULD_NOT_REACH.message);
+    /* The command bar can arm the current mode; its bottom-bar button closes it. */
+    await act(async () => armActivation(SLUG, "ideas"));
+    await settle();
+    expect(posts.map((p) => p.steps)).toEqual([["ideas"]]);
+    expect(posts[0]?.force ?? []).toEqual([]);
+    await press(tryAgain(ideasBand()));
+    await act(async () => armActivation(SLUG, "ideas"));
+    await settle();
+    expect(posts.map((p) => p.steps), "failed reads and a second press must not loop").toEqual([["ideas"]]);
+  });
+
   it("honours a press still in hand: exactly one unforced run, as if the first read had answered", async () => {
     answers = { ideas: "transport" };
     await open("");
@@ -1255,6 +1291,254 @@ describe("Try again answered by a 404", () => {
     await settle();
     expect(posts.map((p) => p.steps)).toEqual([["tweets"]]);
     expect(posts[0]?.force ?? []).toEqual([]);
+  });
+});
+
+/* ------------------------ Try again answered by another failure, after a 404 --
+
+   The owner's answer to the seventh sweep's question 4 (WCO6), relayed by the
+   Overseer:
+
+   > ok, i'll go along with you on this. I don't quite follow
+   >
+   > — Greg, 2026-10-07
+
+   **Once the server has said "none yet" for this article, a failure does not
+   unsay it.** A failed refresh already kept the empty state; a failed *Try
+   again* took it away in twelve modes until 2026-10-07 — the retry went back to
+   asking, and a failure with nothing loaded was the opening read's `error` —
+   so the button that starts a run was gone and only a reload brought it back.
+   Thread had always kept it (useTweets.ts § the catch, postmortem 261004f), so
+   it is the precedent and not a row. A failed *opening* read still ends at
+   `error`: nothing was ever answered. docs/project/mode.md § The artefact, if
+   the mode shows one;
+   docs/plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md. */
+
+const AFTER_NONE = ROWS.filter((row) => row.hook !== "useTweets.ts");
+
+/** The words on every button a reader can see in `within`. */
+function labels(within: Element | null): string[] {
+  return [...(within?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
+    .filter((b) => !b.closest(UNREADABLE))
+    .map((b) => b.textContent?.trim() ?? "");
+}
+
+/** A job writing `step` runs and finishes: the real cause of a read's refresh. */
+async function finishes(step: string): Promise<void> {
+  for (const status of ["running", "done"]) {
+    jobs = [
+      {
+        id: `job-${step}`,
+        slug: SLUG,
+        status,
+        steps: [{ name: step, status: status === "done" ? "done" : "running" }],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ];
+    await act(async () => jobEngine.poke());
+    await settle();
+  }
+}
+
+describe.each(AFTER_NONE)("$hook: Try again answered by another failure, after none yet", (row) => {
+  const band = () => host.querySelector(row.where);
+
+  it("keeps the empty state's buttons beside the failure, and spends nothing", async () => {
+    vi.stubEnv("PROD", true);
+    arrange(row, "missing");
+    await open(row.search);
+    const empty = labels(band());
+    expect(empty, "the empty state drew no button to keep").not.toEqual([]);
+    expect(tryAgain(band())).toBeUndefined();
+
+    /* A failed refresh: already kept the empty state before 2026-10-07. */
+    arrange(row, "transport");
+    await finishes(row.kind);
+    expect(readable(band()), "the refresh did not fail").toContain(COULD_NOT_REACH.message);
+    expect(labels(band())).toEqual(expect.arrayContaining(empty));
+
+    /* A failed Try again: the change. */
+    const before = gets[row.kind] ?? 0;
+    await press(tryAgain(band()));
+    expect((gets[row.kind] ?? 0) - before, "Try again must be exactly one more GET").toBe(1);
+    expect(readable(band()), "the failure was not shown").toContain(COULD_NOT_REACH.message);
+    expect(tryAgain(band())).toBeDefined();
+    expect(labels(band()), "a failed Try again took the empty state's button away").toEqual(
+      expect.arrayContaining(empty),
+    );
+    expect(posts, "no read, failed or retried, ever spends").toEqual([]);
+  });
+});
+
+interface ArtefactReadState {
+  status: string;
+  error: string | null;
+  retryRead(): Promise<void>;
+  refresh(): Promise<void>;
+}
+
+/** The same twelve reads, alone: the control and the change of article. */
+const AFTER_NONE_READS: readonly { kind: string; use: (slug: string) => ArtefactReadState }[] = [
+  { kind: "faq", use: useFaqRead },
+  { kind: "simple", use: useSimple },
+  { kind: "skim", use: (slug) => useSkim(slug, useQuotesRead(slug), useIdeasRead(slug)) },
+  { kind: "ideas", use: useIdeasRead },
+  { kind: "timeline", use: useTimelineRead },
+  { kind: "quotes", use: useQuotesRead },
+  { kind: "debate", use: useDebateRead },
+  { kind: "glossary", use: useGlossaryRead },
+  { kind: "citations", use: useCitationsRead },
+  { kind: "quiz", use: useQuizRead },
+  { kind: "illustrated", use: (slug) => useIllustrated(slug, BLOCKS) },
+  { kind: "sketch", use: (slug) => useSketch(slug, BLOCKS.map((b) => b.id)) },
+];
+
+it("the reads alone are the same twelve as the bands", () => {
+  expect(AFTER_NONE_READS.map((r) => r.kind)).toEqual(AFTER_NONE.map((r) => r.kind));
+});
+
+describe.each(AFTER_NONE_READS)("$kind: what a failed Try again remembers", ({ kind, use }) => {
+  const OTHER = "another-piece";
+  let seen!: ArtefactReadState;
+  function Probe({ slug }: { slug: string }) {
+    seen = use(slug);
+    return null;
+  }
+  async function mount(slug = SLUG): Promise<void> {
+    vi.stubEnv("PROD", true);
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe, { slug })));
+    await settle();
+  }
+  const needs = kind === "skim" ? { quotes: "ok" as Answer, ideas: "ok" as Answer } : {};
+
+  it("none yet, a failed refresh, a failed Try again: none, with the failure", async () => {
+    answers = { ...needs, [kind]: "missing" };
+    await mount();
+    expect(seen.status).toBe("none");
+
+    answers = { ...needs, [kind]: "transport" };
+    await act(async () => seen.refresh());
+    await settle(2);
+    expect(seen.status).toBe("none");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+
+    await act(async () => seen.retryRead());
+    await settle(2);
+    expect(seen.status, "the failed Try again forgot the server's answer").toBe("none");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+    expect(posts).toEqual([]);
+  });
+
+  it("a failed opening read, then a failed Try again: still error, since nothing was answered", async () => {
+    answers = { ...needs, [kind]: "transport" };
+    await mount();
+    expect(seen.status).toBe("error");
+
+    await act(async () => seen.retryRead());
+    await settle(2);
+    expect(seen.status).toBe("error");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+  });
+
+  it("another article's none yet is not this one's: a new slug starts with nothing answered", async () => {
+    answers = { ...needs, [kind]: "missing" };
+    await mount();
+    expect(seen.status).toBe("none");
+
+    elsewhere = { [OTHER]: { ...needs, [kind]: "transport" } };
+    await mount(OTHER);
+    await act(async () => seen.retryRead());
+    await settle(2);
+    expect(seen.status, "the first article's answer stood in for the second's").toBe("error");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+  });
+
+  it("none yet followed by a list never becomes none on a failed refresh or retry", async () => {
+    answers = { ...needs, [kind]: "missing" };
+    await mount();
+    answers = { ...needs, [kind]: "ok" };
+    await act(async () => seen.refresh());
+    await settle(2);
+    expect(seen.status).toBe("ready");
+    answers = { ...needs, [kind]: "transport" };
+    await act(async () => seen.refresh());
+    await act(async () => seen.retryRead());
+    await settle(2);
+    expect(seen.status).toBe("ready");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+    expect(posts).toEqual([]);
+  });
+});
+
+it("Glossary's cleared list on returning to a slug cannot revive a superseded none answer", async () => {
+  let seen!: ReturnType<typeof useGlossaryRead>;
+  function Probe({ slug }: { slug: string }) {
+    seen = useGlossaryRead(slug);
+    return null;
+  }
+  answers = { glossary: "missing" };
+  await act(async () => root.render(createElement(Probe, { slug: SLUG })));
+  await settle();
+  expect(seen.status).toBe("none");
+  answers = { glossary: "ok" };
+  await act(async () => seen.refresh());
+  await settle(2);
+  expect(seen.status).toBe("ready");
+  elsewhere = { "another-piece": { glossary: "transport" } };
+  await act(async () => root.render(createElement(Probe, { slug: "another-piece" })));
+  await settle();
+  answers = { glossary: "transport" };
+  await act(async () => root.render(createElement(Probe, { slug: SLUG })));
+  await settle();
+  await act(async () => seen.retryRead());
+  await settle(2);
+  expect(seen.glossary).toBeNull();
+  expect(seen.status, "the latest answer for this slug was a list, not none").toBe("error");
+  expect(posts).toEqual([]);
+});
+
+/* Sketch and Illustrated have a second "none": a 200 with nothing drawable in
+   it, which keeps the faults that say why. The server answered, so it is
+   remembered like a 404 — and the faults are left as that answer set them. */
+describe.each([
+  {
+    kind: "sketch" as const,
+    use: (slug: string) => useSketch(slug, BLOCKS.map((b) => b.id)),
+    empty: { ...(BODIES.sketch as { sketch: object }), sketch: { ...(BODIES.sketch as { sketch: object }).sketch, scenes: [] } },
+  },
+  {
+    kind: "illustrated" as const,
+    use: (slug: string) => useIllustrated(slug, BLOCKS),
+    empty: {
+      ...(BODIES.illustrated as { illustrated: object }),
+      illustrated: { ...(BODIES.illustrated as { illustrated: object }).illustrated, plates: [] },
+    },
+  },
+])("$kind: nothing drawable, then a failed Try again", ({ kind, use, empty }) => {
+  let seen!: ReturnType<typeof use>;
+  function Probe() {
+    seen = use(SLUG);
+    return null;
+  }
+
+  it("is still none, with the same faults and the failure", async () => {
+    vi.stubEnv("PROD", true);
+    answers = { [kind]: { body: empty } };
+    jobEngine.start(OWNER.id);
+    await act(async () => root.render(createElement(Probe)));
+    await settle();
+    expect(seen.status).toBe("none");
+    const faults = seen.faults;
+
+    answers = { [kind]: "transport" };
+    await act(async () => seen.retryRead());
+    await settle(2);
+    expect(seen.status, "the failed Try again forgot the server's answer").toBe("none");
+    expect(seen.error).toBe(COULD_NOT_REACH.message);
+    expect(seen.faults).toEqual(faults);
+    expect(posts).toEqual([]);
   });
 });
 

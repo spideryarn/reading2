@@ -83,7 +83,7 @@ import { ReadTimeCard } from "./ReadTimeCard.js";
 import { articleStats } from "./stats.js";
 import { AuthorNames } from "./AuthorNames.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
-import { FoldAllButton } from "./FoldToggle.js";
+import { FoldAllButton, FrontMatterButton } from "./FoldToggle.js";
 import type { ArchiveControl } from "./useArchive.js";
 import { EditableTitle, type OnRenamed, useArticleRename } from "./TitleEditor.js";
 import { articleTitleVoice, withVoice } from "./voice.js";
@@ -318,6 +318,11 @@ export function Masthead({ article, slug, onRenamed, archive }: Props) {
               nothing on an article with no heading to fold. FoldToggle.tsx;
               plan 261002e. */}
           <FoldAllButton />
+          {/* The byline blocks under the title, folded away on arrival, and
+              the one control that shows them: here because this line is where
+              the authors are already named. Nothing on an article with no
+              such blocks. FoldToggle.tsx § `FrontMatterButton`; plan 261007d. */}
+          <FrontMatterButton />
         </p>
 
         {/* **Where this article came from, when the answer is not "a web page".**

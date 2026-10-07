@@ -112,6 +112,9 @@ will read is not doing its job, however true it is.
   at each release, for everything in it — whoever cuts the release reads its changes against the docs
   that own them. A doc is cheapest to keep true at the moment its subject changes. Greg, 2026-10-06:
   *"ideally we update them periodically (e.g. when pushing, or deploying)"*.
+  In this repo a hint prompts the first: on `git push`,
+  [`.claude/hooks/push-doc-hint.sh`](../../.claude/hooks/push-doc-hint.sh) names the docs that
+  mention a file you changed and that you did not touch. It never blocks.
 - **Update the docs in the same piece of work.** If you changed what something does, the doc is part
   of the change, not a follow-up. **Removing a feature most of all**: grep the docs for its names and
   fix every hit in the same change. A removal done as "a line here and there" leaves the reference

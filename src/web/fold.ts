@@ -37,10 +37,24 @@
  * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
  * § How a row is hidden, and what has to know.
  *
+ * ## The front matter: hidden here, shut on arrival, and openable
+ *
+ * The run of byline blocks under the title (front-matter.ts; Greg,
+ * spya-duh4w3: *"default collapse them so that you kind of jump straight into
+ * the article itself"*) is the third kind of hiding. It starts shut for every
+ * article on every load. Unlike the echo it can be opened, all of it at once:
+ * by the masthead's control (`toggleFrontMatter`) and by `revealBlock`, so a
+ * jump to one of its blocks shows them. Like the echo, a row in it is not
+ * `isFoldedAway`, and a heading in it is never foldable. `visibleFrom` is the
+ * question it adds, for the callers that would otherwise jump to one of its
+ * rows without meaning to open it.
+ * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ * § How the rows are hidden.
+ *
  * ## What it is not
  *
- * Not persisted and not in the URL: reload and everything is open again (plan
- * § Deferred). One article at a time, because there is one prose table.
+ * Not persisted and not in the URL: reload opens every real fold and shuts the
+ * front matter again. One article at a time, because there is one prose table.
  */
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import type { Block, BlockId } from "../types.js";
@@ -133,14 +147,34 @@ export interface FoldState {
   folded: ReadonlySet<BlockId>;
   /** The headings that have something to fold — the ones that get a button. */
   foldable: ReadonlySet<BlockId>;
+  /** How many blocks the front matter is. Zero when the article has none. */
+  front: number;
+  /**
+   * Whether the front matter is on screen: the reader opened it and no fold
+   * covers any of it. What its control draws, so that a press always changes
+   * what the reader sees.
+   */
+  frontOpen: boolean;
 }
 
-const EMPTY: FoldState = { folded: new Set(), foldable: new Set() };
+const EMPTY: FoldState = { folded: new Set(), foldable: new Set(), front: 0, frontOpen: false };
 const NO_ECHO: ReadonlySet<BlockId> = new Set();
+const NO_FRONT: readonly BlockId[] = [];
 
-let article: { key: string; blocks: readonly Block[]; echo: ReadonlySet<BlockId> } | null = null;
+let article: {
+  key: string;
+  blocks: readonly Block[];
+  echo: ReadonlySet<BlockId>;
+  /** The front matter, in document order, and the same ids as a set. */
+  front: readonly BlockId[];
+  inFront: ReadonlySet<BlockId>;
+  /** The first block after the front matter, or `null` when it ends the article. */
+  afterFront: BlockId | null;
+} | null = null;
 let state: FoldState = EMPTY;
-/** Every row whose cells the stylesheet hides: `foldedAway` and the echo. */
+/** Whether the reader has opened the front matter. Shut for every new article and every new run. */
+let frontWanted = false;
+/** Every row whose cells the stylesheet hides: the echo, the shut front matter, and `foldedAway`. */
 let hidden: ReadonlySet<BlockId> = new Set();
 /** The rows a folded heading hides, the echo not among them unless a fold covers it too. */
 let foldedAway: ReadonlySet<BlockId> = new Set();
@@ -150,6 +184,17 @@ const listeners = new Set<() => void>();
    old table's passive cleanup, so an unconditional cleanup would erase the new
    article. The token makes that stale cleanup a no-op. */
 let mountedBy: symbol | null = null;
+/* **An open front matter, held across one table's own effect remount.** In
+   development React's StrictMode runs every effect's cleanup and setup again
+   straight after the mount. The cleanup below forgets the article, and with
+   it that a link had just opened the run: the `?at=` restore that opened it
+   runs once per address (useReadingPosition.ts § `synced`), so the remount
+   left a pasted link pointing at a shut run. Production has no StrictMode
+   and never takes this path. Only the same mounted table (its token) gets the
+   run back: its cleanup runs only on unmount, so the one way it sees its own
+   token again is that remount, with the same article. A reader who leaves and
+   comes back is a new mount and arrives with the run shut. */
+let reopenFor: symbol | null = null;
 
 /** The attribute the store's own `<style>` carries, so it can find it again. */
 export const FOLD_STYLE_ATTR = "data-fold";
@@ -183,12 +228,20 @@ function writeStyle(): void {
 function commit(folded: ReadonlySet<BlockId>): void {
   const blocks = article?.blocks ?? [];
   const foldable = state.foldable;
-  state = { folded, foldable };
   foldedAway = hiddenBlocks(blocks, folded);
   const echo = article?.echo ?? NO_ECHO;
-  /* The echo first: it is the first rows of the article, so the rules stay in
-     document order. */
-  hidden = echo.size === 0 ? foldedAway : new Set([...echo, ...foldedAway]);
+  const front = article?.front ?? NO_FRONT;
+  const shut = frontWanted ? NO_FRONT : front;
+  state = {
+    folded,
+    foldable,
+    front: front.length,
+    frontOpen: frontWanted && !front.some((id) => foldedAway.has(id)),
+  };
+  /* The echo first and the front matter after it: they are the first rows of
+     the article in that order, so the rules stay in document order. */
+  hidden =
+    echo.size === 0 && shut.length === 0 ? foldedAway : new Set([...echo, ...shut, ...foldedAway]);
   writeStyle();
   for (const l of listeners) l();
 }
@@ -206,21 +259,41 @@ function commit(folded: ReadonlySet<BlockId>): void {
  * would not show until a reload (GPT Sol, plan review of 261007b, F8). An echo
  * heading is not foldable: it has no row to put a chevron on, and Fold all
  * would otherwise shut the whole article behind a control nobody can see.
+ *
+ * `front` is the front matter (front-matter.ts), in document order. **When it
+ * is shut again:** for a different article, and for the same article with a
+ * different run (a re-extraction, or `meta` changing what counts as a name).
+ * The same run stays as the reader left it whatever else changes, a rename
+ * included (GPT Sol, plan review of 261007d, F10). A heading in it is never
+ * foldable, open or shut, so no fold can be made inside it and Fold all does
+ * not count it (F5).
  */
 export function setFoldArticle(
   key: string,
   blocks: readonly Block[],
   echo: ReadonlySet<BlockId> = NO_ECHO,
+  front: readonly BlockId[] = NO_FRONT,
 ): void {
   /* `article !== null` spelled out: `article?.key === key` is true for no
      article and an undefined key, which a test rendering without a slug does. */
   const same = article !== null && article.key === key;
-  if (same && article?.blocks === blocks && sameIds(article.echo, echo)) return;
-  article = { key, blocks, echo };
+  const sameFront = same && sameRun(article?.front ?? NO_FRONT, front);
+  if (sameFront && article?.blocks === blocks && sameIds(article.echo, echo)) return;
+  if (!sameFront) frontWanted = false;
+  const last = front[front.length - 1];
+  const afterFront =
+    last === undefined ? null : (blocks[blocks.findIndex((b) => b.id === last) + 1]?.id ?? null);
+  article = { key, blocks, echo, front, inFront: new Set(front), afterFront };
   const foldable = foldableHeadings(blocks);
   for (const id of echo) foldable.delete(id);
-  state = { folded: state.folded, foldable };
+  for (const id of front) foldable.delete(id);
+  state = { ...state, foldable };
   commit(same ? new Set([...state.folded].filter((id) => foldable.has(id))) : new Set());
+}
+
+/** The same blocks in the same order: what "the same run" means. */
+function sameRun(a: readonly BlockId[], b: readonly BlockId[]): boolean {
+  return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
 function sameIds(a: ReadonlySet<BlockId>, b: ReadonlySet<BlockId>): boolean {
@@ -233,6 +306,7 @@ function sameIds(a: ReadonlySet<BlockId>, b: ReadonlySet<BlockId>): boolean {
 export function clearFoldArticle(): void {
   mountedBy = null;
   article = null;
+  frontWanted = false;
   state = EMPTY;
   commit(new Set());
 }
@@ -266,14 +340,90 @@ export function toggleFoldAll(): void {
  */
 export function revealBlock(id: string): void {
   if (!article || article.echo.has(id as BlockId)) return;
+  /* A block of the front matter: show all of it, as its control does. */
+  if (article.inFront.has(id as BlockId)) {
+    if (!state.frontOpen) openFrontMatter();
+    return;
+  }
   if (!foldedAway.has(id as BlockId)) return;
   const opening = new Set(foldsHiding(article.blocks, state.folded, id as BlockId));
   commit(new Set([...state.folded].filter((h) => !opening.has(h))));
 }
 
 /**
- * **Whether `id`'s row is hidden right now**: inside a folded section, or one
- * of the masthead's echo rows. The question for anything that measures a row,
+ * Show the front matter: mark it wanted, and unfold every real fold that
+ * covers any of it. After a rename block 0's heading is an ordinary foldable
+ * heading and can be folded over the whole article; a control that then did
+ * nothing would read as broken (GPT Sol, plan review of 261007d, F5).
+ */
+function openFrontMatter(): void {
+  if (!article) return;
+  frontWanted = true;
+  const opening = new Set<BlockId>();
+  for (const id of article.front) {
+    for (const h of foldsHiding(article.blocks, state.folded, id)) opening.add(h);
+  }
+  commit(new Set([...state.folded].filter((h) => !opening.has(h))));
+}
+
+/**
+ * **Show the front matter, or put it away again**: the masthead's control
+ * (FoldToggle.tsx § `FrontMatterButton`). Does nothing on an article with none.
+ *
+ * It goes by what is on screen (`FoldState.frontOpen`), not by what was last
+ * asked for: front matter the reader opened and then folded a section over is
+ * shown by the next press, not shut where nobody can see it.
+ */
+export function toggleFrontMatter(): void {
+  if (!article || article.front.length === 0) return;
+  if (!state.frontOpen) {
+    openFrontMatter();
+    return;
+  }
+  frontWanted = false;
+  commit(state.folded);
+}
+
+/**
+ * **Where a jump to `id` should go if it is not meant to open anything**:
+ * the first block after the run while `id` is in the shut front matter, the
+ * folded heading over it while a fold hides it, and `id` itself otherwise.
+ *
+ * A section can start inside the run and carry on past it: the Structure
+ * prompt invites one node for the byline and the abstract together
+ * (src/paperwork.ts). Its first block is a hidden row and the rest of it is on
+ * screen. `scrollToBlock` opens the run for whatever it is sent to, so two
+ * callers that name a section by its first block ask this first:
+ *
+ * - `step` in keynav.ts, so ↑ and ↓ land on the section's first visible row
+ *   and step over a section that is wholly inside the run;
+ * - the reading position (useReadingPosition.ts), so `?at=` names such a
+ *   section by its first visible block. Written as the hidden one, a reload or
+ *   a turned phone would restore it through `scrollToBlock` and open the front
+ *   matter under a reader who was in the abstract.
+ *
+ * A run that ends the article has nothing visible to land on, and answers
+ * `null`: a wholly hidden section is not a navigation stop.
+ *
+ * **A block a fold hides answers the heading that folded it**, the outermost
+ * one, which is the row still on screen. The reading position is the caller
+ * this is for: `?at=` can hold a paragraph a jump put there, and folding a
+ * heading over it would otherwise leave that hidden id standing for the next
+ * restore to unfold (GPT Sol, code review of 261007d, C8). `step` never gets
+ * this far with one: it drops a folded-away start first.
+ */
+export function visibleFrom(id: string): string | null {
+  if (!article) return id;
+  if (foldedAway.has(id as BlockId)) {
+    return foldsHiding(article.blocks, state.folded, id as BlockId)[0] ?? id;
+  }
+  if (frontWanted || !article.inFront.has(id as BlockId)) return id;
+  return article.afterFront;
+}
+
+/**
+ * **Whether `id`'s row is hidden right now**: inside a folded section, one of
+ * the masthead's echo rows, or in the front matter while that is shut. The question for anything that measures a row,
  * draws on it or puts something in its cell.
  */
 export function isFolded(id: string): boolean {
@@ -287,8 +437,9 @@ export function isMastheadEcho(id: string): boolean {
 
 /**
  * **Whether the section that starts at `id` is folded away**: true only when a
- * fold hides the row. An echo alone is false; an echo inside a real fold is
- * true, because navigation must still skip a row the fold covers.
+ * fold hides the row. An echo alone is false, and so is a row of the shut
+ * front matter; either inside a real fold is true, because navigation must
+ * still skip a row the fold covers.
  *
  * Two questions, because the two kinds of hiding differ in what else is gone.
  * A fold hides a whole section, so a section whose start row is folded has
@@ -303,6 +454,14 @@ export function isMastheadEcho(id: string): boolean {
  * there: it has no height and sits at the top of the first visible row, which
  * is in its own section. A real fold can still cover that row, in which case
  * this function returns true.
+ *
+ * The shut front matter is the same case, further down under a title and at
+ * block 0 itself on an article with no title heading (front-matter.ts § Where
+ * it starts): a section may start on one of its rows and carry on into the
+ * abstract, so its start has no height
+ * and sits at the top of that section's first visible row. A section wholly
+ * inside the run ties with the next section's start and loses to it, as a
+ * folded one does. What the front matter adds is `visibleFrom`, above.
  * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md
  */
 export function isFoldedAway(id: string): boolean {
@@ -343,15 +502,21 @@ export function useFoldArticle(
   key: string,
   blocks: readonly Block[],
   echo: ReadonlySet<BlockId> = NO_ECHO,
+  front: readonly BlockId[] = NO_FRONT,
 ): void {
   const mounted = useRef(Symbol("fold article"));
   useLayoutEffect(() => {
     mountedBy = mounted.current;
-    setFoldArticle(key, blocks, echo);
-  }, [key, blocks, echo]);
+    setFoldArticle(key, blocks, echo, front);
+    const reopen = reopenFor === mounted.current;
+    reopenFor = null;
+    if (reopen) openFrontMatter();
+  }, [key, blocks, echo, front]);
   useEffect(
     () => () => {
-      if (mountedBy === mounted.current) clearFoldArticle();
+      if (mountedBy !== mounted.current) return;
+      reopenFor = article !== null && frontWanted ? mounted.current : null;
+      clearFoldArticle();
     },
     [],
   );

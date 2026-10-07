@@ -28,7 +28,7 @@
  *
  * See docs/plans/260826ac-ideas-mode.md and src/ideas.ts.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
 import type { Ideas, IdeasResponse, Job } from "../types.js";
 import { useOrderedRead } from "./useOrderedRead.js";
@@ -176,6 +176,14 @@ export function useIdeasRead(slug: string): IdeasRead {
   const [error, setError] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * The read itself — the parse, the "none yet" branch and the error copy, which are
@@ -202,6 +210,7 @@ export function useIdeasRead(slug: string): IdeasRead {
         setAnswer(null);
         landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -223,6 +232,7 @@ export function useIdeasRead(slug: string): IdeasRead {
       });
       landed(started, res, loaded.ideas.generatedAt);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
@@ -234,7 +244,7 @@ export function useIdeasRead(slug: string): IdeasRead {
          connection blank a list that was still perfectly good. Only the opening
          read has nothing to fall back on. The message is shown either way. Same
          guard, same reason, as useGlossary.ts § `fetchNow`. */
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
   }, [slug, begin, landed]);
 

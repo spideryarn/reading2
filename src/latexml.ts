@@ -616,6 +616,20 @@ function liftBoxedPassage(svg: Element, targets: ReadonlySet<string>): boolean {
 /** A footnote mark set as text after a name. */
 const TRAILING_MARKS = /[\s*∗†‡§¶‖]+$/u;
 
+/** What may stand between two creators, spaces collapsed and lower-cased. A closed list: each was seen on a page. */
+const BETWEEN_CREATORS: ReadonlySet<string> = new Set(["", "and", ","]);
+
+const AUTHOR_CREATOR = "span.ltx_creator.ltx_role_author";
+
+/** What a creator may hold beside its one personname: the notes block, and the footnote `\thanks` makes. */
+const BESIDE_THE_NAME = "span.ltx_author_notes, span.ltx_note.ltx_role_thanks";
+
+/** One person's ORCID record, and nothing else at that address. */
+const ORCID_RECORD = /^https?:\/\/orcid\.org\/\d{4}-\d{4}-\d{4}-\d{3}[\dX]\/?$/u;
+
+/** Labels an ORCID link can display instead of the person's name. */
+const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
+
 /**
  * **The names in a LaTeXML title block, in the page's order — or `null`.**
  *
@@ -625,19 +639,29 @@ const TRAILING_MARKS = /[\s*∗†‡§¶‖]+$/u;
  * reference list. src/meta-authors.ts hands these names to the path a page's
  * declared authors already take.
  *
- * The shape, the same on all five:
+ * The shape, the same on all five, with what 19 more pages added on 2026-10-07:
  *
  * ```
  * article.ltx_document  (one)
  *   div.ltx_authors      (one)
  *     span.ltx_creator.ltx_role_author   ×n
  *       span.ltx_personname              one, holding one name
+ *       span.ltx_note.ltx_role_thanks    the footnote `\thanks` makes, when it is set beside the name: not read
  *       span.ltx_author_notes            affiliations, addresses, emails: not read
- *     span.ltx_author_before             the " and " or the space between them: not read
+ *     span.ltx_author_before             the space, the ", " or the " and " between them: not read
  * ```
  *
  * **Names only**, and a name is the personname's own text: an ORCID link, a
- * superscript and a footnote are left out. Older LaTeXML puts every author,
+ * superscript and a footnote are left out. One link is read into: a name that
+ * is itself the two-word text of a link to that person's ORCID record, the
+ * logo beside it left out. This is the exact observed widening: a one-word
+ * control label and four whitespace-joined name words both refuse. Any other
+ * link in a personname refuses, which is what keeps a "Code" or "Dataset"
+ * link marked up as a creator from being read as a person.
+ *
+ * The footnote beside the personname hides nobody. A creator still holds
+ * exactly one personname and no words of its own, so a second name after the
+ * footnote refuses as it did before. Older LaTeXML puts every author,
  * their marks and their affiliations into one `personname` separated by commas
  * and line breaks; telling a name from an institution there is a guess, so
  * **one creator that is not plainly one name gives `null` for the whole list**
@@ -653,21 +677,40 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
   const block = blocks[0];
   if (blocks.length !== 1 || block === undefined || !noOwnText(block)) return null;
   const names: string[] = [];
-  for (const child of Array.from(block.children)) {
+  const children = Array.from(block.children);
+  for (const [i, child] of children.entries()) {
     if (child.matches("span.ltx_author_before")) {
       const between = (child.textContent ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
-      if (child.children.length !== 0 || (between !== "" && between !== "and")) return null;
+      if (
+        child.children.length !== 0 ||
+        !BETWEEN_CREATORS.has(between) ||
+        !children[i - 1]?.matches(AUTHOR_CREATOR) ||
+        !children[i + 1]?.matches(AUTHOR_CREATOR)
+      ) {
+        return null;
+      }
       continue;
     }
-    if (!child.matches("span.ltx_creator.ltx_role_author") || !noOwnText(child)) return null;
+    if (!child.matches(AUTHOR_CREATOR) || !noOwnText(child)) return null;
     const parts = Array.from(child.children);
     const person = parts.filter((p) => p.matches("span.ltx_personname"));
-    if (person.length !== 1 || parts.some((p) => !p.matches("span.ltx_personname, span.ltx_author_notes"))) return null;
+    if (person.length !== 1 || parts.some((p) => p !== person[0] && !p.matches(BESIDE_THE_NAME))) return null;
     const name = oneName(person[0] as Element);
     if (name === null) return null;
     names.push(name);
   }
   return names.length > 0 ? names : null;
+}
+
+/** The observed two-word ORCID-linked name, with at most a wordless logo beside its text. */
+function isOrcidLinkedName(el: Element): boolean {
+  if (!el.matches("a.ltx_ref.ltx_href") || !ORCID_RECORD.test(el.getAttribute("href") ?? "")) return false;
+  if (!Array.from(el.children).every((part) => part.matches(".ltx_graphics") && (part.textContent ?? "").trim() === "")) return false;
+  const linked = (el.textContent ?? "").trim().replace(/\s+/gu, " ");
+  /* The one measured widening is a two-word name. Stay closed: a one-word
+     control label and four whitespace-joined name words are both plausible
+     text inside the same link and neither is plainly one person. */
+  return linked.split(" ").length === 2 && !ORCID_LINK_LABEL.test(linked);
 }
 
 /** The one name a `personname` holds, or `null` if it holds anything that is not plainly one. */
@@ -696,6 +739,14 @@ function oneName(person: Element): string | null {
     /* A name set in a font: `<span class="ltx_text ltx_font_bold">`, holding only text. */
     if (el.matches("span.ltx_text") && el.children.length === 0) {
       if (!add(el.textContent ?? "")) return null;
+      continue;
+    }
+    /* A name that is the text of its own ORCID link: `<a href="https://orcid.org/…"><object
+       class="ltx_graphics">` (the logo) ` Jane Doe</a>`. The link is the whole name, so words
+       before it or after it are somebody or something else; its own go through every check below. */
+    if (isOrcidLinkedName(el)) {
+      if (text.trim() !== "" || !add(el.textContent ?? "")) return null;
+      ended = true;
       continue;
     }
     return null;

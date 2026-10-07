@@ -113,8 +113,9 @@ export interface TableCoverage {
  *
  * **The foreign-key rule over-reaches, deliberately.** It follows every key, not
  * only the ones that mean ownership, so `jobs` arrives here because it points at
- * the draft revision it is building, and `queue_state` because it points at
- * `jobs`. Narrowing it would drop those two and would also drop the next child
+ * the draft revision it is building. (`queue_state` arrived the same way, through
+ * an unused key to `jobs`, until that column was dropped on 2026-10-07.)
+ * Narrowing it would drop `jobs` and would also drop the next child
  * table that happens to hold a nullable parent id, which is the silence this
  * record exists to prevent. The cost of over-reach is one written-down sentence
  * per table; the cost of under-reach is a rollback that quietly loses somebody's
@@ -423,24 +424,6 @@ export const ARTICLE_TABLE_COVERAGE = {
         "The ingest queue's own state, reachable only because a job points at the " +
         "draft revision it built. Scaffolding once the article exists — and it " +
         "carries a reader-profile snapshot, which is not this article's data.",
-    },
-  },
-  queue_state: {
-    rollback: {
-      exported: false,
-      why:
-        "One row that every claim of a job locks before it decides, so claims " +
-        "are decided one at a time. It records nothing: its `running_job_id` is " +
-        "never written, and that unused column's foreign key to `jobs` is the " +
-        "only reason it is reachable from an article at all. Nothing in it to " +
-        "roll back.",
-    },
-    bundle: {
-      exported: false,
-      why:
-        "One row that every claim of a job locks before it decides. It holds " +
-        "nothing about any article or any job, and is reachable from one only " +
-        "through an unused foreign key to `jobs`.",
     },
   },
   /* The two the record could not see until 2026-09-01, because the guard's

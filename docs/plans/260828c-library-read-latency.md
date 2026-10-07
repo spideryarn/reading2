@@ -582,3 +582,31 @@ fourth distinct *shape* of it.
 - The invariant audit runs against whatever is in the local database. It is a strong check of the
   writers on this machine and says nothing about production's rows.
 - Nobody has measured the loaded case for Part 8. See its own paragraph.
+
+## History moved from library.md (2026-10-07)
+
+Moved verbatim from [library.md § Where the numbers on it come from](../project/library.md#where-the-numbers-on-it-come-from-and-why-nobody-derives-them-twice)
+when the docs sweep split over-long reference docs. Nothing here is current unless library.md says so.
+
+### Deriving the shelf scalars in the filesystem store
+
+(Until 2026-09-05 the filesystem store ran it at read instead, over the artefacts the
+directory walk had just loaded, since there was no publish transaction to hang it on.)
+
+### Per-request derivation of the shelf scalars in Postgres
+
+**On the Postgres side that was also the shelf's whole cost.** Deriving per request meant reading
+every block row of every article — `text`, `html` and the generated `fts` vector — and running each
+one through the jsdom sanitiser, on every homepage load, in order to add up some word counts. Six
+articles on a laptop against a local Supabase:
+
+```
+                          before      after
+  statements per call     13 (1+2N)   2
+  row JSON per call       641 KB      4 KB
+  wall clock (median)     558 ms      3 ms
+```
+
+### The four mode-presence ticks on the shelf card
+
+The four ticks went the same way.

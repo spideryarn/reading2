@@ -1,6 +1,6 @@
 /**
- * **The chevron on a heading, and the masthead's fold-all** — the two controls
- * over fold.ts's store.
+ * **The chevron on a heading, the masthead's fold-all, and its "Show authors
+ * and details"** — the three controls over fold.ts's store.
  *
  * Each is its own small subscriber, so folding a section re-renders a chevron
  * or two and never the prose table, which is memoised over every row
@@ -9,7 +9,7 @@
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { BlockId } from "../types.js";
-import { toggleFold, toggleFoldAll, useFold } from "./fold.js";
+import { toggleFold, toggleFoldAll, toggleFrontMatter, useFold } from "./fold.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
 
 /**
@@ -91,6 +91,52 @@ export function FoldAllButton() {
     >
       <button type="button" className="fold-all" onClick={toggleFoldAll}>
         {anyFolded ? "Unfold all" : "Fold all"}
+      </button>
+    </Tooltip>
+  );
+}
+
+/**
+ * **Show the byline blocks under the title, or put them away again** — on the
+ * masthead's facts line, beside Fold all. The run of authors, affiliations and
+ * contact lines (front-matter.ts) is folded away when an article opens; this
+ * is the one control that shows it. Absent when the article has no such run.
+ *
+ * Greg, spya-duh4w3, 2026-10-06: *"default collapse them so that you kind of
+ * jump straight into the article itself when you first open it."* In the
+ * masthead because that is where the authors are already drawn, directly
+ * above where the run sits.
+ * docs/plans/261007d-front-matter-folded-by-default-and-arxiv-html-authors.md
+ * § The control.
+ */
+export function FrontMatterButton() {
+  const { front, frontOpen } = useFold();
+  if (front === 0) return null;
+  const label = frontOpen ? "Hide authors and details" : "Show authors and details";
+  const lines = front === 1 ? "The line" : `The ${front} lines`;
+  return (
+    <Tooltip
+      placement="bottom"
+      className="tip-soon"
+      content={
+        <ControlTip
+          head={label}
+          what={`${lines} under the title: authors, affiliations, contact details.`}
+          how={
+            frontOpen
+              ? "Folds them away again, so the page starts at the article itself."
+              : "They are folded away when an article opens. A link or a search hit that lands on one opens them too."
+          }
+        />
+      }
+    >
+      <button
+        type="button"
+        className="front-matter-toggle"
+        aria-expanded={frontOpen}
+        onClick={toggleFrontMatter}
+      >
+        {label}
       </button>
     </Tooltip>
   );

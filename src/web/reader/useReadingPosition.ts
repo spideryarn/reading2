@@ -28,7 +28,7 @@ import { positionToWrite, type Section } from "../position.js";
 import { beginJump, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
-import { isFoldedAway, subscribeFold } from "../fold.js";
+import { isFoldedAway, subscribeFold, visibleFrom } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -165,6 +165,15 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          function throw the answer away. The rects are the expensive half of
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
+      /* Closing the front matter can leave the address holding a finer block
+         inside it, and so can folding a heading over a paragraph a jump put
+         there. Canonicalise that held value before asking whether the
+         measured section changed (fold.ts § `visibleFrom`): `positionToWrite`
+         deliberately returns null while two ids are in the same section, but
+         the hidden id must still be replaced or the next restore would open
+         the run, or the fold, again. */
+      const held =
+        synced.current === null ? null : (visibleFrom(synced.current) as BlockId | null);
       const next = positionToWrite({
         sections,
         rowOf,
@@ -176,7 +185,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         line: stickyOffset() + 1,
         jumpInFlight,
         atTop: window.scrollY <= stickyOffset(),
-        held: synced.current,
+        held,
         anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
         /* A folded section start is never written: restoring it would unfold
            it (scroll.ts § `scrollToBlock`). fold.ts. `isFoldedAway`, not
@@ -188,9 +197,23 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
           return s !== undefined && isFoldedAway(s.blockId);
         },
       });
-      if (next === null) return;
-      synced.current = next.at;
-      void setAt(next.at);
+      if (next === null) {
+        if (held !== synced.current) {
+          synced.current = held;
+          void setAt(held);
+        }
+        return;
+      }
+      /* **A section that starts in the shut front matter is written as its
+         first visible block** (fold.ts § `visibleFrom`; Greg, spya-duh4w3).
+         The restore effect and the re-anchor above both go through
+         `scrollToBlock`, which opens the front matter for any block of it: a
+         reload, or a turned phone, would have opened it under a reader who was
+         in the abstract. A finer block inside the section is a value this spy
+         already leaves standing (position.ts § `positionToWrite`). */
+      const at = next.at === null ? null : (visibleFrom(next.at) as BlockId | null);
+      synced.current = at;
+      void setAt(at);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(measure);

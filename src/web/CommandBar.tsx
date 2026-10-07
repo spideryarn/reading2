@@ -178,7 +178,8 @@ import type { ExperimentalSaveOutcome, ExperimentalSetting } from "./experimenta
 import { isImeComposing } from "./key-chord.js";
 import { useDictationField } from "./useDictationField.js";
 import { type MetadataSection, type Mode, type LearnView, modeParam, learnInSearch, withSection } from "./params.js";
-import { METADATA_RERUN_STEPS, RERUN_LANDS_IN, rerunCommand } from "./rerun-commands.js";
+import { METADATA_RERUN_STEPS, RERUN_LABEL, RERUN_LANDS_IN, type MetadataRerunStep, rerunCommand } from "./rerun-commands.js";
+import { rewriteHeld } from "./rewrite-hold.js";
 import { SECTION_ROWS, archiveCommand, exportCommand, sectionCommand } from "./article-commands.js";
 import { downloadExport } from "./export-download.js";
 import type { ArchiveControl } from "./useArchive.js";
@@ -516,6 +517,10 @@ type RerunQueue = Pick<UseJobs, "run" | "lastFailure">;
  */
 const RUN_NOT_STARTED = "Couldn't start the job.";
 
+/** Why a *Run again* row refused: the mode's last forced run has not been read yet (§ `rerunRows`). */
+const rerunHeld = (step: MetadataRerunStep): string =>
+  `${RERUN_LABEL[step]} was just run again and hasn't loaded yet. Open it to see the result first.`;
+
 /**
  * **The answer of an action that cannot fail** — Comments opening its drawer,
  * Feedback its dialog. Returned rather than implied, so the type says every
@@ -558,10 +563,21 @@ const CLOSE: ActionOutcome = { kind: "close" };
  * `?section=` added, **replaced** and without the jump to the top — the page
  * does not change, it opens the section and scrolls there itself
  * (PageContents.tsx § `useRevealOnArrival`).
+ *
+ * ## Unless the mode's own rewrite is held
+ *
+ * A forced run pressed in the mode holds every forced control there until a
+ * fresh read shows its result (rewrite-hold.ts). The row asks the same hold
+ * before it posts, and refuses with `rerunHeld` rather than buy a second run
+ * for one result — GPT Sol's C4 on plan 261007b, fixed in plan 261007i. The
+ * row does not take a hold of its own: it has no artefact identity to hold,
+ * and it leaves for Metadata, whose row shows the job, as Metadata's own
+ * re-runs do.
  */
 function rerunRows(article: CommandBarArticle, queue: RerunQueue): readonly Command[] {
   return METADATA_RERUN_STEPS.map((step) =>
     rerunCommand(step, async (): Promise<ActionOutcome> => {
+      if (rewriteHeld(article.slug, step)) return { kind: "stay", message: rerunHeld(step) };
       const job = await queue.run(stepRunRequest(article.slug, step, { force: true }));
       if (job === null) return { kind: "stay", message: queue.lastFailure() ?? RUN_NOT_STARTED };
       return goToSection(article, RERUN_LANDS_IN);

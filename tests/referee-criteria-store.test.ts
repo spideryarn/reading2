@@ -127,10 +127,10 @@ describe("withCriterion — which row a request produces", () => {
   });
 
   /* **No trim here** — `withCriterion` stopped returning the list on 2026-10-03,
-     because nothing in production read it and the trim that runs is SQL.
-     *never trims a criterion that is still being answered* in
-     tests/store-parity-referee.test.ts holds the cap against the code that
-     executes. docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
+     because nothing in production read it. The SQL trim was removed on
+     2026-10-07; tests/store-parity-referee.test.ts checks that every criterion
+     survives an add, and tests/referee-routes-postgres.test.ts checks the
+     ceiling that refuses an add instead. docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md */
 
   /* `withColour` used to live beside `withCriterion` and had two cases here.
      It went with the filesystem criteria store on 2026-09-05

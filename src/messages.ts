@@ -599,6 +599,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "up-dup": "blocked",
   "up-dup-archived": "blocked",
   "up-dup-wait": "blocked",
+  /* One of our own reading pages pasted into Add. `blocked`: the same link is
+     refused the same way every time, and the way out is the article's own
+     address. See `OWN_READING_PAGE`. */
+  "jb-own-page": "blocked",
   /* A paper on the shelf with only its title and abstract read, and something
      asked of it that needs the whole article — plan 261001m. `blocked`: the
      same request gets the same answer until *Read this* has run, and that is
@@ -2569,6 +2573,23 @@ export const UPLOAD_STILL_ARRIVING: ReaderFacingFailure = {
   message:
     "That file is still on its way — nothing has been lost. Trying again in a moment will " +
     "work, and this page does that for you as long as a Spideryarn tab stays open. [up-wait]",
+};
+
+/**
+ * **A Spideryarn reading page pasted into Add**, refused by `POST /api/jobs`
+ * before a slot is reserved (src/own-reading-page.ts has the rule and why).
+ *
+ * `blocked`, so the Add page offers no *Try again* under it
+ * (src/web/AddPage.tsx § `worthRetrying`): the link is the request, and it
+ * cannot be added. The reader still has two moves and the sentence names both.
+ * Plan 261007f, E8.
+ */
+export const OWN_READING_PAGE: ReaderFacingFailure = {
+  kind: "blocked",
+  message:
+    "That link opens an article already in Spideryarn, rather than the original article, so " +
+    "adding the same link will not help. Open the link to read it, or paste the article's " +
+    "original address to add your own copy. [jb-own-page]",
 };
 
 export const UPLOAD_MISSING: ReaderFacingFailure = {
