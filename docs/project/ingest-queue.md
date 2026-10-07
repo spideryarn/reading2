@@ -2128,13 +2128,30 @@ Two rules now, in [`src/jobs.ts`](../../src/jobs.ts):
   with its draft failed and its pointer cleared. It is never taken as "not current", which would
   start paid work on a question nobody answered.
 - **A progress write that fails is logged and the walk goes on**, unless the failure is the fence
-  saying the claim has moved, which still stops the claimant. The write also records when a
-  force request was spent (`stillForced`); the review records an unresolved duplicate-work path
-  if that receipt is lost before a pause. The
-  step's own `beginStep` or commit, which comes next, is what decides whether the store can be
-  reached. A failed write loses one look at `cancelling`; a successful starting write checks it
-  again before the next runnable step runs. Repeated failures can delay Stop over several steps, bounded
-  by the finite step list and the claim deadline.
+  saying the claim has moved, which still stops the claimant. The step's own `beginStep` or
+  commit, which comes next, is what decides whether the store can be reached. A failed write
+  loses the card's update and one look at `cancelling`; a successful starting write checks it
+  again before the next runnable step runs. Repeated failures can delay Stop over several steps,
+  bounded by the finite step list and the claim deadline.
+
+**A step's commit writes the job's steps, so a forced step is bought once.** `force` is a request,
+and it is spent when the step's stored status is `done` (`stillForced`); the artefacts cannot say
+it, because a rebuilt one looks like the one it replaced. Until 2026-10-07 a commit that kept the
+claim wrote nothing to the `jobs` row, and `done` reached it only through the progress write
+after. Anything that lost that write left the step stored `running` and forced, the requeue put it
+back to `pending`, and the next claim ran it and paid for it again. Two roads led there: a claim
+that lapsed between the commit and the write, which is as old as the kept claim (2026-08-30), and,
+for the hours tolerant progress writes existed without this, two failed writes followed by a
+mid-step pause. The steps now go in the product's transaction (`keepStepIn`,
+[`src/store/pg-jobs.ts`](../../src/store/pg-jobs.ts)), which already held the job row's lock, so
+neither road is open and a progress write carries nothing a repeat purchase depends on. Status,
+lease and title are not written there.
+
+**Ending the job when a progress write fails was the other option, and it was not taken.** It
+would have made a database blink between two steps of a refresh a failed job, and Retry gives a
+forced job all its force back ([§ below](#the-failures-retry-is-not-offered-under)), so pressing
+it would run the finished forced steps again and pay again for every call in them that is not
+checkpointed.
 
 **What is still left to the lease** is a failure of the write that *settles* the job
 (`pauseForDeadline`, or `settleJob` recording a cancel or a failure): there is no further write to

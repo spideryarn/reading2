@@ -3,6 +3,8 @@
 Caught in the write-capable review of
 [the queue stage](../plans/261007b-seventh-sweep-job-queue-tier-0.md), 2026-10-07.
 Root causes independently checked by the review subagent. No production incident was measured.
+The review had no database; every case it wrote was run against Postgres afterwards, and the
+third section's defect, which it left open, was fixed then.
 
 ## An optional write carrying a control message
 
@@ -36,21 +38,45 @@ progress writes fail, pause can reset the old stored running status to pending. 
 then repeats the completed forced step. This wider defect predates this stage through expiry after
 a failed progress write; tolerant continuation exposes it through a clean mid-step pause as well.
 The receipt split originated in `ceec42fc8`, which added `keep` without a job-row write.
-The offline coordinator characterisation executes Extract twice. The real Postgres regression is
-unrun, and the fix remains outside the review's permitted session files. An atomic completion
-receipt is the long-term fix; the review is **not ready to ship** with that harmful default intact.
+
+**Class: a fact that decides spending, written after the transaction that made it true.** The
+review left this one open, with a Postgres regression it could not run and a verdict of not ready
+to ship. Run afterwards, the regression was red: `extract` ran twice. The older road was
+reproduced too, with the progress write put back to rethrowing as it did before the stage: the
+lease lapses between the commit and the write, the sweep requeues, and the forced step runs again.
+
+**The fix** puts the job's steps in the commit that keeps the product. `keep` now carries them,
+and the Postgres session writes them in the same transaction (`keepStepIn`,
+`src/store/pg-jobs.ts`), on a row that transaction had already locked. About twenty lines, no
+column, no migration. Both roads are closed by it, and so is the one neither test needed a failure
+for: a claimant killed between the commit and the write. Taking the write out of the session, or
+handing it steps that do not say `done`, turns both Postgres cases red.
+
+With that in, a progress write carries the card and one look at Stop and nothing a repeat
+purchase rests on, so tolerant continuation stays. Ending the job on a failed progress write was
+weighed and not taken: Retry gives a forced job its force back, so that ending would itself send
+the reader to buy the finished steps again.
 
 ## What would have caught these classes, ranked by ease against value
 
-1. **Combine failure with a later successful control response.** Added offline regressions reproduce
-   the starting and skipped-tail Stop interleavings. The corresponding Postgres cases are unrun
-   in this sandbox. Testing only a write failure with no Stop cannot catch this class.
-2. **Test optional replacements at their boundaries.** Offline coordinator cases reproduce blank
-   title loss; Postgres cases cover undefined, empty and whitespace progress titles, unrun here.
-3. **Observe novel artefacts, rather than fixture freshness.** The original deadline test reused
+1. **Ask of every write outside a transaction what reads it back to decide something.** That is
+   the question that finds the receipt, and it was answerable from `stillForced`'s own comment,
+   which says the job record is the only account of a spent force there is. In
+   `src/store/session.ts`, `JobTransition` said the same field was a progress bar nothing decides
+   anything on.
+2. **Combine failure with a later successful control response.** Offline and Postgres regressions
+   reproduce the starting and skipped-tail Stop interleavings; each goes red with its fix removed.
+   Testing only a write failure with no Stop cannot catch this class.
+3. **Test optional replacements at their boundaries, and assert outside the code under test.**
+   Offline coordinator cases reproduce blank title loss. The Postgres cases for undefined, empty
+   and whitespace titles passed as first written whether or not the store had its guard: their
+   assertions were inside a step's body, where a failed `expect` is a step failure the walk
+   records. They read inside and assert outside now, and the two blank cases go red without the
+   guard. A test written with no database to run it on was the one that could not fail.
+4. **Observe novel artefacts, rather than fixture freshness.** The original deadline test reused
    seeded output and faked freshness, so it could pass after an erroneous late commit. Its revised
-   case returns a distinct metadata title, counts commits and reads the real paused draft. Unrun
-   here; offline cases separately assert that no late product reaches commit.
-4. **Reject a new title type or queue retry mechanism for this stage.** Neither removes the need
+   case returns a distinct metadata title, counts commits and reads the real paused draft; a build
+   that commits the late product and then pauses fails it on the commit count.
+5. **Reject a new title type or queue retry mechanism for this stage.** Neither removes the need
    to consume control responses or validate replacements. They add machinery where two boundary
    checks and adversarial inputs suffice. A separate cancellation protocol is wider work.

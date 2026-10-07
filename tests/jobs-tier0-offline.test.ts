@@ -67,6 +67,9 @@ function fixture(names: StepName[], body: (ctx: StepContext, name: StepName) => 
       commits.push(step.name);
       if (transition.kind === "end") return settle(transition);
       if (transition.kind !== "keep") throw new Error("unexpected release in offline fixture");
+      /* What the Postgres session does with a `keep`: the steps it is handed
+         go on the row with the product (`keepStepIn`). */
+      row.steps = structuredClone(transition.steps);
       return { kind: "kept" };
     },
     settleJob: settle,
@@ -190,7 +193,11 @@ describe("Tier 0 queue decisions without Postgres", () => {
     expect(notes).toBe(3);
   });
 
-  it("characterises the wider forced-step receipt gap after repeated progress failures", async () => {
+  /* The coordinator's half of the receipt: the steps it hands the commit say
+     the forced step is `done`. GPT Sol wrote this as a characterisation of the
+     defect (`extract` twice, stored `pending`) when the commit carried nothing;
+     the store's half is in tests/jobs-walk.test.ts, against Postgres. */
+  it("hands the commit a forced step's done status, so lost progress writes cannot buy it twice", async () => {
     noteFailure = (call) => { if (call === 2 || call === 3) throw new Error("progress write lost"); };
     let late = true;
     const advance = fixture(["extract", "metadata"], async (_ctx, name) => {
@@ -205,10 +212,8 @@ describe("Tier 0 queue decisions without Postgres", () => {
     skipName = "extract";
     expect((await advance())?.job.status).toBe("queued");
     expect(commits).toEqual(["extract"]);
-    expect(row.steps[0]?.status).toBe("pending");
+    expect(row.steps[0]).toMatchObject({ name: "extract", status: "done", force: true });
     expect((await advance())?.job.status).toBe("done");
-    /* Today's defect, not an endorsement: the completed forced work is bought
-       again. Atomic completion receipts require a wider session/store change. */
-    expect(ran.filter((name) => name === "extract")).toHaveLength(2);
+    expect(ran).toEqual(["extract", "metadata", "metadata"]);
   });
 });

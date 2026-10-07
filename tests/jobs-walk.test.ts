@@ -1169,6 +1169,7 @@ describe("one claim walks the whole job", () => {
           draft: jobsTable.draftRevisionId,
           requeues: jobsTable.requeues,
           title: jobsTable.title,
+          steps: jobsTable.steps,
         })
         .from(jobsTable)
         .where(eq(jobsTable.id, id))
@@ -1338,6 +1339,80 @@ describe("one claim walks the whole job", () => {
       expect(advanced?.job.status).toBe("cancelled");
       expect(advanced?.job.steps[1]?.status).toBe("skipped");
       expect((await rowOf(job.id))?.status).toBe("cancelled");
+    });
+
+    it("does not buy a committed forced step again after lost progress and a mid-step pause", async () => {
+      let asked = false;
+      const { ran, job, parts } = await fixture("test-walk-forced-receipt-lost", ["extract", "blocks"], {
+        blocks: () => {
+          if (!asked) { asked = true; throw new NeedsAnotherWindow(); }
+        },
+      });
+      await getDb().update(jobsTable).set({
+        steps: job.steps.map((s) => s.name === "extract" ? { ...s, force: true } : s),
+      }).where(eq(jobsTable.id, job.id));
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let calls = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (++calls === 2 || calls === 3) throw new Error("progress write lost");
+        return await realNote(id, attempt, steps, title);
+      });
+      expect((await advanceAsOwner(job.id, parts))?.job.status).toBe("queued");
+      expect(ran.names).toEqual(["extract", "blocks"]);
+      /* The receipt itself, before the consequence: both progress writes that
+         could have said `done` were lost, so only the step's own commit can
+         have written it. GPT Sol wrote this case without a database; it was
+         red against Postgres (`extract` twice) until the commit carried the
+         steps. */
+      const paused = await rowOf(job.id);
+      expect(paused?.steps[0], "the commit is what says the forced step ran").toMatchObject({
+        name: "extract",
+        status: "done",
+        force: true,
+      });
+      expect((await advanceAsOwner(job.id, parts))?.job.status).toBe("done");
+      expect(ran.names, "bought once").toEqual(["extract", "blocks", "blocks"]);
+    });
+
+    /* The older road to the same double purchase, and the one that needs no
+       tolerance at all: the claim is gone before the walk can write that the
+       step finished. Here the lease lapses inside the progress write that
+       fails; a claimant killed between the commit and that write leaves the
+       same row. The sweep puts a `running` step back to `pending`, and a
+       `pending` step that is forced runs. */
+    it("does not buy a committed forced step again when the claim lapses before its progress is written", async () => {
+      const { ran, job, parts } = await fixture("test-walk-forced-receipt-lapsed", ["extract", "blocks"]);
+      await getDb().update(jobsTable).set({
+        steps: job.steps.map((s) => s.name === "extract" ? { ...s, force: true } : s),
+      }).where(eq(jobsTable.id, job.id));
+      const realNote = pgJobStore.noteProgress.bind(pgJobStore);
+      let calls = 0;
+      vi.spyOn(pgJobStore, "noteProgress").mockImplementation(async (id, attempt, steps, title) => {
+        if (++calls === 2) {
+          await getDb().update(jobsTable)
+            .set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+            .where(eq(jobsTable.id, id));
+          throw new Error("progress write lost");
+        }
+        return await realNote(id, attempt, steps, title);
+      });
+
+      /* Whether the walk leaves as a throw (it did until this stage) or stands
+         down as `busy` (it does now) is not this case's business: either way
+         the row is left `running` behind a lease that is over. */
+      const first = await advanceAsOwner(job.id, parts).then((a) => a?.busy, () => "threw");
+
+      expect(first, "the claimant did not settle the job").not.toBe(false);
+      expect(ran.names).toEqual(["extract"]);
+      const lapsed = await rowOf(job.id);
+      expect(lapsed?.status).toBe("running");
+      expect(lapsed?.steps[0]).toMatchObject({ name: "extract", status: "done", force: true });
+
+      const second = await advanceAsOwner(job.id, parts);
+
+      expect(second?.job.status).toBe("done");
+      expect(second?.job.requeues, "it came back through the sweep").toBe(1);
+      expect(ran.names, "bought once").toEqual(["extract", "blocks"]);
     });
 
     /* ------------------------------------------------------------ PQO1 -- */

@@ -2250,6 +2250,37 @@ const rawPgJobStore: JobStore = {
  */
 
 /**
+ * The step is done and the claim stays: write the job's steps, and only them.
+ *
+ * **This is the receipt for a forced step, which is why it is in the commit.**
+ * `force` is spent by the step's stored status being `done` (`stillForced`,
+ * src/jobs.ts), and nothing about the artefacts can say it instead. Until
+ * 2026-10-07 that status reached the row only through `noteProgress`, after
+ * the commit and on its own connection. A claim that lapsed in between, or a
+ * progress write that failed before a pause, left the step stored as `running`
+ * with `force: true`; the requeue made it `pending`, and the next claim ran
+ * and paid for it again.
+ *
+ * Not the status, not the lease, not `cancelling`, and no row handed back: the
+ * walk's `noteProgress` straight after is still the look at Stop. The row is
+ * already locked by this transaction (`requireLiveJobOwnsDraft`, taken by
+ * `finishStepRun`), so this adds a statement and no lock.
+ */
+export async function keepStepIn(
+  exec: Executor,
+  id: string,
+  attempt: string,
+  steps: JobStep[],
+): Promise<void> {
+  const moved = await exec
+    .update(jobs)
+    .set({ steps })
+    .where(fence(id, attempt))
+    .returning({ id: jobs.id });
+  if (!moved[0]) throw new StaleAttemptError(id);
+}
+
+/**
  * Hand the job back to the queue with this step's outcome recorded — or, if a
  * Stop landed while the step ran, end it as cancelled.
  */

@@ -2623,9 +2623,10 @@ export async function advanceJobWith(
  * deadline that covers the expensive step whole. `LEASE_MS` has the trade.
  *
  * So the claim is taken once and **kept** across steps: `transitionAfter`
- * returns `keep`, which finishes the step and writes nothing to the `jobs` row.
- * What the reader sees between steps is `noteProgress`, which is a progress bar
- * and deliberately does not renew the lease.
+ * returns `keep`, which finishes the step and writes the job's steps with it,
+ * and nothing else on the `jobs` row. What the reader sees between steps is
+ * `noteProgress`, which is a progress bar and deliberately does not renew the
+ * lease.
  *
  * ## What ends the walk
  *
@@ -2855,10 +2856,9 @@ async function walkClaim(
   /**
    * Write what the card should say, **without letting go of the claim.**
    *
-   * The one job write that is neither a release nor a finish, and the walk needs
-   * it twice over. A step's completion reaches the `jobs` row through it now
-   * that a non-final commit writes nothing there — so without it the card would
-   * show a job stuck on step one for the whole ingest — and it is also the only
+   * The one job write outside a commit, and the walk needs it twice over. It is
+   * what tells the card a step has *started* or been skipped (a finished step is
+   * also on the row from its own commit, since 2026-10-07), and it is the only
    * thing that reads the row back mid-job, which is how a Stop pressed on
    * *another instance* is noticed at all: that instance has no `AbortController`
    * of ours to pull, so `cancelling` on the row is the whole of the message.
@@ -2871,12 +2871,19 @@ async function walkClaim(
      failure is the fence saying the claim has moved, which still propagates.
      The three direct calls sit outside `runStep`'s `try` (a skip, a step starting,
      a kept step), so until 2026-10-07 any other failure left the walk through
-     its outer `catch` with the row still `running` behind a live lease. This
-     normally updates the card, but a forced step's `done` status also spends
-     its force request (`stillForced`). Losing that receipt can repeat committed
-     work after a pause; the review records the wider atomic-receipt defect.
-     The next fenced write, the step's own `beginStep` or commit, decides whether the store can be
-     reached. A failed write loses one look at `cancelling`. A successful
+     its outer `catch` with the row still `running` behind a live lease.
+
+     **What makes carrying on safe is that nothing but the card and one look
+     at Stop rides on this write.** A forced step's `done` status spends its
+     force request (`stillForced`), and until 2026-10-07 that receipt was
+     written here and nowhere else, so a claim that lapsed first, or two
+     failures in a row and a pause, bought the step twice. The step's commit
+     writes it now (`keepStepIn`, src/store/pg-jobs.ts), in the transaction
+     that keeps the product.
+
+     The next fenced write, the step's own `beginStep` or commit, decides
+     whether the store can be reached. A failed write loses one look at
+     `cancelling`. A successful
      starting write notices Stop before running the next runnable step; repeated write
      failures can delay it across several steps. The finite step list and the
      claim deadline bound that delay, not a promise of one step.
@@ -2957,11 +2964,18 @@ async function walkClaim(
       }
       /* **There is more to do and time to do it in: keep the claim.** This is
          the ordinary path, and it is the change that makes an import work on a
-         host where the next request would land on a different disk. Nothing is
-         written to the `jobs` row here at all — the loop's `note` does that,
-         outside the commit, because a progress bar is not worth widening an
-         artefact transaction for. */
-      if (deadlineAt - Date.now() >= STEP_BUDGET_MS[next.name]) return { kind: "keep" };
+         host where the next request would land on a different disk.
+
+         **The steps go with it**, this one already `done` in memory. That is
+         the receipt for a forced step: `stillForced` reads the stored status,
+         and until 2026-10-07 only the loop's `note` wrote it, after the commit
+         and able to fail on its own. A claim that lapsed first, or two lost
+         notes and a pause, left the step stored `running` and forced, and the
+         next claim ran it again. Status, lease and title are not touched.
+         tests/jobs-walk.test.ts § does not buy a committed forced step again. */
+      if (deadlineAt - Date.now() >= STEP_BUDGET_MS[next.name]) {
+        return { kind: "keep", jobId: job.id, attempt, steps: job.steps };
+      }
       /* **Not enough of our own deadline left for the next step: hand back.**
          Deliberate, and the difference between this and doing nothing is the
          difference between a job that stays `queued` and resumable and a job
@@ -3168,9 +3182,9 @@ async function walkClaim(
        * **Kept, so the walk goes on — and these two lines are what makes that
        * safe to do.**
        *
-       * The commit wrote nothing to the `jobs` row (see `JobTransition`), so
-       * `noteProgress` is what tells the card this step finished, and its
-       * answer is the only look this walk takes at the row it holds. That look
+       * The commit wrote the steps and handed no row back (see
+       * `JobTransition`), so `noteProgress`'s answer is the only look this walk
+       * takes at the row it holds. That look
        * is not housekeeping: **Stop pressed on another instance arrives here and
        * nowhere else.** `requestCancel` sets `cancelling` on the row and aborts
        * the local `AbortController` if the claimant happens to be in this

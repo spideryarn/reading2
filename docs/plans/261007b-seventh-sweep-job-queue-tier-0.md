@@ -1,8 +1,9 @@
 # Seventh sweep: the job queue's tier 0
 
-Status as of 2026-10-07: built in five commits, reviewed by GPT Sol with uncommitted fixes;
-not pushed. The builder's original Postgres evidence is recorded below. The review's additional
-Postgres checks are unrun because its sandbox has no database or network.
+Status as of 2026-10-07: built in five commits, reviewed by GPT Sol, whose fixes are a sixth and
+whose one open finding (C1, a forced step bought twice) is fixed in a seventh. Not pushed: a
+second, narrow GPT review of the C1 change comes first. [§ Review status](#review-status) has what
+was run and what was decided.
 
 **The five commits are titled `261007a`**, which is what this file was called until `dev` was
 merged in and another plan turned out to hold that letter. It is `261007b`; the commits are these.
@@ -344,45 +345,149 @@ which is what they are for.
   `settleJob` after a cancel or a failure) still leaves the row to the lease. Closing it needs a
   fourth storage-failure door and a sentence for the reader's card.
 - **Not closed in PQO2:** a claimant that dies between `extract`'s commit and the next progress
-  write.
+  write. It is one field away since C1: a `keep` now writes the job's steps inside the commit
+  (`keepStepIn`), and the title could ride the same statement. Not built, because C1 was kept to
+  the receipt.
 - **Another cluster's:** PQ3, PQO3, PQO5.
-- A GPT Sol review of these commits, which the orchestrating agent runs before pushing.
+- A second, narrow GPT review of the C1 change, which the orchestrating agent runs before pushing.
 
-## Write-capable review, 2026-10-07
+## Review status
 
-The review retained tolerant progress writes, with two corrections: a successful starting or
-skipped-step write carrying Stop must be consumed, and repeated failures can hide Stop across
-several steps. The earlier claim of exactly one extra step was too strong. `beginStep` and commit
-still fence lost claims; a persistent database outage stops work at `beginStep`. Failures of the
-settlement write remain covered by the lease rather than reported as an ending that was not stored.
+**GPT Sol's verdict, 2026-10-07: do not ship yet.** Its
+[report](261007b-seventh-sweep-job-queue-tier-0-code-review-sol.md) is beside this file, with the
+[prompt](261007b-seventh-sweep-job-queue-tier-0-code-review-prompt.md) it answered. The review had
+write access and no database, so it fixed four findings, wrote Postgres cases it could not run,
+and left the fifth open. Everything below the table was done afterwards, against Postgres, by the
+agent that picked the stage up. The scope and the size limit on C1 were the orchestrating agent's.
 
-Blank titles now preserve the existing title at the coordinator and progress-store boundaries;
-forwarding test spies carry the optional title too. The deadline regression now returns novel
-metadata and reads the real draft, so fake freshness cannot conceal an erroneous late commit.
-Additional offline cases cover the four pause outcomes, earlier commits, exhausted requeue budget,
-lost claims and unavailable storage. Both running-last-step Stop characterisations remain intact.
+| | Finding | Sol | Now |
+|---|---|---|---|
+| C1 | P0. A completed forced step can run again and be paid for twice | open; regression written, unrun | **fixed**, below |
+| C2 | P1. A progress write that succeeds and answers `cancelling` was ignored | fixed | run; red without the fix |
+| C3 | P1. A blank title erased a stored one | fixed | run; one test repaired; red without the fix |
+| C4 | P2. The deadline case could pass after committing the late product | test strengthened | run; red against a build that commits and then pauses |
+| C5 | P3. False claims in the comments the stage rewrote | fixed | read; comments only |
 
-All 55 comment edits were reviewed, not sampled. Corrections include the retained test-only
-filesystem session, Stop preceding expiry-budget classification, same-request reclamation after
-the sweep, bounded resumption, the actual exception and exit sets, obsolete step counts, the
-625.4s test arithmetic and the scope of transactional fencing. `db08f2408`'s five files compiled
-identically with comments stripped: 85,336 bytes on each side. No budget constant was changed.
-
-**Review verdict: do not ship yet.** Repeated progress failures expose a wider receipt defect:
-`session.commit` with `keep` stores the artefacts but not the job's completed force status. If the
-kept note and next starting note both fail, pausing resets the stored running step to pending.
-The next claim forces that already-committed step again. An offline characterisation reproduced
-two executions; a new Postgres regression asserts one and is unrun. This is also reachable through
-lease expiry after a failed progress write, so it predates tolerance; treating the write as harmless
-does not close it. An atomic receipt needs session/store work beyond this review's permitted files.
-
-Review additions to `tests/jobs-walk.test.ts` are **unrun**, not failed: there is no Postgres or
-network in the review sandbox. The orchestrator must run that file before landing these fixes.
 The [postmortem](../postmortems/261007b-a-progress-write-can-carry-a-stop-and-a-blank-title-can-erase-a-heading.md)
-records the classes and the checks that missed them. No review fix was committed or pushed.
+names the three classes.
 
-Validation in the review sandbox: the four-file offline run passed 42/42; adding the wider receipt
-characterisation then gave 14/14 in the updated offline queue file (43 distinct offline cases
-across those four files). Typechecking passed all four projects, covering 3,339 sources. Scoped
-lint retains one pre-existing error, one warning and five complexity notices; no new lint
-diagnostic remains. `git diff --check` passed. No `npm test` or database test was run.
+### What Sol's unrun cases did against Postgres
+
+`tests/jobs-walk.test.ts` as Sol left it: 35 cases, 34 passed, 1 failed. The failure was the C1
+regression, red for the reason it was written (`extract` ran twice). Every other case passed as
+written, and one of them should not have been trusted:
+
+- **`noteProgress preserves a stored title when given ""`** (and `"   "`, and `undefined`) **could
+  not fail.** Its three `expect`s sat inside the step's body. A failed `expect` there is a throw
+  that `runStep` records as the step's failure, so the job ended `error` carrying the title the
+  claimant still held in memory, and the single assertion outside the body passed. With the
+  store's guard taken out (`title !== undefined` again) all three cases stayed green. The case now
+  reads the store's answer and the row inside the step and asserts both outside it, with the job's
+  status; without the guard the two blank cases go red and `undefined` stays green, as it should.
+
+Each fix was put back to what it was, the suites run, and the fix restored:
+
+| Taken out | Red |
+|---|---|
+| C2, the starting write's `cancelling` check | *honours the next starting write's Stop …* (Postgres: `extract` ran) and its offline twin |
+| C2, the skipped step's `cancelling` check | *honours a skipped tail's Stop …* (Postgres: `done`, not `cancelled`) and its offline twin |
+| C3, the coordinator's blank guard | offline: *keeps an existing title when extract / metadata returns an empty detail* |
+| C3, the store's blank guard | Postgres: the two blank cases, after the repair above; none before it |
+| C4: the late product committed, then the pause | *puts the job down with its draft …*, on "the late product must not enter the commit at all" |
+
+C4's other half is reasoned, not run: that the case as the builder first wrote it stays green
+under that same wrong build. Sol argued it from the fake freshness; it was not re-checked.
+
+### C1: the receipt for a forced step is written by the step's commit
+
+**The defect.** `force` is a request, spent when the step's *stored* status is `done`
+(`stillForced`). A commit that kept the claim wrote nothing to the `jobs` row, so `done` reached
+it only through the progress write afterwards. Lose that write and the row says `running` and
+`force: true`; a requeue makes it `pending`; the next claim runs the step and pays again.
+
+**Two roads, both reproduced against Postgres, both red before the fix.**
+
+- *Sol's.* Forced `extract` commits; the progress write after it fails, and so does the one as
+  `blocks` starts; `blocks` asks for another window; the pause requeues. The second claim ran
+  `extract` again. This road needs tolerant progress writes, so it is this stage's.
+- *The older one.* The lease lapses between the commit and the progress write, and the sweep
+  requeues. The case makes the failing write expire the lease. Run with `note` put back to
+  rethrowing every failure, which is what it did before the stage, `extract` ran twice
+  (`['extract', 'extract', 'blocks']`); with today's `note`, the same. So the defect predates the
+  stage, as Sol said. That is **R on this tree with the one function reverted**, not a run of the
+  commit before the stage. A claimant killed between the commit and the write leaves the same row
+  and needs no failed write at all; it has been reachable since the kept claim (`ceec42fc8`,
+  2026-08-30).
+
+**The fix.** `keep` carries the job's steps, and the Postgres session writes them in the
+transaction that writes the product:
+
+- `src/store/session.ts`: `{ kind: "keep" }` becomes `{ kind: "keep"; jobId; attempt; steps }`.
+- `src/store/pg-jobs.ts`: `keepStepIn`, beside `releaseStepIn` and `finishIn`. One fenced
+  `update … set steps`. Not the status, the lease, `cancelling` or the title.
+- `src/store/pg-session.ts`: `settleIn`'s `keep` branch calls it.
+- `src/jobs.ts`: `transitionAfter` hands over `job.steps`, in which the step is already `done`.
+
+About twenty lines that are not comments or tests. No column, no migration, no new method on a
+store contract. It takes no new lock: `finishStepRun`, one statement earlier in the same
+transaction, already holds the job row `for update`, which is what the old comment's objection
+("would take the job lock on every step of a walk for no gain") had missed. `fsStoreSession`,
+which one test reaches and which has no transaction, ignores the steps.
+
+**Evidence.** Both Postgres cases assert the receipt (the stored step is `done` and still
+`force: true`) and then the consequence (`extract` ran once). Both were red first. Mutations:
+
+| Mutation | Red |
+|---|---|
+| the session's `keep` branch does not call `keepStepIn` | both Postgres cases, on the receipt |
+| `transitionAfter` hands over steps in which the forced step is not `done` | both Postgres cases, and the offline case |
+| before the fix existed, with the receipt assertion commented out | the lapsed-claim case, on `extract` twice, so the consequence is seen red and not only the line above it |
+
+The offline case was Sol's characterisation of the defect (`extract` twice). Its fake session now
+does what the real one does with a `keep`, and it asserts once.
+
+**The simpler option passed over: a receipt read on resume.** Leave the commit alone and have the
+next claim ask whether a `revision_step_runs` row in this job's draft says the step finished.
+The row exists, but it is keyed on revision and step and stamped with the *claim's* token, not the
+job's, and a draft's rows are copied from the revision it was forked from; telling "finished under
+this job" from "copied in" needs a comparison nothing makes today, and a new read on the session,
+which every fake session in the tests would have to answer. The write is smaller and says the
+fact where it becomes true.
+
+### Tolerant continuation stays
+
+Sol's judgement was that a progress write is not a harmless display write, because it carried
+cancellation and the force receipt. Both halves are answered differently now:
+
+- **Cancellation** is read off the next write that succeeds (C2). Repeated failures can still
+  delay a Stop across several steps; the step list and the claim's deadline bound it.
+- **The force receipt** is no longer on that write at all.
+
+So a failed progress write costs the card an update and the walk one look at Stop, and cannot add
+a road to a second paid run: a step is run again only if its stored status says it was not
+finished, or its artefacts do, and the commit now writes both together.
+
+**The option not taken** is the Opus review's sketch: a failed progress write ends the job as a
+retryable `error`, through the ending and the sentence the failed freshness read uses. It would
+have closed Sol's road to C1 and left the older one. It was not taken because it *adds* a paid
+repeat where there was none: Retry
+gives a forced job all its force back (`forceForRetry`), so a database blink between two steps of
+a refresh would end the job, and pressing Retry would run the finished forced steps again. It also
+throws away an ordinary import's claim for the sake of a progress bar, which is why the builder
+passed it over the first time.
+
+### Gates, 2026-10-07
+
+- `npm run typecheck`: 4 projects, all 3339 source files covered, no errors.
+- `tests/jobs-walk.test.ts` 36 passed; `tests/jobs-tier0-offline.test.ts` 14 passed.
+- Every test file that names `advanceJob`, `runStep`, `transitionAfter`, a session, `noteProgress`,
+  `pauseForDeadline` or `settleExpired`, plus the `jobs`, `second-job`, `step-failure`,
+  `store-session`, `pg-session`, `claim-session` and `job-` suites: 66 files in four runs, 1334
+  tests, 1334 passed.
+- `tests/doc-links.test.ts` passed.
+- Biome on the nine touched files: one error and one warning, both in code this stage did not
+  write (an untyped `let locked` in `src/store/pg-jobs.ts`; an optional chain in
+  `src/pipeline.ts`), and six complexity notices. Five are the ones Sol counted; the sixth is
+  `settleIn` in `src/store/pg-session.ts`, a file Sol's run did not include. C1 added statements
+  to an existing branch there and no branch, so it is taken to predate this; that was not measured.
+- Not run: the full `npm test`.
