@@ -91,7 +91,7 @@ export function GuideGreeting({ slug, onAsk }: { slug: string; onAsk(question: s
             id="guide-purpose"
             label="Why you're reading this one"
             placeholder="e.g. I want to know how they handled missing data"
-            hint="Saved as you type, for this article only. You can change it later on Metadata."
+            hint="For this article only. You can change it later on Metadata."
             value={purpose.draft}
             onChange={purpose.setDraft}
             onCommit={purpose.commit}

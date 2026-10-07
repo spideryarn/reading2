@@ -215,7 +215,7 @@ seven.
 ### Stage 4: docs, browser, bookkeeping
 - [x] chat-tools.md, chat-llm-help-commands-vision.md § Where we are, reader-profile.md, help page,
       privacy page if the shelf count counts as new data sent (it is a number, not words).
-- [ ] Sonnet subagent: desktop, iPad, phone.
+- [x] Sonnet subagent: desktop, iPad, phone (Log, 2026-10-07).
 - [x] Queue entries: qi-kc47m5pw (Q-guide-acts), qi-yfa6gs7m (Q-guide-first-open), qi-7cgxpdda (Help pages in the prompt), qi-263b6cpp (one agent behind the bar).
 - [ ] Full suite; push; note; `done qi-gjvvvc6n`.
 
@@ -248,6 +248,20 @@ and a new row:
 > the press. A press is the only way any of it runs
 
 ## Log
+
+- 2026-10-07: **seen in a browser**, Sonnet subagent, Playwright, 1440 / 820 / 390, on an owned
+  local article; three paid turns. Passed: the pinned Guide row and `?guide=1`; the greeting's box
+  saving and the start button appearing; a short streamed answer with a mode button on its own line,
+  which opened the mode; back in Chat, one Guide row with its turn; a plain chat still answering;
+  the bar's *Ask the guide* row after *Couldn't tell what you meant*, sending once. No horizontal
+  scroll at 390. **Fixed after it**: a second "saves as you type" line under the box; the
+  composer's placeholder still asking why you are reading after you had said; "Nothing asked yet."
+  under a guide that had answers (test red first). **Not seen**: the first open from the add page
+  (its tests cover it; an import was not staged); the Guide row with a `?chatfrom=` filter drawn
+  (tests cover it). **Seen and left**: a first `?mode=chat` on an article with no conversations
+  still begins a blank chat, as before, so the Guide row is one press (close) away there.
+  Shots: [greeting](261007j-shot-1-greeting.png), [an answer with a button](261007j-shot-5-answer.png),
+  [the bar's row](261007j-shot-9-bar.png), [phone greeting](261007j-shot-11-phone-greeting.png).
 
 - 2026-10-07: plan written after the prior-work check: `gjd-remote ls` shows this session as the
   only one on the guide; 261005k (the bar suggests from why you are reading) is built and its

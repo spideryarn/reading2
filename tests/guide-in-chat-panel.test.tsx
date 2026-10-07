@@ -169,6 +169,14 @@ describe("the guide's pinned row", () => {
     expect(guideRow()?.textContent).toContain("How to read this piece");
   });
 
+  it("does not say nothing was asked when the guide holds a conversation (browser pass)", () => {
+    paint([], { guide: thread("spya-gdeabb", "guide") });
+    expect(host.textContent).not.toContain("Nothing asked yet.");
+    act(() => root.render(createElement("div")));
+    paint([]);
+    expect(host.textContent).toContain("Nothing asked yet.");
+  });
+
   it("opens the guide when pressed", () => {
     paint([CHAT]);
     act(() => guideRow()?.querySelector<HTMLButtonElement>("button")?.click());

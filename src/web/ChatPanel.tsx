@@ -975,7 +975,9 @@ function ThreadList({
       <>
       {pinned}
       <div className="chat-empty">
-        <p>Nothing asked yet.</p>
+        {/* Not while the guide holds a conversation: something has been asked
+            (the browser pass of plan 261007j). */}
+        {!(guide?.thread && guide.thread.messages.length > 0) && <p>Nothing asked yet.</p>}
         <p className="chat-empty-hint">
           Ask about anything in the article and the answer will point back at the paragraphs it came from — press one to go there.
         </p>
@@ -2932,7 +2934,7 @@ export function Composer({
           busy
             ? "Waiting for the answer…"
             : kind === "guide"
-              ? "Why are you reading this, or what would help?"
+              ? "Ask how to read this, or say what you're after"
               : kind === "tutorial"
               ? "What do you remember about it? It's fine if you haven't read it yet."
               : kind === "explore"
