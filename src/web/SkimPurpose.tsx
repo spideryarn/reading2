@@ -24,6 +24,7 @@ import { MAX_PURPOSE_CHARS } from "../types.js";
 import { Link } from "./Link.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { savePurpose, storedPurpose, usePurpose } from "./purpose.js";
+import { profileSaved } from "./profile-saved.js";
 import { carriedSearch, readHref } from "./router.js";
 import { Tooltip } from "./Tooltip.js";
 import type { UseSkim } from "./useSkim.js";
@@ -109,12 +110,16 @@ export function PurposeLine({ owner, bannerUp }: Props) {
                  thing the same way (copy.md § The words on the one control). */
               "Couldn't tell whether that was saved, so no route was planned. Your words are still " +
                 "in the box. Reload the page to see what is stored."
-            : `That was not saved, so no route was planned. ${why}`,
+            : /* What the read showed, not what the write did: another tab can
+                 replace a save that landed before this read (GPT Sol, K4-F3). */
+              `These words are not what is saved for this article, so no route was planned. ${why}`,
         );
         setSaving(false);
         return;
       }
-      /* It is there. Carry on as the press asked. */
+      /* It is there. Invalidate work made from the old purpose, just as
+         savePurpose does after a readable reply, then carry on as asked. */
+      profileSaved();
       stored = held.purpose;
     }
     if (!live.current) return;

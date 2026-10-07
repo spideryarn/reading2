@@ -292,8 +292,11 @@ export async function readAnswerStream<T>(
            `PAGE_FAULT` and it is reported, as for every other one
            (reader-facing.ts § `MalformedReply`). The sentence this used to
            throw told them to try again, which starts a second paid answer;
-           `done` is sent after the save, so the first is usually stored, and
-           reloading (what `PAGE_FAULT` says) shows it. */
+           Dig deeper and Investigate send `done` after saving, so reloading
+           (what `PAGE_FAULT` says) can recover those answers. The glossary's
+           ask box can finish without storing a new answer when the term
+           already exists or there is no glossary; the malformed reply is
+           still this app's bug, with no promise that this answer was kept. */
         throw new MalformedReply("the stream's done frame is not the shape its reader accepts");
       }
       return result;

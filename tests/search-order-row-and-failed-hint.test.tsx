@@ -22,6 +22,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Block, BlockId, SearchRun } from "../src/types.js";
+import { providerHttpFailure } from "../src/messages.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 
@@ -112,14 +113,14 @@ afterEach(() => {
   host.remove();
 });
 
-async function open(runs: SearchRun[], query = ""): Promise<void> {
+async function open(runs: SearchRun[], query = "", active = runs.map((r) => r.id)): Promise<void> {
   answer = (url) =>
     Promise.resolve(
       (url.split("?")[0] ?? url) === `/api/search/${SLUG}`
         ? json({ runs, sourceHash: "h" })
         : json({ error: "not found" }, 404),
     );
-  history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${runs.map((r) => r.id).join(",")}${query}`);
+  history.replaceState(null, "", `/read/${SLUG}?mode=search&runs=${active.join(",")}${query}`);
   act(() =>
     root.render(
       createElement(
@@ -180,7 +181,7 @@ describe("the hint under searches that all failed", () => {
     await open([RETRYABLE]);
     expect(host.querySelector(".srch-failed")?.textContent).toContain("[ai-busy]");
     expect(retryButtons(), "the precondition: the row's ⚠ is a button").toBe(1);
-    expect(hint()).toBe("The ⚠ on each row above tries it again.");
+    expect(hint()).toBe("The ⚠ on each ticked row above tries it again.");
   });
 
   it("promises no retry when no failed row has one", async () => {
@@ -195,8 +196,26 @@ describe("the hint under searches that all failed", () => {
     await open([RETRYABLE, PERMANENT]);
     expect(host.querySelector(".srch-failed")?.textContent).toContain("All 2 of these searches failed.");
     expect(retryButtons()).toBe(1);
-    expect(hint()).not.toBe("The ⚠ on each row above tries it again.");
+    expect(hint()).not.toBe("The ⚠ on each ticked row above tries it again.");
     expect(hint()).toContain("where that could work");
     expect(hint()).toContain("only marks the failure");
+  });
+
+  it.each([false, true])("does not turn a likely refusal into a certain one (mixed: %s)", async (mixed) => {
+    const refused = failed(BROKE, "who paid for it", providerHttpFailure(403).message);
+    await open(mixed ? [RETRYABLE, refused] : [refused]);
+    expect(host.querySelector(".srch-icon-dead")?.getAttribute("title")).toContain("most likely");
+    expect(retryButtons()).toBe(mixed ? 1 : 0);
+    expect(hint()).not.toContain("would fail the same way");
+    expect(hint()).toContain("only marks the failure");
+  });
+
+  it.each([RETRYABLE, PERMANENT])("does not describe unchecked rows from the selected search's policy ($id)", async (selected) => {
+    await open([RETRYABLE, PERMANENT], "", [selected.id]);
+    expect(host.querySelectorAll(".srch-saved li")).toHaveLength(2);
+    expect(retryButtons()).toBe(1);
+    expect(hint()).not.toContain("each row above");
+    expect(hint()).toContain("each ticked row above");
+    expect(hint()).toContain(selected === RETRYABLE ? "tries it again" : "only marks the failure");
   });
 });

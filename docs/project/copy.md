@@ -498,7 +498,7 @@ the export download. Three things that work settled:
 
 - **`readAnswerStream` says who each throw is for**: the `error` frame and a body that ends early
   are `ReaderFacingError`s; a `done` frame its caller refuses is a `MalformedReply`, so the reader
-  gets `PAGE_FAULT` and not an invitation to pay for a second answer when the first is stored.
+  gets `PAGE_FAULT` and not an invitation to pay for a second answer when the first was kept.
 - **A body read that is not `readJson` marks its own lost connection.** `res.blob()` dying
   part-way rejects with a bare `TypeError`; *View the original* and the export mark it where it
   happens, as `readJson` does.
@@ -509,8 +509,9 @@ the export download. Three things that work settled:
 write, so a reply lost on the way back rejects over a sentence that was stored. Skim's purpose box
 reads what is stored before it says which (`storedPurpose` in
 [`purpose.ts`](../../src/web/purpose.ts), a fresh server 200 only): there, it carries on; not
-there, *That was not saved…* with the reason; no answer, *Couldn't tell whether that was saved…*,
-with no code, as the delete control below says it. The other purpose boxes still say
+there, *These words are not what is saved for this article…* with the reason (what the read
+showed, never "that was not saved": another tab can replace a save that landed); no answer,
+*Couldn't tell whether that was saved…*, with no code, as the delete control below says it. The other purpose boxes still say
 *Not saved — …* for every rejection.
 
 **The server's half, for streams.** The client trusts the server's two reader

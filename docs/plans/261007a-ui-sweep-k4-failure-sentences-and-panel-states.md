@@ -27,11 +27,13 @@ refuses. The last two were plain `Error`s.
   `MalformedReply` in `lib/reader-facing.ts` is the existing class for "a reply that arrived and is
   not the shape its reader needs", and `describeFetchFailure` gives it `PAGE_FAULT` and reports it.
   That is the right outcome here for a second reason: the sentence this used to throw ended
-  "Trying again starts a fresh answer", and `done` is sent **after** the server has stored the
-  answer. So the old advice was an invitation to pay for a second answer when the first was usually
+  "Trying again starts a fresh answer", and *Dig deeper* and *Investigate* send `done` **after**
+  storing the answer. So the old advice was an invitation to pay for a second answer when the first was usually
   kept, and `PAGE_FAULT`'s advice (reloading shows what the server finished) is the true one. The
   two sites that can lose a stored answer this way (Glossary's *Dig deeper*, Citations'
-  *Investigate*) already re-read their list after any failure.
+  *Investigate*) already re-read their list after any failure. The ask box may finish without a
+  new stored answer (`AddedTerm`'s `existing` and `no-glossary` arms), so reloading is not a
+  promise to recover that answer; `PAGE_FAULT` still correctly identifies an app fault.
 
 **Who else catches what it throws.** Four callers: `useGlossary.ts` (two), `useCitations.ts`,
 `useQuiz.ts`. No file compares the message. Three tests pinned it: `quiz-mark-stream` (the stall's
@@ -68,7 +70,7 @@ shelf is an answer: `apiFetch` answers a failed GET from the saved copy with a r
 | The read says | The box does |
 |---|---|
 | the draft is stored | carries on as the press asked: shows *Reading for: …* and plans the route |
-| something else, or nothing, is stored | *That was not saved, so no route was planned. {reason}*, draft kept |
+| something else, or nothing, is stored | *These words are not what is saved for this article, so no route was planned. {reason}*, draft kept |
 | nothing it can trust (a copy, a failure, `purposeFailed`) | *Couldn't tell whether that was saved, so no route was planned. Your words are still in the box. Reload the page to see what is stored.*, draft kept |
 
 `{reason}` is `describeFetchFailure`'s, with its own code last. The third sentence carries no code
@@ -80,6 +82,13 @@ nothing. It leaves the reader to reload to find out what one GET can tell them, 
 dropped the route they asked for when the save had in fact landed.
 
 Seven cases seen red in `tests/skim-purpose-line.test.tsx`; five mutations each turn it red.
+
+The independent review corrected two assumptions: a mismatched snapshot cannot prove the PATCH
+never stored the words (another tab may have replaced them, or the GET may overtake a write still
+finishing), and a recovered save must call `profileSaved`, as the ordinary success path does.
+Without that notification the command suggestions and link summaries keep the old purpose.
+Malformed confirmation fields now leave the result unknown rather than asserting absence.
+Five new cases were red for these causes, then green after the narrow fixes.
 
 ## Group 3: four more sites (`675d794f9`)
 
@@ -137,10 +146,19 @@ helpers never produce; they now use `ReaderFacingError` and a rejected promise.
   the same three checks as the other two rows, and gained a focus-mark check for all three.
 - **Search, the hint.** `Results` now knows whether the reader owns the searches, and counts the
   failed rows whose ⚠ is a button:
-  - all of them: *The ⚠ on each row above tries it again.* (unchanged)
-  - none: *Trying again would fail the same way, so the ⚠ on each row above only marks the failure.*
-  - some: *The ⚠ tries a search again on the rows above where that could work. On the others it
-    only marks the failure, because trying again would fail the same way.*
+  - all of them: *The ⚠ on each ticked row above tries it again.*
+  - none: *The ⚠ on each ticked row above only marks the failure. It is not a button, because
+    running the same search again is unlikely to go differently.*
+  - some: *On the ticked rows above, the ⚠ tries the search again where that could work. On the
+    others it only marks the failure.*
+
+  "Ticked" is the panel's own word for a switched-on search ("Tick a search above to mark its
+  passages"), and every ticked search has failed when this hint shows.
+
+  The review removed the original hint's claim that another go *would* fail the same way:
+  the server's refusal says *most likely*, and `worthRetrying` decides which control to offer,
+  not whether another attempt is guaranteed to fail. Two tests reproduce that stronger claim
+  with the real `providerHttpFailure(403)` sentence, in the all-refused and mixed states.
 
 Red first for each (Quotes 5 cases, Glossary 2 + 2, Criteria 1, Mirror 1, Search 5,
 touch-controls 3). Eighteen mutations each turn a test red.
@@ -212,6 +230,11 @@ Unit tests cover them.
 
 ## Left, and why
 
+- **`COULD_NOT_REACH` says "nothing was sent or received just now"** (`src/messages.ts`), which
+  is false when a stream or a download dies after delivering some of itself. Every caller of
+  `describeFetchFailure` has said it for a cut stream since 2026-09-24; K4 adds the four
+  kept-answer streams and the two blob reads. The review's K4-F1, and its one blocker; see
+  § Review status. Dropping the clause is the whole fix, in a file outside this manifest.
 - **`readBlob` in `lib/api.ts`.** The two blob reads mark a lost connection inline. One shared
   helper beside `readJson` is the right home; `api.ts` is outside this manifest.
 - **`DiagramPanel.tsx`'s two comments** ("the server's own words", near where it draws
@@ -229,4 +252,62 @@ Unit tests cover them.
 
 - Code, round 1: GPT Sol, write-capable inside the cluster. Its prompt and answer are beside this
   doc (`261007a-ui-sweep-k4-code-review-prompt.md`, `261007a-ui-sweep-k4-code-review-sol.md`).
-  *(Verdict and what was done with each finding: filled in below when it lands.)*
+  **Verdict: not ready**, on K4-F1 alone. Eight findings; five fixed by the reviewer and kept
+  (three with the builder's wording over the reviewer's, below), one corrected comment, two
+  reported. **Sol still objects to K4-F1; overruled as a blocker** because the sentence it faults
+  is in `src/messages.ts`, outside this cluster's manifest, has been what chat and the fourteen
+  read hooks say for a cut stream since 2026-09-24, and replaces the browser's raw "network
+  error" in the sites K4 moved. It is a real defect and is the first item for whoever owns that
+  file next: `COULD_NOT_REACH` says "nothing was sent or received just now", which is false after
+  a stream has delivered text; dropping that clause fixes every caller. No second round: the
+  fixes below were made by the reviewer itself.
+
+  **Reworded by the builder after the review.** K4-F3's sentence became *These words are not what
+  is saved for this article…* (the reviewer's *The saved purpose didn't match these words* reads
+  oddly when nothing is saved). K4-F4 and K4-F8's hints say "ticked row", the panel's word, and
+  the all-permanent one gives its reason with a hedge ("unlikely to go differently") in place of
+  the certainty the review removed. `storedPurpose`'s validation is laid out as three early
+  returns. Seven mutations of the review's fixes and the hold each turn a test red.
+
+  The reviewer's own account of each finding:
+
+- **K4-F1, P1, established; outside the permitted files.** `COULD_NOT_REACH` in
+  `src/messages.ts` says nothing was sent or received. K4 routes mid-stream and mid-blob failures
+  to it after headers or text have arrived. The class is *transport classification overstating
+  the request's outcome*; the shared sentence predates K4, but these uses are new. It remains
+  unchanged because `messages.ts` is outside the five commits' path list.
+- **K4-F2, P1, established; fixed.** Skim's recovered save bypassed `profileSaved`:
+  *success-path side effects omitted from recovery*, introduced by `012af29a1`. The new test
+  observes the real profile generation published by the notification that clears cached summaries
+  and wakes the suggestions.
+- **K4-F3, P1, established; fixed.** A mismatched read said the write never happened:
+  *a snapshot mistaken for write history*, introduced by `012af29a1`. The regression arranges
+  a landed write replaced by another tab before the read. The sentence now states the mismatch.
+- **K4-F4, P1, established; fixed.** Search's no-retry and mixed hints guaranteed a refusal:
+  *a control policy mistaken for certainty about the outcome*, introduced by `e707aa87f`.
+  Two red-first tests use the actual `providerHttpFailure(403)` sentence; the hints now describe
+  the controls without that guarantee.
+- **K4-F5, P2, established at the client seam; fixed.** Missing or ill-typed confirmation
+  fields were treated as a read proving absence: *unvalidated data mistaken for evidence*,
+  introduced by `012af29a1`. Three malformed-response probes were red first. The current reader
+  route does not emit those shapes; this is defensive validation of the new confirmation seam.
+- **K4-F6, P3, established; corrected.** The shared stream comment and this doc generalised
+  *Dig deeper* and *Investigate*'s storage contract to every `done`. Glossary's ask can return
+  `existing` or `no-glossary` without storing the answer. The classification stays `MalformedReply`;
+  the explanation now limits the recovery claim to stored answers.
+- **K4-F7, P2, reasoned; reported.** Mirror keeps a blocked failure after the comments change,
+  with no button until the sub-mode is re-entered. This is documented behaviour within the brief,
+  but *retry policy applied to a changed request* risks making the narrower-request escape hard
+  to discover. Fixing the hook's response to comment changes would touch `useMirror.ts`, outside
+  this cluster.
+- **K4-F8, P1, established; fixed.** The all/none hints said *each row above* although the
+  count includes only switched-on searches and the list also draws unchecked rows:
+  *a subset conclusion widened to the displayed population*. The new no-retry variant was
+  introduced by `e707aa87f`; the retained all-retry sentence predates K4 (`dd8de264a8`). Two
+  red-first cases display both policies while selecting only one. All three variants now name
+  the switched-on searches; the earlier tests always selected every supplied row.
+
+Nine new regression cases were observed red for their intended reasons, then green after the
+fixes. Review work stayed inside the candidate paths and was left uncommitted; no network,
+database, model call or full-suite run was used. The separate review answer carries the final
+check results and verdict.

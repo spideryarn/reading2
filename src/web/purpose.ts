@@ -77,8 +77,13 @@ export async function storedPurpose(slug: string): Promise<{ purpose: string | n
   try {
     const res = await apiFetch(`/api/reader?slug=${encodeURIComponent(slug)}`);
     if (res.headers.get("x-spideryarn-offline") === "copy" || res.status !== 200) return null;
-    const body = await readJson<{ purpose: string | null; purposeFailed?: boolean }>(res);
-    return body.purposeFailed === true ? null : { purpose: body.purpose ?? null };
+    const body = await readJson<{ purpose?: unknown; purposeFailed?: unknown } | null>(res);
+    /* A successful status is not evidence that we read a purpose. Missing or
+       ill-typed fields cannot establish that the words are absent. */
+    if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
+    if (body.purpose !== null && typeof body.purpose !== "string") return null;
+    if (body.purposeFailed !== undefined && body.purposeFailed !== false) return null;
+    return { purpose: body.purpose };
   } catch {
     return null;
   }

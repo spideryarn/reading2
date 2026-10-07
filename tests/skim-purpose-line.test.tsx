@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job, Skim } from "../src/types.js";
 import type { UseSkim } from "../src/web/useSkim.js";
 import type { SkimView } from "../src/web/modes/skim/SkimMode.js";
+import { profileGeneration } from "../src/web/profile-saved.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -300,7 +301,7 @@ describe("the purpose line in Skim", () => {
     });
     expect(ensured).toBe(0);
     /* The server refused, and a fresh read of what is stored agrees. */
-    expect(line()?.textContent).toContain("That was not saved");
+    expect(line()?.textContent).toContain("These words are not what is saved");
     expect(line()?.textContent).toContain("The shelf is down.");
     expect(box()?.value).toBe("the method");
     expect(planButton()!.disabled).toBe(false);
@@ -358,9 +359,63 @@ describe("the purpose line in Skim", () => {
       expect(ensured).toBe(1);
     });
 
-    it("says it was not saved only when a fresh read shows it is not there", async () => {
+    it("invalidates work from the old purpose after recovering a stored save", async () => {
+      await drawOwner(owner());
+      await type("the method");
+      const before = profileGeneration();
+      patchReply = replyLost();
+      readerBody = { purpose: "the method" };
+      await press(planButton()!);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(ensured).toBe(1);
+      expect(profileGeneration(), "the link summaries and purpose suggestions must forget the old words").toBe(before + 1);
+    });
+
+    it("does not say a save never landed when another write replaced it before the read", async () => {
+      await drawOwner(owner());
+      await type("the method");
+      /* The PATCH wrote our purpose, but its reply was lost. Another tab's
+         write wins before the confirmation GET; that GET proves only what is
+         stored now, not whether our write happened. */
+      let didStore = false;
+      patchReply = Promise.resolve().then(() => {
+        didStore = true;
+        readerBody = { purpose: "the other tab's purpose" };
+        return replyLost();
+      });
+      await press(planButton()!);
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 0));
+      });
+      expect(didStore).toBe(true);
+      expect(ensured).toBe(0);
+      expect(box()?.value).toBe("the method");
+      expect(line()?.textContent).not.toMatch(/that was not saved/i);
+      expect(line()?.textContent).toContain("These words are not what is saved");
+    });
+
+    it.each([{}, { purpose: 12 }, { purpose: null, purposeFailed: "unknown" }])(
+      "cannot establish the saved purpose from a malformed confirmation %j",
+      async (body) => {
+        await drawOwner(owner());
+        await type("the method");
+        patchReply = replyLost();
+        readerBody = body as typeof readerBody;
+        await press(planButton()!);
+        await act(async () => {
+          await new Promise((r) => setTimeout(r, 0));
+        });
+        expect(ensured).toBe(0);
+        expect(box()?.value).toBe("the method");
+        expect(line()?.textContent).toContain("Couldn't tell whether that was saved");
+      },
+    );
+
+    it("says the stored purpose differs when a fresh read shows the words are not there", async () => {
       await pressPlan();
-      expect(line()?.textContent).toContain("That was not saved");
+      expect(line()?.textContent).toContain("These words are not what is saved");
       expect(line()?.textContent).toMatch(/\[net-down\]/);
       expect(line()?.textContent).not.toContain("Load failed");
       expect(box()?.value).toBe("the method");

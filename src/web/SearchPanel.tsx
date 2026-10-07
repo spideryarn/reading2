@@ -1779,7 +1779,11 @@ function Results({
     /* **How many of those rows have a ⚠ that is a button.** `Saved` draws one
        only for the owner and only while `worthRetrying` says another go could
        work; on the rest the ⚠ is plain text. The hint said "tries it again" of
-       every row until 2026-10-07, which is false for those. */
+       every row until 2026-10-07, which is false for those. The count is of
+       ticked searches only, and every ticked search here failed; an unticked
+       row above can have either kind of ⚠, so each sentence names the ticked
+       rows. And none says another go *would* fail: the refusal's own
+       sentence says "most likely" (GPT Sol, K4-F4 and K4-F8). */
     const retryable = own ? broken.filter((r) => worthRetrying(r.error)).length : 0;
     return (
       <div className="srch-empty">
@@ -1791,11 +1795,12 @@ function Results({
         </p>
         <p className="srch-empty-hint">
           {retryable === broken.length
-            ? "The ⚠ on each row above tries it again."
+            ? "The ⚠ on each ticked row above tries it again."
             : retryable === 0
-              ? "Trying again would fail the same way, so the ⚠ on each row above only marks the failure."
-              : "The ⚠ tries a search again on the rows above where that could work. On the others " +
-                "it only marks the failure, because trying again would fail the same way."}
+              ? "The ⚠ on each ticked row above only marks the failure. It is not a button, because " +
+                "running the same search again is unlikely to go differently."
+              : "On the ticked rows above, the ⚠ tries the search again where that could work. On " +
+                "the others it only marks the failure."}
         </p>
       </div>
     );
