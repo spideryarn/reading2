@@ -81,7 +81,10 @@ Each file's header comment says what it owns.
 - [`src/tweets.ts`](../../src/tweets.ts) — the pipeline stage that writes the thread. It has no
   command line; its header says how to re-run it for one article.
 - [`src/web/useTweets.ts`](../../src/web/useTweets.ts) — the thread's read and its job, and where
-  opening it starts the job.
+  opening it starts the job. The read checks a reply has a thread before it publishes any of it
+  (since 2026-10-07; a 404 and a `200 null` both mean none yet), so a malformed reply leaves the
+  thread on screen and says the re-read failed —
+  [`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx).
 - [`src/web/modes/summary/TweetsMode.tsx`](../../src/web/modes/summary/TweetsMode.tsx) — the thread's band, for
   the owner and for a visitor; [`src/web/Tweets.tsx`](../../src/web/Tweets.tsx) draws the thread.
   [`SummaryMode.tsx`](../../src/web/modes/summary/SummaryMode.tsx) mounts it and owns the control.

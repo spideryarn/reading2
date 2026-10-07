@@ -107,7 +107,7 @@ rest.** A new word there is red until it has a row in each of these totals:
 | `MODE_LABEL` | [`src/title-text.ts`](../../src/title-text.ts) — the only place a mode is spelled for a person |
 | `OWNER_MODE_NOTE` | [`src/messages.ts`](../../src/messages.ts) |
 | `MODE_CATALOG` | [`src/mode-catalog.ts`](../../src/mode-catalog.ts) — **what the mode *is***: the **two sentences** on its bar-button card (`description` and `how` — see [§ The card on the button](#the-card-on-the-button), which is where the second one is written), the words they might type meaning it (`aliases`, which the command bar matches on), and whether it is still behind the experimental switch. A pure module importing only `modes.js`, so both runtimes can read it. All four fields are required, so a new mode means choosing its aliases and **deciding whether it is finished enough to draw for everybody** — [experimental-features.md](experimental-features.md). Say why in the table there either way; moving one later is [§ Moving a mode in or out of the switch](#moving-a-mode-in-or-out-of-the-switch). The `description` and `experimental` fields were on the `MODES_UI` row until 2026-09-07 ([260906h](../plans/260906h-mode-catalog-and-a-command-bar.md)); `how` arrived the same day ([260907b](../plans/260907b-rich-tooltips-on-the-dock-modes.md)) |
-| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **Layout only** since 2026-09-07: the row is `{ mode, group, keepLabel? }` (the icon left for `MODE_ICON`, below, on 2026-10-05), `group` the run of related modes it sits in (a line is drawn between runs, since 2026-09-29 — put it next to its run, and add it to the hand-written order in `tests/dock-mode-order.test.ts`), and `keepLabel` a fact about the bar's fit ladder |
+| `MODES_UI`, via `ModesMissingFromDock` | [`src/web/Dock.tsx`](../../src/web/Dock.tsx) — an ordered array, because the order is Greg's; the type check stands in for the `Record`. **Layout only** since 2026-09-07: the row is `{ mode, group, keepLabel?, more? }` (the icon left for `MODE_ICON`, below, on 2026-10-05), `group` the run of related modes it sits in (a line is drawn between runs, since 2026-09-29 — put it next to its run, and add it to the hand-written order in `tests/dock-mode-order.test.ts`), `keepLabel` a fact about the bar's fit ladder, and `more: true` **whether the mode is gathered under the bar's More button** instead of drawn in it (since 2026-10-07, [261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)). A new mode's row says which: leave `more` off and it is a direct button whenever that reader is offered the mode; set it and, when offered, it is an item in the menu, drawn in the bar only while it is the open mode. Either way an offered mode is in an owner's command bar; visitors have no command bar and reach gathered modes through More. Setting it means adding the mode to the by-name lists in `tests/dock-more.test.tsx` and `tests/dock-experimental-modes.test.tsx` |
 | `MODE_ICON` | [`src/web/mode-icons.ts`](../../src/web/mode-icons.ts) — the mode's icon, a Lucide component. The bar draws it, and so does a row of Chat's list that came from the mode, which is why it is not on the `MODES_UI` row: the panel cannot import the Dock |
 | `POLICY` | [`src/web/visitor.ts`](../../src/web/visitor.ts) — what a visitor may see; there is no fall-through any more, a missing row is a typecheck error |
 | `BAND_SAYS` | [`tests/public-network-trace.test.tsx`](../../tests/public-network-trace.test.tsx) — what a **visitor** is shown |
@@ -479,7 +479,22 @@ Then the residue nothing refuses at compile time:
   ([261004c](../plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md)).
   The panel draws [`ReadError`](../../src/web/ReadError.tsx) with the hook's `retryRead`, and the
   panel is a row in *[`tests/read-error-matrix.test.tsx`](../../tests/read-error-matrix.test.tsx)*,
-  whose second half fails a `useOrderedRead` caller that is neither a row nor a named exclusion. A
+  whose second half fails a `useOrderedRead` caller that is neither a row nor a named exclusion.
+  **Once the server has said "none yet" for this article, a failed read does not unsay it**: a
+  failed refresh or a failed *Try again* ends at `none`, with the failure shown beside the empty
+  state and its Generate button, never at `error`. Only a failed *opening* read — nothing ever
+  answered — ends at `error`. Each hook keeps the slug the server last said "none yet" for in a
+  `saidNoneFor` ref, read by its catch; Thread's `answered` ref (`useTweets.ts`) was the
+  precedent. The cost, accepted: the reader can start a run while the app does not know whether
+  one has landed since — and so can a mode press made in that state, which `useAutoRun` reads as
+  *none* and spends on, once. Twelve modes dropped the button there until the owner's answer:
+
+  > ok, i'll go along with you on this. I don't quite follow
+  >
+  > — Greg, 2026-10-07, relayed by the Overseer
+
+  ([261007g](../plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md);
+  the rows are "Try again answered by another failure, after none yet" in the matrix test.) A
   forced verb goes through `useRewriteHold`
   ([`rewrite-hold.ts`](../../src/web/rewrite-hold.ts);
   [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)),
@@ -684,7 +699,7 @@ list is the checklist above with a compiler behind it. Measured 2026-09-06, on
 |---|---|
 | [`src/title-text.ts`](../../src/title-text.ts) § `MODE_LABEL` | the word a person sees |
 | [`src/messages.ts`](../../src/messages.ts) § `OWNER_MODE_NOTE` | the owner's one-line note |
-| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, in a run (`group`) — whether it is behind the switch is `MODE_CATALOG`'s `experimental` now |
+| [`src/web/Dock.tsx`](../../src/web/Dock.tsx) § `ModesMissingFromDock` | a row in the bar, in a run (`group`), saying whether it is gathered under More (`more`) — whether it is behind the switch is `MODE_CATALOG`'s `experimental` now |
 | [`src/web/visitor.ts`](../../src/web/visitor.ts) § `POLICY` | what a visitor may see |
 | [`src/web/reader/Reader.tsx`](../../src/web/reader/Reader.tsx) § `modeBand()` | the band, or an explicit `null` |
 | [`src/web/reader/passages.ts`](../../src/web/reader/passages.ts) § `selectPassages` | the passage slot, or `NO_FOUND` |

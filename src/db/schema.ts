@@ -3079,16 +3079,17 @@ export const jobs = spideryarn.table(
  * is the guarantee"* of concurrency one until 2026-10-07; the row serialises
  * the decision and the count is the cap.
  *
- * **`running_job_id` is read and written by nothing** (no mention outside this
- * file), and `updated_at` has not moved since the row was seeded: no claim
- * updates either. Dropping the column is Greg's call.
+ * **It had a `running_job_id` until 2026-10-07**, a foreign key to `jobs` that
+ * nothing ever read or wrote; Greg approved dropping it that day
+ * (docs/plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md
+ * § 2). `updated_at` has not moved since the row was seeded: no claim updates
+ * it either.
  */
 export const queueState = spideryarn.table(
   "queue_state",
   {
     /** Always 1. The check is what makes "singleton" a fact rather than a habit. */
     id: smallint("id").primaryKey().default(1),
-    runningJobId: text("running_job_id").references(() => jobs.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check("queue_state_singleton", sql`${t.id} = 1`)],
@@ -6165,6 +6166,12 @@ export const billingVouchers = spideryarn.table(
      * Plan 261002b.
      */
     recipientNote: text("recipient_note"),
+    /**
+     * **Who the gift is for, by name**, as the administrator typed it: the gift
+     * email opens *Dear <name>,* under its heading. One line, and untrusted on
+     * render exactly as the note is. Null is no greeting. Plan 261007f.
+     */
+    recipientName: text("recipient_name"),
     createdAt: createdAt(),
     /** The administrator who made it. A plain uuid, like every admin id. */
     createdBy: uuid("created_by").notNull(),
@@ -6194,6 +6201,10 @@ export const billingVouchers = spideryarn.table(
     check(
       "billing_vouchers_recipient_note_length",
       sql`${t.recipientNote} is null or char_length(${t.recipientNote}) <= 500`,
+    ),
+    check(
+      "billing_vouchers_recipient_name_length",
+      sql`${t.recipientName} is null or char_length(${t.recipientName}) <= 80`,
     ),
     /* A claim is an account and a moment, or neither. */
     check("billing_vouchers_claimed_together", sql`num_nonnulls(${t.claimedBy}, ${t.claimedAt}) <> 1`),

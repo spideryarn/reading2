@@ -182,6 +182,20 @@ export const PROMPT_VERSION = ILLUSTRATED_VERSION;
  * bytes are, and src/illustrated-image.ts decides whether that is allowed.
  */
 export const IMAGE_MODEL = "google/gemini-3.1-flash-image";
+
+/**
+ * The answer the brief asks room for. Generous rather than tight, and the spike
+ * is why: the first attempt truncated at 8,000 output tokens and lost the whole
+ * pass, while 24,000 was comfortable at 6,302 actual — for ONE plate. Four
+ * plates of vignettes and 500-word compositions need several times that, and
+ * undersizing does not degrade here, it throws and loses everything.
+ *
+ * Exported so tests/jobs-lease-budget.test.ts can pin the known gap: at the
+ * measured Sonnet `STREAM_TOKENS_PER_SECOND`, its full-token time estimate
+ * exceeds a claim (src/jobs.ts § `STEP_BUDGET_MS.illustrated`). This is not
+ * a wall-clock bound, nor a claim that every brief takes that long.
+ */
+export const ILLUSTRATED_ANSWER_TOKENS = 32_000;
 export const ASPECT_RATIO = "2:3";
 export const RESOLUTION = "1K";
 
@@ -1148,12 +1162,7 @@ export async function generateIllustrated(opts: {
   const draw = opts.draw ?? drawWithGateway;
   const figures = opts.figures ?? [];
 
-  /* Generous rather than tight, and the spike is why: the first attempt
-     truncated at 8,000 output tokens and lost the whole pass, while 24,000 was
-     comfortable at 6,302 actual — for ONE plate. Four plates of vignettes and
-     500-word compositions need several times that, and undersizing does not
-     degrade here, it throws and loses everything. */
-  const answerTokens = 32_000;
+  const answerTokens = ILLUSTRATED_ANSWER_TOKENS;
   const maxTokens = budgetFor("illustrated", answerTokens);
 
   const briefStarted = Date.now();

@@ -182,6 +182,14 @@ selected as it traversed was several paid jobs from one keypress. The full reaso
 extra tab stops cost is in [`Dock.tsx`](../../src/web/Dock.tsx) § the mode switch; the assertion is
 `tests/arrows-belong-to-the-article.test.tsx`.
 
+**One thing in the bar does take arrows since 2026-10-07, and it is a menu rather than a
+radiogroup**: the bar's More button
+([261007c](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md)).
+With focus on it, ↓ opens its menu instead of stepping the article, and while the menu is open ↑ and
+↓ move through its items, Enter picks one and Escape closes it and returns focus to the button. That
+is Radix's menu-button behaviour, left as it is: opening a list selects nothing and starts no model
+call, which was the objection to arrows on the radios. The same test file holds it.
+
 The blur on click survives all of that, and still earns its place: nothing eats the arrows now, but a
 focused button still takes Enter and Space, and leaving focus on it after a mouse click is not what
 the reader asked for.

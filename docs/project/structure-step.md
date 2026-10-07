@@ -3,9 +3,7 @@
 Up: [architecture.md](architecture.md)
 
 Pipeline stage 4 — `structure`, `npm run structure -- <slug> [--force]`. Builds the nested tree that Structure,
-Marginalia, the Spine and the rest render. (The step was called `hierarchy` until 2026-10-02, and this file was
-`hierarchy.md` — [261002b](../plans/261002b-rename-the-hierarchy-step-to-structure-everywhere.md). The Hierarchy
-*mode* that gave it that name — gist columns beside the prose — was removed on 2026-09-29, [260929d](../plans/260929d-remove-hierarchy-mode-and-heading-numbers.md).) Read
+Marginalia, the Spine and the rest render. (Its old names, `hierarchy` and `toc`, are in [261007l § The opening](../plans/261007g-structure-step-history.md#the-opening).) Read
 [architecture.md § Pipeline](architecture.md#pipeline) first — stages 4 and 5 produce
 **one** `tree.json`, and it must not become two trees.
 
@@ -24,14 +22,6 @@ its coarse levels and fails validation, and both would write the same artefact. 
 [`src/structure.ts`](../../src/structure.ts) is the authority; this line used to say stage 5 filled them, and
 had not been true for some time.
 
-**The step was called `toc` until 2026-08-31**, and this file was `table-of-contents.md`. The
-reading-view mode gave that name up on 2026-08-29 and the step deliberately kept it, which left one
-concept wearing two names across the UI, the code and the database; Greg reversed that half so all
-three say the same word —
-[260831ak-rename-the-toc-step-to-hierarchy-everywhere.md](../plans/260831ak-rename-the-toc-step-to-hierarchy-everywhere.md).
-The rows moved in [`drizzle/0041_rename_toc_step_to_hierarchy.sql`](../../drizzle/0041_rename_toc_step_to_hierarchy.sql);
-the filesystem store's copies moved with a one-off script that was deleted on 2026-10-06, a month
-after the store itself.
 "Table of contents" still appears below wherever it means the artefact or the ordinary English idea,
 rather than the step.
 
@@ -193,39 +183,15 @@ paragraph joins the section **before** it rather than the one after. The cursor 
 did the opposite, and on the fixture in `tests/structure-step-repairs.test.ts` that filed "Body of the first
 part" under "Second".
 
-#### What this cost, and how we got here
-
-Three shapes in three days, each one bought by an article somebody lost:
-
-| | what it did | what it cost |
-|---|---|---|
-| until 2026-08-30 | refused any tiling fault | 4 structure calls in 13 |
-| 2026-08-30 | snapped boundaries; bounded by size, then by count | an article with two slips |
-| 2026-08-31 | derives the tiling; nothing about it refuses | a dropped section, rarely |
-
-A paid calibration on 2026-08-30 threw on **4 of 13** structure calls, bimodal by kind: two partition
-gaps and two `sourceHeading` claims outside their node's range. The structure call takes about 163
-seconds and most of the stage's bill, so every refusal cost a reader a whole article after the money
-was spent.
-
-The first fix snapped a boundary shut, bounded at one block. That bound was fitted to four
-observations that were **all off by one and all from HTML articles with headings** — the half of the
-corpus where the model has the author's own structure to agree with. PDF ingest reached production
-the same day, PDFs are headingless, and a 9-page arXiv paper lost its ToC to a gap of three. Greg,
-2026-08-30:
+Greg, 2026-08-30:
 
 > I think for now, we should allow gaps. It's not ideal, but it's not the end of the world, and
 > better than things failing fatally. Perhaps in future, it should trigger a re-run of the LLM, where
 > we feed in the previous output, with information about the gaps and ask it to adjust. But that's
 > for later.
 
-So the size bound went, leaving a count: **one distinct boundary per answer**. That was fitted to the
-same four observations, and the code comment said in as many words that a headingless PDF with two
-independent slips would still lose its whole ToC. On 2026-08-31 one did — a Princeton memory paper,
-one gap of a block at depth two and one overlap of two at depth one. Fixing that by raising the
-number would have been the third guess at a threshold nobody had evidence for, so instead the
-question it answered was removed. See
-[260831ai-hierarchy-tiling-normalisation.md](../plans/260831ai-hierarchy-tiling-normalisation.md).
+How the tiling came to be derived — three shapes in three days, each bought by a lost article — is in
+[261007l § What this cost, and how we got here](../plans/261007g-structure-step-history.md#what-this-cost-and-how-we-got-here).
 
 #### The one thing it loses, and what still throws
 
@@ -259,19 +225,13 @@ have more places for one local fault, and the reader pressing Retry was the retr
 
 #### A child's backwards range is a disagreement, not a lie <a id="backwards-child"></a>
 
-**That list had a second entry — a range that runs backwards — until 2026-09-04.** The refusal was
-explicit and tested, so it was a decision rather than an oversight; what was too broad was its
-premise. This whole function believes a start and computes every end, so **a child's own end is a
+This whole function believes a start and computes every end, so **a child's own end is a
 redundant second statement of a boundary the derivation already discards**. A backwards pair whose
 ids both resolve is those two statements disagreeing, which is the thing the repairs exist to absorb.
 
 It is not evidence that the node's title and gist describe the wrong prose: the model wrote those
 from the whole article, not from its own range, and the repairs already keep a title and gist while
 moving that node's boundary by many blocks. ⟨GPT Sol, 2026-09-04⟩
-
-Measured, and it is why this changed: `smart-low` lost `gwern-scaling-long` to exactly this — one
-block backwards at `root > child 7 > child 1` — in the run that moved production to `low`
-([hierarchy-waves-real-corpus](../../evals/results/hierarchy-waves-real-corpus-2026-09-04.md)).
 
 **What it costs, which is the interesting half.** A backwards end is **ineligible for the fallback**.
 When two children claim the same start, `planChildRanges` falls back to the previous child's end as
@@ -286,19 +246,13 @@ on a pair that does not run forwards, or it would turn an invented id into a sil
 
 #### The root was the last node whose range was believed <a id="root-clamp"></a>
 
-**A root that misses the article's ends was on that list until 2026-09-04, and it should never have
-been.** Every other node's range is *computed* — `planChildRanges` believes a start and derives every
+Every other node's range is *computed* — `planChildRanges` believes a start and derives every
 end, so the first child begins where its parent begins and the last ends where its parent ends. The
 root has no parent, so its range came out of the answer and then met a hard equality assertion. It
 was the one node in the tree where the ordinary fault was fatal, and the section above reads as
 though the derivation covered everything.
-
-It is not a corner. `openai-huggingface` ends on an empty paragraph, a stranded footnote the prompt
-renders as `NOT-GISTABLE: (withheld)`, and a blog footer whose entire text is `No posts`; ending the
-article before those three is what a careful reader would do, and **three independent arms — Sonnet
-at `medium`, Sonnet at `low`, and glm-5.3-flash — each did, and each lost the article to the same
-sentence** ([hierarchy-cheap-models](../../evals/results/hierarchy-cheap-models-2026-09-03.md),
-recommendation 3).
+The evidence that it is not a corner is in [261007l § The root was the last node whose range was
+believed](../plans/261007g-structure-step-history.md#the-root-was-the-last-node-whose-range-was-believed).
 
 So the root is clamped to `[blocks[0].id, blocks.at(-1).id]` before anything descends, and the guard
 stays behind it as a post-condition rather than being deleted for having nothing left to catch.
@@ -316,13 +270,7 @@ Three things about the shape are load-bearing:
 
 #### A section that starts one block below its own heading is snapped onto it <a id="heading-snap"></a>
 
-**The model was not ignoring the author. It was cutting one block late.** Measured on a 142-page
-Kuhn paper, 2026-09-04, replaying the saved structure answer: of 82 non-root nodes, **24 started on
-a heading block and 53 on the block immediately after one**, and 75 of the 82 named a
-`sourceHeading`. Every unbacked claim reproduced was at that offset — the heading fell into the
-previous section's tail, `planChildRanges` believed the start, and `buildTree` dropped the claim as
-out of range. `droppedHeadings: 59` was counting that, and it read as the author's structure being
-overruled. It was not.
+**The model was not ignoring the author. It was cutting one block late.**
 
 So the repair is code, in `snapStartsToHeadings`
 ([`src/heading-snap.ts`](../../src/heading-snap.ts)): a kept child whose start is the block after a
@@ -352,21 +300,8 @@ they disagreed about.
   phantom `overlap` against its own correct start — and the snap would vanish from the telemetry that
   exists to watch it.
 
-**Measured, before and after, on the real answer** (no paid calls — the saved answer replayed through
-`buildTree`; the plan has the table):
-
-| | Kuhn, 142pp | noema × 43 saved trees |
-|---|---|---|
-| backed `sourceHeading` | 24 → **74** of 75 claimed | unchanged |
-| `droppedHeadings` | 59 → **9** | 0 → 0 |
-| headings starting a node | 21 → **67** of 254 | unchanged |
-| `repairedBlocks` | 40 → 86 | 0 → 0 |
-| `checkTree` problems | 0 → 0 | 0 → 0 |
-
-`repairedBlocks` **rises**, and that is the repair being honest rather than a regression: 46 headings
-really did change hands. The no-op half is the half that matters — 43 saved trees over noema and
-`openai-huggingface` come out byte-identical, because the model already put those starts on the
-headings.
+The Kuhn measurement, before and after, is in [261007l § A section that starts one block below its
+own heading](../plans/261007g-structure-step-history.md#a-section-that-starts-one-block-below-its-own-heading-is-snapped-onto-it).
 
 **`repairedBlocks` also over-counts now, by a known and bounded amount.** A boundary the model got
 *both* misplaced and one block late is recorded twice — by `recordBoundaryFaults` at the coordinate
@@ -387,9 +322,7 @@ who numbered three deep, and it is stage 8b of
 [`src/structure-cascade.ts`](../../src/structure-cascade.ts) fixes each answer's ranges before the
 next call is made, precisely so no subtree is generated against a range that later moves — and it
 tells its caller to hand the final `buildTree` a fresh report because "there is nothing left for it
-to mend". For a while the snap *was* something left for it to mend, and that mattered from wave 2
-on: a scoped call would be shown a slice `planChildRanges` had derived while its own answer was
-derived by a rule with no snap in it. Both now call
+to mend". Both now call
 [`src/heading-snap.ts`](../../src/heading-snap.ts), and a differential test hands a normalised answer
 to the real `buildTree` and requires it to change no range and record no repair.
 
@@ -608,8 +541,7 @@ what happens to exist — [`src/web/nav-labels.ts`](../../src/web/nav-labels.ts)
 says why: a column of blank cells reports our unfinished work as the article's own shape, and a
 partly-drawn outline rung is worse.
 
-Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day
-and `pending` is now the ordinary state of a newly added article** — `structure` writes the empty
+Stage 1 wrote `ready` everywhere and changed nothing anybody could see. **Stage 2 landed the same day and `pending` is now the ordinary state of a newly added article** — `structure` writes the empty
 manifest and the labels arrive later, from a free successor job
 ([Why they are two steps](#two-steps)). So the withheld state is what a reader sees for the minutes
 between adding a piece and the labels landing, rather than a state nothing produces.
@@ -648,10 +580,7 @@ reproduces the heading, not the bytes.** Publishers emit `Claude’s Constitutio
 because their CMS does; ask a model to repeat it and a fair share of the time you get
 `Claude's Constitution`. Same heading, typewriter apostrophe.
 
-The first article to reach this check with apostrophes in its headings — the Anthropic constitution,
-36 of them — failed on **eleven**, and every one of the eleven was an apostrophe. None was a heading
-the model had actually got wrong, which is the only thing the check exists to catch. A validator
-whose errors are all false teaches whoever reads it to stop reading it, which is a slower and worse
+A validator whose errors are all false teaches whoever reads it to stop reading it, which is a slower and worse
 version of having no validator at all.
 
 So the comparison folds the characters that have both a typographic and a typewriter spelling —
@@ -762,6 +691,9 @@ What that means in practice:
   settlement, and `settleExpired` ([`pg-jobs.ts`](../../src/store/pg-jobs.ts)) for the job whose lease
   ran out with nobody inside it. The label pass is the slowest step in the app, so running out of
   lease is its *ordinary* ending rather than an exotic one.
+  **Neither marks while another job is still going to make the labels**: both ask
+  `anotherJobCarriesLabelsIn` (`pg-jobs.ts`), which counts another active, non-cancelling job of the
+  same owner on the article with a `labels` step, and never the job that is ending.
 - **`structure` writes an empty manifest**, a `PendingLabelsFile` — the three hashes, `labels: {}`,
   `batches: null`, and deliberately **no `version` and no `generator`**, because no prompt and no
   model produced it. [`src/labels.ts`](../../src/labels.ts) has the type and the argument.
@@ -818,10 +750,7 @@ would move the batches of trees that label fine today.
 than emit one and refuse it at run time, the packing keeps taking sets, and a short tail is merged
 backwards into the batch before it. The floor and tail merge can each add up to twelve beyond the
 60, even with no oversized set: sets of `[12, 60, 12]` pack into 84. The widest real case measured
-here was 71. Measured before
-it landed: 4 of 31 batches across the fourteen articles on Greg's machine were under the floor, on
-three of them; afterwards, 1 of 28, and that one is a ten-block article which has no neighbour to
-merge into. The residue is `acceptGap`'s to refuse.
+here was 71. The residue is `acceptGap`'s to refuse.
 
 **A heading's label is taken from the block, not asked for.** The prompt says to copy the heading
 exactly; the model does not. On the two committed articles, 9 of 36 heading labels and 3 of 9
@@ -844,8 +773,7 @@ stage 1 of [260830am](../plans/260830am-faster-ingest-and-concurrency.md) took i
 renamed its job — the article-level backstop, not the per-batch bound — and
 [`src/labels.ts`](../../src/labels.ts) § `COVERAGE_FLOOR` carries that argument.
 
-*(Both lines said the opposite of the code from 2026-08-30 until 2026-08-31, which is the drift
-CLAUDE.md warns about: a doc that restates a constant is a second copy that nothing keeps in step.)*
+The two lines’ documented drift is in [261007l § Why they are two steps](../plans/261007g-structure-step-history.md#why-they-are-two-steps).
 
 ### And, behind a switch that is off, a third pass <a id="deepening"></a>
 
@@ -1026,13 +954,8 @@ enforces the pairing from the other side as well: `writeArtefacts` **refuses** a
 no manifest beside it, so a future writer of the tree (the deepening wave is the one we know is
 coming) has to say what it did to the labels rather than remember a convention.
 
-It used to write the three files itself, in a fixed order with the tree last. That ordering was
-about three *separate* writes: `writeFile` truncates before it has anything to put there, and
-*existence* is what [`src/pipeline.ts`](../../src/pipeline.ts) reads as "this step is done", so a
-kill mid-write left a present, truncated tree that a retry skipped. One write for all three removes
-both halves of that. **The ordering survived in `npm run structure`'s own `main()` until 2026-09-05,
-and now survives nowhere**: that command goes through the queue, so there are no three files and no
-order to get right. Nothing in this repo writes stage 4's artefacts separately any more.
+Why it is one write and not three is in [261007l § Three artefacts](../plans/261007g-structure-step-history.md#three-artefacts-and-what-survives-a-failed-run).
+Nothing in this repo writes stage 4's artefacts separately any more.
 
 `labels.json` carries a **manifest** — `sourceHash`, `structureHash`, `structureVersion` — because a
 whole-or-nothing write gives us "whole or not there" and not "still true". A complete set of labels
@@ -1124,13 +1047,8 @@ Two failures, deliberately kept distinct, because they are not the same problem:
   so. Clamping to the ceiling instead would be friendlier-looking and wrong: the call would run for
   minutes, cost money, and come back truncated anyway.
 
-  **What that boundary is, and what it is not.** It used to be pinned in the tests at exactly 1,976
-  blocks, on the argument that the boundary *is* the feature. The number itself turned out to be
-  wrong by a factor: `estimateStructureTokens` charged one node per four blocks, which is a rate
-  fitted to three trees of 19, 141 and 360 blocks, and re-measured over 32 trees from 10 to 2,025
-  blocks it over-predicts monotonically with length — 1.35× → 2.2× → 3.8× → 4.0× → **8.21×**. The
-  8.21× is the paper it refused, which a real call then answered in 10,996 tokens of a 128,000
-  budget. So the estimate is now built from what the prompt asks for rather than from a rate per
+  **What that boundary is, and what it is not.** (How the old rate was found wrong: [261007l § The budget](../plans/261007g-structure-step-history.md#the-budget).)
+  So the estimate is now built from what the prompt asks for rather than from a rate per
   paragraph — the tree it describes for any article at all (three levels, nine children a node, so 81
   sections) as a **floor**, plus the sections the article's own headings and long runs force on top.
   Measured margin over the whole corpus: 2.46× at the tightest. The boundary that leaves is around
@@ -1152,12 +1070,7 @@ What must never happen is the third option: keeping whatever JSON arrived and bu
 it. A table of contents that silently describes two thirds of an article is exactly the failure
 [silent-success.md](../reusable/silent-success.md) is about, and it is worse than the bug.
 
-**A third failure used to hide behind the second, and it looked identical.** On 2026-09-03 this step
-died on `dhammatalks.org/suttas/MN/MN10.html` saying *"it breaks at position 5409 of 13547
-characters"* — which reads like a truncated answer and was not one, since `ranOut` had already ruled
-truncation out. The likeliest reading is a whole tree with another 8,138 characters written after it,
-though nothing kept the response, so that stays a candidate rather than a fact. The stage assumed a
-model's answer *is* its
+The stage assumed a model's answer *is* its
 JSON, and it is not — it now reads the answer with `parseJsonAnswer`
 ([`src/parse-json.ts`](../../src/parse-json.ts)), which finds the document inside a preamble, a
 sign-off or a stray close fence, and `diagnose` names trailing material outright instead of quoting
@@ -1279,8 +1192,7 @@ this step.
   That value means the opposite: a `["structure"]` job is queued to replace it. Ask
   `awaitingStructure(tree)` ([`src/types.ts`](../../src/types.ts)), never the bare flag, since the
   two values want different things from every reader.
-- **A model's tree no longer takes this path for a section too long for one labels call.** From
-  2026-10-05 to 2026-10-06 it did (`labels-could-not-ask`), and the reader lost every gist. The
+- **A model's tree no longer takes this path for a section too long for one labels call.** The
   labels planner now asks about such a section in windows
   ([§ Why they are two steps](#two-steps)), so the tree stands.
   `unaskableBatches` ([`src/labels.ts`](../../src/labels.ts)) is kept as the measure: it is empty
@@ -1328,16 +1240,10 @@ refuse a book was the arithmetic, not the model, and the fix was to re-rate it: 
 [the budget](#the-budget).
 
 Past that, the **structure** call is what no longer fits, and since 2026-10-05 the tree is asked for
-in slices instead ([§ When one answer will not fit](#when-one-answer-will-not-fit)). The shape first
-proposed for it, from GPT-5.6-sol's review and written up in
-[260826h-toc-scaling.md § D](../plans/260826h-toc-scaling.md): build the authored-heading skeleton mechanically;
-make bounded, navigational section cards in parallel; run one global pass over the ordered cards to
-assign top-level boundaries and sibling titles; then generate each coarse subtree in parallel with
-the whole global outline in front of it. Never blind subtree calls with independently invented
-sibling roots — that is where four sections all end up meaning "Background".
+in slices instead ([§ When one answer will not fit](#when-one-answer-will-not-fit)).
 
-Note what is *no longer* on that list: the labels. They are already batched, and they are the half
-that scaled worst.
+Never blind subtree calls with independently invented
+sibling roots — that is where four sections all end up meaning "Background".
 
 **The model emits nested JSON; stage 4 converts it to the flat map** and assigns `NodeId`s, `parent`
 pointers and `depth`. Asking a model to emit a self-consistent map of cross-referencing ids is
@@ -1353,10 +1259,7 @@ The prompt's rules inherit from
 [granularity-zoom.md § Generation](granularity-zoom.md#generation) and
 [vision.md § Principles](vision.md#principles).
 
-**The live prompt is [`SYSTEM`](../../src/structure.ts) and it is not copied here.** A copy was, for
-a fortnight, and it went stale without a word: it still said *"Do not write a `gist` field — that is
-a later stage"* long after the gists moved back into this call, and it had never gained *"Go 3
-levels deep"*. `tests/structure-whole-document-request-parity.test.ts` pins the real bytes, so that is
+**The live prompt is [`SYSTEM`](../../src/structure.ts) and it is not copied here.** `tests/structure-whole-document-request-parity.test.ts` pins the real bytes, so that is
 the one to read and the one that fires when they move.
 
 What it asks for, in one line each, so this page can be read without opening the source: internal
@@ -1459,8 +1362,7 @@ the hint says so instead: *"(two options weighed)"*, *"(no settled answer)"*.
 
 **This replaced the first wording on 2026-09-07**, and the first wording is why. It asked for the
 question *"this node's text answers and its gist does NOT"* — an instruction to strip out everything
-the gist carried, whose only honest output is a bare why-question. Four candidate rewordings were
-built into an eval and measured over seven real articles;
+the gist carried, whose only honest output is a bare why-question. Four candidate rewordings were built into an eval and measured over seven real articles;
 [`evals/summaries/variants.md`](../../evals/summaries/variants.md) has all four, the axes that
 separate them, and the code change this one needed. Production shipped that V4 block byte-for-byte
 at `toc/7`; `toc/8` replaced only its final plain-words bullet, and a test asserts that exact

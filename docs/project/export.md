@@ -212,8 +212,10 @@ than leaving an importer to discover it.
 Earlier revisions: they
 exist and carry lineage, so this is a product decision, not an impossibility. `ai_calls`, whose
 `article_id` is nullable, so a per-article total would be quietly **wrong** rather than merely
-absent. And the pipeline tables — `checkpoints`, `jobs`, `queue_state`, `revision_step_runs` —
-machinery rather than reader data. Plus `raw_sources` and `uploads`, which describe *how the
+absent. And the pipeline tables — `checkpoints`, `jobs`, `revision_step_runs` — machinery rather
+than reader data. (`queue_state` was on that list until 2026-10-07, reachable only through an
+unused column that was dropped that day; it is out of scope now, so the manifest no longer names
+it.) Plus `raw_sources` and `uploads`, which describe *how the
 document arrived* rather than the article: the bucket object the fetch stored, and the upload
 attempt that produced it.
 

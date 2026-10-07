@@ -1758,14 +1758,6 @@ export const STORE_MIGRATION: Readonly<Record<string, StoreEntry>> = {
       "default `repeatable read` so a passing assertion cannot be the database's own default " +
       "agreeing with the bug. Nothing about it is filesystem; the two sites are `contextPaths`.",
   },
-  "tests/store-session.test.ts": {
-    category: "filesystem-adapter-behaviour",
-    reason:
-      "D1a — the commit seam **on the filesystem, where there is no transaction to hold**, and its " +
-      "sharpest case is a refusal over an artefact carried from a previous run, because against an " +
-      "empty directory a refusal proves nothing. The Postgres half of the same seam already lives " +
-      "in `store-pg-session.test.ts`.",
-  },
   "tests/store-uploads-parity.test.ts": {
     category: "filesystem-adapter-behaviour",
     reason:
@@ -3171,6 +3163,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* New on 2026-09-06. Nothing it asserts is about state the shared stack has:
      it seeds its own throwaway article per run and reads back one column. */
   "tests/nav-label-status-pg.test.ts": "private-postgres",
+  /* New on 2026-10-07 (plan 261007f). Its own owner and throwaway articles,
+     every survey scoped to that owner. */
+  "tests/never-published-tidy.test.ts": "private-postgres",
   /* New on 2026-10-05 (plan 261005g). Its own throwaway article per run, and
      one column read back through four reads. */
   "tests/title-original-pg.test.ts": "private-postgres",
@@ -3192,6 +3187,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Plan 261005j: an import that opens before its structure is built, through
      the real `enqueue`, claim, `structure` step and publication. */
   "tests/open-before-structure-queue.test.ts": "private-postgres",
+  /* Plan 261007f: two accounts import one address, through the real `enqueue`,
+     claim and publication. The bucket is a `Map` in the test's own process. */
+  "tests/two-readers-one-article-pg.test.ts": "private-postgres",
   "tests/owner-isolation.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04. Its header's *jobs never reach Postgres*
      is what the conversion falsifies, and the lane follows from the two owners
@@ -3237,6 +3235,11 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the public reads with a key. The bucket is a temp directory, mocked at
      the `blobStore()` selector as `asset-route` mocks it. */
   "tests/share-link-pg.test.ts": "private-postgres",
+  /* Plan 261007f, E14 to E16: two seeded readers who hold the same article,
+     through the real billing, upload, share-link and public routes. The bucket
+     is a temp directory, mocked as `share-link-pg` mocks it, and the upload
+     grant is mocked beside it, so nothing reaches Storage. */
+  "tests/two-readers-one-article-billing-pg.test.ts": "private-postgres",
   /* A visitor before publication, plan 261005l § 2c: thirteen seeded articles
      and their jobs, read through the public route. The bucket is a temp
      directory, mocked as `share-link-pg` mocks it. */
@@ -3366,6 +3369,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      clone already seeds, no article is loaded from the corpus, and nothing
      goes near GoTrue or the bucket. */
   "tests/shared-site-run-row-gate.test.ts": "private-postgres",
+  /* 2026-10-07 (plan 261007f, E10): `articles` rows under the ambient owner,
+     which the private clone already seeds. Rolled back, bar one row it deletes. */
+  "tests/short-id-collision.test.ts": "private-postgres",
   "tests/source-store.test.ts": "private-postgres",
   /* Converted in stage B, 2026-09-04, and the private lane is not optional
      here: six fixed slugs, each of which `lockOrCreateArticle` **creates** the
@@ -3705,6 +3711,13 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     "3e1ec7ed-0000-4000-8000-00000000ab01": { kind: "seeded" },
     "3e1ec7ed-0000-4000-8000-00000000ab02": { kind: "seeded" },
   },
+  /* 261007f's two readers, A and B, who hold the same article. `seedAuthUser`
+     in `beforeAll`; articles, uploads, ledger rows, jobs and the billing
+     anchor all hang off the `auth.users` foreign key. */
+  "tests/two-readers-one-article-billing-pg.test.ts": {
+    "dbd38869-cc97-475e-b4d5-0d690338daad": { kind: "seeded" },
+    "0ee81fe4-6630-450f-9d3a-97750838f812": { kind: "seeded" },
+  },
   "tests/billing-high-power.test.ts": {
     "0b1f0a1e-0000-4000-8000-0000000c6c01": { kind: "seeded" },
     "0b1f0a1e-0000-4000-8000-0000000c6c02": { kind: "seeded" },
@@ -3736,6 +3749,11 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
      `lockBillingAccount` before it deletes anything. */
   "tests/article-delete-pg.test.ts": {
     "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
+  },
+  /* Plan 261007f. `seedAuthUser` in `beforeEach`, deleted again in `afterAll`:
+     the articles hang off it, and `destroy` creates its billing anchor. */
+  "tests/never-published-tidy.test.ts": {
+    "7e1d0000-0000-4000-8000-0000000000b1": { kind: "seeded" },
   },
   "tests/db-referee-criteria.test.ts": {
     "7ac042a4-7c19-44a6-ab6d-448acc5909b8": { kind: "seeded" },
@@ -3928,7 +3946,7 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
     },
   },
   "tests/referee-routes-postgres.test.ts": {
-    "00000000-0000-4000-8000-0000000000d5": {
+    "07852712-f444-4aec-bd4a-b70403c8c03d": {
       kind: "no-row-needed",
       why:
         "`outsider` is a request owner for the one case that asks whether somebody who does not " +

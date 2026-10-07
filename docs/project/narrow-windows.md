@@ -193,7 +193,11 @@ Three things worth carrying to whatever is built next:
   Anything pinned *above* the bar (the mode band, the overflow fade) reads it directly; anything
   that must clear the bar permanently (`.reader`'s bottom padding, the dialogs) reads `--dock-space`
   instead. **Do not tie the document's height to the moving one** — a page that grows and shrinks
-  under the finger scrolling it is worse than a bar in the way.
+  under the finger scrolling it is worse than a bar in the way. One rule holds the bar home whatever
+  the scroll says (`styles/narrow-window.css` § a small device, the `:root:has(...)` guard): while
+  its drawer is open, while focus is in it, while a dialog or a band that covers the article is up,
+  and — since 2026-10-07 — while its own **More menu** is open, which is portalled out of the bar and
+  takes focus with it, so *focus is in the bar* stops being true the moment the list appears.
 
 **The width layout.ts divides is the layout viewport's, not `innerWidth`.** On iPad Safari
 `innerWidth` is the *visual* viewport and shrinks when the page is zoomed in, while every media query
@@ -276,9 +280,15 @@ Two rules now live there beside the dock's, and both are floors rather than fixe
   on exactly that, and a browser caught it both times while the suite stayed green.
 
   **The utilities layer is out of reach from it.** `@layer theme, base, app, utilities` puts every
-  `tw:` class after the stylesheets, so the four Tailwind-styled fields — sign-in's email and
-  password, the shelf's search, Add URL, and the library's in-place title editor — carry
-  `tw:any-pointer-coarse:text-base` at their own call sites.
+  `tw:` class after the stylesheets, so the Tailwind-styled fields — sign-in's email and
+  password, the shelf's search, Add URL, the library's in-place title editor, and since 2026-10-07
+  the search box above the contents list on Metadata and `/profile` and Help's search box — carry
+  an `any-pointer-coarse` font-size floor at their own call sites. Most carry
+  `tw:any-pointer-coarse:text-base`, which is `1rem` and so drops under 16px for a reader whose
+  root type is smaller; the two added on 2026-10-07 carry
+  `tw:any-pointer-coarse:text-[max(1rem,16px)]`, the same floor as the app-layer rule, and moving
+  the rest to it is queued. Grep for `any-pointer-coarse:text-` rather than trust this list. It also wins over a breakpoint variant on the same element (`tw:lg:text-xs`), because
+  Tailwind emits the `any-pointer` block after the breakpoint ones.
 
   **`<select>` joined it on 2026-09-08**, working the second report of the same bug
   (SPIDERYARN-READING2-2H, the Feedback dialog zooming on an iPhone — which the `textarea` half had

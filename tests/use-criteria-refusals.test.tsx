@@ -2,9 +2,10 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CRITERION_HAS_COMMENTS } from "../src/referee-criteria-store.js";
-import type { SavedCriterion } from "../src/saved-criteria.js";
+import { CRITERIA_AT_CEILING, CRITERION_HAS_COMMENTS, criteriaAtCeiling } from "../src/referee-criteria-store.js";
+import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
 import type { CriteriaApi } from "../src/web/useCriteria.js";
+import { SignedInReader } from "../src/web/lib/made-for.js";
 
 let answer: (url: string, init: RequestInit) => Promise<Response>;
 vi.mock("../src/web/lib/api.js", async () => {
@@ -36,8 +37,14 @@ function Probe({ slug }: { slug: string }) {
   api = useCriteria(slug);
   return null;
 }
-function mount(slug = "paper") {
-  act(() => root.render(createElement(Probe, { slug })));
+function mount(slug = "paper", reader: string | null = null) {
+  act(() => root.render(createElement(SignedInReader.Provider, { value: reader }, createElement(Probe, { slug }))));
+}
+async function remount(slug = "paper", reader: string | null = null) {
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  mount(slug, reader);
+  await flush();
 }
 async function flush() {
   for (let i = 0; i < 6; i++) await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -79,6 +86,7 @@ function refuse(reply: ReturnType<typeof deferred>) {
 }
 beforeEach(() => {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  sessionStorage.clear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -304,5 +312,170 @@ describe("refused optimistic criterion deletes under overlapping work", () => {
     stream.end(); await flush();
     expect(api.criteria).toEqual([]);
     expect(api.error).toBeNull();
+  });
+});
+
+/**
+ * **An add refused at the ceiling** (`CRITERIA_AT_CEILING`, a 409 before any
+ * stream: docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+ * The ordinary pre-stream failure path keeps a failed row with the server's
+ * sentence and Retry once room is made; it never shows the criterion as added
+ * or touches an existing row. Review added session drafts after reproducing
+ * loss on reload. They retain the words and configuration until acceptance or
+ * explicit deletion, without automatically resending them.
+ */
+describe("an add refused at the ceiling", () => {
+  it("shows the typed criterion as failed, with the sentence, and leaves the rest alone", async () => {
+    answer = (_url, init) =>
+      Promise.resolve(init.method === "POST"
+        ? json({ error: CRITERIA_AT_CEILING }, 409)
+        : json({ criteria: [first, second], sourceHash: "h" }));
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("One too many", { kind: "single" }); }); await flush();
+    expect(api.criteria.slice(0, 2)).toMatchObject([first, second]);
+    const refused = api.criteria.find((c) => c.id === id);
+    expect(refused).toMatchObject({ criterion: "One too many", status: "error", results: [], error: CRITERIA_AT_CEILING });
+    expect(api.criteria).toHaveLength(3);
+    expect(api.error).toBe(CRITERIA_AT_CEILING);
+  });
+
+  it("keeps refused words and both poles across a reload, without resending", async () => {
+    const posts: RequestInit[] = [];
+    answer = (_url, init) => {
+      if (init.method === "POST") posts.push(init);
+      return Promise.resolve(init.method === "POST"
+        ? json({ error: CRITERIA_AT_CEILING }, 409)
+        : json({ criteria: [first, second], sourceHash: "h" }));
+    };
+    mount(); await flush();
+    const config = { kind: "diverging", poles: { against: "missing controls", favour: "adequate controls" }, scale: "br" } as const;
+    let id = "";
+    act(() => { id = api.ask("My detailed criterion", config); }); await flush();
+    await remount();
+    expect(api.criteria.find((c) => c.id === id)).toMatchObject({ criterion: "My detailed criterion", config, status: "error", error: CRITERIA_AT_CEILING });
+    expect(api.criteria.slice(0, 2)).toMatchObject([first, second]);
+    expect(posts).toHaveLength(1);
+  });
+
+  it("keeps a draft refused by a list already past the ceiling, whose sentence names its count", async () => {
+    const above = criteriaAtCeiling(MAX_CRITERIA + 1);
+    expect(above).not.toBe(CRITERIA_AT_CEILING);
+    answer = (_url, init) => Promise.resolve(init.method === "POST"
+      ? json({ error: above }, 409)
+      : json({ criteria: [first, second], sourceHash: "h" }));
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("Past the ceiling", { kind: "single" }); }); await flush();
+    await remount();
+    expect(api.criteria.find((c) => c.id === id)).toMatchObject({ criterion: "Past the ceiling", error: above });
+  });
+
+  it("keeps a refused retry as a draft until a begin confirms the add", async () => {
+    const posts: RequestInit[] = [];
+    let stream: ReturnType<typeof heldStream> | undefined;
+    let stored: SavedCriterion[] = [first, second];
+    answer = (_url, init) => {
+      if (init.method === "POST") {
+        posts.push(init);
+        return Promise.resolve(stream?.response ?? json({ error: CRITERIA_AT_CEILING }, 409));
+      }
+      return Promise.resolve(json({ criteria: stored, sourceHash: "h" }));
+    };
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("Retry me", { kind: "single" }); }); await flush();
+    act(() => api.retry(id)); await flush();
+    expect(posts).toHaveLength(2);
+    expect(JSON.parse(posts[1]!.body as string)).toMatchObject({ id, criterion: "Retry me" });
+    expect(api.criteria.find((c) => c.id === id)?.error).toBe(CRITERIA_AT_CEILING);
+    await remount();
+    expect(api.criteria.find((c) => c.id === id)?.criterion).toBe("Retry me");
+
+    stream = heldStream();
+    act(() => api.retry(id)); await flush();
+    // A retry in flight is still unsaved until its begin frame.
+    await remount();
+    expect(api.criteria.find((c) => c.id === id)?.criterion).toBe("Retry me");
+    const accepted = { ...first, id, criterion: "Retry me" };
+    stream.push("begin", { ...accepted, status: "pending" });
+    stream.push("done", accepted); stream.end(); await flush();
+    stored = [...stored, accepted];
+    await remount();
+    expect(api.criteria.filter((c) => c.id === id)).toEqual([expect.objectContaining(accepted)]);
+    // Removing the persisted row elsewhere must not resurrect a consumed draft.
+    stored = [first, second];
+    await remount();
+    expect(api.criteria.map((c) => c.id)).toEqual([first.id, second.id]);
+  });
+
+  it("keeps drafts apart by article and reader, and forgets an explicitly removed draft", async () => {
+    answer = (_url, init) => Promise.resolve(init.method === "POST"
+      ? json({ error: CRITERIA_AT_CEILING }, 409)
+      : json({ criteria: [], sourceHash: "h" }));
+    mount("paper", "reader-a"); await flush();
+    let id = "";
+    act(() => { id = api.ask("Private words", { kind: "literature" }); }); await flush();
+    await remount("elsewhere", "reader-a");
+    expect(api.criteria).toEqual([]);
+    await remount("paper", "reader-b");
+    expect(api.criteria).toEqual([]);
+    await remount("paper", "reader-a");
+    expect(api.criteria.find((c) => c.id === id)?.criterion).toBe("Private words");
+    act(() => api.remove(id)); await flush();
+    await remount("paper", "reader-a");
+    expect(api.criteria).toEqual([]);
+  });
+
+  it("still loads, refuses and keeps the row on screen when browser storage is blocked", async () => {
+    // What a browser with site data blocked does: merely reading the property throws.
+    vi.spyOn(window, "sessionStorage", "get").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    answer = (_url, init) => Promise.resolve(init.method === "POST"
+      ? json({ error: CRITERIA_AT_CEILING }, 409)
+      : json({ criteria: [first, second], sourceHash: "h" }));
+    mount(); await flush();
+    expect(api.loaded).toBe(true);
+    expect(api.loadError).toBeNull();
+    let id = "";
+    act(() => { id = api.ask("Kept while mounted", { kind: "single" }); }); await flush();
+    expect(api.criteria.find((c) => c.id === id)).toMatchObject({ criterion: "Kept while mounted", error: CRITERIA_AT_CEILING });
+    act(() => api.remove(id)); await flush();
+    await remount();
+    expect(api.criteria.map((c) => c.id)).toEqual([first.id, second.id]);
+  });
+
+  it("does not revive a discarded draft when its refusal arrives after leaving the article", async () => {
+    const post = deferred();
+    answer = (_url, init) => init.method === "POST"
+      ? post.promise
+      : Promise.resolve(json({ criteria: [], sourceHash: "h" }));
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("Words I then discard", { kind: "single" }); }); await flush();
+    act(() => api.remove(id)); await flush();
+    await remount("elsewhere");
+    post.resolve(json({ error: CRITERIA_AT_CEILING }, 409)); await flush();
+    await remount();
+    expect(api.criteria).toEqual([]);
+  });
+
+  it("does not revive a draft deleted by a new mount while an old retry is in flight", async () => {
+    const retry = deferred();
+    let holding = false;
+    answer = (_url, init) => init.method === "POST"
+      ? holding ? retry.promise : Promise.resolve(json({ error: CRITERIA_AT_CEILING }, 409))
+      : Promise.resolve(json({ criteria: [], sourceHash: "h" }));
+    mount(); await flush();
+    let id = "";
+    act(() => { id = api.ask("Discard after returning", { kind: "single" }); }); await flush();
+    holding = true;
+    act(() => api.retry(id)); await flush();
+    await remount();
+    act(() => api.remove(id)); await flush();
+    retry.resolve(json({ error: CRITERIA_AT_CEILING }, 409)); await flush();
+    await remount();
+    expect(api.criteria).toEqual([]);
   });
 });

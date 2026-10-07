@@ -54,6 +54,7 @@
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { OWN_READING_PAGE } from "../src/messages.js";
 import type { Article } from "../src/types.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -458,5 +459,27 @@ describe("the add page, which is the fifth copy and was found in a browser", () 
 
     expect(host.textContent).toContain("The server was busy.");
     expect(host.textContent).toContain("It didn't get as far as the queue");
+  });
+
+  it("shows the sentence for a pasted Spideryarn reading page, with no Try again under it", async () => {
+    /* The route's own constant (src/messages.ts § `OWN_READING_PAGE`), so this
+       is the sentence a reader is really sent. Watched red on 2026-10-07 while
+       the sentence had no code: `worthRetrying` did not recognise it and the
+       page drew its *Try again* underneath. */
+    refused = OWN_READING_PAGE.message;
+    await act(async () => {
+      root.render(
+        createElement(AddPage, {
+          source: { kind: "url", url: "www.spideryarn.com/read/why-trees-spya-k3m9qt" },
+        }),
+      );
+    });
+    await settle();
+    await answerPolls();
+
+    expect(host.textContent).toContain(OWN_READING_PAGE.message);
+    /* And no *Try again* under it: the same link would be refused the same way. */
+    expect(host.textContent).not.toContain("It didn't get as far as the queue");
+    expect([...host.querySelectorAll("button")].map((b) => b.textContent)).not.toContain("Try again");
   });
 });

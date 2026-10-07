@@ -1,8 +1,17 @@
 -- C7 first-application preflight, reviewed HEAD d4bbcd76e plus uncommitted review fixes.
 -- Read-only; not executed in this review. Run on production's SESSION connection
 -- using the migration credential. It expects the complete original 153-row ledger,
--- followed by exactly these seven pending files. Rebuild this ledger literal if
+-- followed by exactly these nine pending files. Rebuild this ledger literal if
 -- the final deployment commit contains additional migrations.
+-- The eighth, 20261007053304_billing_voucher_recipient_name, is another
+-- session's (plan 261007f-gift-voucher-recipient-name-and-a-starter-article-written-up),
+-- which landed on dev first; its only checks here are its two objects in the
+-- "absent before" block.
+-- The ninth, 20261007073504_drop_queue_state_running_job_id, was added on
+-- 2026-10-07: a column drop Greg approved that day (plan 261007g § 2). Its checks
+-- are the queue_state blocks below, and queue_state and jobs in the lock and
+-- ownership inspections. It was generated as 20261007065807_… and regenerated
+-- after the voucher migration when the two branches met.
 -- Every query labelled VIOLATIONS must return ZERO rows. Counts may grow since
 -- the recorded investigation: only the violation counts must remain zero.
 -- A different catalog definition is a stop for inspection, even if it is equivalent.
@@ -185,7 +194,7 @@ SELECT NULL, a.created_at, 'unexpected ledger row or different hash'
 FROM actual a
 WHERE NOT EXISTS (SELECT 1 FROM expected e WHERE e.stamp = a.created_at AND e.hash = a.hash);
 
--- Must list all seven tags below, crosses_watermark=true for each; none applied.
+-- Must list all nine tags below, crosses_watermark=true for each; none applied.
 WITH pending(stamp, tag) AS (VALUES
   (1791334488929::bigint, '20261007005448_revision_blocks_article_block_index'),
   (1791334950895::bigint, '20261007010230_referee_criteria_shape_all_or_none'),
@@ -193,7 +202,9 @@ WITH pending(stamp, tag) AS (VALUES
   (1791335787375::bigint, '20261007011627_upload_source_guesses_created_at'),
   (1791336047829::bigint, '20261007012047_drop_duplicate_chat_messages_index'),
   (1791336414855::bigint, '20261007012654_declare_migration_only_indexes_and_checks'),
-  (1791337115199::bigint, '20261007013835_ledger_indexes_declared_as_made')
+  (1791337115199::bigint, '20261007013835_ledger_indexes_declared_as_made'),
+  (1791351184402::bigint, '20261007053304_billing_voucher_recipient_name'),
+  (1791358504947::bigint, '20261007073504_drop_queue_state_running_job_id')
 )
 SELECT tag, stamp,
        stamp > (SELECT max(created_at) FROM spideryarn_migrations.__drizzle_migrations) AS crosses_watermark,
@@ -211,7 +222,35 @@ WHERE EXISTS (SELECT 1 FROM pg_attribute
 UNION ALL
 SELECT 'referee_claims_empty_unless_done already exists'
 WHERE EXISTS (SELECT 1 FROM pg_constraint
- WHERE conrelid='spideryarn.referee_claims'::regclass AND conname='referee_claims_empty_unless_done');
+ WHERE conrelid='spideryarn.referee_claims'::regclass AND conname='referee_claims_empty_unless_done')
+UNION ALL
+SELECT 'billing_vouchers.recipient_name already exists'
+WHERE EXISTS (SELECT 1 FROM pg_attribute
+ WHERE attrelid='spideryarn.billing_vouchers'::regclass
+   AND attname='recipient_name' AND NOT attisdropped)
+UNION ALL
+SELECT 'billing_vouchers_recipient_name_length already exists'
+WHERE EXISTS (SELECT 1 FROM pg_constraint
+ WHERE conrelid='spideryarn.billing_vouchers'::regclass AND conname='billing_vouchers_recipient_name_length');
+
+-- VIOLATIONS: the column the ninth migration drops, and its foreign key, must be
+-- there exactly as 0000 made them, and the column must hold nothing. A missing
+-- one means the drop would fail; a value means it would throw away a fact.
+SELECT 'queue_state.running_job_id is missing' AS problem
+WHERE NOT EXISTS (SELECT 1 FROM pg_attribute
+ WHERE attrelid='spideryarn.queue_state'::regclass
+   AND attname='running_job_id' AND NOT attisdropped)
+UNION ALL
+SELECT 'queue_state_running_job_id_jobs_id_fk is missing or different'
+WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint
+ WHERE conrelid='spideryarn.queue_state'::regclass
+   AND conname='queue_state_running_job_id_jobs_id_fk')
+  IS DISTINCT FROM 'FOREIGN KEY (running_job_id) REFERENCES spideryarn.jobs(id) ON DELETE SET NULL'
+UNION ALL
+SELECT 'queue_state.running_job_id holds a value'
+WHERE EXISTS (SELECT 1 FROM spideryarn.queue_state WHERE running_job_id IS NOT NULL);
+-- Must report exactly one row: the singleton the claim locks, which stays.
+SELECT count(*) AS queue_state_rows FROM spideryarn.queue_state;
 
 -- Both invalid counts, and non_array_claims, must be zero. CASE prevents a
 -- non-array from raising jsonb_array_length before its count can be reported.
@@ -296,12 +335,18 @@ SELECT c.relname, pg_get_userbyid(c.relowner) AS owner,
 FROM pg_class c
 WHERE c.oid IN ('spideryarn.revision_blocks'::regclass,'spideryarn.referee_criteria'::regclass,
  'spideryarn.referee_claims'::regclass,'spideryarn.upload_source_guesses'::regclass,
- 'spideryarn.chat_messages'::regclass)
+ 'spideryarn.chat_messages'::regclass,'spideryarn.queue_state'::regclass,'spideryarn.jobs'::regclass,
+ 'spideryarn.billing_vouchers'::regclass)
 ORDER BY c.relname;
 
 -- Inspect immediately before applying: SHARE conflicts with writers to blocks;
--- later ACCESS EXCLUSIVE locks conflict with readers too. This is a point-in-time
--- sample, not a guarantee: use a finite lock_timeout on the migration connection.
+-- later ACCESS EXCLUSIVE locks conflict with readers too — including queue_state,
+-- which every job claim locks FOR UPDATE NOWAIT. NOWAIT applies only to row locks;
+-- claims wait for the table lock until commit/rollback and can occupy runtime pool
+-- connections. Dropping the foreign key also locks jobs. This is a point-in-time
+-- sample, not a guarantee: use finite lock_timeout and statement_timeout on the
+-- migration connection. The voucher migration's ADD CHECK takes ACCESS EXCLUSIVE on
+-- billing_vouchers and scans it, so that table is inspected here too.
 -- pg_stat_activity text is intentionally not selected (reader data may appear in it).
 SELECT l.relation::regclass AS relation, l.mode, l.granted, l.pid,
        a.state, clock_timestamp()-a.xact_start AS transaction_age,
@@ -310,7 +355,9 @@ FROM pg_locks l LEFT JOIN pg_stat_activity a ON a.pid=l.pid
 WHERE l.pid IS DISTINCT FROM pg_backend_pid()
   AND l.relation IN ('spideryarn.revision_blocks'::regclass,'spideryarn.referee_criteria'::regclass,
     'spideryarn.referee_claims'::regclass,'spideryarn.upload_source_guesses'::regclass,
-    'spideryarn.chat_messages'::regclass,'spideryarn.chat_messages_thread_ordinal_idx'::regclass)
+    'spideryarn.chat_messages'::regclass,'spideryarn.chat_messages_thread_ordinal_idx'::regclass,
+    'spideryarn.queue_state'::regclass,'spideryarn.jobs'::regclass,
+    'spideryarn.billing_vouchers'::regclass)
 ORDER BY a.xact_start NULLS FIRST, relation, l.mode;
 SELECT pid, state, clock_timestamp()-xact_start AS transaction_age, wait_event_type, wait_event
 FROM pg_stat_activity

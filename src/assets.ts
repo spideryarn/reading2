@@ -164,6 +164,10 @@ export interface Assets {
    * changed nothing it hashed. A carried-forward empty manifest would have gone
    * on reporting itself current and the step would never have run. GPT Sol,
    * D1-4.
+   *
+   * **Or `"stopped-part-way"`** (`STOPPED_PART_WAY`, src/collect-assets.ts),
+   * since 2026-10-07: the manifest of a run the reader stopped, kept and
+   * published but deliberately not current, so the next run does it again.
    */
   sourceHash: string;
   fetchedAt: string;

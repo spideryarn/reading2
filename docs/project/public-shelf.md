@@ -191,6 +191,8 @@ sits beside it, never inside it.
   [`public/robots.txt`](../../public/robots.txt) lets a crawler fetch `/read/` only so that it can
   read that — [deployment.md § Our own pages may be listed](deployment.md#our-own-pages-may-be-listed-nothing-a-reader-put-here-may).
   (The blanket `Disallow: /` it used to be, until 2026-10-05, did not stop an address being listed.)
+- **No merging of two readers' copies of one article.** Both are listed, as two cards
+  ([library.md § Two readers, one article](library.md#two-readers-one-article)).
 - **No artefact flags on a card** — no "has a diagram", no "has a glossary". That would be a second
   projection to keep in step with what the reader actually gets.
 - **No cursor.** The row cap is a ceiling rather than a page size, so there is nothing to paginate

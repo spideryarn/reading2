@@ -335,10 +335,12 @@ Since 2026-08-29 a step returns a *product* —
 `{ detail, parts?, stamp? }` — and the commit after it
 ([`src/store/session.ts`](../../src/store/session.ts)) writes that product, checks it, and finishes
 the step. The boundary landed empty on purpose, so that the stages could move behind it one at a
-time; by 2026-08-31 every one of them had. `LEGACY_UNCONVERTED_STEPS` in
-[`src/pipeline.ts`](../../src/pipeline.ts) is the list of steps still exempted from returning
-`parts` — **empty**, and kept rather than deleted, because a step off it must return `parts` or the
-type checker refuses it: the exemption has to be asked for by name, not fallen into.
+time; by 2026-08-31 every one of them had. A step must return `parts`: `PipelineStep.run` in
+[`src/pipeline.ts`](../../src/pipeline.ts) is typed to return a `ConvertedProduct`, and
+`checkProduct` refuses a product without them at commit. There was a list of step names exempted
+from that (`LEGACY_UNCONVERTED_STEPS`), empty from 2026-08-31 and deleted on 2026-10-07 with the
+filesystem session that was its last reader ([261007e](../plans/261007e-seventh-sweep-pipeline-tidy-one-successor-rule-and-the-dead-filesystem-session.md)), so there is no way to ask for the
+exemption any more.
 [260827aa-delete-the-importer.md § D1](../plans/260827aa-delete-the-importer.md),
 [260831b-finish-the-database-move.md § Stage 2](../plans/260831b-finish-the-database-move.md).
 
@@ -385,7 +387,10 @@ that record two ways, and they fail differently:
   by `criterion_id`, `thread_id` or `revision_id` is in scope for the same reason its parent is.
   `revision_step_runs` was already such a table and was invisible until 2026-09-01. The walk
   deliberately over-reaches: it pulls in `jobs`, because a job points at the draft revision it is
-  building, and `queue_state` behind it. Over-reach costs one written-down sentence; under-reach
+  building. (It pulled in `queue_state` behind that, through `running_job_id`'s key to `jobs`,
+  until the column — read and written by nothing — was dropped on 2026-10-07 with Greg's approval;
+  [261007g](../plans/261007g-keep-the-generate-button-and-drop-the-unused-queue-column.md) § 2.)
+  Over-reach costs one written-down sentence; under-reach
   costs a rollback that quietly loses somebody's work. No database needed.
 - **Is the list true?** Every table the record calls exported gets a row with a sentinel string in it,
   `exportArticle` runs, and that string has to come back out of the file the record names. This half

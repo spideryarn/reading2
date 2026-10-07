@@ -26,7 +26,7 @@
  * It is the same rule applied at both ends of a wire that has a database and a
  * year in the middle of it.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { readSketch, type Sketch, type SketchFault } from "../sketch-scene.js";
 import type { BlockId, Job, SketchResponse } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
@@ -96,27 +96,49 @@ export interface UseSketch {
   cancel(id: string): void;
 }
 
+/**
+ * **The picture on screen and everything that arrived with it, as one value**
+ * — so the facts about a picture cannot outlive it. They were six `useState`s,
+ * and the branch for a reply with nothing drawable in it cleared the picture
+ * and left its four flags standing. useIdeas.ts § `IdeasAnswer` is the same
+ * remedy. `faults` is deliberately not in here: with nothing drawable, what
+ * the checker refused is the only account of why.
+ * docs/plans/261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags.md § 3.
+ */
+interface SketchShown {
+  /** Validated and safe to paint. */
+  sketch: Sketch;
+  /**
+   * **Which stored picture this is**, for Regenerate's hold (rewrite-hold.ts).
+   * A sketch carries no clock of its own — `Sketch` has no `generatedAt` — so
+   * this is the stored `sketch` value itself, as the server sent it. **Never
+   * the response beside it**: `stale`, `outdated` and `profileChanged` change
+   * with no job having drawn anything, and would read as a replacement (GPT
+   * Sol's plan review of 261004c, F12). Nor the checked scene, which changes
+   * with the article's block order.
+   */
+  drawn: string;
+  stale: boolean;
+  outdated: boolean;
+  profiled: boolean;
+  profileChanged: boolean;
+}
+
 export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSketch {
   const [status, setStatus] = useState<SketchStatus>("loading");
-  const [sketch, setSketch] = useState<Sketch | null>(null);
+  const [shown, setShown] = useState<SketchShown | null>(null);
   const [faults, setFaults] = useState<SketchFault[]>([]);
-  const [stale, setStale] = useState(false);
-  const [outdated, setOutdated] = useState(false);
-  const [profiled, setProfiled] = useState(false);
-  const [profileChanged, setProfileChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /**
-   * **Which stored picture is on screen**, for Regenerate's hold
-   * (rewrite-hold.ts). A sketch carries no clock of its own — `Sketch` has no
-   * `generatedAt` — so this is the stored `sketch` value itself, as the server
-   * sent it. **Never the response beside it**: `stale`, `outdated` and
-   * `profileChanged` change with no job having drawn anything, and would read
-   * as a replacement (GPT Sol's plan review of 261004c, F12). Nor the checked
-   * scene, which changes with the article's block order.
-   */
-  const [drawn, setDrawn] = useState<string | null>(null);
   const fresh = useFreshReads();
   const { begin, landed } = fresh;
+  /**
+   * The article the server has said "none yet" for. A failed read after that
+   * answer — a failed *Try again* included — ends at `none`, not `error`,
+   * so the empty state's button stays (Greg, 2026-10-07; docs/project/mode.md
+   * § The artefact, if the mode shows one). Keyed by slug, so one article's
+   * answer cannot stand in for another's.
+   */
+  const saidNoneFor = useRef<string | null>(null);
 
   /**
    * **Keyed on the ids, not on the array.** `blockOrder` is derived in the
@@ -142,15 +164,11 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
         // The ordinary case, not a fault: `sketch` is off DEFAULT_INGEST_STEPS,
         // so most articles have never had one drawn. This is what the button is
         // for.
-        setSketch(null);
+        setShown(null);
         setFaults([]);
-        setStale(false);
-        setOutdated(false);
-        setProfiled(false);
-        setProfileChanged(false);
-        setDrawn(null);
         landed(started, res, null);
         setError(null);
+        saidNoneFor.current = slug;
         setStatus("none");
         return;
       }
@@ -164,42 +182,48 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
          something got past both — an import, a hand-edited column, a schema
          from before `accept` existed. A panel that took it as `ready` would
          draw an empty band and report success, which is the failure this whole
-         feature keeps having to be defended against. */
+         feature keeps having to be defended against.
+
+         **No picture, so no facts about one** — `shown` is null and the four
+         flags go with it. The faults stay: they say why there is nothing. */
       if (checked.scenes.length === 0) {
-        setSketch(null);
+        setShown(null);
         setFaults(report.faults);
-        setDrawn(null);
         landed(started, res, null);
+        saidNoneFor.current = slug;
         setStatus("none");
         setError(null);
         return;
       }
 
       const identity = JSON.stringify(loaded.sketch);
-      setDrawn(identity);
       landed(started, res, identity);
-      setSketch(checked);
-      setFaults(report.faults);
-      setStale(loaded.stale);
-      setOutdated(loaded.outdated);
-      /* `!= null` rather than truthiness: the field is `string | null |
-         undefined` and only `null` and absent mean "drawn without one".
+      setShown({
+        sketch: checked,
+        drawn: identity,
+        stale: loaded.stale,
+        outdated: loaded.outdated,
+        /* `!= null` rather than truthiness: the field is `string | null |
+           undefined` and only `null` and absent mean "drawn without one".
 
-         **Off the stored value, not `checked`.** `readSketch` rebuilds the
-         scene and does not carry `profileHash` across, so reading it there was
-         always `false`: no picture ever drew its *written for you* badge, and
-         the redraw in that badge's panel could not be reached. Found by
-         tests/rewrite-hold.test.tsx, 2026-10-04. */
-      setProfiled((loaded.sketch as { profileHash?: unknown } | null)?.profileHash != null);
-      setProfileChanged(loaded.profileChanged);
+           **Off the stored value, not `checked`.** `readSketch` rebuilds the
+           scene and does not carry `profileHash` across, so reading it there
+           was always `false`: no picture ever drew its *written for you*
+           badge, and the redraw in that badge's panel could not be reached.
+           Found by tests/rewrite-hold.test.tsx, 2026-10-04. */
+        profiled: (loaded.sketch as { profileHash?: unknown } | null)?.profileHash != null,
+        profileChanged: loaded.profileChanged,
+      });
+      setFaults(report.faults);
       setError(null);
+      saidNoneFor.current = null;
       setStatus("ready");
     } catch (err) {
       if (!current()) return;
       setError(describeFetchFailure(err as Error));
       // A failed revalidation must not take the picture away — useIdeas.ts
       // § load has the reasoning, and it is the same one.
-      setStatus((was) => (was === "loading" ? "error" : was));
+      setStatus((was) => (was !== "loading" ? was : saidNoneFor.current === slug ? "none" : "error"));
     }
   }, [slug, order, begin, landed]);
 
@@ -219,9 +243,9 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
      revalidation is tried again; only the opening error returns to loading. */
   const retryRead = useCallback(async () => {
     setError(null);
-    if (sketch === null) setStatus("loading");
+    if (shown === null) setStatus("loading");
     await reload();
-  }, [sketch, reload]);
+  }, [shown, reload]);
 
   const queue = useStepJob(slug, "sketch", refresh, "watches-queue");
 
@@ -232,7 +256,7 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
     },
     [queue],
   );
-  const hold = useRewriteHold({ slug, step: "sketch", identity: drawn, queue, fresh, refresh });
+  const hold = useRewriteHold({ slug, step: "sketch", identity: shown?.drawn ?? null, queue, fresh, refresh });
   const held = hold.run;
   const regenerate = useCallback(
     async () => {
@@ -251,12 +275,12 @@ export function useSketch(slug: string, blockOrder: readonly BlockId[]): UseSket
 
   return {
     status,
-    sketch,
+    sketch: shown?.sketch ?? null,
     faults,
-    stale,
-    outdated,
-    profiled,
-    profileChanged,
+    stale: shown?.stale ?? false,
+    outdated: shown?.outdated ?? false,
+    profiled: shown?.profiled ?? false,
+    profileChanged: shown?.profileChanged ?? false,
     slug,
     error,
     job: queue.job,

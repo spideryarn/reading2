@@ -43,6 +43,7 @@ const VOUCHERS = [
     articles: 20,
     note: "met at the conference",
     recipientNote: "Lovely to meet you at the conference.",
+    recipientName: "Ada Lovelace",
     createdAt: "2026-10-01T10:00:00Z",
     createdBy: "admin",
     updatedAt: "2026-10-01T10:00:00Z",
@@ -58,6 +59,7 @@ const VOUCHERS = [
     articles: 10,
     note: null,
     recipientNote: null,
+    recipientName: null,
     createdAt: "2026-09-20T10:00:00Z",
     createdBy: "admin",
     updatedAt: "2026-09-21T10:00:00Z",
@@ -74,6 +76,7 @@ const VOUCHERS = [
     articles: 5,
     note: null,
     recipientNote: null,
+    recipientName: null,
     createdAt: "2026-09-10T10:00:00Z",
     createdBy: "admin",
     updatedAt: "2026-09-11T10:00:00Z",
@@ -278,6 +281,81 @@ describe("/admin/vouchers", () => {
     expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ recipientNote: "Better words." });
   });
 
+  it("shows their name under the address, and Edit changes it and sends only that", async () => {
+    /* Plan 261007f. */
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    const firstCell = waiting?.querySelector("td");
+    expect(firstCell?.textContent).toBe("waiting@example.testAda Lovelace");
+    expect(rowFor("claimed@example.test")?.querySelector("td")?.textContent).toBe("claimed@example.test");
+
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const name = firstCell?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
+    expect(name?.value).toBe("Ada Lovelace");
+    /* Native maxLength counts UTF-16 units, while the route and Postgres count
+       Unicode code points. It would stop a valid 80-emoji name at 40. */
+    expect(name?.hasAttribute("maxlength")).toBe(false);
+    expect(waiting?.textContent).toContain("The same goes for their name.");
+
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(name, " Ada ");
+      name?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([{ recipientName: "Ada" }]);
+
+    /* Emptied, it is sent as none; a claimed voucher's name can change too. */
+    calls.length = 0;
+    /* The row is held, not found again: while it is edited its address is in
+       a box, so `rowFor` cannot see it. */
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const again = waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
+    await act(async () => {
+      setter?.call(again, "  ");
+      again?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.filter((c) => c.method === "PATCH").map((c) => c.body)).toEqual([{ recipientName: null }]);
+
+    await act(async () => buttonIn(rowFor("claimed@example.test"), "Edit")?.click());
+    expect(rowFor("claimed@example.test")?.querySelector('input[aria-label="Their name"]')).not.toBeNull();
+  });
+
+  it("refuses an over-limit raw name in Edit instead of trimming it into acceptance", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const name = waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
+    const raw = `${"x".repeat(80)} `;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(name, raw);
+      name?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+    expect(waiting?.textContent).toContain("recipientName must be at most 80 characters.");
+  });
+
+  it("does not PATCH when only invisible formatting differs from the stored name", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const name = waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(name, "Ada Lovelace\u202e");
+      name?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+  });
+
   it("keeps every text field at a non-zooming size on a coarse pointer", async () => {
     await mount();
     await act(async () => buttonIn(rowFor("waiting@example.test"), "Edit")?.click());
@@ -324,7 +402,7 @@ describe("/admin/vouchers", () => {
       const state = useAdminVouchers();
       return (
         <>
-          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null, recipientNote: null })}>
+          <button type="button" onClick={() => void state.create({ email: "fresh@example.test", articles: 20, note: null, recipientNote: null, recipientName: null })}>
             Create
           </button>
           <span>{state.vouchers?.map((voucher) => voucher.email).join(",") ?? "loading"}</span>
@@ -578,6 +656,104 @@ describe("/admin/vouchers", () => {
       await write("Something else.");
       await submit();
       expect(idOf(creates()[1])).not.toBe(idOf(creates()[0]));
+    });
+
+    async function name(value: string) {
+      const input = host.querySelector("#voucher-new-recipient-name") as HTMLInputElement;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      await act(async () => {
+        setter?.call(input, value);
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    it("has a box for their name above the note, and says what it does", async () => {
+      /* Greg, 2026-10-06 (spya-vc6pnm). Plan 261007f. */
+      await mount();
+      const input = form().querySelector<HTMLInputElement>("#voucher-new-recipient-name");
+      expect(input?.type).toBe("text");
+      expect(input?.required).toBe(false);
+      /* Leave the code-point limit to the server, as the note below does. */
+      expect(input?.hasAttribute("maxlength")).toBe(false);
+      expect(input?.labels?.[0]?.textContent).toContain("Their name");
+      expect(input?.labels?.[0]?.textContent).toContain("optional");
+      expect(input?.labels?.[0]?.textContent).toContain("Dear <name>,");
+      const controls = [...form().querySelectorAll<HTMLElement>("input, textarea, button")];
+      const at = (selector: string) => controls.indexOf(form().querySelector(selector) as HTMLElement);
+      expect(at("#voucher-new-articles")).toBeLessThan(at("#voucher-new-recipient-name"));
+      expect(at("#voucher-new-recipient-name")).toBeLessThan(at("#voucher-new-recipient-note"));
+    });
+
+    it("sends their name, trimmed, or none; and clears the box once the voucher is made", async () => {
+      await mount();
+      await fill("new@example.test");
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ recipientName: null });
+      await fill("new@example.test");
+      await name("  Ada  ");
+      await write("A note.");
+      await submit();
+      expect(creates()[1]?.body).toMatchObject({ recipientName: "Ada", recipientNote: "A note." });
+      expect((host.querySelector("#voucher-new-recipient-name") as HTMLInputElement).value).toBe("");
+    });
+
+    it("refuses an over-limit raw name in Create instead of trimming it into acceptance", async () => {
+      await mount();
+      await fill("new@example.test");
+      const raw = `${"x".repeat(80)} `;
+      await name(raw);
+      await submit();
+      expect(creates()).toHaveLength(0);
+      expect(form().textContent).toContain("recipientName must be at most 80 characters.");
+    });
+
+    it("submits the same cleaned name that its sketch shows", async () => {
+      await mount();
+      await fill("new@example.test");
+      await name(`Ada\u200bLovelace\u202e`);
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ recipientName: "Ada Lovelace" });
+    });
+
+    it("mints a new id when only their name changed after a create whose answer was lost", async () => {
+      /* The replay fingerprint lists the input's fields by hand (Sol's F5):
+         without the name in it this resubmit would reuse the id for a
+         different body, and the server would answer 409. */
+      await mount();
+      await fill("new@example.test");
+      await name("Ada");
+      postAnswer = { status: 0, body: null };
+      await submit();
+      await submit();
+      expect(idOf(creates()[1])).toBe(idOf(creates()[0]));
+      await name("Grace");
+      await submit();
+      expect(creates()[2]?.body).toMatchObject({ email: "new@example.test", recipientName: "Grace" });
+      expect(idOf(creates()[2])).not.toBe(idOf(creates()[0]));
+    });
+
+    it("sketches the greeting under the heading once a name is typed, and not before", async () => {
+      await mount();
+      const lines = () => [...(sketch()?.querySelectorAll("p") ?? [])].map((p) => p.textContent);
+      expect(sketch()?.textContent).not.toContain("Dear");
+      await name(" Ada ");
+      expect(lines().indexOf("Dear Ada,")).toBe(lines().indexOf("A gift of 20 free articles") + 1);
+      /* Still above the note. */
+      await write("Great to meet you today.");
+      expect(lines().indexOf("Dear Ada,")).toBe(lines().indexOf("Great to meet you today.") - 1);
+      expect(sketch()?.textContent).toContain("Subject: A gift of 20 free articles on Spideryarn");
+      await name("   ");
+      expect(sketch()?.textContent).not.toContain("Dear");
+    });
+
+    it("sketches the same cleaned greeting the email will render", async () => {
+      await mount();
+      await name(`Ada\u200bLovelace\u202e`);
+      expect(sketch()?.textContent).toContain("Dear Ada Lovelace,");
+      for (const control of ["\u200b", "\u202e"]) expect(sketch()?.textContent).not.toContain(control);
+
+      await name("\u200b\u202e\u2060");
+      expect(sketch()?.textContent).not.toContain("Dear");
     });
 
     it("sketches the email, with the note where it will go", async () => {

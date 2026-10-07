@@ -143,7 +143,10 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           <li>
             <strong>The bottom bar</strong> starts with the way home (the Spideryarn wordmark). On
             your own article, that is followed by the <strong>Commands</strong> button. Next come
-            the mode buttons, then <strong>Comments</strong> and <strong>Metadata</strong>. When you
+            the mode buttons, ending with <strong>More</strong> and <strong>Marginalia</strong>:{" "}
+            <strong>More</strong> opens a short list of the modes you will want less often (Quotes,
+            Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come{" "}
+            <strong>Comments</strong> and <strong>Metadata</strong>. When you
             are signed in, it also has the <strong>Experimental</strong> switch and{" "}
             <strong>Feedback</strong>. To come back to this page from your own article, press{" "}
             <strong>Commands</strong> and type <em>help</em>, or follow <strong>More in Help</strong>{" "}
@@ -591,6 +594,12 @@ export const HELP_TOPICS: Record<HelpTopic, HelpSection> = {
           The buttons in the bottom bar are the modes. Each shows the same article a different way,
           in a panel beside the text; the text itself never changes. You do not need most of them for
           most pieces — pick by the question you have.
+        </p>
+        <p>
+          Five of them are not in the bar itself but under its <strong>More</strong> button: Quotes,
+          Glossary, FAQ, Ideas and Timeline. Press <strong>More</strong> and pick one from the list.
+          While one of those is open it has a button of its own in the bar, so you can see where you
+          are, and pressing that button closes it.
         </p>
         <ModesTable />
         <p>

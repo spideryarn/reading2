@@ -225,6 +225,12 @@ interface Row {
   readAgain: string;
   /** What the POST these tests' press makes carries besides the step. */
   posts?: Record<string, unknown>;
+  /**
+   * **Other GETs the band stands on, answered the same way every time**, keyed
+   * like `path`. Skim's: with its Quotes and Ideas read as current, its request
+   * names the route alone, which is the request this file is about.
+   */
+  also?: Record<string, unknown>;
 }
 
 const noop = () => {};
@@ -246,6 +252,7 @@ const { FaqBand } = await import("../src/web/modes/faq/FaqMode.js");
 const { DebateBand } = await import("../src/web/modes/debate/DebateMode.js");
 const { CitationsBand } = await import("../src/web/modes/citations/CitationsMode.js");
 const { useCitationsRead } = await import("../src/web/useCitations.js");
+const { SkimBand } = await import("../src/web/modes/skim/SkimMode.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useFreshReads, useRewriteHold } = await import("../src/web/rewrite-hold.js");
 
@@ -279,6 +286,34 @@ function CitationsOuter({ show }: { show: boolean }) {
   const read = useCitationsRead(SLUG);
   return show
     ? createElement(CitationsBand, { slug: SLUG, read, onJump: noop, focus: null, onFocusTaken: noop })
+    : null;
+}
+
+/* Skim stands on the Quotes read `OwnedReader` holds and the glossary read
+   `Reader` holds; its own read, and the Ideas', are the band's. */
+function SkimOuter({ show }: { show: boolean }) {
+  const quotes = useQuotesRead(SLUG);
+  const glossary = useGlossaryRead(SLUG);
+  return show
+    ? createElement(SkimBand, {
+        slug: SLUG,
+        blocks: BLOCKS,
+        tree: ARTICLE.tree,
+        quotes,
+        glossary,
+        onOpen: noop,
+        canOpen: () => false,
+        arrival: { stop: null, open: false },
+        quoteMarks: [],
+        covers: false,
+        away: false,
+        onAway: noop,
+        onJump: noop,
+        onFound: noop,
+        openKey: null,
+        onOpenKey: noop,
+        onControl: noop,
+      })
     : null;
 }
 
@@ -700,6 +735,76 @@ const ROWS: Row[] = [
     waiting: "The new citations haven't loaded yet.",
     readAgain: "Try again",
   },
+  /* The seventh of the seven that had a forced verb and no hold (plan 261007e).
+     Its forced control is the stale or profile-changed banner's, and the same
+     button in the status foot of a current route. The Quotes and the Ideas are
+     served current, so the press asks for the route alone: what a run does
+     about its prerequisites is tests/modes-that-start-themselves.test.tsx's. */
+  {
+    name: "Skim",
+    hook: "useSkim.ts",
+    step: "skim",
+    path: "/api/skim/",
+    body: (which, { stale }) => ({
+      skim: {
+        ...stamp(which, false),
+        stops: [{ quoteId: "spya-qte234", depth: 1, role: `${SAYS[which]} turn` }],
+        visible: [1, 1, 1],
+        offered: 1,
+        dropped: { unknownQuote: 0, duplicate: 0, sameBlock: 0, malformed: 0, badRole: 0, overCap: 0, collapsed: 0 },
+      },
+      stale,
+      outdated: false,
+      profileChanged: false,
+      notOnRoute: 0,
+    }),
+    also: {
+      "/api/quotes/": {
+        quotes: {
+          ...stamp("old", false),
+          quotes: [
+            {
+              id: "spya-qte234",
+              blockId: "spya-bbbbbb",
+              text: "The instrument was built first",
+              start: 0,
+              reason: "It is the sentence the piece turns on.",
+              importance: 90,
+              striking: 80,
+            },
+          ],
+          discarded: { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 },
+        },
+        stale: false,
+        outdated: false,
+        profileChanged: false,
+      },
+      "/api/ideas/": {
+        ideas: {
+          ...stamp("old", false),
+          ideas: [
+            {
+              id: "spya-kdea34",
+              name: "Instruments outrun explanation",
+              provenance: "assumed",
+              statement: "You cannot theorise about what you have no way to measure.",
+              occurrences: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", reasoning: "It rests on it." }],
+            },
+          ],
+        },
+        stale: false,
+        outdated: false,
+        profileChanged: false,
+      },
+    },
+    mount: (show) => createElement(SkimOuter, { show }),
+    verb: "Plan it again",
+    shape: ON_THE_BANNER,
+    forced: ["Plan it again"],
+    direct: [{ label: "Plan it again", stale: true }],
+    waiting: "The new route hasn't loaded yet.",
+    readAgain: "Try again",
+  },
 ];
 
 /* --------------------------------------------------------------- the harness -- */
@@ -821,6 +926,9 @@ beforeEach(() => {
     if (url === path) {
       reads++;
       return serve();
+    }
+    for (const [prefix, body] of Object.entries(row.also ?? {})) {
+      if (url === `${prefix}${SLUG}`) return json(body);
     }
     return json({ error: "Not here." }, 404);
   });
@@ -1330,6 +1438,102 @@ describe.each(ROWS)("$name", (mode) => {
   });
 });
 
+/* **Skim's hold and the steps its job may run first** (plan 261007e). A run
+   names the Quotes or the Ideas in `precededBy` when they are missing or
+   stale, unforced, in the one job. The hold follows that job: it is not a hold
+   on the prerequisite, and a press that had to wait for the prerequisite reads
+   is one press. */
+describe("Skim: the forced run and its prerequisites", () => {
+  const skim = ROWS.find((r) => r.name === "Skim")!;
+  const without = (prefix: string): Row => ({
+    ...skim,
+    also: Object.fromEntries(Object.entries(skim.also ?? {}).filter(([key]) => key !== prefix)),
+  });
+
+  it.each((["quotes", "ideas"] as const).flatMap((prerequisite) =>
+    (["error", "cancelled", "skim-refused"] as const).map((outcome) => ({ prerequisite, outcome })),
+  ))("releases after $prerequisite ends with $outcome, even without a new route", async ({ prerequisite, outcome }) => {
+    start(without(`/api/${prerequisite}/`));
+    await paint();
+    await pressRegenerate();
+    jobs = [{
+      ...job(prerequisite, "running"),
+      steps: [{ name: prerequisite, status: "running" }, { name: "skim", status: "pending" }],
+    } as Job];
+    await paint();
+    await expectHeld("the prerequisite is still running");
+
+    /* Keep the completion read in the air: the terminal job alone must
+       release, even though Skim never wrote a replacement. */
+    serve = () => new Promise(() => {});
+    jobs = [{
+      ...job(prerequisite, outcome === "cancelled" ? "cancelled" : "error"),
+      steps: [
+        { name: prerequisite, status: outcome === "skim-refused" ? "done" : "error" },
+        { name: "skim", status: outcome === "skim-refused" ? "error" : "pending" },
+      ],
+    } as Job];
+    await paint();
+    expect(await regenerate(), outcome).toBe("enabled");
+    expect(onScreen("old")).toBe(true);
+    expect(posted).toHaveLength(1);
+  });
+
+  it("holds through a job that chose the Quotes first, and forces the route alone", async () => {
+    start(without("/api/quotes/"));
+    await paint();
+    const button = await forcedButton();
+    await act(async () => {
+      button.click();
+      button.click();
+    });
+    await flush();
+    expect(posted).toEqual([{ slug: SLUG, steps: ["quotes", "skim"], force: ["skim"] }]);
+
+    let land!: (res: Response) => void;
+    serve = () => new Promise((resolve) => { land = resolve; });
+    jobs = [{ ...job("quotes", "done"), steps: [{ name: "quotes", status: "done" }, { name: "skim", status: "done" }] } as Job];
+    await paint();
+    expect(onScreen("old")).toBe(true);
+    await expectHeld("the job is done and the new route has not been read");
+    expect(posted).toHaveLength(1);
+
+    await act(async () => land(json(skim.body("new", usual()))));
+    await flush();
+    expect(onScreen("new")).toBe(true);
+    expect(await regenerate()).toBe("enabled");
+  });
+
+  it("a press made while the Ideas read is still out is one forced run, held once it is made", async () => {
+    const mode = without("/api/ideas/");
+    let landIdeas!: (res: Response) => void;
+    const ideas = new Promise<Response>((resolve) => { landIdeas = resolve; });
+    start(mode);
+    const usualFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: unknown, init?: RequestInit) =>
+      String(input) === `/api/ideas/${SLUG}` && (init?.method ?? "GET") === "GET" ? ideas : usualFetch(input as string, init),
+    );
+    await paint();
+    const button = await forcedButton();
+    await act(async () => {
+      button.click();
+      button.click();
+    });
+    await flush();
+    expect(posted, "nothing is asked for until the request can name its prerequisites").toHaveLength(0);
+    await expectHeld("the kept intent already takes the control away before the POST");
+
+    await act(async () => landIdeas(json(skim.also!["/api/ideas/"])));
+    await flush();
+    expect(posted).toEqual([{ slug: SLUG, steps: ["skim"], force: ["skim"] }]);
+    serve = () => new Promise(() => {});
+    finishJob();
+    await paint();
+    await expectHeld("the deferred press is held like any other");
+    expect(posted).toHaveLength(1);
+  });
+});
+
 /* Loaded pictures deliberately draw no JobProgress Retry. Exercise their real
    hooks' shared failure callback without adding a control to either view. */
 describe.each(ROWS.filter((mode) => ["Sketch", "Illustrated"].includes(mode.name)))("$name Retry seam", (mode) => {
@@ -1396,15 +1600,14 @@ describe.each(ROWS.filter((mode) => ["Sketch", "Illustrated"].includes(mode.name
   );
 });
 
-/* **A pin of a known-open defect, not a requirement** (GPT Sol's C4, plan
-   261007b § What is left; the form is tests/adversarial-shapes.test.ts's).
-   The command bar's *Run again* row posts its forced run straight through the
-   queue and knows nothing of the mode's hold, so with FAQ held it buys a
-   second run for the one result on screen. Read it as news if it goes red:
-   when the row is taken through the hold, invert the count and strike the
-   item from the plan. It drives the row's own action out of `besideTheModes`
-   rather than the drawn bar, so it says nothing about which rows are drawn. */
-it("pins C4: the command bar's Run again posts a second forced run over a held mode", async () => {
+/* **The command bar's *Run again* row asks the mode's hold** (GPT Sol's C4,
+   plan 261007b § Left; fixed in plan 261007i). Until then the row posted its
+   forced run straight through the queue, so with FAQ held it bought a second
+   run for the one result on screen; this test was a pin of that, and was seen
+   red in this form against the unfixed row (two POSTs, and the row went on to
+   Metadata). It drives the row's own action out of `besideTheModes` rather
+   than the drawn bar, so it says nothing about which rows are drawn. */
+it("the command bar's Run again refuses while the mode's rewrite is held (C4)", async () => {
   const { besideTheModes } = await import("../src/web/CommandBar.js");
   const { useJobs } = await import("../src/web/useJobs.js");
   const mode = ROWS.find((r) => r.step === "faq")!;
@@ -1425,15 +1628,19 @@ it("pins C4: the command bar's Run again posts a second forced run over a held m
   }).find((command) => command.kind === "action" && command.id === "rerun-faq");
   expect(again?.kind).toBe("action");
   if (again?.kind !== "action") return;
-  /* The row then navigates to Metadata; put the address back for whatever runs next. */
   const here = location.href;
-  await act(async () => void (await again.run()));
+  let outcome: Awaited<ReturnType<typeof again.run>> | undefined;
+  await act(async () => void (outcome = await again.run()));
+  const landed = location.href;
+  /* A row that ran would have gone to Metadata; put the address back for whatever runs next. */
   history.replaceState(null, "", here);
+  expect(outcome).toEqual({
+    kind: "stay",
+    message: "FAQ was just run again and hasn't loaded yet. Open it to see the result first.",
+  });
+  expect(landed).toBe(here);
   await expectHeld("the mode's own controls are still held");
-  expect(posted).toEqual([
-    { slug: SLUG, steps: ["faq"], force: ["faq"] },
-    { slug: SLUG, steps: ["faq"], force: ["faq"] },
-  ]);
+  expect(posted).toEqual([{ slug: SLUG, steps: ["faq"], force: ["faq"] }]);
 });
 
 /* ------------------------------------------------------ the membership guard --
@@ -1444,10 +1651,11 @@ it("pins C4: the command bar's Run again posts a second forced run over a held m
    seven hooks came to have a forced run and no hold (plan 261007b).
 
    What it reads is the syntax tree, with `@babel/parser` as
-   tests/use-copy.test.tsx does, because the text will not do: Skim forces
-   through a conditional spread (`...(again ? { force: true } : {})`), the
-   glossary passes it through a parameter (`queue.start({ force, … })`), and a
-   dozen comments say `force: true` without doing it. So a hit is **an object
+   tests/use-copy.test.tsx does, because the text will not do: Skim forced
+   through a conditional spread (`...(again ? { force: true } : {})`) until it
+   got its hold, the glossary passes it through a parameter
+   (`queue.start({ force, … })`), and a dozen comments say `force: true`
+   without doing it. So a hit is **an object
    literal with a `force` property** — written out, shorthand, or nested in a
    spread — whose value is not `false` and not itself an object literal (which
    is the force-directed diagram's table, a different word).
@@ -1493,13 +1701,11 @@ function forcing(code: string): { forces: boolean; holds: boolean } {
  * is red until it is a row above or a line here.
  */
 const NOT_HELD: Record<string, string> = {
-  "useSkim.ts":
-    "pending C10b: Skim's forced run has no hold yet. It is the one artefact hook left, and it waits on the change to the same hook in docs/plans/261006n-one-type-for-a-read-spiked-on-useideas.md. Delete this line when it is a row.",
   "useStepJob.ts": "the transport: it turns a hook's `force: true` into the request's `force: [step]`, and decides nothing.",
   "Metadata.tsx":
     "the Metadata page's *AI processing* re-run rows, not a mode's artefact hook: no artefact is on screen beside the button to be mistaken for the new one, and the row has a press latch of its own (§ `RerunRow`).",
   "CommandBar.tsx":
-    "the command bar's *Run again* rows, which are Metadata's re-runs reached by typing: the press leaves for the Metadata section, where the row above shows the job.",
+    "the command bar's *Run again* rows, which are Metadata's re-runs reached by typing: the press leaves for the Metadata section, where the row above shows the job. It asks a mode's hold before posting (`rewriteHeld`, plan 261007i) but has no artefact identity to take one of its own.",
   "StructureNotice.tsx":
     "the Structure notice's press for the real tree, with `RerunRow`'s press latch (§ `run`). The tree is part of the article, not a mode artefact with a read of its own for a hold to watch.",
   "ShelfEntry.tsx":
@@ -1531,9 +1737,9 @@ describe("every file under src/web that forces a step", () => {
 
   it("is a row in the table or a named exclusion, and never both", () => {
     expect(forcers.length, "the search found nothing, so it proves nothing").toBeGreaterThanOrEqual(ROWS.length);
-    /* The two forms a search of the text misses: without these two hits the
-       scan is the literal scan again. */
-    expect(forcers, "Skim's conditional spread").toContain("useSkim.ts");
+    /* A form a search of the text misses: without this hit the scan is the
+       literal scan again. (The conditional spread, which Skim used until plan
+       261007e, is pinned by the snippets above.) */
     expect(forcers, "the glossary's shorthand `force`").toContain("useGlossary.ts");
     expect(
       forcers.filter((f) => !rows.has(f) && !(f in NOT_HELD)),

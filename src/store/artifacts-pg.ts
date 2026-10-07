@@ -1650,8 +1650,7 @@ export function readOnlyPgArtifacts(ref: JobDraftRef, exec: Executor): ReadOnlyA
  *
  * **`readBaseline` is a method, not an arrow property**, and so is `read` inside
  * the view this spreads. Both are generic over `ArtifactKind`, and the arrow
- * form loses the type parameter and hands every caller back `unknown` — the
- * mistake `readsOf` in src/store/session.ts already wrote down.
+ * form loses the type parameter and hands every caller back `unknown`.
  *
  * `Db` is fine here for the same reason it is fine for the read-only view: a
  * read that sees a slightly older snapshot than the write that follows it is the

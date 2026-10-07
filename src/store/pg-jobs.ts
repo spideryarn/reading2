@@ -1906,7 +1906,8 @@ const rawPgJobStore: JobStore = {
        * missing fact is this one: **no other active job on this article still
        * carries `labels`**. If one does, skip — it will be marked at its own
        * ending if it dies too, so nothing is lost and the sentence stays true
-       * meanwhile.
+       * meanwhile. The predicate itself is `anotherJobCarriesLabelsIn`, below,
+       * which the live ending in src/store/pg-session.ts asks as well.
        *
        * **Asked after the settlement, deliberately.** By now every row this sweep
        * ended is terminal and so is outside `ACTIVE`, which is what stops two
@@ -1916,37 +1917,9 @@ const rawPgJobStore: JobStore = {
        * `queued` and does count, which is right: it has another window and its
        * draft.
        */
-      const stillCarryingLabels =
-        buyingLabels.length === 0
-          ? []
-          : (
-              await tx
-                .select({ id: jobs.id, ownerId: jobs.ownerId, slug: jobs.slug, steps: jobs.steps })
-                .from(jobs)
-                .where(
-                  and(
-                    inArray(
-                      jobs.slug,
-                      buyingLabels.map((row) => row.slug),
-                    ),
-                    inArray(jobs.status, ACTIVE),
-                    not(jobs.cancelling),
-                  ),
-                )
-            ).filter(
-              (row) =>
-                !ended.has(row.id) && row.steps.some((step) => step.name === "labels"),
-            );
-
       for (const row of buyingLabels) {
         if (ended.get(row.id) !== "error") continue;
-        if (
-          stillCarryingLabels.some(
-            (other) => other.slug === row.slug && other.ownerId === row.ownerId,
-          )
-        ) {
-          continue;
-        }
+        if (await anotherJobCarriesLabelsIn(tx, row, [...ended.keys()])) continue;
         const marked = await markNavLabelsFailedIn(
           tx,
           row.slug,
@@ -2237,8 +2210,9 @@ const rawPgJobStore: JobStore = {
  * These are exported anyway, because the transactional store session
  * (docs/plans/260827aa-delete-the-importer.md § D1b) has to settle the job inside the
  * *artefact* transaction, and a method that calls `getDb()` for itself binds to
- * nothing. Injecting the public `JobSettles` capability was the design the
- * review rejected for exactly that reason.
+ * nothing. Injecting the public pair (`JobSettles`, a type deleted with the
+ * filesystem session on 2026-10-07) was the design the review rejected for
+ * exactly that reason.
  *
  * **So the scrubbing has to be re-provided by the caller, and here is where:**
  * the session constructs its returned object through `guardDbStore`, the same
@@ -2248,6 +2222,69 @@ const rawPgJobStore: JobStore = {
  * `.finish` still go through the wrapper, because the wrapper is applied to the
  * store object and not to the statement.
  */
+
+/**
+ * **Is some other job still going to make this article's paragraph labels?**
+ *
+ * The one answer to that, for the two endings that ask it before writing
+ * `failed` onto a published revision (`markNavLabelsFailedIn`,
+ * src/store/pg-revisions.ts): the sweep above, ending a job nobody is inside,
+ * and `settleIn` (src/store/pg-session.ts), a live claimant ending its own.
+ * Until 2026-10-07 only the sweep asked, so the same article in the same
+ * position ended `pending` after a lapse and `failed` after a live failure
+ * (docs/investigations/261006d-seventh-sweep-depth-pipeline-and-import-queue-sol.md
+ * § PQ3). Kept here, with the statuses it reads, so there is no second copy to
+ * drift a second time.
+ *
+ * Another job counts when all four hold:
+ *
+ * - **it is not one of `excluding`.** The caller names every job it is ending.
+ *   For the sweep that is belt and braces, because its rows are already
+ *   terminal. For the live path it is the whole of the answer: the settling job
+ *   is still `running` with a `labels` step when this is asked, and would
+ *   otherwise be read as its own successor, so no live failure would ever mark;
+ * - **it belongs to `article.ownerId`.** `articles.slug` is unique across every
+ *   owner, but `jobs.slug` is plain text with no key to the article, so the
+ *   schema does not stop another owner's job carrying the same text, and the
+ *   sweep runs over everybody's rows;
+ * - **it is `queued` or `running` and not `cancelling`.** A job on its way out
+ *   promises nothing;
+ * - **its step list has `labels`.** Membership is right *here*, about the other
+ *   job: this is whether it may still carry the work, not
+ *   whether it failed inside it.
+ *
+ * **When to ask is the caller's, and the two differ on purpose.** The sweep
+ * asks about any ended job whose list has `labels`; the live path only when
+ * `unfinished === "labels"`. Do not merge them: each states its reason where it
+ * asks.
+ *
+ * Reads `jobs` and takes no lock. Both callers already hold the article's row,
+ * which is what a publication takes before it queues a successor, so a
+ * successor cannot appear between this answer and the mark. Session completion
+ * takes that lock too. Stop does not: it can cancel a queued successor while
+ * this transaction holds the article. As with Stop after this commit, that can
+ * leave labels pending; both callers deliberately mark only an error ending.
+ */
+export async function anotherJobCarriesLabelsIn(
+  exec: Executor,
+  article: { readonly slug: string; readonly ownerId: OwnerId },
+  excluding: readonly string[],
+): Promise<boolean> {
+  const active = await exec
+    .select({ id: jobs.id, steps: jobs.steps })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.slug, article.slug),
+        eq(jobs.ownerId, article.ownerId),
+        inArray(jobs.status, ACTIVE),
+        not(jobs.cancelling),
+      ),
+    );
+  return active.some(
+    (row) => !excluding.includes(row.id) && row.steps.some((step) => step.name === "labels"),
+  );
+}
 
 /**
  * The step is done and the claim stays: write the job's steps, and only them.
@@ -2346,6 +2383,13 @@ export async function releaseStepIn(
  * So the flag is cleared and the ending stands. Written down here because the
  * two functions reading the same column and answering differently is exactly
  * what a later reader would take for a bug.
+ *
+ * **And since 2026-10-07 the claimant's own instance agrees.** A Stop that
+ * aborted the running step locally used to make `transitionAfter` (src/jobs.ts)
+ * ask for a `cancelled` ending here instead, so the same press kept the article
+ * or lost it by which server answered. It asks for `done` now; Greg's decision
+ * is quoted there. `cancel_requested_at` is not cleared, so the press stays on
+ * the row.
  */
 export async function finishIn(
   exec: Executor,

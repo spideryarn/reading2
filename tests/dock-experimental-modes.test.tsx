@@ -54,13 +54,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type BandMode, MODES, type Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type { PublicArtefacts } from "../src/types.js";
-import { Dock, fitSignature, visibleModes } from "../src/web/Dock.js";
+import { Dock, fitSignature, splitForMore, visibleModes } from "../src/web/Dock.js";
 import { markedModes } from "../src/web/visitor.js";
 import {
   EXPERIMENTAL_OFF,
   EXPERIMENTAL_ON,
   EXPERIMENTAL_SIGNED_OUT,
 } from "./helpers/experimental-fixtures.js";
+import { itemLabel, moreItems, moreLabels, openMore } from "./helpers/dock-more.js";
 
 /**
  * **The independent copy of the policy**, by name, so that moving a mode in or
@@ -114,6 +115,32 @@ const BEHIND_THE_SWITCH: readonly Mode[] = [
  */
 function expectedWhenOff(current?: Mode): readonly Mode[] {
   return MODES.filter((m) => !BEHIND_THE_SWITCH.includes(m) || m === current);
+}
+
+/**
+ * **The five the bar lists under More rather than drawing**, by name — the
+ * second independent copy in this file, for the reason `BEHIND_THE_SWITCH` is
+ * one (plan 261007c, D2). The switch decides which modes a reader is
+ * **offered**; this decides where an offered mode stands. Until 2026-10-07 the
+ * two were one question, and every assertion here read the bar's buttons.
+ */
+const UNDER_MORE: readonly Mode[] = ["quotes", "glossary", "faq", "ideas", "timeline"];
+
+/**
+ * What a bar offering `offered` should show: as buttons (or links), every
+ * offered mode that is not gathered, plus a gathered one that is the open
+ * mode; under More, every offered mode that is gathered. Both halves are
+ * asserted, so a mode hidden from the bar and missing from the menu too —
+ * unreachable, which is the thing the switch must never do by accident — is
+ * a failure here and not a shorter list.
+ */
+function expectBar(offered: readonly Mode[], current: Mode | undefined, drawn: () => string[]): void {
+  expect([...drawn()].sort(), "drawn in the bar").toEqual(
+    labels(offered.filter((m) => !UNDER_MORE.includes(m) || m === current)),
+  );
+  expect([...moreLabels(host)].sort(), "listed under More").toEqual(
+    labels(offered.filter((m) => UNDER_MORE.includes(m))),
+  );
 }
 
 let host: HTMLDivElement;
@@ -198,12 +225,12 @@ const labels = (modes: readonly Mode[]) => modes.map((m) => MODE_LABEL[m]).sort(
 describe("which buttons the bar draws", () => {
   it("with the switch off, exactly the modes that are not behind it", () => {
     reading({ experimental: EXPERIMENTAL_OFF });
-    expect([...radioModes()].sort()).toEqual(labels(expectedWhenOff()));
+    expectBar(expectedWhenOff(), "plain", radioModes);
   });
 
   it("with the switch on, every mode there is", () => {
     reading({ experimental: EXPERIMENTAL_ON });
-    expect([...radioModes()].sort()).toEqual(labels(MODES));
+    expectBar(MODES, "plain", radioModes);
   });
 
   /**
@@ -223,8 +250,9 @@ describe("which buttons the bar draws", () => {
       visitor: true,
       marked: markedModes(NOTHING_SHARED),
     });
-    expect([...radioModes()].sort()).toEqual(labels(expectedWhenOff()));
+    expectBar(expectedWhenOff(), "plain", radioModes);
     expect(radioModes()).not.toContain(MODE_LABEL.timeline);
+    expect(moreLabels(host)).not.toContain(MODE_LABEL.timeline);
   });
 });
 
@@ -241,7 +269,10 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    */
   it("a reading view in Timeline draws it, checked, with the switch off", () => {
     reading({ mode: "timeline", experimental: EXPERIMENTAL_OFF });
-    expect([...radioModes()].sort()).toEqual(labels(expectedWhenOff("timeline")));
+    /* Twice over since 2026-10-07: Timeline is experimental *and* gathered
+       under More, and being the open mode overrides both. */
+    expectBar(expectedWhenOff("timeline"), "timeline", radioModes);
+    expect(radioModes()).toContain(MODE_LABEL.timeline);
     expect(checked()).toEqual([MODE_LABEL.timeline]);
   });
 
@@ -278,13 +309,21 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
    */
   it("the metadata page retains the mode its URL carries", () => {
     loose("?mode=learn");
-    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff("learn")));
+    expectBar(expectedWhenOff("learn"), "learn", linkModes);
     expect(linkModes()).not.toContain(MODE_LABEL.timeline);
+  });
+
+  /* The same, for a mode that is behind the switch and under More: the URL
+     alone puts Timeline back in the bar, as a link. */
+  it("the metadata page retains a gathered experimental mode its URL carries", () => {
+    loose("?mode=timeline");
+    expectBar(expectedWhenOff("timeline"), "timeline", linkModes);
+    expect(linkModes()).toContain(MODE_LABEL.timeline);
   });
 
   it("the metadata page with no mode in its URL draws the default bar", () => {
     loose("");
-    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
+    expectBar(expectedWhenOff(), undefined, linkModes);
   });
 
   /* The old word, `annotations`, and the mode's own word since 261001n,
@@ -295,9 +334,14 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
     it(`the metadata page translates ?mode=${word} before following either axis`, () => {
       loose(`?mode=${word}`);
       const hrefFor = (mode: Mode) => {
-        const link = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a.dock-btn")].find(
+        /* A bar link, or — for Glossary since 2026-10-07 — the link that is
+           its item under More (plan 261007c). The same `modeLinkHref` either
+           way, which is what this case is about. */
+        const inBar = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a.dock-btn")].find(
           (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
         );
+        if (!inBar) openMore(host);
+        const link = inBar ?? moreItems().find((el) => itemLabel(el) === MODE_LABEL[mode]);
         expect(link, `${mode} link`).toBeDefined();
         return new URL((link as HTMLAnchorElement).href).searchParams;
       };
@@ -314,7 +358,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
 
   it("a mode word the URL made up is ignored rather than drawn", () => {
     loose("?mode=nonsense");
-    expect([...linkModes()].sort()).toEqual(labels(expectedWhenOff()));
+    expectBar(expectedWhenOff(), undefined, linkModes);
   });
 });
 
@@ -333,20 +377,28 @@ describe("the fit signature", () => {
      tests/dock-experimental-switch.test.tsx § the fit signature, and
      tests/dock-corner-controls.test.tsx § the fit signature — because they are
      about those controls, not about the modes. */
+  /* **The drawn list, since 2026-10-07** (plan 261007c): the signature is
+     given `splitForMore`'s answer, because the row's width is what the bar
+     draws and five modes are under More. Timeline is one of the five and
+     Referee is not, and each is drawn while it is the open mode — so the pair
+     below still differs by one name at a constant count, in the bar itself. */
+  const drawn = (on: boolean, current: BandMode, margin = false) =>
+    splitForMore(visibleModes(on, current, margin), current);
   const sig = (on: boolean, current: BandMode) =>
-    fitSignature(visibleModes(on, current), current, noop, undefined, null, null, false);
+    fitSignature(drawn(on, current), current, noop, undefined, null, null, false);
 
   it("changes when the visible identities change at a constant count", () => {
-    expect(visibleModes(false, "timeline")).toHaveLength(visibleModes(false, "referee").length);
+    expect(drawn(false, "timeline").drawn).toHaveLength(drawn(false, "referee").drawn.length);
+    expect(drawn(false, "timeline").drawn.map((m) => m.mode)).toContain("timeline");
     expect(sig(false, "timeline")).not.toBe(sig(false, "referee"));
   });
 
   /* Marginalia's toggle pressed is `.on`, which gets its label back at rung 2,
      with the same buttons and the same mode (261001i, GPT Sol's plan review). */
   it("changes when Marginalia's notes are turned on, at the same mode", () => {
-    const off = fitSignature(visibleModes(true, "glossary"), "glossary", noop, undefined, null, null, false, false);
-    const on = fitSignature(visibleModes(true, "glossary", true), "glossary", noop, undefined, null, null, false, true);
-    expect(visibleModes(true, "glossary")).toEqual(visibleModes(true, "glossary", true));
+    const off = fitSignature(drawn(true, "glossary"), "glossary", noop, undefined, null, null, false, false);
+    const on = fitSignature(drawn(true, "glossary", true), "glossary", noop, undefined, null, null, false, true);
+    expect(drawn(true, "glossary")).toEqual(drawn(true, "glossary", true));
     expect(on).not.toBe(off);
   });
 
@@ -485,6 +537,21 @@ describe("marked × experimental, in both arms", () => {
             ? labels([...reader.marked.keys()]).filter((label) => drawn.includes(label))
             : [];
           expect(markedLinkModes().sort(), what).toEqual(expectedMarked.sort());
+          /* And the marks on the modes under More, which are links in a menu
+             rather than in the bar since 2026-10-07 (plan 261007c). */
+          openMore(host);
+          const listed = moreItems().map(itemLabel);
+          expect(listed.length, what).toBeGreaterThanOrEqual(3);
+          const expectedMarkedItems = reader.marked
+            ? labels([...reader.marked.keys()]).filter((label) => listed.includes(label))
+            : [];
+          expect(
+            moreItems()
+              .filter((el) => el.classList.contains("tw:opacity-55"))
+              .map(itemLabel)
+              .sort(),
+            what,
+          ).toEqual(expectedMarkedItems.sort());
         });
       }
     }

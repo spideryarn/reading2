@@ -51,6 +51,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Article, Ideas, IdeasResponse } from "../src/types.js";
 import type { PublicArtefacts, PublicArticle } from "../src/public-types.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 
 /* -------------------------------------------------------------- the probe --
 
@@ -585,12 +586,12 @@ async function open(search = ""): Promise<void> {
 
 const text = (): string => host.textContent ?? "";
 
-function modeButton(label: string): HTMLButtonElement {
-  const found = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-    (b) => b.getAttribute("aria-label") === label,
-  );
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+/* The bar's button, or the mode's item under More where it is one of the
+   five gathered there (plan 261007c) — `modeDoor` opens More to find it. */
+function modeButton(label: string): HTMLElement {
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 function buttonNamed(label: string): HTMLButtonElement {

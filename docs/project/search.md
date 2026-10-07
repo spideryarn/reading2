@@ -46,7 +46,7 @@ empty one:
   block. From outside that looks exactly like *no match*; the log line counts each:
   [§ The counts in the log line](#the-counts-in-the-log-line).
 - **The text in the box was replaced** by a saved run's criterion arriving late:
-  [§ And the fetch](#and-the-fetch-which-can-still-take-the-text-away).
+  [§ And the fetch](../plans/261007g-search-history.md#and-the-fetch-which-can-still-take-the-text-away).
 - **A quick search** shows only paragraphs Jev scored at 0.65 or more (or, when there are none,
   the best eight at 0.4 or more), never a heading, and at most twenty: [§ Quick search](#quick-search-a-meaning-search-in-about-a-second).
 - **On the shelf**, only gistable blocks are indexed for passages (`searchLibrary` in
@@ -91,9 +91,7 @@ and `search_article_words` is the library box's query language pointed at one ar
 `parseQuery` and `fold` from [`src/library-search.ts`](../../src/library-search.ts) rather than
 inventing a second idea of what a quoted phrase means. See [chat-tools.md](chat-tools.md).
 
-Be exact about how far that sharing goes, because an earlier version of this paragraph said "the
-three share `parseQuery`/`fold`/`occurrences`" and **all three halves of that were wrong**. There
-are three word-matchers here and they are deliberately three:
+There are three word-matchers here and they are deliberately three:
 
 | | What "matches" means | Why |
 |---|---|---|
@@ -131,6 +129,8 @@ function doing the same job.
 - [§ The third search](#the-third-search-the-whole-library-at-once) — the shelf's box, and the embedding choice for when it is wanted
 - [§ What is still open](#what-is-still-open) — known gaps and undecided calls
 - [§ See also](#see-also) — neighbours
+- How it came to be — superseded designs, earlier numbers, the bugs along the way — is in
+  [261007g-search-history.md](../plans/261007g-search-history.md)
 - Tests: `tests/search*.test.ts(x)`, `tests/quick-search*.test.ts(x)`, `tests/use-search.test.ts`,
   [`search-hits.test.ts`](../../tests/search-hits.test.ts), [`searches.test.ts`](../../tests/searches.test.ts)
 
@@ -248,9 +248,8 @@ from that shape:
   natural break in Jev's scores, so the floor is a measurement, not a gap: the plan said 0.8, and
   re-measured on the wording actually sent, 0.8 kept about half the meaning search's hits and 0.7
   about three-quarters before the cap, with what lay between nearly all genuine. The cap does real work on queries
-  about the whole piece. On the new wording, up to 94 of 505 blocks cleared 0.7 in the eval.
-  Floors of 0.6 and 0.65 found no more literal targets on its short-topic set and let in more
-  known wrong paragraphs; 0.5 recovered three more target opportunities with more junk.
+  about the whole piece. What else was measured at 0.7 and 0.5 is in
+  [261007g-search-history.md § Quick search](../plans/261007g-search-history.md#quick-search-a-meaning-search-in-about-a-second).
 - **When nothing clears the floor, the best eight at the fallback floor or more are shown
   instead** (`QUICK_FALLBACK_FLOOR`, `QUICK_FALLBACK_HITS`; the numbers in this bullet are for
   0.7 and 0.5, as built), since 2026-10-03, from Greg's report
@@ -261,10 +260,7 @@ from that shape:
   fills 50 of them, with 71% of what it shows judged right, and it cannot change a search that
   finds anything, because it is read only when the list is empty. Its hits print their own scores
   and nothing else marks them; because the score is rounded to an integer, a value just under 0.7
-  can print as 70. What it costs: a word with no clear referent in the piece,
-  or a neighbouring topic the piece does not cover, can now show a few wrong paragraphs where it
-  showed none (13 of 50 new lists held nothing right; 4 of 75 absent and near-miss searches showed
-  something). The same thing typed as a question already scores far higher ("what were the
+  can print as 70. The same thing typed as a question already scores far higher ("what were the
   results?": 0.93). All of it, with the rules passed over, is in
   [261003f](../investigations/261003f-quick-search-category-words-score-under-the-floor.md); the
   plan is [261003o](../plans/261003o-quick-search-falls-back-to-a-lower-floor-when-nothing-clears-it.md).
@@ -310,15 +306,14 @@ Both from Greg's reports of 2026-10-03; the plan is
 > — Greg, `spya-z4bae4`. And, `spya-pra2h3`: *"I don't think that phrase, flesh out, is very clear.
 > Perhaps we could replace it with 'thorough'."*
 
-The button was *flesh out* and kept both rows, unticking the quick one. Now one press does three
+Now one press does three
 things, all in the browser (`onAsk` in
 [`SearchMode.tsx`](../../src/web/modes/search/SearchMode.tsx)), with no server change:
 
 - **It asks the meaning search** for the same words, and ticks it.
 - **It deletes the quick row at once**, not when the meaning search succeeds. If the thorough search
   fails, its row says so and has the retry button; the quick answer is gone, and is a second to ask
-  again. Deleting only on success was the plan's first version, and its review says what that would
-  have needed: a server-side replace, protection from the 30-row trim, and a new column.
+  again.
 - **The new row wears the quick row's colour.** The slot the browser *resolved* for the quick row,
   because an automatic colour is not stored. It is passed to `ask`, painted on the pending row, and
   written with the ordinary colour PATCH once `begin` has said which row the server is using. So the
@@ -533,8 +528,7 @@ be visible while the bar box has focus; they share the same words and typing ses
 - **Where there is no room for the box, nothing is drawn**: a coarse pointer at every width, a
   mouse at fit rung 4, and a window under 732px. Rung 3 keeps a compact 7rem input after the button
   labels disappear. A text box in a fixed bar at the foot of an iPad is where the on-screen keyboard
-  misbehaves, which is why a finger never gets one. Until 2026-10-05 those three cases drew the ⚡
-  alone. Greg, 2026-10-05 (`spya-n8pgy2`):
+  misbehaves, which is why a finger never gets one. Greg, 2026-10-05 (`spya-n8pgy2`):
 
   > if there isn't much room, don't bother showing the quick search icon alone without the input
   > text bar, because the quick search icon does just the same thing as clicking the search icon,
@@ -585,8 +579,7 @@ avoids focusing a newly mounted box on a touch screen:
 - **A hidden rail comes back**, as it does when the Dock opens Search (`arrivalBringsRailBack` in
   [`mode-press.ts`](../../src/web/reader/mode-press.ts)).
 - **Back.** If Search was closed, one Back leaves it. If it was already open on words or meaning,
-  the switch to quick is its own history entry, so Back returns to that view. (The box had this
-  wrong until now: it replaced the entry and Back skipped the view.)
+  the switch to quick is its own history entry, so Back returns to that view.
 - **On a touch screen the panel's box does not take focus** when it mounts for a search already
   sent, so the keyboard does not rise over the hits. The ⚡ still focuses it.
 
@@ -635,10 +628,6 @@ band, from
 > Glossary, etc) we'll want to keep the spine and article, but reuse the middle sections.
 >
 > — Greg, 2026-08-25
-
-This is the third mode to arrive in that slot and it cost the layout **nothing**: no change to
-[`layout.ts`](../../src/web/layout.ts), no new term in the arithmetic, one word in `MODES`, one row
-in `MODES_UI`, one component. That is now enough evidence to stop calling the slot an experiment.
 
 The cost is the one 260826a-chat-mode.md already stated: **the granularity columns are gone while you
 search, not shrunk.** You cannot read the L1 gists and the results list at the same time. It is a
@@ -739,11 +728,9 @@ block and said why, and that much is still true when the words have moved. Marki
 good answer away over a whitespace difference; marking the wrong words is worse than either.
 
 One thing there worth writing down, because it was wrong for about an hour and real data caught it:
-**whether the fallback fired is read from `findQuote`'s own answer and from nothing else.** The first
-version inferred it — a span covering the whole block, plus the quote not matching the block's text —
-and a hit whose quote genuinely *was* the whole block produced exactly the shape the fallback
-produces. The model had retyped a line break as a space, so the string comparison said "different",
-and a perfect match was labelled as having moved. A derived fact that *usually* agrees with a known
+**whether the fallback fired is read from `findQuote`'s own answer and from nothing else.** How the first version got it wrong is in
+[261007g-search-history.md § What a hit is anchored to](../plans/261007g-search-history.md#what-a-hit-is-anchored-to).
+A derived fact that *usually* agrees with a known
 one is the shape of most of [silent-success.md](../reusable/silent-success.md), and the fix is always
 the same: ask the thing that knows.
 
@@ -803,9 +790,7 @@ That is the same rule the glossary follows about the model's difficulty and cent
 >
 > — Greg, 2026-09-12
 
-Until then the card opened wherever on the row you were hovering, and a click opened it too, both
-because the pointer was on the row and because the row button took focus. So it landed over the
-prose the jump had just scrolled to, and on a touch screen it stayed there. Now **the gutter is its
+Now **the gutter is its
 own button beside the row's**, not inside it (a button inside a button is invalid). Hovering the
 gutter, focusing it or pressing it opens the card, and pressing it goes nowhere. Pressing the words
 goes to the passage and opens nothing. The gutter is as tall as the row, so the whole left column is
@@ -859,10 +844,9 @@ second thing wearing it would be a reader having to learn that this particular b
 something else. Two channels, two colours, and neither carries its meaning by colour alone: the
 confidence prints its number, the place bar has a name.
 
-**There is no legend above the list, since 2026-10-03.** There was one: a line under the sort bar
-with miniature specimens of both marks, there because a hover-only explanation is one nobody on a
-touchscreen ever sees. On a landscape iPad it wrapped to three lines and, with the rest of the
-panel's furniture, left the results a window shorter than one result. Greg, 2026-10-03 (report
+**There is no legend above the list, since 2026-10-03.** What it was, and why it went, is in
+[261007g-search-history.md § Where in the article](../plans/261007g-search-history.md#where-in-the-article-on-every-result).
+Greg, 2026-10-03 (report
 `spya-eqcbay`):
 
 > And there's also a blurb explaining, you know, what the scoring and the visual bars are. Let's
@@ -891,9 +875,6 @@ hit looks exactly like a passage the model chose not to return, and "nothing in 
 that" is a legitimate answer a reader sees. Textbook [silent-success](../reusable/silent-success.md),
 handled by making it countable.
 
-*(This heading said "the four counts" until 2026-08-26, while `Dropped` carried five and the
-streaming work was about to add another. A number in a heading is a hostage to the next change.)*
-
 | Count | What it means when it climbs |
 |---|---|
 | `unknownIds` | the model is citing block ids the article does not have — the id contract has stopped working |
@@ -911,10 +892,9 @@ private as a selection — it is what somebody was looking for. See [logging.md]
 **Since 2026-08-26.** Search asks for one JSON object and used to wait for all of it, which is
 thirty to sixty seconds of spinner. It now shows each passage as it lands.
 
-The reason this took a second look is worth keeping, because the first answer was confidently wrong.
-The argument for not streaming was: *a search result is a list, not prose — half a JSON array is a
-syntax error, so there is nothing to paint until it parses*. The first half is true. The conclusion
-is not. Hits come back **best first**, and a *complete hit object* is renderable the moment its
+Why streaming was first thought impossible is in
+[261007g-search-history.md § The results arrive one at a time](../plans/261007g-search-history.md#the-results-arrive-one-at-a-time).
+Hits come back **best first**, and a *complete hit object* is renderable the moment its
 closing brace arrives. The apparent alternative — asking for JSON Lines instead — would have changed
 the prompt and therefore the ranking, which is a question about result quality and belongs in
 [`evals/`](../../evals/README.md); it is also unnecessary. **Nothing about the prompt changed.**
@@ -931,9 +911,7 @@ it is what a future change must not quietly break:
 > still decides what gets stored. The extractor's output is a preview. A hit it misses, splits
 > wrongly, or never completes costs a **late** hit — never a wrong one.
 
-That claim was false for about an hour after it was first written: the extractor took *the first
-array one level inside the object*, so a reply of `{"notes":[…],"hits":[]}` would have previewed a
-hit the stored result did not contain. Found by cross-model review. It keys on the `hits` key now.
+It keys on the `hits` key now.
 The lesson generalises — **a comment claiming a safety property is not the property**, and this one
 was the entire justification for the design.
 
@@ -965,9 +943,7 @@ show. See [260826r-sse-stall-recovery.md](../plans/260826r-sse-stall-recovery.md
 Meaning-searches are stored in Postgres (`search_runs`, via
 [`src/store/pg-searches.ts`](../../src/store/pg-searches.ts)) — reader state beside the article
 rather than in it, the same shape as [`comments.ts`](../../src/comments.ts) and
-[`chat.ts`](../../src/chat.ts). Until 2026-09-05 it was a file, `data/<slug>/searches.json`, written
-atomically behind a serialised read-modify-write queue; that filesystem half was deleted along with
-the rest of the store. Greg chose to save these over keeping nothing.
+[`chat.ts`](../../src/chat.ts). Greg chose to save these over keeping nothing.
 
 The reason is the criticism the previous version earned in its own docs:
 
@@ -994,8 +970,7 @@ paid answer the reader was waiting on
 >
 > — Greg, 2026-08-26
 
-Before this, a saved search was a thing you *opened*: pressing it replaced the list with its results
-and `?run=` named the one that was open. Now every saved search is on screen all the time with a box
+Now every saved search is on screen all the time with a box
 beside it, several can be on at once, and their results are one list.
 
 Four decisions, all Greg's, taken together as one design.
@@ -1044,16 +1019,10 @@ The rules are drawn as a gradient inside the mark's own box, in `padding-bottom`
 mark's background downward into the leading **without touching the line box**, so switching a search
 on cannot reflow the article. The band caps at 6px and the stripes inside it get thinner rather than
 the band growing; past **six** they are not drawn at all (`HUE_STRIPES` in
-[`annotate.ts`](../../src/web/annotate.ts)). It was four, and a GPT Sol review pointed out that the
-justification for that — a fifth stripe would be sub-pixel — was simply arithmetic nobody had done:
-six stripes in six pixels is one pixel each. The bar down the paragraph has no such cap, because it
+[`annotate.ts`](../../src/web/annotate.ts)). The bar down the paragraph has no such cap, because it
 is as tall as the paragraph and can show all eight. There is a `box-decoration-break: slice` on that rule, and the story behind that choice is worth keeping
-because it is a good example of a plausible rationale that was simply untrue. The comment beside it
-claimed the default, `slice`, would draw a bottom-anchored stripe once at the foot of the last line
-and leave the first line of a wrapped phrase bare. A GPT Sol review disputed it; a browser pass
-toggled the property live on a real wrapped match and pixel-diffed the result. **Chrome renders the
-two identically** — 12 differing pixels out of 42,780 across the line boundary, which is
-antialiasing.
+because it is a good example of a plausible rationale that was simply untrue. It is in
+[261007g-search-history.md § An outline](../plans/261007g-search-history.md#an-outline-since-2026-10-03).
 
 The reason is what to remember: the stripe is sized and positioned in *percentages*, which resolve
 against each fragment's own box. `slice` only differs where a declaration reaches for the unwrapped
@@ -1085,8 +1054,7 @@ edge. The swatch and the edge are at full strength whether or not the row is tic
 >
 > — Greg, `spya-fwcwun`, 2026-10-03
 
-Until then the edge was at 30% on an unticked row and there was no swatch, so an unticked row barely
-said its colour at all. The swatch is decoration inside the row's own button, not a control; the
+The swatch is decoration inside the row's own button, not a control; the
 palette icon is still how the colour is changed.
 
 ### Asking the next question before the last one answers
@@ -1122,10 +1090,8 @@ many different questions run at once; the reasons, and what was passed over, are
 >
 > — Greg, 2026-08-27
 
-The set stayed. What changed is which gesture builds it. Until now the box and the words beside it
-were one `<label>`, which is the right thing for a checkbox and its text and the wrong thing for a
-list: every press added or removed, so getting from four ticked searches to *just this one* was four
-presses, and the common case was paying for the rare one.
+What the row did before this is in
+[261007g-search-history.md § Pressing the row](../plans/261007g-search-history.md#pressing-the-row-is-not-the-same-as-pressing-the-box).
 
 Now there are two controls on the row, and the difference between them is the difference between
 **and** and **only**:
@@ -1324,9 +1290,7 @@ half a feature drawn somewhere they cannot see. The pill is one press away.
 > — Greg, 2026-08-26
 
 A third option beside *by place* and *by confidence*. It sorts exactly as *by place* does and
-**hides** every passage the model was less than `?conf=` sure of — 30 to start with, on a slider.
-It was 50, the midpoint of the scale the rows print, until 2026-09-15, when this order became the
-default and every prioritised bar in the app was lowered so that most entries come in (below). 30
+**hides** every passage the model was less than `?conf=` sure of — 30 to start with, on a slider. 30
 is chosen so that a hit the model rated *worth a look* is not hidden by default — and not because
 any number here means *more likely than not*: this confidence is
 [not a probability](#what-the-number-means-which-printing-it-does-not-say), and a starting position
@@ -1340,11 +1304,10 @@ changed with them is that this panel gained the **foot line** saying how many ar
 did not have and which was the only thing Greg asked for that it was missing. (Since 2026-10-03 it
 is printed here only when something is hidden: § The four ways a filter lies.)
 
-**The reference-list argument this section used to make did not survive contact**, and it is worth
-naming rather than quietly deleting. It ran: a glossary shows every term and lifts the ones that
-clear the bar to the top, because a glossary is a reference list and *a term you cannot find is a
-term you have lost*; a search is the opposite errand, where the reader is hunting and what they want
-done with a weak match is for it to go away. It treated hiding as loss. The bar is on screen with
+The reference-list argument this section used to make, and why it did not survive, is in
+[261007g-search-history.md § Prioritised](../plans/261007g-search-history.md#prioritised-place-order-with-a-bar-under-it).
+
+The bar is on screen with
 its number, the foot line says how many it is holding back, and dragging it left is one gesture — a
 result is not lost when the control that hid it is the control in your hand.
 
@@ -1563,19 +1526,10 @@ matcher held focus. Greg met it as a bug and asked for the behaviour removed. Ea
 tab stop now, and Enter, Space or a click selects. The full reasoning, and what it costs, is in
 [`Dock.tsx`](../../src/web/Dock.tsx) § the mode switch.
 
-### And the fetch, which can still take the text away
-
-A saved run's criterion arrives from the server. Land on `?mode=search&run=<id>` and for the length of
-one request `runs` is `[]`, so the criterion is empty — and the box is now focused, so **the reader
-can already be typing when the answer lands**, at which point the effect that fills the box from the
-criterion deletes what they wrote. The autofocus did not create that race so much as make it
-reachable.
-
-A `dirty` ref is the guard: once the reader has touched the box, the criterion stops being allowed to
-overwrite it. Opening a *different* saved run clears the flag, because that is a deliberate act that
-plainly means "show me this one". Escape sets it too — an emptied box is the reader's as much as a
-typed one, and a criterion landing afterwards would refill something they had just cleared on
-purpose.
+The race a saved run's criterion used to run against the reader's typing, and the `dirty` ref that
+guarded it, are in
+[261007g-search-history.md § And the fetch](../plans/261007g-search-history.md#and-the-fetch-which-can-still-take-the-text-away);
+both went with the several-searches change.
 
 `order` is a separate parameter from the glossary's `?sort=` rather than one shared one with five
 legal values, because two modes' orderings have nothing in common but the word — and
@@ -1705,9 +1659,7 @@ Two things travel between the two features, and they are what make the handoff w
 
 What they do **not** share is the ranking. `ts_rank_cd` weighs term density and proximity for the
 shelf's box; the model-driven `confidence` in this document is a third thing again, which is why
-`LibraryHit` deliberately has no `confidence` and no `reasoning` field. (Until 2026-09-05 the shelf's
-box had a second ranking too, a filesystem scan that counted matches and damped by length; that
-implementation is gone.) There is nothing for a text index to be uncertain about and nobody to explain anything.
+`LibraryHit` deliberately has no `confidence` and no `reasoning` field. There is nothing for a text index to be uncertain about and nobody to explain anything.
 
 Meaning-based search across the library — embeddings, pgvector, a blended list — is **deferred**, by
 Greg on 2026-08-26. The research is in [260826e-postgres-search.md](../research/260826e-postgres-search.md); the
@@ -1715,18 +1667,8 @@ short version is that Supabase gives you `ts_rank` rather than BM25, `pgvector` 
 enabled, and Anthropic has no embeddings API so it would mean a second vendor.
 
 **When it stops being deferred, the embedding model is already chosen and it was measured rather
-than argued.** Four candidates reachable through OpenRouter — `baai/bge-m3`, `voyageai/voyage-4-lite`,
-`voyageai/voyage-4` and `openai/text-embedding-3-small` — were run against **this shelf's own 495
-paragraphs** with 18 reader-style questions, judged blind on a pooled union so every arm was scored
-against identical judgements, and judged twice by two different models to check the verdict was not
-one judge's opinion.
-
-Two findings, and only one of them is a difference. **`bge-m3` is genuinely behind** — every measure,
-both judges, no interval near zero, and nothing relevant at all in its top five on three of the
-eighteen queries where the others fail on at most one. That was the cheapest option and the
-originally preferred one. **`voyage-4` and `3-small` cannot be separated**: identical precision@5,
-six per-query wins each, every bootstrap interval straddling zero. At this sample size the harness
-says "too close to call", and it is written to be able to say that.
+than argued.** How the four candidates were run, and why `voyage-4` and `3-small` came out tied, is
+in [261007g-search-history.md § The third search](../plans/261007g-search-history.md#the-third-search-the-whole-library-at-once).
 
 So the tie-break decides, and it is stated rather than implied: `voyage-4` is 1024 dims against 1536
 and bills to OpenRouter credits, where Greg wanted the billing, against `3-small`'s BYOK to a
