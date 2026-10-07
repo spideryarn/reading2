@@ -110,6 +110,11 @@ Closing this needs OpenRouter's own per-generation list. `GET /api/v1/activity` 
 and its time. The gateway sends `X-Title: Spideryarn` on the chat wires. The Messages wire, the
 Overseer and the evals' raw fetches send no title, so the title alone would not separate them.
 
+**Left open on purpose.** Greg, 2026-10-07: *"If it's easy to record, great. If it's
+complex/hassle don't worry too much about it."* Recording new spend is now enforced (plan
+261007o); naming the last ~$38 would need his manual export, so it is not pursued unless he
+exports it.
+
 ## Before October: $106
 
 Evals that went unrecorded in September come to about $30 (range $24 to $36). Of that, $7.7 is
