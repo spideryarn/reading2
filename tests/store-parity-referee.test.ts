@@ -84,7 +84,7 @@ import { CLAIMS_SWEPT } from "../src/store/pg-referee-claims.js";
 import type { DivergingResult, SingleResult } from "../src/referee-criteria.js";
 import type { Comment } from "../src/types.js";
 import { CRITERION_SWEPT } from "../src/referee-criteria-store.js";
-import { MAX_CRITERIA, type SavedCriterion } from "../src/saved-criteria.js";
+import type { SavedCriterion } from "../src/saved-criteria.js";
 import type { CommentStore, RefereeClaimsStore, RefereeCriteriaStore } from "../src/store/contracts.js";
 import {
   CLAIMS_ORPHAN_GRACE_MS,
@@ -489,24 +489,29 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
     expect(at(13)).toEqual(at(12));
   });
 
-  it("never trims a criterion that is still being answered", async () => {
+  it("never drops a criterion that is still being answered, or any other", async () => {
     /* Sweep 5, D1 (docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md).
-       A retry keeps its original `created_at`, so the oldest criterion of a full
-       history can be the one that is `pending`. The trim did not look at status:
-       one more `begin` deleted it, its fenced `finish` updated nothing, and the
-       answer the referee was waiting on was gone. Search's twin of this test is
-       in tests/store-searches-pg.test.ts. */
+       A retry keeps its original `created_at`, so the oldest criterion of a long
+       history can be the one that is `pending`. The trim to twenty did not look
+       at status: one more `begin` deleted it, its fenced `finish` updated
+       nothing, and the answer the referee was waiting on was gone. There has
+       been no trim at all since 2026-10-07 (an add at `MAX_CRITERIA` is refused
+       instead, tests/referee-routes-postgres.test.ts), and this keeps the
+       retry half of the story: past the old cap of twenty, nothing is dropped
+       and the retry still lands. Search's twin of this test, where the trim
+       remains, is in tests/store-searches-pg.test.ts. */
     const store = pgRefereeCriteriaStore;
     const start = Date.parse("2026-08-01T00:00:00.000Z");
     const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
+    const PAST_THE_OLD_CAP = 25;
 
     const oldest = await store.begin(SLUG, HASH, "the one that failed", { kind: "single" }, undefined, at(0));
     await store.finish(SLUG, oldest.row.id, { status: "error", error: "the provider refused" }, oldest.attempt);
-    for (let i = 1; i < MAX_CRITERIA; i++) {
+    for (let i = 1; i < PAST_THE_OLD_CAP; i++) {
       const { row, attempt } = await store.begin(SLUG, HASH, `criterion ${i}`, { kind: "single" }, undefined, at(i));
       await store.finish(SLUG, row.id, { status: "done", results: [] }, attempt);
     }
-    expect(await store.load(SLUG)).toHaveLength(MAX_CRITERIA);
+    expect(await store.load(SLUG)).toHaveLength(PAST_THE_OLD_CAP);
 
     // Retried: the same row, the same date, waiting again.
     const retry = await store.begin(SLUG, HASH, "the one that failed", { kind: "single" }, oldest.row.id, at(100));
@@ -518,8 +523,8 @@ describe("the Postgres store, on Referee mode", { timeout: 30_000 }, () => {
 
     const kept = await store.load(SLUG);
     expect(kept.find((c) => c.id === oldest.row.id)?.status).toBe("pending");
-    // The cap is twenty, plus however many older ones are still running.
-    expect(kept).toHaveLength(MAX_CRITERIA + 1);
+    // Every one of them, and the one just begun.
+    expect(kept).toHaveLength(PAST_THE_OLD_CAP + 1);
     // And the retry can still land its answer.
     const landed = await store.finish(SLUG, oldest.row.id, { status: "done", results: [] }, retry.attempt);
     expect(landed?.status).toBe("done");

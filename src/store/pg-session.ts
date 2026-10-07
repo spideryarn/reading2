@@ -804,8 +804,10 @@ export function pgStoreSession(options: PgStoreSessionOptions): StoreSession {
              this transaction. `settleIn` would otherwise ask `finishStepRun` to
              end a row that is already `done`, its fence would refuse, and a
              perfectly good commit would roll back — which is reachable, since
-             `transitionAfter` returns an `end` with a `cancelled` or
-             `interrupted` ending after a step that ran to completion. */
+             `transitionAfter` returns an `end` with a `cancelled` ending after
+             a step that ran to completion when a Stop on this instance landed
+             with steps still to run. (It returned an `interrupted` one too,
+             until our own deadline stopped committing at all on 2026-10-07.) */
           const { settlement, announce: what } = await settleIn(tx, ctx.slug, transition);
           announced = what;
           return settlement;

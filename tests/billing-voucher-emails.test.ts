@@ -113,6 +113,8 @@ const CREATOR_B = mint();
 const emailOf = (owner: string) => `vmail-${owner}@example.invalid`;
 const creatorEmail = (owner: string) => `creator-${owner}@example.invalid`;
 const SECRET_NOTE = "SECRET-NOTE-do-not-send";
+/** A recipient's name that must reach their email and nothing else: no log line, no notice. */
+const SECRET_NAME = "SECRET-NAME-Zebedee";
 
 const PROD = { VERCEL_ENV: "production", RESEND_API_KEY: "re_test_key" } as const;
 
@@ -205,9 +207,10 @@ async function givenVoucher(
   createdBy = CREATOR_A,
   note: string | null = SECRET_NOTE,
   recipientNote: string | null = null,
+  recipientName: string | null = null,
 ): Promise<{ id: string; delivery: string }> {
   const made = await createVoucher(
-    { id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote },
+    { id: randomUUID(), email: emailOf(owner), articles: n, note, recipientNote, recipientName },
     createdBy,
   );
   if (made.kind !== "created") throw new Error(`expected a new voucher, got ${made.kind}`);
@@ -882,7 +885,7 @@ describe("the recipient's email is written for who they are", () => {
       expect(await giftAudienceFor(emailOf(READER), { lookup: failed })).toEqual({ kind: "invite" });
 
       const made = await createVoucher(
-        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null, recipientNote: null },
+        { id: randomUUID(), email: emailOf(READER), articles: 2, note: null, recipientNote: null, recipientName: null },
         CREATOR_A,
         { audience: failed },
       );
@@ -973,6 +976,241 @@ describe("the recipient's email is written for who they are", () => {
   });
 });
 
+/* ------------------------------------------- the whole email, pinned -- */
+
+/* **Recorded against the renderer as it was before the recipient's name
+   existed** (plan 261007f, Sol's F8), and not edited since: with no name the
+   email must be byte for byte what it was. Nothing else here holds the whole
+   text and HTML. Only `render`'s one line changed when the renderer's
+   arguments became an object. */
+describe("with no name, the gift email is exactly what it was before names existed", () => {
+  const READER_FREE: GiftAudience = {
+    kind: "reader",
+    plan: { kind: "free", limit: articles(3), wallUsed: points(0), waiting: articles(0) },
+  };
+  const NOTE = "I read your piece.\n— Greg";
+  const render = (audience: GiftAudience, note: string | null) =>
+    giftMessage(20, audience, { recipientName: null, recipientNote: note });
+
+  it("to somebody new, without a note", () => {
+    const mail = render({ kind: "invite" }, null);
+    expect(mail.text).toMatchInlineSnapshot(`
+      "A gift of 20 free articles
+
+      You have been given 20 free articles on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.
+
+      Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.
+
+      Sign in or create an account: https://www.spideryarn.com/login
+
+      They come on top of the three articles every free account starts with. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.
+
+      --
+      Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com."
+    `);
+    expect(mail.html).toMatchInlineSnapshot(`
+      "<!doctype html>
+      <html lang="en">
+      <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="dark">
+      <meta name="supported-color-schemes" content="dark">
+      <title>A gift of 20 free articles on Spideryarn</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#0a0a0a;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+      <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
+      <tr><td style="padding:0 0 32px 0;">
+      <img src="https://www.spideryarn.com/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+      <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+      </td></tr>
+      <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">A gift of 20 free articles</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">You have been given 20 free articles on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 28px 0;">Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.</td></tr>
+      <tr><td style="padding:0 0 28px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="https://www.spideryarn.com/login" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">Sign in or create an account</a></td></tr></table>
+      </td></tr>
+      <tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">They come on top of the three articles every free account starts with. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.</td></tr>
+      <tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
+      </table>
+      </td></tr>
+      </table>
+      </body>
+      </html>
+      "
+    `);
+  });
+
+  it("to somebody new, with a note", () => {
+    const mail = render({ kind: "invite" }, NOTE);
+    expect(mail.text).toMatchInlineSnapshot(`
+      "A gift of 20 free articles
+
+      I read your piece.
+      — Greg
+
+      You have been given 20 free articles on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.
+
+      Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.
+
+      Sign in or create an account: https://www.spideryarn.com/login
+
+      They come on top of the three articles every free account starts with. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.
+
+      --
+      Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com."
+    `);
+    expect(mail.html).toMatchInlineSnapshot(`
+      "<!doctype html>
+      <html lang="en">
+      <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="dark">
+      <meta name="supported-color-schemes" content="dark">
+      <title>A gift of 20 free articles on Spideryarn</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#0a0a0a;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+      <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
+      <tr><td style="padding:0 0 32px 0;">
+      <img src="https://www.spideryarn.com/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+      <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+      </td></tr>
+      <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">A gift of 20 free articles</td></tr>
+      <tr><td style="padding:0 0 20px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="font-size:16px;line-height:1.6;color:#f5f5f5;font-style:italic;border-left:3px solid #DB8A45;padding:2px 0 2px 14px;"><em>I read your piece.<br>— Greg</em></td></tr></table></td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">You have been given 20 free articles on Spideryarn, for this email address. Spideryarn is a reading tool: add an article or a paper, and it helps you read it deeply and efficiently. It highlights, annotates and explains, but keeps you in the text itself.</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 28px 0;">Sign in, or create an account, with this same address. The articles are added to your free allowance when you do, with no code to type in.</td></tr>
+      <tr><td style="padding:0 0 28px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="https://www.spideryarn.com/login" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">Sign in or create an account</a></td></tr></table>
+      </td></tr>
+      <tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">They come on top of the three articles every free account starts with. If you use Continue with Google, choose the Google account for this address. If you were not expecting this, you can ignore this email.</td></tr>
+      <tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
+      </table>
+      </td></tr>
+      </table>
+      </body>
+      </html>
+      "
+    `);
+  });
+
+  it("to an existing reader, without a note", () => {
+    const mail = render(READER_FREE, null);
+    expect(mail.text).toMatchInlineSnapshot(`
+      "A gift of 20 free articles
+
+      You have been given 20 free articles on Spideryarn, for your account with this address.
+
+      Before this gift you had 3 articles left on your free allowance. With it, you have 23 articles.
+
+      They are added the next time you open Spideryarn while signed in, with nothing to type in.
+
+      Open Spideryarn: https://www.spideryarn.com/
+
+      If you were not expecting this, you can ignore this email.
+
+      --
+      Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com."
+    `);
+    expect(mail.html).toMatchInlineSnapshot(`
+      "<!doctype html>
+      <html lang="en">
+      <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="dark">
+      <meta name="supported-color-schemes" content="dark">
+      <title>A gift of 20 free articles on Spideryarn</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#0a0a0a;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+      <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
+      <tr><td style="padding:0 0 32px 0;">
+      <img src="https://www.spideryarn.com/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+      <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+      </td></tr>
+      <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">A gift of 20 free articles</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">You have been given 20 free articles on Spideryarn, for your account with this address.</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">Before this gift you had 3 articles left on your free allowance. With it, you have 23 articles.</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 28px 0;">They are added the next time you open Spideryarn while signed in, with nothing to type in.</td></tr>
+      <tr><td style="padding:0 0 28px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="https://www.spideryarn.com/" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">Open Spideryarn</a></td></tr></table>
+      </td></tr>
+      <tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">If you were not expecting this, you can ignore this email.</td></tr>
+      <tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
+      </table>
+      </td></tr>
+      </table>
+      </body>
+      </html>
+      "
+    `);
+  });
+
+  it("to an existing reader, with a note", () => {
+    const mail = render(READER_FREE, NOTE);
+    expect(mail.text).toMatchInlineSnapshot(`
+      "A gift of 20 free articles
+
+      I read your piece.
+      — Greg
+
+      You have been given 20 free articles on Spideryarn, for your account with this address.
+
+      Before this gift you had 3 articles left on your free allowance. With it, you have 23 articles.
+
+      They are added the next time you open Spideryarn while signed in, with nothing to type in.
+
+      Open Spideryarn: https://www.spideryarn.com/
+
+      If you were not expecting this, you can ignore this email.
+
+      --
+      Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to hello@spideryarn.com."
+    `);
+    expect(mail.html).toMatchInlineSnapshot(`
+      "<!doctype html>
+      <html lang="en">
+      <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="color-scheme" content="dark">
+      <meta name="supported-color-schemes" content="dark">
+      <title>A gift of 20 free articles on Spideryarn</title>
+      </head>
+      <body style="margin:0;padding:0;background-color:#0a0a0a;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+      <tr><td align="center" style="padding:40px 16px;">
+      <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:480px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#e5e5e5;">
+      <tr><td style="padding:0 0 32px 0;">
+      <img src="https://www.spideryarn.com/apple-touch-icon.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border:0;">
+      <span style="display:inline-block;vertical-align:middle;margin-left:10px;font-family:Georgia,'Times New Roman',serif;font-size:22px;color:#DB8A45;">Spideryarn</span>
+      </td></tr>
+      <tr><td style="font-size:22px;line-height:1.3;font-weight:600;color:#f5f5f5;padding:0 0 16px 0;">A gift of 20 free articles</td></tr>
+      <tr><td style="padding:0 0 20px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="font-size:16px;line-height:1.6;color:#f5f5f5;font-style:italic;border-left:3px solid #DB8A45;padding:2px 0 2px 14px;"><em>I read your piece.<br>— Greg</em></td></tr></table></td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">You have been given 20 free articles on Spideryarn, for your account with this address.</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">Before this gift you had 3 articles left on your free allowance. With it, you have 23 articles.</td></tr>
+      <tr><td style="font-size:16px;line-height:1.6;padding:0 0 28px 0;">They are added the next time you open Spideryarn while signed in, with nothing to type in.</td></tr>
+      <tr><td style="padding:0 0 28px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td bgcolor="#DB8A45" style="background-color:#DB8A45;border-radius:6px;padding:12px 24px;"><a href="https://www.spideryarn.com/" style="color:#0a0a0a;font-size:16px;font-weight:600;text-decoration:none;display:inline-block;">Open Spideryarn</a></td></tr></table>
+      </td></tr>
+      <tr><td style="font-size:14px;line-height:1.6;color:#a3a3a3;padding:0 0 28px 0;">If you were not expecting this, you can ignore this email.</td></tr>
+      <tr><td style="font-size:13px;line-height:1.6;color:#a3a3a3;border-top:1px solid #262626;padding:20px 0 0 0;">Spideryarn helps you read deeply and efficiently. Questions? Reply to this email, or write to <a href="mailto:hello@spideryarn.com" style="color:#a3a3a3;">hello@spideryarn.com</a>.</td></tr>
+      </table>
+      </td></tr>
+      </table>
+      </body>
+      </html>
+      "
+    `);
+  });
+});
+
 /* ------------------------------------------------- logs, and the route -- */
 
 describe("a note to them, from whoever gave the gift", () => {
@@ -987,7 +1225,7 @@ describe("a note to them, from whoever gave the gift", () => {
 
   it("sits under the heading, above everything we wrote, in both audiences' text and HTML", () => {
     for (const audience of [{ kind: "invite" } as const, READER_FREE]) {
-      const mail = giftMessage(20, audience, NOTE);
+      const mail = giftMessage(20, audience, { recipientName: null, recipientNote: NOTE });
       expect(mail.text).toContain("Great to meet you today!\nSee <script>alert(1)</script>");
       expect(mail.text.indexOf("Great to meet you")).toBeLessThan(mail.text.indexOf("You have been given"));
       expect(mail.text.indexOf("Great to meet you")).toBeGreaterThan(mail.text.indexOf("A gift of 20"));
@@ -1006,7 +1244,7 @@ describe("a note to them, from whoever gave the gift", () => {
     /* Greg, 2026-10-02: "Maybe just italicise the note from me" — the label
        went, and he signs the note himself. */
     for (const audience of [{ kind: "invite" } as const, READER_FREE]) {
-      const mail = giftMessage(20, audience, "Hello.\n— Greg");
+      const mail = giftMessage(20, audience, { recipientName: null, recipientNote: "Hello.\n— Greg" });
       expect(mail.text).toContain("A gift of 20 free articles\n\nHello.\n— Greg\n\nYou have been given");
       expect(mail.html).toContain("<em>Hello.<br>— Greg</em>");
       expect(mail.html).toMatch(/<td style="[^"]*font-style:italic[^"]*"><em>Hello\.<br>— Greg<\/em><\/td>/);
@@ -1017,7 +1255,7 @@ describe("a note to them, from whoever gave the gift", () => {
   it("keeps markup and entities inside the italic wrapper as literal note text", () => {
     const note = `</em><img src=x onerror="alert('x')"> & &lt;em&gt;`;
     for (const audience of [{ kind: "invite" } as const, READER_FREE]) {
-      const mail = giftMessage(20, audience, note);
+      const mail = giftMessage(20, audience, { recipientName: null, recipientNote: note });
       expect(mail.text).toContain(`\n\n${note}\n\n`);
       expect(mail.html).toContain(
         "<em>&lt;/em&gt;&lt;img src=x onerror=&quot;alert(&#39;x&#39;)&quot;&gt; &amp; &amp;lt;em&amp;gt;</em>",
@@ -1033,7 +1271,7 @@ describe("a note to them, from whoever gave the gift", () => {
     const controls = [0, 13, 0x2028, 0x2029, 9, 0x7f, 0x85].map((c) => String.fromCharCode(c));
     const [nul, cr, ls, ps, tab, del, nextLine] = controls;
     const raw = `one${cr}\ntwo${cr}three${ls}four${ps}five${nul}six${tab}seven${del}eight${nextLine}nine\n\n\n\nten`;
-    const mail = giftMessage(3, { kind: "invite" }, raw);
+    const mail = giftMessage(3, { kind: "invite" }, { recipientName: null, recipientNote: raw });
     expect(mail.text).toContain("one\ntwo\nthree\nfour\nfive six seven eight nine\n\nten");
     expect(mail.html).toContain("one<br>two<br>three<br>four<br>five six seven eight nine<br><br>ten");
     for (const c of controls) {
@@ -1041,12 +1279,12 @@ describe("a note to them, from whoever gave the gift", () => {
       expect((mail.html ?? "").includes(c)).toBe(false);
     }
     /* Blank once cleaned is no note at all. */
-    expect(giftMessage(3, { kind: "invite" }, `${nul} ${cr}\n`)).toEqual(giftMessage(3));
+    expect(giftMessage(3, { kind: "invite" }, { recipientName: null, recipientNote: `${nul} ${cr}\n` })).toEqual(giftMessage(3));
   });
 
   it("leaves no empty block when there is no note", () => {
     const without = giftMessage(20);
-    const blank = giftMessage(20, { kind: "invite" }, null);
+    const blank = giftMessage(20, { kind: "invite" }, { recipientName: null, recipientNote: null });
     expect(blank).toEqual(without);
     expect(without.html).not.toContain("border-left");
   });
@@ -1162,6 +1400,206 @@ describe("a note to them, from whoever gave the gift", () => {
   });
 });
 
+/* ------------------------------------------------------- their name -- */
+
+describe("their name, which opens the email", () => {
+  /* Greg, 2026-10-06 (spya-vc6pnm): "the gift voucher would say something
+     like, Dear so-and-so. So maybe it needs a name field as well." Plan
+     261007f stage 1. Somebody else's text in a stranger's inbox, as the note is. */
+  const READER_FREE: GiftAudience = {
+    kind: "reader",
+    plan: { kind: "free", limit: articles(3), wallUsed: points(0), waiting: articles(0) },
+  };
+  const BOTH = [{ kind: "invite" } as const, READER_FREE];
+  const SUBJECT = "A gift of 20 free articles on Spideryarn";
+  const GREETING_ROW = (inner: string) =>
+    `<tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">${inner}</td></tr>\n`;
+
+  it("is its own plain line under the heading and above the note, in both audiences' text and HTML", () => {
+    for (const audience of BOTH) {
+      const mail = giftMessage(20, audience, { recipientName: "Ada", recipientNote: "Hello.\n— Greg" });
+      expect(mail.text).toContain("A gift of 20 free articles\n\nDear Ada,\n\nHello.\n— Greg\n\nYou have been given");
+      const html = mail.html ?? "";
+      /* Directly after the heading's row, directly before the note's. */
+      expect(html).toContain(`A gift of 20 free articles</td></tr>\n${GREETING_ROW("Dear Ada,")}<tr><td style="padding:0 0 20px 0;">`);
+      expect(html.indexOf("Dear Ada,")).toBeLessThan(html.indexOf("<em>Hello."));
+      expect(html.indexOf("<em>Hello.")).toBeLessThan(html.indexOf("You have been given"));
+      /* Plain, not in the note's italics. */
+      expect(html).not.toMatch(/<em>[^<]*Dear Ada/);
+      expect(mail.subject).toBe(SUBJECT);
+    }
+  });
+
+  it("still reads with a name and no note", () => {
+    for (const audience of BOTH) {
+      const mail = giftMessage(20, audience, { recipientName: "Ada", recipientNote: null });
+      expect(mail.text).toContain("A gift of 20 free articles\n\nDear Ada,\n\nYou have been given");
+      expect(mail.html).toContain(`${GREETING_ROW("Dear Ada,")}<tr><td style="font-size:16px;line-height:1.6;padding:0 0 16px 0;">You have been given`);
+      expect(mail.html).not.toContain("border-left");
+    }
+  });
+
+  it("keeps the name and the note apart: each lands in its own place", () => {
+    /* Two distinct values, so passing them the wrong way round fails here
+       (Sol's F9). */
+    for (const audience of BOTH) {
+      const mail = giftMessage(20, audience, { recipientName: "NAME-VALUE", recipientNote: "NOTE-VALUE" });
+      expect(mail.text).toContain("\n\nDear NAME-VALUE,\n\nNOTE-VALUE\n\n");
+      expect(mail.html).toContain(GREETING_ROW("Dear NAME-VALUE,"));
+      expect(mail.html).toContain("<em>NOTE-VALUE</em>");
+      expect(mail.html).not.toContain("Dear NOTE-VALUE");
+      expect(mail.html).not.toContain("<em>NAME-VALUE");
+    }
+  });
+
+  it("arrives as text when it has markup in it, and never reaches the subject", () => {
+    const name = `<b>Ada</b> & "O'Brien" <a href="https://evil.example">x</a>`;
+    for (const audience of BOTH) {
+      const mail = giftMessage(20, audience, { recipientName: name, recipientNote: null });
+      expect(mail.text).toContain(`\n\nDear ${name},\n\n`);
+      expect(mail.html).toContain(
+        GREETING_ROW(
+          "Dear &lt;b&gt;Ada&lt;/b&gt; &amp; &quot;O&#39;Brien&quot; &lt;a href=&quot;https://evil.example&quot;&gt;x&lt;/a&gt;,",
+        ),
+      );
+      expect(mail.html).not.toContain("<b>Ada");
+      expect(mail.html).not.toContain('href="https://evil.example"');
+      expect(mail.subject).toBe(SUBJECT);
+      expect(mail.html).toContain(`<title>${SUBJECT}</title>`);
+    }
+  });
+
+  it("is one line where it is rendered: a line break or a control character becomes a space", () => {
+    /* Built from char codes so this file holds no raw control byte. */
+    const controls = [0, 10, 13, 9, 0x7f, 0x85, 0x2028, 0x2029].map((c) => String.fromCharCode(c));
+    const [nul, lf, cr, tab, , , ls] = controls;
+    const mail = giftMessage(3, { kind: "invite" }, { recipientName: `Ada${lf}Lovelace${tab}B${nul}C${ls}D`, recipientNote: null });
+    expect(mail.text).toContain("\n\nDear Ada Lovelace B C D,\n\n");
+    expect(mail.html).toContain(GREETING_ROW("Dear Ada Lovelace B C D,"));
+    expect(mail.html).not.toContain("Lovelace<br>");
+    for (const c of controls.filter((c) => c !== lf)) {
+      expect(mail.text.includes(c)).toBe(false);
+      expect((mail.html ?? "").includes(c)).toBe(false);
+    }
+    /* Blank once cleaned is no greeting at all: the email as it always was. */
+    expect(giftMessage(3, { kind: "invite" }, { recipientName: ` ${nul}${cr}${lf} `, recipientNote: null })).toEqual(giftMessage(3));
+    expect(giftMessage(3).text).not.toContain("Dear");
+    expect(giftMessage(3).html).not.toContain("Dear");
+  });
+
+  const make = (recipientName: unknown, more: Record<string, unknown> = {}) =>
+    drive(
+      "POST",
+      "/api/admin/vouchers",
+      JSON.stringify({ id: randomUUID(), email: emailOf(OTHER), articles: 1, note: null, recipientName, ...more }),
+      ADMIN_USER_ID_LOCAL,
+    );
+  const listedName = async (reply: { body: unknown }) =>
+    (await listVouchers()).find((v) => v.id === (reply.body as { id: string }).id)?.recipientName;
+
+  it("is refused over 80 characters rather than shortened, counted as Postgres counts", async () => {
+    const eighty = await make("x".repeat(80));
+    expect(eighty.status).toBe(201);
+    expect(await listedName(eighty)).toBe("x".repeat(80));
+    const tooLong = await make("x".repeat(81));
+    expect(tooLong.status).toBe(400);
+    expect(tooLong.body).toEqual({ error: "recipientName must be at most 80 characters." });
+    /* One emoji is one character at this seam, though two UTF-16 units. */
+    const emoji = await make("😀".repeat(80));
+    expect(emoji.status).toBe(201);
+    expect(await listedName(emoji)).toBe("😀".repeat(80));
+    expect((await make("😀".repeat(81))).status).toBe(400);
+    /* Refused first, cleaned second: trimming does not rescue an over-long request. */
+    expect((await make(`${"x".repeat(80)} `)).status).toBe(400);
+    expect((await make(7)).status).toBe(400);
+    /* And the table says the same, for a writer that skipped the route. */
+    await expect(
+      pool.query(
+        "insert into spideryarn.billing_vouchers (email, articles, created_by, recipient_name) values ($1, 1, $2, $3)",
+        [emailOf(OTHER), CREATOR_A, "x".repeat(81)],
+      ),
+    ).rejects.toThrow(/billing_vouchers_recipient_name_length/);
+  });
+
+  it("is stored as one trimmed line, and blank is none", async () => {
+    const flat = await make(`  Ada${String.fromCharCode(10)}Lovelace${String.fromCharCode(0)}B  `);
+    expect(flat.status).toBe(201);
+    expect(await listedName(flat)).toBe("Ada Lovelace B");
+    const blank = await make("   ");
+    expect(blank.status).toBe(201);
+    expect(await listedName(blank)).toBeNull();
+    const absent = await make(undefined);
+    expect(absent.status).toBe(201);
+    expect(await listedName(absent)).toBeNull();
+  });
+
+  it("is sent with the gift, makes a replay the same create only when it matches, and never reaches the creator's notice", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const id = randomUUID();
+    const body = { id, email: emailOf(READER), articles: 5, note: SECRET_NOTE, recipientNote: "Lovely to meet you.", recipientName: SECRET_NAME };
+    expect((await drive("POST", "/api/admin/vouchers", JSON.stringify(body), ADMIN_USER_ID_LOCAL)).status).toBe(201);
+    expect(box.sent[0]?.subject).toBe("A gift of 5 free articles on Spideryarn");
+    expect(box.sent[0]?.text).toContain(`A gift of 5 free articles\n\nDear ${SECRET_NAME},\n\nLovely to meet you.\n\n`);
+    expect(box.sent[0]?.html).toContain(GREETING_ROW(`Dear ${SECRET_NAME},`));
+
+    const replay = await drive("POST", "/api/admin/vouchers", JSON.stringify(body), ADMIN_USER_ID_LOCAL);
+    expect(replay.status).toBe(200);
+    expect(replay.body).toEqual({ id, email: "replayed" });
+    for (const different of [{ ...body, recipientName: "Somebody else" }, { ...body, recipientName: null }]) {
+      expect((await drive("POST", "/api/admin/vouchers", JSON.stringify(different), ADMIN_USER_ID_LOCAL)).status).toBe(409);
+    }
+    expect(box.sent).toHaveLength(1);
+    expect((await listVouchers()).find((v) => v.id === id)?.recipientName).toBe(SECRET_NAME);
+
+    box.sent.length = 0;
+    control.auth.set(READER, { kind: "confirmed", email: emailOf(READER) });
+    expect((await drive("GET", "/api/billing/usage", "", READER)).status).toBe(200);
+    const notice = box.sent.find((m) => m.subject.startsWith("Gift voucher claimed"));
+    expect(notice?.text).toBeDefined();
+    expect(notice?.subject).not.toContain(SECRET_NAME);
+    expect(notice?.text).not.toContain(SECRET_NAME);
+  });
+
+  it("changing it sends nothing; a new address is greeted by the name as it now stands", async () => {
+    const box = mailbox();
+    control.deps = box.deps;
+    const { id, delivery } = await givenVoucher(READER, 4, CREATOR_A, null, "The note.", "First");
+    await sendQueuedVoucherEmail(delivery, box.deps);
+    expect(box.sent[0]?.text).toContain("Dear First,\n\nThe note.");
+
+    const edit = await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ recipientName: " Second " }), ADMIN_USER_ID_LOCAL);
+    expect(edit.status).toBe(200);
+    expect(edit.body).toEqual({ ok: true });
+    expect(box.sent).toHaveLength(1);
+    expect(await deliveriesOf(id)).toHaveLength(1);
+    const listed = (await listVouchers()).find((v) => v.id === id);
+    expect(listed?.recipientName).toBe("Second");
+    /* The note was not in the patch, and is as it was. */
+    expect(listed?.recipientNote).toBe("The note.");
+
+    const moved = `moved-${emailOf(READER)}`;
+    await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ email: moved }), ADMIN_USER_ID_LOCAL);
+    expect(box.sent.map((m) => m.to)).toEqual([[emailOf(READER)], [moved]]);
+    expect(box.sent[1]?.text).toContain("Dear Second,\n\nThe note.");
+    expect(box.sent[1]?.text).not.toContain("First");
+
+    /* Both at once: the new address gets the new name. */
+    const again = `again-${emailOf(READER)}`;
+    await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ email: again, recipientName: "Third" }), ADMIN_USER_ID_LOCAL);
+    expect(box.sent[2]?.to).toEqual([again]);
+    expect(box.sent[2]?.text).toContain("Dear Third,\n\nThe note.");
+
+    /* Cleared, and then moved: no greeting, the note still there. */
+    const last = `last-${emailOf(READER)}`;
+    await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ email: last, recipientName: null }), ADMIN_USER_ID_LOCAL);
+    expect(box.sent[3]?.text).toContain("A gift of 4 free articles\n\nThe note.\n\n");
+    expect(box.sent[3]?.text).not.toContain("Dear");
+
+    expect((await drive("PATCH", `/api/admin/vouchers/${id}`, JSON.stringify({ recipientName: "x".repeat(81) }), ADMIN_USER_ID_LOCAL)).status).toBe(400);
+  });
+});
+
 describe("what is said, and to whom", () => {
   it("puts no address and no note in any log line or detail", async () => {
     const said = await logLinesWhile(async () => {
@@ -1179,7 +1617,7 @@ describe("what is said, and to whom", () => {
       await drive(
         "POST",
         "/api/admin/vouchers",
-        JSON.stringify({ id, email: emailOf(READER), articles: 2, note: SECRET_NOTE }),
+        JSON.stringify({ id, email: emailOf(READER), articles: 2, note: SECRET_NOTE, recipientName: SECRET_NAME }),
         ADMIN_USER_ID_LOCAL,
       );
       /* A fetch error is outside our control and may echo its request. It is
@@ -1225,6 +1663,7 @@ describe("what is said, and to whom", () => {
       emailOf(OTHER),
       creatorEmail(CREATOR_A),
       SECRET_NOTE,
+      SECRET_NAME,
       "@example.invalid",
       "provider-body-secret",
     ]) {

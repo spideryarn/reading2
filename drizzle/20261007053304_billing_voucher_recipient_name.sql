@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."billing_vouchers" ADD COLUMN "recipient_name" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."billing_vouchers" ADD CONSTRAINT "billing_vouchers_recipient_name_length" CHECK ("spideryarn"."billing_vouchers"."recipient_name" is null or char_length("spideryarn"."billing_vouchers"."recipient_name") <= 80);

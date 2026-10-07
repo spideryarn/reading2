@@ -60,8 +60,9 @@
  * has a store to be missing.
  */
 
+import { randomUUID } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -71,7 +72,7 @@ import { loadEnvLocal } from "../src/env.js";
 import type { Claim } from "../src/referee-claims.js";
 import type { RefereeResult } from "../src/referee-criteria.js";
 import {
-  CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS,
+  CRITERIA_AT_CEILING,
   CRITERION_HAS_COMMENTS,
   CRITERION_NOT_ON_ARTICLE,
 } from "../src/referee-criteria-store.js";
@@ -82,6 +83,7 @@ import { runAsOwner, type OwnerId } from "../src/owner.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { scratchArticleInPg, type ScratchArticle } from "./helpers/scratch-article.js";
+import { seedAuthUser } from "./helpers/seed-auth-user.js";
 
 loadEnvLocal();
 
@@ -423,7 +425,9 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
    * that pointer dangling. It always did; what reached the reader was a 500
    * `[db-failed]` and a Sentry report, from three directions: deleting such a
    * criterion, placing a comment on one another tab had just deleted, and
-   * adding a criterion when the trim wants such a one gone.
+   * adding a criterion when the trim wanted such a one gone. The third has no
+   * trim to come from since 2026-10-07: the cases under *nothing dropped, a
+   * ceiling* below replaced it.
    *
    * Through the route and against Postgres, because both halves are needed to
    * see it: the constraint name lives on the driver's error underneath
@@ -432,9 +436,10 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
    * Each refusal was **watched red** before its `catch` existed (500
    * where the case asks for 409 or 400), and again afterwards by renaming
    * `COMMENTS_CRITERION_FK` (src/referee-criteria-store.ts) to a constraint
-   * that does not exist: the four refusal cases go red and the three controls
-   * stay green. The last case is the retreat rule the other way round — it
-   * goes red if `violatesForeignKey` stops asking for the name.
+   * that does not exist: the refusal cases went red and the controls stayed
+   * green. *"does not take the comment table's other foreign key"* is the
+   * retreat rule the other way round — it goes red if `violatesForeignKey`
+   * stops asking for the name.
    */
   describe("a criterion with the referee's own comments placed on it", () => {
     /** A criterion that has finished, made through the store rather than the paying route. */
@@ -583,55 +588,210 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       expect(kept.map((c) => [c.id, c.criterionId])).toEqual([[comment.id, second]]);
     });
 
+    /* -------------------------------------- nothing dropped, a ceiling -- */
+
     /**
-     * **Characterisation, and an open question for the owner — not a verdict.**
-     * Question 3a in docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md
-     * § For Greg: a full list whose oldest finished criterion has a comment on
-     * it cannot take another, *every time*, because the trim's delete is
-     * refused and the insert rolls back with it. That is today's behaviour and
-     * this pins it exactly as it is; only the status and the sentence changed
-     * on 2026-10-07 (it was a 500).
-     *
-     * **Whoever builds 3a starts here.** If the answer is "protect the comments
-     * and let the list run past twenty", the first half of this case turns
-     * over: the POST opens a stream, `done` arrives, and the list holds
-     * twenty-one with the commented one still in it. The second half — an
-     * uncommented oldest is trimmed as before — stays as it is under any answer.
+     * **An add never deletes a criterion; at `MAX_CRITERIA` it is refused.**
+     * Greg's two answers of 2026-10-07
+     * (docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
+     * Until then an add past twenty deleted the oldest finished criterion, and
+     * when that one had comments on it the key refused the delete and the add
+     * failed every time. The first case below pinned that refusal as
+     * *OPEN QUESTION 3a* and was turned over, red first.
      */
-    it("OPEN QUESTION 3a: a full list whose oldest criterion has a comment refuses a new one", async () => {
-      const start = Date.parse("2026-08-01T00:00:00.000Z");
-      const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
+    const START = Date.parse("2026-08-01T00:00:00.000Z");
+    const at = (i: number) => () => new Date(START + i * 60_000).toISOString();
+    const add = (criterion = "one more") =>
+      call("POST", `/api/referee/criteria/${SLUG}`, { criterion, kind: "single" });
+    /** An add that went through: a stream, a `done`, and the id it was given. */
+    async function added(criterion: string): Promise<string> {
+      const reply = await add(criterion);
+      expect(reply.streamed, `${criterion}: ${reply.status} ${reply.text.slice(0, 300)}`).toBe(true);
+      const done = frame(reply.text, "done");
+      expect(done?.status).toBe("done");
+      return done?.id as string;
+    }
+    /** An add that was refused at the ceiling, before any stream, and wrote nothing. */
+    async function refused(criterion: string, sentence = CRITERIA_AT_CEILING): Promise<void> {
+      const rowsBefore = await criteriaRows();
+      const reply = await add(criterion);
+      expect(reply.status, reply.text.slice(0, 300)).toBe(409);
+      expect(reply.streamed, "a refusal must be JSON, before any header").toBe(false);
+      expect(reply.body.error).toBe(sentence);
+      expect(await criteriaRows()).toEqual(rowsBefore);
+    }
+    /** `n` finished criteria, oldest first, through the store. */
+    async function fill(n: number, from = 0): Promise<string[]> {
       const ids: string[] = [];
-      for (let i = 0; i < MAX_CRITERIA; i++) ids.push(await criterion(`criterion ${i}`, at(i)));
+      for (let i = from; i < from + n; i++) ids.push(await criterion(`criterion ${i}`, at(i)));
+      return ids;
+    }
+
+    it("adds past the old cap of twenty and keeps every criterion, the commented oldest included", async () => {
+      const ids = await fill(20);
       const oldest = ids[0] as string;
       const comment = (await place(oldest)).body.comment as Comment;
       const before = await criteriaRows();
 
-      const add = () =>
-        call("POST", `/api/referee/criteria/${SLUG}`, { criterion: "one more", kind: "single" });
+      // This is the request that was refused, every time, with the oldest commented.
+      const first = await added("one more");
+      const second = await added("and another");
+      expect(await criteriaIds()).toEqual([...ids, first, second]);
 
-      for (const attempt of ["first", "retry"]) {
-        const refused = await add();
-        expect(refused.status, `${attempt}: ${refused.text.slice(0, 300)}`).toBe(409);
-        expect(refused.streamed, "a refusal must be JSON, before any header").toBe(false);
-        expect(refused.body.error).toBe(CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
-        // Rolled back whole: nothing trimmed, nothing added.
-        expect(await criteriaIds()).toEqual(ids);
-        expect(await criteriaRows()).toEqual(before);
-      }
+      // No surviving row was rewritten on the way, and nothing was detached.
+      const after = new Map((await criteriaRows()).map((r) => [r.id, r]));
+      for (const row of before) expect(after.get(row.id)).toEqual(row);
+      expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => [c.id, c.criterionId]))
+        .toEqual([[comment.id, oldest]]);
+    });
 
-      /* The control, and the way out the sentence names: with the placement
-         cleared the same request succeeds and the oldest is trimmed as ever. */
-      await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
-        criterionId: null,
-        valence: null,
+    it("drops nothing when nothing has comments either", async () => {
+      const ids = await fill(25);
+      const before = await criteriaRows();
+      const more = [await added("twenty-six"), await added("twenty-seven")];
+      expect(await criteriaIds()).toEqual([...ids, ...more]);
+      const after = new Map((await criteriaRows()).map((r) => [r.id, r]));
+      for (const row of before) expect(after.get(row.id)).toEqual(row);
+    });
+
+    it("accepts the two-hundredth, refuses the next with a sentence, and lets a failed one run again", async () => {
+      expect(MAX_CRITERIA).toBe(200);
+      /* What the ceiling counts is every row: one still running and one that
+         failed are in the 199 below, and one carries a comment. */
+      const running = await asTestOwner(() => refereeCriteriaStore.begin(
+        SLUG, hashBlocks(article.blocks), "still running", { kind: "single" }, undefined, at(0),
+      ));
+      const failed = await asTestOwner(async () => {
+        const b = await refereeCriteriaStore.begin(
+          SLUG, hashBlocks(article.blocks), "it failed", { kind: "single" }, undefined, at(1),
+        );
+        await refereeCriteriaStore.finish(SLUG, b.row.id, { status: "error", error: "the provider refused" }, b.attempt);
+        return b.row.id;
       });
-      const added = await add();
-      expect(added.streamed, added.text.slice(0, 300)).toBe(true);
-      expect(frame(added.text, "done")?.status).toBe("done");
-      const after = await criteriaIds();
-      expect(after).toHaveLength(MAX_CRITERIA);
-      expect(after).not.toContain(oldest);
+      const rest = await fill(MAX_CRITERIA - 3, 2);
+      expect((await place(rest[0] as string)).status).toBe(201);
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA - 1);
+
+      const last = await added("the two-hundredth");
+      expect(await criteriaIds()).toEqual([running.row.id, failed, ...rest, last]);
+
+      await refused("one too many");
+      await refused("one too many"); // and again: a refusal is not a state that wears off
+
+      /* A retry of the failed one is not an add: the same row, run again. */
+      const retried = await call("POST", `/api/referee/criteria/${SLUG}`, {
+        id: failed, criterion: "it failed", kind: "single",
+      });
+      expect(frame(retried.text, "done"), retried.text.slice(0, 300)).toMatchObject({ id: failed, status: "done" });
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA);
+
+      // The sentence's way out works: delete one, and the add goes through.
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/${last}`)).status).toBe(200);
+      await added("in its place");
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA);
+      // The running one was never touched, and can still land its answer.
+      const landed = await asTestOwner(() => refereeCriteriaStore.finish(
+        SLUG, running.row.id, { status: "done", results: [] }, running.attempt,
+      ));
+      expect(landed?.status).toBe("done");
+    });
+
+    /**
+     * **A list already past the ceiling is told its real count**, and how many
+     * to delete. The former trim spared pending rows, so a list above 200 could
+     * be inherited (production's largest was 4 on 2026-10-07); `begin` now
+     * prevents creating one, so the state is seeded directly. GPT Sol's C2:
+     * the sentence used to say "200" and "Delete one" here, false twice.
+     */
+    it("tells an inherited list above the ceiling its real count, and how many to delete", async () => {
+      await fill(MAX_CRITERIA);
+      const [template] = await criteriaRows();
+      for (const id of ["spya-extraa", "spya-extrab"]) {
+        await getDb().insert(refereeCriteria).values({ ...template!, id, criterion: `inherited ${id}` });
+      }
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA + 2);
+      await refused(
+        "a new criterion",
+        "This article already has 202 criteria, and it can hold 200. Delete 3 to add another.",
+      );
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/spya-extraa`)).status).toBe(200);
+      await refused(
+        "still no room",
+        "This article already has 201 criteria, and it can hold 200. Delete 2 to add another.",
+      );
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/spya-extrab`)).status).toBe(200);
+      // At exactly 200 the sentence is the ordinary one, word for word.
+      await refused("and at the ceiling", CRITERIA_AT_CEILING);
+      const [oldest] = await criteriaIds();
+      expect((await call("DELETE", `/api/referee/criteria/${SLUG}/${oldest}`)).status).toBe(200);
+      // The sentence's arithmetic was right: that many deletes, and the add goes through.
+      await added("room at last");
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA);
+    });
+
+    /**
+     * **Two adds at once at 199 make 200, not 201.** The count and the insert
+     * are one transaction under the article lock, so the second add counts
+     * after the first has written. Four at once, through the route, on a pool
+     * of five.
+     *
+     * With `lockArticleRow` removed from `begin` this went red, three runs of
+     * three (the plan's § Evidence).
+     */
+    it("lets one of several simultaneous adds at 199 through, and refuses the rest", async () => {
+      await fill(MAX_CRITERIA - 1);
+      const replies = await Promise.all(["a", "b", "c", "d"].map((x) => add(`simultaneous ${x}`)));
+      const through = replies.filter((r) => r.streamed);
+      expect(through, replies.map((r) => `${r.status} ${r.text.slice(0, 120)}`).join("\n")).toHaveLength(1);
+      for (const r of replies.filter((x) => !x.streamed)) {
+        expect(r.status).toBe(409);
+        expect(r.body.error).toBe(CRITERIA_AT_CEILING);
+      }
+      expect(await criteriaIds()).toHaveLength(MAX_CRITERIA);
+    });
+
+    it("counts this article's criteria and nobody else's", async () => {
+      /* Another article of this reader's, and another owner's, each with a
+         criterion under the id this article's oldest has. Neither counts here,
+         neither is touched by this article's refusal, and this article's
+         ceiling does not stop the other one adding. */
+      const SHARED = "spya-shrd22";
+      const finished = async (slug: string, hash: string, text: string, id?: string) => {
+        const b = await refereeCriteriaStore.begin(slug, hash, text, { kind: "single" }, id, at(0));
+        await refereeCriteriaStore.finish(slug, b.row.id, { status: "done", results: [] }, b.attempt);
+        return b.row.id;
+      };
+      /* A random owner rather than a fixed one: a seeded row in `auth.users`
+         for the length of this case, and nothing for OWNER_AUDIT to account for. */
+      const other = randomUUID() as OwnerId;
+      await seedAuthUser(getDb(), { id: other, email: `other-referee-routes-postgres-${other}@example.invalid` });
+      const mine = await scratchArticleInPg(`${SLUG}-same-owner`, { ownerId: TEST_OWNER });
+      const theirs = await scratchArticleInPg(`${SLUG}-other-owner`, { ownerId: other });
+      try {
+        await asTestOwner(() => finished(mine.slug, hashBlocks(mine.blocks), "mine, elsewhere", SHARED));
+        await runAsOwner(other, () => finished(theirs.slug, hashBlocks(theirs.blocks), "somebody else's", SHARED));
+        const elsewhere = () => getDb().select().from(refereeCriteria)
+          .where(inArray(refereeCriteria.articleId, [mine.articleId, theirs.articleId]))
+          .orderBy(asc(refereeCriteria.articleId), asc(refereeCriteria.id));
+        const untouched = await elsewhere();
+        expect(untouched.filter((r) => r.id === SHARED)).toHaveLength(2);
+        expect(new Set(untouched.map((r) => r.ownerId))).toEqual(new Set([TEST_OWNER, other]));
+
+        expect(await asTestOwner(() => finished(SLUG, hashBlocks(article.blocks), "criterion 0", SHARED)))
+          .toBe(SHARED);
+        await fill(MAX_CRITERIA - 2, 1);
+        await added("the two-hundredth, with two more elsewhere");
+        await refused("past the ceiling here");
+        expect(await elsewhere()).toEqual(untouched);
+
+        // The other article is counted on its own.
+        const there = await call("POST", `/api/referee/criteria/${mine.slug}`, { criterion: "fine there", kind: "single" });
+        expect(frame(there.text, "done")?.status, there.text.slice(0, 300)).toBe("done");
+      } finally {
+        await mine.remove();
+        await theirs.remove();
+        await getDb().execute(sql`delete from auth.users where id = ${other}`);
+      }
     });
 
     it("does not take the comment table's other foreign key for this one", async () => {
@@ -686,92 +846,6 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
       }))).rejects.toMatchObject({ status: 404 });
       expect(await criteriaIds()).toEqual([id]);
       expect(await asTestOwner(() => commentStore.load(SLUG))).toEqual([]);
-    });
-
-    it("rolls back uncommented trim candidates as well as the blocked one", async () => {
-      const at = (i: number) => () => new Date(Date.parse("2026-08-01T00:00:00Z") + i * 60_000).toISOString();
-      const running = [];
-      for (let i = 0; i < 3; i++) {
-        running.push(await asTestOwner(() => refereeCriteriaStore.begin(
-          SLUG, hashBlocks(article.blocks), `running ${i}`, { kind: "single" }, undefined, at(i),
-        )));
-      }
-      for (let i = 3; i < MAX_CRITERIA + 2; i++) await criterion(`finished ${i}`, at(i));
-      for (const row of running.slice(0, 2)) {
-        await asTestOwner(() => refereeCriteriaStore.finish(
-          SLUG, row.row.id, { status: "done", results: [] }, row.attempt,
-        ));
-      }
-      const blocked = running[1]!.row.id;
-      const comment = (await place(blocked)).body.comment as Comment;
-      const before = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
-      const beforeRows = await criteriaRows();
-      expect(before).toHaveLength(MAX_CRITERIA + 2);
-      const refused = await call("POST", `/api/referee/criteria/${SLUG}`, {
-        criterion: "would trim several", kind: "single",
-      });
-      expect(refused.status).toBe(409);
-      expect(refused.streamed).toBe(false);
-      expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toEqual(before);
-      expect(await criteriaRows()).toEqual(beforeRows);
-      expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => [c.id, c.criterionId]))
-        .toEqual([[comment.id, blocked]]);
-    });
-
-    it("keeps an oldest pending row, and rolls back all rows when a different trim candidate has comments", async () => {
-      const start = Date.parse("2026-08-01T00:00:00.000Z");
-      const at = (i: number) => () => new Date(start + i * 60_000).toISOString();
-      const pending = await asTestOwner(() => refereeCriteriaStore.begin(
-        SLUG, hashBlocks(article.blocks), "oldest, still running", { kind: "single" }, undefined, at(0),
-      ));
-      const blocked = await criterion("next oldest, with comments", at(1));
-      const comment = (await place(blocked)).body.comment as Comment;
-      for (let i = 2; i < MAX_CRITERIA; i++) await criterion(`finished ${i}`, at(i));
-
-      // Same retention policy: a pending row outside the cap survives a successful add.
-      const accepted = await call("POST", `/api/referee/criteria/${SLUG}`, {
-        criterion: "fits by skipping pending", kind: "single",
-      });
-      expect(accepted.streamed, accepted.text.slice(0, 300)).toBe(true);
-      expect(frame(accepted.text, "done")?.status).toBe("done");
-      const before = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
-      const beforeRows = await criteriaRows();
-      expect(before).toHaveLength(MAX_CRITERIA + 1);
-      expect(before[0]).toMatchObject({ id: pending.row.id, status: "pending" });
-      expect(before[1]?.id).toBe(blocked);
-
-      const refused = await call("POST", `/api/referee/criteria/${SLUG}`, {
-        criterion: "blocked by finished candidate", kind: "single",
-      });
-      expect(refused.status).toBe(409);
-      expect(refused.streamed).toBe(false);
-      expect(refused.body.error).toBe(CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
-      // Compare full rows, not ids alone: reset/overwrite mutations must fail too.
-      expect(await asTestOwner(() => refereeCriteriaStore.load(SLUG))).toEqual(before);
-      expect(await criteriaRows()).toEqual(beforeRows);
-      expect((await asTestOwner(() => commentStore.load(SLUG))).map((c) => [c.id, c.criterionId]))
-        .toEqual([[comment.id, blocked]]);
-      /* The sentence names "the one that would be dropped to make room", and
-         here that is not the oldest: the oldest is pending, is skipped by the
-         trim, and has nothing placed on it. So the one claim pinned about the
-         wording is the false one it used to make; the rest stays rewritable
-         (docs/project/copy.md § tests match on the code, not the prose). */
-      expect(pending.row.id).not.toBe(blocked);
-      expect(refused.body.error).not.toMatch(/oldest/i);
-
-      // Clearing the blocker resumes today's trim without deleting the pending row.
-      const cleared = await call("PATCH", `/api/comments/${SLUG}/${comment.id}/mark`, {
-        criterionId: null, valence: null,
-      });
-      expect(cleared.status).toBe(200);
-      const added = await call("POST", `/api/referee/criteria/${SLUG}`, {
-        criterion: "blocked by finished candidate", kind: "single",
-      });
-      expect(frame(added.text, "done")?.status).toBe("done");
-      const after = await asTestOwner(() => refereeCriteriaStore.load(SLUG));
-      expect(after).toHaveLength(MAX_CRITERIA + 1);
-      expect(after[0]).toMatchObject({ id: pending.row.id, status: "pending" });
-      expect(after.map((c) => c.id)).not.toContain(blocked);
     });
   });
 });

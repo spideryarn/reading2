@@ -196,7 +196,18 @@ review that reshaped it):
   is the one value in the email we did not write, so it is untrusted on render: `noteText`
   ([`src/email.ts`](../../src/email.ts)) makes its line breaks plain and its other control characters
   spaces, and the HTML part escapes it. Never in the subject. Editing it re-sends nothing; an address
-  change sends the note as it then stands. It is one of two letters, chosen before the
+  change sends the note as it then stands. Since 2026-10-07 it may also open with **their name**
+  (`recipient_name`): *Dear <name>,* as its own plain line under the heading and above the note, in
+  both parts and both letters, from `giftEmailGreeting` in
+  [`src/admin-vouchers.ts`](../../src/admin-vouchers.ts), which the page's sketch calls too
+  ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md)). The name
+  follows the note's rules — untrusted, made one line by `cleanRecipientName`, with invisible separators and
+  bidirectional formatting controls made plain (but the joiners used in real names and emoji kept),
+  escaped in the HTML, never in the subject, the claim notice or a log line, and editing it re-sends
+  nothing. The renderer takes the
+  two as one object, `{ recipientName, recipientNote }`, so they cannot be passed the wrong way
+  round. With no name the email is byte for byte what it was, which
+  `tests/billing-voucher-emails.test.ts` holds as whole-email snapshots. It is one of two letters, chosen before the
   event's transaction by `giftAudienceFor` ([261002a](../plans/261002a-fb99-voucher-email-for-existing-user.md)):
   - **An existing reader** — exactly one account with that address *confirmed*, found in the same
     count-checked account list `/admin/users` reads — is told the articles they had left on Free and
