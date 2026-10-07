@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "5 October 2026";
+const LAST_UPDATED = "7 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -291,7 +291,9 @@ export function PrivacyPage() {
               their address (docs/plans/261001p); since 2026-10-02 the one to an
               existing reader carries their own remaining allowance
               (docs/plans/261002a), hence its second clause; and since the same day
-              it may carry a note from whoever gave it (docs/plans/261002b). The
+              it may carry a note from whoever gave it (docs/plans/261002b),
+              and since 2026-10-07 the recipient's name as that person typed it
+              (docs/plans/261007f). The
               copy of each reader's feedback mailed to us is docs/plans/261002j. */}
           <Third name="Resend" href="https://resend.com/legal/privacy-policy">
             email. The sign-up confirmation we send you goes through them, so they see your email
@@ -300,7 +302,8 @@ export function PrivacyPage() {
             for a plan, which ones), so we know who has joined. That note goes through Resend, then
             our domain’s mail forwarding at Namecheap, to our own inbox. An administrator can also give
             a gift of free articles to an email address, and that address is sent one email saying
-            so, with a short note from whoever gave it, if they wrote one — if it is already your account’s, the email also says how many articles you had left
+            so, with a short note from whoever gave it, if they wrote one, and the recipient’s name as that person
+            gave it, if they gave one — if it is already your account’s, the email also says how many articles you had left
             and how many you have with the gift; when the gift is claimed, we email ourselves, the same way, the address that claimed
             it. When you send us feedback, we also email ourselves a copy — what you wrote, the address of the page you
             were on, and your email address — the same way. If you send us feedback through the Feedback button and we

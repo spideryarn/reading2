@@ -13,6 +13,15 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-06 · SPIDERYARN-READING2-E4 (spya-rvbmss; the report itself shipped: two readers'
+  copies of one article are now tested end to end, this is its deferred half) · two small design
+  questions. Q1: when two readers both share one article, the public shelf shows two identical
+  cards; leave it (recommended, it has not happened yet), show one, label them, or one card that
+  opens to its versions. Q2: in Citations, a stranger's public copy matched by DOI is linked ahead
+  of your own matched only by title; leave it (recommended) or show both · qi-a8wyhr67 ·
+  [261007f § Questions for Greg](../plans/261007f-two-readers-import-the-same-article-checked-end-to-end-and-the-edge-cases.md#questions-for-greg) ·
+  [note](261006_2135-two-readers-import-the-same-article.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-E8 (spya-n8cuqq; the report itself shipped: dictation runs
   fifteen minutes and warns before it stops, this is its deferred half) · should Feedback take a
   full fifteen minutes of non-stop speech? It takes 12,000 characters now, about thirteen minutes
@@ -61,14 +70,24 @@ in this directory records which, and the line comes off.
   [261005g § Questions for Greg](../plans/261005g-reading-time-line-waits-on-the-experimental-switch-not-on-a-timer.md#questions-for-greg) ·
   [note](261005_0729-reading-time-line-appears-a-minute-after-the-article-loads.md)
 
-- 2026-10-04 · spya-hwdefp and spya-v322fd (SPIDERYARN-READING2-D7) · sharing an article with some
-  people: not built, because Greg asked to discuss first and every version changes who may read
-  an article, a listed defence. Three stages, three questions. Recommended: a private link first
-  (anyone holding it reads, no AI, not listed, can be turned off; one or two sessions), then
-  comments and highlights for signed-in people who have it, and named email addresses with
-  invitations and sharee AI only after those have been used · qi-98933vdd ·
-  [261005e § Questions for Greg](../plans/261005e-share-an-article-with-some-people-a-private-link-first.md#questions-for-greg) ·
-  [note](261004_2030-share-an-article-with-some-people.md)
+- 2026-10-06 · SPIDERYARN-READING2-ED (spya-vc6pnm; the report itself shipped as *Their name* on a
+  gift voucher, whose email now opens "Dear so-and-so,"; this is its deferred half) · may the
+  voucher email carry a starter article by private link? Not built, because the link's key would
+  then be kept in a second place of ours (the stored voucher email) and by our mail provider, and
+  where that key may go is a listed security defence. Four options, A to D. Recommended: yes, with
+  the voucher keeping only which article and the key going into the one email (A; one to two
+  days). Until then, send the link from your own email (D) rather than pasting it into the note ·
+  qi-zqkjnadh ·
+  [261007f § Q-starter](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md#q-starter-may-the-voucher-email-carry-a-private-link) ·
+  [note](261006_2222-gift-voucher-name-note-and-a-starter-article.md)
+
+- 2026-10-06 · SPIDERYARN-READING2-ED (spya-vc6pnm, its other deferred half) · where does the
+  "big list of people" to contact live? A voucher cannot be the list as it is: its email is sent
+  and its gift is real the moment it is made. Three options. Recommended: keep the list where you
+  keep such lists today (A, nothing to build); or a separate list of people on `/admin` with a
+  *Make a voucher* button on each row (B, about two days) · qi-dajb32q7 ·
+  [261007f § Q-list](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md#q-list-where-does-the-big-list-of-people-live) ·
+  [note](261006_2222-gift-voucher-name-note-and-a-starter-article.md)
 
 - 2026-10-04 · SPIDERYARN-READING2-BX (spya-mdp0em) · topic pills on the public shelf
   (`/read/public`): not built, because every way of showing them edits a listed security defence,

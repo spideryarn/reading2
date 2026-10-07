@@ -439,6 +439,42 @@ describe("every article lookup names an owner", () => {
   });
 
   /**
+   * **A lookup by short id is the same door, and the sweep above cannot see
+   * it.** `articles.short_id` is unique across every owner, exactly as the slug
+   * is, so `eq(articles.shortId, …)` with no owner beside it finds anybody's
+   * article. The grep above looks for `articles.slug` and nothing else.
+   *
+   * Two store modules may compare the column, and each is checked for what
+   * makes it safe: `find-article.ts`, whose one comparison sits inside an
+   * `and(ownedByReader(), …)`; and `short-id-is-taken.ts`, the unfiltered one,
+   * which answers yes or no and nothing else (plan 261007f, E10). A third file,
+   * or a second comparison in either, fails here.
+   */
+  it("and a lookup by short id names an owner too, bar the one boolean leaf", async () => {
+    const BARE_SHORT_ID = /eq\(\s*articles\.shortId\s*,/g;
+    const dir = fileURLToPath(new URL("../src/store/", import.meta.url));
+    const found: Record<string, number> = {};
+    for (const name of await readdir(dir)) {
+      if (!name.endsWith(".ts")) continue;
+      const count = (codeOf(await readFile(dir + name, "utf8")).match(BARE_SHORT_ID) ?? []).length;
+      if (count > 0) found[name] = count;
+    }
+    expect(found).toEqual({ "find-article.ts": 1, "short-id-is-taken.ts": 1 });
+
+    const finder = codeOf(await readFile(`${dir}find-article.ts`, "utf8"));
+    expect(finder).toMatch(/and\(\s*ownedByReader\(\)\s*,\s*eq\(\s*articles\.shortId\s*,/);
+
+    const leaf = codeOf(await readFile(`${dir}short-id-is-taken.ts`, "utf8"));
+    const body = /export async function shortIdIsTaken[\s\S]*?\n}/.exec(leaf)?.[0] ?? "";
+    expect((body.match(BARE_SHORT_ID) ?? []).length, "the lookup is outside shortIdIsTaken").toBe(1);
+    expect(body).toMatch(/Promise<boolean>/);
+    expect(body).toMatch(/\.select\(\{\s*id:\s*articles\.id\s*\}\)/);
+    expect(body).toMatch(/return rows\.length > 0;/);
+    /* Nothing else in the file selects, so there is no second answer to leak. */
+    expect((leaf.match(/\.select\(/g) ?? []).length).toBe(1);
+  });
+
+  /**
    * And `pg.ts` is no longer exempt at all, which is the point of the move —
    * asserted rather than assumed, because "we removed the exemption" is exactly
    * the kind of claim that survives the exemption being quietly put back.

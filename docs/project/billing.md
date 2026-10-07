@@ -1067,6 +1067,8 @@ product rule. The answer when it matters is a daily attempt cap, not a change to
 > — Greg, 2026-10-01
 
 A voucher is a row of `billing_vouchers`: an address, a number of articles (1–1000), a private note,
+optionally a note to the recipient and their name (`recipient_name`, at most 80 characters, which
+opens their email *Dear <name>,* — [261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md)),
 who made it, and — once claimed — which account claimed it. Only the administrator makes or changes
 one, under `/api/admin/vouchers` ([admin.md](admin.md)); the plan and its review are
 [261001m](../plans/261001m-gift-vouchers-for-free-articles.md). Four rules, each for a reason:
