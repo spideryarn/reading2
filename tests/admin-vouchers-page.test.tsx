@@ -292,7 +292,9 @@ describe("/admin/vouchers", () => {
     await act(async () => buttonIn(waiting, "Edit")?.click());
     const name = firstCell?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
     expect(name?.value).toBe("Ada Lovelace");
-    expect(name?.maxLength).toBe(80);
+    /* Native maxLength counts UTF-16 units, while the route and Postgres count
+       Unicode code points. It would stop a valid 80-emoji name at 40. */
+    expect(name?.hasAttribute("maxlength")).toBe(false);
     expect(waiting?.textContent).toContain("The same goes for their name.");
 
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -320,6 +322,38 @@ describe("/admin/vouchers", () => {
 
     await act(async () => buttonIn(rowFor("claimed@example.test"), "Edit")?.click());
     expect(rowFor("claimed@example.test")?.querySelector('input[aria-label="Their name"]')).not.toBeNull();
+  });
+
+  it("refuses an over-limit raw name in Edit instead of trimming it into acceptance", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const name = waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
+    const raw = `${"x".repeat(80)} `;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(name, raw);
+      name?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+    expect(waiting?.textContent).toContain("recipientName must be at most 80 characters.");
+  });
+
+  it("does not PATCH when only invisible formatting differs from the stored name", async () => {
+    await mount();
+    const waiting = rowFor("waiting@example.test");
+    await act(async () => buttonIn(waiting, "Edit")?.click());
+    const name = waiting?.querySelector<HTMLInputElement>('input[aria-label="Their name"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      setter?.call(name, "Ada Lovelace\u202e");
+      name?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => buttonIn(waiting, "Save")?.click());
+    await settle();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
   });
 
   it("keeps every text field at a non-zooming size on a coarse pointer", async () => {
@@ -639,7 +673,8 @@ describe("/admin/vouchers", () => {
       const input = form().querySelector<HTMLInputElement>("#voucher-new-recipient-name");
       expect(input?.type).toBe("text");
       expect(input?.required).toBe(false);
-      expect(input?.maxLength).toBe(80);
+      /* Leave the code-point limit to the server, as the note below does. */
+      expect(input?.hasAttribute("maxlength")).toBe(false);
       expect(input?.labels?.[0]?.textContent).toContain("Their name");
       expect(input?.labels?.[0]?.textContent).toContain("optional");
       expect(input?.labels?.[0]?.textContent).toContain("Dear <name>,");
@@ -660,6 +695,24 @@ describe("/admin/vouchers", () => {
       await submit();
       expect(creates()[1]?.body).toMatchObject({ recipientName: "Ada", recipientNote: "A note." });
       expect((host.querySelector("#voucher-new-recipient-name") as HTMLInputElement).value).toBe("");
+    });
+
+    it("refuses an over-limit raw name in Create instead of trimming it into acceptance", async () => {
+      await mount();
+      await fill("new@example.test");
+      const raw = `${"x".repeat(80)} `;
+      await name(raw);
+      await submit();
+      expect(creates()).toHaveLength(0);
+      expect(form().textContent).toContain("recipientName must be at most 80 characters.");
+    });
+
+    it("submits the same cleaned name that its sketch shows", async () => {
+      await mount();
+      await fill("new@example.test");
+      await name(`Ada\u200bLovelace\u202e`);
+      await submit();
+      expect(creates()[0]?.body).toMatchObject({ recipientName: "Ada Lovelace" });
     });
 
     it("mints a new id when only their name changed after a create whose answer was lost", async () => {
@@ -690,6 +743,16 @@ describe("/admin/vouchers", () => {
       expect(lines().indexOf("Dear Ada,")).toBe(lines().indexOf("Great to meet you today.") - 1);
       expect(sketch()?.textContent).toContain("Subject: A gift of 20 free articles on Spideryarn");
       await name("   ");
+      expect(sketch()?.textContent).not.toContain("Dear");
+    });
+
+    it("sketches the same cleaned greeting the email will render", async () => {
+      await mount();
+      await name(`Ada\u200bLovelace\u202e`);
+      expect(sketch()?.textContent).toContain("Dear Ada Lovelace,");
+      for (const control of ["\u200b", "\u202e"]) expect(sketch()?.textContent).not.toContain(control);
+
+      await name("\u200b\u202e\u2060");
       expect(sketch()?.textContent).not.toContain("Dear");
     });
 

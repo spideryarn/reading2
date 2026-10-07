@@ -56,14 +56,17 @@ import { allTiers } from "./pg-tiers.js";
 import { READ_COMMITTED } from "./isolation.js";
 import {
   type GiftAudience,
-  RECIPIENT_NAME_MAX,
-  cleanRecipientName,
   latestVoucherEmails,
   queueClaimedEmail,
   queueGiftEmail,
   skipQueuedGifts,
 } from "./pg-voucher-emails.js";
-import type { AdminVoucher, ClaimantUsage } from "../admin-vouchers.js";
+import {
+  RECIPIENT_NAME_MAX,
+  type AdminVoucher,
+  type ClaimantUsage,
+  cleanRecipientName,
+} from "../admin-vouchers.js";
 import { isUuid } from "../ids.js";
 
 const logger = log("store");

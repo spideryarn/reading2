@@ -128,3 +128,28 @@ export function giftEmailSubject(articles: number): string {
 export function giftEmailGreeting(name: string): string {
   return `Dear ${name},`;
 }
+
+/** The longest recipient name the API and table take, in Unicode code points. */
+export const RECIPIENT_NAME_MAX = 80;
+
+/* Formatting that can make a stored name invisible or reorder the greeting.
+   Unicode's property avoids the hand-list omission described in
+   feedback-notice.ts. ZWNJ and ZWJ stay: real names and emoji use them. */
+const UNSAFE_NAME_FORMATTING = /\p{Bidi_Control}|[\u200b\u2060-\u2064\ufeff]/gu;
+const DEFAULT_IGNORABLE = /\p{Default_Ignorable_Code_Point}/gu;
+
+/** The one shared name rule for the form's sketch, storage and email rendering. */
+export function cleanRecipientName(raw: string | null): string | null {
+  if (raw === null) return null;
+  const flat = [
+    ...raw
+      .replace(/[\p{Cc}\u2028\u2029]/gu, " ")
+      .replace(UNSAFE_NAME_FORMATTING, " ")
+      .trim(),
+  ];
+  const name =
+    flat.length > RECIPIENT_NAME_MAX
+      ? `${flat.slice(0, RECIPIENT_NAME_MAX - 1).join("")}…`
+      : flat.join("");
+  return name === "" || name.replace(DEFAULT_IGNORABLE, "").trim() === "" ? null : name;
+}

@@ -54,6 +54,7 @@ import {
   type VoucherEmailState,
   type VoucherEmailStatus,
   type VoucherEmails,
+  cleanRecipientName,
   freeArticles,
   giftEmailGreeting,
   giftEmailHeading,
@@ -194,22 +195,6 @@ export interface GiftWords {
 }
 
 const NO_WORDS: GiftWords = { recipientName: null, recipientNote: null };
-
-/** The longest name a voucher may carry, in code points. The table's check says the same. */
-export const RECIPIENT_NAME_MAX = 80;
-
-/**
- * **A name as the email and the table take it**: one line (`oneLine` turns a
- * line break or any other control character into a space), trimmed, and null
- * when nothing is left. It does **not** enforce the limit by itself — `oneLine`
- * would shorten silently — so the route refuses an over-long name first
- * (`parseName` in src/store/pg-vouchers.ts).
- */
-export function cleanRecipientName(raw: string | null): string | null {
-  if (raw === null) return null;
-  const name = oneLine(raw, RECIPIENT_NAME_MAX).trim();
-  return name === "" ? null : name;
-}
 
 /**
  * One email in the shape of supabase/templates/confirmation.html. Every value

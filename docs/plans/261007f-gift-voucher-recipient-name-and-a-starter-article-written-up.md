@@ -100,8 +100,8 @@ You have been given 20 free articles on Spideryarn…   <- as today
   `char_length <= 80`. An additive, nullable column: no backfill, and old code ignores it.
 - One line. **Refused first, cleaned second** (Sol's F7): a raw value over 80 Unicode code points
   is a 400 that says so, as the note's limit is, and is never silently shortened (`oneLine(text,
-  80)` would truncate). What passes is cleaned with `oneLine` (`src/email.ts`), trimmed, and empty
-  means none. It is cleaned again where the email is rendered, as the note is. Tests: 80 and 81
+  80)` would truncate). What passes is cleaned with `cleanRecipientName` (`src/admin-vouchers.ts`),
+  trimmed, and empty means none. It is cleaned again where the email is rendered, as the note is. Tests: 80 and 81
   ASCII characters, 80 and 81 emoji, a control character and a line break inside a name.
 - It is somebody else's text in a stranger's inbox, so the HTML part escapes it with the same
   function the note uses (`escapeNoteHtml`).
@@ -313,8 +313,8 @@ code and accepted:
     ([database.md](../project/database.md)). The suites build a private database from this tree's
     `drizzle/`, so the column and its CHECK were exercised there, including an 81-character
     insert the constraint rejects. Migration: `drizzle/20261007053304_billing_voucher_recipient_name.sql`.
-  - `oneLine` turns each control character into one space and does not collapse runs, so a CRLF
-    inside a name is two spaces. A test pins it.
+  - `cleanRecipientName` mirrors `oneLine`: each control character becomes one space and runs are
+    not collapsed, so a CRLF inside a name is two spaces. A test pins it.
   - Trailing spaces count toward the 80, as they do for the note.
   - The hint beside the box is static (*their email then opens "Dear <name>,"*); the sketch beside
     the form shows the greeting live.
@@ -324,3 +324,14 @@ code and accepted:
     without a note) were recorded against the untouched renderer and still pass unedited. Four
     deliberate breaks (name out of the browser fingerprint, out of the replay comparison, the old
     name on a readdress, greeting after the note) each failed exactly their test.
+- 2026-10-07: GPT Sol's code review of `e661a29d5`
+  ([prompt](261007f-gift-voucher-name-code-review-prompt.md),
+  [answer](261007f-gift-voucher-name-code-review-sol.md)): *land with the fixes made*. It fixed
+  four, red first, and I re-ran the gates over its diff (typecheck, ten suites, 228 tests green):
+  C1, the browser's `maxlength=80` counted UTF-16 units and refused 80 emoji, removed; C2, bidi
+  controls and invisible characters survived cleaning, so one shared `cleanRecipientName` in
+  `src/admin-vouchers.ts` now neutralises them for the form's sketch, storage and the email; C3,
+  the forms trimmed before counting, now they refuse first as the route does; C4, the privacy
+  test now pins the date. Reported and not fixed: C5, the older private-note box has the same
+  `maxlength` mismatch (250 emoji where the server takes 500; a quiet admin-only box, left);
+  C6, two functions over the lint's complexity advice, left.

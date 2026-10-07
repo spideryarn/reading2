@@ -22,6 +22,8 @@ import { RefreshCw } from "lucide-react";
 
 import {
   type VoucherEmailState,
+  RECIPIENT_NAME_MAX,
+  cleanRecipientName,
   giftEmailGreeting,
   giftEmailHeading,
   giftEmailSubject,
@@ -57,8 +59,11 @@ const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-mediu
 
 /** The default a new voucher offers: Greg's own example, *"e.g. 20 free articles"*. */
 const DEFAULT_ARTICLES = 20;
-/** The longest name the server takes (`RECIPIENT_NAME_MAX`), which refuses a longer one with a 400. */
-const NAME_MAX = 80;
+const RECIPIENT_NAME_TOO_LONG = `recipientName must be at most ${RECIPIENT_NAME_MAX} characters.`;
+
+function recipientNameTooLong(name: string): boolean {
+  return [...name].length > RECIPIENT_NAME_MAX;
+}
 
 function Refusal({ message }: { message: string }) {
   return (
@@ -95,13 +100,18 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       setRefusal("Articles must be a whole number.");
       return;
     }
+    /* Refuse the raw value before trim can shorten it, as the route does. */
+    if (recipientNameTooLong(recipientName)) {
+      setRefusal(RECIPIENT_NAME_TOO_LONG);
+      return;
+    }
     setBusy(true);
     const answer = await create({
       email,
       articles: count,
       note: note.trim() === "" ? null : note,
       recipientNote: recipientNote.trim() === "" ? null : recipientNote,
-      recipientName: recipientName.trim() === "" ? null : recipientName.trim(),
+      recipientName: cleanRecipientName(recipientName),
     });
     setBusy(false);
     setRefusal(answer.kind === "refused" ? answer.message : null);
@@ -172,7 +182,6 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
             type="text"
             enterKeyHint="go"
             autoComplete="off"
-            maxLength={NAME_MAX}
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
             className={`${INPUT} tw:w-full`}
@@ -251,7 +260,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
 function EmailSketch({ articles, name, note }: { articles: number | null; name: string; note: string }) {
   const n = articles !== null && articles >= 1 ? articles : 1;
   const trimmed = note.trim();
-  const who = name.trim();
+  const who = cleanRecipientName(name);
   return (
     <section
       aria-label="What their email will look like"
@@ -261,7 +270,7 @@ function EmailSketch({ articles, name, note }: { articles: number | null; name: 
         <span className="tw:text-ink-faint">Subject:</span> {giftEmailSubject(n)}
       </p>
       <p className="tw:m-0 tw:mb-2 tw:text-sm tw:font-medium tw:text-foreground">{giftEmailHeading(n)}</p>
-      {who !== "" && <p className="tw:m-0 tw:mb-2 tw:break-words tw:text-foreground">{giftEmailGreeting(who)}</p>}
+      {who !== null && <p className="tw:m-0 tw:mb-2 tw:break-words tw:text-foreground">{giftEmailGreeting(who)}</p>}
       {trimmed === "" ? (
         <p className="tw:m-0 tw:mb-2 tw:border-l-2 tw:border-dashed tw:border-highlight/50 tw:pl-2 tw:italic">
           Your note to them goes here, if you write one.
@@ -481,6 +490,10 @@ function VoucherRow({
       setRefusal("Articles must be a whole number.");
       return;
     }
+    if (recipientNameTooLong(recipientName)) {
+      setRefusal(RECIPIENT_NAME_TOO_LONG);
+      return;
+    }
     /* Only what changed, so a save never sends an address for a claimed
        voucher (which the server would refuse with a 409). */
     const patch: { -readonly [K in keyof VoucherPatchInput]: VoucherPatchInput[K] } = {};
@@ -489,7 +502,7 @@ function VoucherRow({
     if (nextNote !== voucher.note) patch.note = nextNote;
     const nextRecipientNote = recipientNote.trim() === "" ? null : recipientNote;
     if (nextRecipientNote !== voucher.recipientNote) patch.recipientNote = nextRecipientNote;
-    const nextRecipientName = recipientName.trim() === "" ? null : recipientName.trim();
+    const nextRecipientName = cleanRecipientName(recipientName);
     if (nextRecipientName !== voucher.recipientName) patch.recipientName = nextRecipientName;
     if (unclaimed && email.trim().toLowerCase() !== voucher.email) patch.email = email;
     if (Object.keys(patch).length === 0) {
@@ -525,7 +538,6 @@ function VoucherRow({
             enterKeyHint="done"
             autoComplete="off"
             form={`voucher-${voucher.id}`}
-            maxLength={NAME_MAX}
             value={recipientName}
             onChange={(e) => setRecipientName(e.target.value)}
             className={`${INPUT} tw:mt-1 tw:block tw:w-56`}

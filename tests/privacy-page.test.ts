@@ -172,6 +172,10 @@ describe("the privacy page", () => {
     expect(prose).toContain("and the recipient’s name as that person gave it, if they gave one");
   });
 
+  it("dates the privacy notice to the day the recipient-name disclosure was added", () => {
+    expect(PAGE).toContain('const LAST_UPDATED = "7 October 2026"');
+  });
+
   it("says a reader is emailed when their feedback ships, without their words", () => {
     /* Plan 261002f: scripts/feedback-shipped-emails.ts, run by `npm run deploy`. */
     const prose = PAGE.replace(/\s+/g, " ");
