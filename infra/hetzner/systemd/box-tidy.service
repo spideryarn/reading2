@@ -51,6 +51,11 @@ AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 # run then. The script is one file with no dependencies, installed outside the
 # checkout by provision.sh.
 ExecStart=/usr/bin/node /usr/local/lib/spideryarn/box-tidy.mjs
+# Never a checkout or a worktree. The capabilities above hide this process's
+# working directory from the user's other processes, and worktree removal
+# (scripts/worktree-inuse.ts) lets a hidden process past only because it knows
+# this one by name and knows it stands here.
+WorkingDirectory=/
 
 # It walks and deletes on a box running twenty sessions. Last in line for CPU
 # and disk.

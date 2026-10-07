@@ -2164,6 +2164,11 @@ export function main(argv, env) {
 }
 
 if (process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url)) {
+  // The kernel's name for this process, read by scripts/worktree-inuse.ts. Under
+  // the unit this process holds capabilities, so its cwd is hidden from the
+  // user's other processes, and a worktree removal that cannot place a hidden
+  // process refuses. `box-tidy` is on that script's list of ones it knows.
+  process.title = "box-tidy";
   process.exitCode = main(process.argv.slice(2), process.env);
 }
 BOX_TIDY_MJS
@@ -2224,6 +2229,11 @@ AmbientCapabilities=CAP_SYS_PTRACE CAP_DAC_READ_SEARCH
 # run then. The script is one file with no dependencies, installed outside the
 # checkout by provision.sh.
 ExecStart=/usr/bin/node /usr/local/lib/spideryarn/box-tidy.mjs
+# Never a checkout or a worktree. The capabilities above hide this process's
+# working directory from the user's other processes, and worktree removal
+# (scripts/worktree-inuse.ts) lets a hidden process past only because it knows
+# this one by name and knows it stands here.
+WorkingDirectory=/
 
 # It walks and deletes on a box running twenty sessions. Last in line for CPU
 # and disk.

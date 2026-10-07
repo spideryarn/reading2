@@ -411,5 +411,10 @@ export function main(argv, env) {
 }
 
 if (process.argv[1] !== undefined && process.argv[1] === fileURLToPath(import.meta.url)) {
+  // The kernel's name for this process, read by scripts/worktree-inuse.ts. Under
+  // the unit this process holds capabilities, so its cwd is hidden from the
+  // user's other processes, and a worktree removal that cannot place a hidden
+  // process refuses. `box-tidy` is on that script's list of ones it knows.
+  process.title = "box-tidy";
   process.exitCode = main(process.argv.slice(2), process.env);
 }
