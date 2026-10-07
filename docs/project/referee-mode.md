@@ -410,38 +410,71 @@ and it is also a ranking of the referee's own work, which wants thought first.
 [`src/web/CriteriaPanel.tsx`](../../src/web/CriteriaPanel.tsx) and `tests/referee-gap.test.tsx`,
 which collects every digit on the row and compares it against the numbers that went in.
 
-#### A criterion with comments on it cannot be deleted, and says so <a id="a-criterion-with-comments-on-it"></a>
+#### A criterion is never dropped; a criterion with comments on it cannot be deleted <a id="a-criterion-with-comments-on-it"></a>
 
-A placement points at its criterion, and `comments_criterion_fk` refuses to leave it pointing at
-nothing ([database.md § `restrict` and `no action`](database.md#restrict-and-no-action-are-the-same-rule-at-two-different-moments)).
+**An add never deletes a criterion.** Until 2026-10-07 a list was capped at twenty and an add past
+that deleted the oldest finished criterion to make room, without a word; and when that criterion had
+the referee's comments placed on it, the key refused the delete and the add failed every time. The
+cap and the drop-oldest rule were **not an instruction of Greg's**: an agent chose them on
+2026-09-01 (`b9f1d2a53`, *Criteria: the referee says what they are judging the paper against*) by
+analogy with searches' `MAX_RUNS`. Asked first whether a criterion with comments should be kept even
+if the list ran past twenty:
+
+> yes, agreed. is there a good reason why we cap at 20 in the first place? I don't think that was an
+> instruction from me
+>
+> — Greg, 2026-10-07, relayed by the Overseer
+
+and then, to *never drop a reader's criterion silently; replace drop-oldest with a high ceiling of
+200; refuse a new criterion past that with a plain sentence saying why*:
+
+> 1 agreed
+>
+> — Greg, 2026-10-07, relayed by the Overseer
+
+So there is no trim. `MAX_CRITERIA` ([`src/saved-criteria.ts`](../../src/saved-criteria.ts)) is
+**200**, a ceiling, and `begin` ([`src/store/pg-referee-criteria.ts`](../../src/store/pg-referee-criteria.ts))
+refuses the add that would pass it: a 409 before any stream opens, nothing written, nothing deleted.
+It counts **every criterion on the article** — running, failed, with comments or without — because
+pending and failed rows still hold the reader's words. Current database constraints make every
+config readable; rows outside that contract count too but are hidden by the loader. A commented
+criterion must have its placements cleared before a delete succeeds. The count and insert are one
+transaction under the article lock, so two adds at 199 make 200. A retry with the same id and words,
+while its saved row is still failed, resets that row before the ceiling check. The browser keeps a
+ceiling refusal as a failed row with Retry and the sentence; it is never shown as added.
+[`criterion-refusal-drafts.ts`](../../src/web/criterion-refusal-drafts.ts) keeps the refused words
+and configuration through mode changes and reloads in this tab, keyed by reader and article, until
+a `begin` confirms storage or the reader deletes the draft. If browser storage is unavailable, only
+the mounted hook keeps those words.
+
+**A criterion with comments on it cannot be deleted by hand, and says so.** A placement points at its
+criterion, and `comments_criterion_fk` refuses to leave it pointing at nothing
+([database.md § `restrict` and `no action`](database.md#restrict-and-no-action-are-the-same-rule-at-two-different-moments)).
 Until 2026-10-07 nothing turned that refusal into words, so it reached the referee as a 500
-`[db-failed]`, *"a bug here rather than anything you did"*, from three directions. Each is now a
-refusal with its own sentence, **and nothing else changed**: no comment is detached, no criterion is
-deleted, and the key is what it was.
+`[db-failed]`. It is now a refusal with a sentence; no comment is detached and the key is what it
+was. Whether Delete should instead detach the comments was question 3b, and the answer relayed on
+2026-10-07 was to keep refusing.
 
 | The referee | Gets | Sentence |
 |---|---|---|
+| adds a criterion to an article that already has 200 (or more, inherited from the old trim) | 409, before any stream opens | `criteriaAtCeiling(n)` — the real count, and how many to delete |
 | deletes a criterion their comments are placed on | 409, and the row is put back on screen | `CRITERION_HAS_COMMENTS` |
-| adds a criterion when the list is full and the one the trim would remove has comments on it | 409, before any stream opens | `CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS` |
 | places a comment on a criterion another tab deleted a moment ago | 400, the words the early check uses | `CRITERION_NOT_ON_ARTICLE` |
 
-The sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts); the key
-is matched **by name**, before the store guard drops the name, with `violatesForeignKey`
-([`src/store/db-errors.ts`](../../src/store/db-errors.ts)). They are caught rather than checked for
-in advance: a read for comments followed by the delete can be raced by a placement, and the key
-cannot. The delete is optimistic in the browser, so `useCriteria` § `forget` restores the row on a
-409 and on nothing else — a 500 does not say whether the row went.
+The sentences are in [`src/referee-criteria-store.ts`](../../src/referee-criteria-store.ts). The two
+foreign-key refusals are matched **by name**, before the store guard drops the name, with
+`violatesForeignKey` ([`src/store/db-errors.ts`](../../src/store/db-errors.ts)). They are caught
+rather than checked for in advance: a read for comments followed by the delete can be raced by a
+placement, and the key cannot. The delete is optimistic in the browser, so `useCriteria` § `forget`
+restores the row on a 409 and on nothing else — a 500 does not say whether the row went.
 
-**The second row is a wedge, and it is still one.** Finished rows past the cap are trimmed, and
-pending rows are skipped. If a trim candidate has comments, that add rolls back. The sentence says
-"the one that would be dropped to make room" rather than "the oldest one", because the oldest can
-be a pending row the trim skips while a younger finished one is what blocks. Whether the trim should skip such a
-criterion instead, letting a list run past twenty, is a retention decision waiting on Greg (question 3a in
-[the seventh sweep's umbrella](../plans/261006m-seventh-codebase-sweep-depth-umbrella.md)), as is
-what Delete should do with the comments (question 3).
-`tests/referee-routes-postgres.test.ts` § *OPEN QUESTION 3a* pins today's behaviour so whoever
-builds the answer has the case to turn over.
-[The plan](../plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md).
+**Mirror still sends at most 24 criteria** (its own `MAX_CRITERIA` in
+[`src/referee-mirror.ts`](../../src/referee-mirror.ts), a prompt-size bound and a different number),
+and says how many it left out. A list past twenty-four was nearly impossible under the old cap and is
+ordinary now.
+
+The plans: [refused, not failed](../plans/261007b-seventh-sweep-referee-criteria-with-notes-are-refused-not-failed.md)
+and [never dropped, a ceiling of 200](../plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md).
 
 ### 2. Claims — where the paper addresses its own claims
 
