@@ -678,7 +678,7 @@ describe("Referee's routes, against Postgres", { timeout: 60_000 }, () => {
 
     it("keeps another owner's access as a 404 before any foreign-key translation", async () => {
       const id = await criterion("owned by the fixture reader");
-      const outsider = "00000000-0000-4000-8000-0000000000d5" as OwnerId;
+      const outsider = "07852712-f444-4aec-bd4a-b70403c8c03d" as OwnerId;
       await expect(runAsOwner(outsider, () => refereeCriteriaStore.remove(SLUG, id)))
         .rejects.toMatchObject({ status: 404 });
       await expect(runAsOwner(outsider, () => commentStore.create(SLUG, {
