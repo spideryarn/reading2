@@ -222,11 +222,31 @@ separator between creators where the reader allows only `""` and `"and"`, and a 
 (`.ltx_note`) set beside the personname instead of inside it. One (`2610.08750`) is not yet
 explained.
 
-**So v1:** the reader accepts those two shapes, and nothing else changes. Red first from trimmed
-`.ltx_authors` fixtures of the real pages; then the 19 pages again, and the gate is the table's
-last row staying at 0. The page that must stay refused is `2610.08781`, where institutions and
-icon links are marked up as creators beside names carrying `<math>`: the reader refuses it today
-because it refuses `<math>`, and a test pins that.
+**So v1:** the reader accepts three more shapes, each a closed widening seen on a real page, and
+nothing else changes:
+
+- `","` between creators, beside `""` and `"and"` (`2610.08790`);
+- a `\thanks` footnote (`span.ltx_note.ltx_role_thanks`) set beside the personname instead of
+  inside it (four pages). It hides nobody: a creator still holds exactly one personname and no
+  words of its own;
+- a name that is the text of a link to that person's own ORCID record (`2610.08750`, the page
+  unexplained when this was written). The link must be the whole name, its address an ORCID id
+  and nothing else, and its words still pass every one-name check. This one rests on a single
+  page; taking it out is one branch and one helper.
+
+**Result, built 2026-10-07**, the same 19 pages against the hand-labelled names:
+
+| | before | after |
+|---|---|---|
+| right | 6 | 12 |
+| `null` | 13 | 7 |
+| wrong | 0 | 0 |
+
+The seven still refused: five with several people in one `personname`, one with no author block,
+and `2610.08781`, where institutions and icon links (*Code*, *Dataset*) are marked up as creators
+beside names carrying `<math>`. A test pins each of its nine creators refusing alone: seven on
+the `<math>`, two on the link. Red first from fixtures cut from the real pages (emails replaced);
+ten mutants of the new code, all killed.
 
 **Affiliations are not read, and this is measured, not assumed.** A rule of one affiliation per
 `ltx_role_affiliation` contact gave the right affiliations on 5 of 19 pages and wrong ones on 7
@@ -321,3 +341,6 @@ university; a heading using *School* as a noun; a surname that is a word).
   affiliations dropped on the measurement.
 - 2026-10-07: GPT Sol's plan review, *revise before build*; Opus arbitrated F9 and the
   replacement rule; stage 1 rewritten around per-block evidence.
+- 2026-10-07: stage 2 built by an Opus subagent: three shapes, 6 to 12 of 19 pages right, none
+  wrong. It narrowed the brief's "any `.ltx_note` sibling" to the `\thanks` note the four pages
+  actually carry, and traced `2610.08750` to an ORCID-linked name.

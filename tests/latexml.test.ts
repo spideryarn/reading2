@@ -420,6 +420,14 @@ describe("fix 5 — the byline is the paper's authors", () => {
     "2610-03261v1": ["Elena Morotti", "Davide Evangelista", "Elena Loli Piccolomini"],
     /* Each name carries an ORCID link with an SVG logo in it. */
     "2610-01988v1": ["Adamu Issifu", "Orlando Oliveira", "Tobias Frederico"],
+    /* Joined by ", " and a last " and ". */
+    "2610-08790": ["Jiraphon Yenphraphai", "Fang Li", "Tianshuo Xu", "Depu Meng", "Quentin Herau", "Yihan Hu", "Raymond A. Yeh", "Wei Zhan"],
+    /* A \thanks footnote set after the personname, not inside it; the second name carries its mark inside. */
+    "2610-08785": ["Kevin Zhang", "Stephen Bates"],
+    /* The same footnote, with the affiliations after it. */
+    "2610-08392": ["Ilya Auslender", "Yasaman Heydari", "Asiye Malkoç"],
+    /* The second name is the text of its own ORCID link. */
+    "2610-08750": ["Jose Eduardo Escrig Molina", "Daniel Probst"],
   };
 
   for (const [slug, names] of Object.entries(NAMES)) {
@@ -480,6 +488,61 @@ describe("fix 5 — the byline is the paper's authors", () => {
       const words = fixture.replace('<span class="ltx_author_before"> and </span>', '<span class="ltx_author_before">University of Oxford</span>');
       expect(names(latexml(nested))).toBeNull();
       expect(names(latexml(words))).toBeNull();
+    });
+    it("a comma between creators is a separator; a comma with words is not", () => {
+      const comma = fx("authors-2610-08790");
+      for (const between of [", and ", ", Jr., ", "; ", ", University of Oxford, "]) {
+        const html = comma.replace('<span class="ltx_author_before">, </span>', `<span class="ltx_author_before">${between}</span>`);
+        expect(html, between).not.toBe(comma);
+        expect(names(latexml(html)), between).toBeNull();
+      }
+    });
+    it("a footnote beside the personname hides nobody: a second personname or loose words after it still refuse", () => {
+      const noted = fx("authors-2610-08785");
+      const after = '<span class="ltx_note_type">thanks: </span>EECS, MIT, Cambridge MA, USA.</span></span></span>';
+      expect(noted).toContain(after);
+      expect(names(latexml(noted.replace(after, `${after}<span class="ltx_personname">John Smith</span>`)))).toBeNull();
+      expect(names(latexml(noted.replace(after, `${after} John Smith`)))).toBeNull();
+      /* Only the footnote LaTeXML makes of \thanks: another element in its place is not read past. */
+      const other = noted.replace('class="ltx_note ltx_note_frontmatter ltx_thanks_note ltx_role_thanks"', 'class="ltx_text"');
+      expect(other).not.toBe(noted);
+      expect(names(latexml(other))).toBeNull();
+    });
+    it("a link around a name is read only when it is the person's ORCID and holds the name alone", () => {
+      const linked = fx("authors-2610-08750");
+      const orcid = 'href="https://orcid.org/0000-0003-1737-4407"';
+      expect(linked).toContain(orcid);
+      for (const href of ['href="https://github.com/someone/code"', 'href="https://orcid.org.example.test/0000-0003-1737-4407"', 'href="https://orcid.org/"']) {
+        expect(names(latexml(linked.replace(orcid, href))), href).toBeNull();
+      }
+      for (const inside of ["Daniel Probst, John Smith", "Daniel Probst and John Smith", 'Daniel Probst <span class="ltx_text">Code</span>']) {
+        const html = linked.replace("Daniel Probst</a>", `${inside}</a>`);
+        expect(html, inside).not.toBe(linked);
+        expect(names(latexml(html)), inside).toBeNull();
+      }
+      /* Words beside the link are a second thing in the personname. */
+      for (const [from, to] of [
+        ["Daniel Probst</a>", "Daniel Probst</a> John Smith"],
+        ['<span class="ltx_personname"><a href="https://orcid', '<span class="ltx_personname">John Smith <a href="https://orcid'],
+      ] as const) {
+        expect(linked, from).toContain(from);
+        expect(names(latexml(linked.replace(from, to))), to).toBeNull();
+      }
+    });
+    it("institutions and icon links marked up as creators (2610.08781): nothing is read", () => {
+      const fixture08781 = fx("authors-2610-08781");
+      expect(fixture08781).toContain("Tata Consultancy Services");
+      expect(fixture08781).toContain('<span class="ltx_text ltx_font_typewriter">Code</span></a>');
+      expect(names(latexml(fixture08781))).toBeNull();
+      expect(metaAuthors(documentAt(latexml(fixture08781)))).toBeNull();
+      /* Each kind of creator in it refuses on its own: a name with a formula after it, an
+         institution with one before it, and a link that is not a name. */
+      const creators = fixture08781.replace(/^<div class="ltx_authors">\n|<\/div>\n?$/gu, "").split(/\n<span class="ltx_author_before">\s*<\/span>/u);
+      expect(creators).toHaveLength(9);
+      for (const creator of creators) expect(names(latexml(`<div class="ltx_authors">${creator}</div>`)), creator.slice(0, 120)).toBeNull();
+      /* And the two links are not names even with nothing else on the page. */
+      const links = creators.filter((creator) => creator.includes("ltx_href") && !creator.includes("<math"));
+      expect(links).toHaveLength(2);
     });
     it("leaves a single declared dc.creator to Readability", () => {
       const html = latexml(fixture).replace("<title>", '<meta name="dc.creator" content="Declared Author"><title>');
