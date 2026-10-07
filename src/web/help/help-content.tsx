@@ -1,11 +1,15 @@
 /**
  * **What the Help page says**, section by section, and the order it says it in.
  *
- * The words are TSX rather than Markdown because there is no Markdown renderer
- * in the client, and adding one for a page we write ourselves is a dependency
- * for nothing; and because TSX lets a section link to another by a typed
- * anchor (`HelpRef`), so a cross-reference to a section that has gone does not
- * compile. docs/plans/261002b-help-page.md § One static page.
+ * **The words are Markdown**, one file per section under src/web/help/pages/
+ * (help-pages.ts loads them, help-markdown.tsx draws them), and this file
+ * turns them into the shapes the page has always drawn. They were TSX until
+ * 2026-10-07; Greg asked for Markdown so that a page is easy to write and easy
+ * to hand to a model.
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md.
+ * What TSX gave, a cross-reference to a section that has gone not compiling,
+ * is now a throw when the file is drawn (help-markdown.tsx § targetOf), which
+ * tests/help-page.test.tsx reaches by rendering the page.
  *
  * ## What belongs in a section
  *
@@ -23,8 +27,9 @@
  * from `MODE_CATALOG` — the same words its band's (i) card shows (BandAbout.tsx
  * § AboutMode) — and then the two things only Help says: when the mode is worth
  * opening, and how to read what it shows. Restating the catalog here would be
- * a second copy to drift. `HELP_MODES` is a `Record<Mode, …>`, so a new mode
- * without an entry here is a type error. GPT Sol, plan review, R7.
+ * a second copy to drift. `HELP_MODE_FILES` (help-pages.ts) is a
+ * `Record<Mode, …>`, so a new mode without a file is a type error. GPT Sol,
+ * plan review, R7.
  *
  * ## Search reads `title` and `keywords`, not `body`
  *
@@ -32,17 +37,48 @@
  * for the words a reader *brings* — "heat", "thick line", "phone", "price" —
  * not for the words the section already uses in its title.
  */
-import { MODES } from "../../modes.js";
+import { MODES, type Mode } from "../../modes.js";
 import type { SynonymTable } from "../page-search.js";
-import { FAQ_IDS, modeAnchor, type HelpAnchor } from "./help-anchors.js";
+import { FAQ_IDS, HELP_TOPIC_IDS, modeAnchor, type FaqId, type HelpAnchor, type HelpTopic } from "./help-anchors.js";
+import { renderHelpMarkdown, renderHelpModeHalves } from "./help-markdown.js";
+import { byId, HELP_FAQ_PAGES, HELP_MODE_PAGES, HELP_TOPIC_PAGES } from "./help-pages.js";
+import { onePageHref, type HelpHrefFor, type HelpModeExtra, type HelpSection } from "./help-parts.js";
 
-/* **The words live in three files**, one per kind of section, and this file
-   gathers them so the page imports from one place. The shared shapes and the
-   link components are in help-parts.tsx, which imports none of the words. */
-export { HELP_FAQ } from "./help-faq.js";
-export { HELP_MODES, MODE_WHEN } from "./help-modes.js";
-export { HELP_TOPICS } from "./help-topics.js";
+export { MODE_WHEN } from "./help-mode-when.js";
 export { HELP_LINK_CLASS, HelpRef, type HelpModeExtra, type HelpSection } from "./help-parts.js";
+
+/**
+ * **One section from its file**, with its links pointing wherever `hrefFor`
+ * says. Functions as well as the three tables below, because where a link
+ * points is the page's decision (help-parts.tsx § HelpHrefFor) and the words
+ * should not have to be loaded twice to change it.
+ */
+export function helpTopicSection(id: HelpTopic, hrefFor: HelpHrefFor): HelpSection {
+  const page = HELP_TOPIC_PAGES[id];
+  return { title: page.title, keywords: page.keywords, body: renderHelpMarkdown(page.body, hrefFor, id) };
+}
+
+export function helpFaqSection(id: FaqId, hrefFor: HelpHrefFor): HelpSection {
+  const page = HELP_FAQ_PAGES[id];
+  return { title: page.title, keywords: page.keywords, body: renderHelpMarkdown(page.body, hrefFor, id) };
+}
+
+export function helpModeExtra(mode: Mode, hrefFor: HelpHrefFor): HelpModeExtra {
+  const page = HELP_MODE_PAGES[mode];
+  return { keywords: page.keywords, ...renderHelpModeHalves(page.body, hrefFor, modeAnchor(mode)) };
+}
+
+/* **Help as one page**, which is what it still is: every link to another
+   section is a fragment. Drawn once, when the Help chunk loads; the words are
+   constants. A file with something in it that nothing draws throws here, so it
+   fails every test that imports the page rather than one section of it. */
+
+/** The general sections. Total over `HelpTopic`. */
+export const HELP_TOPICS: Record<HelpTopic, HelpSection> = byId(HELP_TOPIC_IDS, (id) => helpTopicSection(id, onePageHref));
+/** What Help adds to each mode. Total over `Mode`. */
+export const HELP_MODES: Record<Mode, HelpModeExtra> = byId(MODES, (m) => helpModeExtra(m, onePageHref));
+/** The questions people ask. Total over `FaqId`. */
+export const HELP_FAQ: Record<FaqId, HelpSection> = byId(FAQ_IDS, (id) => helpFaqSection(id, onePageHref));
 
 /** One heading in the contents list, and the sections under it in page order. */
 export interface HelpGroup {

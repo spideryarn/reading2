@@ -9,8 +9,9 @@
  * > bar, and lots of anchor links (so we can link directly to places). And
  * > include it in footer.
  *
- * The words are in help-content.tsx and the anchors in help-anchors.ts; this
- * file is only the page that draws them. docs/plans/261002b-help-page.md, whose
+ * The words are Markdown files under pages/, gathered by help-content.tsx, and
+ * the anchors are in help-anchors.ts; this file is only the page that draws
+ * them. docs/plans/261002b-help-page.md, whose
  * last section (GPT Sol's plan review) is what shaped the three decisions below.
  *
  * ## Its own contents list, not `PageContents`
@@ -68,6 +69,7 @@ import {
   HELP_TOPICS,
   type HelpSection,
 } from "./help-content.js";
+import { HelpSub } from "./help-parts.js";
 
 /**
  * **One section as the page draws and searches it**, whichever table it came
@@ -87,11 +89,6 @@ function topicOrFaq(anchor: HelpAnchor): HelpSection | null {
   if (Object.hasOwn(HELP_TOPICS, anchor)) return HELP_TOPICS[anchor as keyof typeof HELP_TOPICS];
   if (Object.hasOwn(HELP_FAQ, anchor)) return HELP_FAQ[anchor as keyof typeof HELP_FAQ];
   return null;
-}
-
-/** A small subheading inside a mode's section. */
-function Sub({ children }: { children: ReactNode }) {
-  return <h4 className="tw:m-0 tw:mt-1 tw:text-xs tw:font-semibold tw:tracking-wide tw:text-ink-faint tw:uppercase">{children}</h4>;
 }
 
 function modeEntry(anchor: HelpAnchor, mode: Mode): Entry {
@@ -114,13 +111,13 @@ function modeEntry(anchor: HelpAnchor, mode: Mode): Entry {
         <p>{catalog.how}</p>
         {extra.whenToUse !== null && (
           <>
-            <Sub>When to use it</Sub>
+            <HelpSub>When to use it</HelpSub>
             {extra.whenToUse}
           </>
         )}
         {extra.reading !== null && (
           <>
-            <Sub>Reading it</Sub>
+            <HelpSub>Reading it</HelpSub>
             {extra.reading}
           </>
         )}

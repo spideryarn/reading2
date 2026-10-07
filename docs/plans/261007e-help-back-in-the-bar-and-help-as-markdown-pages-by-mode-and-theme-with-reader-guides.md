@@ -230,6 +230,79 @@ queue.
 
 None blocking.
 
+## After GPT Sol's plan review
+
+**Plan, GPT Sol, 2026-10-07, read-only: not ready, on four established P1s the plan had missed.**
+[prompt](261007e-help-pages-plan-review-prompt.md), [answer](261007e-help-pages-plan-review-sol.md).
+It agreed with the grain (a page per topic and per mode, the questions together), with `?raw`, and
+that `overseer.md` needs no edit. All seven findings are taken, and they change the plan as follows.
+
+- **R1, P1. The command bar's Help row would vanish from model-picked commands.** `pickKey`
+  (`src/web/command-match.ts`) strips `?` and `#` but not a path segment, so `/help/mode-glossary`
+  would become `page:/help/mode-glossary`, which the generated catalogue does not hold and the
+  server therefore discards. **Change:** every `/help` and `/help/<page>` row keys to `page:/help`
+  and keeps its real `href`; a path-form case joins `tests/command-pick-catalogue.test.ts` and
+  `tests/command-bar-pick.test.tsx`.
+- **R2, P1. Feedback filed from a Help page would lose its page label.** `feedbackPageLabel`
+  (`src/feedback-page.ts`) knows only exactly `/help`. **Change:** `/help/<one segment>` is
+  labelled `/help`, and the segment is never stored. Tests for a real and an unknown segment.
+- **R3, P1. Seven other tests read the three `.tsx` files of words** to hold Help's promises to the
+  features they describe (annotate dialog, dictation's double stop, the command bar's double stop,
+  Citations, the thorough search's duration, public sharing, the spine). **Change:** S2 gives tests
+  one helper that returns a section's plain text, and each of the seven keeps its assertion against
+  that.
+- **R4, P1. The "nothing matches" line tells the reader that the browser's Find "searches the text
+  of every section"**, which stops being true once the sections are separate pages. **Change:**
+  the search also reads each page's body, below title and keywords, so a remembered phrase still
+  finds its page; and the line no longer mentions Find.
+- **R5, P1 (reasoned). Moving between Help pages inside the app would not re-run arrival**: both
+  `App.tsx` arms use `routeKey="help"`, and the router's `pushState` fires no `hashchange`.
+  **Change:** the page's arrival effect is keyed on the page and the fragment, and the tests cover
+  moving inside the app, Back and Forward, an old topic link, a retired mode and a question's old
+  link, not only a direct load.
+- **R6, P2. A crawler could find `/help/spine` from `/help` but `robots.txt` would stop it reading
+  the `noindex`** (`src/site-pages.ts` explains why a linked no-index page must stay fetchable).
+  **Change:** `/help/` joins the crawlable-but-not-listed allow list, in `robots.txt`, in
+  `CRAWLABLE_NOINDEX_ROBOTS_ALLOWS` and in `scripts/check-public-shell.ts`, with a real page in the
+  public-shell check. The pages stay out of `SITE_PAGES` and the sitemap; listing them is still
+  the deferred piece.
+- **R7, P3.** `help-page.md § Bringing it up to date` calls itself the brief for "step 3"; it is the
+  deploy's step 4. Fixed in the rewrite.
+
+**S2 is also built differently from how it was first written:** the Markdown files are produced by
+a one-off script that renders each old section and writes its Markdown, not by hand, so that 2,100
+lines are not retyped. The equivalence test then checks the script's output like anybody else's.
+
+## S2 evidence
+
+Steps 1 and 2, 2026-10-07. 46 files under `src/web/help/pages/` (21 topics, 17 modes, 8 questions),
+1,268 lines, written by a one-off converter that rendered each old section and walked its DOM. The
+converter is deleted and kept nowhere. The page at `/help` is now drawn from the files; the three
+`.tsx` files of words are still on disk, imported only by the equivalence test and the seven tests R3
+names.
+
+`tests/help-markdown-equivalence.test.tsx` compares old and new for every section: the words, the
+link targets, the sequence of `strong` / `em` / `code` / `kbd` / `li`, and title and keywords. It
+passed on the converter's first output, so it was shown red three ways before being believed, each
+by one edit to one file, each restored afterwards:
+
+| the edit | what failed |
+|---|---|
+| the first `**…**` in `spine.md` unmarked | `topic spine`: `expected [ …(24) ] to deeply equal [ 'strong: proportional', …(24) ]` |
+| `/help/spine` → `/help/keyboard` in `what-it-is-for.md` | `topic what-it-is-for`: `expected [ '/help/ai-words', …(3) ] to deeply equal [ '/help/ai-words', …(3) ]` (the diff names the two targets) |
+| the last sentence of `modes/plain.md` deleted | `mode plain`: `expected 'One thing carries over: once an artic…' to be 'One thing carries over: once an artic…'` |
+
+Each run: `Tests  1 failed | 46 passed (47)`. Restored: `Tests  47 passed (47)`.
+
+What the converter did not do by walking, all four by exact match on a value from code: the
+experimental modes' names in `experimental-features.md` became `{{experimental-modes}}`, the link
+text in `sharing.md` became `{{public-shelf-label}}`, the link text in `whats-new.md` became
+`{{whats-new-label}}`, and the table in `modes.md` became `{{modes-table}}`. The 21 `summary` lines
+are new words, written by hand from each section.
+
+`tests/help-markdown.test.tsx` stays: the machinery throws on what it does not draw, the real files
+never make it throw, so that test is where each refusal is seen.
+
 ## Reviews
 
-(to come)
+(code review to come)

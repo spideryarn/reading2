@@ -1,0 +1,161 @@
+// @vitest-environment jsdom
+/**
+ * **What Help's Markdown machinery refuses, and what its text form says**:
+ * src/web/help/help-front-matter.ts, help-pages.ts, help-markdown.tsx.
+ * docs/plans/261007e-help-back-in-the-bar-and-help-as-markdown-pages-by-mode-and-theme-with-reader-guides.md
+ * § The Markdown, and how it becomes a page.
+ *
+ * The files are ours, so the machinery throws on anything it does not draw
+ * rather than drawing it wrongly, and tests/help-page.test.tsx turns a throw
+ * into a red test by rendering the page. That only works if the throws
+ * happen, and the 46 real files are all well formed, so none of them shows
+ * one. These are the refusals, each seen.
+ */
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
+import { MODE_CATALOG } from "../src/mode-catalog.js";
+import { MODES } from "../src/modes.js";
+import { MODE_LABEL } from "../src/title-text.js";
+import { CHANGELOG_LABEL } from "../src/web/router.js";
+import { HELP_ANCHORS, type HelpAnchor } from "../src/web/help/help-anchors.js";
+import { readFrontMatter } from "../src/web/help/help-front-matter.js";
+import {
+  expandHelpTokens,
+  helpMarkdownText,
+  helpSectionText,
+  renderHelpMarkdown,
+  renderHelpModeHalves,
+} from "../src/web/help/help-markdown.js";
+import { HELP_TOPIC_FILES, HELP_TOPIC_PAGES } from "../src/web/help/help-pages.js";
+
+const fragment = (a: HelpAnchor): string => `#${a}`;
+const html = (md: string, hrefFor = fragment): string => renderToStaticMarkup(<>{renderHelpMarkdown(md, hrefFor, "t")}</>);
+
+describe("the front matter", () => {
+  const shape = { required: ["title", "keywords"], optional: ["related"] } as const;
+  const read = (raw: string) => readFrontMatter(raw, shape, "t");
+
+  it("reads keys, keeps a colon in a value, and returns the body", () => {
+    const { meta, body } = read("---\ntitle: Your data: export\nkeywords: a b\n---\n\nWords.\n");
+    expect(meta).toEqual({ title: "Your data: export", keywords: "a b" });
+    expect(body).toBe("Words.");
+  });
+
+  it.each([
+    ["no opening fence", "title: x\nkeywords: a\n---\nb", /first line must be ---/],
+    ["never closed", "---\ntitle: x\nkeywords: a\nb", /never closed/],
+    ["a missing key", "---\ntitle: x\n---\nb", /missing "keywords"/],
+    ["an unknown key", "---\ntitle: x\nkeywords: a\nauthor: me\n---\nb", /unknown front matter key "author"/],
+    ["a key twice", "---\ntitle: x\ntitle: y\nkeywords: a\n---\nb", /appears twice/],
+    ["an empty value", "---\ntitle:\nkeywords: a\n---\nb", /"title" is empty/],
+  ])("throws on %s", (_name, raw, message) => {
+    expect(() => read(raw)).toThrow(message);
+  });
+
+  it("every topic has a summary that is one sentence of its own", () => {
+    for (const page of Object.values(HELP_TOPIC_PAGES)) {
+      expect(page.summary).toMatch(/^[A-Z].{30,}\.$/);
+      expect(page.summary).not.toBe(page.title);
+    }
+  });
+});
+
+describe("drawing a file", () => {
+  it("draws the elements the page styles, and nothing else", () => {
+    const out = html("A **b** *c* `d` <kbd>E</kbd>.\n\n- one\n  - inner\n- two\n\n## Sub");
+    expect(out).toContain("<p>A <strong>b</strong> <em>c</em> <code>d</code> <kbd>E</kbd>.</p>");
+    expect(out).toContain("<ul><li>one<ul><li>inner</li></ul></li><li>two</li></ul>");
+    expect(out).toMatch(/<h4[^>]*>Sub<\/h4>/);
+  });
+
+  it("gives a Help link's anchor to hrefFor, and leaves another page's path alone", () => {
+    const md = "[a](/help/spine) [b](/help/questions#faq-older-profile) [c](/pricing)";
+    expect(html(md)).toMatch(/href="#spine".*href="#faq-older-profile".*href="\/pricing"/);
+    expect(html(md, (a) => `/x/${a}`)).toMatch(/href="\/x\/spine".*href="\/x\/faq-older-profile"/);
+  });
+
+  it.each([
+    ["other HTML", "A <span>b</span>.", /only HTML allowed is <kbd>/],
+    ["a block of HTML", "<div>\nx\n</div>", /nothing draws a "html"/],
+    ["an unclosed kbd", "Press <kbd>Enter.", /never closed/],
+    ["an unknown token", "A {{nonsense}}.", /unknown token \{\{nonsense\}\}/],
+    ["half a token", "A {{public-shelf-label.", /not closed/],
+    ["the table inside a sentence", "See {{modes-table}} here.", /alone in its own paragraph/],
+    ["a link to a page that does not exist", "[a](/help/nowhere)", /names no live Help page/],
+    ["a link to a retired anchor", "[a](/help/mode-trajectory)", /names no live Help page/],
+    ["a question outside questions#", "[a](/help/faq-older-profile)", /should be \/help\/questions#faq-older-profile/],
+    ["a link off the site", "[a](https://example.com)", /must be a path on this site/],
+    ["a numbered list", "1. one\n2. two", /numbered lists/],
+    ["a loose list", "- one\n\n- two", /blank line/],
+    ["a deeper heading", "### Three", /only ## headings/],
+    ["a block quote", "> quoted", /nothing draws a "blockquote"/],
+    ["an image", "![alt](/x.png)", /nothing draws a "image"/],
+  ])("throws on %s", (_name, md, message) => {
+    expect(() => html(md)).toThrow(message);
+    /* The text walk refuses the same files, so search cannot index what the page cannot draw. */
+    expect(() => helpMarkdownText(md, "t")).toThrow();
+  });
+
+  it("splits a mode's file into its two halves, and a missing half is null", () => {
+    const both = renderHelpModeHalves("## When to use it\n\nA.\n\n## Reading it\n\nB.", fragment, "t");
+    expect(renderToStaticMarkup(<>{both.whenToUse}</>)).toBe("<p>A.</p>");
+    expect(renderToStaticMarkup(<>{both.reading}</>)).toBe("<p>B.</p>");
+    expect(renderHelpModeHalves("## Reading it\n\nB.", fragment, "t").whenToUse).toBeNull();
+    expect(renderHelpModeHalves("## When to use it\n\nA.", fragment, "t").reading).toBeNull();
+  });
+
+  it.each([
+    ["words before the first heading", "A.\n\n## Reading it\n\nB.", /must start with a ## heading/],
+    ["a misspelt heading", "## When to use\n\nA.", /a mode's headings are/],
+    ["the halves out of order", "## Reading it\n\nB.\n\n## When to use it\n\nA.", /repeated or out of order/],
+    ["a half twice", "## Reading it\n\nB.\n\n## Reading it\n\nC.", /repeated or out of order/],
+  ])("a mode's file throws on %s", (_name, md, message) => {
+    expect(() => renderHelpModeHalves(md, fragment, "t")).toThrow(message);
+  });
+});
+
+describe("the tokens", () => {
+  const experimental = MODES.filter((m) => MODE_CATALOG[m].experimental).map((m) => MODE_LABEL[m]);
+
+  it("stand for the labels in code, on the page and in the text", () => {
+    expect(html("[{{public-shelf-label}}](/read/public)")).toContain(`>${PUBLIC_SHELF_LABEL}</a>`);
+    expect(helpMarkdownText("{{whats-new-label}}.", "t")).toBe(`${CHANGELOG_LABEL}.`);
+    const list = helpMarkdownText("{{experimental-modes}}", "t");
+    expect(experimental.length).toBeGreaterThan(1);
+    for (const label of experimental) expect(list).toContain(label);
+    expect(list).toMatch(/, .* and /);
+  });
+
+  it("the table is drawn as a table, with a row for every mode", () => {
+    const out = html("{{modes-table}}");
+    expect(out).toContain("<table");
+    for (const m of MODES) expect(out).toContain(`href="#mode-${m}"`);
+  });
+
+  it("expandHelpTokens leaves Markdown, with the table as a list and no token behind", () => {
+    const out = expandHelpTokens(HELP_TOPIC_FILES.modes);
+    expect(out).not.toContain("{{");
+    expect(out.match(/^- \*\*.+\*\*.*: reach for it when /gm)?.length).toBe(MODES.length);
+    expect(out).toContain(`- **${MODE_LABEL.chat}**: reach for it when you have a question of your own`);
+    expect(() => expandHelpTokens("{{nonsense}}")).toThrow(/unknown token/);
+  });
+});
+
+describe("a section's plain text", () => {
+  it("exists for every anchor, with no Markdown or token left in it", () => {
+    for (const anchor of HELP_ANCHORS) {
+      const text = helpSectionText(anchor);
+      expect(text.length, anchor).toBeGreaterThan(40);
+      expect(text, anchor).not.toMatch(/\{\{|\*\*|<kbd>|\]\(/);
+    }
+  });
+
+  it("says what the page says", () => {
+    expect(helpSectionText("spine")).toContain("It is proportional — a part that fills half the piece");
+    expect(helpSectionText("keyboard")).toContain("⌘K (Mac) or Ctrl K opens the command bar.");
+    expect(helpSectionText("mode-plain")).toMatch(/^When to use it\nFor reading straight through\./);
+    expect(helpSectionText("modes")).toContain(`${MODE_LABEL.chat}: reach for it when you have a question of your own`);
+  });
+});
