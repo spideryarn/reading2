@@ -288,11 +288,15 @@ the interface model.
   reason for reading, roughly how many other articles they have opened, and our words for every
   mode, and it proposes **buttons** — open a mode, quick search, and chat's others — that the
   reader presses. The bar reaches it as a second door: when the fast pick answers that no row fits,
-  a row *Ask the guide: "…"* sends the sentence there. It replaces the "Why are you reading this?"
-  modal on a first open where a band fits. [chat-tools.md § The guide](chat-tools.md#the-guide).
+  a row *Ask the guide: "…"* sends the sentence there. It is where every first open of an article
+  lands where a band fits (since 2026-10-07), and stands in there for the "Why are you reading
+  this?" modal. [chat-tools.md § The guide](chat-tools.md#the-guide).
   Unlike the pick, **the guide sees the article**, so it holds the line by pressing alone: nothing
-  it writes runs without the reader. Whether it may open a mode itself is a question for Greg
-  (`[Q-guide-acts]` in the plan).
+  it proposes that writes or spends runs without the reader. Since 2026-10-07 it may *move* the
+  reader itself — one jump, or one mode that makes and writes nothing, per answer — which Greg
+  answered on q-tyvutf: *"yes. err on the side of capability for the guide, unless there's high
+  risk/stakes"* ([261007p](../plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md),
+  [chat-tools.md § The guide](chat-tools.md#the-guide)).
 - **Not built**: questions about the app answered from the Help; two commands from one sentence;
   the capable model when Jev is unsure (§ Jev first says what replaced it); the interface model
   in chat.

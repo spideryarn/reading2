@@ -33,7 +33,8 @@
  * arms fall across the sheet's halves so a lopsided order is seen before anyone
  * judges it. `score` joins a judge's `labels.tsv` back to the key.
  *
- * Reads the article from the local database, read-only. Writes JSON under
+ * Reads the article from the local database, and writes nothing there beyond
+ * the `ai_calls` row each paid call records. Writes JSON under
  * `evals/results/quiz-reading-goal/<arm>/`.
  */
 
@@ -299,7 +300,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (cmd === "generate") {
     const arm = flag("--arm");
     if (!arm) throw new Error("generate needs --arm <name>");
-    await generate(arm, flag("--purpose") ?? null, flag("--about") ?? null, slug);
+    loadEnvLocal();
+    const { withLedger } = await import("../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    await withLedger("eval", () => generate(arm, flag("--purpose") ?? null, flag("--about") ?? null, slug));
     process.exit(0);
   } else if (cmd === "report") {
     const parts = (flag("--parts") ?? "").split(",").map(Number).filter((n) => n > 0);

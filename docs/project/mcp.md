@@ -74,6 +74,9 @@ this one, not your browser) and deletes the file. A running server notices on it
 | `get_import_status`, `list_imports` | how an import is going |
 | `set_auto_modes` | the "run the main modes after import" switch |
 | `make_article_private`, `make_article_public` | visibility; **public asks you first** |
+| `create_private_link` | the article's private link, key and all, made only if none is on (an existing one is never replaced); **asks you first, every time** |
+| `list_users` | admin: every account, most recently active first — address, sign-up, last sign-in, last read, article counts, plan |
+| `user_activity` | admin: one account's counts and dates, by address or id; never which articles or what they wrote |
 | `list_gift_vouchers` | admin: who you have sent gifts to, claimed or not (no note text) |
 | `create_gift_voucher` | admin: **sends the gift email; asks you first** |
 | `update_gift_voucher` | admin: edit or revoke; **changing the address re-sends, and asks you first** |
@@ -89,8 +92,15 @@ that is a capability you grant separately.) Off macOS these tools refuse and poi
 gift. Calling again with the same key and the same gift sends nothing; the same key with a different
 gift is refused. A second gift to the same person needs a new key.
 
-**Not there yet, and why** (each is a question for Greg in the plan): every reader's address
-(`list_users`), the private link with its key, and signing in from Cowork on the web or phone.
+**The private link is a credential.** Anyone who has it can read the article, and once handed over
+it sits in the AI app's conversation. Greg accepted that (2026-10-07);
+[security-map.md](security-map.md#and-since-2026-10-05-there-is-a-second-way-in-which-is-a-key)
+lists it among the places the key travels. **The reader tools put other people's addresses into
+that conversation too**, which the privacy page says
+([privacy.md](privacy.md#an-administrators-ai-assistant-can-look-up-accounts)). Both came with
+[261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md).
+
+**Not there yet:** signing in from Cowork on the web or phone.
 
 ## Where the code is
 

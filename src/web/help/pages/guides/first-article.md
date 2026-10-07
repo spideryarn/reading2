@@ -22,6 +22,9 @@ mark things as you go.
 
 ## Get your bearings
 
+- **Start with the guide.** A new article opens with the guide beside it, where there is room: tell
+  it why you are reading, and it suggests where to begin and which modes would help — see
+  [Chat](/help/mode-chat).
 - **Look at the screen** with [The parts of the reading view](/help/the-reading-view) to hand: the
   spine down the left edge, the article in the main column, the bottom bar with the mode buttons.
 - **Point at [the spine](/help/spine)** to read a card for each section, and click to go there. It

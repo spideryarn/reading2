@@ -60,8 +60,9 @@
  * ## And an article never opened here arrives at a default
  *
  * Since 2026-10-05, for a signed-in reader: a bare address with **no key at
- * all** for the slug opens in Summary where a band fits beside the prose, with
- * Marginalia's notes too where those fit. It is the same decision with one more case, and the same rule: the
+ * all** for the slug opens in a band where one fits beside the prose — the
+ * guide since 2026-10-07, Summary before that — with Marginalia's notes too
+ * where those fit. It is the same decision with one more case, and the same rule: the
  * link always wins. So that "no key" means *never opened by this reader in this browser*, an
  * empty view is now stored as `""` rather than removed, and a storage that
  * cannot be read or written means no default rather than one on every visit.
@@ -83,7 +84,7 @@ import { storageReader } from "./lib/storage-reader.js";
 import { rootFontPx, usableWidth } from "./reader/measure.js";
 import { useExperimental } from "./useExperimental.js";
 import { peekAskPurpose } from "./ask-purpose.js";
-import { firstOpenHeld, holdFirstOpen, releaseWhenDecided } from "./first-open-purpose.js";
+import { firstOpenHeld, GUIDE_FIRST_OPEN, holdFirstOpen, releaseWhenDecided } from "./first-open-purpose.js";
 
 /**
  * The parameters worth putting back. Most only draw a view on arrival;
@@ -569,6 +570,11 @@ export function writeLastView(
  * > When I open an article for the first time, default to Summary/Briefer in left-hand (if there's
  * > room) and (if there's even more room) Marginalia mode in right-hand
  *
+ * And Greg, 2026-10-07, on whether the guide should replace Summary as that
+ * band (q-kgrhm4): *"yes. but perhaps with a fixed starting message?"* — so
+ * the band is the guide, whose greeting is ours and free (GuideGreeting.tsx),
+ * plan docs/plans/261007p-the-guide-acts-without-a-press-and-opens-every-new-article.md.
+ *
  * One more case in the same decision: a bare address **and no key for this
  * slug** arrives at a default instead of at the article alone. Three pure
  * functions, one per question, and the effect in `useLastView` that asks them.
@@ -584,9 +590,10 @@ export function writeLastView(
  * own first open is still to come.
  *
  * **The add page's mark holds it** (since 2026-10-07, plan 261007j F4): while
- * the mark names this slug, the default waits for the owner's purpose read,
- * which may turn it into the guide (`?mode=chat&guide=1`) instead of the
- * modal. first-open-purpose.ts is that one decision.
+ * the mark names this slug, the arrival is applied without waiting for the
+ * settings store, and the owner's purpose read decides only whether the
+ * "Why are you reading this?" modal shows — never where a band already shows
+ * the guide's box. first-open-purpose.ts is that one decision.
  */
 
 /**
@@ -596,24 +603,29 @@ export function writeLastView(
  * never name a column the layout would then decline to draw: `bandCoversProse`
  * (a band would lie over the prose — below 700px with the rail) and `notesFit`
  * beside Summary's `roomy` band (from 900px). The widths are theirs; the tests
- * sit either side of each. `?summary=` is left off, which is Brief.
+ * sit either side of each.
  *
  * **Not a question for the experimental switch since 2026-10-05**, when
  * Marginalia left it (spya-vv54j2); until then a third argument kept the notes
  * out for a reader whose switch was off.
  * docs/plans/261005d-marginalia-out-of-the-experimental-switch.md.
  *
- * `?mode=summary` starts nothing on arrival — checked in the hook, as
- * `NEEDS_AN_EXPLICIT_PRESS` above says to: `useSimple` spends through
- * `useAutoRun`, which waits for a press. **`?margin=1` does, on purpose, since
+ * `?mode=chat&guide=1` starts nothing on arrival: Chat turns `guide=1` into
+ * the stored guide or an empty one, and the guide's greeting is drawn, not
+ * asked for (GuideGreeting.tsx), so the reader's first message is its first
+ * model call. **`?margin=1` does start something, on purpose, since
  * 2026-10-05**: the column asks for its relation words when it is shown, and
  * this default is the case Greg's decision was made for (useRelations.ts) —
  * one call, once per article, for its owner.
  */
 export function firstOpenSearch(windowWidth: number, rootFontPx: number): string {
   if (bandCoversProse(windowWidth)) return "";
+  /* Measured beside Summary's `roomy` band, as it was when Summary was the
+     default, though the guide opens Chat's standard one: the marginalia
+     admission in layout.ts § `fitBoth` happens before `bandWidth` sees the
+     shape, so `.both` is the same for the two (plan 261007j F4). */
   const notes = notesFit({ windowWidth, bandShape: "roomy", rootFontPx }, true).both;
-  return notes ? "?mode=summary&margin=1" : "?mode=summary";
+  return notes ? `${GUIDE_FIRST_OPEN}&margin=1` : GUIDE_FIRST_OPEN;
 }
 
 /**
@@ -750,11 +762,11 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
        needs there to be none. */
     firstOpenFor.current =
       view === "article" && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
-    /* **The add page's mark holds the default** until the purpose read has
-       answered, because no reason stored may mean the guide rather than
-       Summary (first-open-purpose.ts, plan 261007j F4). Measured here, at the
-       claim, so `PurposePrompt` can know whether to ask before the settings
-       store has answered. Every arrival holds afresh or drops the hold. */
+    /* **The add page's mark holds this arrival's decision**, so it can apply
+       the guide immediately and let the purpose read decide only the modal
+       (first-open-purpose.ts, plan 261007p). Measured here, at the claim, so
+       `PurposePrompt` can know whether a band fits before the settings store
+       has answered. Every arrival holds afresh or drops the hold. */
     holdFirstOpen(
       firstOpenFor.current !== null && peekAskPurpose(slug)
         ? { slug, readerId, ordinary: firstOpenSearch(usableWidth(), rootFontPx()) }
@@ -787,7 +799,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
      the mark and suppressed its modal, but no guide/default can ever be
      released. `App` hands this hook a null slug until the session is known, so
      `readerId` already answers signed-in status for this held path. The apply
-     still waits for the purpose outcome in first-open-purpose.ts.
+     no longer waits for the purpose outcome (first-open-purpose.ts, plan 261007p).
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never
@@ -811,9 +823,9 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
       );
       if (href !== null) history.replaceState(history.state, "", href);
     };
-    /* Held by the add page's mark: applied when the purpose read answers,
-       which may be now (first-open-purpose.ts). `firstOpenHref` is asked
-       then, so a reader who moved meanwhile is still left alone. */
+    /* Held by the add page's mark: applied immediately, without waiting on
+       either read (first-open-purpose.ts). `firstOpenHref` still checks that
+       the address names this arrival and carries no explicit article state. */
     if (held) releaseWhenDecided(slug, readerId, apply);
     else apply(firstOpenSearch(usableWidth(), rootFontPx()));
   }, [slug, view, readerId, loaded, signedIn]);

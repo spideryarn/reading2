@@ -14,18 +14,20 @@
  *
  *   npx tsx evals/long-documents/spike-followups.ts
  *
- * Same rules as spike-parts.ts: local database read-only, no row written,
- * spend sunk to the results file.
+ * Same rules as spike-parts.ts: the local database is read, and its only
+ * write is one `ai_calls` row per paid call; spend is also in the results file.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type Anthropic from "@anthropic-ai/sdk";
 import { collectSpend, totalSpend } from "../../src/ai-spend.js";
+import { allOrStop } from "../../src/concurrency.js";
 import { loadEnvLocal } from "../../src/env.js";
 import { unaskableBatches } from "../../src/labels.js";
 import { finishedText, streamMessage, type MessagesBody } from "../../src/messages-stream.js";
 import { withMessagesJsonSchema } from "../../src/messages-structured-output.js";
 import { parseJsonAnswer } from "../../src/parse-json.js";
+import { environmentOwnerId } from "../../src/owner.js";
 import { plainWords } from "../../src/plain-words.js";
 import {
   buildTree,
@@ -36,6 +38,7 @@ import {
   type BuildReport,
   type ModelNode,
 } from "../../src/structure.js";
+import { costStore } from "../../src/store/ai-calls.js";
 import { isSupplementNode } from "../../src/supplement.js";
 import { checkTree } from "../../src/tree-invariants.js";
 import type { Block, Tree } from "../../src/types.js";
@@ -165,10 +168,13 @@ console.log(`fat sectionless chapters to refill: ${fat.map((c) => `${at.get(c.ra
 const began = Date.now();
 const { result, report } = await collectSpend(
   async () => {
-    const [refills, hinted] = await Promise.all([
-      Promise.all(fat.map((c, i) => ask(`refill-${i}`, at.get(c.range[0])!, at.get(c.range[1])!, false))),
-      Promise.all([2, 3].map((i) => ask(`hint-slice-${i}`, slices[i]!.lo, slices[i]!.hi, true))),
-    ]);
+    // Drain all paid siblings before the collector closes, including across the two groups.
+    const answers = await allOrStop([
+      ...fat.map((c, i) => ask(`refill-${i}`, at.get(c.range[0])!, at.get(c.range[1])!, false)),
+      ...[2, 3].map((i) => ask(`hint-slice-${i}`, slices[i]!.lo, slices[i]!.hi, true)),
+    ], () => {});
+    const refills = answers.slice(0, fat.length);
+    const hinted = answers.slice(fat.length);
     const refilled = baseline.flatMap((r) => r.children ?? []).flatMap((c) => {
       const i = fat.indexOf(c);
       const got = i >= 0 ? refills[i] : undefined;
@@ -184,7 +190,7 @@ const { result, report } = await collectSpend(
     const root = parseJsonAnswer<{ gist: string; question: string }>(finishedText(message, "book root", 6000, 200), "the book root response");
     return { refills, hinted, refilled, root, rootMs: Date.now() - t0 };
   },
-  { attribution: { scopeKind: "eval", articleSlug: SLUG }, sink: async () => {} },
+  { attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: SLUG }, sink: (row) => costStore.record(row) },
 );
 
 const hintedParts = [

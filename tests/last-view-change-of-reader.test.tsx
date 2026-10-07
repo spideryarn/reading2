@@ -121,7 +121,7 @@ describe("A is reading, and the tab becomes B's without the page being remounted
   it("B's first open gets the first-open default, as any first open does", () => {
     Object.assign(setting, { loaded: true });
     as(B);
-    expect(location.search).toBe("?mode=summary&margin=1");
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
   it("A, back again, finds A's place, and B's is kept", () => {

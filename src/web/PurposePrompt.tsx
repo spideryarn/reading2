@@ -28,8 +28,8 @@
  *   never pass for "you have not said") → kept for the next load. Sol's item 3.
  * - **Asked here only where the guide cannot ask instead** (plan 261007j F4).
  *   On a first open that `useLastView` claimed, with a band's room beside the
- *   text, definitively none opens the guide in Chat, whose greeting holds the
- *   same box — and no modal. Below that width (a phone, where a band covers
+ *   text, the article opens on the guide in Chat (every first open has since
+ *   2026-10-07, plan 261007p), whose greeting holds the same box — and no modal. Below that width (a phone, where a band covers
  *   the article), and on any open that was not a claimed first open, the modal
  *   as before. The one decision, and the race it settles with the first-open
  *   default, is src/web/first-open-purpose.ts; this component reports its read

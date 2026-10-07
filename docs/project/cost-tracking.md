@@ -31,10 +31,19 @@ three rules**, and each rule has something that enforces it:
    `tests/no-undeclared-spend.test.ts` fails on any other way to reach a provider.
 2. **Make the call inside a scope.** A pipeline step runs inside `runStep`
    ([`src/jobs.ts`](../../src/jobs.ts)) and an HTTP request inside `handleApi`
-   ([`src/routes.ts`](../../src/routes.ts)); both open a collector. A call made outside one records
-   nothing and is counted by `unscopedCalls()` — so a script or eval opens its own with
-   `collectSpend` (see [`evals/cost/ledger-check.ts`](../../evals/cost/ledger-check.ts) for the
-   shortest example).
+   ([`src/routes.ts`](../../src/routes.ts)); both open a collector. A script or eval opens its
+   own, **and it has to be one that writes**: `withLedger("eval", main)` from
+   [`src/cli-ledger.ts`](../../src/cli-ledger.ts) around the entry point, or `collectSpend` with a
+   `sink` and an owner ([`evals/cost/ledger-check.ts`](../../evals/cost/ledger-check.ts) is the
+   shortest example). A collector with no `sink` writes nothing. Since 2026-10-07 a process
+   started from a file under `evals/` or `scripts/` is **refused** its first model call, before
+   anything is spent, when no collector with a sink is open (`UnrecordedSpendRefused`, in
+   [`src/ai-spend.ts`](../../src/ai-spend.ts)). Until then such calls went ahead and wrote no row:
+   about $79 of the dev key's October went that way
+   ([261007c](../investigations/261007c-openrouter-spend-the-ledger-does-not-record.md)). The
+   check asks whether a sink is there, not where it writes. A sink that keeps rows in memory still
+   passes, so give it `costStore.record` as well. Anywhere else (the server, a test), a call outside
+   a collector still records nothing and is only counted by `unscopedCalls()`.
 3. **Say which article it was for.** This is the one that used to need remembering:
    - A **pipeline step** is attributed by `runStep` — job, step and article. Nothing to do.
    - A **route with the article's slug in its path** declares where the slug is, in the route

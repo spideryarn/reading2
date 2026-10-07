@@ -150,6 +150,18 @@ describe("the privacy page", () => {
     expect(prose).toContain("That note goes through Resend, then our domain’s mail forwarding at Namecheap");
   });
 
+  it("says an administrator may look up account details with an AI assistant, and not your reading", () => {
+    /* Plan 261007o: the MCP's list_users and user_activity put readers'
+       addresses and activity into the administrator's own AI assistant, which
+       is not one of the app's AI calls, so the OpenRouter entry is qualified
+       too (Sol's F4). docs/project/privacy.md. */
+    const prose = PAGE.replace(/\s+/g, " ");
+    expect(prose).toContain("An administrator may also look up account details");
+    expect(prose).toContain("but not what you read or wrote");
+    expect(prose).toContain("by asking an AI assistant of their choosing, so those details pass through that assistant’s provider");
+    expect(prose).toContain("every AI call our reading features make, bar one, goes through them");
+  });
+
   it("says a gift email to an existing reader carries their own remaining allowance", () => {
     /* Plan 261002a: giftMessage's reader letter, in src/store/pg-voucher-emails.ts,
        puts the before and after counts through Resend into that inbox. */

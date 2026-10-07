@@ -15,8 +15,9 @@
  * (no profile, a first pass) and records a hash of the prompt's source files
  * beside the answer. There is no copy of the prompt in here to drift.
  *
- * Reads the local database, writes nothing there beyond the `ai_calls` rows
- * every call records. Output under `evals/results/glossary-citations/<arm>/`.
+ * Reads the local database, writes nothing there beyond the `ai_calls` row each
+ * call records (`generate` runs inside `withLedger`). Output under
+ * `evals/results/glossary-citations/<arm>/`.
  *
  * **What the screen cannot say.** `looksCited` is a regex over names and
  * aliases: it flags "Blade Runner (1982)" and "Tokyo 2020" as readily as
@@ -29,6 +30,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
+import { allOrStop } from "../src/concurrency.js";
 import { loadEnvLocal } from "../src/env.js";
 import { isMain } from "../src/is-main.js";
 
@@ -67,7 +69,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
   );
   fs.mkdirSync(path.join(OUT, arm), { recursive: true });
   await runAsOwner(environmentOwnerId(), async () => {
-    await Promise.all(
+    await allOrStop(
       slugs.map(async (slug) => {
         const out = path.join(OUT, arm, `${slug}.json`);
         /* Never overwrite an arm: a second run under the same name would replace
@@ -86,6 +88,7 @@ async function generate(arm: string, slugs: string[]): Promise<void> {
         fs.writeFileSync(out, `${JSON.stringify(file, null, 2)}\n`);
         console.log(`${arm} ${slug}: ${entries.length} entries written`);
       }),
+      () => {}, // A failed article must not close accounting over paid siblings.
     );
   });
 }
@@ -125,7 +128,11 @@ async function main(): Promise<void> {
   const [command, ...rest] = process.argv.slice(2);
   if (command === "report") return report();
   if (command === "generate" && rest[0] === "--arm" && rest[1] && rest.length > 2) {
-    return generate(rest[1], rest.slice(2));
+    const [arm, slugs] = [rest[1], rest.slice(2)];
+    loadEnvLocal();
+    const { withLedger } = await import("../src/cli-ledger.js");
+    /* The ledger is open around the paid command only: an eval's spend is refused without one (src/ai-spend.ts § UnrecordedSpendRefused). */
+    return withLedger("eval", () => generate(arm, slugs));
   }
   throw new Error("usage: glossary-citations.ts generate --arm <name> <slug>... | report");
 }

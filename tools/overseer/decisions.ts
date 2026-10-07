@@ -110,7 +110,8 @@ export const DECISIONS_LOCK_FILE = "decisions.lock";
 export const DECISIONS_INIT_FILE = "decisions.created";
 
 export type DecisionClass = "assumption" | "decision" | "decline";
-export type Adviser = "sol" | "fable" | "nobody";
+/** `fable` is history: who advised a decision made before Greg retired Fable (2026-09-28). New ones say `opus`. */
+export type Adviser = "sol" | "opus" | "fable" | "nobody";
 export type DecisionOption = { readonly name: string; readonly tradeoffs: string };
 export type DecisionChoice = { readonly option: string; readonly note: string | null };
 export type ExecutionRef =
@@ -792,7 +793,7 @@ function asAdvisers(value: unknown): readonly Adviser[] | null {
   const advisers: Adviser[] = [];
   const seen = new Set<Adviser>();
   for (const candidate of value) {
-    if (candidate !== "sol" && candidate !== "fable" && candidate !== "nobody") return null;
+    if (candidate !== "sol" && candidate !== "opus" && candidate !== "fable" && candidate !== "nobody") return null;
     if (seen.has(candidate)) return null;
     seen.add(candidate);
     advisers.push(candidate);
@@ -961,7 +962,7 @@ function parseDecidedFields(json: Record<string, unknown>, id: string): Result<D
   const chose = asChoice(json["chose"], options);
   if (chose === null) return no("chose must name one of the options, with a note that is text or null");
   const advisers = asAdvisers(json["advisers"]);
-  if (advisers === null) return no("advisers must be one or more of sol and fable, or just nobody");
+  if (advisers === null) return no("advisers must be one or more of sol and opus (or fable, on a decision from before 2026-09-28), or just nobody");
   const bearsOn = asBearsOn(json["bearsOn"]);
   if (bearsOn === null) return no("bearsOn must hold distinct named sessions with execution references, and a plan that is text or null");
   if (!("supersedes" in json)) return no("supersedes must be present, as a decision id or null");

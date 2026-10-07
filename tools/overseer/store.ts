@@ -2834,7 +2834,12 @@ function parseAttentionItem(u: unknown): AttentionItem | null {
   };
 }
 
-const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "fable", "greg", "overseer", "self"];
+const PROPOSAL_RECIPIENTS: readonly ProposalRecipient[] = ["sol", "opus", "greg", "overseer", "self"];
+
+/** A stored holder; `fable`, retired by Greg on 2026-09-28, reads as the `opus` that replaced it. */
+function storedRecipient(u: unknown): ProposalRecipient | undefined {
+  return u === "fable" ? "opus" : PROPOSAL_RECIPIENTS.find((r) => r === u);
+}
 
 /** A string with something in it. Every text field of a proposal is drawn on its own line, so a blank one is refused. */
 function filledText(u: unknown): string | null {
@@ -2856,7 +2861,7 @@ function parseAttentionProposal(u: unknown): AttentionProposal | null {
   switch (u["kind"]) {
     case "proposed": {
       const id = filledText(u["id"]);
-      const recipient = PROPOSAL_RECIPIENTS.find((r) => r === u["recipient"]);
+      const recipient = storedRecipient(u["recipient"]);
       const reason = filledText(u["reason"]);
       const asks = filledText(u["asks"]);
       const by = parseProposalAuthor(u["by"]);

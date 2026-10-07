@@ -397,7 +397,7 @@ describe("what a call cost, which is three cases and not one", () => {
   });
 });
 
-describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () => {
+describe("the proposal-aware prompt (plan 260910f D1, D8, D9, D13)", () => {
   const TAIL = [
     "⏺ The stack is idle and I can free it on request. Nothing is using the app right now;",
     "  supabase stop plus killing vite would return ~0.5 GB. Say the word and I'll",
@@ -426,22 +426,51 @@ describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () 
     expect(buildClassifierPrompt("TAIL", CLASSIFIER_PROMPT_VERSION)).toEqual(p);
   });
 
-  it("asks version 2 for a recipient, a reason and the verbatim sentence, naming all five holders", () => {
+  it("asks for a recipient, a reason and the verbatim sentence, naming all five holders", () => {
     const { system } = buildClassifierPrompt("TAIL", PROPOSAL_PROMPT_VERSION);
-    for (const word of ['"sol"', '"fable"', '"greg"', '"overseer"', '"self"', '"unplaced"', "recipient", "reason", "asks"]) {
+    for (const word of ['"sol"', '"opus"', '"greg"', '"overseer"', '"self"', '"unplaced"', "recipient", "reason", "asks"]) {
       expect(system).toContain(word);
     }
     expect(system).not.toEqual(buildClassifierPrompt("TAIL").system);
   });
 
-  it("reads a proposal naming a holder, with its reason and its quoted sentence", () => {
+  it("routes by Greg's 2026-10-07 split: Opus for judgment, Sol for technical review, Greg for dropping a case", () => {
+    const { system } = buildClassifierPrompt("TAIL", PROPOSAL_PROMPT_VERSION);
+    // Fable was retired on 2026-09-28; nothing may still be routed to it.
+    expect(system).not.toMatch(/fable/i);
+    const line = (holder: string) => {
+      const at = system.indexOf(`- "${holder}":`);
+      expect(at).toBeGreaterThanOrEqual(0);
+      const next = system.indexOf('\n- "', at + 1);
+      return system.slice(at, next === -1 ? undefined : next);
+    };
+    expect(line("opus")).toMatch(/wording/);
+    expect(line("opus")).toMatch(/default/);
+    expect(line("opus")).not.toMatch(/dropped/);
+    // overseer-direction.md § The gates: whether a case can be dropped is Greg's.
+    expect(line("greg")).toMatch(/whether a case can be dropped/);
+  });
+
+  it("files the re-routed prompt under a new version, so a verdict made under the old routing is stale", () => {
+    expect(PROPOSAL_PROMPT_VERSION).toBe(3);
+  });
+
+  it("refuses a fresh answer naming the retired holder rather than guessing who it meant", () => {
     const v = parseVerdict(
       asked({ recipient: "fable", reason: "it is a question of wording", asks: "Say the word and I'll shut it down." }),
       v2,
     );
+    expect(v.kind).toBe("unreadable");
+  });
+
+  it("reads a proposal naming a holder, with its reason and its quoted sentence", () => {
+    const v = parseVerdict(
+      asked({ recipient: "opus", reason: "it is a question of wording", asks: "Say the word and I'll shut it down." }),
+      v2,
+    );
     expect(v).toMatchObject({
       kind: "question",
-      recipient: "fable",
+      recipient: "opus",
       reason: "it is a question of wording",
       asks: "Say the word and I'll shut it down.",
     });
@@ -495,7 +524,7 @@ describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () 
     expect("by" in v).toBe(false);
   });
 
-  it("reads a `no-question` answer under version 2 exactly as under version 1", () => {
+  it("reads a proposal-aware `no-question` answer exactly as under version 1", () => {
     expect(parseVerdict(JSON.stringify({ asked: false, why: "a status report" }), v2)).toEqual({
       kind: "no-question",
       why: "a status report",
@@ -509,7 +538,7 @@ describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () 
     expect("asks" in v).toBe(false);
   });
 
-  it("classifyTail under version 2 sends version 2's prompt and checks the quote against what it sent", async () => {
+  it("classifyTail sends the proposal-aware prompt and checks the quote against what it sent", async () => {
     const bodies: Record<string, unknown>[] = [];
     const reply = (content: string) =>
       (async (_url: unknown, init?: RequestInit) => {
@@ -533,7 +562,7 @@ describe("prompt version 2 — the proposal (plan 260910f D1, D8, D9, D13)", () 
     expect(invented.verdict.kind).toBe("unreadable");
   });
 
-  it("reserves at least the bytes of version 2's longest prompt too, since it is the longer one", () => {
+  it("reserves at least the bytes of the proposal-aware prompt too, since it is the longer one", () => {
     const worst = clipForClassifier("€".repeat(MAX_TAIL_CHARS * 2));
     const prompt = buildClassifierPrompt(worst, PROPOSAL_PROMPT_VERSION);
     expect(prompt.system.length).toBeGreaterThan(buildClassifierPrompt(worst).system.length);

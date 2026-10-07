@@ -93,6 +93,22 @@ describe("the private link's key", () => {
     ]);
   });
 
+  /**
+   * **Who asks the owner's route for the key, outside the browser.** The
+   * owner's card is the browser's caller. Since plan 261007o the MCP server's
+   * `create_private_link` is a second: with the owner's approval in a dialog,
+   * it hands the link into an AI assistant's conversation
+   * (docs/project/security-map.md § Where the key may travel). A third
+   * client is a third place the key goes, and a line somebody has to add here.
+   */
+  it("is asked of the owner's route by one client outside the browser, the MCP server", () => {
+    const clients = SOURCES.filter(
+      (file) =>
+        file !== "src/routes.ts" && !file.startsWith("src/web/") && /\/share-link\b/.test(code.get(file) ?? ""),
+    );
+    expect(clients).toEqual(["src/mcp/tools.ts"]);
+  });
+
   it("is compared and never selected by the public predicate", () => {
     const leaf = code.get("src/store/link-shared-slug.ts") ?? "";
     expect(leaf.match(/shareToken/g) ?? []).toHaveLength(1);

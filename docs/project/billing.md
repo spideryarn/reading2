@@ -418,10 +418,10 @@ payload above rather than from a boolean.
 
 ### The live row that needs a backfill
 
-**Probably moot since 2026-10-03, unverified.** The subscription was scheduled to end that day, and
-when Stripe ends one it sends `customer.subscription.deleted`, which is in `HANDLED_EVENTS` and
-resyncs the customer like any other handled event ([`src/billing/webhook.ts`](../../src/billing/webhook.ts)).
-The production row has not been verified here; check it before acting on what follows.
+**Resolved; this section is history.** Read on production on 2026-10-07 (read-only): the row says
+`status = canceled`, `cancel_at = current_period_end = 2026-10-03 11:37 UTC`. Stripe ended the
+subscription on its scheduled day and `customer.subscription.deleted`, which is in `HANDLED_EVENTS`,
+resynced it ([`src/billing/webhook.ts`](../../src/billing/webhook.ts)). Nothing below needs doing.
 
 **The original gap, in one production row.** `sub_1UBYxALv4piDbwcbVew6jxqN` was
 cancelled on 2026-09-03; the `customer.subscription.updated` webhook that carried the cancellation
@@ -1577,9 +1577,8 @@ any time. See [admin.md](admin.md).
 - **Comp subscriptions** for journalists and QA. Until then the only exemption is the hardcoded
   admin check.
 - **Backfilling the one live cancelled row** — see
-  [The live row that needs a backfill](#the-live-row-that-needs-a-backfill). The code is fixed; the
-  row predates the column. Probably moot since the subscription's scheduled end on 2026-10-03, but
-  unverified.
+  [The live row that needs a backfill](#the-live-row-that-needs-a-backfill). Resolved: the row
+  resynced when the subscription ended on 2026-10-03 (read 2026-10-07).
 - **Grandfathered subscribers keep paying and lose their allowance** — the warning under
   [Adding a tier or a currency](#adding-a-tier-or-a-currency). Nobody is grandfathered yet, so this
   is a trap rather than a live fault, and changing a price is what springs it.

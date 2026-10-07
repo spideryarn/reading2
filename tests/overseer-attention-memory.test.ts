@@ -20,6 +20,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "vitest";
 
+import { PROPOSAL_PROMPT_VERSION } from "../tools/overseer/attention-classify.js";
 import {
   ATTENTION_MEMORY_FILE,
   ATTENTION_MEMORY_SCHEMA,
@@ -122,13 +123,37 @@ describe("the round trip", () => {
 });
 
 describe("a version-2 verdict's proposal fields (plan 260910f D3, D8)", () => {
+  test.each([2, PROPOSAL_PROMPT_VERSION])("refuses a version-%s question without its proposal, even when that version is stale", (promptVersion) => {
+    const parsed = parseAttentionMemory({
+      schema: ATTENTION_MEMORY_SCHEMA,
+      epoch: "e",
+      waits: {},
+      verdicts: {
+        abc: {
+          fingerprint: "abc",
+          classifiedAt: "2026-09-08T09:00:00.000Z",
+          promptVersion,
+          model: "openai/gpt-5.6-luna",
+          verdict: {
+            kind: "question",
+            topic: "shall I push",
+            why: "it stopped and offered",
+            attentionKind: "irreversible",
+            answerability: { kind: "phone" },
+          },
+        },
+      },
+    });
+    expect(parsed).toMatchObject({ kind: "unusable", why: expect.stringContaining("carries no proposal") });
+  });
+
   const PROPOSED = {
     kind: "question" as const,
     topic: "shall I shut it down",
     why: "it offered and stopped",
     attentionKind: "irreversible" as const,
     answerability: { kind: "phone" as const },
-    recipient: "fable" as const,
+    recipient: "opus" as const,
     reason: "it is a question of wording",
     asks: "Say the word and I'll shut it down.",
   };
@@ -176,6 +201,19 @@ describe("a version-2 verdict's proposal fields (plan 260910f D3, D8)", () => {
     const root = tempRoot();
     writeAttentionMemory(root, memoryOf(JSON.parse(JSON.stringify(verdict))));
     expect(readAttentionMemory(root).kind).toBe("unusable");
+  });
+
+  test("reads a proposal remembered for Fable as Opus — the holder Greg retired it for on 2026-09-28", () => {
+    const parsed = parseAttentionMemory({
+      schema: ATTENTION_MEMORY_SCHEMA,
+      epoch: "e",
+      waits: {},
+      verdicts: {
+        abc: { fingerprint: "abc", classifiedAt: "2026-09-08T09:00:00.000Z", promptVersion: 2, model: "openai/gpt-5.6-luna", verdict: { ...PROPOSED, recipient: "fable" } },
+      },
+    });
+    if (parsed.kind !== "memory") throw new Error(`expected memory, got ${parsed.kind}`);
+    expect(parsed.memory.verdicts.get("abc")?.verdict).toEqual(PROPOSED);
   });
 
   test("bumps the schema for the recorded model, so an older reader refuses the file rather than stamping its own model on it", () => {

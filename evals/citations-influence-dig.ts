@@ -15,9 +15,9 @@
  * a title naming the work**.
  *
  * **What it writes.** One file, `evals/results/citations-influence/dig-<n>-<slug>.json`,
- * and never over one that is there. It stores nothing in the database: no
- * investigation, no find. Both calls are made outside every spend collector, so
- * they write no `ai_calls` row either (docs/project/cost-tracking.md).
+ * and never over one that is there. It stores nothing else in the database: no
+ * investigation, no find. Its one database write is the `ai_calls` row each
+ * call records, under `withLedger` (docs/project/cost-tracking.md).
  *
  * **What it leaves out of a press**: the quick check, the paper read and the
  * streamed answer (none feeds the influence call), and the search of the
@@ -101,9 +101,11 @@ async function run(n: number, slug: string, names: string[]): Promise<void> {
   const { investigateContext } = await import("../src/citation-investigate-context.js");
   const { digSubject } = await import("../src/citation-investigate.js");
   const influence = await import("../src/citation-influence.js");
+  const { withLedger } = await import("../src/cli-ledger.js");
 
   const results: WorkResult[] = [];
-  await runAsOwner(environmentOwnerId(), async () => {
+  /* The ledger closes, and its writes land, before `closeDb` below. */
+  await withLedger("eval", () => runAsOwner(environmentOwnerId(), async () => {
     const article = await store.loadArticle(slug);
     const { citations } = await store.loadCitations(slug);
     /* Every name resolved before the first paid call. */
@@ -177,7 +179,7 @@ async function run(n: number, slug: string, names: string[]): Promise<void> {
           (record.kept ? `kept ${record.keptValue} from ${record.keptHost}` : `nothing kept: ${record.why}`),
       );
     }
-  });
+  }));
   await closeDb();
 
   fs.mkdirSync(OUT, { recursive: true });

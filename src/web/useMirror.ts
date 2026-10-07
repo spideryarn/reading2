@@ -72,6 +72,59 @@ export interface MirrorApi {
   ask(): void;
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const isCount = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+const isOptionalString = (value: unknown): boolean => value === undefined || typeof value === "string";
+
+/** A comment the panel quotes back: `id` to find it, `quote` and `body` to print. */
+function isComment(value: unknown): boolean {
+  return isObject(value) && typeof value.id === "string" && typeof value.blockId === "string" &&
+    typeof value.quote === "string" && isOptionalString(value.body);
+}
+
+/**
+ * One remark, with what its kind draws. A kind this copy does not know is
+ * allowed through — the badge reads it with `ownLabel` — but only with what
+ * every non-coverage row reads: the comment it is about and the block to jump to.
+ */
+function isRemark(value: unknown): boolean {
+  if (!isObject(value) || typeof value.kind !== "string" || typeof value.note !== "string" ||
+      typeof value.trialTested !== "boolean") return false;
+  // Known kinds carry literal evidence flags; accepting the opposite would
+  // lend the trial's authority to a kind it never tested. New kinds still use
+  // their own boolean, just as their badge uses their own name.
+  if ((value.kind === "specificity" || value.kind === "tone" || value.kind === "misunderstanding") &&
+      value.trialTested !== true) return false;
+  if ((value.kind === "coverage" || value.kind === "placement") && value.trialTested !== false) return false;
+  if (value.kind === "coverage") return typeof value.criterion === "string";
+  if (typeof value.commentId !== "string" || typeof value.blockId !== "string") return false;
+  if (value.kind === "misunderstanding") return typeof value.passage === "string";
+  if (value.kind === "placement") {
+    return typeof value.passage === "string" && typeof value.valence === "number" &&
+      Number.isFinite(value.valence) && isOptionalString(value.criterion);
+  }
+  return true;
+}
+
+function isCoverage(value: unknown): boolean {
+  if (!isObject(value)) return false;
+  if (value.asked === true) return isCount(value.criteriaOmitted);
+  return value.asked === false && typeof value.reason === "string";
+}
+
+/** Check every field the panel reads before treating a transport value as an answer. */
+function isResult(value: unknown): value is MirrorResult {
+  if (!isObject(value) || !Array.isArray(value.remarks) || !isObject(value.input) ||
+      !isCoverage(value.coverage) || !isCount(value.placementsOmitted) ||
+      typeof value.model !== "string") return false;
+  const input = value.input;
+  return Array.isArray(input.comments) && input.comments.every(isComment) &&
+    Array.isArray(input.placements) && input.placements.every(isComment) &&
+    isCount(input.skippedBookmarks) && value.remarks.every(isRemark);
+}
+
 /**
  * **The terminal contract, in one function**, so that `"done"` cannot be set
  * from two places.
@@ -89,21 +142,12 @@ async function readRun(
       continue;
     }
     if (event.name === "done") {
-      const data = event.data as Partial<MirrorResult> | null;
-      /* **Checked rather than cast**, and `Array.isArray` rather than a
-         truthiness test on `remarks` — an empty array is the answer this
-         feature gives most often, and `if (!data.remarks?.length)` would file
-         every good run as malformed. What is being guarded against is a `done`
-         frame from a server that has moved on: a missing `input` or `coverage`
-         would render as blanks and read as a run that found nothing. */
-      if (
-        data &&
-        Array.isArray(data.remarks) &&
-        data.input !== undefined &&
-        data.coverage !== undefined
-      ) {
-        return data as MirrorResult;
-      }
+      /* **Checked rather than cast**, every field `MirrorPanel` reads, the way
+         `isResult` in useHiddenCheck.ts checks its own (GPT Sol's C1 and C4 on
+         plan 261007l). A `done` from a server that has moved on must not crash
+         the panel on a null remark, nor draw blanks that read as a run that
+         found nothing. */
+      if (isResult(event.data)) return event.data;
       throw new ReaderFacingError("The run finished with an answer this page could not read. Try again.");
     }
     if (event.name === "error") {
