@@ -2,6 +2,7 @@
 reports: spya-ucftjt
 ending: shipped
 parts: 3
+comment: Part 1 of 3 shipped (Help in the bar, Help as pages). Still to come: a Help chatbot for signed-out readers, and a guide agent when an article opens.
 ---
 # Help back in the bar, and Help as many short pages with reader guides
 
