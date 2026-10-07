@@ -44,6 +44,7 @@ import {
   describeStorageFailure,
   pdfFigureCaptionsIn,
   pdfFigureMarkersIn,
+  STOPPED_PART_WAY,
 } from "./collect-assets.js";
 import { collectPdfFigures, type PdfFiguresRun } from "./collect-pdf-figures.js";
 import { type FigureLocator, openRouterFigureLocator } from "./pdf-figure-locate.js";
@@ -818,6 +819,13 @@ export interface StepProduct {
   parts?: ArtifactParts;
   /** What the store should record about this run. */
   stamp?: StepStamp;
+  /**
+   * This partial product may be kept only while the step's signal is live.
+   * The runner checks again after ledger/preview settlement, before deciding
+   * the commit. Illustrated uses it for a provider-cancelled plate set; a
+   * later Stop must preserve the last good painting.
+   */
+  discardOnAbort?: true;
 }
 
 /**
@@ -1256,11 +1264,12 @@ export async function assertProduced(
  * URL while resolving the collision."*
  *
  * So this closes the **destructive** case — same owner, reader state
- * overwritten — and knowingly leaves the **wasteful** one open: two owners
- * racing for one free slug, where the second pays for a whole pipeline before
- * publication refuses it (case 4 above). Fixing that needs a return shape that
- * can say *"taken, but not yours"* without disclosing what it is, and it
- * belongs in `freeSlug` rather than here. It is a known gap, not an oversight.
+ * overwritten. The **wasteful** one it used to leave open, two owners racing
+ * for one free slug (case 4 above), went on 2026-08-31 by another route: every
+ * new slug ends in a random short id (src/ingest.ts § `slugWithShortId`), so
+ * two owners who paste one address are given two slugs and never want the same
+ * one. A slug somebody else holds is refused where the article row is created,
+ * before any step runs (`lockOrCreateArticle`, src/store/pg-revisions.ts).
  *
  * **Broader than `meta.json` was**, and in the safe direction: this is true as
  * soon as the article row exists, which is before the first revision is
@@ -3658,6 +3667,14 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const assets: Assets = {
         ...run.assets,
         ...(figures && figures.entries.length ? { pdfFigures: figures.entries } : {}),
+        /* **Stopped part-way: kept, and not current.** The reader's Stop can
+           land while this, an import's last step, is running, and the queue then
+           keeps and publishes what it returns (src/jobs.ts § `transitionAfter`).
+           Every image not yet fetched is in `entries` as a failure; with the real
+           hash the next ordinary run would skip the step and never fetch them.
+           Asked of the signal after both halves have returned, so a Stop during
+           either counts. `STOPPED_PART_WAY` in src/collect-assets.ts. */
+        ...(ctx.signal.aborted ? { sourceHash: STOPPED_PART_WAY } : {}),
       };
       const drawn = figures?.stored ? `, ${figures.stored} figures recovered` : "";
       return {
@@ -4980,6 +4997,16 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       }
       run.illustrated.plates = settled;
 
+      /* **Stopped between plates: no product.** Check after storage so the
+         bytes already paid for are kept as blobs, as before, even though the
+         draft is discarded and the last good painting stays. A provider
+         timeout can return a cancelled set with a live signal, then Stop can
+         land during these writes. Only throw when the signal fired: a
+         provider timeout alone keeps its old partial-result path. The
+         product flag below carries this condition through the runner's own
+         awaits. docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md. */
+      if (run.cancelled) ctx.signal.throwIfAborted();
+
       plog.info(
         {
           slug: ctx.slug,
@@ -5015,6 +5042,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const missing = run.illustrated.plates.length - stored;
       return {
         parts: { illustrated: run.illustrated },
+        ...(run.cancelled ? { discardOnAbort: true as const } : {}),
         detail:
           `${stored} plate(s) painted` + (missing > 0 ? `, ${missing} failed` : "") +
           ` — ${run.illustrated.style}`,

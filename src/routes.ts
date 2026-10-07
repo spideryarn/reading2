@@ -249,6 +249,7 @@ import type { CitersResult } from "./types.js";
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
 import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
+import { isOwnReadingPage } from "./own-reading-page.js";
 import {
   advanceJob,
   cancelJob,
@@ -296,6 +297,7 @@ import {
   REASON_NOT_READ,
   UNEXPECTED_FAILURE,
   UPLOAD_MISSING,
+  OWN_READING_PAGE,
   UPLOAD_STILL_ARRIVING,
   UPLOAD_UNAVAILABLE,
 } from "./messages.js";
@@ -11149,6 +11151,12 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       // body is the receipt to poll, which is the only thing there is to say
       // about a job that has not started.
       const request = parseJobRequest(await readBody(req));
+      /* One of our own reading pages is not an article to import, and the
+         answer costs nothing: asked of the normalised address, before any slot.
+         src/own-reading-page.ts. */
+      if (request.url !== undefined && isOwnReadingPage(request.url)) {
+        throw httpError(400, OWN_READING_PAGE.message);
+      }
       const uploadId = request.uploadId;
       if (uploadId !== undefined) {
         /* No other field survives `checkUploadOrigin`, so there is nothing to

@@ -4,9 +4,12 @@
  *
  * **src/store/pg-searches.ts is this file's model, and it is worth reading
  * first**: the attempt fence, the article lock as the mutex, the `DB_NOW`
- * clock, the trim, and why every one of them is there. Nothing in that
- * reasoning changes here, so none of it is repeated. What is written out below
- * is only what a criterion has that a search run does not.
+ * clock, and why every one of them is there. Nothing in that reasoning changes
+ * here, so none of it is repeated. What is written out below is only what a
+ * criterion has that a search run does not — and one thing a search run has
+ * that a criterion no longer does: **the trim**. Searches drop their oldest
+ * past `MAX_RUNS`; criteria are never dropped, and `begin` refuses an add at
+ * `MAX_CRITERIA` instead (§ begin).
  *
  * ## The decision is not here
  *
@@ -34,7 +37,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, isNull, lt, notInArray, or, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
 import { refereeCriteria } from "../db/schema.js";
@@ -48,9 +51,9 @@ import {
 } from "../referee-criteria.js";
 import {
   COMMENTS_CRITERION_FK,
-  CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS,
   CRITERION_HAS_COMMENTS,
   CRITERION_SWEPT,
+  criteriaAtCeiling,
   criterionRefusal,
   withCriterion,
 } from "../referee-criteria-store.js";
@@ -225,6 +228,42 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
         return back;
       }
 
+      /* **A ceiling that refuses, not a trim that drops.** Until 2026-10-07 an
+         add past twenty deleted the oldest finished criterion to make room, and
+         a referee's criterion went without a word. Greg's answer that day: never
+         drop one silently; hold up to `MAX_CRITERIA` (200) and refuse the next
+         with a sentence. docs/plans/261007f-referee-criteria-are-never-dropped-a-ceiling-of-200-refuses-instead.md
+
+         **It counts every row on the article** — pending, failed, with
+         comments or without. The current kind and diverging-shape constraints
+         ensure each config is readable. A raw `count(*)` also counts rows
+         outside that contract (e.g. written while constraints were disabled);
+         the loader hides those, so they cannot be deleted from the panel.
+         Counting them preserves the table bound, but cannot promise a visible
+         way out in a database that violates the contract.
+
+         A visible criterion with comments also refuses a delete until its
+         placements are cleared (`CRITERION_HAS_COMMENTS`).
+         **Under the article lock, which is the mutex.** Every `begin` on this
+         article takes `lockArticleRow` first, so two adds at 199 are counted
+         one after the other and the second sees the first's insert: two adds
+         cannot make 201. A delete does not take the lock, and does not need
+         to: it only ever lowers the count.
+
+         A reset adds no row, so it is never refused: a failed criterion can be
+         run again at the ceiling. */
+      const [counted] = await tx
+        .select({ n: count() })
+        .from(refereeCriteria)
+        .where(eq(refereeCriteria.articleId, articleId));
+      const n = counted?.n ?? 0;
+      if (n >= MAX_CRITERIA) {
+        logger.info({ slug, criteria: n }, "criterion not added: the article is at the ceiling");
+        // Thrown out of the callback, so nothing is written. The real count, so
+        // a list inherited above the ceiling is told the truth.
+        throw criterionRefusal(409, criteriaAtCeiling(n));
+      }
+
       const [inserted] = await tx
         .insert(refereeCriteria)
         .values({
@@ -244,67 +283,6 @@ const rawPgRefereeCriteriaStore: RefereeCriteriaStore = {
           attemptStartedAt: DB_NOW,
         })
         .returning();
-
-      /* Trim to MAX_CRITERIA, excluding the row just written. The file keeps
-         the last N array elements and this keeps the N newest by timestamp;
-         pg-searches.ts § the trim works through exactly how far apart those two
-         can get and why the guarantee that matters — *the row this `begin`
-         returns survives this transaction* — is the one a reader needs.
-
-         **And a `pending` row past the cap is skipped, not deleted** — the rule
-         pg-searches.ts gained on 2026-10-01 and this copy did not, until
-         2026-10-03. A retry keeps its `created_at`, so the oldest row can be the
-         one still being answered; deleting it made its fenced `finish` update
-         nothing and the paid answer was gone on reload. It becomes trimmable
-         once it finishes or the sweep fails it. So the cap is twenty plus
-         however many older criteria are still running.
-         docs/plans/261003h-referee-answers-are-not-lost-or-overwritten.md
-
-         **A finished row with the referee's comments placed on it is NOT
-         skipped**, and that is a decision waiting on Greg rather than an
-         oversight (question 3a,
-         docs/plans/261006m-seventh-codebase-sweep-depth-umbrella.md § For Greg).
-         `comments_criterion_fk` refuses the delete, this transaction rolls back
-         with the insert in it. The add fails whenever such a row is a trim
-         candidate. What changed on 2026-10-07 is only how that is said: a 409
-         and a sentence where there was a 500. There is deliberately no
-         "has it comments?" read in front of the delete — under READ COMMITTED a
-         comment can be placed between such a read and the delete, so the key's
-         own refusal is the only check that cannot be raced. */
-      const others = await tx
-        .select({ id: refereeCriteria.id, status: refereeCriteria.status })
-        .from(refereeCriteria)
-        .where(
-          and(
-            eq(refereeCriteria.articleId, articleId),
-            notInArray(refereeCriteria.id, [decided.id]),
-          ),
-        )
-        .orderBy(sql`${refereeCriteria.createdAt} desc`, sql`${refereeCriteria.id} desc`)
-        .offset(MAX_CRITERIA - 1);
-      const past = others.filter((r) => r.status !== "pending").map((r) => r.id);
-      if (past.length) {
-        try {
-          await tx.delete(refereeCriteria).where(
-            and(
-              eq(refereeCriteria.articleId, articleId),
-              inArray(refereeCriteria.id, past),
-              // Repeated in SQL for the reason the reset's predicate is above.
-              ne(refereeCriteria.status, "pending"),
-            ),
-          );
-        } catch (err) {
-          // Thrown out of the callback, so the insert above is rolled back with it.
-          if (violatesForeignKey(err, COMMENTS_CRITERION_FK)) {
-            /* A line, because this used to be a 500 somebody would have seen in
-               Sentry and is now an answer nobody will: how often a list is
-               wedged is the evidence question 3a is waiting for. */
-            logger.info({ slug, past: past.length }, "criterion not added: the trim would delete one with comments on it");
-            throw criterionRefusal(409, CRITERIA_FULL_NEXT_TO_DROP_HAS_COMMENTS);
-          }
-          throw err;
-        }
-      }
 
       // `inserted!`: an insert with `returning()` yields the row it wrote.
       const back = toCriterion(inserted!);

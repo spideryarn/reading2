@@ -767,6 +767,11 @@ describe("one claim walks the whole job", () => {
           }),
           new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2_000)),
         ]);
+        /* A model call that is reached throws, which is what the step does
+           here. Since 2026-10-07 a last step that *returns* after a Stop is
+           kept and published (`transitionAfter`), so a step that ignored the
+           signal would end `done` and this case would be about that instead. */
+        ctx.signal.throwIfAborted();
       },
     });
 
@@ -1583,40 +1588,176 @@ describe("one claim walks the whole job", () => {
     });
 
     /**
-     * **Today's behaviour, pinned and not endorsed.** A step that finishes its
-     * work although Stop was pressed has two endings, and which one a reader
-     * gets depends on which server answered the Stop. It is an open product
-     * question for Greg (the plan's § Left open); these two cases exist so
-     * that nothing changes it by accident before he answers.
+     * **A Stop that lands while the last step is finishing keeps and publishes
+     * the article, whichever server it reached.** Until 2026-10-07 the answer
+     * depended on the server: `done` and published when another one answered
+     * the Stop, `cancelled` with the draft failed when the claimant's own did.
+     * Greg, 2026-10-07, relayed by the Overseer: *"re Stop, yes, probably best
+     * to err on the side of caution, and keep & publish"*.
+     * docs/plans/261007f-stop-during-the-last-step-keeps-and-publishes.md.
+     *
+     * The controls are the cases the decision must not reach: a Stop during an
+     * earlier step still does no more, a step that obeys the Stop leaves no
+     * product to keep, and our own deadline still does not commit a late
+     * product. Which abort fired first is what tells Stop and the deadline
+     * apart, because they share one controller and the first reason sticks.
      */
-    describe("Stop during a last step that finishes anyway — today's behaviour, an open question", () => {
-      async function stopDuringLastStep(slug: string, press: (id: string) => Promise<unknown>) {
+    describe("Stop during a last step that finishes anyway", () => {
+      async function stopDuring(
+        slug: string,
+        names: StepName[],
+        press: (id: string) => Promise<unknown>,
+        opts: { obeys?: boolean } = {},
+      ) {
         let draft: string | null | undefined;
-        const { job, parts } = await fixture(slug, ["fetch"], {
-          fetch: async () => {
+        const first = names[0]!;
+        const { job, parts, ran } = await fixture(slug, names, {
+          [first]: async (ctx: StepContext) => {
             draft = (await rowOf(job.id))?.draft;
             await press(job.id);
+            if (opts.obeys) ctx.signal.throwIfAborted();
           },
         });
         const advanced = await advanceAsOwner(job.id, parts);
-        return { advanced, draft: await revisionStatus(draft) };
+        const row = await rowOf(job.id);
+        return { advanced, ran: ran.names, draft: await revisionStatus(draft), row, job };
       }
 
-      it("pressed on another server: the job ends done and the article is published", async () => {
-        const { advanced, draft } = await stopDuringLastStep("test-walk-stop-remote-last", (id) =>
-          pgJobStore.requestCancel(id, OWNER),
-        );
-        expect(advanced?.job.status).toBe("done");
-        expect(draft).toBe("published");
+      async function stopRequestedAt(id: string): Promise<Date | null | undefined> {
+        const [row] = await getDb()
+          .select({ at: jobsTable.cancelRequestedAt })
+          .from(jobsTable)
+          .where(eq(jobsTable.id, id))
+          .limit(1);
+        return row?.at;
+      }
+
+      const local = (id: string) => runAsOwner(OWNER, () => cancelJob(id));
+      const remote = (id: string) => pgJobStore.requestCancel(id, OWNER);
+
+      /* C1 of the GPT Sol code review: a Stop while `beginStep` opens the
+         marker must stop the last step's work and fail the draft. Red without
+         the check after `beginStep` in `runStep` (it ran `metadata`). */
+      it("a Stop during the last step's opening prevents its work and fails the draft", async () => {
+        let draft: string | null | undefined;
+        const { job, parts, ran } = await fixture("test-walk-stop-last-opening", ["fetch", "metadata"]);
+        const advanced = await advanceAsOwner(job.id, {
+          ...parts,
+          session: async (j, attempt) => {
+            const session = await parts.session(j, attempt);
+            return {
+              ...session,
+              beginStep: async (slug, name) => {
+                const stepAttempt = await session.beginStep(slug, name);
+                if (name === "metadata") {
+                  draft = (await rowOf(job.id))?.draft;
+                  await local(job.id);
+                }
+                return stepAttempt;
+              },
+            };
+          },
+        });
+        expect(ran.names).toEqual(["fetch"]);
+        expect(advanced?.job.status).toBe("cancelled");
+        expect((await rowOf(job.id))?.status).toBe("cancelled");
+        expect((await rowOf(job.id))?.draft).toBeNull();
+        expect(await revisionStatus(draft)).toBe("failed");
       });
 
-      it("pressed on the claimant's own server: the job ends cancelled and the draft is failed", async () => {
-        const { advanced, draft } = await stopDuringLastStep("test-walk-stop-local-last", (id) =>
-          runAsOwner(OWNER, () => cancelJob(id)),
-        );
-        expect(advanced?.job.status).toBe("cancelled");
+      it("pressed on another server: the job ends done and the article is published", async () => {
+        const { advanced, draft, row, job } = await stopDuring("test-walk-stop-remote-last", ["fetch"], remote);
+        expect(advanced?.job.status).toBe("done");
+        expect(draft).toBe("published");
+        expect(row?.draft, "a finished job holds no draft pointer").toBeNull();
+        expect(await stopRequestedAt(job.id), "the Stop is still on the row for an operator").toBeTruthy();
+      });
+
+      it("pressed on the claimant's own server: the job ends done and the article is published", async () => {
+        const { advanced, draft, row, job } = await stopDuring("test-walk-stop-local-last", ["fetch"], local);
+        expect(advanced?.job.status).toBe("done");
+        expect(advanced?.done).toBe(true);
+        expect(advanced?.job.cancelling, "or the card stays at Stopping…").toBeUndefined();
+        expect(advanced?.job.error, "a kept article is not a failure").toBeUndefined();
         expect(advanced?.job.steps[0]?.status, "the step is shown as finished").toBe("done");
+        expect(draft).toBe("published");
+        expect(row?.status).toBe("done");
+        expect(row?.draft, "a finished job holds no draft pointer").toBeNull();
+        expect(await stopRequestedAt(job.id), "the Stop is still on the row for an operator").toBeTruthy();
+      });
+
+      /* ------------------------------------------------------ controls -- */
+
+      it.each([
+        ["on the claimant's own server", local],
+        ["on another server", remote],
+      ] as const)("pressed during an earlier step %s: nothing after it runs, and the draft is failed", async (_where, press) => {
+        const slug = `test-walk-stop-earlier-${press === local ? "local" : "remote"}`;
+        const { advanced, ran, draft, row } = await stopDuring(slug, ["fetch", "extract"], press);
+        expect(ran, "Stop still means do no more").toEqual(["fetch"]);
+        expect(advanced?.job.status).toBe("cancelled");
+        expect(row?.status).toBe("cancelled");
+        expect(draft, "what the earlier steps made is not published").toBe("failed");
+        expect(row?.draft).toBeNull();
+      });
+
+      it("pressed during a last step that obeys it: no product, the job ends cancelled and the draft is failed", async () => {
+        const { advanced, draft, row } = await stopDuring("test-walk-stop-obeyed", ["fetch"], local, { obeys: true });
+        expect(advanced?.job.status).toBe("cancelled");
+        expect(advanced?.job.steps[0]?.status).toBe("error");
         expect(draft).toBe("failed");
+        expect(row?.draft).toBeNull();
+      });
+
+      /**
+       * **Both signals, in both orders.** They abort one controller and the
+       * first reason sticks, so the order decides which rule applies.
+       *
+       * - Our deadline first, then Stop: the late product is not committed
+       *   (C3's rule), the walk asks to pause, and the pause lets the Stop
+       *   win (`pauseForDeadline` answers `cancelled`). Nothing is published.
+       * - Stop first, then our deadline: the step was told to stop by the
+       *   reader, so the Stop's rule applies and the article is kept.
+       */
+      async function bothSignals(slug: string, order: "deadline-first" | "stop-first") {
+        let commits = 0;
+        let draft: string | null | undefined;
+        let runs = 0;
+        const { job, parts } = await fixture(slug, ["fetch"], {
+          fetch: async (ctx) => {
+            runs += 1;
+            draft = (await rowOf(job.id))?.draft;
+            if (order === "stop-first") await local(job.id);
+            await sleep(400);
+            expect(ctx.signal.aborted, "the deadline has to have fired as well").toBe(true);
+            if (order === "deadline-first") await local(job.id);
+          },
+        });
+        const advanced = await advanceAsOwner(job.id, {
+          ...parts,
+          leaseMs: DEADLINE_MARGIN_MS + 100,
+          session: async (j, attempt) => {
+            const session = await parts.session(j, attempt);
+            return { ...session, commit: async (...args) => { commits += 1; return await session.commit(...args); } };
+          },
+        });
+        return { advanced, commits, runs, draft: await revisionStatus(draft), row: await rowOf(job.id) };
+      }
+
+      it("our deadline first, then Stop: the late product is not committed, and the Stop ends the job", async () => {
+        const { advanced, commits, runs, draft, row } = await bothSignals("test-walk-deadline-then-stop", "deadline-first");
+        expect(runs).toBe(1);
+        expect(commits, "a product that arrives after our deadline is never committed").toBe(0);
+        expect(advanced?.job.status).toBe("cancelled");
+        expect(row?.requeues ?? 0, "the Stop wins over the pause").toBe(0);
+        expect(draft).toBe("failed");
+      });
+
+      it("Stop first, then our deadline: the Stop's rule applies, and the article is kept", async () => {
+        const { advanced, commits, draft } = await bothSignals("test-walk-stop-then-deadline", "stop-first");
+        expect(commits).toBe(1);
+        expect(advanced?.job.status).toBe("done");
+        expect(draft).toBe("published");
       });
     });
 
