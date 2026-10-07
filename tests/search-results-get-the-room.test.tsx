@@ -170,14 +170,14 @@ async function open(query: string): Promise<{ found: number; conf: string }> {
 describe("the Search panel keeps its furniture out of the results' way", () => {
   it("prints no foot line under the slider when the threshold hides nothing", async () => {
     await open(`runs=${RUN}&conf=10`);
-    expect(host.querySelector(".srch-gate-value")?.textContent, "the precondition: the slider is drawn").toContain("2 of 2");
-    expect(host.querySelector(".srch-gate-note")).toBeNull();
+    expect(host.querySelector(".gloss-gate-value")?.textContent, "the precondition: the slider is drawn").toContain("2 of 2");
+    expect(host.querySelector(".gloss-gate-note")).toBeNull();
   });
 
   it("still says how many are hidden, and the way back, when some are", async () => {
     await open(`runs=${RUN}`);
-    expect(host.querySelector(".srch-gate-value")?.textContent).toContain("1 of 2");
-    expect(host.querySelector(".srch-gate-note")?.textContent).toBe(
+    expect(host.querySelector(".gloss-gate-value")?.textContent).toContain("1 of 2");
+    expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
       "1 passage is hidden by this threshold. Drag the slider left to show it.",
     );
   });
@@ -185,7 +185,7 @@ describe("the Search panel keeps its furniture out of the results' way", () => {
   it("still says so when the reader has hidden every one, where the list is empty", async () => {
     await open(`runs=${RUN}&conf=80`);
     expect(host.querySelector(".srch-hits")).toBeNull();
-    expect(host.querySelector(".srch-gate-note")?.textContent).toBe(
+    expect(host.querySelector(".gloss-gate-note")?.textContent).toBe(
       "All 2 passages are hidden by this threshold. Drag the slider left to show them.",
     );
   });
@@ -205,7 +205,7 @@ describe("the Search panel keeps its furniture out of the results' way", () => {
     const got = await open("match=words&find=in");
     expect(got.found, "the precondition: the word is found").toBeGreaterThan(0);
     expect(host.querySelector(".srch-legend")).toBeNull();
-    expect(host.querySelector(".srch-gate"), "and words mode has no slider at all").toBeNull();
+    expect(host.querySelector(".gloss-gate"), "and words mode has no slider at all").toBeNull();
   });
 
   it("caps the saved searches at a quarter of the panel, so the results get the rest", () => {

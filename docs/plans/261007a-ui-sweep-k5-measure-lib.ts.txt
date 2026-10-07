@@ -1,0 +1,44 @@
+/* K5 browser helpers. Run with `npx tsx` from the worktree root. */
+import { chromium } from "/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/node_modules/playwright-core/index.mjs";
+import { signIn } from "/var/tmp/spideryarn-worktrees/agent-a9c5866f16a8fec1a/scripts/browser-sign-in.ts";
+
+export const BASE = process.env.SPIDERYARN_BASE_URL ?? "";
+if (!BASE) throw new Error("set SPIDERYARN_BASE_URL");
+
+export type Cell = { width: number; height: number; touch: boolean; theme: "dark" | "light" };
+
+export const blocked: string[] = [];
+
+export async function open(opts: Cell) {
+  const browser = await chromium.launch({
+    headless: true,
+    executablePath: "/usr/bin/google-chrome-stable",
+    args: ["--no-sandbox"],
+  });
+  const context = await browser.newContext({
+    viewport: { width: opts.width, height: opts.height },
+    hasTouch: opts.touch,
+    /* A touch context reports `pointer: coarse` only under isMobile. */
+    isMobile: opts.touch,
+  });
+  await context.addInitScript({ content: "globalThis.__name = globalThis.__name || ((f) => f);" });
+  await context.addInitScript({
+    content: `try { localStorage.setItem("spya.appearance", ${JSON.stringify(opts.theme)}); } catch {}`,
+  });
+  /* No model call may leave this browser. A read is not always a GET here
+     (Diagram's projection is a POST that can call a paid embedding), so the
+     rule is the method, not the route: every non-GET is refused, except the
+     sign-in's own and the "opened" stamp. */
+  await context.route("**/*", (route) => {
+    const req = route.request();
+    const method = req.method();
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") return route.continue();
+    const url = req.url();
+    if (/\/auth\/v1\//.test(url) || /\/api\/library\/[^/]+\/open$/.test(new URL(url).pathname)) return route.continue();
+    blocked.push(`${method} ${url}`);
+    return route.abort();
+  });
+  const page = await context.newPage();
+  await signIn(page, BASE);
+  return { browser, context, page };
+}

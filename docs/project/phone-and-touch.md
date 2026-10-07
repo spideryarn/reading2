@@ -157,6 +157,9 @@ and close-cross reports
   [261003n](../plans/261003n-where-am-i-rail-on-two-or-three-lines-on-a-phone-in-portrait-and-a-phone-portrait-doc.md).
 - **Overflow in narrow rows and bars:** which surface wraps and which scrolls.
   [narrow-windows.md § Narrow windows: wrap, do not shrink](narrow-windows.md#narrow-windows-wrap-do-not-shrink).
+- **A page's contents list and its search box go above the page**, on Metadata and `/profile`,
+  where a wide window has them in the left margin; the list is folded under a *Contents* button.
+  [reader-profile.md § The page's six sections](reader-profile.md#the-pages-six-sections).
 - **The prose gutters:** what gives way when horizontal space is scarce.
   [narrow-windows.md § The reading view's narrow window](narrow-windows.md#the-reading-views-narrow-window-which-is-a-different-problem),
   and `styles/narrow-window.css` for the gutters.
