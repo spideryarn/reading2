@@ -724,11 +724,12 @@ Not done, in this order of importance:
      740 s, before its images): cap the plates or the brief per request, or split the step.
    - **Nothing tells a reader their Stop came too late**: the card goes from "Stopping…" to "Done —
      read it".
-4. **Left, each in its cluster's plan:** the command bar's *Run again* row bypasses every hold
-   (reproduced, pinned by a test that goes red when it is fixed; P1 by Sol's grading and the most
-   valuable thing left); the route opt-in for the last six "none yet" reads; stage 7 of the schema
+4. **Left, each in its cluster's plan:** the route opt-in for the last six "none yet" reads; stage 7 of the schema
    (the published-scalars CHECK); a deleted cross-reference artefact replayed from the offline
    cache; the developer-register 400 sentence a reader can meet in Referee; NEW1.
+5. **Fixed since (2026-10-07):** the command bar's *Run again* row bypassed every hold; it now asks
+   the mode's hold and refuses while one is up
+   ([261007i](261007i-command-bar-run-again-row-honours-the-rewrite-hold.md)).
 
 ## What this run says about the method
 
