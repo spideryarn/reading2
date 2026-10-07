@@ -324,6 +324,40 @@ describe("the search box", () => {
     expect(window.location.hash).toBe("#spine");
     expect(scrolled.map((el) => el.id)).toEqual(["spine"]);
   });
+
+  /* A reader typing Japanese or Chinese presses Enter to accept a candidate
+     and Escape to dismiss the list; neither is a press on this box. Both
+     spellings of "composing" (key-chord.ts § `isImeComposing`). Plan
+     261007a-ui-sweep-k2. */
+  it.each([
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+  ])("goes nowhere and clears nothing while an input method is composing (%s)", (_how, init) => {
+    mountAt("/help");
+    type("heat");
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    act(() => {
+      searchBox()?.dispatchEvent(enter);
+      searchBox()?.dispatchEvent(escape);
+    });
+    expect(window.location.hash).toBe("");
+    expect(scrolled).toEqual([]);
+    expect(searchBox()?.value).toBe("heat");
+    expect(enter.defaultPrevented).toBe(false);
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(escape.defaultPrevented).toBe(true);
+  });
+
+  it("and an ordinary Escape still clears the box", () => {
+    mountAt("/help");
+    type("heat");
+    act(() => {
+      searchBox()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(searchBox()?.value).toBe("");
+  });
 });
 
 describe("arriving at a section", () => {

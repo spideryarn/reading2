@@ -25,6 +25,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { normaliseTag, TAGS_PER_ARTICLE } from "../tags.js";
 import type { TagChange } from "./article-tags.js";
 import { loadReaderTags } from "./article-tags.js";
+import { isImeComposing } from "./key-chord.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { voiceClass, withVoice } from "./voice.js";
 
@@ -162,7 +163,7 @@ export function TagEditor({
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     /* Enter is how an IME accepts its current composition. Treating that same
        event as our submit would save a partial CJK tag. */
-    if (e.nativeEvent.isComposing) return;
+    if (isImeComposing(e)) return;
     if (busy) {
       if (e.key === "Enter" || e.key === ",") e.preventDefault();
       return;

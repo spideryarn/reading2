@@ -151,6 +151,23 @@ describe("TagEditor", () => {
     expect(box().value).toBe("仮");
   });
 
+  /* The older spelling of "composing": some engines send `keyCode` 229 and no
+     flag (key-chord.ts § `isImeComposing`). Plan 261007a-ui-sweep-k2. */
+  it("nor on an Enter or a comma that arrives as keyCode 229", async () => {
+    const save = vi.fn(async (c: TagChange) => c.add ?? []);
+    paint([], save);
+    await type("仮");
+    for (const key of ["Enter", ","]) {
+      const e = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, keyCode: 229 } as KeyboardEventInit);
+      await act(async () => {
+        box().dispatchEvent(e);
+      });
+      expect(e.defaultPrevented, key).toBe(false);
+    }
+    expect(save).not.toHaveBeenCalled();
+    expect(box().value).toBe("仮");
+  });
+
   it("removes the last tag on Backspace in an empty box", async () => {
     const save = vi.fn(async () => ["a"]);
     paint(["a", "b"], save);

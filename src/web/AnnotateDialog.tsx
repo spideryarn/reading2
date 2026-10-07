@@ -163,6 +163,7 @@ import { mintId } from "../ids.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { HighlightSwatches } from "./HighlightSwatches.js";
 import { DEFAULT_HIGHLIGHT } from "./fresh-highlight.js";
+import { isImeComposing } from "./key-chord.js";
 import { type Mark, NO_MARK, PlaceOnCriterion } from "./PlaceOnCriterion.js";
 import { parseRoute } from "./router.js";
 import { keepDictation } from "./dictation-keep.js";
@@ -638,6 +639,10 @@ export function AnnotateDialog({
             readOnly={dictate.readOnly}
             onChange={(e) => changeBody(e.target.value)}
             onKeyDown={(e) => {
+              /* A key an input method is using is not ours. Its Escape
+                 dismisses a candidate list and must not empty the box; the
+                 window listener below asks the same and leaves the panel up. */
+              if (isImeComposing(e)) return;
               /* Escape closes the panel from a window listener, which would eat
                  half-written words without warning. Stopped here so the first
                  Escape clears the box and the second closes the panel — the

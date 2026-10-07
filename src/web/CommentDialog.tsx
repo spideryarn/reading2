@@ -19,6 +19,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Globe, LoaderCircle, X } from "lucide-react";
 import { PROVIDER_UNREADABLE, worthRetrying } from "../messages.js";
+import { isImeComposing } from "./key-chord.js";
 import type { ClientComment } from "./useComments.js";
 import { MARK_KIND_LABEL, commentKind, passageOf } from "./comment-nav.js";
 import { HighlightSwatches } from "./HighlightSwatches.js";
@@ -870,6 +871,14 @@ export function CommentDialog({
                a half-typed question without warning. Stopped here so the first
                Escape clears the box and the second closes the panel. */
             onKeyDown={(e) => {
+              /* A key an input method is using is not ours. Its Escape keeps
+                 the question; its Enter accepts a candidate, so the form's
+                 implicit submit, which asks the AI, is cancelled
+                 (DebatePanel.tsx's lens box does the same). */
+              if (isImeComposing(e)) {
+                if (e.key === "Enter") e.preventDefault();
+                return;
+              }
               if (e.key === "Escape" && followUp) {
                 e.stopPropagation();
                 setFollowUp("");
@@ -1148,6 +1157,9 @@ function CommentBody({
       }}
       onBlur={commit}
       onKeyDown={(e) => {
+        /* A key an input method is using is not ours: its Escape dismisses a
+           candidate list and must not put the stored words back. */
+        if (isImeComposing(e)) return;
         if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
           e.preventDefault();
           commit();

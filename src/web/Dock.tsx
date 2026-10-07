@@ -1936,6 +1936,13 @@ export function Dock({
    * It does not fire for the command bar, which cannot be open over the drawer:
    * `useCommandBarChord`'s `show()` shuts the drawer on its way in,
    * deliberately, and says why.
+   *
+   * **An Escape that belongs to an input method closes nothing** (2026-10-07):
+   * it dismisses a candidate list in whichever box the reader is typing in.
+   * The press is still stopped first, so it goes no further than an ordinary
+   * one would. This listener runs before every box on the page, so no guard
+   * in a box could keep the drawer open.
+   * docs/plans/261007a-ui-sweep-k2-composition-keys.md.
    */
   const onPanel = drawer?.onPanel;
   useEffect(() => {
@@ -1944,6 +1951,7 @@ export function Dock({
       if (e.key !== "Escape") return;
       if (document.querySelector("dialog[open]") !== null) return;
       e.stopImmediatePropagation();
+      if (isImeComposing(e)) return;
       onPanel(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });

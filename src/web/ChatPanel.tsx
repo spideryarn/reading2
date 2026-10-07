@@ -109,7 +109,7 @@ import { keepDictation } from "./dictation-keep.js";
 import { useReaderTranscriber } from "./dictation-upload.js";
 import { useCopy } from "./useCopy.js";
 import { useDictationField } from "./useDictationField.js";
-import { isHeldSendEnter, isSendEnter } from "./key-chord.js";
+import { isHeldSendEnter, isImeComposing, isSendEnter } from "./key-chord.js";
 import { ControlTip, TipNote, Tooltip } from "./Tooltip.js";
 import {
   CHAT_FROM_LABEL,
@@ -1226,6 +1226,10 @@ function RenameRow({
           // capture-phase listener otherwise (Dock.tsx), and Enter would
           // reach nothing but is worth being explicit about.
           e.stopPropagation();
+          // After the stop, so a composing key is still contained: Enter that
+          // accepts an input method's candidate is not a save, and its Escape
+          // is not a cancel (key-chord.ts § isImeComposing).
+          if (isImeComposing(e)) return;
           if (e.key === "Enter") onDone(value);
           if (e.key === "Escape") onCancel();
         }}
@@ -2496,7 +2500,9 @@ function EditQuestion({
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
           e.stopPropagation();
-          if (e.key === "Escape") onCancel();
+          /* Not the Escape that dismisses an input method's candidates, which
+             would throw the rewrite away. After the stop, as in the composer. */
+          if (e.key === "Escape" && !isImeComposing(e)) onCancel();
           if (isSendEnter(e)) {
             e.preventDefault();
             ask();
@@ -2894,8 +2900,14 @@ export function Composer({
              I was typing, give me the reading keys back. Doing them in that
              order means the destructive one is never reached by accident: you
              cannot clear a draft you have not typed, and you cannot blur while
-             there is anything else Escape could still be for. */
-          if (e.key === "Escape") {
+             there is anything else Escape could still be for.
+
+             **None of them for an Escape that belongs to an input method.** A
+             reader typing Japanese or Chinese presses it to dismiss the
+             candidate list, and the second rung emptied their question. The
+             test sits here, after the `stopPropagation` above, so a composing
+             key is still contained like every other. */
+          if (e.key === "Escape" && !isImeComposing(e)) {
             if (onStop) onStop();
             else if (value !== "") {
               setValue("");

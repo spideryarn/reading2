@@ -52,6 +52,7 @@ import type { Mode } from "../../modes.js";
 import { MODE_LABEL } from "../../title-text.js";
 import { HomeLink } from "../BackLink.js";
 import { scrollToAndFlash } from "../flash.js";
+import { isImeComposing } from "../key-chord.js";
 import { Link } from "../Link.js";
 import { pageTitle, useDocumentTitle } from "../page-title.js";
 import { searchSections, type SearchableSection } from "../page-search.js";
@@ -363,6 +364,14 @@ function HelpContents({
   onGo: (anchor: HelpAnchor) => void;
 }) {
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    /* A key an input method is using is not ours: its Enter accepts a
+       candidate and its Escape dismisses the list. A `type="search"` box is
+       also emptied by the browser itself on Escape (measured in Chrome,
+       2026-10-07), so that default is cancelled. */
+    if (isImeComposing(e)) {
+      if (e.key === "Escape") e.preventDefault();
+      return;
+    }
     if (e.key === "Enter" && results !== null && results[0] !== undefined) {
       e.preventDefault();
       onGo(results[0]);
