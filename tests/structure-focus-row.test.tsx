@@ -2,6 +2,8 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Block, BlockId } from "../src/types.js";
+import { clearFoldArticle, setFoldArticle, toggleFold } from "../src/web/fold.js";
 import type { Section } from "../src/web/position.js";
 import { arrivalAnchor, clearArrivalAnchor, scrollToBlock } from "../src/web/scroll.js";
 import { useColumnContext } from "../src/web/useColumnContext.js";
@@ -79,6 +81,7 @@ beforeEach(() => {
 
 afterEach(() => {
   clearArrivalAnchor();
+  clearFoldArticle();
   act(() => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
@@ -151,6 +154,37 @@ describe("Structure's current-row measurement", () => {
       flushFrames();
     });
     expect(arrivalAnchor()).toBeNull();
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
+  });
+});
+
+/**
+ * **Block 0 is the first section's start and the masthead's echo at once.**
+ * It is hidden through the fold store, and its section is still on screen, so
+ * it is not skipped the way a folded section's start is (fold.ts §
+ * `isFoldedAway`; Greg, spya-t6cdve;
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md).
+ */
+describe("Structure's current row when the first section starts on the masthead's echo", () => {
+  const blocks = [
+    { id: A, kind: "heading", tag: "h1", level: 1 },
+    { id: B, kind: "text", tag: "p" },
+  ] as Block[];
+
+  it("is the first section while the reader is in it", () => {
+    topOfB = 150; // the second section has not reached the focus line at 80
+    setFoldArticle("slug", blocks, new Set([A as BlockId]));
+    act(() => root.render(<Harness sections={FIRST} layoutKey="k" />));
+    expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
+  });
+
+  it("is still never a section whose start a fold hides (the control)", () => {
+    /* `B` is under the folded heading `A`: no height, tying with whatever is
+       next, and past the focus line. Unskipped it would be the answer. */
+    topOfB = 50;
+    setFoldArticle("slug", blocks);
+    toggleFold(A as BlockId);
+    act(() => root.render(<Harness sections={FIRST} layoutKey="k" />));
     expect(host.querySelector("[data-focus-row]")?.textContent).toBe("0");
   });
 });

@@ -28,7 +28,7 @@ import { positionToWrite, type Section } from "../position.js";
 import { beginJump, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
-import { isFolded, subscribeFold } from "../fold.js";
+import { isFoldedAway, subscribeFold } from "../fold.js";
 
 /**
  * Reading position, both ways: the URL scrolls the page, and the page writes the
@@ -179,10 +179,13 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         held: synced.current,
         anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
         /* A folded section start is never written: restoring it would unfold
-           it (scroll.ts § `scrollToBlock`). fold.ts. */
+           it (scroll.ts § `scrollToBlock`). fold.ts. `isFoldedAway`, not
+           `isFolded`: the first section starts on the masthead's echo, which
+           is hidden with its section still on screen, and skipping it wrote
+           the next section while the reader was in the first. */
         skip: (i) => {
           const s = sections[i];
-          return s !== undefined && isFolded(s.blockId);
+          return s !== undefined && isFoldedAway(s.blockId);
         },
       });
       if (next === null) return;

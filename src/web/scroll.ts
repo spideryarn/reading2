@@ -1007,6 +1007,19 @@ export function scrollToBlock(
     cancel();
     return done?.("missing");
   }
+  const instant = behavior !== "smooth" || reducedMotion();
+  /* **Still hidden after the reveal: the masthead's echo** (masthead-echo.ts;
+     Greg, spya-t6cdve). Its row has no height and no fold opens it, so there
+     is nothing to measure and nothing to centre. The visible copy of its
+     words is the masthead, so the jump goes to the top of the page: `?at=`,
+     ↑ to the first section's start, a search hit or a quote that names it.
+     No arrival anchor is left, since the top of the page is where every
+     position reader already says "nowhere yet". GPT Sol, plan review F6,
+     docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md. */
+  if (isFolded(id)) {
+    glide(() => 0, done, instant ? 0 : SCROLL_MS);
+    return;
+  }
   const align = how.align ?? "top";
   const aim = aimAt(id, row, align, align === "centre" ? how.passage : undefined);
   glide(
@@ -1018,7 +1031,7 @@ export function scrollToBlock(
       if (outcome === "settled" && align === "centre") holdAnchor(id, how.passage);
       done?.(outcome);
     },
-    behavior === "smooth" && !reducedMotion() ? SCROLL_MS : 0,
+    instant ? 0 : SCROLL_MS,
     aim.finish,
     aim.provisional,
   );
@@ -1202,7 +1215,7 @@ export function isPassageOnScreen(id: string, passage: string): boolean {
 export function whereIsBlock(id: string): Whereabouts {
   const row = blockRow(id);
   if (!row) return "nowhere";
-  if (isFolded(id)) return "away"; // a jump to it will unfold it
+  if (isFolded(id)) return "away"; // a jump unfolds it, or for the masthead's echo goes to the top
   if (anchor?.id === id) return "here"; // § `anchor`
   const { top, bottom } = row.getBoundingClientRect();
   const line = stickyOffset();

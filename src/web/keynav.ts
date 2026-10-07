@@ -56,7 +56,7 @@ import { navigableItems, type Cell, type Geometry } from "./tree.js";
 /* Typing somewhere? Then the arrows are the caret's, not ours. One copy for
    every shortcut, in a leaf module the Dock can import too — key-chord.ts. */
 import { isTyping } from "./key-chord.js";
-import { isFolded } from "./fold.js";
+import { isFolded, isFoldedAway } from "./fold.js";
 import { blockRow } from "./rows.js";
 
 /**
@@ -662,10 +662,15 @@ export function useArrowNav(
       /* **Over a folded section, never into it.** `scrollToBlock` unfolds
          whatever it is sent to, so a folded row left in the list would make ↓
          open every section it met (fold.ts). Filtered here, at the press,
-         because folding changes nothing the plan is memoised on. */
+         because folding changes nothing the plan is memoised on.
+
+         `isFoldedAway`, not `isFolded`: the masthead's echo is hidden and
+         stays a start, because block 0 is where the first section begins.
+         ↑ to it goes to the top of the page (scroll.ts § `scrollToBlock`);
+         filtered out, ↑ from inside the first section had nowhere to go. */
       const starts = (plan.starts[d] ?? []).filter((row) => {
         const id = blocks[row]?.id;
-        return id === undefined || !isFolded(id);
+        return id === undefined || !isFoldedAway(id);
       });
       /* The aim this press steps from, if one still stands — kept so a ↓ that
          moves nothing can put it back, below. */

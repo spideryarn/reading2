@@ -82,6 +82,109 @@ describe("↓ and a folded section", () => {
   });
 });
 
+/**
+ * **The masthead's echo is hidden and is not a fold** (fold.ts § `isFoldedAway`;
+ * Greg, spya-t6cdve;
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md).
+ * Block 0 is the echo and is also where the first section starts, so ↑ must
+ * still be able to ask for it: `scrollToBlock` then goes to the top of the
+ * page (below). Filtered out like a folded start, ↑ from inside the first
+ * section had nowhere to go.
+ */
+describe("↑ and the masthead's echo", () => {
+  const up = () =>
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
+    });
+  /* Sections start at b0 (the echo heading) and b3. */
+  const sections: NavPlan = { starts: [[0, 3]] };
+  function BySection() {
+    useArrowNav(sections, blocks, 0);
+    return null;
+  }
+
+  /** The reader on row `at`: every row before it above the line, the echo rows with no height. */
+  function standOn(at: number, echo: number): () => void {
+    const table = document.createElement("table");
+    table.innerHTML = `<tbody>${blocks.map((b) => `<tr data-block="${b.id}"><td></td></tr>`).join("")}</tbody>`;
+    document.body.append(table);
+    const rows = [...table.querySelectorAll("tr")];
+    const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const i = rows.indexOf(this as HTMLTableRowElement);
+      const top = i < 0 ? 0 : (Math.max(i, echo) - at) * 100;
+      return { top, bottom: top + (i < echo ? 0 : 100), height: i < echo ? 0 : 100 } as DOMRect;
+    });
+    return () => {
+      spy.mockRestore();
+      table.remove();
+    };
+  }
+
+  it("reaches the start of the first section from inside it", async () => {
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const leave = standOn(2, 1);
+    await act(async () => root.render(createElement(BySection)));
+    try {
+      up();
+      expect(jumps).toEqual(["spya-b0"]);
+    } finally {
+      leave();
+    }
+  });
+
+  it("still has nowhere to go when that start is folded away (the control)", async () => {
+    /* b1 to b4 under one folded heading, and a plan whose starts are all inside it. */
+    const under: NavPlan = { starts: [[1, 4]] };
+    function Under() {
+      useArrowNav(under, blocks, 0);
+      return null;
+    }
+    const all = blocks.map((b, i) => (i === 3 ? block(3) : b));
+    setFoldArticle("slug", all);
+    toggleFold("spya-b0" as BlockId);
+    await act(async () => root.render(createElement(Under)));
+    up();
+    down();
+    expect(jumps).toEqual([]);
+  });
+
+  it("ends at the top of the page: the jump to an echo row measures no row", async () => {
+    const real = await vi.importActual<typeof import("../src/web/scroll.js")>("../src/web/scroll.js");
+    globalThis.CSS ??= { escape: (s: string) => s } as unknown as typeof globalThis.CSS;
+    setFoldArticle("slug", blocks, new Set(["spya-b0" as BlockId]));
+    const leave = standOn(2, 1);
+    let y = 300;
+    /* Tall enough to scroll: `scrollToBlock` clamps to the page, and jsdom's
+       zero-height document would send every destination to 0. */
+    const tall = vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(5000);
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockImplementation(() => y);
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(((o: ScrollToOptions) => {
+      y = o.top ?? y;
+    }) as typeof window.scrollTo);
+    try {
+      const outcomes: string[] = [];
+      real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o));
+      expect(y).toBe(0);
+      /* The control: a visible row is measured, and it is not at the top. */
+      real.scrollToBlock("spya-b3", "auto");
+      expect(y).not.toBe(0);
+      real.scrollToBlock("spya-b0", "auto", (o) => outcomes.push(o), { align: "centre" });
+      expect(y).toBe(0);
+      expect(real.arrivalAnchor()).toBeNull();
+      real.abandonScroll();
+      expect(isFolded("spya-b0")).toBe(true);
+    } finally {
+      real.abandonScroll();
+      scrollTo.mockRestore();
+      tall.mockRestore();
+      scrollY.mockRestore();
+      leave();
+    }
+  });
+});
+
 describe("a folded row is never where the reader is", () => {
   it("is skipped by activeSectionIndex even when it ties last", async () => {
     const { activeSectionIndex } = await import("../src/web/position.js");
