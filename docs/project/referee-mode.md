@@ -436,11 +436,16 @@ So there is no trim. `MAX_CRITERIA` ([`src/saved-criteria.ts`](../../src/saved-c
 **200**, a ceiling, and `begin` ([`src/store/pg-referee-criteria.ts`](../../src/store/pg-referee-criteria.ts))
 refuses the add that would pass it: a 409 before any stream opens, nothing written, nothing deleted.
 It counts **every criterion on the article** — running, failed, with comments or without — because
-each is one the referee asked for and can delete, so the sentence's way out is always in reach. The
-count and the insert are one transaction under the article lock, so two adds at 199 make 200, not
-201. A retry of a failed criterion adds no row and is never refused. The browser keeps the refused
-criterion on screen as a failed row carrying the sentence, so the referee's words are not lost; it
-is never shown as added.
+pending and failed rows still hold the reader's words. Current database constraints make every
+config readable; rows outside that contract count too but are hidden by the loader. A commented
+criterion must have its placements cleared before a delete succeeds. The count and insert are one
+transaction under the article lock, so two adds at 199 make 200. A retry with the same id and words,
+while its saved row is still failed, resets that row before the ceiling check. The browser keeps a
+ceiling refusal as a failed row with Retry and the sentence; it is never shown as added.
+[`criterion-refusal-drafts.ts`](../../src/web/criterion-refusal-drafts.ts) keeps the refused words
+and configuration through mode changes and reloads in this tab, keyed by reader and article, until
+a `begin` confirms storage or the reader deletes the draft. If browser storage is unavailable, only
+the mounted hook keeps those words.
 
 **A criterion with comments on it cannot be deleted by hand, and says so.** A placement points at its
 criterion, and `comments_criterion_fk` refuses to leave it pointing at nothing

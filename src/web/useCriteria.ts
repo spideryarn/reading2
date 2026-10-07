@@ -33,7 +33,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mintId } from "../ids.js";
 import type { RefereeCriterionConfig, RefereeResult } from "../referee-criteria.js";
 import type { SavedCriterion } from "../saved-criteria.js";
+import { CRITERIA_AT_CEILING } from "../referee-criteria-store.js";
 import { isStale } from "../search-stale.js";
+import { criterionRefusalDrafts } from "./criterion-refusal-drafts.js";
 import { apiFetch, failure, fetchOk, statusOf } from "./lib/api.js";
 import { ReaderFacingError } from "./lib/reader-facing.js";
 import { openingRead } from "./lib/opening-read.js";
@@ -95,6 +97,7 @@ interface CriterionDeletion {
 export function useCriteria(slug: string): CriteriaApi {
   // A queued colour or a stream's re-delete can run after the session changes.
   const madeFor = useMadeFor();
+  const drafts = useMemo(() => criterionRefusalDrafts(slug, madeFor), [slug, madeFor]);
   const [rows, setRows] = useState<SavedCriterion[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -137,7 +140,7 @@ export function useCriteria(slug: string): CriteriaApi {
 
   useEffect(() => {
     let live = true;
-    setRows([]);
+    setRows(drafts.read());
     setLoaded(false);
     setLoadError(null);
     setFingerprint(null);
@@ -152,7 +155,11 @@ export function useCriteria(slug: string): CriteriaApi {
         if (body.error) {
           setLoadError(body.error);
         } else {
-          setRows(body.criteria ?? []);
+          const stored = body.criteria ?? [];
+          // A late acceptance may already have stored a draft's id. The server
+          // owns those words now; do not show two rows or revive its old error.
+          for (const row of stored) drafts.remove(row.id);
+          setRows([...stored, ...drafts.read()]);
           /* **Unconditionally, including when the field is missing.** A reply
              that got here is the server's answer about this paper, so
              `undefined` is not silence — it is "we checked and cannot tell",
@@ -176,7 +183,7 @@ export function useCriteria(slug: string): CriteriaApi {
       live = false;
       read.abandon();
     };
-  }, [slug]);
+  }, [slug, drafts]);
 
   /** Replace one row in place, or append it if it is new. */
   const put = useCallback((next: SavedCriterion) => {
@@ -243,7 +250,8 @@ export function useCriteria(slug: string): CriteriaApi {
    * as a hidden error while deleted, and shown only if the delete is refused.
    */
   const send = useCallback(
-    (id: string, criterion: string, config: RefereeCriterionConfig, createdAt: string) => {
+    (id: string, criterion: string, config: RefereeCriterionConfig, createdAt: string, isAdd = false) => {
+      const wasDraft = drafts.read().some((draft) => draft.id === id);
       // Drop whatever the previous attempt left behind, so a retry shows a
       // spinner rather than the old error with a spinner under it.
       put({ id, criterion, config, createdAt, status: "pending", results: [] });
@@ -282,6 +290,7 @@ export function useCriteria(slug: string): CriteriaApi {
             if (gone && gone.scope !== deletionScope) return;
             if (event.name === "begin") {
               const begun = event.data as SavedCriterion;
+              drafts.remove(id);
               /* Fresher news about the paper than the GET has: the server
                  fingerprints the blocks as it opens the row, so this hash *is*
                  the article's current one. */
@@ -349,6 +358,9 @@ export function useCriteria(slug: string): CriteriaApi {
           };
           const removed = deleted.current.get(liveId);
           if (removed && removed.scope !== deletionScope) return;
+          if (!removed && (isAdd || wasDraft) && statusOf(e) === 409 && message === CRITERIA_AT_CEILING) {
+            drafts.put(failed, wasDraft);
+          }
           if (removed) {
             removed.row = failed;
             return;
@@ -358,13 +370,13 @@ export function useCriteria(slug: string): CriteriaApi {
         }
       })();
     },
-    [slug, put, forget, madeFor, deletionScope],
+    [slug, put, forget, madeFor, deletionScope, drafts],
   );
 
   const ask = useCallback(
     (criterion: string, config: RefereeCriterionConfig) => {
       const id = mintId();
-      send(id, criterion.trim(), config, new Date().toISOString());
+      send(id, criterion.trim(), config, new Date().toISOString(), true);
       return id;
     },
     [send],
@@ -430,12 +442,13 @@ export function useCriteria(slug: string): CriteriaApi {
       /* Read from the closure, not from inside the updater below — an updater
          must be pure, the rule `retry` keeps for the same reason. */
       const back: CriterionDeletion = { row: rows.find((c) => c.id === id), scope: deletionScope };
+      drafts.discard(id);
       deleted.current.set(id, back);
       setRows((prev) => prev.filter((c) => c.id !== id));
       // If a POST is still out, its `done` frame re-sends the DELETE after the write.
       void forget(id, back);
     },
-    [forget, rows, deletionScope],
+    [forget, rows, deletionScope, drafts],
   );
 
   /**
