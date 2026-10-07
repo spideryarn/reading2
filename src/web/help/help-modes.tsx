@@ -182,7 +182,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
         </p>
         <p>
           <strong>Talking instead of typing.</strong> The microphone turns your speech into text in
-          the box, to edit before you send; a recording stops after five minutes. Press Stop twice
+          the box, to edit before you send; a recording stops after fifteen minutes, and says so a minute before. Press Stop twice
           quickly and it sends by itself once the words arrive; this works here, in Feedback, in a
           comment follow-up, in a quiz answer and when you annotate a passage. In the command bar it
           presses Enter for you instead.{" "}

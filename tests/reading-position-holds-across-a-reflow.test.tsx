@@ -47,6 +47,7 @@ import {
   glideTarget,
   scrollToBlock,
 } from "../src/web/scroll.js";
+import { clearFoldArticle, setFoldArticle, toggleFold } from "../src/web/fold.js";
 import { useReadingPosition } from "../src/web/reader/useReadingPosition.js";
 
 enableHistorySync();
@@ -96,6 +97,8 @@ const LANDSCAPE = 40;
 
 let rowHeight = PORTRAIT;
 let scrollY = 0;
+/** How many leading rows are the masthead's echo: drawn with no height. */
+let echoRows = 0;
 let scrollTo: ReturnType<typeof vi.fn>;
 
 function rowIndexOf(el: Element): number | null {
@@ -139,6 +142,7 @@ const atNow = () => new URLSearchParams(location.search).get("at");
 beforeEach(() => {
   rowHeight = PORTRAIT;
   scrollY = 0;
+  echoRows = 0;
 
   document.body.replaceChildren();
   const table = document.createElement("table");
@@ -155,8 +159,12 @@ beforeEach(() => {
     this: Element,
   ) {
     const i = rowIndexOf(this);
-    const top = i === null ? 0 : i * rowHeight - scrollY;
-    return { top, bottom: top + rowHeight, height: rowHeight, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
+    /* A hidden row has no height and sits at the top of the next visible one
+       (fold.ts § Why the cells are hidden): the masthead's echo, below. */
+    const echo = i !== null && i < echoRows;
+    const height = echo ? 0 : rowHeight;
+    const top = i === null ? 0 : (echo ? echoRows : i) * rowHeight - scrollY;
+    return { top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
   });
   vi.spyOn(document.documentElement, "scrollHeight", "get").mockImplementation(
     () => ROWS * rowHeight,
@@ -191,6 +199,7 @@ afterEach(() => {
      leak does to a mutation check. */
   abandonScroll();
   clearArrivalAnchor();
+  clearFoldArticle();
   vi.restoreAllMocks();
 });
 
@@ -402,5 +411,58 @@ describe("a reflow under a reader who is staying put", () => {
     rowHeight = LANDSCAPE;
     render("landscape");
     expect(arrivalAnchor()).toBeNull();
+  });
+});
+
+/**
+ * **The first section starts on a row the reader cannot see, and is still the
+ * section they are in.** Block 0 is the start of the first section of every
+ * article (tree.ts § `navigableItems` begins at row 0), and it is also the
+ * masthead's echo, hidden through the fold store (Greg, spya-t6cdve). A fold
+ * hides a whole section, so its start is skipped; an echo hides one row whose
+ * section is on screen, and skipping it wrote `?at=` as the *next* section.
+ * fold.ts § `isFoldedAway`;
+ * docs/plans/261007b-the-title-is-drawn-once-and-the-masthead-loses-its-back-arrow.md.
+ */
+describe("an article whose first rows are the masthead's echo", () => {
+  beforeEach(() => {
+    echoRows = 2;
+    setFoldArticle("x", BLOCKS, new Set([block(0), block(1)]));
+  });
+
+  it("writes ?at= as the first section while the reader is mid-way through it", async () => {
+    history.replaceState(null, "", "/read/x");
+    render("k");
+    await settle();
+
+    /* Row 5 at the line: past the echo, seven rows short of the second section. */
+    window.scrollTo({ top: 5 * PORTRAIT });
+    await settle();
+
+    expect(atNow()).toBe(block(0));
+  });
+
+  it("still skips a section whose start a fold hides (the control)", async () => {
+    /* Rows 13 to 29 under one folded heading at row 12: the last section's
+       start is folded away, and the reader is past where it would be. */
+    const folded = BLOCKS.map((b, i) =>
+      i === 12 ? { ...b, kind: "heading", tag: "h2", level: 2 } : b,
+    ) as Block[];
+    setFoldArticle("x", folded);
+    toggleFold(block(12));
+    history.replaceState(null, "", "/read/x");
+    render("k");
+    await settle();
+    window.scrollTo({ top: 26 * PORTRAIT });
+    await settle();
+    expect(atNow()).toBe(block(12));
+  });
+
+  it("arrives at the top of the page for ?at= naming an echo row", async () => {
+    scrollY = 7 * PORTRAIT;
+    history.replaceState(null, "", `/read/x?at=${block(0)}`);
+    render("k");
+    await settle();
+    expect(scrollY).toBe(0);
   });
 });

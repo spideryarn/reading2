@@ -518,7 +518,9 @@ paper. The hash is the browser's claim; that is safe only because the check is t
 - `loadArticle` throws it, carrying `paper` — the title, authors, abstract, DOI, filename and kind
   the not-yet-read page draws — so chat, live, comments, citations, term lookup, similar, link
   previews and the article read all refuse before they spend. Search and a referee criterion ask
-  first (`refuseAPaperNotReadYet`), because they write a row before they read the article.
+  first (`refuseAPaperNotReadYet`), and store nothing when refused. That gate reads the `articles`
+  row alone, so it also refuses a minimal paper whose first revision is not published yet, which
+  `loadArticle`'s revision join answers 404.
 - `enqueue` refuses any job naming a minimal article except the admitted *Read this*: its
   reservation is an unsettled ingest bound to that article (`isReadThisFor`), or the owner is the
   administrator asking through *Read this* or retrying it. A mode, Rebuild and a step re-run are

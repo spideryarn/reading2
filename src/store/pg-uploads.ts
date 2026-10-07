@@ -270,6 +270,7 @@ export async function claimUploadIn(
     .limit(1);
   const existing = row ?? null;
   if (!existing) return { ok: false, why: "unknown" };
+  if (existing.status === "expired") return { ok: false, why: "expired" };
   if (existing.status !== "pending") return { ok: false, why: "taken" };
   return { ok: false, why: "expired" };
 }

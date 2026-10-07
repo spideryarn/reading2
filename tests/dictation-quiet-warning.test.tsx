@@ -53,6 +53,7 @@ function listening(quiet: boolean): UseDictation {
     toggle: () => {},
     error: null,
     startedAt: Date.now(),
+    endsAt: null,
     deviceLabel: "MacBook Pro Microphone (Built-in)",
     deviceId: null,
     deviceUnavailable: false,

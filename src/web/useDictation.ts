@@ -118,9 +118,16 @@ import {
   rememberedDevice,
   rememberedDeviceLabel,
 } from "./mic-devices.js";
-import { type MicRecording, type MicTape, type TapeEvents, extFor, recordTrack } from "./mic-recording.js";
+import {
+  MAX_MS,
+  type MicRecording,
+  type MicTape,
+  type TapeEvents,
+  extFor,
+  recordTrack,
+} from "./mic-recording.js";
 import { useAudioLevel } from "./useAudioLevel.js";
-import { useQuietChime } from "./quiet-chime.js";
+import { playCappedChime, useLastMinuteChime, useQuietChime } from "./quiet-chime.js";
 
 /**
  * The tape lost audio part-way — one of its recorders failed, never finished,
@@ -145,6 +152,16 @@ const RECOVERED =
  */
 const RECOVERED_CUT =
   "The page closed while you were still recording. What was saved is below; the last few seconds may be missing. [mic-cut-off]";
+/**
+ * How long after the cap a press is taken as the Stop it was aimed at, and
+ * ignored. Longer than a reaction, shorter than deciding to dictate again.
+ */
+const CAP_PRESS_GRACE_MS = 1500;
+/**
+ * The dictation reached its cap and was stopped. The number is read from the
+ * constant the timer uses, so the sentence cannot name a different one.
+ */
+const CAPPED =`Dictation stops after ${MAX_MS / 60_000} minutes, so it stopped there. Everything you said up to then is kept. [mic-full]`;
 
 /* The API is prefixed in Safari and unprefixed in Chrome, and neither spelling
    is in TypeScript's DOM library — it is not a standard. Declared narrowly:
@@ -307,6 +324,12 @@ export interface UseDictation {
    * Null until the microphone is genuinely open — see {@link Session.audioAt}.
    */
   startedAt: number | null;
+  /**
+   * `Date.now()` at which this dictation will be stopped by the cap (`MAX_MS`
+   * in `mic-recording.ts`), so the strip can count down to it. Null when no
+   * tape is running, which is also when nothing will be stopped.
+   */
+  endsAt: number | null;
   /**
    * The browser's own name for the microphone we opened — the exact string the
    * reader will see in their system sound settings, which is why it is quoted
@@ -496,6 +519,8 @@ interface Session<C> {
   sent: Map<number, Promise<TranscriptionResult>>;
   /** The tape lost audio part-way (`onBroken`). The ending says so. */
   broke: boolean;
+  /** The tape reached its cap and ended this dictation (`onCapped`). */
+  capped: boolean;
   /** The keeper this press began with. Like `where`, it may not follow a later render. */
   keeper: DictationKeeper<C> | null;
   /**
@@ -635,6 +660,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
   const [ctx, setCtx] = useState<AudioContext | null>(null);
   const [hearing, setHearing] = useState(false);
   const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [endsAt, setEndsAt] = useState<number | null>(null);
+  /** `Date.now()` when the cap last ended a dictation here. See `toggle`. */
+  const cappedAt = useRef(Number.NEGATIVE_INFINITY);
   const [deviceLabel, setDeviceLabel] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(() => rememberedDevice());
   const [recording, setRecording] = useState<DictationRecording | null>(null);
@@ -691,6 +719,8 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
      context the meter reads from — the one the press created inside its
      gesture. `startedAt` is the dictation it belongs to. Plan 261001k. */
   useQuietChime(measured.quiet, startedAt, ctx);
+  /* And the one that says a minute is left before the cap. Plan 261007b. */
+  useLastMinuteChime(endsAt, ctx);
   const detectedLevel = useRef(0);
   /* One or the other, never a blend. `measured.measuring` only goes true once
      samples are genuinely flowing from a running context, so the fallback is
@@ -839,6 +869,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       setHearing(false);
       setTrack(null);
       setStartedAt(null);
+      setEndsAt(null);
       setDeviceLabel(null);
     }
 
@@ -1017,6 +1048,22 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       }
     };
 
+    /**
+     * **Heard as well as shown**, when the cap ended it: somebody thinking
+     * aloud is not looking at the box, and for a year the sentence was the only
+     * sign (spya-n8cuqq). Called once the recorders are drained and the track
+     * is off, never from `capped`, so the notes cannot land on the tape they
+     * announce the end of. Only for the session that still owns the box: a
+     * superseded or unmounted one has nobody to tell. Once, whichever path
+     * gets here. The shared context outlives the stop.
+     */
+    const capChime = () => {
+      if (!s.capped || !stillOurs()) return;
+      s.capped = false;
+      const ctx = audio();
+      if (ctx) playCappedChime(ctx);
+    };
+
     void tape.stop().then(async (ending) => {
       /* The recorders are drained *before* the track is released — killing the
          track under a live recorder loses the final `dataavailable`, which is
@@ -1024,6 +1071,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          the transcription that follows needs no microphone. */
       t?.stop();
       free();
+      capChime();
       /* **A tape that lost audio part-way publishes nothing** (plan 260929f,
          R3). Whatever it kept is offered to save — but not to retry, because
          the part with the hole has no complete file to send again. The requests
@@ -1078,6 +1126,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
          happened. */
       t?.stop();
       free();
+      capChime();
       /* Whatever broke, the copy is not proof of anything delivered. */
       if (held.current !== s.kept) s.kept?.release();
       if (stillOurs()) setError(TRANSCRIPTION_UNEXPECTED);
@@ -1151,6 +1200,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
       upload: new AbortController(),
       sent: new Map(),
       broke: false,
+      capped: false,
       keeper: keeper.current ?? null,
       kept: undefined,
       /* Filled in on the next two lines — a `Session` is built in one literal so
@@ -1170,9 +1220,9 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
      */
     const capped = () => {
       if (session.current !== s || s.finished) return;
-      setError(
-        "Dictation stops after five minutes, so it stopped there. What you said before that is kept. [mic-full]",
-      );
+      setError(CAPPED);
+      s.capped = true;
+      cappedAt.current = Date.now();
       stopRef.current();
     };
     /**
@@ -1267,7 +1317,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         if (s.audioAt === null) {
           s.audioAt = Date.now();
           setStartedAt(s.audioAt);
-          armTape(s, tapeEvents);
+          armTape(s, tapeEvents, setEndsAt);
         }
       };
       /* Both of these are the recogniser reporting, so both stop counting when
@@ -1367,11 +1417,11 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
             setStartedAt(s.audioAt);
             setPhase("listening");
           }
-          armTape(s, tapeEvents);
+          armTape(s, tapeEvents, setEndsAt);
           /* **`recordTrack` can return null**, when every container this browser
              claims to support refuses to start. Carrying on then would leave the
              microphone armed with *no* transcription source at all — no live
-             words, no tape, and no five-minute cap to end it — under a strip
+             words, no tape, and no cap to end it — under a strip
              promising words when the reader stops. `finish` says
              `[mic-no-tape]` for exactly this. GPT Sol's code review, D2. */
           if (!s.tape) {
@@ -1588,18 +1638,24 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
         s.audioAt = Date.now();
         setStartedAt(s.audioAt);
         setPhase("listening");
-        armTape(s, tapeEvents);
+        armTape(s, tapeEvents, setEndsAt);
         return;
       }
       /* Both orders covered. `audiostart` is the recorder's zero, and it is
          measured at ~1.1s after the track arrives — but it is a task rather
          than a microtask, so it could in principle land before the assignment
          above. Whichever happens second arms the tape. */
-      armTape(s, tapeEvents);
+      armTape(s, tapeEvents, setEndsAt);
     })();
   }, [finish, holdKept]);
 
   const toggle = useCallback(() => {
+    /* **A press just after the cap was aimed at Stop.** The countdown invites
+       exactly that press, and without this it lands on a session that is
+       already stopping, takes the `start` branch, and `start` aborts the
+       uploads of the fifteen minutes just recorded. The cap has already done
+       what the press asked for. GPT Sol's plan review of 261007b, P7. */
+    if (Date.now() - cappedAt.current < CAP_PRESS_GRACE_MS) return;
     if (session.current && !session.current.stopRequested) stop();
     else start();
   }, [start, stop]);
@@ -1912,6 +1968,7 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
     toggle,
     error,
     startedAt,
+    endsAt,
     deviceLabel,
     deviceId,
     deviceUnavailable,
@@ -1939,9 +1996,13 @@ export function useDictation<C>(options: DictationOptions<C>): UseDictation {
  * Needs both the track and `audioAt`, and is called from whichever arrives
  * second. Does nothing twice.
  */
-function armTape(s: Session<unknown>, events: TapeEvents): void {
+function armTape(s: Session<unknown>, events: TapeEvents, armed: (endsAt: number) => void): void {
   if (s.tape || s.finished || !s.track || s.audioAt === null) return;
   s.tape = recordTrack(s.track, events);
+  /* The tape's own deadline, not one worked out here from `audioAt`, which can
+     be a second earlier when the track arrives after `audiostart`. No tape, no
+     ceiling, and nothing to count down to. */
+  if (s.tape) armed(s.tape.endsAt);
 }
 
 type CaptureOutcome =

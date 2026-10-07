@@ -1,11 +1,18 @@
 /**
- * The Postgres store. Same questions as src/store/fs.ts, same answers.
+ * The Postgres store, and since 2026-09-05 the only one.
  *
- * "Same answers" is meant literally and is tested literally: tests/store-parity.test.ts
- * asks both stores for every article in `data/` and compares the **API-shaped**
- * result — the `Article` the client receives — not SQL rows. Comparing rows
- * passes while the thing the client gets has changed shape, which is the
- * failure this whole exercise exists to catch.
+ * It was written as the second of two. src/store/fs.ts answered the same
+ * questions from files, and tests/store-parity.test.ts asked both stores for
+ * every article in `data/` and compared the **API-shaped** result — the
+ * `Article` the client receives — not SQL rows. The filesystem store and that
+ * suite's second arm were deleted on 2026-09-05
+ * (docs/plans/260903f-delete-the-spideryarn-store-flag-and-the-filesystem-store.md);
+ * what the suite still holds is in its own header.
+ *
+ * **Many comments below give "what the filesystem store answered" as the reason
+ * for a choice** — which inputs a fingerprint has, why a field is spread
+ * conditionally. They are history, and still the reason: this file was made to
+ * agree with that one, and the shapes it agreed on are the API's.
  *
  * ## Three things here are easy to get subtly wrong
  *
@@ -14,19 +21,21 @@
  *    differently: `JSON.stringify({a: undefined})` is `{}`, but the property is
  *    there for `in` and for `Object.keys`. Postgres gives back `null` where the
  *    file had *nothing*, so every optional field is a conditional spread. This
- *    is the single biggest source of near-miss parity failures.
+ *    was the single biggest source of near-miss parity failures.
  * 2. **Errors carry a status.** `src/routes.ts` turns `status: 404` into a 404;
  *    an untagged throw becomes a 500. So "no such article" must be tagged here
- *    exactly as it was in src/api.ts, or a missing article starts reporting as a
- *    server fault.
+ *    (`notFound`, below), or a missing article starts reporting as a server
+ *    fault.
  * 3. **Staleness is computed at read time, never stored.** A flag written when
  *    the artefact was generated is right up until the moment it matters.
  *
- * ## What is deliberately NOT here
+ * ## What was deliberately not here
  *
- * A fallback to the filesystem. Nothing in this file may catch an error and
- * call into src/store/fs.ts — see docs/plans/260826e-postgres-storage-implementation.md
- * § Rules. It would hide exactly the divergence the parity test is looking for.
+ * A fallback to the filesystem, while there was one. Nothing in this file
+ * caught an error and called into src/store/fs.ts —
+ * docs/plans/260826e-postgres-storage-implementation.md § Rules — because that
+ * would have hidden exactly the divergence the parity test was looking for.
+ * There is nothing to fall back to now: a read that fails here has failed.
  */
 
 import { and, asc, count, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
@@ -1600,9 +1609,11 @@ async function blocksFor(revisionId: string): Promise<Block[]> {
 /** Stored blocks, made safe to render. Every read but one wants this. */
 function cleanedForReading(blocks: Block[]): Block[] {
   /* The same guard src/api.ts put on the filesystem reader, because there were
-     two `loadArticle`s and guarding one of them passes every test — the fs half
-     is genuinely protected, the suite is green, and the store that is in the
-     middle of *replacing* the filesystem serves old HTML unchecked.
+     two `loadArticle`s and guarding one of them passed every test — the fs half
+     was genuinely protected, the suite was green, and the store that was in the
+     middle of *replacing* the filesystem served old HTML unchecked. (Both
+     src/api.ts and the filesystem reader have since been deleted; this is the
+     one `loadArticle` now, and the guard is no less needed for that.)
 
      `undefined` for the stamp, deliberately, and not because nobody got round
      to it: there is no column to keep one in yet, and absent reads as stale,
@@ -2762,11 +2773,12 @@ export function shareableArtefacts(revision: {
  * the `Pick` was recording nothing except which names existed when it was last
  * edited.
  *
- * **Annotated, not `satisfies`**, for two reasons. `fsArticleReader` in
- * src/store/fs.ts is annotated the same way, and the twin adapters should read
- * the same; and tests/store-seams-have-two-implementations.test.ts finds an
- * adapter by parsing its *type annotation* out of the source, so a `satisfies`
- * clause would make this one invisible to the test that counts sides of a seam.
+ * **Annotated, not `satisfies`**, because
+ * tests/store-seams-have-two-implementations.test.ts finds an adapter by
+ * parsing its *type annotation* out of the source, so a `satisfies` clause
+ * would make this one invisible to that test. (There was a second reason
+ * until 2026-09-05: `fsArticleReader` in src/store/fs.ts was annotated the same
+ * way, and the twin adapters were meant to read the same.)
  * The narrower inferred type buys callers nothing here: every method already
  * returns exactly what the interface declares.
  */
@@ -3627,12 +3639,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const thread = found.revision.tweets as TweetThread | null;
     if (!thread) {
-      throw Object.assign(
-        new Error(
-          `No thread for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No thread for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["tweets"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -3927,12 +3936,9 @@ const rawPgArticleReader: ArticleReader = {
       relations.relations === null ||
       Array.isArray(relations.relations)
     ) {
-      throw Object.assign(
-        new Error(
-          `No relations for "${slug}" yet. Build them with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No relations for "${slug}" yet. Build them with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["relations"] }.`,
       );
     }
     const blocks = await relationsFingerprintInputs(found.revision.id);
@@ -4033,12 +4039,9 @@ const rawPgArticleReader: ArticleReader = {
     if (!found) throw notFound(slug);
     const skim = found.revision.skim as Skim | null;
     if (!skim || !Array.isArray(skim.stops)) {
-      throw Object.assign(
-        new Error(
-          `No Skim route for "${slug}" yet. Build it with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No Skim route for "${slug}" yet. Build it with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["quotes", "ideas", "skim"] }.`,
       );
     }
     const quotes = found.revision.quotes as Quotes | null;
@@ -4252,12 +4255,11 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The Sketch picture on its own — the Postgres half of `loadSketch`.
+   * The Sketch picture on its own.
    *
    * Three inputs like `loadIdeas` above, and the same reason for the third: the
    * fingerprint covers the tree as well as the blocks, so comparing only the
-   * blocks here would call a re-sectioned article's picture current while the
-   * filesystem store called it stale.
+   * blocks here would call a re-sectioned article's picture current.
    */
   async loadSketch(slug: string): Promise<SketchFound> {
     requireSlug(slug);
@@ -4270,12 +4272,9 @@ const rawPgArticleReader: ArticleReader = {
        column can hold `{"scenes": []}` — from an import, or from a hand edit —
        and a panel handed that would draw an empty band and report success. */
     if (!sketch || !Array.isArray(sketch.scenes) || sketch.scenes.length === 0) {
-      throw Object.assign(
-        new Error(
-          `No sketch for "${slug}" yet. Draw one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No sketch for "${slug}" yet. Draw one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["sketch"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);
@@ -4288,8 +4287,7 @@ const rawPgArticleReader: ArticleReader = {
   },
 
   /**
-   * The Illustrated plates on their own — the Postgres half of
-   * `loadIllustrated`. docs/project/diagram.md § Illustrated.
+   * The Illustrated plates on their own. docs/project/diagram.md § Illustrated.
    *
    * **Two artefacts, not one article.** `loadSketch` above compares its scene
    * with the blocks and the tree; this compares its plates with the *scene*,
@@ -4311,14 +4309,11 @@ const rawPgArticleReader: ArticleReader = {
 
     const illustrated = found.revision.illustrated as Illustrated | null;
     /* An empty plate list counts as none — the same hole `SHAPE` closes at the
-       store boundary and `loadIllustrated` closes on the filesystem. */
+       store boundary. */
     if (!illustrated || !Array.isArray(illustrated.plates) || illustrated.plates.length === 0) {
-      throw Object.assign(
-        new Error(
-          `No illustration for "${slug}" yet. Paint one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No illustration for "${slug}" yet. Paint one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["illustrated"] }.`,
       );
     }
     const sketch = found.revision.sketch as Sketch | null;
@@ -4366,12 +4361,9 @@ const rawPgArticleReader: ArticleReader = {
 
     const arc = found.revision.arc as Arc | null;
     if (!arc) {
-      throw Object.assign(
-        new Error(
-          `No arc for "${slug}" yet. Write one with ` +
-            `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
-        ),
-        { status: 404 },
+      throw new ArtefactNotMadeYet(
+        `No arc for "${slug}" yet. Write one with ` +
+          `POST /api/jobs { "slug": "${slug}", "steps": ["arc"] }.`,
       );
     }
     const blocks = await blockHashInputs(found.revision.id);

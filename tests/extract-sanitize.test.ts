@@ -11,8 +11,10 @@
  * **The debug page has four holes, not one.** The known one is the article body.
  * The other three are the metadata, which is interpolated into the template as
  * raw markup: the title into `<title>` and `<h1>`, the byline and site name into
- * a `<div>`, and the language into an *attribute* on `<html>`. Readability hands
- * all four back as strings it took the textContent of, which reads as safe and
+ * a `<div>`, and the language into an *attribute* on `<html>`. (Since 2026-10-07
+ * the page has no `<h1>` and no byline `<div>` of ours, so two of those sinks
+ * are gone: the title into `<title>` and the language are what is left.)
+ * Readability hands all four back as strings it took the textContent of, which reads as safe and
  * is not — a title of `Real&lt;/title&gt;&lt;img …&gt;` decodes to
  * `Real</title><img …>` and closes our element for us.
  *
@@ -161,15 +163,15 @@ describe("the debug page stage 2 writes", () => {
     // must not survive is a second element. `document.title` is the parser's
     // answer to "where did <title> actually end".
     expect(doc.title).toContain("TITLEPAYLOAD");
-    expect(doc.head.querySelector("img")).toBeNull();
-    expect(doc.querySelector("h1")?.querySelector("*")).toBeNull();
-    expect(doc.querySelector("h1")?.textContent).toContain("</title>");
+    expect(doc.title).toContain("</title>");
+    expect(doc.head.querySelectorAll("img")).toHaveLength(0);
   });
 
-  it("does not let the byline become a tag", () => {
-    const meta = doc.querySelector(".meta");
-    expect(meta?.textContent).toContain("BYLINEPAYLOAD");
-    expect(meta?.querySelector("img")).toBeNull();
+  /* The byline used to be written into the body as text, and the test here was
+     that it stayed text. It is not written at all now, which is the stronger
+     form of the same claim. */
+  it("does not write the byline into the page at all", () => {
+    expect(page).not.toContain("BYLINEPAYLOAD");
   });
 
   it("does not let the lang attribute grow a handler", () => {
@@ -184,8 +186,31 @@ describe("the debug page stage 2 writes", () => {
   it("still contains the article", () => {
     expect(page).toContain("Paragraph 0 of ordinary prose");
     expect(doc.querySelector('a[href="https://ok.example/the-real-link"]')).not.toBeNull();
-    expect(doc.querySelector(".meta")?.textContent).toContain("Ann Author");
     expect(doc.querySelectorAll("p").length).toBeGreaterThan(16);
+  });
+
+  /* **The page has no header of ours in its body, since 2026-10-07** (plan
+     261007b, report spya-t6cdve). It used to open with `<h1>{title}</h1>` and a
+     `.meta` line ending `~N min read`. Stage 3 splits this body into blocks, so
+     the two became blocks 0 and 1 of every web article and the reading view,
+     whose masthead already shows the title, said it twice. The fixture has no
+     `<h1>` of its own, so any `<h1>` here would be ours. */
+  it("writes no header of its own into the body, and keeps the title in the head", () => {
+    /* Counted rather than `toBeNull()`: a failing matcher handed a jsdom element
+       tries to print it, and the failure reads as a jsdom error. */
+    expect(doc.body.querySelectorAll("h1")).toHaveLength(0);
+    expect(doc.body.querySelectorAll(".meta")).toHaveLength(0);
+    expect(doc.body.textContent).not.toContain("min read");
+    expect(doc.body.textContent).not.toContain("Ann Author");
+    expect(doc.title).toContain("Real");
+    expect(page).not.toMatch(/<style>[\s\S]*\.meta[\s\S]*<\/style>/);
+  });
+
+  it("gives stage 3 the article's own first block first", () => {
+    const { blocks } = splitIntoBlocks(page);
+    expect(blocks[0]?.text).toMatch(/^Paragraph 0 of ordinary prose/);
+    expect(blocks.some((b) => b.tag === "h1")).toBe(false);
+    expect(blocks.some((b) => b.text.includes("min read"))).toBe(false);
   });
 
   /* Our own stylesheet lives in the head and the policy forbids `<style>`, so
@@ -204,10 +229,11 @@ describe("what stage 3 makes of it", () => {
      the spine — which is the one thing in this project that may not move. */
   /* Stage 3 sanitises whatever it is handed, so a body stage 2 already cleaned
      and the same body raw must come out as the same blocks. Compared on the
-     article body alone rather than on the whole debug page, because the page's
-     `<h1>` and byline line legitimately *do* change — that is the metadata fix,
-     not a stage-3 regression, and folding the two together would let a real
-     change to the spine hide behind an expected one. */
+     article body alone rather than on the whole debug page, because when this
+     was written the page's `<h1>` and byline line legitimately *did* change —
+     that was the metadata fix, not a stage-3 regression, and folding the two
+     together would have let a real change to the spine hide behind an expected
+     one. (The page has had neither since 2026-10-07.) */
   it("makes the same blocks from a cleaned body as from a raw one", () => {
     const parsed = new Readability(new JSDOM(PAGE, { url: SOURCE }).window.document).parse();
     const raw = parsed?.content ?? "";
