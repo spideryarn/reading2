@@ -302,13 +302,18 @@
    enough for every one of the four faint states. Sol, 2026-08-30. */
 .outln-row:hover,
 .outln-row:hover .outln-text { color: var(--ink); }
-/* `--highlight`, never `--accent`: tokens.css defines `--accent` as a raised
+/* The orange, never `--accent`: tokens.css defines `--accent` as a raised
    dark SURFACE (shadcn's meaning), so a ring drawn in it is nearly invisible
    against the panel — and the native outline is suppressed on the list, so
-   this ring is the only focus indicator there is. The § tokens header at the
-   top of this file says exactly this: anything meaning "the orange" says
-   `--highlight`. GPT Sol caught it, 2026-08-28. */
-.outln-row.focused { box-shadow: inset 0 0 0 2px var(--highlight, currentColor); }
+   this ring is the only focus indicator there is. GPT Sol caught it,
+   2026-08-28.
+
+   And `--highlight-text`, the orange that is legible as a mark in both themes,
+   not raw `--highlight`: that is 2.2:1 on the light band. Inset, because the
+   list scrolls and the band hides its overflow. `OutlinePanel` sets `focused`
+   on a row whether or not the list has keyboard focus, so a mouse reader sees
+   this ring too. */
+.outln-row.focused { box-shadow: inset 0 0 0 2px var(--highlight-text); }
 
 /* The sentence on the current section, and the arc sentence on the current
    part. Prose, so they take the reading face at reading size rather than the

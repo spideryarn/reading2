@@ -96,3 +96,38 @@ pairs failed in both themes ("--danger is not defined"); all pass with the token
 - `diagram-sketch.css` said `--destructive` is something "this stylesheet references six times and
   defines nowhere". Both halves are false (it is defined in `styles/tokens.css`, and that sheet
   does not reference it at all); the sentence is gone and the reason it gave for the grey stays.
+
+## 2. Focus marks
+
+The umbrella's rule: keep each control's geometry and change only what makes the mark invisible.
+Every row was measured after a real Tab, with the control matching `:focus-visible`. The ratio is
+the mark's colour against the surface behind it.
+
+| Control | Before | After | Geometry |
+|---|---|---|---|
+| `.prof-box-input` on /profile | 1px border, raw `--highlight`: 5.72 dark, **2.72 light** | 1px border, `--highlight-text`: 5.72 dark (the two tokens are the same colour there), **5.95 light** | unchanged; outline still off |
+| `.outln-row.focused` (Structure's nested list, at 820 and 600 wide) | inset 2px shadow, raw `--highlight`: 5.81 dark, **2.19 light** | inset 2px shadow, `--highlight-text`: 5.81 dark, **4.81 light** | unchanged. The row carries `focused` with no keyboard focus in the list (measured: `document.activeElement` is elsewhere), so a mouse reader sees the new colour too, as the umbrella says |
+| Marginalia: `.marg-idea`, `.marg-arc`, `.marg-relation`, `.marg-shut-button` | 2px outline, offset 2px, `--rule-strong`: **1.82 dark, 1.92 light** | same outline in `--highlight-text`: 7.29 dark, 5.70 light | unchanged |
+| `.chat-card-shut` | 2px outline, offset −2px, `--rule-strong`: **1.43 dark, 2.01 light** | same outline in `--highlight-text`: 5.72 dark, 5.95 light | unchanged; still inset |
+| Collapsible headings (`PageSection.tsx`), first and last on /profile and on `/read/fowler-phrenology/metadata` | outline `none`; the text turns `--highlight-text` and that is the whole mark | 2px outline, offset 2px, `--highlight-text` (7.29 dark, 5.70 light), and the text still turns | the button's box is unchanged (100 by 14px); **no ancestor clips the mark** on either page, at 1440 or at 390 |
+
+Notes on what was and was not reached:
+
+- **Marginalia has five such buttons, not four.** `.marg-shut-button` carried the identical rule
+  and is fixed with the others. `.marg-question` shares one rule shape with them and is changed,
+  but no fixture has a margin question, so it was not measured; the others were.
+- **The marginalia offset stays at 2px.** At a 12px root the closest two of these buttons are 6px
+  apart (8px at 16px). One mark is 4px deep (2px offset and 2px line), so a focused button's mark
+  stops 2px short of its neighbour, and only one button is focused at a time, so two marks never
+  meet. Measured on two articles, 21 and 27 buttons: no pair is closer than one mark.
+- **`.chat-card-shut` was measured on injected markup** (the button `ChatDialog.tsx` emits, inside
+  a `.chat-dialog`), reached by a real Tab: the real one needs a conversation with an answer.
+- **`.prof-box-input` has two emitters**, `ProfileBox.tsx` (on /profile, Metadata, the profile
+  panel and the purpose prompt) and the Add page's purpose box. Measured on /profile at 1440 and on
+  Metadata's box at 390: the same 5.72 dark and 5.95 light. The Add page draws its box only while
+  an import is running, which costs a model call, so it was not opened; it is the same class with
+  no focus rule of its own.
+
+A check was added, because the baseline is clean now and only now:
+`tests/css-tokens.test.ts` § *no outline is drawn in a surface or hairline token*. It reuses that
+file's own resolver. Seen red by putting `--rule-strong` back on `.chat-card-shut`.

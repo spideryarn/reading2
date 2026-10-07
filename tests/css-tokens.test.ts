@@ -257,6 +257,44 @@ describe("no text is painted in a surface token", () => {
 });
 
 /**
+ * **The same mistake on a focus mark.** Five marks in marginalia.css and
+ * dialogs.css were `outline: 2px solid var(--rule-strong)` until 2026-10-07: a
+ * hairline colour, under 2:1 against the surface in both themes, on controls
+ * whose only focus mark it was. Measured in a browser after a real Tab
+ * (docs/plans/261007a-ui-sweep-k1-css-status-rows-focus-marks.md). An outline
+ * has to be seen against a surface, so it may not be drawn in one, or in a
+ * hairline. The app's mark is `--highlight-text`.
+ *
+ * As above, this reads text: it cannot see an outline that is legible in one
+ * theme and not the other, or a mark made of a border or a box-shadow.
+ */
+describe("no outline is drawn in a surface or hairline token", () => {
+  const OUTLINE = /(?<![-\w])outline(?:-color)?\s*:\s*([^;{}]*)/gi;
+
+  it("finds outline declarations at all", () => {
+    const scanned = sheets.reduce((n, { css }) => n + [...css.matchAll(OUTLINE)].length, 0);
+    expect(scanned, "no `outline:` declaration found in any sheet — the scanner is broken")
+      .toBeGreaterThan(50);
+  });
+
+  for (const { path, css } of sheets) {
+    const hits: string[] = [];
+    for (const m of css.matchAll(OUTLINE)) {
+      for (const v of (m[1] ?? "").matchAll(/var\(\s*(--[A-Za-z0-9_-]+)/g)) {
+        if (v[1] && resolvesToSurface(v[1])) hits.push(`${m[0].trim()}  →  ${v[1]}`);
+      }
+    }
+    it(path, () => {
+      expect(
+        hits,
+        "these draw an outline in a surface or hairline token, which cannot be seen " +
+          "against the surface it sits on; the focus mark is `--highlight-text`",
+      ).toEqual([]);
+    });
+  }
+});
+
+/**
  * The same mistake in Tailwind's spelling. `tw:text-muted` looks like the text
  * colour and is not: the bridge at the top of tailwind.css maps `--color-muted`
  * to `--muted`, the surface. `tw:text-muted-foreground` is the one that means
