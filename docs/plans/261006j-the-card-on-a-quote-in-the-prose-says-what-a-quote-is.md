@@ -159,6 +159,11 @@ and this report (asking for a tooltip where one already is) is a little evidence
 it gives discoverability and costs cards appearing unasked over long quotes. Left at 900ms here; a
 queue entry marked as needing Greg carries the question.
 
+**Answered, 2026-10-06** — Greg on the question: *"use your judgment"*. The Overseer chose 600ms,
+between the glossary's 320ms and 900ms, and it landed on 2026-10-07 (queue item `qi-78gf6x87`):
+`QUOTE_OPEN_MS` in src/web/ProseHoverCard.tsx, with the reasoning in
+[quotes.md](../project/quotes.md).
+
 ## Reviews
 
 - **Plan review, GPT Sol**:
