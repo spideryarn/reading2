@@ -262,13 +262,18 @@ function AskBox({ state }: { state: HelpAskState }) {
           className={`${voiceClass("reader")} tw:box-border tw:block tw:w-full tw:resize-y tw:rounded-md tw:border tw:border-border tw:bg-transparent tw:px-3 tw:py-1.5 tw:text-sm tw:leading-relaxed tw:text-foreground tw:any-pointer-coarse:text-[max(1rem,16px)] tw:placeholder:text-ink-faint tw:focus-visible:border-highlight-text tw:focus-visible:outline-none`}
         />
         <div className="tw:flex tw:items-center tw:justify-end tw:gap-2">
+          {/* Two keys, so Stop and Ask are never one reused <button>. Reused,
+             its type flipped from "button" to "submit" while a Stop click was
+             still being dispatched (React renders a discrete event's update
+             before the default action), and the click posted the question
+             again: the server's 429 instead of "Stopped.", seen in a browser. */}
           {arriving ? (
-            <Button type="button" variant="outline" size="sm" onClick={stop}>
+            <Button key="stop" type="button" variant="outline" size="sm" onClick={stop}>
               <Square fill="currentColor" className="tw:size-3" />
               Stop
             </Button>
           ) : (
-            <Button type="submit" size="sm" disabled={value.trim() === ""}>
+            <Button key="ask" type="submit" size="sm" disabled={value.trim() === ""}>
               Ask
             </Button>
           )}

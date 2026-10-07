@@ -2993,15 +2993,19 @@ export function Composer({
       {/* Stop *replaces* send while an answer is arriving, rather than sitting
           beside it. Two buttons in a 400px composer is one too many, and the
           send button was disabled in that state anyway — so the space was
-          already spoken for by a control that could not be pressed. */}
+          already spoken for by a control that could not be pressed.
+          Keyed apart, so the two are never one reused <button> whose type
+          flips to "submit" mid-click (postmortem 261007p); today the Tooltip
+          round Send keeps them apart, and the keys say so. */}
       {onStop ? (
-        <button type="button" className="chat-send stop" onClick={onStop} title="Stop (Esc)">
+        <button key="stop" type="button" className="chat-send stop" onClick={onStop} title="Stop (Esc)">
           <Square size={14} fill="currentColor" />
         </button>
       ) : (
         /* The keys on a card rather than an OS `title` — Greg, 2026-09-29:
            *"Add a tooltip to the send-message button with keyboard shortcuts."* */
         <Tooltip
+          key="send"
           placement="top"
           keepSide
           className="tip-soon"

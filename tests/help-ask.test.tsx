@@ -135,6 +135,33 @@ describe("Ask about Spideryarn", () => {
     expect(host.textContent).not.toContain("cut short");
   });
 
+  it("stops on a click of Stop, and does not ask the question again", async () => {
+    /* Seen in a browser, 2026-10-07: Stop and Ask were one reused <button>
+       whose type flipped from "button" to "submit" while the click was still
+       being dispatched, so the click submitted the form, posted the question a
+       second time, and drew the server's 429 instead of "Stopped." */
+    draw(true);
+    held = true;
+    await ask("What is the spine?");
+    expect(posted).toHaveLength(1);
+    const stopButton = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Stop"));
+    if (!stopButton) throw new Error("no Stop button while an answer is arriving");
+    /* jsdom does not replay a browser's order (render during the click, then
+       the default action), so a click here passed with the bug. What makes it
+       impossible is that Stop is never the element that becomes Ask. */
+    await act(async () => {
+      stopButton.click();
+    });
+    for (let i = 0; i < 20; i++) await act(async () => {});
+    expect(posted).toHaveLength(1);
+    expect(host.textContent).toContain("Stopped.");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    const askButton = [...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Ask"));
+    expect(askButton).toBeDefined();
+    expect(askButton).not.toBe(stopButton);
+    expect(stopButton.isConnected).toBe(false);
+  });
+
   it("says an answer was cut short when it was", async () => {
     draw(true);
     frames = [
