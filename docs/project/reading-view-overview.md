@@ -122,6 +122,26 @@ mostly unfinished work, but **Referee is behind it for its audience rather than 
 four of its sub-modes are built, and it is for somebody asked to peer-review the piece, which most
 readers never are.
 
+**Five modes are under a More button rather than in the bar** since 2026-10-07: Quotes, Glossary,
+FAQ, Ideas and Timeline, the ones Greg said a reader does not open often. More stands after the
+other modes and before Marginalia, and its menu opens upwards. A mode there is as reachable as it
+was — an owner's command bar lists it, its address works, and a visitor can pick it from More — and
+while it is the open mode it is drawn in the bar again, checked, so a second press still closes it.
+This is a second, separate reason a mode
+has no bar button: the switch decides whether a reader is *offered* a mode, More decides where an
+offered one stands, and FAQ and Timeline are subject to both. The row flag is `more` in `MODES_UI`
+and the split is `splitForMore`, both in [`src/web/Dock.tsx`](../../src/web/Dock.tsx);
+[the plan](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md) has
+Greg's words and why More is not one of the radios.
+
+**The bar rises in, once.** On the first article opened after a page load the bottom bar is absent
+for a second, then fades and rises into place, to draw a new reader's eye to it. Later articles in
+the same tab, and coming back from Metadata, do not replay it, and the bars on Metadata and the
+visitor pages never play it. For that second the bar cannot be pressed or focused. A reader who
+asked for less motion gets the bar at once. Which mount plays it is
+[`src/web/reader/dock-entrance.ts`](../../src/web/reader/dock-entrance.ts); the animation is
+`styles/dock.css` § the entrance; the decisions are [the same plan](../plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md) § D7.
+
 - **[structure.md](structure.md)** — the article's tree with two faces, two linked columns or a
   nested list, chosen by the band's width. Open it for which plan decided what, how Outline and
   Hierarchy folded into it, and where the code is.
@@ -255,8 +275,10 @@ want.** Most of what it offers is a mode. On the reading view, Enter opens one *
 its Dock button does** — same activation, same generate-on-open, same cost; on Metadata it follows
 the mode link drawn there and arms nothing, as that link does. It is an *additional door*, never a
 replacement: the Dock keeps every button it has, and the bar's
-**mode rows** are exactly what the Dock lists, because the Dock hands it the list it just drew rather
-than computing a second one. The button sits **just after the wordmark** since 2026-09-08, on Greg's
+**mode rows** are exactly what the Dock offers, as a button or under its More button, because the
+Dock hands it the list it then splits into those two rather than computing a second one. (It was
+*exactly what the Dock lists* until 2026-10-07, when five modes moved under More and had to stay
+one ⌘K away.) The button sits **just after the wordmark** since 2026-09-08, on Greg's
 ask; the chord is bound to the window rather than to it, so it did not move with it.
 
 It has no doc of its own because there is very little to say that is not the decisions Greg made
@@ -314,7 +336,7 @@ Command bar, include sub-modes, e.g. Quiz mode, Illustrated diagram, etc."* *Lea
 *Diagram › Illustrated*, *Referee › Claims*, *Summary › Thread* and the rest sit after the mode rows
 and before the pages, and Enter opens the mode with that chip already pressed: armed as the chip
 arms (Quiz writes questions, Illustrated paints), never as the mode does, and with the same
-`generates` marker rule. Only a mode the Dock draws offers its sub-modes, and Diagram offers the
+`generates` marker rule. Only a mode the Dock offers has its sub-modes listed, and Diagram offers the
 pictures its chip row would. A sub-mode here means a control that **replaces the whole band** —
 Learn, Diagram, Referee and Summary's plain-words levels; the names live once, in
 [`src/web/sub-modes.ts`](../../src/web/sub-modes.ts), and the chips read them from there. Orderings

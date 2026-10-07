@@ -66,15 +66,19 @@
  *     Enter, or a press on the button that says so (2026-10-05, `ASK_LABEL`:
  *     a phone may have no on-screen Enter after dictation). `ask` below, and
  *     src/command-pick.ts.
- *  4. **The bar's mode rows are exactly what the Dock lists** — narrowed from
- *     *the bar lists exactly what the Dock lists* by the 2026-09-07 change,
- *     since the rest are the bar's own. The surviving half is still true *by
- *     construction* rather than by agreement: the visible modes arrive as a
- *     prop, computed once by `visibleModes` in Dock.tsx, so there is no second
- *     copy of the experimental-switch rule to keep in step. Everything else is
- *     appended **after** that prop, never mixed into it, which is what keeps
- *     the halves separable — and tests/command-bar.test.tsx asserts both halves
- *     rather than the old single one.
+ *  4. **The bar's mode rows are exactly what the Dock offers, directly or
+ *     under its More button** — narrowed from *the bar lists exactly what the
+ *     Dock lists* by the 2026-09-07 change, since the rest are the bar's own,
+ *     and reworded on 2026-10-07, when five modes left the Dock's buttons for
+ *     its More menu and had to stay one ⌘K away (plan 261007c, D5). The
+ *     surviving half is still true *by construction* rather than by agreement:
+ *     the reachable modes arrive as a prop, computed once by `visibleModes` in
+ *     Dock.tsx — the same array the Dock then splits into buttons and menu —
+ *     so there is no second copy of the experimental-switch rule to keep in
+ *     step. Everything else is appended **after** that prop, never mixed into
+ *     it, which is what keeps the halves separable — and
+ *     tests/command-bar.test.tsx asserts both halves rather than the old
+ *     single one.
  *
  * ## It does not import from `Dock.tsx`, and that is a hard constraint
  *
@@ -1342,12 +1346,12 @@ function onlyMovesTheReader(command: Command): boolean {
 }
 
 /**
- * **The sub-mode rows to offer**: every sub-mode of every mode the Dock drew,
- * in Dock order and then chip order — and, inside a mode, only the chips that
- * mode would draw with the switch as it is (Diagram's pictures and Learn's
+ * **The sub-mode rows to offer**: every sub-mode of every mode the Dock offers
+ * (as a button or under More), in Dock order and then chip order — and, inside
+ * a mode, only the chips that mode would draw with the switch as it is (Diagram's pictures and Learn's
  * Explore: experimental-visibility.ts, the rule `visibleKinds` in DiagramPanel.tsx
- * and `visibleModes` in Dock.tsx share). A mode the Dock did not draw offers
- * no sub-mode at all, so the experimental switch is decided once, upstream.
+ * and `visibleModes` in Dock.tsx share). A mode the Dock does not offer has
+ * no sub-mode row at all, so the experimental switch is decided once, upstream.
  *
  * **Plus the picture `?diagram=` names**, experimental or not — the chip row's
  * own second rule, so with the switch off and a shared `diagram=trail` link
@@ -2549,7 +2553,7 @@ export function CommandBar({
                    that going somewhere and changing the band feel like one
                    instrument. It is here so that tests/command-bar.test.tsx can
                    state the surviving half of call 4 ("the *mode* rows are
-                   exactly what the Dock lists") without inferring the kind from
+                   exactly what the Dock offers") without inferring the kind from
                    a row's label or from an href's leading slash. */
                 data-kind={command.kind}
                 /* **`-1`, and not a tab stop.** Focus stays in the box the

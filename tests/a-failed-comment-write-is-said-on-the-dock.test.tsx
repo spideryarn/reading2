@@ -230,7 +230,8 @@ describe("a comment write that failed", () => {
   });
 
   it("changes the fit signature, so the row is re-measured rather than left on its rung", () => {
-    const rest = [[], undefined, undefined] as const;
+    /* No modes drawn and none under More: this is about the chip. */
+    const rest = [{ drawn: [], menu: [] }, undefined, undefined] as const;
     const saved = fitSignature(rest[0], rest[1], rest[2], undefined, { comments: [MARKED], error: null }, null, false);
     const failed = fitSignature(rest[0], rest[1], rest[2], undefined, { comments: [MARKED], error: REFUSED }, null, false);
     expect(saved).not.toBe(failed);

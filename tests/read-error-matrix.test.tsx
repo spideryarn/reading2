@@ -49,6 +49,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { COULD_NOT_REACH, PAGE_FAULT, THREAD_RECHECK_FAILED } from "../src/messages.js";
 import type { Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import type { Article, Block, BlockId } from "../src/types.js";
 import { MalformedReply } from "../src/web/lib/reader-facing.js";
 
@@ -1202,13 +1203,13 @@ describe("tweets: every thread stored in the fixture corpus is accepted", () => 
 
 /* -------------------------------------------- what Try again may spend (F1) -- */
 
-function modeButton(mode: Mode): HTMLButtonElement {
+/* The bar's button, or the mode's item under More where it is one of the
+   five gathered there (plan 261007c) — `modeDoor` opens More to find it. */
+function modeButton(mode: Mode): HTMLElement {
   const label = MODE_LABEL[mode];
-  const found = [
-    ...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]'),
-  ].find((b) => b.getAttribute("aria-label") === label);
-  expect(found, `the bar must draw ${label}`).toBeDefined();
-  return found as HTMLButtonElement;
+  const found = modeDoor(host, label);
+  expect(found, `the bar must offer ${label}`).toBeDefined();
+  return found as HTMLElement;
 }
 
 describe("Try again answered by a 404", () => {

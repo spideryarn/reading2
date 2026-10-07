@@ -751,6 +751,14 @@ interface ModeClick {
   /** `Component=count` from the in-page probe, this click only. */
   renders: string;
   error?: string;
+  /**
+   * **The bar offered this mode nowhere** — no button, and no item under More
+   * — so nothing was clicked and nothing was measured. Its own field rather
+   * than one more `error` string because it is the one error that fails the
+   * run (`main`): a requested mode with no row would otherwise be a table that
+   * is simply one mode short. GPT Sol, PR-10 of plan 261007c.
+   */
+  unreachable?: true;
 }
 
 async function clickModes(cdp: Cdp, modes: string[], repeats: number): Promise<ModeClick[]> {
@@ -758,8 +766,27 @@ async function clickModes(cdp: Cdp, modes: string[], repeats: number): Promise<M
     expression: `(async () => {
       const MODES = ${JSON.stringify(modes)};
       const REPEATS = ${repeats};
-      const button = (label) => Array.from(document.querySelectorAll('.dock-modes button'))
+      /* A mode's own bar button: a radio, or Marginalia's toggle. Not just any
+         button in the segment, which since 2026-10-07 includes More. */
+      const button = (label) => Array.from(document.querySelectorAll('.dock-modes button[role="radio"], .dock-modes button[aria-pressed]'))
         .find(b => (b.getAttribute('aria-label') || '').trim().toLowerCase() === label.toLowerCase());
+      /* **Or its item under More** — Quotes, Glossary, FAQ, Ideas and Timeline
+         have no bar button unless they are the open mode (plan 261007c). Radix
+         opens the menu on \`pointerdown\`, not on \`click\`, and portals it to
+         \`body\`. Opened here, before the stopwatch starts, so what is timed is
+         the pick and not the menu arriving. */
+      const underMore = async (label) => {
+        const trigger = document.querySelector('.dock-more-trigger');
+        if (!trigger) return null;
+        if (trigger.getAttribute('data-state') !== 'open') {
+          trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse' }));
+          for (let i = 0; i < 20 && !document.querySelector('.dock-more-menu'); i++) await raf();
+        }
+        const item = Array.from(document.querySelectorAll('.dock-more-menu [role="menuitem"]'))
+          .find(el => (el.getAttribute('data-mode-label') || '').trim().toLowerCase() === label.toLowerCase());
+        if (!item) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        return item || null;
+      };
       const out = [];
       let long = [];
       let observing = false;
@@ -774,11 +801,13 @@ async function clickModes(cdp: Cdp, modes: string[], repeats: number): Promise<M
       const idle = (ms) => new Promise(r => setTimeout(r, ms));
       for (let rep = 0; rep < REPEATS; rep++) {
         for (const mode of MODES) {
-          const btn = button(mode);
-          if (!btn) { out.push({ rep, mode, ms: 0, longest: 0, blocking: 0, tasks: 0, renders: '', error: 'no button in .dock-modes' }); continue; }
           /* Let the previous switch's effects, fetches and layout finish, or
-             they are charged to this one. */
+             they are charged to this one. Before the door is looked for: the
+             previous click may have just put this mode's button in the bar,
+             or taken it out. */
           await idle(700);
+          const btn = button(mode) || await underMore(mode);
+          if (!btn) { out.push({ rep, mode, ms: 0, longest: 0, blocking: 0, tasks: 0, renders: '', error: 'no button in .dock-modes and no item under More', unreachable: true }); continue; }
           await nextPaint();
           if (window.__perf) window.__perf.reset();
           long = [];
@@ -1208,6 +1237,16 @@ async function main(): Promise<void> {
     if (fetches.result.value) console.log(`fetches: ${fetches.result.value}`);
 
     if (modeClicks) reportModeClicks(modeClicks, modeList);
+    /* **A requested mode the bar offered nowhere fails the run.** The warning
+       above was all there was until 2026-10-07, and the script still exited 0
+       — which, once five modes had left the bar for the More menu, would have
+       been a table five rows short and a green run (GPT Sol, PR-10). The
+       results are still printed and written; only the exit code changes. */
+    const unreachable = [...new Set((modeClicks ?? []).filter((c) => c.unreachable).map((c) => c.mode))];
+    if (unreachable.length > 0) {
+      console.error(`✗ could not reach ${unreachable.join(", ")} from the bar or its More menu: not measured`);
+      process.exitCode = 1;
+    }
 
     const second = await read();
     const after = second.total;

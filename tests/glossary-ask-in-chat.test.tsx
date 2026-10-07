@@ -46,6 +46,7 @@ import type { Article, ChatThread, Glossary } from "../src/types.js";
 import type { PublicArticle } from "../src/public-types.js";
 import { ASKED_TERM_ABSENT, ASKED_TERM_PART_WORD } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
+import { modeDoor } from "./helpers/dock-more.js";
 import { askAboutTerm } from "../src/web/chat-handoff.js";
 
 const who = vi.hoisted(() => {
@@ -431,10 +432,8 @@ describe("Ask in chat, from the glossary's refusal", () => {
     await askInChat();
     expect(questionsSent(), "the press sent it as handed over").toEqual([askAboutTerm("axiom")]);
 
-    const mode = (label: string) =>
-      [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-        (b) => b.getAttribute("aria-label") === label,
-      );
+    /* Glossary is under More while it is not the open mode (plan 261007c). */
+    const mode = (label: string) => modeDoor(host, label);
     expect(mode(MODE_LABEL.glossary), "the dock offers Glossary").toBeDefined();
     await act(async () => mode(MODE_LABEL.glossary)?.click());
     await until(() => param("mode") === "glossary");
@@ -492,9 +491,7 @@ describe("Ask in chat, from the glossary's refusal", () => {
 
     /* Back out to the glossary: the floating draft is there again, about the
        same paragraph, and carries none of the glossary's question. */
-    const glossary = [...host.querySelectorAll<HTMLButtonElement>('.dock-modes [role="radio"]')].find(
-      (b) => b.getAttribute("aria-label") === MODE_LABEL.glossary,
-    );
+    const glossary = modeDoor(host, MODE_LABEL.glossary);
     await act(async () => glossary?.click());
     await until(() => param("mode") === "glossary");
     expect(floating()?.textContent ?? "", "the floating draft came back").toContain(PARAGRAPH);

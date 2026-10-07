@@ -30,11 +30,12 @@ import { PUBLIC_SHELF_LABEL } from "../src/messages.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import { modeGenerates, pendingActivation, resetActivations } from "../src/web/activation.js";
 import { ASK_LABEL, ASK_OR_ENTER, GENERATES_MARKER, NO_MATCH } from "../src/web/CommandBar.js";
-import { Dock } from "../src/web/Dock.js";
+import { Dock, visibleModes } from "../src/web/Dock.js";
 import { FeedbackHost } from "../src/web/FeedbackButton.js";
 import { TitleEditor } from "../src/web/TitleEditor.js";
 import { CHANGELOG_LABEL } from "../src/web/router.js";
 import { EXPERIMENTAL_OFF, EXPERIMENTAL_ON } from "./helpers/experimental-fixtures.js";
+import { moreLabels, pressModeByLabel } from "./helpers/dock-more.js";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -192,11 +193,14 @@ const listedOfKind = (kind: RowKind): string[] =>
   rowsOfKind(kind).map((row) => row.querySelector(".cmdbar-name")?.textContent ?? "");
 
 /** The mode buttons the Dock itself drew, in the order it drew them. */
-const dockLists = (): string[] =>
+const dockDraws = (): string[] =>
   /* The radios and Marginalia's toggle after them (261001i), in DOM order. */
   [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
+
+/** The modes the Dock lists under its More button, read out of the open menu. */
+const dockGathers = (): string[] => moreLabels(host);
 
 /**
  * **Typing, the way React hears it.** Setting `.value` alone is invisible to
@@ -227,13 +231,22 @@ function selected(): string {
   return (row as HTMLElement).querySelector(".cmdbar-name")?.textContent ?? "";
 }
 
-describe("the bar's mode rows are exactly what the Dock lists", () => {
+describe("the bar's mode rows are exactly what the Dock offers, directly or under More", () => {
   /**
    * The one rule, in one place. `visibleModes` in Dock.tsx decides which modes
-   * the bar draws, the Dock hands that same array down, and this asserts the
-   * two ends of it agree — with the switch in each of its two positions,
-   * because the whole risk is a second copy of the rule that is right for one
-   * of them.
+   * this reader's bar offers, the Dock hands that same array down, and this
+   * asserts the two ends of it agree — with the switch in each of its two
+   * positions, because the whole risk is a second copy of the rule that is
+   * right for one of them.
+   *
+   * **"Offers, directly or under More", since 2026-10-07.** Until then it was
+   * *exactly what the Dock lists*, read off the bar's buttons. Five modes are
+   * now items of the More menu rather than buttons, and the contract changed
+   * with them on purpose (plan 261007c, D5 and PR-9): a mode gathered under
+   * More must stay one ⌘K away. So the Dock's end of the comparison is its
+   * buttons **and** its menu, both read from the DOM, and the order is the
+   * bar's own (`visibleModes`), in which the gathered modes keep the places
+   * they had.
    *
    * **`listedOfKind("mode")` rather than every row, since 2026-09-07**, when
    * Greg added the changelog to the bar and product call 4 narrowed from *the
@@ -242,19 +255,38 @@ describe("the bar's mode rows are exactly what the Dock lists", () => {
    * about them, but the mode rows must still be the Dock's array untouched.
    * CommandBar.tsx § call 4.
    */
-  it("draws the same modes, in the same order, with the switch off", () => {
-    reading({ experimental: EXPERIMENTAL_OFF });
-    openBar();
-    expect(listedOfKind("mode")).toEqual(dockLists());
-    /* The vacuity guard: two empty lists are equal. */
-    expect(listedOfKind("mode").length).toBeGreaterThan(5);
-  });
+  for (const flip of [
+    { name: "off", experimental: EXPERIMENTAL_OFF },
+    { name: "on", experimental: EXPERIMENTAL_ON },
+  ]) {
+    it(`lists every mode the Dock offers, in the bar's order, with the switch ${flip.name}`, () => {
+      reading({ experimental: flip.experimental });
+      /* Read the Dock before the command bar opens over it. */
+      const drawn = dockDraws();
+      const gathered = dockGathers();
+      /* The vacuity guards: two empty lists are equal, and a bar with nothing
+         under More would make this the old contract again. */
+      expect(drawn.length).toBeGreaterThan(5);
+      expect(gathered.length).toBeGreaterThanOrEqual(3);
+      expect(drawn.filter((label) => gathered.includes(label)), "plain is open, so nothing is in both").toEqual([]);
 
-  it("draws the same modes, in the same order, with the switch on", () => {
-    reading({ experimental: EXPERIMENTAL_ON });
+      openBar();
+      const listed = listedOfKind("mode");
+      expect(new Set(listed)).toEqual(new Set([...drawn, ...gathered]));
+      expect(listed).toHaveLength(drawn.length + gathered.length);
+      expect(listed).toEqual(visibleModes(flip.experimental.on, "plain").map((m) => MODE_LABEL[m.mode]));
+      /* Each half keeps the order the Dock gave it. */
+      expect(listed.filter((label) => drawn.includes(label))).toEqual(drawn);
+      expect(listed.filter((label) => gathered.includes(label))).toEqual(gathered);
+      if (flip.experimental.on) expect(listed.length).toBe(MODES.length);
+    });
+  }
+
+  it("lists a gathered mode that the bar does not draw", () => {
+    reading({ experimental: EXPERIMENTAL_OFF });
+    expect(dockDraws()).not.toContain(MODE_LABEL.glossary);
     openBar();
-    expect(listedOfKind("mode")).toEqual(dockLists());
-    expect(listedOfKind("mode").length).toBe(MODES.length);
+    expect(listedOfKind("mode")).toContain(MODE_LABEL.glossary);
   });
 
   /**
@@ -1479,13 +1511,15 @@ describe("off the reading view", () => {
       },
       onMode,
     });
-    for (const mode of ["glossary", "summary"] as const) {
-      const button = [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"]')].find(
-        (b) => b.getAttribute("aria-label") === MODE_LABEL[mode] || b.textContent?.trim() === MODE_LABEL[mode],
-      );
-      expect(button, `${mode}: a bar button`).toBeDefined();
-      act(() => button?.click());
-      expect(onMode).toHaveBeenCalledWith(mode, undefined, true);
+    /* Both of the bar's doors: Summary's own button, which toggles, and
+       Glossary's item under More (plan 261007c), which names a destination
+       and so does not. Neither arms for a visitor. */
+    for (const [mode, door, toggles] of [
+      ["glossary", "more", false],
+      ["summary", "bar", true],
+    ] as const) {
+      expect(pressModeByLabel(host, MODE_LABEL[mode]), `${mode}: which door`).toBe(door);
+      expect(onMode).toHaveBeenCalledWith(mode, undefined, toggles);
     }
     expect(pendingActivation("a-piece", "glossary")).toBeNull();
     expect(pendingActivation("a-piece", "simple")).toBeNull();

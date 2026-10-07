@@ -84,6 +84,11 @@ quality usually feeds all of them, which is the stronger argument for it.
    always reach the passage it came from in one action. See [block-ids.md](block-ids.md).
 5. **No hidden reformulation.** We never silently rewrite the author's prose in the reading view.
    Generated text lives at generated altitudes; the rightmost level is verbatim, always.
+6. **Never lose what the reader gave us.** A dictation, a draft, a note, a criterion, a pasted
+   article: anything the reader typed, said or chose is kept, not silently cut, capped away or
+   overwritten. A limit refuses with a sentence saying why, never by dropping the oldest. Greg,
+   2026-10-07: *"try hard to avoid ever losing/throwing away (especially important) user
+   data/input"*. Production data has its own rule in AGENTS.md § Real data belongs to the reader.
 
 ## Prefer boring
 
@@ -189,8 +194,10 @@ these, each to be judged against the principles above:
   (Greg, [notes](../research/260902k-greg-notes-the-edge-between-ease-and-difficulty.md)).
 - **Notes and highlights** anchored to block ids, surviving re-extraction — which is precisely why
   those ids are random rather than sequential
-  ([block-ids.md](block-ids.md#why-random-and-not-sequential)).
+  ([block-ids.md](block-ids.md#why-random-and-not-sequential)). **Built**: Comments,
+  [comments.md](comments.md).
 - **Recall** — a few durable questions generated from what the reader actually dwelt on.
+  **Built**: Learn and Quiz, [learn-mode.md](learn-mode.md) and [quiz.md](quiz.md).
 - **A model of the reader** — where they are and what they know, built passively where possible
   (time on a paragraph, what they select, what they open in the glossary) and only crudely from the
   profile boxes ([reader-profile.md](reader-profile.md)). Every mode above becomes a consumer of it.
