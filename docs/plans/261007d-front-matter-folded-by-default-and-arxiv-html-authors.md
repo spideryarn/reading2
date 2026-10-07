@@ -444,3 +444,4 @@ margin's fixed "where you are" head naming block 0's section at the top of the p
 - 2026-10-07: stage 1 built by an Opus subagent; § Built, and what the building changed.
 - 2026-10-07: GPT Sol's code review (C1 to C7 fixed by it); browser check; block 0, the
   StrictMode reopen, C8 to C11 and an overlap bug fixed; re-measured.
+- 2026-10-07: GPT Sol's round two on dd103680f, narrowed to the four post-round-one fixes: no findings, *ready to push*. Discovery closed.
