@@ -55,6 +55,10 @@ never touched, the reading view asks *Why are you reading this?* once, in a smal
 if the article still has none — a one-shot `sessionStorage` mark from the add page, owner only
 ([`src/web/PurposePrompt.tsx`](../../src/web/PurposePrompt.tsx),
 [plan 261001s](../plans/261001s-imports-detail-on-home-and-why-reading-saved-state-and-first-open-prompt.md)).
+Since 2026-10-07, where that open is the article's first and a band fits beside the text, it opens
+on the guide in Chat instead, whose greeting holds the same box, and there is no dialog; on a phone
+the dialog stays ([url-state.md § An article never opened here arrives at a default](url-state.md#an-article-never-opened-here-arrives-at-a-default),
+[plan 261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4).
 
 **The add page's box saves as you type** since 2026-10-04 (Greg: *"B with a small debounce of some
 kind"*): one second after the last keystroke, on blur, and on the way out, as soon as the article's row
@@ -62,8 +66,11 @@ exists; words typed before that are held and saved the moment it does. The reaso
 server queues the first modes when the import publishes, with the purpose stored by then
 ([plan 261004h](../plans/261004h-post-import-modes-decided-on-the-server-for-every-import-path.md)),
 so a purpose saved at a button after the import was always too late for them. A reader still typing
-at that moment still misses. On a re-add the box shows the purpose already stored, so an emptied box
-clears it. The saving is a small class of its own, bound to one article's slug
+at that moment still misses. Whenever an add resolves to an existing article, its purpose session
+reads the stored purpose before writing, so an emptied box clears it only after that read. An
+untouched repeat paste offers no purpose box; a draft entered while its answer was pending stays
+visible ([ingest-queue.md](ingest-queue.md#the-three-traps-in-a-page-whose-whole-job-is-one-effect)).
+The saving is a small class of its own, bound to one article's slug
 ([`src/web/add-purpose.ts`](../../src/web/add-purpose.ts)), because one add page can change which
 article it is about (a new address, a Retry) and `useAutosavedText` cannot be re-pointed;
 [plan 261004l](../plans/261004l-the-add-page-purpose-box-saves-as-you-type.md) has why, and what

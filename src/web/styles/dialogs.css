@@ -608,7 +608,7 @@
   margin: 0.5rem 0 0;
   font-size: 0.81rem;
   line-height: 1.4;
-  color: var(--destructive);
+  color: var(--danger);
   overflow-wrap: anywhere;
 }
 
@@ -776,7 +776,7 @@
 .chat-dialog-error {
   margin: 0.4rem 0 0;
   font-size: 0.77rem;
-  color: var(--destructive);
+  color: var(--danger);
 }
 
 /* ------------------------------------------------------------ chat marks -- */

@@ -30,9 +30,9 @@ import type {
   ThreadKind,
   ThreadOrigin,
 } from "../../../types.js";
-import { isSingleThreadKind } from "../../../types.js";
-import { chatFromParam, currentAt, modeParam, learnParam, threadParam } from "../../params.js";
-import { listedInChat, sourcesIn } from "../../thread-source.js";
+import { isLearnKind } from "../../../types.js";
+import { chatFromParam, currentAt, guideParam, modeParam, learnParam, threadParam } from "../../params.js";
+import { listedInChat, openableInChat, sourcesIn } from "../../thread-source.js";
 import { useRenderCount } from "../../perf.js";
 import { type QuizArrival, QuizPanel, type QuizSections, LearnSubModeToggle } from "../../QuizPanel.js";
 import { type QuizRead, useQuiz } from "../../useQuiz.js";
@@ -287,8 +287,13 @@ function QuizSubBand({
  * Written as an `Exclude` rather than as `"chat" | "learn"` so that a fifth
  * kind arrives here as a compile error and somebody has to decide which side of
  * the line it is on.
+ *
+ * `guide` is on the far side too: it is a conversation the Chat band opens
+ * (one per article, pinned above Chat's list), not a band of its own, so no
+ * mode mounts this band with it. docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md
+ * (GPT Sol's F2: single-thread, openable in Chat, and Learn are three ideas).
  */
-type ConversationKind = Exclude<ThreadKind, "candidates">;
+type ConversationKind = Exclude<ThreadKind, "candidates" | "guide">;
 
 /**
  * **A question another mode has handed to chat, for a fresh conversation:
@@ -316,7 +321,16 @@ type ConversationKind = Exclude<ThreadKind, "candidates">;
  * Nor is it in the URL: the question is the reader's text, which
  * docs/project/logging.md keeps out of addresses.
  */
-export interface ChatHandoff {
+export type ChatHandoff = ChatHandoffToChat | ChatHandoffToGuide;
+
+/**
+ * **Where a handoff goes — required, so a sender has to say** (plan 261007j,
+ * GPT Sol's F2). Every *Ask in chat* in the app starts a fresh chat, as Greg
+ * asked on 2026-09-11 (*"fresh"*), whatever conversation the band has open —
+ * the guide included. The command bar's *Ask the guide* row (stage 3) targets
+ * the article's one guide instead: open it, existing or new, and send there.
+ */
+interface ChatHandoffBase {
   readonly slug: string;
   readonly question: string;
   /**
@@ -331,6 +345,16 @@ export interface ChatHandoff {
    * docs/plans/261006j-ask-in-chat-sends-the-question.md.
    */
   readonly send: boolean;
+}
+
+/** To the guide: open it (or begin it) and send, or wait in its box. Nothing else rides along. */
+export interface ChatHandoffToGuide extends ChatHandoffBase {
+  readonly target: "guide";
+}
+
+/** A fresh chat — every *Ask in chat* sender in `Reader` § `handToChat`. */
+export interface ChatHandoffToChat extends ChatHandoffBase {
+  readonly target: "chat";
   /**
    * The item the question is about, when the conversation should remember it
    * (`ThreadOrigin`): Debate's *Check this claim in chat* since 2026-10-05,
@@ -359,6 +383,8 @@ export interface ChatHandoff {
  */
 export function oneLearn(
   threads: readonly ChatThread[],
+  /* Any single-thread kind: Learn's three, and since plan 261007j the guide,
+     which Chat's band picks the same way. */
   kind: SingleThreadKind = "learn",
 ): ChatThread | null {
   let best: ChatThread | null = null;
@@ -516,7 +542,15 @@ export function ConversationBand({
    */
   /* Origins come from the server, through a load or the successful `begin`
      frame. A held draft may have been refused, so it cannot label a row. */
-  const threads = useMemo(() => everyThread.filter((t) => t.kind === kind), [everyThread, kind]);
+  /* **Chat's band opens the guide as well as its chats** (plan 261007j, GPT
+     Sol's F2: `openableInChat`). Everything below that resolves the open
+     conversation, or where a question goes, reads this set — so a `?thread=`
+     naming the guide opens it here, and the kind a send carries is the open
+     conversation's, never the band's (`sendTo`). */
+  const threads = useMemo(
+    () => everyThread.filter((t) => (kind === "chat" ? openableInChat(t.kind) : t.kind === kind)),
+    [everyThread, kind],
+  );
   /**
    * **What Chat's list draws: every conversation but Referee's Candidates.**
    *
@@ -540,7 +574,7 @@ export function ConversationBand({
   });
   /* Recall, Tutorial and Explore: each one conversation per article, no
      list. Named for Learn because that is where all three live. */
-  const single = isSingleThreadKind(kind) ? kind : null;
+  const single = isLearnKind(kind) ? kind : null;
   const learning = single !== null;
   /**
    * Start over has two ordered waits: Live must finish writing its last spoken
@@ -560,6 +594,19 @@ export function ConversationBand({
   const theLearn = resetting === "idle" ? found : null;
   /** The open conversation's id: Learn's one, or what `?thread=` says in chat. */
   const current = learning ? (theLearn?.id ?? null) : thread;
+  /**
+   * **The open conversation's kind**, which is what a send, an edit and Live
+   * go by — not the band's (GPT Sol's F2). In Chat it is `chat` or `guide`;
+   * with nothing open, a send mints a conversation of the band's kind.
+   */
+  const openKind: ThreadKind = threads.find((t) => t.id === current)?.kind ?? kind;
+  /**
+   * **This article's guide, in Chat's band** — one per article, chosen like
+   * Learn's (`oneLearn`): one with something in it over an empty one this tab
+   * began before the list brought the stored one. `null` until there is one;
+   * the pinned row is drawn either way, and a press begins it (`openGuide`).
+   */
+  const theGuide = useMemo(() => (kind === "chat" ? oneLearn(threads, "guide") : null), [kind, threads]);
 
   /* The address follows Learn's conversation, by *replace* — this corrects
      the URL; it is not a step the reader took. */
@@ -606,6 +653,32 @@ export function ConversationBand({
   useEffect(() => {
     for (const t of threads) if (named(t.id)) drafts.clearOrigin(t.id);
   }, [threads, named, drafts]);
+
+  /* **A guide this tab began, beaten by the stored one**, is reconciled — as
+     an empty Learn conversation is below — and if it was the one on screen,
+     the reader is moved to the stored guide with their unsent words. By
+     *replace*: this corrects the address.
+
+     Usually both rows are still in this controller and the loop finds the
+     empty local one. A mode change can unmount the band before the server's
+     `begin` frame corrects the id, though: the next controller then has only
+     the stored guide. `drafts.guide()` is the durable evidence of the missing
+     optimistic row, so reconcile that id as well. */
+  useEffect(() => {
+    if (!theGuide) return;
+    const reconcile = (id: string) => {
+      drafts.moveThread(id, theGuide.id);
+      if (drafts.destination() === id) drafts.setDestination(theGuide.id);
+      if (id === thread) void setThread(theGuide.id, { history: "replace" });
+      discard(id);
+    };
+    const begun = drafts.guide();
+    if (begun !== undefined && begun !== theGuide.id) reconcile(begun);
+    for (const t of threads) {
+      if (t.kind !== "guide" || t.id === theGuide.id || t.messages.length > 0) continue;
+      if (t.id !== begun) reconcile(t.id);
+    }
+  }, [theGuide, threads, thread, drafts, discard, setThread]);
   /**
    * `speak`, as the live session is handed it: **a spoken exchange is a
    * submission**, and it is one the typed draft knows nothing about — the
@@ -755,6 +828,40 @@ export function ConversationBand({
   const startNew = useCallback(() => beginHere(true), [beginHere]);
 
   /**
+   * **Open this article's guide in the band: the stored one, or one begun
+   * here** (plan 261007j). One per article, so there is nothing to choose:
+   * the pinned row, `?guide=1` and a handoff that targets the guide all come
+   * here. A guide begun here is local until its first question, like any new
+   * conversation; the server folds a first turn into a guide it already holds
+   * and says so in the `begin` frame (src/chat.ts § `targetOf`), which is the
+   * id `send`'s `onThreadId` puts in the address.
+   *
+   * `wanted` is an id to begin it under — the one this tab began before a
+   * mode change took it away, so its words come back with it. Through a ref
+   * for the stored guide, because a handoff's effect can run before this
+   * render's `theGuide` is the newest.
+   */
+  const guideNow = useRef(theGuide);
+  guideNow.current = theGuide;
+  const openGuide = useCallback(
+    (focus: boolean, wanted?: string): string => {
+      heldOnList.current = null;
+      setPendingLive(null);
+      const stored = guideNow.current;
+      /* `begin` with an id this tab already holds returns it unchanged, so a
+         second open in one commit (StrictMode) is the same guide. */
+      const id = stored?.id ?? begin("guide", wanted ?? drafts.guide());
+      if (!stored) drafts.setGuide(id);
+      if (wanted !== undefined && wanted !== id) drafts.moveThread(wanted, id);
+      drafts.setDestination(id);
+      void setThread(id);
+      if (focus) setFocusNonce((n) => n + 1);
+      return id;
+    },
+    [begin, setThread, drafts],
+  );
+
+  /**
    * **An empty chat opens a conversation rather than an empty list.**
    *
    * Greg, 2026-08-26: *"By default, if no existing Chats, start a new one."*
@@ -862,7 +969,7 @@ export function ConversationBand({
    */
   const taken = useRef<ChatHandoff | null>(null);
   const sendToRef = useRef<
-    (id: string | null, question: string, first?: ChatHandoff) => void
+    (id: string | null, question: string, first?: ChatHandoffToChat, as?: ThreadKind) => void
   >(() => {});
   useEffect(() => {
     if (!handoff) return;
@@ -873,7 +980,15 @@ export function ConversationBand({
     const take = () => {
       if (taken.current === handoff) return;
       taken.current = handoff;
-      if (ours) {
+      if (ours && handoff.target === "guide") {
+        /* The one guide, not a fresh conversation: the bar's *Ask the guide*
+           (plan 261007j). Sent as a guide turn, whatever the band had open. */
+        const id = openGuide(!handoff.send);
+        if (handoff.send) sendToRef.current(id, handoff.question, undefined, "guide");
+        else drafts.setThread(id, handoff.question);
+      } else if (ours && handoff.target === "chat") {
+        /* A fresh chat, even with the guide open: `beginHere` mints the
+           band's kind, which here is `chat`. */
         const id = beginHere(!handoff.send);
         /* Under the conversation's id, so it goes wherever its words go, and
            before the send, which reads it (`pendingOrigin`). */
@@ -906,7 +1021,25 @@ export function ConversationBand({
     return () => {
       live = false;
     };
-  }, [handoff, slug, beginHere, onHandoffTaken, onHandoffThread, drafts]);
+  }, [handoff, slug, beginHere, openGuide, onHandoffTaken, onHandoffThread, drafts]);
+
+  /**
+   * **`?guide=1`: open the guide, whether or not it exists** (params.ts §
+   * `guideParam`). Once the list has answered, so a stored guide is opened
+   * rather than a second begun beside it; then the address says
+   * `?thread=<its id>` and the flag goes, both by replacement rather than a new
+   * history step. It spends the
+   * arrival latch, as a handoff does, so the rule below does not open a chat
+   * over it. After the handoff effect and before the arrival rule, for the
+   * reason that order is given above.
+   */
+  const [askGuide, setAskGuide] = useQueryState("guide", guideParam);
+  useEffect(() => {
+    if (kind !== "chat" || askGuide !== true || !loaded) return;
+    started.current = true;
+    openGuide(false);
+    void setAskGuide(null);
+  }, [kind, askGuide, loaded, openGuide, setAskGuide]);
 
   /**
    * **Arriving in chat: one decision, in this order**, made once per visit and
@@ -970,7 +1103,7 @@ export function ConversationBand({
    */
   useEffect(() => {
     if (kind !== "chat" || modeNow !== "chat" || !loaded || thread === null) return;
-    if (everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+    if (everyThread.some((t) => t.id === thread && !openableInChat(t.kind))) {
       void setThread(null, { history: "replace" });
     }
   }, [kind, modeNow, loaded, thread, everyThread, setThread]);
@@ -991,7 +1124,7 @@ export function ConversationBand({
     if (!arrived.current) {
       arrived.current = true;
       const was = drafts.destination();
-      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && t.kind !== "chat")) {
+      if (!started.current && !loadFailed && everyThread.some((t) => t.id === thread && !openableInChat(t.kind))) {
         /* A known non-chat URL means the list, even if this tab left words in
            another chat. Stored chats already have a selectable row. Recover
            a missing draft as a row too, without selecting it or sending it. */
@@ -1026,6 +1159,11 @@ export function ConversationBand({
         } else if (threads.some((t) => t.id === was)) {
           /* This corrects the address; it is not a step the reader took. */
           void setThread(was, { history: "replace" });
+        } else if (was === drafts.guide()) {
+          /* The guide this tab began, gone with the band: begin it again
+             under the same id, words and all — never as a chat (plan 261007j). */
+          started.current = true;
+          openGuide(true, was);
         } else if (drafts.isFresh(was)) {
           started.current = true;
           drafts.moveThread(was, startNew());
@@ -1037,11 +1175,13 @@ export function ConversationBand({
        conversations are Learn's has rows to show, and a blank chat begun
        over them would hide the list this visit was for. The box under the
        list and the + in the header still start one. */
-    if (listed.length === 0) {
+    /* Nor when the guide has been talked to: its pinned row is something to
+       show (plan 261007j). An empty guide is not. */
+    if (listed.length === 0 && !(theGuide && theGuide.messages.length > 0)) {
       started.current = true;
       startNew();
     }
-  }, [learning, loaded, loadFailed, threads, listed, everyThread, thread, setThread, startNew, drafts, begin, kind]);
+  }, [learning, loaded, loadFailed, threads, listed, everyThread, thread, setThread, startNew, drafts, begin, kind, theGuide, openGuide]);
 
   /**
    * **Where chat is, written down for the next visit** — the conversation on
@@ -1107,16 +1247,23 @@ export function ConversationBand({
   const sendTo = (
     to: string | null,
     question: string,
-    first?: ChatHandoff,
+    first?: ChatHandoffToChat,
+    /* The kind of conversation `to` is, when this render cannot see it yet —
+       a guide a handoff has just begun. Otherwise the open thread's own. */
+    as?: ThreadKind,
   ): void => {
     if (resettingNow.current) return;
     // `send` returns the thread it went to, minted here when this is a new
     // conversation — so the URL can name it before the request lands.
-    /* This mode's kind: every conversation the band can open is of it now.
-       The server refuses a kind that contradicts an existing thread rather
-       than taking our word for it, so this being wrong is a 409 rather than
-       a corrupted transcript. */
-    const origin = pendingOrigin(to);
+    /* **The conversation's kind, never the band's** (GPT Sol's F2 on plan
+       261007j): Chat's band opens the guide too, and a guide turn sent as
+       `chat` would be refused (409) or answered with the wrong prompt. A new
+       conversation (`to` names nothing yet) is the band's kind. The server
+       refuses a kind that contradicts an existing thread rather than taking
+       our word for it, so this being wrong is a 409 rather than a corrupted
+       transcript. */
+    const sendKind: ThreadKind = as ?? threads.find((t) => t.id === to)?.kind ?? kind;
+    const origin = sendKind === "chat" ? pendingOrigin(to) : undefined;
     const id = send(to, question, at, {
       onThreadId: (corrected) => void setThread(corrected),
       ...((first || (origin && to)) ? {
@@ -1140,8 +1287,10 @@ export function ConversationBand({
           if (origin && to) drafts.clearOrigin(confirmed);
         },
       } : {}),
-      kind,
-      ...(onScreen ? { visible: onScreen() } : {}),
+      kind: sendKind,
+      /* The blocks on screen are a chat's alone: the server refuses them on
+         any other kind (src/routes.ts). */
+      ...(onScreen && sendKind === "chat" ? { visible: onScreen() } : {}),
       ...(origin ? { origin } : {}),
       ...(first?.anchor ? { anchor: first.anchor } : {}),
       ...(first?.sourceCommentId ? { sourceCommentId: first.sourceCommentId } : {}),
@@ -1177,6 +1326,9 @@ export function ConversationBand({
          conversation open. Pushed, as a press on the bar's Learn is.
          Learn's band would write its conversation's id itself; naming it
          here means the address is right from the first frame. */
+      /* The guide's pinned row: Chat's alone, drawn whether or not the guide
+         exists yet (plan 261007j). */
+      guide={kind === "chat" ? { thread: theGuide, onOpen: () => void openGuide(true) } : undefined}
       onOpenLearn={kind === "chat" ? (view, id) => {
         setPendingLive(null);
         void setWhere({ mode: "learn", learn: view, thread: id }, { history: "push" });
@@ -1202,10 +1354,12 @@ export function ConversationBand({
          by the server, so there is no button. */
       /* Nor on a conversation whose origin the server does not have yet
          (`awaitsOrigin` above): no button, and the callback is refused too. */
-      live={OFFERS_LIVE[kind] && !awaitsOrigin(current) ? live : undefined}
+      /* Nor in the guide, which is typed (plan 261007j). */
+      live={OFFERS_LIVE[kind] && openKind !== "guide" && !awaitsOrigin(current) ? live : undefined}
       onStartLive={!OFFERS_LIVE[kind] ? undefined : (id) => {
         if (resettingNow.current) return;
         if (awaitsOrigin(id)) return;
+        if (id && threads.find((t) => t.id === id)?.kind === "guide") return;
         if (!id && kind !== "chat") return;
         const next = id ?? begin("chat");
         /* Begun here like `startNew`'s, and as unsent until its first spoken
@@ -1284,8 +1438,10 @@ export function ConversationBand({
          back is the one it was given. `current` is non-null wherever these can
          be pressed — the conversation view is what renders them. */
       onRetry={(messageId) => current && retry(current, messageId)}
+      /* What was on screen goes with a chat's edit, as with its send, and with
+         nothing else's. */
       onEdit={(messageId, question) =>
-        current && edit(current, messageId, question, at, onScreen?.())
+        current && edit(current, messageId, question, at, openKind === "chat" ? onScreen?.() : undefined)
       }
       onStop={(messageId) => current && stop(current, messageId)}
       onHintOpened={(messageId, hint) => current && openHint(current, messageId, hint)}

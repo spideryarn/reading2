@@ -10,9 +10,9 @@ in `src/help-chat-call.ts`. The questions, with what a right answer does, are in
 
 Judge every answer in these files (each is an array of rows with `id`, `kind`, `answer`):
 
-- `evals/help-chat/results/261007a/luna.json` (prompt help-chat/1, model Luna)
-- `evals/help-chat/results/261007a/deepseek.json` (prompt help-chat/1, model DeepSeek V4.1 Flash)
-- `evals/help-chat/results/261007a/luna-v2.json` (prompt help-chat/2, model Luna)
+- `evals/help-chat/results/261007b/luna.json` (prompt help-chat/1, model Luna)
+- `evals/help-chat/results/261007b/deepseek.json` (prompt help-chat/1, model DeepSeek V4.1 Flash)
+- `evals/help-chat/results/261007b/luna-v2.json` (prompt help-chat/2, model Luna)
 
 For each answer, check against the corpus itself (search it; do not trust the answer):
 

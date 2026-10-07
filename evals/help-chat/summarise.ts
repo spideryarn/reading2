@@ -1,5 +1,5 @@
 /**
- * **The numbers in docs/investigations/261007a-help-chat-model-and-refusals.md**,
+ * **The numbers in docs/investigations/261007b-help-chat-model-and-refusals.md**,
  * from the result files `run.ts` wrote. Free: reads files, calls nothing.
  *
  * ```
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import type { Row } from "./run.js";
 
-const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "results", "261007a");
+const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "results", "261007b");
 
 const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);

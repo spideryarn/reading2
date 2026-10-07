@@ -10,6 +10,38 @@ Up: [design-css-overview.md](design-css-overview.md)
 Added 2026-08-27, after Greg looked at the shelf and said the buttons were ugly. He was right, and
 the reason turned out to be one line of CSS rather than taste.
 
+## Controls that do the same job look the same
+
+> I'm just trying to sort of look for a tiny bit more consistency across modes and in various places
+>
+> — Greg, 2026-10-06 (report `spya-rgq3f6`)
+
+> yes A probably controls that do the same job should look the same in every mode, though use your
+> judgment. and make a minimal update to docs about aiming for consistency.
+>
+> — Greg, 2026-10-07
+
+**The aim:** a control that does the same job looks the same in every mode, so reuse the shared
+piece rather than drawing a new one. **Orange marks the mode; a part within it is marked
+neutrally.** Look at `/design` § Controls across modes before drawing one; it shows each piece
+below, live. The families came from plan
+[261007h](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md).
+
+| a control that… | the shared piece | tests of the piece or its listed callers |
+|---|---|---|
+| switches a mode's parts | `.summ-views` / `.summ-view-btn`, [`mode-band.css`](../../src/web/styles/mode-band.css) | [`part-switchers-share-one-bar`](../../tests/part-switchers-share-one-bar.test.ts), [`reveal-chosen-more`](../../tests/reveal-chosen-more.test.tsx) (the fade at an edge with more, shared with the order row) |
+| starts a model call | [`JobProgress`](../../src/web/JobProgress.tsx), or shadcn `Button` outline / sm | [`run-buttons-and-text-boxes-agree`](../../tests/run-buttons-and-text-boxes-agree.test.ts) |
+| takes the reader's typing in a band | `mode-band.css` § text boxes in the bands | the same test |
+| orders a list | [`OrderGroup`](../../src/web/OrderGroup.tsx) with `.gloss-sort-btn` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
+| says the band is waiting | [`BandWaiting`](../../src/web/BandWaiting.tsx) | [`band-waiting`](../../tests/band-waiting.test.tsx), [`band-waiting-layout`](../../tests/band-waiting-layout.test.tsx) |
+| says something failed | [`ReadError`](../../src/web/ReadError.tsx) or `.gloss-error`, in `--danger` | [`failure-colour-and-order-chips`](../../tests/failure-colour-and-order-chips.test.ts) |
+| is too small for a finger | `.tap-target`, [`tap-target.css`](../../src/web/styles/tap-target.css) (the close cross: `.close-x`) | [`tap-target`](../../tests/tap-target.test.tsx), [`close-cross`](../../tests/close-cross.test.ts) |
+| floats over something | `--shadow-pop`, `--shadow-dialog`, `--shadow-sheet`, [`tokens.css`](../../src/web/styles/tokens.css) | none yet |
+
+Some tests check the shared piece itself; the caller checks hold only the callers they list.
+A new mode needs adding to those checks. "Use your judgment" is meant: Skim's ‹ › is a pager,
+not a part-switcher, and keeps its own shape.
+
 ## The reset covered a minority of what it named
 
 We do not import Tailwind's preflight (the header of
@@ -130,8 +162,10 @@ now holds a decision for each of those too. The measurement is in
 name. shadcn's `outline` and `ghost` both hovered to `bg-accent`, while every hand-rolled control
 on the shelf hovered to `bg-highlight/10`. Same page, two answers.
 The variants were repainted to the app's own; see the header comment in
-[`button.tsx`](../../src/web/components/ui/button.tsx), which is now **two** local edits rather than
-one.
+[`button.tsx`](../../src/web/components/ui/button.tsx), which is now **three** local edits rather than
+one: the third (2026-10-07, plan 261007h § F3) makes `aria-disabled="true"` look as unavailable as
+`disabled` — half opacity, a default cursor, no hover — for a button that must keep its tooltip
+reachable while it cannot act.
 
 `outline` lost more than a hover. It shipped `dark:bg-input/30` over `bg-background` plus
 `shadow-xs`, and every `dark:` here means *always* (the `@custom-variant` in `tailwind.css`), so it
@@ -153,7 +187,9 @@ list page now agree, and agreeing is the whole of it:
 | sort chips, Unread, Archived, Undo, card icon buttons, the view toggle | **28px** (`h-7` / `size-7`) | pill for state, `rounded-md` (8px) otherwise |
 | the view toggle's two halves | 24px (`size-6`) inside the 28px box | `rounded-sm` (6px) = outer 8 − 2px padding |
 | shadcn `size="sm"` | 32px | `rounded-md` |
+| **a mode's run button** — `JobProgress`'s, Referee's five (*Run this criterion*, *Pull the paper's claims*, Mirror's, *Build the reviewer brief*, Candidates' *Ask*), Search's *find*, Glossary's *Look up*, *Find more* / *Write a new list* and an entry's *Dig deeper* (plan 261007h § F3) | 32px: shadcn `Button` `variant="outline" size="sm"`; each old class stays as a hook. Citations' *Dig deeper* is the same button at `size="xs"`, 24px, because it sits in a row of 24px controls | `rounded-md` (8px) |
 | shadcn `size="default"`, and the inputs beside it | 36px | `rounded-md` |
+| **a text box in a band** — chat's composer, Search's, Glossary's and Debate's one-line boxes, Referee's criterion, poles and Candidates box, Learn's quiz answer, Illustrated's note, Skim's purpose | the content's: padding `0.45rem 0.55rem`, a 1px `--rule-strong` border, `--page` ground, the 2px `--highlight-text` focus mark; one rule, mode-band.css § text boxes in the bands. Not Chat's rename and edit boxes or `ProfileBox` | `var(--radius)` (10px) |
 | chat's Send, beside its one-line box | 36px, **`var(--control-h)`** | `var(--radius)`, the box's own |
 | Skim's ‹ ›, the mode's main control (Greg: *"a bit bigger"*, 2026-09-28) | 44px, **`var(--control-h-lg)`** | `var(--radius)` |
 | every modal's and panel's close cross, **`.close-x`** (Greg: *"I kept missing it on my iPad"*, 2026-10-01) | 32px, an 18px glyph, and a 40px invisible target wherever there is a finger (so 4px of gap beside it) | 6px, or the component's own |

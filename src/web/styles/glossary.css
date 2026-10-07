@@ -66,10 +66,17 @@
   gap: 0.25rem;
   min-width: 0;
 }
+/* **One chip with Search's** (`.srch-sort-btn`, search.css): the same corner,
+   height and "on" — plan 261007h § F4. 28px, the height the shelf's own sort
+   chips are (docs/project/controls.md § The numbers); it was 23px here. */
 .gloss-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.75rem;
   padding: 0.1rem 0.4rem;
   border: 1px solid transparent;
-  border-radius: 0.4rem;
+  border-radius: var(--radius);
   background: none;
   color: var(--ink-faint);
   font-family: var(--font-ui);
@@ -89,10 +96,14 @@
   .gloss-sort-btn:hover { color: var(--ink); background: var(--surface-raised); }
 }
 .gloss-sort-btn:active { color: var(--ink); background: var(--surface-raised); }
+/* **Neutral, as a part-switcher marks its part** (mode-band.css § the
+   part-switcher): orange marks the mode, and a choice within it is the raised
+   fill, the ink and the weight. It was `--highlight-ink` until 2026-10-07. */
 .gloss-sort-btn.on {
   border-color: var(--rule-strong);
   background: var(--surface-raised);
-  color: var(--highlight-ink);
+  color: var(--ink);
+  font-weight: 600;
 }
 .gloss-sort-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
@@ -217,9 +228,12 @@
   font-size: 0.83rem;
   line-height: 1.45;
 }
+/* A failure sentence: `--danger`, the error-text colour every band's failure
+   is drawn in (plan 261007h § F4; tests/failure-colour-and-order-chips.test.ts).
+   It was the orange until 2026-10-07, the colour that also means "the AI's". */
 .gloss-error {
   margin: 0.4rem 0.7rem 0;
-  color: var(--highlight-ink);
+  color: var(--danger);
   font-size: 0.88rem;
 }
 /* A failed read and its *Try again* (ReadError.tsx) — every band's, so it sits

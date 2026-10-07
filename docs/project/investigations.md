@@ -37,7 +37,10 @@ measured with scripted readers and a blind judge:
   set the scene its quote assumes, with and without the quote's paragraph: a large gain on the
   question asked, and the two regressions (giving the finding away, misstating the context) that a
   second and third judge question caught.
-- [261007a](../investigations/261007a-help-chat-model-and-refusals.md) — Ask about Spideryarn on
+- [261007a](../investigations/261007a-the-guide-prompt-first-measurement.md) — two versions of the
+  guide's prompt, each run twice, with buttons scored by the renderer's own `chipFor`: the shorter
+  second version improved the measured failures, while the client still refused an injected mode.
+- [261007b](../investigations/261007b-help-chat-model-and-refusals.md) — Ask about Spideryarn on
   Luna against DeepSeek: 24 questions, every off-topic and jailbreak one declined, $0.0068 a question
   cold and $0.0006 warm, a cache that reads across questions and twelve quiet minutes, and the fuse
   sized cold anyway.

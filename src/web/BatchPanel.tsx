@@ -165,13 +165,13 @@ export function BatchPanel({ source = batchUpload }: { source?: BatchSource }) {
           : "Each paper is on your shelf with only its title, authors and abstract read. Press Read this on one to read the whole of it."}
       </p>
       {overflow > 0 && (
-        <p className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-destructive">
+        <p className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-danger">
           {`One drop takes up to ${BATCH_MAX_FILES.toLocaleString()} files, so the other ${overflow.toLocaleString()} were not added. Drop them again once these are done.`}
         </p>
       )}
       <QuotaNotice
         message={noRoom?.kind === "no-room" ? noRoom.message : null}
-        className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-destructive"
+        className="tw:mt-1 tw:mb-0 tw:text-xs tw:text-danger"
       />
 
       <ul className="tw:mt-3 tw:mb-0 tw:flex tw:max-h-96 tw:list-none tw:flex-col tw:gap-1.5 tw:overflow-y-auto tw:p-0">
@@ -207,7 +207,7 @@ function BatchRowLine({ row, onRetry }: { row: BatchRow; onRetry: () => void }) 
             row.filename
           )}
         </span>
-        <span className={bad ? "tw:text-destructive" : "tw:text-muted-foreground"}>
+        <span className={bad ? "tw:text-danger" : "tw:text-muted-foreground"}>
           {stateLabel(state, row.bytes)}
         </span>
         {state.kind === "failed" && (

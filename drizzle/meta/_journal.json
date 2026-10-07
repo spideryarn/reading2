@@ -1160,8 +1160,15 @@
     {
       "idx": 165,
       "version": "7",
-      "when": 1791374955953,
-      "tag": "20261007120915_help_chat_bucket",
+      "when": 1791376386686,
+      "tag": "20261007123306_guide_thread_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 166,
+      "version": "7",
+      "when": 1791385037291,
+      "tag": "20261007145717_help_chat_bucket",
       "breakpoints": true
     }
   ]

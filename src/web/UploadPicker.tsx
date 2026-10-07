@@ -322,7 +322,7 @@ export function UploadPicker({
           it gets the same link beside it. QuotaNotice.tsx. */}
       <QuotaNotice
         message={problem ?? failureOf(transfer)}
-        className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-destructive"
+        className="tw:mt-2 tw:mb-0 tw:text-xs tw:text-danger"
       />
 
       {/* **What we will take, before anybody has chosen anything.**

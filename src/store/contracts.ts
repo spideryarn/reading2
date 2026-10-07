@@ -729,6 +729,17 @@ export interface ShelfStore {
   recordOpen(slug: string): Promise<void>;
 
   /**
+   * **How many other articles this reader has opened**: theirs, on the shelf
+   * and not archived, opened at least once, and not `slug`. The guide's measure
+   * of how much they have used Spideryarn (`experienceOf`, src/guide.ts;
+   * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, F7).
+   *
+   * A number at runtime, not only in its type. `slug` is checked as a slug and
+   * need not be on the shelf: it is only left out of the count.
+   */
+  articlesOpenedBefore(slug: string): Promise<number>;
+
+  /**
    * **Destroy this article, for good.** The one irreversible act a reader can
    * perform on their own data.
    *

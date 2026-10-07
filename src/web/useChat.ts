@@ -152,7 +152,7 @@ export interface SendOptions {
    */
   origin?: ThreadOrigin;
   /**
-   * Chat or Learn — **only on the send that creates the thread**, and the
+   * The conversation kind — **only on the send that creates the thread**, and the
    * server 409s one that contradicts a thread that already exists.
    *
    * Deliberately absent from `retry` and `edit`: their thread already has a
@@ -412,6 +412,7 @@ const NEW_THREAD_TITLE: Record<ThreadKind, string> = {
   candidates: "Finding reviewers",
   tutorial: "Tutorial",
   explore: "Exploring",
+  guide: "Guide",
 };
 
 export function useChat(slug: string, onSettled?: () => void): ChatApi {

@@ -28,7 +28,7 @@ The words this part covers:
 
 **Ending: Shipped, signed in; the signed-out half awaits Greg.** On `dev`. Plan
 [261007k](../plans/261007k-help-chatbot.md); measurements in
-[investigation 261007a](../investigations/261007a-help-chat-model-and-refusals.md).
+[investigation 261007b](../investigations/261007b-help-chat-model-and-refusals.md).
 
 - **A box on every Help page**, *Ask about Spideryarn*: in the sidebar on a page, under the search
   on `/help`. One question at a time, answered in a second or two, streamed, from the Help pages

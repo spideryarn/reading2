@@ -73,7 +73,7 @@ export const HELP_CHAT_MAX_TOKENS = 800;
  * a time, and a global fuse of 1,300 a day across every reader.
  *
  * **The fuse is sized cold** (the plan's F2), from the measured cost in
- * docs/investigations/261007a-help-chat-model-and-refusals.md. The system
+ * docs/investigations/261007b-help-chat-model-and-refusals.md. The system
  * message is about 26,900 input tokens, and a cold question on Luna costs
  * **$0.0068**, not the $0.0054 the list price suggests: OpenRouter bills the
  * first call's 26,900-token cache write at 1.25× input. The worst cold

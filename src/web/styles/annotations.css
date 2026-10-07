@@ -1223,7 +1223,7 @@ td.text.has-hit[data-hues="8"] {
   font-family: var(--font-mono);
   font-size: 0.81rem;
   line-height: 1.4;
-  color: var(--destructive);
+  color: var(--danger);
   overflow-wrap: anywhere;
 }
 

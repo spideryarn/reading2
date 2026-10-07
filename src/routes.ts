@@ -256,7 +256,8 @@ import type { CitersResult } from "./types.js";
    reader hovering, so it streams. src/link-summary.ts, docs/project/links.md. */
 import { linkSummaryStream } from "./link-summary.js";
 import { liveKeys } from "./live-keys.js";
-import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl } from "./ingest.js";
+import { isSlug, normaliseUrl, slugFromFilename, slugFromUrl, urlKey } from "./ingest.js";
+import { slugForUrlKey } from "./store/find-article.js";
 import { isOwnReadingPage } from "./own-reading-page.js";
 import {
   advanceJob,
@@ -388,6 +389,7 @@ import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
 import { DEFAULT_INGEST_STEPS, isStepName, type StepName } from "./pipeline.js";
 import { hashProfile, normaliseProfileText, profileIsStale, renderProfile } from "./profile.js";
+import { type GuideExperience, experienceOf } from "./guide.js";
 import { panelRunKind } from "./glossary.js";
 import { routeProfileIsStale } from "./skim.js";
 import {
@@ -2959,6 +2961,40 @@ async function exploreNotes(
   }
 }
 
+/**
+ * **How much the reader has used Spideryarn, for a guide turn**, or `null`.
+ *
+ * The other articles on their shelf they have opened (`articlesOpenedBefore`),
+ * bucketed by `experienceOf` (src/guide.ts) — the bucket goes to the model,
+ * never the count. Resolved per turn, like the profile, from the stored
+ * thread's kind: `null` for every kind but `guide`.
+ *
+ * **A failed read costs the line, not the turn**, as `exploreNotes` above:
+ * the guide's prompt says what to assume when the line is missing. Logged with
+ * the slug and the error's kind, never a count.
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md, F7.
+ */
+async function guideExperience(
+  slug: string,
+  thread: Pick<ChatThread, "kind">,
+): Promise<GuideExperience | null> {
+  if (thread.kind !== "guide") return null;
+  try {
+    return experienceOf(await shelfStore.articlesOpenedBefore(slug));
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "guide: could not read how many articles the reader has opened; answering without it",
+    );
+    return null;
+  }
+}
+
 async function streamChat(slug: string, body: unknown, res: ServerResponse): Promise<void> {
   const {
     threadId,
@@ -3580,6 +3616,10 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          the stored thread's kind and id, like `kind` below. `null` for every
          other kind, and for an Explore turn whose notes could not be read. */
       notes: await exploreNotes(slug, thread, article.blocks),
+      /* **How much the reader has used Spideryarn, on every guide turn**, from
+         the stored thread's kind like `notes` above. `null` for every other
+         kind, and for a guide turn whose count could not be read. */
+      experience: await guideExperience(slug, thread),
       /* **From the THREAD the store just wrote, never from the request body.**
          Those two agree only when the request was right, and the request comes
          from a tab that may be several navigations out of date. A retry and an
@@ -11495,6 +11535,30 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       if (request.readThis) {
         send(res, 202, publicJob(await queueReadThis(request.slug)));
         return;
+      }
+      /* **A repeat paste is free, and says it is one** — Greg, 2026-10-06:
+         *"yes repeat pastes should be free (and signal they're a repeat in the
+         UI)"*. A plain add whose address finds an article the reader already
+         has used to adopt it, run a job whose cached steps usually skipped, and charge a
+         slot. Now it is answered with the article and nothing else: no slot, no
+         job. The upload path's `{ article }` answer is the same shape, so the
+         add page already treats it as a completion; `repeat` is what lets it
+         say why.
+
+         **Outside the billing lock, and safe there in both directions.** A hit
+         spends nothing and starts nothing, so there is nothing to race for; a
+         miss falls through to the locked admission below, and an article that
+         publishes in between is charged exactly as before.
+
+         Only a *plain* add: `steps` or `force` beside a URL asks for work on
+         the article, and swallowing it here would drop that work and report
+         success. docs/plans/261007k-repeat-paste-is-free-and-says-so.md. */
+      if (request.url !== undefined && request.steps === undefined && request.force === undefined) {
+        const have = await slugForUrlKey(urlKey(request.url));
+        if (have !== undefined) {
+          send(res, 200, { article: have, repeat: true });
+          return;
+        }
       }
       const profile =
         request.url !== undefined || request.useProfile === false

@@ -17,7 +17,7 @@
  */
 import type { Mode } from "../modes.js";
 import { MODE_LABEL } from "../title-text.js";
-import { type ChatThread, isLensOrigin, type SingleThreadKind, type ThreadKind } from "../types.js";
+import { type ChatThread, isLensOrigin, type LearnKind, type ThreadKind } from "../types.js";
 import { CHAT_FROM_WORDS, type ChatFrom, type LearnView } from "./params.js";
 import { LEARN_SUB_MODES } from "./sub-modes.js";
 
@@ -66,9 +66,10 @@ export const SOURCE_PASSAGE = "About a passage";
 /**
  * Which part of Learn each of its kinds is. `learn` is the stored word
  * for Recall's conversation (src/types.ts § ThreadKind). A `Record`, so a new
- * single-thread kind has to say.
+ * Learn kind has to say. Keyed by `LearnKind`, not `SingleThreadKind`: the
+ * guide is single-thread but is not a part of Learn.
  */
-const LEARN_VIEW_OF: Readonly<Record<SingleThreadKind, LearnConversationView>> = {
+const LEARN_VIEW_OF: Readonly<Record<LearnKind, LearnConversationView>> = {
   learn: "recall",
   tutorial: "tutorial",
   explore: "explore",
@@ -76,14 +77,31 @@ const LEARN_VIEW_OF: Readonly<Record<SingleThreadKind, LearnConversationView>> =
 
 /**
  * **Does Chat's list show this conversation?** Every kind but Candidates,
- * which is Referee's machinery and not a conversation the reader had.
+ * which is Referee's machinery and not a conversation the reader had, and the
+ * guide, which Chat is to pin above its list rather than list among the rest,
+ * outside the source filter (GPT Sol's F2 on
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md).
  *
  * Listing is not opening: Chat's band opens only `chat`-kind conversations
  * (`ConversationBand`, the plan review's F3).
  */
 export function listedInChat(thread: { kind: ThreadKind }): boolean {
-  return thread.kind !== "candidates";
+  return thread.kind !== "candidates" && thread.kind !== "guide";
 }
+
+/**
+ * **Can Chat's band open this conversation, and send to it?** A chat, and the
+ * guide (plan 261007j, GPT Sol's F2: *openable in Chat* is its own idea, apart
+ * from single-thread and from Learn). Not the same set as `listedInChat`: a
+ * Learn row is listed and opens Learn; the guide is pinned rather than listed,
+ * and opens here.
+ */
+export function openableInChat(kind: ThreadKind): boolean {
+  return kind === "chat" || kind === "guide";
+}
+
+/** What the pinned row and the open guide's header call it. */
+export const GUIDE_LABEL = "Guide";
 
 export function threadSource(thread: SourcedThread): ThreadSource | null {
   const { origin, kind, anchor } = thread;
@@ -123,8 +141,10 @@ export function threadSource(thread: SourcedThread): ThreadSource | null {
         label: SOURCE_PASSAGE,
         ...("quote" in anchor ? { quote: anchor.quote } : {}),
       };
-    /* Never listed (`listedInChat`), so it has nothing to say here. */
+    /* Never listed (`listedInChat`), so it has nothing to say here. The guide
+       is pinned above the list, never filtered by source. */
     case "candidates":
+    case "guide":
       return null;
     default:
       return kind satisfies never;

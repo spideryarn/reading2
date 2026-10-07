@@ -452,7 +452,7 @@
   align-items: baseline;
   gap: 0.3rem 0.6rem;
 }
-.struct-arriving-failed { flex: 1 1 100%; }
+.struct-arriving-failed { flex: 1 1 100%; color: var(--danger); }
 .struct-arriving-note > .struct-view-btn {
   padding: 0.15rem 0.5rem;
   border: 1px solid var(--rule);

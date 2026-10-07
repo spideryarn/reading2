@@ -34,12 +34,26 @@ const executor = (glossaryReady = true): CommandExecutor => ({
     "tag-add": () => CLOSE,
     "tag-remove": () => CLOSE,
     bookmark: () => CLOSE,
+    mode: () => CLOSE,
+    "quick-search": () => CLOSE,
   },
   sources: {
     glossary: {
       ready: glossaryReady,
       terms: [{ id: "spya-g7w2dn", name: "Free energy", aliases: ["FE"] }],
     },
+    /* What the reading view's door offers: the Dock's reachable set and its
+       sub-mode rows (command-runners.ts § `modeDoor`). Not Debate, which is
+       behind the switch here; not anything the catalogue has and this page
+       does not draw. */
+    modes: new Map([
+      ["mode:glossary", { key: "mode:glossary", label: "Glossary", description: "Terms", generates: true }],
+      ["mode:structure", { key: "mode:structure", label: "Structure", description: "Shape", generates: false }],
+      [
+        "submode:learn:tutorial",
+        { key: "submode:learn:tutorial", label: "Learn › Tutorial", description: "Turns", generates: false },
+      ],
+    ]),
   },
 });
 
@@ -99,7 +113,7 @@ describe("finding tokens in a run of text", () => {
 describe("which tokens are a chip", () => {
   it("offers every id but glossary-open", () => {
     expect([...CHAT_PROPOSABLE].sort()).toEqual(
-      ["bookmark", "find", "glossary-ask", "jump-first", "tag-add", "tag-remove"].sort(),
+      ["bookmark", "find", "glossary-ask", "jump-first", "mode", "quick-search", "tag-add", "tag-remove"].sort(),
     );
     expect(chipFor("[cmd:glossary-open:spya-g7w2dn]", executor(), BLOCKS)).toBeNull();
   });
@@ -160,6 +174,53 @@ describe("which tokens are a chip", () => {
       proposal: { id: "glossary-ask", term: "qualia" },
       enabled: false,
     });
+  });
+});
+
+/* Plan 261007j, GPT Sol's F3: a mode is resolved against what the reader can
+   open here now, at the draw and again at the press — never the catalogue. */
+describe("a mode or a quick search as a chip", () => {
+  it("is a chip for a mode the page offers, carrying the mode's own marker", () => {
+    expect(chipFor("[cmd:mode:mode%3Aglossary]", executor(), BLOCKS)).toEqual({
+      proposal: { id: "mode", key: "mode:glossary" },
+      target: { key: "mode:glossary", label: "Glossary", description: "Terms", generates: true },
+      enabled: true,
+    });
+    expect(chipFor("[cmd:mode:mode%3Astructure]", executor(), BLOCKS)?.target?.generates).toBe(false);
+    expect(chipFor("[cmd:mode:submode%3Alearn%3Atutorial]", executor(), BLOCKS)?.target?.label).toBe(
+      "Learn › Tutorial",
+    );
+  });
+
+  it("is no chip for a mode behind the switch, one this page does not offer, or one nobody has heard of", () => {
+    for (const raw of [
+      "[cmd:mode:mode%3Adebate]", // experimental, switch off: not in the door
+      "[cmd:mode:submode%3Alearn%3Aexplore]", // an experimental sub-mode
+      "[cmd:mode:mode%3Anonsense]",
+      "[cmd:mode:mode%3Aglossary%20]",
+    ]) {
+      expect(chipFor(raw, executor(), BLOCKS), raw).toBeNull();
+    }
+    const noModes: CommandExecutor = { runners: executor().runners, sources: {} };
+    expect(chipFor("[cmd:mode:mode%3Aglossary]", noModes, BLOCKS)).toBeNull();
+  });
+
+  it("says no at the press once the mode has gone, because the press asks again", () => {
+    const modes = new Map(executor().sources.modes);
+    const live: CommandExecutor = { ...executor(), sources: { ...executor().sources, modes } };
+    expect(chipFor("[cmd:mode:mode%3Aglossary]", live, BLOCKS)).not.toBeNull();
+    modes.delete("mode:glossary");
+    expect(chipFor("[cmd:mode:mode%3Aglossary]", live, BLOCKS)).toBeNull();
+  });
+
+  it("is a chip for a quick search, enabled only where the page can run one", () => {
+    expect(chipFor("[cmd:quick-search:how%20they%20measured]", executor(), BLOCKS)).toEqual({
+      proposal: { id: "quick-search", words: "how they measured" },
+      enabled: true,
+    });
+    const { "quick-search": _q, ...rest } = executor().runners;
+    expect(chipFor("[cmd:quick-search:x]", { runners: rest, sources: {} }, BLOCKS)?.enabled).toBe(false);
+    expect(chipFor("[cmd:quick-search:]", executor(), BLOCKS)).toBeNull();
   });
 });
 

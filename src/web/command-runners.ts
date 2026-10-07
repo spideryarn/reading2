@@ -10,12 +10,15 @@
  * their runners from these, and tests/command-runners.test.ts presses each.
  */
 import type { Block, BlockId } from "../types.js";
-import type { ActionOutcome } from "./command-match.js";
+import { MODE_LABEL } from "../title-text.js";
+import { modeGenerates, subModeGenerates } from "./activation.js";
+import { type ActionOutcome, type Command, commandId, commandText } from "./command-match.js";
 import type {
   CommandExecutor,
   CommandProposal,
   FindMorePresses,
   GlossaryLookupSource,
+  ModeTarget,
   Outcome,
 } from "./command-proposal.js";
 import { FIND_MORE_MODES, type FindMoreMode } from "./find-more.js";
@@ -201,6 +204,78 @@ export function quickSearchPress(slug: string, open: () => void): (words: string
   };
 }
 
+/** A mode row or a sub-mode row of the bar — the two a `mode` proposal can name. */
+export type ModeCommand = Extract<Command, { kind: "mode" | "submode" }>;
+
+/**
+ * **How a `mode` proposal opens what it names** (plan 261007j, GPT Sol's F3):
+ * the targets the reader can open here now, by catalogue key, and the press.
+ */
+export interface ModeDoor {
+  readonly targets: ReadonlyMap<string, ModeTarget>;
+  open(key: string): void;
+}
+
+/**
+ * **The bar's own mode and sub-mode rows, as a door a chat chip can use.**
+ *
+ * `commands` are the rows the command bar lists on this page now — the Dock's
+ * reachable set (`visibleModes`) and its sub-mode rows (`subModeRows`), built
+ * by the reading view from the same two functions the Dock and the bar call —
+ * so a key resolves exactly where the bar would offer that row, and nowhere
+ * else: not behind the experimental switch, not a mode this page does not draw.
+ *
+ * `activate` is the Dock's own pair (Dock.tsx § `useActivateMode`,
+ * `useActivateSubMode`), handed in by reference: a press arms what the Dock's
+ * press arms and moves the band the way it does, so the chip's `generates`
+ * marker (`modeGenerates`, `subModeGenerates`) is a statement about what the
+ * press will do, not a guess beside it.
+ */
+export function modeDoor(
+  commands: readonly ModeCommand[],
+  activate: {
+    mode(command: Extract<ModeCommand, { kind: "mode" }>): void;
+    sub(command: Extract<ModeCommand, { kind: "submode" }>): void;
+  },
+): ModeDoor {
+  const byKey = new Map<string, ModeCommand>();
+  const targets = new Map<string, ModeTarget>();
+  for (const command of commands) {
+    const key = commandId(command);
+    const { label, description } = commandText(command);
+    byKey.set(key, command);
+    targets.set(key, {
+      key,
+      /* A sub-mode's own label is one word of its parent's (*Tutorial*), so
+         the chip names both, as the plan's sketch does: *Open Learn › Tutorial*. */
+      label: command.kind === "submode" ? `${MODE_LABEL[command.sub.mode]} › ${label}` : label,
+      description,
+      generates: command.kind === "mode" ? modeGenerates(command.mode) : subModeGenerates(command.sub),
+    });
+  }
+  return {
+    targets,
+    open(key) {
+      const command = byKey.get(key);
+      if (command === undefined) return;
+      if (command.kind === "mode") activate.mode(command);
+      else activate.sub(command);
+    },
+  };
+}
+
+/**
+ * **Open the mode a chip names** — refused, in a sentence, if the door no
+ * longer offers it (it went behind the switch between draw and press).
+ */
+export function modeRunner(door: ModeDoor): Runner<"mode"> {
+  return ({ key }) => {
+    if (!door.targets.has(key)) return { kind: "stay", message: "That mode isn't available here any more." };
+    door.open(key);
+    return CLOSE;
+  };
+}
+
 /**
  * **The reading view's executor, built once** — what Reader.tsx hands the Dock
  * (command-proposal.ts § `CommandExecutor`), from the controllers it already
@@ -218,7 +293,10 @@ export function quickSearchPress(slug: string, open: () => void): (words: string
  *    the owner while that band's list can be added to (`findMoreRunners`);
  *  - **a quick search exists only when the page hands in Search's opener**,
  *    which it does for the owner: a visitor's band cannot ask
- *    (`quickSearchPress`).
+ *    (`quickSearchPress`) — as the bar's row and, since 2026-10-07, as the
+ *    `quick-search` proposal a chat chip presses, one press for both;
+ *  - **a mode exists only when the page hands in its door** (`modeDoor`),
+ *    which it does for the owner, from the Dock's own reachable set.
  */
 export function readingExecutor({
   slug,
@@ -229,6 +307,8 @@ export function readingExecutor({
   findMore,
   openQuickSearch,
   askThroughLens,
+  askGuide,
+  modes,
 }: {
   slug: string;
   blocks: Block[];
@@ -244,21 +324,43 @@ export function readingExecutor({
    * Reader.tsx § `suggestedLensInChat` (plan 261005k).
    */
   askThroughLens?: ((lens: string) => void) | undefined;
+  /**
+   * Send a sentence to the guide, for the bar's *Ask the guide* row —
+   * Reader.tsx § `askTheGuide` (plan 261007j F6).
+   */
+  askGuide?: ((sentence: string) => void) | undefined;
+  /** The modes a chip may open, and how — `modeDoor` (plan 261007j). */
+  modes?: ModeDoor | undefined;
 }): CommandExecutor {
+  const quickSearch = openQuickSearch === undefined ? undefined : quickSearchPress(slug, openQuickSearch);
   return {
     runners: {
       "jump-first": jumpFirstRunner(blocks, jump),
       ...(glossary === undefined ? {} : glossaryRunners({ slug, ...glossary })),
       ...(bookmark === undefined ? {} : { bookmark: bookmarkRunner(blocks, bookmark) }),
+      /* The bar's own press, so a chip's quick search and the bar's row are one search. */
+      ...(quickSearch === undefined ? {} : { "quick-search": ({ words }: { words: string }) => quickSearch(words) }),
+      ...(modes === undefined ? {} : { mode: modeRunner(modes) }),
     },
-    sources: glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } },
+    sources: {
+      ...(glossary === undefined ? {} : { glossary: { ready: glossary.ready, terms: glossary.terms } }),
+      ...(modes === undefined ? {} : { modes: modes.targets }),
+    },
     ...(findMore === undefined ? {} : { findMore: findMoreRunners(slug, findMore) }),
-    ...(openQuickSearch === undefined ? {} : { quickSearch: quickSearchPress(slug, openQuickSearch) }),
+    ...(quickSearch === undefined ? {} : { quickSearch }),
     ...(askThroughLens === undefined
       ? {}
       : {
           askThroughLens: (lens: string): ActionOutcome => {
             askThroughLens(lens);
+            return CLOSE;
+          },
+        }),
+    ...(askGuide === undefined
+      ? {}
+      : {
+          askGuide: (sentence: string): ActionOutcome => {
+            askGuide(sentence);
             return CLOSE;
           },
         }),
@@ -278,9 +380,11 @@ export function readingExecutor({
  *  - **the jump of the surface the chat is drawn in** — the band's, which
  *    steps a covering band aside on a phone, or the dialog's plain one.
  *
- * **Not the reading view's `findMore`, nor its `quickSearch`**: each is a row
- * of the bar's, not a proposal, and no chip token names it. A chat *Find “X”*
- * chip goes on opening the exact-words search.
+ * **Not the reading view's `findMore`, nor its `quickSearch` row**: each is a
+ * row of the bar's, not a proposal. A chat *Find “X”* chip goes on opening the
+ * exact-words search; a quick search reaches chat as its own proposal,
+ * `quick-search`, whose runner is in `reading.runners` above (since
+ * 2026-10-07, plan 261007j), and so is a `mode`.
  *
  * Chat is the owner's, so this is only ever built for one.
  */

@@ -182,7 +182,7 @@ makes is only about the door.
 
 **What the decision is for.** v1 answers signed-in readers only. Greg asked for it to work signed
 out too, and that needs an anonymous request that spends money, which nothing on the site does
-today. Measured in stage 3 ([investigation 261007a](../investigations/261007a-help-chat-model-and-refusals.md)): a question costs about **$0.007 cold** and **$0.0006 when the cache is warm**, which it was on every question after the first, whoever asked; answers start in about a second. Every off-topic and jailbreak question in the eval was declined.
+today. Measured in stage 3 ([investigation 261007b](../investigations/261007b-help-chat-model-and-refusals.md)): a question costs about **$0.007 cold** and **$0.0006 when the cache is warm**, which it was on every question after the first, whoever asked; answers start in about a second. Every off-topic and jailbreak question in the eval was declined.
 
 **A. Leave it signed in.** Strangers see "Sign in to ask". No defence changes. Costs: the people
 most likely to need Help before signing up — someone deciding whether to try it — cannot ask.

@@ -776,8 +776,13 @@ describe("toolsFor — who is offered the reader's notes (PR-3)", () => {
     expect(names(kind)).toEqual(CHAT_TOOLS.map((t) => t.function.name));
   });
 
+  /* Every kind but the guide has at least the shared eight; the guide has the
+     article's own five and no reader_notes (tests/guide-kind.test.ts, plan 261007j). */
   it("has an answer for every thread kind there is", () => {
-    for (const kind of THREAD_KINDS) expect(toolsFor(kind).length).toBeGreaterThanOrEqual(CHAT_TOOLS.length);
+    for (const kind of THREAD_KINDS) {
+      expect(toolsFor(kind).length).toBeGreaterThanOrEqual(kind === "guide" ? 1 : CHAT_TOOLS.length);
+    }
+    expect(names("guide")).not.toContain("reader_notes");
   });
 
   it("returns the same array each time, because tools are part of the cached prefix", () => {

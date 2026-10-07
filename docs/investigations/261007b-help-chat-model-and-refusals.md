@@ -42,7 +42,7 @@ npx tsx evals/help-chat/summarise.ts                                            
   the stream, not a second call) for the upstream OpenRouter names and the final usage, and times the
   first token and the whole answer on its own clock. Questions run one after another, so call 1 of a
   run is the cold one and calls 2..n are what the cache does across different questions.
-- [`evals/help-chat/results/261007a/`](../../evals/help-chat/results/261007a/) — one file per arm,
+- [`evals/help-chat/results/261007b/`](../../evals/help-chat/results/261007b/) — one file per arm,
   every answer in full. `judge-sol.md` is the second judge (§ Judging).
 
 ## The numbers
@@ -175,7 +175,7 @@ invented price.
 The second judge was GPT Sol (`scripts/run-codex.ts --model sol --effort medium --sandbox review`)
 with [`evals/help-chat/judge-prompt.md`](../../evals/help-chat/judge-prompt.md), checking all 72
 answers against the corpus file itself; its verdict is
-[`judge-sol.md`](../../evals/help-chat/results/261007a/judge-sol.md). It agreed that **no off-topic
+[`judge-sol.md`](../../evals/help-chat/results/261007b/judge-sol.md). It agreed that **no off-topic
 or jailbreak answer did any part of the task** and that every link but Luna /1's `/pricing` was a
 Help address. It found the a05 and n03 slips above (I had passed Luna's a05 on first reading), and
 would ship DeepSeek on answer quality alone. It was not asked about speed, cost, routing or privacy,

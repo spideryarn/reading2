@@ -43,6 +43,16 @@ describe.skipIf(chrome === null)("a band's wait geometry in Chrome", () => {
         expect(host.textContent).toBe(words);
         fixtures.push({ label: className, before, after: host.innerHTML });
       }
+      act(() => root.render(
+        <BandWaiting key="formatted" className="gloss-quiet">
+          {/* biome-ignore lint/complexity/noUselessFragments: measure a fragment's formatted multiline footprint before and after the delay. */}
+          <>Looking for <em>the questions</em><br />in this article…</>
+        </BandWaiting>,
+      ));
+      const before = host.innerHTML;
+      expect(host.querySelector(".band-waiting-ghost[aria-hidden='true'] em")?.textContent).toBe("the questions");
+      act(() => vi.advanceTimersByTime(SLOW_AFTER_MS));
+      fixtures.push({ label: "formatted sentence", before, after: host.innerHTML });
     } finally {
       act(() => root.unmount());
       vi.useRealTimers();

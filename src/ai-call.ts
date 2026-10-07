@@ -803,7 +803,7 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
        is no help here either: the user message is the question.
 
      **Measured on 2026-10-07**
-     (docs/investigations/261007a-help-chat-model-and-refusals.md): every
+     (docs/investigations/261007b-help-chat-model-and-refusals.md): every
      call landed on OpenAI, and every call after the first read ~26,750 cached
      tokens whatever the question, still warm after 12 minutes of quiet; cold
      $0.0068 (the write is billed at 1.25x input), warm $0.0006. The global
@@ -1177,7 +1177,7 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      watching the box. `command-suggest`'s setting on the same model; whether
      a little thinking would buy better answers was not measured, because at
      `none` the eval found nothing for it to fix
-     (docs/investigations/261007a-help-chat-model-and-refusals.md): every
+     (docs/investigations/261007b-help-chat-model-and-refusals.md): every
      refusal held and the answers kept to the pages, so the ceiling of 800
      tokens stays all answer. */
   "help-chat": { effort: "none" },

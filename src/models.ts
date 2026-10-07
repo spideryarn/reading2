@@ -518,7 +518,7 @@ export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
  * request.
  *
  * **Measured for this job on 2026-10-07**, against DeepSeek V4.1 Flash, in
- * docs/investigations/261007a-help-chat-model-and-refusals.md: every
+ * docs/investigations/261007b-help-chat-model-and-refusals.md: every
  * off-topic and jailbreak question declined, answers grounded in the pages,
  * about a second to the first word, and a prefix cache that reads across
  * different questions ($0.0068 cold, $0.0006 warm). DeepSeek answered as

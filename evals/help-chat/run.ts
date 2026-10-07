@@ -1,7 +1,7 @@
 /**
  * **Does Ask about Spideryarn answer from the Help, refuse the rest, and what
  * does a question cost?** — plan docs/plans/261007k-help-chatbot.md, Stage 3.
- * Write-up: docs/investigations/261007a-help-chat-model-and-refusals.md.
+ * Write-up: docs/investigations/261007b-help-chat-model-and-refusals.md.
  *
  * ```
  * npx tsx evals/help-chat/run.ts --arm luna                                  # PAID: every question on HELP_CHAT_MODEL
@@ -44,7 +44,7 @@ import { QUESTIONS } from "./questions.js";
 loadEnvLocal();
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const RESULTS_DIR = path.join(HERE, "results", "261007a");
+const RESULTS_DIR = path.join(HERE, "results", "261007b");
 /** Stop if one run has spent more than this. A whole arm is a few cents. */
 const BUDGET_USD = 0.6;
 

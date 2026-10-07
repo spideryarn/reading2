@@ -349,6 +349,23 @@ export function marginInSearch(search: string): boolean {
 export const threadParam = parseAsBlockId.withOptions({ history: "replace" });
 
 /**
+ * **`?guide=1`: open this article's guide in Chat, whether or not it exists
+ * yet** — plan 261007j. The guide is one conversation per article (src/types.ts
+ * § `SINGLE_THREAD_KINDS`), so a link that means *the guide* cannot name an id:
+ * there may be none until the first question is sent.
+ *
+ * A flag beside `?thread=` rather than a sentinel in it, so `threadParam`
+ * stays a block id for every reader of it. Chat's band reads it once its list
+ * has answered, opens the stored guide or begins one, then replaces the
+ * address with that conversation's id in `?thread=` and drops this — so the
+ * address round-trips to the ordinary `?mode=chat&thread=<id>`
+ * (`ConversationBand`, src/web/modes/conversation/ConversationModes.tsx).
+ * Acted on only while `mode=chat`, and never put back by a restore
+ * (last-view.ts § `NEVER_REMEMBERED`).
+ */
+export const guideParam = parseAsBit.withOptions({ history: "replace" });
+
+/**
  * **Which conversations Chat's list is narrowed to, by where they came from**
  * — `?chatfrom=chats`, `debate`, `learn` or `passage`. Since 2026-10-05
  * the list shows every conversation about the article (report `spya-hyfqkq`,

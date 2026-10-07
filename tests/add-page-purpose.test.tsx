@@ -79,7 +79,8 @@ const leaves = () => events.filter((e) => e.startsWith("leave:"));
 const patch = (purpose: string | null, slug = SLUG) => `patch:${slug}:${JSON.stringify({ purpose })}`;
 
 let jobs: Job[] = [];
-let addResult: Job | null = null;
+type AddAnswer = Job | { article: string; repeat?: true } | null;
+let addResult: AddAnswer | Promise<AddAnswer> = null;
 let addUploadResult: Promise<Job | { article: string } | null> = Promise.resolve(null);
 let retryResult: (() => Job | null) | null = null;
 const queue: UseJobs = {
@@ -696,7 +697,7 @@ describe("held until the article exists", () => {
     expect(ticked(), "ticked a save that never went").toBe(false);
   });
 
-  it("a re-add shows the stored purpose, sends nothing for it, and an emptied box then clears", async () => {
+  it("a job over an existing article shows the stored purpose, sends nothing for it, and an emptied box then clears", async () => {
     purposes.set(SLUG, "why I came");
     await JOB.start();
     expect(box().value).toBe("why I came");
@@ -725,7 +726,7 @@ describe("held until the article exists", () => {
     expect(purposes.get(SLUG)).toBe("why I came");
   });
 
-  it("an untouched re-add opens by itself with the stored purpose left alone", async () => {
+  it("an untouched job over an existing article opens by itself with the stored purpose left alone", async () => {
     purposes.set(SLUG, "why I came");
     await JOB.start();
     await JOB.finish();
@@ -1393,5 +1394,97 @@ describe("same-slug retirement across page lifetimes (F9)", () => {
     expect(purposes.get(SLUG)).toBe(latest);
     expect(ticked()).toBe(true);
     expect(leaving()).toBe(false);
+  });
+});
+
+/**
+ * **A repeat paste stops to say so** — Greg, 2026-10-06: *"yes repeat pastes
+ * should be free (and signal they're a repeat in the UI)"*. The server answers
+ * `{ article, repeat: true }` with nothing spent and nothing queued, so the
+ * page must not open by itself (the reader would see nothing to notice), must
+ * not offer boxes that apply to an import that never ran, and must not go on
+ * saying "Queueing it…". docs/plans/261007k-repeat-paste-is-free-and-says-so.md.
+ */
+describe("a repeat paste of an article already on the shelf", () => {
+  it("under StrictMode a repeat stays, and a double press opens once", async () => {
+    strict = true;
+    addResult = { article: SLUG, repeat: true };
+    render(URL_SOURCE);
+    await settle();
+    expect(navigations).toEqual([]);
+    const open = button(OPEN)!;
+    act(() => { open.click(); open.click(); });
+    await settle();
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+  });
+
+  it("a late repeat answer for an old address cannot replace the new one", async () => {
+    let answer!: (value: AddAnswer) => void;
+    addResult = new Promise((resolve) => { answer = resolve; });
+    render(URL_SOURCE);
+    await settle();
+    addResult = { article: "new-address-article", repeat: true };
+    render({ kind: "url", url: "https://example.org/new-address" });
+    await settle();
+    answer({ article: SLUG, repeat: true });
+    await settle();
+    expect(navigations).toEqual([]);
+    press(OPEN);
+    expect(navigations).toEqual(["/read/new-address-article"]);
+  });
+
+  it("keeps a draft entered before the repeat answer and waits for its save", async () => {
+    let answer!: (value: AddAnswer) => void;
+    addResult = new Promise((resolve) => { answer = resolve; });
+    render(URL_SOURCE);
+    await settle();
+    focus();
+    type("why this matters to me");
+    patchAnswer = async () => json({ error: "save refused" }, { status: 500 });
+    answer({ article: SLUG, repeat: true });
+    await settle();
+    expect(box().value).toBe("why this matters to me");
+    press(OPEN);
+    await settle();
+    expect(navigations).toEqual([]);
+    expect(box().value).toBe("why this matters to me");
+    expect(button(OPEN_UNSAVED)).toBeTruthy();
+  });
+
+  it("keeps the outcome of High-powered AI chosen before the repeat answer visible", async () => {
+    let answer!: (value: AddAnswer) => void;
+    addResult = new Promise((resolve) => { answer = resolve; });
+    render(URL_SOURCE);
+    await settle();
+    const tick = host.querySelector<HTMLInputElement>("[data-add-high-power] input")!;
+    act(() => tick.click());
+    putAnswer = async () => json({ error: "allowance exhausted" }, { status: 402 });
+    answer({ article: SLUG, repeat: true });
+    await settle();
+    expect(puts()).toEqual([`put:${SLUG}:true`]);
+    expect(host.querySelector("[data-add-high-power]")).not.toBeNull();
+    expect(host.textContent).toContain("allowance exhausted");
+    expect(navigations).toEqual([]);
+  });
+
+  it("says it was already there, offers nothing to tick, and opens on the button", async () => {
+    const { DIRECT_ADD_SENT_TEXT_AWAY, REPEAT_PASTE_ON_THE_SHELF } = await import("../src/messages.js");
+    addResult = { article: SLUG, repeat: true };
+    render(URL_SOURCE);
+    await settle();
+
+    expect(navigations, "opened by itself over the repeat").toEqual([]);
+    expect(host.textContent).toContain(REPEAT_PASTE_ON_THE_SHELF);
+    expect(host.textContent).not.toContain("Queueing it");
+    expect(host.textContent, "said the text was sent, over a paste that sent nothing").not.toContain(
+      DIRECT_ADD_SENT_TEXT_AWAY,
+    );
+    expect(host.querySelector("textarea"), "the purpose box over a repeat").toBeNull();
+    expect(host.querySelector("input[type=checkbox]"), "a box to tick over a repeat").toBeNull();
+
+    press(OPEN);
+    expect(navigations).toEqual([`/read/${SLUG}`]);
+    expect(patches()).toEqual([]);
+    expect(runs()).toEqual(NO_RUNS);
   });
 });

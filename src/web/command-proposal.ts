@@ -29,10 +29,20 @@ import { type ActionOutcome, type ArgumentQuery, canonical } from "./command-mat
 import type { FindMoreMode } from "./find-more.js";
 
 /**
- * **Everything a proposal can ask for.** Seven ids, and an argument each.
+ * **Everything a proposal can ask for.** Nine ids, and an argument each.
  *
  * `bookmark` has no verb in the bar — a reader has no block id to type — and
  * is here for chat (Stage 2), which can name the passage it is talking about.
+ *
+ * **`mode` and `quick-search` since 2026-10-07**, for Chat and the guide both
+ * (docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md;
+ * Greg: *"all of the main chats should probably have all the same tools"*).
+ * Neither has a verb in the bar either: the bar has its own mode rows and its
+ * own *Quick search “X”* row, and these are those rows as a model may name
+ * them. A `mode` key is a command-pick catalogue id — `mode:glossary`,
+ * `submode:learn:tutorial` (command-match.ts § `commandId`) — and parsing it
+ * says only that it is shaped like one: whether the reader can open it *here*
+ * is the live set's to say (`ArgumentSources.modes`, GPT Sol's F3).
  */
 export type CommandProposal =
   | { readonly id: "jump-first"; readonly words: string }
@@ -41,20 +51,31 @@ export type CommandProposal =
   | { readonly id: "glossary-ask"; readonly term: string }
   | { readonly id: "tag-add"; readonly tag: string }
   | { readonly id: "tag-remove"; readonly tag: string }
-  | { readonly id: "bookmark"; readonly blockId: BlockId };
+  | { readonly id: "bookmark"; readonly blockId: BlockId }
+  | { readonly id: "mode"; readonly key: string }
+  | { readonly id: "quick-search"; readonly words: string };
 
 export type ProposalId = CommandProposal["id"];
 type ProposalOf<K extends ProposalId> = Extract<CommandProposal, { id: K }>;
+
+/** Moves the reader, writes the reader's own data (reversibly), or spends a model call. */
+export type Risk = "navigate" | "writes" | "spends";
 
 /**
  * **What pressing each one does to the world** — moves the reader, writes the
  * reader's own data (reversibly), or spends a model call.
  *
- * A `Record` over the ids, so an eighth id is a compile error here before it
+ * A `Record` over the ids, so a tenth id is a compile error here before it
  * is a row. The bar's `generates` marker is read off this
  * (`proposalWords`), never written beside it, so the two cannot disagree.
+ *
+ * **`mode` is the one id whose answer is its target's** (`"per-mode"`): opening
+ * Structure moves the reader, opening Summary may write one (GPT Sol's F3 on
+ * plan 261007j). One id cannot honestly say both, so `proposalRisk` asks the
+ * mode itself — `modeGenerates` / `subModeGenerates` in activation.ts, the
+ * table the bar's own mode rows read — through the resolved `ModeTarget`.
  */
-export const RISK: Readonly<Record<ProposalId, "navigate" | "writes" | "spends">> = {
+export const RISK: Readonly<Record<ProposalId, Risk | "per-mode">> = {
   "jump-first": "navigate",
   find: "navigate",
   "glossary-open": "navigate",
@@ -62,12 +83,34 @@ export const RISK: Readonly<Record<ProposalId, "navigate" | "writes" | "spends">
   "tag-add": "writes",
   "tag-remove": "writes",
   bookmark: "writes",
+  mode: "per-mode",
+  /* A quick search is a model call and a saved row — the bar's own row says
+     `generates` for it (CommandBar.tsx § `quickSearchRow`). */
+  "quick-search": "spends",
 };
+
+/**
+ * **What this press does to the world**, `RISK` with the one per-target id
+ * resolved. A `mode` with no target in hand says `spends`: over-warning is the
+ * direction that costs nothing (activation.ts § `modeGenerates`).
+ */
+export function proposalRisk(proposal: CommandProposal, target?: ModeTarget): Risk {
+  const risk = RISK[proposal.id];
+  if (risk !== "per-mode") return risk;
+  return target === undefined || target.generates ? "spends" : "navigate";
+}
 
 export const PROPOSAL_IDS = Object.keys(RISK) as readonly ProposalId[];
 
 /** Longest a `find` or jump phrase may be in a token — a ceiling, not a design limit. */
 const MAX_WORDS = 200;
+
+/**
+ * **The shape of a catalogue key for a mode or a sub-mode** — `commandId`'s
+ * two mode arms (command-match.ts). Only the shape: what the key names, and
+ * whether it can be opened here, is `ArgumentSources.modes`'.
+ */
+const MODE_KEY = /^(?:mode:[a-z-]+|submode:[a-z-]+:[a-z-]+)$/;
 
 /**
  * **A proposal whose argument its own command accepts**, or `null`.
@@ -80,11 +123,17 @@ const MAX_WORDS = 200;
  */
 function checked(id: ProposalId, argument: string): CommandProposal | null {
   switch (id) {
+    /* A quick search takes what a typed `find X` would: the bar draws its
+       *Quick search “X”* row for exactly those words (CommandBar.tsx §
+       `argumentRowsFor`). */
     case "jump-first":
-    case "find": {
+    case "find":
+    case "quick-search": {
       const words = argument.replace(/\s+/g, " ").trim();
       return words === "" || words.length > MAX_WORDS ? null : { id, words };
     }
+    case "mode":
+      return MODE_KEY.test(argument) ? { id, key: argument } : null;
     case "glossary-open":
       return isSpideryarnId(argument) ? { id, termId: argument } : null;
     case "bookmark":
@@ -110,7 +159,10 @@ function argumentOf(proposal: CommandProposal): string {
   switch (proposal.id) {
     case "jump-first":
     case "find":
+    case "quick-search":
       return proposal.words;
+    case "mode":
+      return proposal.key;
     case "glossary-open":
       return proposal.termId;
     case "glossary-ask":
@@ -189,9 +241,32 @@ export interface GlossaryLookupSource {
   readonly terms: readonly Pick<GlossaryEntry, "id" | "name" | "aliases">[];
 }
 
+/**
+ * **A mode or sub-mode the reader can open here, now**, as a `mode` proposal
+ * resolves to it — built by the reading view from the Dock's own reachable
+ * set (command-runners.ts § `modeDoor`), never from the whole catalogue.
+ */
+export interface ModeTarget {
+  /** The catalogue key: `mode:glossary`, `submode:learn:tutorial`. */
+  readonly key: string;
+  /** Its name as the reader sees it: `Glossary`, `Learn › Tutorial`. */
+  readonly label: string;
+  /** The bar's own sentence about it. */
+  readonly description: string;
+  /** Whether opening it may start work — `modeGenerates` / `subModeGenerates`. */
+  readonly generates: boolean;
+}
+
 /** What a typed argument can be matched against where the reader is standing. */
 export interface ArgumentSources {
   readonly glossary?: GlossaryLookupSource | undefined;
+  /**
+   * **The modes and sub-modes the reader can open here now, by catalogue
+   * key** (GPT Sol's F3 on plan 261007j): the Dock's reachable set — the
+   * experimental switch, the mode open now — and its sub-mode rows, exactly as
+   * the command bar lists them. Absent means no `mode` proposal resolves.
+   */
+  readonly modes?: ReadonlyMap<string, ModeTarget> | undefined;
 }
 
 /**
@@ -271,10 +346,11 @@ export interface ProposalWords {
 /**
  * **What a proposal's row says** — and, from `RISK`, whether it carries the
  * `generates` marker. `shown` is the display name a `glossary-open` row needs
- * (its argument is an id); the others ignore it.
+ * (its argument is an id); the others ignore it. `target` is what a `mode`
+ * proposal resolved to here, which carries its name and its own marker.
  */
-export function proposalWords(proposal: CommandProposal, shown?: string): ProposalWords {
-  const generates = RISK[proposal.id] === "spends";
+export function proposalWords(proposal: CommandProposal, shown?: string, target?: ModeTarget): ProposalWords {
+  const generates = proposalRisk(proposal, target) === "spends";
   switch (proposal.id) {
     case "jump-first":
       return {
@@ -314,6 +390,22 @@ export function proposalWords(proposal: CommandProposal, shown?: string): Propos
       };
     case "bookmark":
       return { label: "Bookmark this passage", description: "In your comments, with no note.", generates };
+    /* The bar's own words for both: a mode row's label and sentence, and the
+       *Quick search “X”* row's (CommandBar.tsx § `quickSearchRow`). No quotes
+       round a mode's name: it is ours, not the model's (CommandChip.tsx §
+       `voiced`). */
+    case "mode":
+      return {
+        label: `Open ${target?.label ?? "that mode"}`,
+        description: target?.description ?? "",
+        generates,
+      };
+    case "quick-search":
+      return {
+        label: `Quick search “${proposal.words}”`,
+        description: "Search mode, a fast first pass for the passages about this.",
+        generates,
+      };
     default: {
       const never: never = proposal;
       return never;
@@ -359,6 +451,10 @@ export function runProposal(runners: ProposalRunners, proposal: CommandProposal)
       return runners["tag-remove"]?.(proposal) ?? null;
     case "bookmark":
       return runners.bookmark?.(proposal) ?? null;
+    case "mode":
+      return runners.mode?.(proposal) ?? null;
+    case "quick-search":
+      return runners["quick-search"]?.(proposal) ?? null;
     default: {
       const never: never = proposal;
       return never;
@@ -423,9 +519,10 @@ export interface CommandExecutor {
   /**
    * **Run a quick search for these words** — since 2026-10-05, plan 261005i:
    * what the bar's *Quick search “X”* row presses, drawn in front of every
-   * *Find “X”* row. The bar's own, like `findMore`, and for the same reason
-   * not a proposal: chat's chips never see it, and a chat *Find “X”* chip
-   * stays the exact-words address.
+   * *Find “X”* row. The bar's own row, like `findMore`; a chat *Find “X”*
+   * chip stays the exact-words address. **Since 2026-10-07 a chat chip can
+   * run the same search** as the `quick-search` proposal, whose runner calls
+   * this same press (command-runners.ts § `readingExecutor`).
    *
    * **Absent means not offered**: the reading view hands it over for the
    * owner alone, the cut the bar's own quick-search box makes (Dock.tsx §
@@ -444,6 +541,18 @@ export interface CommandExecutor {
    * Chat is the owner's.
    */
   readonly askThroughLens?: ((lens: string) => ActionOutcome) | undefined;
+  /**
+   * **Send a sentence to this article's guide, in Chat** — since 2026-10-07,
+   * plan 261007j F6: what the bar's *Ask the guide: “…”* row presses, offered
+   * only once the fast pick could not tell what the sentence meant. The
+   * reading view's guide handoff (Reader.tsx § `askTheGuide`), which sends:
+   * the press is the consent, as an *Ask in chat* button's is. The bar's own;
+   * chat's chips never see it.
+   *
+   * **Absent means not offered**: handed over for the owner alone, because
+   * Chat is the owner's.
+   */
+  readonly askGuide?: ((sentence: string) => ActionOutcome) | undefined;
 }
 
 /** One press per band that offers an append now; a band not named offers none. */
@@ -474,6 +583,10 @@ function unchecked(id: ProposalId, shown: string): CommandProposal {
       return { id, tag: shown };
     case "bookmark":
       return { id, blockId: shown };
+    case "mode":
+      return { id, key: shown };
+    case "quick-search":
+      return { id, words: shown };
     default: {
       const never: never = id;
       return never;

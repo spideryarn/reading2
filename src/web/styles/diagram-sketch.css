@@ -417,20 +417,19 @@ a.sk-card-jump.block-ref:hover { color: var(--highlight-text); text-decoration: 
 }
 /* The other end of `.sk-busy`: a redraw that came back failed.
 
-   **The same grey as every other failure in this band**, not a red. Both of the
-   diagram panel's failures — `.diag-wait`'s and the Force strip's — say what
-   went wrong in `--ink-faint` and let the words carry it, and a red here would
-   be the one message in the band shouting. */
+   **`--danger`, as every failure in every band is** (plan 261007h § F4 and
+   § Judgement calls). This was grey, with Diagram's other failures, on the
+   ground that a picture not made is no cause for alarm; but grey is how every
+   band prints "not made yet", so a grey failure could not be told from never
+   having asked. The wording stays calm; the colour says it failed. Diagram's
+   failed read (ReadError's `.gloss-error`) is no longer overridden to grey. */
 .sk-failed {
   margin: 0;
   padding: 0.15rem 0.7rem 0.3rem;
   font-family: var(--font-ui);
   font-size: 0.81rem;
-  color: var(--ink-faint);
+  color: var(--danger);
 }
-/* The shared read-error markup belongs to both pictures in Diagram. Keep the
-   band's failure colour when its sentence also carries a retry button. */
-.mode-band.diag .read-error .gloss-error { color: var(--ink-faint); }
 .sk-empty p { margin: 0 0 0.5rem; line-height: 1.45; }
 .sk-empty-why { font-size: 0.81rem; color: var(--ink-faint); }
 .sk-run { display: flex; flex-direction: column; gap: 0.4rem; align-items: flex-start; }

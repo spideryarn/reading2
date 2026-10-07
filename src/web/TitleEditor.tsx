@@ -378,7 +378,7 @@ export function EditableTitle({
       {rename.error && (
         <p
           role="alert"
-          className="tw:mt-1 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:font-sans tw:text-xs tw:text-destructive"
+          className="tw:mt-1 tw:mb-0 tw:inline-flex tw:items-center tw:gap-1 tw:font-sans tw:text-xs tw:text-danger"
         >
           <TriangleAlert size={12} /> Couldn't rename it: {rename.error}
         </p>

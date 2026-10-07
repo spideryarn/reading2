@@ -196,6 +196,7 @@ the remote box took production migrations over
 | | |
 |---|---|
 | `npm run deploy` | the whole thing |
+| `-- --ready` | deploy **the newest commit on `origin/dev` the readiness loop saw green**, not `HEAD` — [§ Deploying a commit already known green](#deploying-a-commit-already-known-green). Combines with `--dry-run` |
 | `-- --dry-run` | every local gate, nothing external. Nothing pushed, no migration applied |
 | `-- --verify-only` | check what is live right now, deploy nothing |
 | `-- --force-gate=test` | named, never blanket, and printed in the summary as `DEPLOYED WITH … FORCED` |
@@ -224,7 +225,8 @@ because each one is a mistake this page already records:
 - **The gates run in a `git worktree` of the exact commit**, not in your working
   tree, which is the only check that can catch the failure below —
   [committed code importing a file still on somebody's disk](#the-two-do-not-agree-and-git-is-the-one-telling-the-truth).
-  It costs about two seconds.
+  Creating it costs about two seconds; installing its dependencies with `npm ci` (since 2026-10-07)
+  about forty seconds more (41 s measured on the box, 2026-10-07).
 - **It pushes by name**, `git push origin <sha>:refs/heads/main`, so the commit
   that was gated is the commit that ships. Several agents commit into this tree,
   and a plain `git push origin main` would gate one commit and ship another.
@@ -232,6 +234,45 @@ because each one is a mistake this page already records:
   nearly every check anybody would write passes over a perfectly healthy
   deployment three commits old. Both artefacts now carry a
   [build stamp](#the-build-stamp).
+
+### Deploying a commit already known green
+
+> How can we make the deploy take less time and be more robust without too many tradeoffs? […]
+> And perhaps we won't have to re-run all the tests when we deploy if we've just run them
+> successfully - your call.
+>
+> — Greg, 2026-10-07
+
+The test gate is most of a deploy's hour, and on 2026-10-07 it was also how reds that were already
+on `dev` got found, one per hour. The [readiness loop](readiness.md) had already run the full suite
+on most of those commits. Since 2026-10-07 the deploy reads what it found
+([261007k](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md)):
+
+- **`--ready` picks the commit.** The newest commit on `origin/dev` whose test gate the readiness
+  store already proves, and it stops if there is none rather than falling back to the tip. Its trunk
+  gate is `in origin/dev` (an ancestor, so it was pushed) instead of `level with origin/dev`; the
+  commits on `dev` after it are named and left for the next deploy.
+- **The `test` gate may be reused, in any mode.** When the store proves *this* sha, the gate prints
+  `ok test — reused readiness run <id> …` and the suite does not run; otherwise it runs exactly as
+  before, and the line before it says why the store could not stand in. The summary repeats which
+  happened. `build`, the tooling builds, `fixtures` and `typecheck` always run.
+
+What "proves" means is `testEvidenceFor` in
+[`scripts/deploy-evidence.ts`](../../scripts/deploy-evidence.ts), and every clause in it is a way
+the store could have looked like evidence and not been
+([silent-success.md](../reusable/silent-success.md)): the readiness verdict for that sha is `ready`;
+the run behind its `test` reading is a full `npm run check` in the readiness runner's own checkout;
+it carries the loop's **preparation stamp** for that sha, at the current version, with the same
+`.env.local` hash as the primary's now; its `typecheck`, `build`, tooling-build and `test` rows are
+all present and clean; and it finished within 24 hours.
+
+Two other things changed with it. **The gate worktree always runs `npm ci`** now rather than
+sharing the primary's `node_modules` (41 s on the box), because under `--ready` the candidate is usually older than
+whatever the primary installed. And **a failed `git fetch origin main` stops the deploy**: its
+result used to be ignored, leaving a stale `origin/main` to answer the ancestry check.
+
+Not built: a `release/<sha>` branch for fixing a non-test gate without taking the rest of `dev` —
+[261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief).
 
 ### The gate needs both halves of the artefact store
 

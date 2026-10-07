@@ -619,8 +619,8 @@ reader's profile as it stood at publication.
 It happens for every way an import starts: the add page, *add to Spideryarn* on a link's hover card,
 Retry on the shelf's job card, *Read this*, and an import whose add page was closed before it
 finished. It does not happen for a Rebuild, a Start again (which has its own list), a paper added
-with only its title and abstract, or a re-add of something already on the shelf, which publishes
-nothing. **Queued is not run**: nothing on the server drives a queued job. The owner's browser does,
+with only its title and abstract, or a re-add of something already on the shelf, which queues no
+job at all (above). **Queued is not run**: nothing on the server drives a queued job. The owner's browser does,
 from any page, as it drives `labels`; with every tab closed the modes wait.
 
 The page's tick box, on by default, is the reader's setting rather than the page's:
@@ -722,9 +722,24 @@ rewrite being a pure `canonicalAddHref` that main.tsx calls rather than four lin
   being read as proof the segment was raw. The query is now always put back, whichever spelling the
   segment is in — which is what the first of these three needed anyway.
 
-An article already on the shelf takes about a second — every step finds its artefact and skips — so
-adding the same URL twice is a blink and then the article, rather than an error telling you that you
-already have it.
+**Adding an article you already have is free, and says so** (since 2026-10-07). Greg, 2026-10-06:
+
+> yes repeat pastes should be free (and signal they're a repeat in the UI)
+
+`POST /api/jobs { url }` asks the shelf first (`slugForUrlKey`), before any slot, and an address the
+reader already has is answered `200 { article, repeat: true }` with nothing reserved and no job.
+The add page stops on *"This article is already on your shelf, so adding it again cost nothing."*
+with an **Open the article** button, a link's hover card says so and links to it, and the MCP tool
+answers the article with its link. If the reader entered a purpose or chose High-powered AI while
+the answer was pending, their draft and save controls or the separately charged switch's outcome
+stay visible. Until then the paste adopted the article, ran a job whose cached steps usually
+skipped, and charged a slot. Only a plain add: `{ url, steps }` or `{ url, force }` asks for work
+and keeps the ordinary path.
+
+What that gives up: a repeat paste no longer re-runs a step that has gone stale or rebuilds a
+stand-in tree. Neither was ever how a reader was meant to do it — the reading view has **Build it**
+for a tree that never arrived, and step re-runs are free —
+[261007k](../plans/261007k-repeat-paste-is-free-and-says-so.md).
 
 **The add box stopped being an `<input type="url">` for this.** The browser will not submit one
 without a scheme, and `example.com/an-essay` is meant to work — so it is a plain text input whose

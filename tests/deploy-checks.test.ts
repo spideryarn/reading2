@@ -158,7 +158,7 @@ describe("what the command line asked for", () => {
   it("does not mistake ordinary npm configuration for a swallowed flag", () => {
     /* `host` is in the name, and a fragment match refused a plain deploy over it. */
     const env = { ...NPM_BASELINE, npm_config_replace_registry_host: "never", npm_config_registry: "https://r.example/" };
-    expect(parseDeployArgs([], env)).toEqual({ ok: true, mode: { op: "deploy", skipMigrations: false, forcedGates: new Set() } });
+    expect(parseDeployArgs([], env)).toEqual({ ok: true, mode: { op: "deploy", skipMigrations: false, forcedGates: new Set(), ready: false } });
   });
 
   it.each(["", "false"])("refuses npm's negative answer, npm_config_yes=%j", (value) => {
@@ -176,8 +176,8 @@ describe("what the command line asked for", () => {
   });
 
   it("accepts the forms the docs name, under npm's ordinary environment", () => {
-    expect(mode([])).toEqual({ op: "deploy", skipMigrations: false, forcedGates: new Set() });
-    expect(mode(["--dry-run"])).toEqual({ op: "dry-run", skipMigrations: false, forcedGates: new Set() });
+    expect(mode([])).toEqual({ op: "deploy", skipMigrations: false, forcedGates: new Set(), ready: false });
+    expect(mode(["--dry-run"])).toEqual({ op: "dry-run", skipMigrations: false, forcedGates: new Set(), ready: false });
     expect(mode(["--verify-only"])).toEqual({ op: "verify", host: null });
     expect(mode(["--verify-only", "--host", "https://staging.example/"])).toEqual({
       op: "verify",
@@ -191,11 +191,13 @@ describe("what the command line asked for", () => {
       op: "deploy",
       skipMigrations: true,
       forcedGates: new Set(["test", "changelog"]),
+      ready: false,
     });
     expect(mode(["--dry-run", "--force-gate=test"])).toEqual({
       op: "dry-run",
       skipMigrations: false,
       forcedGates: new Set(["test"]),
+      ready: false,
     });
   });
 });

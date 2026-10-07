@@ -333,8 +333,9 @@ and is untouched. Three other sentences moved for the same reason, and the plan'
 **Three of those answers were checked against the admission path rather than against a doc about
 it**, because they are the kind that is easy to state backwards. A slot is reserved only where the
 request carries a URL or an upload, and settled only on a `done` ending — so a failed fetch costs
-nothing, pasting the same URL again costs a second article even though every step then skips, and
-re-running something already on your shelf is free. And **the answer about reaching your limit offered a
+nothing, and re-running something already on your shelf is free. Since 2026-10-07 a plain repeat
+paste also costs nothing and answers the existing article —
+[billing.md](billing.md#which-requests-spend-a-slot-and-why-the-wall-is-at-the-routes). And **the answer about reaching your limit offered a
 subscriber no upgrade until 2026-09-04**, because there was not one: the Portal could not switch
 between two Products, and then the gate on every plan button asked whether an open subscription
 existed rather than whether this tier was somewhere to go. Both were fixed that day, so the answer

@@ -221,6 +221,14 @@ describe("each tool calls the route it claims", () => {
     expect(Object.keys(articles[0] ?? {})).not.toContain("opens");
   });
 
+  /* A repeat paste is answered with the article, free and with nothing queued
+     (plan 261007k), and the agent still gets the link to it. */
+  it("import_article of an article already on the shelf answers it, with its link", async () => {
+    const h = await harness({ "POST /api/jobs": { status: 200, body: { article: "on-tools", repeat: true } } });
+    const result = await h.call("import_article", { url: "https://example.com/p" });
+    expect(result.json()).toEqual({ article: "on-tools", repeat: true, link: `${SITE}/read/on-tools` });
+  });
+
   it("there is no get_allowance, list_users or private-link tool (Sol F17; plan § Not in V1)", () => {
     const names = TOOLS.map((t) => t.name);
     expect(names).not.toContain("get_allowance");

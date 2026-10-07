@@ -115,6 +115,7 @@ import { asksTheServer, type HitOrder, type Matcher } from "./params.js";
 import { PALETTE_BY_HUE } from "./hit-colours.js";
 import { ModeSurface } from "./ModeSurface.js";
 import { Tooltip, TooltipGroup } from "./Tooltip.js";
+import { Button } from "@/components/ui/button";
 import { useRevealChosen } from "./useRevealChosen.js";
 import { useRenderCount } from "./perf.js";
 import { BandWaiting } from "./BandWaiting.js";
@@ -810,8 +811,12 @@ const Box = forwardRef<
             than a disabled one, which invites a reader to wonder what they did
             wrong. */}
         {asking !== null && (
-          <button
+          /* The run button every mode shares (plan 261007h § F3): it was a
+             24px chip of its own, 12px shorter than the box above it. */
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
             className="srch-go"
             disabled={!ready}
             /* Checked again here, not only through `disabled`: `disabled`
@@ -829,7 +834,7 @@ const Box = forwardRef<
             }
           >
             find
-          </button>
+          </Button>
         )}
       </div>
     </div>
