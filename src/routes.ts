@@ -215,6 +215,7 @@ import { similarBlocks } from "./similar.js";
 import { projectArticle } from "./projection.js";
 import { EmbeddingFailure } from "./embeddings.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
+import { prefixWithinBytes } from "./json-budget.js";
 /* **The one exception to "every paid call goes through OpenRouter"**, and it is
    Greg's, weighed rather than slipped past: OpenRouter has no realtime API at
    all. src/live.ts holds the whole of it, including the only use of
@@ -288,6 +289,7 @@ import type {
 } from "./store/contracts.js";
 import {
   ADMIN_FEEDBACK_DEFAULT_LIMIT,
+  FEEDBACK_LIST_BYTES,
   decodeFeedbackCursor,
   isSearchKind,
   parseFeedbackFrom,
@@ -7428,8 +7430,8 @@ function feedbackBody(sent: Record<string, unknown>): string {
   }
 
   /* **Two caps.** The one box takes `MAX_FEEDBACK_ANSWER_CHARS`. The old three
-     keep the cap they were written under, so that glued together they still
-     come to exactly what the column's CHECK admits. src/types.ts. */
+     keep the cap they were written under, so that glued together they come to
+     12,072, inside what the column's CHECK admits. src/types.ts. */
   const written = feedbackAnswer(sent.body, "body", MAX_FEEDBACK_ANSWER_CHARS);
   const steps = feedbackAnswer(sent.steps, "steps", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
   const expected = feedbackAnswer(sent.expected, "expected", MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
@@ -8811,20 +8813,24 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       }
       const page = await feedbackStore.listMineByStatus(EARLIER_FEEDBACK_LIMIT, feedbackIdsByEnding(), show);
       const { open, waiting, aside, shipped } = page.counts;
+      const reports = page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt }) => ({
+        id,
+        createdAt,
+        kind,
+        body,
+        page: filedFrom,
+        at,
+        number,
+        status,
+        comment: feedbackComment(id),
+        ignoredAt,
+      }));
+      /* Whole reports, as many as fit one response, as the plain route does
+         below: fifty at 20,000 characters can pass 4.5 MB. Plan 261007j. */
+      const fitting = prefixWithinBytes(reports, FEEDBACK_LIST_BYTES);
       const answer: AdminEarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at, number, status, ignoredAt }) => ({
-          id,
-          createdAt,
-          kind,
-          body,
-          page: filedFrom,
-          at,
-          number,
-          status,
-          comment: feedbackComment(id),
-          ignoredAt,
-        })),
-        more: page.more,
+        reports: fitting,
+        more: page.more || fitting.length < reports.length,
         counts: { all: open + waiting + aside + shipped, open, waiting, aside, shipped },
         questions: await questionsForAdmin(),
       };
@@ -9338,17 +9344,23 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
         show === "all" ? undefined : { ids: shippedIds, keep: show === "shipped" ? "in" : "out" },
       );
       const counted = page.counts;
+      const reports = page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at }) => ({
+        id,
+        createdAt,
+        kind,
+        body,
+        page: filedFrom,
+        at,
+        shipped: isFeedbackShipped(id),
+      }));
+      /* **Fifty is a count, and the response has a size.** A report may be
+         20,000 characters, so fifty can pass the 4.5 MB a response may be.
+         Whole reports, newest first, as many as fit; `more` then says the list
+         is cut short and the tab counts what it shows. Plan 261007j. */
+      const fitting = prefixWithinBytes(reports, FEEDBACK_LIST_BYTES);
       const answer: EarlierFeedbackPage = {
-        reports: page.reports.map(({ id, createdAt, kind, body, page: filedFrom, at }) => ({
-          id,
-          createdAt,
-          kind,
-          body,
-          page: filedFrom,
-          at,
-          shipped: isFeedbackShipped(id),
-        })),
-        more: page.more,
+        reports: fitting,
+        more: page.more || fitting.length < reports.length,
         counts: { all: counted.all, shipped: counted.in, unshipped: counted.all - counted.in },
       };
       send(res, 200, answer);

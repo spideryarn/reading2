@@ -43,6 +43,7 @@ import { mintId } from "../src/ids.js";
 import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
+  FEEDBACK_LIST_BYTES,
   MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_BODY_CHARS,
   MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
@@ -514,6 +515,35 @@ describe("GET /api/feedback", () => {
     expect(listOwners).toEqual([TEST_OWNER]);
   });
 
+  /* Fifty reports at the 20,000-character cap, each character a control
+     character that JSON escapes to six bytes, are 6 MB — past the 4.5 MB a
+     Vercel response may be. The list is cut to a prefix that fits and says
+     there are more; no report is shortened. Plan 261007j, GPT Sol's review. */
+  it("cuts the list to what fits a response, whole reports only, and says there are more", async () => {
+    const heavy = "\u0001".repeat(MAX_FEEDBACK_ANSWER_CHARS);
+    const rows = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) => ({
+      id: `spya-hvy${String(i).padStart(3, "0")}`,
+      createdAt: "2026-09-12T10:45:00.000Z",
+      kind: null,
+      body: heavy,
+      page: null,
+      at: null,
+    }));
+    listAnswer = { reports: rows, more: false };
+    countAnswer = { all: EARLIER_FEEDBACK_LIMIT, in: 0 };
+    const reply = await call(undefined, { method: "GET" });
+    expect(reply.status).toBe(200);
+    const sent = reply.body as { reports: { id: string; body: string }[]; more: boolean };
+    expect(Buffer.byteLength(JSON.stringify(reply.body))).toBeLessThan(FEEDBACK_LIST_BYTES + 4 * 1024);
+    expect(sent.reports.length).toBeGreaterThan(0);
+    expect(sent.reports.length).toBeLessThan(EARLIER_FEEDBACK_LIMIT);
+    expect(sent.reports.map((r) => r.id)).toEqual(
+      rows.slice(0, sent.reports.length).map((r) => r.id),
+    );
+    expect(sent.reports.every((r) => r.body === heavy)).toBe(true);
+    expect(sent.more).toBe(true);
+  });
+
   it("says shipped only for a report whose note says shipped — not declined, not waiting, not unknown", async () => {
     const row = (id: string) => ({ id, createdAt: "2026-09-12T10:45:00.000Z", kind: null, body: "x", page: null, at: null });
     listAnswer = {
@@ -630,6 +660,29 @@ describe("GET /api/admin/feedback/earlier", () => {
     status,
     ignoredAt: null,
     ...over,
+  });
+
+  /* The same budget as the reader's list: fifty at the cap in control
+     characters are 6 MB, so whole reports as many as fit, and `more`. 261007j. */
+  it("cuts the list to what fits a response, whole reports only, and says there are more", async () => {
+    const heavy = "\u0001".repeat(MAX_FEEDBACK_ANSWER_CHARS);
+    const rows = Array.from({ length: EARLIER_FEEDBACK_LIMIT }, (_, i) =>
+      row(`spya-hvy${String(i).padStart(3, "0")}`, 300 - i, "open", { body: heavy }),
+    );
+    statusAnswer = {
+      reports: rows,
+      more: false,
+      counts: { open: EARLIER_FEEDBACK_LIMIT, waiting: 0, aside: 0, shipped: 0 },
+    };
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    const sent = reply.body as { reports: { id: string; body: string }[]; more: boolean };
+    expect(sent.reports.length).toBeGreaterThan(0);
+    expect(sent.reports.length).toBeLessThan(EARLIER_FEEDBACK_LIMIT);
+    expect(sent.reports.map((r) => r.id)).toEqual(rows.slice(0, sent.reports.length).map((r) => r.id));
+    expect(sent.reports.every((r) => r.body === heavy)).toBe(true);
+    expect(sent.more).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(sent.reports))).toBeLessThanOrEqual(FEEDBACK_LIST_BYTES);
   });
 
   it("answers the admin's own list: ten fields a report, the comment from the note, never cached", async () => {
@@ -1041,16 +1094,25 @@ describe("POST /api/feedback", () => {
    * character, six bytes per unit. If this goes red, the outer limit and the
    * inner ones have drifted apart again.
    */
-  it("takes the largest report the validator accepts", async () => {
+  /* Six bytes per unit once escaped, at the cap, in both shapes the route
+     takes: the one box (20,000 since plan 261007j, now the larger) and a stale
+     client's three answers (4,000 each). The outer limit has to clear whichever
+     is bigger, and a cap that moves should not leave the other untested. */
+  it.each([
+    ["the one box", { body: "\u0001".repeat(MAX_FEEDBACK_ANSWER_CHARS) }],
+    [
+      "an old client's three answers",
+      {
+        steps: "\u0001".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+        expected: "\u0002".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+        actual: "\u0003".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+        body: undefined,
+      },
+    ],
+  ])("takes the largest report the validator accepts, as %s", async (_shape, answers) => {
     const body = minimal({
       consented: true,
-      /* Six bytes per unit once escaped, at the cap, three times over — the
-         *legacy* shape, because that is the largest body this route still takes
-         and therefore the one the outer limit has to clear. */
-      steps: "\u0001".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
-      expected: "\u0002".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
-      actual: "\u0003".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
-      body: undefined,
+      ...answers,
       /* `isSlug` caps a slug at 60 characters — src/ingest.ts. */
       slug: `a${"b".repeat(59)}`,
       buildCommit: "c".repeat(64),
@@ -1206,11 +1268,12 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(0);
   });
 
-  /* Fifteen minutes of dictation is about 13,000 characters at an even pace,
-     and the box used to stop taking them at 4,000 — Greg, spya-n8cuqq, was cut
-     off in this box. Plan 261007b. The database's CHECK already admits 12,072. */
+  /* Fifteen minutes of dictation is about 13,000 characters at an even pace and
+     15,108 in 261007b's non-stop soak, and the box used to stop taking them at
+     4,000 — Greg, spya-n8cuqq, was cut off in this box. 12,000 from plan 261007b,
+     20,000 from 261007j, which widened the database's CHECK to match. */
   it("takes a report as long as a fifteen-minute dictation", async () => {
-    expect(MAX_FEEDBACK_ANSWER_CHARS).toBe(12_000);
+    expect(MAX_FEEDBACK_ANSWER_CHARS).toBe(20_000);
     expect(MAX_FEEDBACK_ANSWER_CHARS).toBeLessThanOrEqual(MAX_FEEDBACK_BODY_CHARS);
     const reply = await call(minimal({ body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) }));
     expect(reply.status).toBe(201);
@@ -1233,11 +1296,17 @@ describe("POST /api/feedback", () => {
     const reply = await call(minimal({ body: undefined, steps: full, expected: full, actual: full }));
     expect(reply.status).toBe(201);
     expect(submitted).toHaveLength(1);
-    expect(submitted[0]?.body.length).toBe(MAX_FEEDBACK_BODY_CHARS);
+    /* Three full answers under their headings: 12,072, inside the column's cap. */
+    expect(submitted[0]?.body.length).toBe(3 * MAX_LEGACY_FEEDBACK_ANSWER_CHARS + 72);
+    expect(submitted[0]?.body.length).toBeLessThanOrEqual(MAX_FEEDBACK_BODY_CHARS);
   });
 
   it("refuses an answer past the cap, and never quotes it back", async () => {
-    const prose = "The unbearable lightness of a very long paragraph. ".repeat(300);
+    /* From the cap, so it stays one past it whatever the cap becomes: a fixed
+       15,300 characters was over at 12,000 and became legal at 20,000. */
+    const sentence = "The unbearable lightness of a very long paragraph. ";
+    const prose = sentence.repeat(Math.ceil((MAX_FEEDBACK_ANSWER_CHARS + 1) / sentence.length));
+    expect(prose.length).toBeGreaterThan(MAX_FEEDBACK_ANSWER_CHARS);
     const reply = await call(minimal({ body: prose }));
     expect(reply.status).toBe(400);
     expect(String(reply.body.error)).toMatch(/\[fb-long\]/);

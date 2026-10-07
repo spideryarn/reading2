@@ -99,7 +99,7 @@
   font-size: 0.79rem;
 }
 .prof-save svg { flex: none; }
-.prof-save.is-error { color: var(--highlight-text); }
+.prof-save.is-error { color: var(--danger); }
 /* The tick a save that landed leaves: faint, held for two seconds, then faded
    and hidden — `visibility` too, so nothing invisible is left to hover or to
    be read out. Greg, 2026-10-05.
@@ -127,7 +127,7 @@
   align-items: center;
   gap: 0.3rem;
   margin: 0.35rem 0 0;
-  color: var(--highlight-text);
+  color: var(--danger);
   font-family: var(--font-ui);
   font-size: 0.79rem;
 }

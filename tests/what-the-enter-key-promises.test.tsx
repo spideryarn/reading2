@@ -119,6 +119,9 @@ const PROMISES: Record<string, string> = {
   "AnnotateDialog.tsx › Your comment on this passage": "newline",
   "CommentDialog.tsx › Your comment on this passage": "newline",
   "CriteriaPanel.tsx › crit-text": "newline",
+  /* /design's specimen of a band's text box (plan 261007h § F7): it sends
+     nothing, so Enter is a new line. */
+  "DesignPage.tsx › Example text box": "newline",
   "FeedbackDialog.tsx › fb-input fb-body": "newline",
   "FeedbackEarlier.tsx › fb-input fb-reply-input": "newline",
   /* The note on how an Illustrated picture should come out: a sentence or two,

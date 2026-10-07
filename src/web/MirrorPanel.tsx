@@ -61,6 +61,7 @@ import type { MirrorComment, MirrorRemark, MirrorRemarkKind, MirrorResult } from
 import { worthRetrying } from "../messages.js";
 import type { BlockId } from "../types.js";
 import { ControlTip, Tooltip } from "./Tooltip.js";
+import { Button } from "@/components/ui/button";
 import { ownLabel, plainWords } from "./lib/own-label.js";
 import { useMirror, type MirrorApi } from "./useMirror.js";
 import { signedValence } from "./valence.js";
@@ -130,14 +131,16 @@ export function MirrorView({
           `JobProgress` and Search's rows do (src/messages.ts). Offered for
           every failure until 2026-10-07. */}
       {(api.status !== "failed" || worthRetrying(api.error)) && (
-        <button
+        <Button
           type="button"
+          variant="outline"
+          size="sm"
           className="mir-run"
           onClick={api.ask}
           disabled={api.status === "running"}
         >
           {runLabel(api)}
-        </button>
+        </Button>
       )}
 
       {api.status === "failed" && api.error && <p className="mir-error">{api.error}</p>}

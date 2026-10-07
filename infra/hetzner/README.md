@@ -483,17 +483,26 @@ value is written here or anywhere in the repo; each line names where one lives.
    `provision.sh` installs the unit and leaves it disabled, on purpose, because it cannot know
    whether the page is already up some other way. On a fresh server it is not. Check:
    `curl -s http://127.0.0.1:8787/api/state | head -c 200`.
-8. **The Overseer daemon, exactly one of two ways.** `provision.sh` enables `overseer.service`, so
-   after the first reboot systemd starts it. That copy has no `OPENROUTER_API_KEY` and runs with
-   attention off; it says so once, in a startup warning that goes to the journal, where nobody is
-   looking. Until the unit is given the key (a decision for Greg,
-   open as of 2026-10-07), run the daemon in tmux instead: `sudo systemctl disable --now overseer`,
-   then the command in the header of
-   [`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh).
-   Check: `npx tsx scripts/overseer.ts diagnose` names one live daemon, and
+8. **The Overseer daemon, under `overseer.service`.** `provision.sh` enables the unit, and it will
+   not start until it has its key file, so first copy the key out of `.env.local` into
+   **`/etc/overseer-secrets.env`, root-owned, mode 0600**, without printing it (Greg approved this
+   place for the secret on 2026-10-07):
+
+   ```
+   sudo sh -c 'umask 077; grep "^OPENROUTER_API_KEY=" /home/greg/code/spideryarn2/.env.local > /etc/overseer-secrets.env'
+   sudo stat -c '%U:%G %a' /etc/overseer-secrets.env      # root:root 600
+   ```
+
+   Then `sudo npx tsx scripts/overseer-activate.ts --disarm` to read the plan, and the same with
+   `--apply` to do it: it checks the key file, installs and restarts the unit, and fails unless the
+   new daemon writes a checkpoint and does not log `attention: off`. Check:
+   `npx tsx scripts/overseer.ts diagnose` names one live daemon, and
    `systemctl is-active overseer-watchdog.timer` says `active`
    (`sudo systemctl start overseer-watchdog.timer` if not: provisioning enables it for the next
-   boot and does not start it).
+   boot and does not start it). The fallback, if the unit will not come up, is the tmux launch in
+   the header of
+   [`scripts/overseer-tools/daemon-launch.sh`](../../scripts/overseer-tools/daemon-launch.sh),
+   after `sudo systemctl disable --now overseer`.
 9. **The Overseer session and its loops.** Start the session and claim the role
    ([overseer.md](../../docs/project/overseer.md)), give it a working directory outside `/tmp`,
    and start the loops from

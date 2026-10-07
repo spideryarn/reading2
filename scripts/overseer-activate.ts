@@ -32,11 +32,12 @@
  * ## And the second trap in that sequence
  *
  * A `restart` before the tmux daemon is stopped starts a systemd process that
- * immediately loses the store lock to the one already holding it — and
- * `Restart=always` with `StartLimitBurst=10` means ten of those in fifty seconds
- * leaves the unit `failed`, at which point the box has no Overseer at all and
- * the reason is five layers down. So the tmux holder is stopped FIRST, and the
- * lock is watched until it is actually free.
+ * immediately loses the store lock to the one already holding it, and then
+ * retries every thirty seconds for as long as the other one lives (until
+ * 2026-10-07 it gave up after ten tries and sat `failed`). So the tmux holder is
+ * stopped FIRST, and the lock is watched until it is actually free. The lock is
+ * looked for in the store the UNIT names, not under $HOME, which is root's
+ * under sudo.
  *
  * ## Dry run is the default, on purpose
  *
@@ -45,7 +46,7 @@
  * this prints the plan, runs every read-only check in it, and touches nothing.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,6 +66,8 @@ export const INSTALLED_UNIT = "/etc/systemd/system/overseer.service";
 export const UNIT_SOURCE = "infra/hetzner/systemd/overseer.service";
 /** The arming file the unit requires. Created by provisioning, never by this command unless asked. */
 export const ARMING_ENV_FILE = "/etc/overseer.env";
+/** The key file the unit requires. Root 0600; written by a person, never by this command or provisioning. */
+export const SECRETS_ENV_FILE = "/etc/overseer-secrets.env";
 /** The systemd unit name. */
 export const UNIT_NAME = "overseer";
 
@@ -83,7 +86,51 @@ export function substitutedUnit(source: string, user: string): { ok: true; text:
   if (!text.includes(`EnvironmentFile=${ARMING_ENV_FILE}`)) {
     return { ok: false, why: `the unit does not read ${ARMING_ENV_FILE}, so arming it would have no effect on the daemon` };
   }
+  if (!text.includes(`EnvironmentFile=${SECRETS_ENV_FILE}`)) {
+    return { ok: false, why: `the unit does not read ${SECRETS_ENV_FILE}, so the daemon would run with attention off` };
+  }
   return { ok: true, text };
+}
+
+/** The unit's `Environment=OVERSEER_STORE_DIR=`, if it names an absolute one. */
+export function storeDirOfUnit(unitText: string): string | null {
+  const line = unitText.split("\n").find((one) => one.startsWith("Environment=OVERSEER_STORE_DIR="));
+  const value = line?.slice("Environment=OVERSEER_STORE_DIR=".length).trim();
+  return value !== undefined && value.startsWith("/") ? value : null;
+}
+
+/**
+ * **THE KEY FILE**, `/etc/overseer-secrets.env`: root-owned, 0600, one
+ * `OPENROUTER_API_KEY=` line. systemd reads it as root before dropping to the
+ * unit's user, so the daemon gets the key and no agent can read the file.
+ * Greg approved this place for a secret on 2026-10-07
+ * (docs/plans/261007j-box-followups-tmp-age-overseer-unit-png-compression.md).
+ *
+ * Pure. `text` is null when this process cannot read the file, which is the
+ * dry run as the ordinary user: that is "cannot tell", never "fine". Nothing
+ * here returns or prints the value.
+ */
+export function secretsFileStanding(input: {
+  readonly exists: boolean;
+  readonly ownerUid: number | null;
+  readonly mode: number | null;
+  readonly text: string | null;
+}): { kind: "ok" } | { kind: "cannot-tell"; why: string } | { kind: "bad"; why: string } {
+  if (!input.exists) {
+    return {
+      kind: "bad",
+      why: `${SECRETS_ENV_FILE} does not exist, and the unit reads it with no leading "-", so systemd would refuse to start. Create it as infra/hetzner/README.md says`,
+    };
+  }
+  if (input.ownerUid !== 0 || input.mode !== 0o600) {
+    return { kind: "bad", why: `${SECRETS_ENV_FILE} must be owned by root with mode 0600, so no agent on the box can read the key` };
+  }
+  if (input.text === null) return { kind: "cannot-tell", why: `${SECRETS_ENV_FILE} exists, root 0600; its contents can only be checked as root (--apply under sudo)` };
+  const assignments = input.text.split("\n").map((line) => line.trim()).filter((line) => line !== "" && !line.startsWith("#") && !line.startsWith(";"));
+  if (assignments.length !== 1 || !/^OPENROUTER_API_KEY=[A-Za-z0-9_-]+$/.test(assignments[0]!)) {
+    return { kind: "bad", why: `${SECRETS_ENV_FILE} must contain exactly one OPENROUTER_API_KEY= line with a non-empty plain value and no other assignments: later lines could empty the key or override the unit's store or arming` };
+  }
+  return { kind: "ok" };
 }
 
 /**
@@ -130,9 +177,19 @@ export function activationVerdict(input: {
   /** Which of those are session jobs: a stale pin on one is a warning while disarmed (F6). */
   readonly sessionJobIds: ReadonlySet<string>;
   readonly armed: boolean;
+  /**
+   * Whether the unit's journal since the restart has the daemon's own
+   * `attention: off` line, or null if this invocation's startup could not be confirmed. The key
+   * file can exist and still not reach the daemon; this is the daemon saying so.
+   */
+  readonly attentionOffSinceRestart: boolean | null;
 }): ActivationVerdict {
   const problems: string[] = [];
   const notes: string[] = [];
+
+  if (input.attentionOffSinceRestart === null) problems.push(`the journal for ${UNIT_NAME} did not confirm the current daemon's startup, so nothing confirms the key reached it`);
+  else if (input.attentionOffSinceRestart) problems.push(`the new daemon logged "attention: off": ${SECRETS_ENV_FILE} did not give it OPENROUTER_API_KEY`);
+  else notes.push(`the current daemon's startup was read from its journal and did not log "attention: off", so it has its key`);
 
   if (input.installedUnit === null) {
     problems.push(`${INSTALLED_UNIT} does not exist, so systemd has no unit to run`);
@@ -288,7 +345,6 @@ function main(argv: readonly string[]): number {
     console.error("--arm and --disarm cannot both be passed");
     return 2;
   }
-  const storeDir = process.env["OVERSEER_STORE_DIR"] ?? join(process.env["HOME"] ?? "", ".overseer");
   const user = process.env["SUDO_USER"] ?? process.env["USER"] ?? "";
 
   console.log(apply ? "overseer-activate: APPLYING" : "overseer-activate: DRY RUN — nothing will be changed. Pass --apply to do it.");
@@ -329,6 +385,16 @@ function main(argv: readonly string[]): number {
     console.error(`\nSTOPPING: ${substituted.why}`);
     return 1;
   }
+  // THE STORE THE UNIT WILL USE, read out of the unit. Not $HOME: under sudo
+  // that is root's, so this command would look for the tmux daemon's lock in
+  // /root/.overseer, find none, and restart systemd into a lock fight (GPT Sol,
+  // 261007j plan review, finding 2).
+  const storeDir = storeDirOfUnit(substituted.text);
+  if (storeDir === null) {
+    console.error("\nSTOPPING: the unit names no absolute OVERSEER_STORE_DIR, so there is no telling which store the daemon will use");
+    return 1;
+  }
+  console.log(`  · the unit's store is ${storeDir}`);
   const installed = existsSync(INSTALLED_UNIT) ? readFileSync(INSTALLED_UNIT, "utf8") : null;
   console.log(
     installed === substituted.text
@@ -350,6 +416,11 @@ function main(argv: readonly string[]): number {
         "Run infra/hetzner/provision.sh, or add --disarm to have this command create it disarmed.",
     );
   }
+  const secrets = readSecretsStanding();
+  if (secrets.kind === "ok") console.log(`  ✓ ${SECRETS_ENV_FILE} is root 0600 and has an OPENROUTER_API_KEY line (value not read out)`);
+  else if (secrets.kind === "cannot-tell" && !apply) console.log(`  · ${secrets.why}`);
+  else blockers.push(secrets.why);
+
   const armedNow = new RegExp(`^${JOBS_ENABLED_VAR}=1\\s*$`, "m").test(armingFile ?? "");
   const armedAfter = arm ? true : disarm ? false : armedNow;
   console.log(`  · ${ARMING_ENV_FILE}: ${armedNow ? "ARMED" : "disarmed"}${armedAfter === armedNow ? "" : ` → ${armedAfter ? "ARMED" : "disarmed"}`}`);
@@ -414,8 +485,8 @@ function main(argv: readonly string[]): number {
   }
   if (holder.kind === "other" && holder.pid !== null) {
     // BEFORE THE RESTART, and waited for. A systemd start that loses this lock
-    // exits, `Restart=always` starts it again, and ten of those inside 300s
-    // leaves the unit `failed` — with the real cause five layers down.
+    // exits and `Restart=always` starts it again, every thirty seconds, with the
+    // real cause five layers down.
     try {
       process.kill(holder.pid, "SIGTERM");
     } catch (cause) {
@@ -443,7 +514,9 @@ function main(argv: readonly string[]): number {
   // ── (4) THE VERIFICATION, which is the point of the whole file.
   waitFor(() => {
     const at = readCheckpoint(storeDir).writtenAt;
-    return at !== null && Date.parse(at) >= Date.parse(restartedAt);
+    // The warning is printed BEFORE the checkpoint, but journald may ingest
+    // it later. Wait for the startup log as well; an empty journal is no proof.
+    return at !== null && Date.parse(at) >= Date.parse(restartedAt) && attentionOffSince(restartedAt) !== null;
   }, 60_000);
   const checkpoint = readCheckpoint(storeDir);
   const active = spawnSync("systemctl", ["is-active", UNIT_NAME], { encoding: "utf8" });
@@ -461,6 +534,7 @@ function main(argv: readonly string[]): number {
     requiredJobIds,
     sessionJobIds,
     armed: armedAfter,
+    attentionOffSinceRestart: attentionOffSince(restartedAt),
   });
   console.log("");
   for (const note of verdict.notes) console.log(`  ✓ ${note}`);
@@ -480,6 +554,43 @@ function installAtomically(path: string, text: string): { ok: true } | { ok: fal
   } catch (cause) {
     return { ok: false, why: cause instanceof Error ? cause.message : String(cause) };
   }
+}
+
+/** The key file's owner, mode and, if this process may read it, its text. The text never leaves `secretsFileStanding`. */
+function readSecretsStanding(): ReturnType<typeof secretsFileStanding> {
+  if (!existsSync(SECRETS_ENV_FILE)) return secretsFileStanding({ exists: false, ownerUid: null, mode: null, text: null });
+  const stat = statSync(SECRETS_ENV_FILE);
+  let text: string | null = null;
+  try {
+    text = readFileSync(SECRETS_ENV_FILE, "utf8");
+  } catch {
+    text = null;
+  }
+  return secretsFileStanding({ exists: true, ownerUid: stat.uid, mode: stat.mode & 0o777, text });
+}
+
+/**
+ * The CURRENT invocation's startup, not a previous retry's warning. The CLI
+ * prints `scheduler:` after deciding whether attention is off, before running
+ * the daemon and writing any checkpoint. Until that line is visible, absence
+ * of the warning proves nothing. No journal text is returned or printed.
+ */
+export function attentionOffSince(
+  sinceIso: string,
+  read = (command: string, args: string[]) => spawnSync(command, args, { encoding: "utf8", timeout: 30_000 }),
+): boolean | null {
+  const shown = read("systemctl", ["show", UNIT_NAME, "-p", "InvocationID", "--value"]);
+  const invocation = shown.stdout?.trim();
+  if (shown.error !== undefined || shown.status !== 0 || !/^[a-f0-9]{32}$/.test(invocation ?? "")) return null;
+  // journalctl accepts fractional epoch seconds. Flooring would include the
+  // old daemon's warning from earlier in the very same second.
+  const since = `@${(Date.parse(sinceIso) / 1000).toFixed(3)}`;
+  const ran = read("journalctl", ["-u", UNIT_NAME, `_SYSTEMD_INVOCATION_ID=${invocation}`, "--since", since, "-o", "cat", "--no-pager"]);
+  if (ran.error !== undefined || ran.status !== 0) return null;
+  const still = read("systemctl", ["show", UNIT_NAME, "-p", "InvocationID", "--value"]);
+  if (still.error !== undefined || still.status !== 0 || still.stdout.trim() !== invocation) return null;
+  if (!/^scheduler: (OFF|RULES ONLY|ARMED) — /m.test(ran.stdout)) return null;
+  return ran.stdout.includes("attention: off");
 }
 
 /** The unit's MainPID, or null. Used only to tell "the lock is held by us" from "the lock is held by the tmux job". */

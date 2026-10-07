@@ -381,7 +381,7 @@ export function ThreadPosts({
               </span>
             )}
             <span
-              className={`tw:font-mono ${tweet.chars > thread.limit ? "tw:text-destructive" : ""}`}
+              className={`tw:font-mono ${tweet.chars > thread.limit ? "tw:text-danger" : ""}`}
               title={
                 tweet.chars > thread.limit
                   ? `Over the ${thread.limit}-character limit by ${tweet.chars - thread.limit}`
@@ -425,7 +425,7 @@ function RunRow({ owner }: { owner: UseTweets }) {
       {waiting && <NewThreadWaiting owner={owner} />}
       {running && <RunFoot job={owner.job} owner={owner} />}
       {failed && (
-        <span className="tw:ml-auto tw:text-xs tw:text-destructive">{failed.message}</span>
+        <span className="tw:ml-auto tw:text-xs tw:text-danger">{failed.message}</span>
       )}
     </div>
   );
@@ -507,7 +507,7 @@ function CopyButton({
       <span
         aria-live="polite"
         aria-atomic="true"
-        className={state === "failed" ? "tw:text-xs tw:text-destructive" : "tw:sr-only"}
+        className={state === "failed" ? "tw:text-xs tw:text-danger" : "tw:sr-only"}
       >
         {status}
       </span>
@@ -528,7 +528,7 @@ function CopyButton({
           {state === "copied" ? (
             <Check size={12} aria-hidden="true" className="tw:text-highlight-text" />
           ) : state === "failed" ? (
-            <TriangleAlert size={12} aria-hidden="true" className="tw:text-destructive" />
+            <TriangleAlert size={12} aria-hidden="true" className="tw:text-danger" />
           ) : (
             <Copy size={12} aria-hidden="true" />
           )}

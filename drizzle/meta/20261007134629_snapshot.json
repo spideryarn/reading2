@@ -1,6 +1,6 @@
 {
-  "id": "b8d0fc30-e397-4fa1-b75a-49e27bff9e90",
-  "prevId": "78025803-d426-4c00-a583-8d4c8867ab29",
+  "id": "c6f8ce4d-a275-46c3-8807-f4d6d2eb0fb0",
+  "prevId": "56ca72e0-9d52-46d1-91a3-9b9aed6fe238",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -4237,7 +4237,7 @@
         },
         "feedback_body_shape": {
           "name": "feedback_body_shape",
-          "value": "length(btrim(\"spideryarn\".\"feedback\".\"body\")) > 0 and length(\"spideryarn\".\"feedback\".\"body\") <= 12072"
+          "value": "length(btrim(\"spideryarn\".\"feedback\".\"body\")) > 0 and length(\"spideryarn\".\"feedback\".\"body\") <= 20000"
         },
         "feedback_kind": {
           "name": "feedback_kind",
@@ -4340,7 +4340,7 @@
         },
         "feedback_question_answers_body_shape": {
           "name": "feedback_question_answers_body_shape",
-          "value": "length(btrim(\"spideryarn\".\"feedback_question_answers\".\"body\")) > 0 and length(\"spideryarn\".\"feedback_question_answers\".\"body\") <= 12000"
+          "value": "length(btrim(\"spideryarn\".\"feedback_question_answers\".\"body\")) > 0 and length(\"spideryarn\".\"feedback_question_answers\".\"body\") <= 20000"
         }
       },
       "isRLSEnabled": false

@@ -122,7 +122,7 @@ export function ReadThisButton({
         </>
       )}
       <div aria-live="polite" className="tw:basis-full">
-        <QuotaNotice message={failure ?? ended} className="tw:m-0 tw:text-xs tw:text-destructive" />
+        <QuotaNotice message={failure ?? ended} className="tw:m-0 tw:text-xs tw:text-danger" />
       </div>
     </div>
   );

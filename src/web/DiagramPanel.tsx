@@ -1962,7 +1962,9 @@ export function DiagramPanel({
               ⟨Sol⟩, 2026-08-28. */}
           {similar.status === "error" && (
             <>
-              {`There are no dotted lines, and the rest of the picture is unaffected. ${similar.error ?? "The reason did not come back."}`}{" "}
+              <span className="diag-failed">
+                {`There are no dotted lines, and the rest of the picture is unaffected. ${similar.error ?? "The reason did not come back."}`}
+              </span>{" "}
               {/* **A verb to go with the reason.** The fetch runs once from an
                   effect, so without this the reader has the failure on screen
                   and nothing to do about it — the only way back is to leave the
@@ -2329,7 +2331,7 @@ function Waiting({ projection }: { projection: UseProjection | null }) {
          a row would stand the button beside it and squeeze both. `wide` turns
          the axis rather than letting the text wrap around the button. */
       <div className="diag-wait wide" role="status">
-        <span>
+        <span className="diag-failed">
           Could not place these paragraphs.{" "}
           {projection.error ?? "The reason did not come back."}
         </span>

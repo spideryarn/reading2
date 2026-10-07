@@ -41,6 +41,7 @@
     "validate-tree": "tsx src/validate-tree.ts",
     "structure:flatten": "tsx src/structure-flatten.ts",
     "test:watch": "vitest",
+    "screenshots:compress": "tsx scripts/compress-screenshots.ts",
     "structure": "tsx scripts/stage.ts structure",
     "labels": "tsx scripts/stage.ts labels",
     "eval:pdf-read": "tsx src/pdf-read.ts",
@@ -97,6 +98,7 @@
     "@fontsource-variable/geist-mono": "^5.3.0",
     "@fontsource-variable/source-serif-4": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@mozilla/readability": "^0.6.0",
     "@napi-rs/canvas": "^1.0.8",
     "@sentry/core": "^10.71.0",
@@ -129,7 +131,8 @@
     "stripe": "22.6.1",
     "tailwind-merge": "^3.6.0",
     "temml": "0.13.5",
-    "undici": "^7.30.0"
+    "undici": "^7.30.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.8",
@@ -137,6 +140,7 @@
     "@biomejs/biome": "2.5.10",
     "@inquirer/prompts": "8.7.0",
     "@jridgewell/trace-mapping": "^0.3.31",
+    "@modelcontextprotocol/client": "^2.3.1",
     "@sentry/vite-plugin": "^5.4.0",
     "@supabase/auth-js": "^2.112.4",
     "@tailwindcss/oxide": "^4.3.3",

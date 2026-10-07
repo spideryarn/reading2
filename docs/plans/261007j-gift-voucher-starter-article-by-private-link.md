@@ -194,7 +194,7 @@ on 2026-10-07.
   import chains would copy delicate client code: taken further than asked, by linking out to the
   add page and the article's card, which is Sol's own simpler version.
 - 2026-10-07: **Stage 1 built** by an Opus subagent, not committed. Migration
-  `drizzle/20261007110028_billing_voucher_starter_article.sql` (two nullable columns, the FK
+  `drizzle/20261007134629_billing_voucher_starter_article.sql` (two nullable columns, the FK
   `on delete set null`, and a CHECK `billing_vouchers_starter_has_slug`: an id without its slug
   would make a replay look starter-less). Not applied to the shared local database; the suites
   build their own from this tree's `drizzle/`.

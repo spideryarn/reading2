@@ -846,6 +846,7 @@ describe("activation with stale live pins (F6)", () => {
       eligibility: input.eligibility,
       requiredJobIds: input.requiredJobIds,
       sessionJobIds: input.sessionJobIds,
+      attentionOffSinceRestart: false,
     };
     expect(activationVerdict({ ...base, checkpointScheduler: "off", armed: false }).ok).toBe(true);
     expect(activationVerdict({ ...base, checkpointScheduler: "armed", armed: true }).ok).toBe(false);

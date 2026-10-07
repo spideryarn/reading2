@@ -260,7 +260,7 @@ function Plate({
 
   if (plate.failed !== undefined) {
     return (
-      <p className="ill-plate-out">
+      <p className="ill-plate-out is-failed">
         <ImageOff size={14} aria-hidden="true" /> {plate.failed}
       </p>
     );
@@ -273,7 +273,7 @@ function Plate({
       </p>
     );
   }
-  if (error) return <p className="ill-plate-out">{error}</p>;
+  if (error) return <p className="ill-plate-out is-failed">{error}</p>;
   if (!url) {
     return (
       /* The dashed plate is there at once, so the page does not jump; the

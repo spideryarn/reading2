@@ -11,7 +11,7 @@ import { useSlow } from "./useSlow.js";
  * Mount it only while the caller is waiting; unmount it the moment the wait
  * ends. A wait that ends inside the 600ms then never shows at all.
  *
- * **The container is there from the first paint, empty.** `role="status"`,
+ * **The container is there from the first paint, with no accessible words.** `role="status"`,
  * because the words arrive 600ms after the band does, and a live region that
  * is mounted already filled announces nothing; polite, so the reader is told
  * when they next pause. GPT Sol, 2026-08-27. It carries the caller's class, so
@@ -50,8 +50,9 @@ export function BandWaiting({
 }) {
   const slow = useSlow(true, delayMs);
   // A press response must be present on the first render, even before timers
-  // run. Opening reads still mount the empty live region before their words.
+  // run. Opening reads mount the live region without accessible words first.
   const visible = delayMs === 0 || slow;
+  const ghostWords = visible ? null : wordsOf(children);
   return (
     <Tag className={className ? `band-waiting ${className}` : "band-waiting"} role="status">
       {visible ? (
@@ -63,23 +64,26 @@ export function BandWaiting({
         /* **The line's footprint before its words** (GPT Sol, F1 review E1):
            the same spinner and sentence, unseen, so the box is as tall as the
            line it stands in for — wrapped, at this width — and the band does
-           not jump when the words land. The sentence is a CSS `content`
-           (`.band-waiting-ghost`, mode-band.css), not text, so the live region
-           holds no words to announce until they are real. */
+           not jump when the words land. Plain words use CSS `content`
+           (`.band-waiting-ghost`, mode-band.css); formatted children keep
+           their actual markup, including line breaks. Both are hidden from
+           sight and assistive technology until the sentence is real. */
         <>
           {/* Not the spinner's class: nothing may count this as a spinner shown.
               Its footprint is the same (13px, `flex: none`, mode-band.css). */}
           <LoaderCircle className="band-waiting-ghost" size={13} aria-hidden="true" />
-          <span className="band-waiting-ghost" aria-hidden="true" data-words={wordsOf(children)} />
+          <span className="band-waiting-ghost" aria-hidden="true" data-words={ghostWords ?? undefined}>
+            {ghostWords === null ? children : null}
+          </span>
         </>
       )}
     </Tag>
   );
 }
 
-/** The sentence as plain text, for the unseen copy; every caller passes words. */
-function wordsOf(children: ReactNode): string {
-  return Children.toArray(children)
-    .map((c) => (typeof c === "string" || typeof c === "number" ? String(c) : ""))
-    .join("");
+/** Plain sentences use CSS content; other children need their own markup's footprint. */
+function wordsOf(children: ReactNode): string | null {
+  const parts = Children.toArray(children);
+  if (parts.some((c) => typeof c !== "string" && typeof c !== "number")) return null;
+  return parts.map(String).join("");
 }

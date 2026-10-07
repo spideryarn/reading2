@@ -195,7 +195,10 @@ function readEnvelope(
   const counts = page.counts as Record<string, unknown>;
   if (!countKeys.every((key) => Number.isSafeInteger(counts[key]) && (counts[key] as number) >= 0)) return null;
   const here = counts[which] as number;
-  if (page.more && page.reports.length !== EARLIER_FEEDBACK_LIMIT) return null;
+  /* `more` with a short page is real: the server cuts a list of long reports to
+     what fits one response (src/types.ts § `FEEDBACK_LIST_BYTES`). Never empty,
+     and never over the cap. */
+  if (page.reports.length > EARLIER_FEEDBACK_LIMIT || (page.more && page.reports.length === 0)) return null;
   if (page.reports.length > here || page.more !== (here > page.reports.length)) return null;
   if (!page.reports.every((report: unknown) => typeof report === "object" && report !== null)) return null;
   return { reports: page.reports as Record<string, unknown>[], counts: counts as Record<string, number> };
@@ -1166,7 +1169,7 @@ export function EarlierList({
             </ol>
             {more ? (
               <p className="fb-earlier-status">
-                Showing the {EARLIER_FEEDBACK_LIMIT} most recent of your {counts[choice.show]}{" "}
+                Showing the {reports.length} most recent of your {counts[choice.show]}{" "}
                 {ADMIN_CAP_NOUN[choice.show]}.
               </p>
             ) : null}
@@ -1187,7 +1190,7 @@ export function EarlierList({
               /* "of N", so the reader need not take the cap on trust
                  (SPIDERYARN-READING2-95: "Is that true?"). */
               <p className="fb-earlier-status">
-                Showing the {EARLIER_FEEDBACK_LIMIT} most recent of your {counts[choice.show]} {CAP_NOUN[choice.show]}.
+                Showing the {reports.length} most recent of your {counts[choice.show]} {CAP_NOUN[choice.show]}.
               </p>
             ) : null}
           </>
