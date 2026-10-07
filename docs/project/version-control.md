@@ -5,6 +5,26 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 Where the code lives, and the one habit that is different here because several agents share a
 working tree.
 
+## In this doc
+
+- [Commit your own files, by name, in one command](#commit-your-own-files-by-name-in-one-command) — the commit recipe; open it before every commit in a shared tree
+- [What protects `main`, and what does not](#what-protects-main-and-what-does-not) — before any push, and why nothing stops a push to production
+- [Always merge, never rebase](#always-merge-never-rebase) — integrating `dev` into your work, and the reasons
+- When a pull or merge conflicts — [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)
+- [Never run a git command that throws work away](#never-run-a-git-command-that-throws-work-away) — tempted by `restore`, `stash`, `reset` or `rm`
+- [§ Where it is](#where-it-is) — the remote, the branches, which one is production
+- [§ The reason this doc exists: one tree, several agents](#the-reason-this-doc-exists-one-tree-several-agents) — the rules for a shared tree, and the accidents behind each (mostly history)
+  - [The pathspec takes a peer's hunks too](#and-the-other-half-of-that-which-cost-us-twice-on-2026-08-28) — a file you are committing has someone else's edits in it
+  - [The private index is gone](#the-private-index-is-gone-2026-08-30) — why there is no third commit recipe (history)
+  - [A stale index reports the file deleted](#a-stale-index-reports-the-file-deleted-while-it-sits-there-full-of-content-2026-08-29) — `git status` says deleted and the file is there
+- [§ Four more ways the recipe goes wrong](#four-more-ways-the-recipe-goes-wrong) — the commit ran and committed nothing, or the wrong thing
+- [§ Nobody knows who edited an uncommitted file](#nobody-knows-who-edited-an-uncommitted-file) — an edit in the tree is not yours and you want to know whose
+- [§ The thing that fails silently](#the-thing-that-fails-silently) — a commit that reverts a peer's work without saying so
+- [§ What is deliberately not in git](#what-is-deliberately-not-in-git) — looking for `data/` or `.env.local`
+- [§ Dropbox, until 2026-09-01](#dropbox-until-2026-09-01) — (history)
+- [§ The other repo, and the move that hasn't happened](#the-other-repo-and-the-move-that-hasnt-happened) — the second repository
+- [§ See also](#see-also) — the neighbouring docs
+
 ## Where it is
 
 | | |

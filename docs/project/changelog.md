@@ -24,6 +24,22 @@ what `changelog.ts check` prints, and is deliberately not written down here.
 > I wonder if we can make sure that the latest release notes are included in the deploy itself
 > going forwards.
 
+## In this doc
+
+Code: [`scripts/changelog/changelog.ts`](../../scripts/changelog/changelog.ts) (the runner) and
+[`release-notes.ts`](../../scripts/changelog/release-notes.ts); the file is
+[`src/web/changelog-versions.ndjson`](../../src/web/changelog-versions.ndjson); tests are
+`tests/changelog-*.test.ts*`.
+
+- [§ A version is a deploy](#a-version-is-a-deploy) — what counts as a version and how its commit range is found
+- [§ The file](#the-file) — the NDJSON's shape and the watermark
+- [§ The pending release](#the-pending-release) — how notes ship in the deploy itself (since 2026-10-01)
+- [§ The four stages](#the-four-stages) — enumerate, trawl, review, copy: who may assert what
+- [§ The first run is retrospective](#the-first-run-is-retrospective) — (history) how the back catalogue was written
+- [§ The page](#the-page) — what `/changelog` shows and how it renders
+- [§ Running it](#running-it) — what "run this doc" means, step by step
+- [§ The traps](#the-traps) — what has gone wrong, before you run it
+
 ## A version is a deploy
 
 Not a semver number, not a date. **One production deploy on Vercel is one version**, and its name is

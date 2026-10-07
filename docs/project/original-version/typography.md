@@ -193,3 +193,7 @@ Answer these ourselves when they come up, and write the answer into
 - [../design-css-overview.md](../design-css-overview.md) — our stylesheets and which mechanism owns what
 - [../web-client.md](../web-client.md) — the reading view and its constraints
 - [`styles/tokens.css`](../../../styles/tokens.css) — where the lifted values live
+
+---
+
+Up: [overview.md](overview.md)

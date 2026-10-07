@@ -778,7 +778,7 @@ says. Do not use `Button` yet.
 > `src/web/components/ui/` — correct. It must not land at `src/components/ui/`:
 > [`tsconfig.json`](../../tsconfig.json) is `"include": ["src"], "exclude": ["src/web"]` with
 > `nodenext`, no DOM libs and no `jsx`, so a `.tsx` there fails with confusing errors about JSX and
-> `document`. See [typechecking.md](../project/typechecking.md#why-three-and-not-one).
+> `document`. See [typechecking.md](../project/typechecking.md#why-several-and-not-one).
 
 **Step 5 — masthead disclosure → `Collapsible`.** A pure passthrough, so almost nothing can go wrong.
 Keep it controlled by `?about=`. *Verify:* `/?about=1` still arrives open; back/forward works.
@@ -834,7 +834,7 @@ which suits a repo that is deliberately one Vite process and no build cleverness
 | [web-client.md § Dark mode](../project/web-client.md#appearance-light-dark-and-system) | That `init` writes a light `:root` block we revert every time; the `@theme inline` bridge; `tokens.css` stays canonical. |
 | [tooltips.md](../project/tooltips.md) | Record that the choice was revisited on 2026-08-25, that the "no component convention here" argument **expired**, and that it was kept on the grouping behaviour alone. A decision re-affirmed for a *narrower* reason is worth writing down. |
 | [icons.md](../project/icons.md) | One line: Lucide was picked partly for being shadcn's default, and that bet paid off — no icon work needed. |
-| [typechecking.md § The layout](../project/typechecking.md#the-layout-one-base-of-options-three-projects) | The `@/` alias, why `paths` lives in `src/web/tsconfig.json` and not the base, and the `src/components` trap. |
+| [typechecking.md § The layout](../project/typechecking.md#the-layout-one-base-of-options-four-projects) | The `@/` alias, why `paths` lives in `src/web/tsconfig.json` and not the base, and the `src/components` trap. |
 | [testing.md § What we test](../project/testing.md#what-we-test-and-what-we-dont) | Sharpen the "no DOM tests yet" note: two migration bugs of this size were invisible to the whole suite. The moment to reconsider `@testing-library/react`. |
 | [linting.md](../project/linting.md) | The `overrides` entry for generated components, if one is needed. |
 | [setup-dev.md](../project/setup-dev.md) | `npx shadcn@latest add <component>` as the way to add UI, **and that its class strings must be `tw:`-prefixed by hand afterwards**, and to diff the CSS. |

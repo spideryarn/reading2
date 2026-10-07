@@ -255,8 +255,8 @@ import { ownedSlug } from "./store/owned-slug.js";
  * numbers back in its run object — which the `run()` closures below receive and
  * currently reduce to a sentence for a progress bar. The stage command lines
  * printed them and the queue threw them away. So "what did this article's tree cost?" had no
- * answer once the web UI became the normal way to ingest, which is open question
- * Q7 in docs/project/open-questions.md.
+ * answer once the web UI became the normal way to ingest. It has one now:
+ * docs/project/ai-gateway.md § What an article costs to arrive.
  *
  * The numbers are all in scope *here*, at the seam the queue already owns, so
  * this file can answer that question without a single edit inside somebody

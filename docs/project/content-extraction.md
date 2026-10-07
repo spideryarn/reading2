@@ -1,5 +1,7 @@
 # Content extraction (readability)
 
+Up: [architecture.md](architecture.md)
+
 Strips a rich HTML page (article/blog post) down to the main content — drops nav, ads, sidebars, comments — using [Mozilla Readability](https://github.com/mozilla/readability) (the Firefox Reader View algorithm).
 
 - Script: `src/extract.ts`
@@ -23,6 +25,24 @@ Strips a rich HTML page (article/blog post) down to the main content — drops n
 - Sample run: `output/noema-mythology-of-conscious-ai.html`, extracted from https://www.noemamag.com/the-mythology-of-conscious-ai/
 
 For background on why Readability was chosen over alternatives (trafilatura, defuddle, Diffbot, Jina Reader, LLM-based extraction, etc.), see the research discussion earlier in this project's chat history — no separate write-up exists yet.
+
+## In this doc
+
+- [§ The fetch above it](#the-fetch-above-it) — what stage 1 hands this stage
+- [§ Two extractors, one artefact](#two-extractors-one-artefact) — the PDF extractor beside Readability
+- [§ A LaTeXML page: arXiv's HTML](#a-latexml-page-arxivs-html) — arXiv/ar5iv pages
+- [§ Stage 2 and the document with no address](#stage-2-and-the-document-with-no-address) — uploaded files
+- [§ The three ways this stage refuses](#the-three-ways-this-stage-refuses) — a page rejected as no article, too short, or a bot check; adding a bot-check provider
+- [§ The one thing this pipeline deletes](#the-one-thing-this-pipeline-deletes) — what is removed on purpose
+- [§ The one thing this pipeline protects](#the-one-thing-this-pipeline-protects) — what must survive extraction
+- [§ The publisher's furniture, and the title it stole](#the-publishers-furniture-and-the-title-it-stole) — site chrome and wrong titles
+- [§ The byline, and the authors Readability drops](#the-byline-and-the-authors-readability-drops) — author extraction
+- [§ The journal and the publication day, from a registry](#the-journal-and-the-publication-day-from-a-registry) — venue and date; includes the backfill
+- [§ A title from outside is plain text](#a-title-from-outside-is-plain-text) — sanitising titles
+- [§ A title in capitals is tidied, and the original kept](#a-title-in-capitals-is-tidied-and-the-original-kept) — ALL-CAPS titles
+- [§ What it gets wrong, and how we know](#what-it-gets-wrong-and-how-we-know) — known failures and the eval corpus
+- [§ Where this sits](#where-this-sits) — neighbouring docs and code
+- [§ Prior art](#prior-art) — alternatives considered
 
 ## The fetch above it
 
@@ -100,9 +120,8 @@ The differences that matter to a reader:
   the pages before an upload is promoted to its canonical name or a fetched document is stored, so
   the reader hears it in seconds instead of after a job card has been running. `pass0`'s own guard
   stays as the backstop for anything ingested before that, or re-extracted after the cap moves
-  again — and it is the *only* guard for the stage CLIs, which do not go through the queue's stage 1
-  at all: the queue stores whatever it fetched, and `npm run eval:pdf-read` keeps the original before
-  `runPdfExtract` counts anything. Neither can reach a reader's job.
+  again; `npm run eval:pdf-read` keeps the original before `runPdfExtract` counts anything.
+  The stage CLIs now drive the queue through `scripts/stage.ts`, and an ingest runs stage 1's guard.
 - **Maths comes out as TeX, and the checks read it as what it prints.** Since 2026-09-24
   (`PROMPT_VERSION` `pdf-v4`) the prompt asks for inline maths between `\(…\)` and displayed
   equations between `\[…\]`, never `$`, which the reading view draws as maths ([maths.md](maths.md)).
@@ -354,9 +373,9 @@ address from `<link rel="canonical">` would cover more saved pages and is **deli
 done**: that URL would come out of untrusted file contents and flow into stage 4.5's image
 fetching, which is a security question worth answering on its own rather than as a rider.
 
-One thing it does **not** yet buy, and should: `fetchDocument` reports the URL it *ended up* at
-after redirects, and this stage still hands Readability the URL that was typed. Where those differ,
-relative links resolve against the wrong origin.
+For a fetched page, since 2026-10-05, the base is the URL stage 1 *ended up* at after redirects
+(`manifest.url`, which `fetchDocument` reports), not the one that was typed; the job's own address
+is used only where the manifest has none (the `extract` step in [`src/pipeline.ts`](../../src/pipeline.ts)).
 
 ## The three ways this stage refuses
 
@@ -430,6 +449,30 @@ entry; one is added when a page of that kind is seen to clear the floor, with it
 [260904e § C1](../plans/260904e-extraction-repair-evals-and-llm-post-processing.md) for the design).
 It does not get past the check either: the address still cannot be imported, and the reader is told
 what works instead.
+
+### Adding a provider (a bot check from a new vendor)
+
+Fetching that hands you the page is [fetching.md](fetching.md); everything below is stage 2. Each
+place was checked against the code on 2026-10-07.
+
+- Capture the page the way [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
+  says (plain GET, no JavaScript, hashed, committed; the Anubis section there is the worked case).
+  `scripts/probes/261006f-bot-wall-probe.ts` finds candidate pages.
+- [`src/challenge-page.ts`](../../src/challenge-page.ts): the `ChallengeProvider` union, a recogniser
+  function, and its line in `RECOGNISERS` (a `Record` over the union, so the compiler lists what is missing).
+- [`evals/extraction/fixtures/`](../../evals/extraction/fixtures/): the `.html`, its `hashes.json` entry,
+  and a `<name>.manifest.json` with `"notAnArticle": true`.
+- [`evals/extraction/corpus.mts`](../../evals/extraction/corpus.mts): a row in `EXTRA_FIXTURES`.
+- [`evals/extraction/score.mts`](../../evals/extraction/score.mts): `MANIFESTS_EXPECTED`.
+- [`tests/extract-challenge-page.test.ts`](../../tests/extract-challenge-page.test.ts): the rungs and
+  negative controls; [`tests/extract-protect.test.ts`](../../tests/extract-protect.test.ts): `CHALLENGES`
+  and the corpus-size count; [`tests/extraction-visible-text.test.ts`](../../tests/extraction-visible-text.test.ts):
+  `NOT_ARTICLES`.
+- Nothing to add for the reader's sentence or the pipeline: `documentIsABotCheck` in
+  [`src/messages.ts`](../../src/messages.ts) and the `ChallengePage` branch in
+  [`src/pipeline.ts`](../../src/pipeline.ts) do not name the provider.
+- Current inventory counts in [`evals/extraction/fixtures/README.md`](../../evals/extraction/fixtures/README.md)
+  are prose and need updating by hand; keep dated measurement counts as recorded.
 
 **Both rules are prospective, and that is a boundary rather than an oversight.** The floor is a rule inside
 stage 2, and stage 2 does not run when its artefact is already there: `stepIsDone` derives what is
@@ -1074,16 +1117,16 @@ Ids are preserved by matching on the `spya-` attribute already in the document, 
 not strip unrecognised `id` attributes — doing so would re-mint every id and orphan every note.
 
 The standalone styled HTML output doubles as a debug view; the durable artefacts are the same two
-things this stage returns, and where they land is the store's decision — `output/<slug>.html` plus
-`data/<slug>/meta.json` on a filesystem, columns on `article_revisions` in Postgres.
+things this stage returns, and where they land is the store's decision — columns on `article_revisions` in Postgres
+(`output/<slug>.html` plus `data/<slug>/meta.json` until the filesystem store went, 2026-09-05).
 
 The metadata landed on 2026-08-25, when the library needed something to put on a card: title,
 byline, site, language, source URL, fetch date and Readability's excerpt. **It is the only place the
 source URL and the byline survive past this script**, and it is rebuilt on every run, because
 re-extracting is how you refresh a page and the fetch date should follow. One subtlety worth reading
-before touching it — the **command line** derives the slug from the *output filename* rather than
-from the URL, because that is what stages 3 and 4 will name the data directory after; `runExtract`
-itself now takes the slug as an argument, since the queue has always known it. Both are in
+before touching it — the command line used to derive the slug from the *output filename* rather than
+from the URL (`slugForOutFile`, gone 2026-09-05); `runExtract` takes the slug as an argument, since
+the queue has always known it. The slug's story is in
 [library.md § meta.json](library.md#metajson-and-the-articles-identity).
 
 Why any of this exists at all: [vision.md](vision.md).

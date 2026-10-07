@@ -697,10 +697,14 @@ const Box = forwardRef<
             /* Escape clears the search rather than closing the mode. The mode
                has a button of its own in the bar, and a key that sometimes
                empties a box and sometimes throws you out of the panel is a key
-               nobody trusts. */
+               nobody trusts. And not the Escape that dismisses an input
+               method's candidate list, which is the IME's as its Enter is:
+               that one is still cancelled, because a `type="search"` box is
+               emptied by the browser itself on Escape (measured in Chrome,
+               2026-10-07), but it clears nothing. */
             if (e.key === "Escape") {
               e.preventDefault();
-              clear();
+              if (!isImeComposing(e)) clear();
             }
           }}
         />

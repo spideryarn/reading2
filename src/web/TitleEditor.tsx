@@ -26,6 +26,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 
 import { Pencil, TriangleAlert } from "lucide-react";
 import type { LibraryEntry } from "../types.js";
 import { IconButton } from "./IconButton.js";
+import { isImeComposing } from "./key-chord.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { voiceClass } from "./voice.js";
 
@@ -95,6 +96,10 @@ export function TitleEditor({
         aria-describedby={hintId}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
+          /* Enter that accepts an input method's candidate is not a save:
+             cancel the form's implicit submit (DebatePanel.tsx's lens box does
+             the same). An ordinary Enter still uses the form. */
+          if (e.key === "Enter" && isImeComposing(e)) e.preventDefault();
           if (e.key !== "Escape") return;
           /* **The press stops here.** This is tier T1 of five — React's own
              root container, which is a descendant of `document` — so the hover
@@ -114,6 +119,9 @@ export function TitleEditor({
              docs/plans/260906f-the-active-mode-gets-one-surface-and-one-way-to-fit-the-screen-escape-inventory.md;
              both halves are tests/one-escape-closes-one-surface.test.tsx. */
           e.stopPropagation();
+          /* After the stop, so a composing Escape is contained like any other;
+             it dismisses a candidate list and is not a cancel. */
+          if (isImeComposing(e)) return;
           onDone(undefined);
         }}
         // Blur commits rather than cancels: clicking away from a field you have

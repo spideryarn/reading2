@@ -1,5 +1,31 @@
 # Keyboard: ↑ / ↓ take the step; ← / → step Skim, Quiz, Quotes and Structure
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
+## In this doc
+
+Code: [`keynav.ts`](../../src/web/keynav.ts) (`useArrowNav`, wired in [`Reader.tsx`](../../src/web/reader/Reader.tsx)), [`key-chord.ts`](../../src/web/key-chord.ts) (the ⌘ chords), [`TermJump.tsx`](../../src/web/TermJump.tsx) (G), [`DockQuickSearch.tsx`](../../src/web/DockQuickSearch.tsx) (`/`); tests [`keynav.test.ts`](../../tests/keynav.test.ts), [`keynav-horizontal.test.ts`](../../tests/keynav-horizontal.test.ts).
+
+**Which sections are live.** Live: ← / → in Skim, Quiz, Quotes and Structure; the five rules; the chords (⌘-K, ⌘-Enter, ⌘⌥T); G; `/`; Tab. History (the gist columns went on 2026-09-29): the pointer's stride and aim, `L1 / L2`.
+
+- [§ Why the pointer, and not a mode](#why-the-pointer-and-not-a-mode) — the stride-by-pointer design (history)
+- [§ What each zone means](#what-each-zone-means) — pointer zones (history)
+- [§ Choosing the level without a mouse](#choosing-the-level-without-a-mouse) — ← / → as a stride (history)
+- [§ ← / → in Skim](#-in-skim) — the stop-stepping seam, and how a mode hands `useArrowNav` a handler
+- [§ ← / → in Quiz](#-in-quiz) — Previous/Next, and the refusals that keep a draft
+- [§ ← / → in Quotes](#-in-quotes) — `stepQuote` and the band's order
+- [§ ← / → in Structure](#-in-structure) — `acrossDepth`, and why ↑ / ↓ left the list
+- [§ The aim is visible before you press anything](#the-aim-is-visible-before-you-press-anything) — column tinting (history)
+- [§ Five rules, each with a reason](#five-rules-each-with-a-reason) — auto-repeat, a widget that handled the key, rapid presses, a keypress's URL
+- [§ The one chord that is not an arrow](#the-one-chord-that-is-not-an-arrow) — ⌘-K, ⌘-Enter (Metadata), ⌘⌥T (fold all), Enter in a text box
+- [§ G, the one letter](#g-the-one-letter) — jump to a term in the paragraph
+- [§ Quick search: the slash key](#quick-search-the-slash-key) — `/`
+- [§ What we gave up](#what-we-gave-up) — what the arrows cost the browser
+- [§ This constrains which components we may use](#this-constrains-which-components-we-may-use) — keys a widget must not swallow
+- [§ Tab, and the surfaces it walks through](#tab-and-the-surfaces-it-walks-through) — "not trapped", three ways
+- [§ Where this leaves an older sketch](#where-this-leaves-an-older-sketch) — (history)
+- [§ The same step, with a finger](#the-same-step-with-a-finger) — pointer to touch.md (history)
+
 > **Status, 2026-10-01.** **↑ / ↓ step one block everywhere except over the spine**, which still
 > steps by part; until that day anywhere off the prose and the spine (a mode's band, the masthead)
 > stepped a section, and a focused row in Structure's list stepped the list. **← / → step
@@ -177,7 +203,7 @@ the table by adding one attribute, and why a new panel would too.
 **While Skim is the mode, ← / → step its stops instead of moving the stride** — the stops
 of the pass drawn, which since 2026-09-29 are only that pass's own, so More never steps you back
 through Gist ([260929e](../plans/260929e-trajectory-each-pass-walks-only-its-new-stops.md)). Everywhere else
-they move the stride exactly as above, and ↑ / ↓ are the article's in every mode, Skim
+they are the browser's (the stride is gone, see the status above), and ↑ / ↓ are the article's in every mode, Skim
 included. This is the direction Greg's 2026-08-31 answer pointed — *"we can use left/right for
 mode-specific behaviours"* — and the one he asked for in the brief:
 
@@ -604,6 +630,28 @@ rather than `disabled` so the card still opens on an empty box
 ([260929g § Part C](../plans/260929g-shelf-search-focus-and-metadata-chord.md)). Tests:
 `tests/the-enter-key-really-sends.test.tsx`.
 
+### A key an input method is using is not ours
+
+A reader typing Japanese or Chinese presses Enter to accept a candidate word and Escape to dismiss
+the candidate list. Neither is a press on anything of ours, so while a composition is open **no
+text box saves, sends, clears, cancels or navigates on them, and no surface closes**. The one test
+is `isImeComposing` in [`key-chord.ts`](../../src/web/key-chord.ts), which reads the native flag,
+React's, and the older `keyCode` 229. Four things a new handler has to get right:
+
+- **The two shared Escape listeners ask it too**: `useEscapeToClose` (Chat, Comment, Annotate) and
+  the Dock drawer's capture listener. A guard in the box alone leaves the panel closing around it.
+- **Where a handler stops propagation on purpose, the test comes after the stop**, so a composing
+  key is contained like any other.
+- **A box in a form cancels a composing Enter** (`preventDefault`), so the form's implicit submit
+  cannot send a half-chosen word. Everywhere else a composing key is left untouched.
+- **A `type="search"` box cancels a composing Escape**, because the browser itself empties such a
+  box on Escape. Measured in Chrome on 2026-10-07; jsdom has no such default, so only a browser
+  shows it.
+
+Which handlers were fixed, and which were left and why:
+[261007a K2](../plans/261007a-ui-sweep-k2-composition-keys.md). Tests:
+`tests/one-escape-closes-one-surface.test.tsx` (the surfaces) and `tests/chat-composing-keys.test.tsx`.
+
 ## G, the one letter
 
 **G opens the glossary on a term in the paragraph you are on**, focused on that term's row with its
@@ -706,8 +754,8 @@ reading view, where the box does. *`tests/dock-quick-search.test.tsx`.*
 
 ## This constrains which components we may use
 
-All four arrow keys are spoken for, and now all four by this file: ↑/↓ take the step, ←/→ choose the
-stride. (So is a bare G outside text fields — [§ G](#g-the-one-letter).) So a component that captures arrow keys takes something real away — more than it did when
+↑/↓ are spoken for everywhere (they take the step), and ←/→ are spoken for while Skim, Quiz, Quotes or
+Structure is the mode (the stride they once chose went with the gist columns). (So is a bare G outside text fields — [§ G](#g-the-one-letter).) So a component that captures arrow keys takes something real away — more than it did when
 ←/→ were only the browser's — and several of the obvious ones do.
 
 **Radix's roving focus binds ArrowLeft, ArrowRight, ArrowUp *and* ArrowDown.** That is why the

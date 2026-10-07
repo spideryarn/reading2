@@ -108,6 +108,32 @@ paragraph used to put every later offset out by one, which moved the wash and th
 to the right and threw nothing. `library-search.ts` had that trap written down already, in a
 function doing the same job.
 
+## In this doc
+
+- [§ The one decision](#the-one-decision-everything-else-follows-from) — why two matchers share one downstream
+- [§ Quick search](#quick-search-a-meaning-search-in-about-a-second) — the third matcher (Jev, ~1 s), and how it hands over to thorough
+- [§ Search as you type](#search-as-you-type-and-the-box-in-the-bottom-bar) — the bottom-bar box, the command bar, the cross
+- [§ Why this is on the augment side](#why-this-is-on-the-augment-side-of-the-line) — the intent: finding, not answering
+- [§ The mode band](#the-mode-band) and [§ The bottom bar](#the-bottom-bar) — where search sits in the chrome
+- [§ Drawing the marks](#drawing-the-marks-and-the-wall-that-wasnt-there) — overlapping washes, and the wall that was not there
+- [§ What a hit is anchored to](#what-a-hit-is-anchored-to) — block id first, quote second, never offsets
+- [§ The confidence](#the-confidence-and-the-unit-that-changed-silently) — the 0–100 vs 0–1 unit bug, and what the number means
+- [§ Where in the article](#where-in-the-article-on-every-result) — the "where" shown on each result
+- [§ The counts in the log line](#the-counts-in-the-log-line) — reading a search's log line
+- [§ The results arrive one at a time](#the-results-arrive-one-at-a-time) — the SSE stream, and how it can end silently
+- [§ Saving](#saving-and-the-toy-it-stops-this-being) — why searches are stored
+- [§ Several searches at once](#several-searches-at-once-each-with-a-colour) — the outline, colours, the row vs the box
+- [§ The rail](#the-rail-and-the-shape-of-a-search) — spine marks for results, and the ruler
+- [§ Prioritised](#prioritised-place-order-with-a-bar-under-it) — the order and the bar, and the four ways a filter lies
+- [§ The URL](#the-url) — `?match=`, `?find=`, `?runs=`, `?order=`, `?conf=`, and why each pushes or replaces
+- [§ How the pieces fit](#how-the-pieces-fit) — the diagram of files from box to marks
+- [§ A visitor reads the saved searches](#a-visitor-reads-the-saved-searches-and-asks-nothing) — what a stranger sees and why it is enforced in three places
+- [§ The third search](#the-third-search-the-whole-library-at-once) — the shelf's box, and the embedding choice for when it is wanted
+- [§ What is still open](#what-is-still-open) — known gaps and undecided calls
+- [§ See also](#see-also) — neighbours
+- Tests: `tests/search*.test.ts(x)`, `tests/quick-search*.test.ts(x)`, `tests/use-search.test.ts`,
+  [`search-hits.test.ts`](../../tests/search-hits.test.ts), [`searches.test.ts`](../../tests/searches.test.ts)
+
 ## The one decision everything else follows from
 
 **One box, one results list, and a toggle that says how to match.** It was two matchers, the

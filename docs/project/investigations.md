@@ -22,7 +22,7 @@ is called done.** A plan's § Result or a file under `evals/results/` is not whe
 write-up says what was asked, what was measured, what was decided and what was
 ruled out. It links to the plan and the raw results rather than copying their tables.
 
-The files are not indexed here; list the directory. Two that show the shape, both of a prompt
+The files are not indexed here; list the directory. A few that show the shape, mostly of a prompt
 measured with scripted readers and a blind judge:
 
 - [261003c](../investigations/261003c-tutorial-prompt-leans-to-retention.md) — Tutorial's prompt

@@ -246,6 +246,37 @@ describe("the shelf search's clear cross", () => {
     expect(await pressEscape()).toBe(false);
   });
 
+  /* An input method's Enter accepts a candidate and its Escape dismisses the
+     list. The box keeps its words and the caret. Plan 261007a-ui-sweep-k2. */
+  it.each([
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+  ])("leaves both keys to an input method that is composing (%s)", async (_how, init) => {
+    await show("/?q=attention");
+    box().focus();
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
+    const escapeKey = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    const heard: string[] = [];
+    const watch = (e: Event) => heard.push((e as KeyboardEvent).key);
+    document.addEventListener("keydown", watch);
+    try {
+      await act(async () => {
+        box().dispatchEvent(enter);
+        box().dispatchEvent(escapeKey);
+      });
+    } finally {
+      document.removeEventListener("keydown", watch);
+    }
+    expect(heard).toEqual(["Enter"]);
+    await settle();
+    expect(box().value).toBe("attention");
+    expect(document.activeElement).toBe(box());
+    expect(enter.defaultPrevented).toBe(false);
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(escapeKey.defaultPrevented).toBe(true);
+  });
+
   it("is the only cross: the browser's own is hidden on this box", async () => {
     await show("/?q=attention");
     expect(box().classList.contains("own-clear")).toBe(true);

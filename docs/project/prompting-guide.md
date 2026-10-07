@@ -1,5 +1,7 @@
 # Prompting guide — the words a prompt puts in front of a reader
 
+Up: [architecture.md](architecture.md)
+
 Every prompt in this app that writes words for a reader carries **one shared plain-words rule**.
 This is what the rule is, how it trades plain words against the paper's own wording, where it
 lives, and how to measure a prompt change before calling it an improvement. Part of
@@ -221,5 +223,5 @@ differently. This is the method that worked, in `evals/plain-words/`:
 8. **Read the outputs anyway.** Two regressions the numbers could not see were found by reading:
    outside knowledge filed under the article's own label, and people dropped from a glossary.
 
-Keep each paid run to a few dollars. The cost of a tree is in [open-questions.md](open-questions.md)
-§ Q7.
+Keep each paid run to a few dollars. What an article costs to arrive, tree included, is in
+[ai-gateway.md § What an article costs to arrive](ai-gateway.md#what-an-article-costs).

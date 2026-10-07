@@ -1,5 +1,7 @@
 # Browser control: which mechanism, which machine
 
+Up: [code-quality-overview.md](code-quality-overview.md)
+
 There are two ways to drive a browser here, and **which one you get is decided by the machine you
 are running on, not by preference**. Pick the wrong one and you spend an hour on a handshake that
 cannot complete. This page is the fork in the road and nothing else; each branch has its own docs.
@@ -36,6 +38,10 @@ screenshots are large and the reasoning is small.
 - **[`scripts/remote-smoke-browser.mjs`](../../scripts/remote-smoke-browser.mjs)** — the committed
   proof that the stack works. `npx tsx scripts/gjd-remote.ts doctor` copies it to the box and runs
   it on every invocation, so it is never a stale copy; the `browser` line is this test.
+- **[`scripts/browser-sign-in.ts`](../../scripts/browser-sign-in.ts)** and
+  **[`scripts/safe-area-check.ts`](../../scripts/safe-area-check.ts)** — signing in to the local app
+  with no human, and the phone-notch check; both are explained in
+  [browser-testing-playwright.md](browser-testing-playwright.md#signing-in).
 - **[infra/hetzner/README.md](../../infra/hetzner/README.md)** — the box itself: `gjd-remote tunnel`
   plus `start-vnc` to watch the browser over noVNC, why Playwright runs `--isolated`, and why the
   MCP list is deliberately short.
@@ -163,7 +169,3 @@ reproduce on 1.8.0.
 Chrome 152.0.7977.64 driven through `playwright-core`, two distinct PNGs at the requested size, and
 the clicked text changing. Separately, a real page was loaded over the network from the box,
 screenshotted, copied back to the laptop and looked at. Both browser MCPs reported connected.
-
----
-
-Up: [code-quality-overview.md](code-quality-overview.md)

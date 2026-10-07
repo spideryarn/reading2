@@ -3,6 +3,24 @@
 The **Feedback** button, the dialog behind it, and the two places a bug report ends up. Part of
 [dev-and-deployment-overview.md](dev-and-deployment-overview.md).
 
+Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
+
+## In this doc
+
+- [§ One box](#one-box-since-2026-09-02) — why the dialog is one box, not three (history)
+- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, and [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark)
+- [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
+- [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
+- [§ Where it came from](#where-it-came-from) — Greg's original request, verbatim
+- [§ The shape of it](#the-shape-of-it) — the row, the Sentry copy, the email: what is authoritative
+- [§ The rate cap](#the-rate-cap-and-who-has-none) — thirty an hour per owner: why a send is refused, and who is exempt
+- [§ Where the code is](#where-the-code-is) — the file for each piece
+- [§ The one rule](#the-one-rule) — why this is the one place reader prose may leave, and the allowlist
+- [§ The tick-box](#the-tick-box-and-what-is-behind-it) — what extra diagnostics and the reader's own article add
+- [§ The screenshot](#the-screenshot) — capture, shrinking, re-encoding
+- [§ Trying it locally](#trying-it-locally) — running it on your laptop
+- [§ Reading the reports](#reading-the-reports) — `/admin/feedback`, the mirror columns, and [Ignoring a report](#ignoring-a-report-since-2026-10-03); what to do with them afterwards is [feedback-reports.md](feedback-reports.md)
+
 **One dialog, four shapes of button.** The dialog is mounted once, at the
 signed-in `App` level, and hands `open()` down through a context — otherwise a bar that unmounts
 takes a half-written report with it. The button is at the right-hand end of the bottom bar on the

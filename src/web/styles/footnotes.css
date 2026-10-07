@@ -334,7 +334,10 @@ td.text.note-open {
   font-size: 0.86rem;
   cursor: pointer;
 }
-.gloss-btn:hover { border-color: var(--highlight); color: var(--ink); }
+/* A button that is off does not answer the pointer, in either spelling:
+   `disabled`, or `aria-disabled` where it stays focusable so its tooltip can
+   say why (`.cite-investigate`, citations.css). */
+.gloss-btn:not(:disabled):not([aria-disabled="true"]):hover { border-color: var(--highlight); color: var(--ink); }
 .gloss-btn:disabled { opacity: 0.45; cursor: default; }
 .gloss-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 .gloss-btn.primary { color: var(--ink); border-color: var(--highlight); }

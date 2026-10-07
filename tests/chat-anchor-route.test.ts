@@ -31,8 +31,9 @@
  * the status codes and the SSE frames here are the route's.
  */
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ChatConflict } from "../src/chat.js";
 import { closeDb } from "../src/db/client.js";
 import { loadEnvLocal } from "../src/env.js";
 import { acceptAny, asTestOwner, AUTHED_HEADERS, TEST_OWNER } from "./helpers/authed.js";
@@ -391,5 +392,204 @@ describe("cancelling the first answer", () => {
     const out = await post(`/api/chat/${SLUG}/${threadId}/cancel`, { messageId: "spya-msgaaa" });
     expect(out.status).toBe(409);
     expect(await threads()).toHaveLength(1);
+  });
+});
+
+/**
+ * The same two rules **inside the store's transaction**, where a second server
+ * would meet them: its own route check saw no thread, and `begin` then reads
+ * one under the article lock. Calling `chatStore.begin` on a thread that exists
+ * is that request. Until 2026-10-07 both were accepted: `withTurn` rechecked
+ * kind and origin only. Seventh sweep, SV3 = SVO4; the pure cases are in
+ * tests/chat-anchor-transaction.test.ts.
+ *
+ * Through `chatStore` (the guarded one the route uses), so what is asserted is
+ * also that each refusal crosses `guardDbStore` as itself: a `ChatConflict`
+ * for the route's 409, a numeric `status` of 400 for help.
+ *
+ * **Mutation.** Three, each applied to src/chat.ts § `withTurn` alone, watched
+ * red here on 2026-10-07 and undone. The anchor refusal disabled: the first
+ * two cases. The help refusal disabled: the third. The help refusal thrown as
+ * a `ChatConflict` instead of a `ChatTurnRefused`: the third again, on the
+ * status, which is the 400 against 409 the route has always kept apart.
+ *
+ * **Blind to.** Two servers. This is one process calling `begin` as a second
+ * would, so it shows what the transaction decides and nothing about the
+ * schedule that gets a request there; and it does not show the route turning
+ * these into a response, because the route's own check answers first here.
+ */
+describe("the store refuses what the route would, for a request another process let through", () => {
+  const begin = (turn: Parameters<typeof chatStore.begin>[1]) =>
+    asTestOwner(() => chatStore.begin(SLUG, turn)).then(
+      () => "accepted" as const,
+      (err: unknown) => err,
+    );
+  const rows = async () =>
+    (await threads()).find((t) => t.id === "spya-anchr2")?.messages.map((m) => m.help ?? false);
+
+  it("a different anchor is a ChatConflict, and nothing is appended", async () => {
+    await ask({ threadId: "spya-anchr2", question: "what?", anchor: { blockId: BLOCK.id } });
+    const other = article?.blocks.find((b) => b.id !== BLOCK.id);
+    if (!other) throw new Error("the fixture article has only one block");
+
+    const out = await begin({ threadId: "spya-anchr2", question: "and this?", anchor: { blockId: other.id } });
+    expect(out).toBeInstanceOf(ChatConflict);
+    expect((out as Error).message).toBe("That conversation is already about a different passage");
+
+    const stored = (await threads()).find((t) => t.id === "spya-anchr2");
+    expect(stored?.anchor).toEqual({ blockId: BLOCK.id });
+    expect(stored?.messages).toHaveLength(2);
+  });
+
+  it("an anchor for a thread that has none is a ChatConflict", async () => {
+    await ask({ threadId: "spya-anchr2", question: "what?" });
+    expect(await begin({ threadId: "spya-anchr2", question: "and?", anchor: { blockId: BLOCK.id } }))
+      .toBeInstanceOf(ChatConflict);
+    expect(await rows()).toHaveLength(2);
+  });
+
+  it("a help flag on a thread that exists is a 400, and no press is recorded", async () => {
+    await ask({ threadId: "spya-anchr2", question: "what?", anchor: { blockId: BLOCK.id } });
+    const out = await begin({
+      threadId: "spya-anchr2",
+      question: "and?",
+      anchor: { blockId: BLOCK.id },
+      help: true,
+    });
+    expect(out).not.toBe("accepted");
+    expect(out).not.toBeInstanceOf(ChatConflict);
+    expect((out as { status?: unknown }).status).toBe(400);
+    expect((out as Error).message).toMatch(/starts a conversation/);
+    expect(await rows()).toEqual([false, false]);
+  });
+
+  it("the identical anchor, and a follow-up with none, are still accepted", async () => {
+    const anchor = { blockId: BLOCK.id, quote: QUOTE, start: START };
+    await ask({ threadId: "spya-anchr2", question: "what?", anchor });
+    expect(await begin({ threadId: "spya-anchr2", question: "again", anchor: { ...anchor } })).toBe("accepted");
+    expect(await begin({ threadId: "spya-anchr2", question: "and then?" })).toBe("accepted");
+    expect(await rows()).toHaveLength(6);
+  });
+});
+
+/**
+ * **What the real client sends still gets through, with the statuses it had.**
+ *
+ * The new refusals sit behind the route's own, so an ordinary request can
+ * reach one only if the two disagree. These are the requests a single tab
+ * makes (src/web/ChatDialog.tsx § `ask` for the first send and the "?" press,
+ * each on a freshly minted id with `send(null, …)`; its `onSend` for a
+ * follow-up, which carries no anchor and no flag) plus the one resend the
+ * route has always allowed.
+ *
+ * **Mutation.** Two, for the two ways the new refusals could reach a request
+ * that was fine, watched red here on 2026-10-07 and undone. `sameAnchor` in
+ * src/types.ts answering `false` for an identical anchor: the first case.
+ * `withTurn` refusing `help` whether or not the thread exists: the second.
+ * Both cases were green before the refusals existed, which is their point.
+ *
+ * **Blind to.** The browser. The request bodies are written out from a
+ * reading of src/web/ChatDialog.tsx, so a client that started sending an
+ * anchor on a follow-up would not turn this red; it would meet the 409 the
+ * route already gave it.
+ */
+describe("the requests one tab makes, after the store learnt the route's rules", () => {
+  it("first send, the same send again, and a follow-up", async () => {
+    const anchor = { blockId: BLOCK.id, quote: QUOTE, start: START };
+    const first = await ask({ threadId: "spya-anchr4", question: "what does this mean?", anchor });
+    const again = await ask({ threadId: "spya-anchr4", question: "what does this mean?", anchor });
+    const next = await ask({ threadId: "spya-anchr4", question: "and what follows?" });
+    expect([first, again, next].map((r) => r.frames[0]?.event)).toEqual(["begin", "begin", "begin"]);
+    expect((await threads()).find((t) => t.id === "spya-anchr4")?.messages).toHaveLength(6);
+  });
+
+  it("a help press, then a follow-up; a second press on that thread is the 400 it always was", async () => {
+    const press = {
+      question: "About this block: I could not follow it.",
+      anchor: { blockId: BLOCK.id },
+      help: true,
+    };
+    const first = await ask({ threadId: "spya-anchr5", ...press });
+    expect(first.frames[0]?.event).toBe("begin");
+    const next = await ask({ threadId: "spya-anchr5", question: "and what follows?" });
+    expect(next.frames[0]?.event).toBe("begin");
+
+    const again = await ask({ threadId: "spya-anchr5", ...press });
+    expect(again.status).toBe(400);
+    expect(String(again.body?.error)).toMatch(/starts a conversation/);
+    const stored = (await threads()).find((t) => t.id === "spya-anchr5");
+    expect(stored?.messages.map((m) => m.help ?? false)).toEqual([true, false, false, false]);
+  });
+});
+
+/**
+ * **How many times a send reads every conversation of the article before it
+ * begins.** `chatStore.load` is the article's whole transcript (an ownership
+ * query and two selects), and `begin` reads it again under the lock.
+ *
+ * Until 2026-10-07 each of the four checks under `inTurnOrder` did its own
+ * load, so a send carrying an anchor, an origin and a help flag read it five
+ * times and one carrying none read it once. They share one read now, taken only
+ * when one of them needs it. Seventh sweep, SVO9
+ * (docs/investigations/261006d-seventh-sweep-depth-server-request-path-opus.md).
+ *
+ * Counted up to the moment `begin` is called, because the stream reads the
+ * thread again afterwards for reasons of its own.
+ *
+ * **Mutation.** The code before the change is the first one: these read 1, 4
+ * and 5. And on 2026-10-07 the shared read was made to load twice, which
+ * turned the second and third cases red and left the first green, as it
+ * should: a send carrying none of the four never takes that read.
+ *
+ * **Blind to.** Queries. It counts calls to `chatStore.load`, each of which
+ * is three statements, and nothing after `begin` is called: the loads the
+ * stream makes for its own reasons are not in the number.
+ */
+describe("a send reads the article's conversations once for its checks, however many it carries", () => {
+  async function loadsBeforeBegin(body: unknown): Promise<number> {
+    const load = vi.spyOn(chatStore, "load");
+    let atBegin = -1;
+    const realBegin = chatStore.begin.bind(chatStore);
+    const begin = vi.spyOn(chatStore, "begin").mockImplementation((...args) => {
+      atBegin = load.mock.calls.length;
+      return realBegin(...args);
+    });
+    try {
+      const out = await ask(body);
+      expect(out.frames[0]?.event).toBe("begin");
+      return atBegin;
+    } finally {
+      load.mockRestore();
+      begin.mockRestore();
+    }
+  }
+
+  const claim = () => ({ mode: "debate", blockId: BLOCK.id, quote: "a claim the piece makes" });
+
+  it("none: the one read that finds the thread's kind", async () => {
+    expect(await loadsBeforeBegin({ threadId: "spya-anchr6", question: "what?" })).toBe(1);
+  });
+
+  it("an anchor and an origin: one more, not three more", async () => {
+    expect(
+      await loadsBeforeBegin({
+        threadId: "spya-anchr6",
+        question: "what?",
+        anchor: { blockId: BLOCK.id },
+        origin: claim(),
+      }),
+    ).toBe(2);
+  });
+
+  it("an anchor, an origin and a help flag: one more, not four more", async () => {
+    expect(
+      await loadsBeforeBegin({
+        threadId: "spya-anchr6",
+        question: "About this block: I could not follow it.",
+        anchor: { blockId: BLOCK.id },
+        origin: claim(),
+        help: true,
+      }),
+    ).toBe(2);
   });
 });

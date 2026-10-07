@@ -1,5 +1,7 @@
 # The wordmark's hover animations
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 Point at the Spideryarn wordmark, or hold it down on a phone, and one of fourteen animations plays
 — a different one each time. This is what they are, why there are fourteen rather than one, what the
 word looks like at rest, and the five ways a new one can silently do nothing.
@@ -273,7 +275,7 @@ add the entry to `LOGO_ANIMATIONS` with its `reach` — `mark` if any rule of it
 the anchor, `letters` if it lives only in the word, and the test says so if you guess wrong — and
 run `npm test`. `/design` picks it up with no further edit.
 
-The stylesheet's header carries the rules in full. The four that are worth knowing before you start,
+The stylesheet's header carries the rules in full. The five that are worth knowing before you start,
 because each of them fails **silently** — the animation looks fine to whoever wrote it and does
 nothing for a large group of readers ([silent-success.md](../reusable/silent-success.md)):
 
@@ -394,5 +396,3 @@ away entirely.
 - [reading-view-overview.md](reading-view-overview.md) — where the second copy of the wordmark lives
 - [narrow-windows.md](narrow-windows.md) — why the word disappears
 - [browser-testing.md](browser-testing.md) — **do not judge colour, or motion, from one screenshot**
-
-Up: [design-css-overview.md](design-css-overview.md)
