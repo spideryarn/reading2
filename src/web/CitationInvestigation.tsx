@@ -431,15 +431,16 @@ export function InvestigateButton({
       }
     >
       {/* The run button every mode shares (plan 261007h § F3, GPT Sol's R10),
-          at the row's size: *Ask in chat* and the Scholar link beside it are
-          24px, and a 32px button would stand a head above them on every row.
+          at its house size, `sm`, as in Glossary. It was `xs` for a day to
+          match a 25px *Ask in chat*; that button became this same `sm` Button
+          instead, so the pair is one size in both modes (plan 261007m S2).
           `aria-disabled` looks unavailable through `Button`'s own classes
           (components/ui/button.tsx § THREE); the guard is the `busy` check in
           the handler. `.gloss-btn` stays as a hook. */}
       <Button
         type="button"
         variant="outline"
-        size="xs"
+        size="sm"
         className="gloss-btn cite-investigate"
         aria-disabled={busy}
         onPointerDown={reveal.onPointerDown}

@@ -1,7 +1,7 @@
 ---
 id: q-sa4yuq
 report: spya-n8cuqq
-status: open
+status: answered
 asked: 2026-10-06
 title: Should Feedback take a full fifteen minutes of speech?
 refs: SPIDERYARN-READING2-E8 · qi-8qvg5gwv · docs/plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md § Questions for Greg · docs/user-feedback/261006_2202-dictation-cut-off-at-five-minutes-with-no-sign.md
@@ -21,3 +21,9 @@ C. Raise it only for a dictated report. Not recommended: the server cannot tell 
 What would decide it: if you expect to dictate long reports without pausing, B. If thirteen minutes non-stop is already more than you would say in one go, A.
 
 Recommended: B. You file most of the reports, you dictate them, and what reaches Sentry is your own words in your own account.
+
+## Greg's answer, 2026-10-07 (relayed by the Overseer)
+
+> yes
+
+To option B. Built and on dev (aaab52aa7), plan docs/plans/261007j-feedback-takes-twenty-thousand-characters-and-admin-feedback-pages-by-size.md, queue item qi-8qvg5gwv. Marked answered by the feedback sweep, since the session that built it left this file open.

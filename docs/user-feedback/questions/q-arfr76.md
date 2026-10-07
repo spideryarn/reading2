@@ -1,7 +1,7 @@
 ---
 id: q-arfr76
 report: spya-bkkjzy
-status: open
+status: answered
 asked: 2026-10-07
 title: The MCP server: Cowork on the web, a private link's key, every reader's address?
 refs: SPIDERYARN-READING2-EE · qi-n9ntngfq · qi-2a8nh33e · docs/plans/261007j-mcp-server-for-spideryarn-admins-first.md § Questions for Greg · docs/user-feedback/261006_2227-mcp-server-for-spideryarn.md · docs/project/mcp.md
@@ -35,3 +35,13 @@ A. Yes, and the privacy page gets a line saying so.
 B. No. The agent keeps the vouchers list, which holds only addresses you typed yourself.
 
 Recommended: B, unless you need it for a specific job.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> I can live with it being something simple (e.g. fixed-key), but I'd prefer Google OAuth or similar if possible
+
+> re making private links - if the agent is authenticated to the site, can't it just instruct the site to do it?
+
+> yes, I want user email addresses and activity to be queryable via MCP
+
+Settled: OAuth first (fixed key only as fallback), a private-link tool behind the Approve dialog, and admin-only user tools with the privacy page updated. qi-n9ntngfq, qi-2a8nh33e.

@@ -568,6 +568,12 @@ const SHARED = new Set([
      (src/command-suggest-call.ts), which is not reachable from here. See
      src/command-suggest.ts and plan 261005k. */
   "command-suggest.js",
+  /* *Ask about Spideryarn*: the path, the question's cap, and the frames the
+     answer streams in. On the list for `command-pick.js`'s reason — the box's
+     `maxLength` is the number the route refuses past — and it imports
+     nothing. The prompt, the corpus and the call are src/help-chat-call.ts,
+     not reachable from here. See src/help-chat.ts and plan 261007k. */
+  "help-chat.js",
   /* The `data-spya-*` namespace — the attributes stage 2 leaves on the article
      so stage 3 can read them back. On the list because it imports **nothing at
      all**, deliberately and for this reason: its own header says so, since a

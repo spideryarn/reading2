@@ -10,6 +10,8 @@ jump. After one, a **↩ back to** button, naming the section you left, appears 
 Press it to go back; press it again to keep going back through earlier jumps. The **×** beside it
 hides it.
 
+![A click on the spine jumps to another section and a ↩ back to Love of the work button appears at the bottom left; pressing it returns to the passage and the button goes](images/jump-back.gif "Jump with the spine, then ↩ back to … takes you straight back to where you were.")
+
 Your browser’s Back button does the same, because each jump is saved in your history. Ordinary
 scrolling is not, so Back never makes you crawl up the page a screen at a time. The way back
 survives switching mode: jump from inside Chat, open Glossary, and the button still takes you back

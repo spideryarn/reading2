@@ -96,6 +96,7 @@ const PROMISES: Record<string, string> = {
   /* Enter goes to the first matching section (plan 261001s). */
   "PageContents.tsx › Search this page's sections": "search",
   /* Enter goes to the best match by setting the address (plan 261002b). */
+  "HelpAsk.tsx › Ask a question about Spideryarn": "send",
   "HelpPage.tsx › Search Help": "search",
   "SearchPanel.tsx › srch-input": "search",
   /* The sign-in form: the first field moves to the second, the second signs in.
@@ -256,12 +257,13 @@ describe("what the Enter key promises", () => {
   it("labels a textarea Send only where that tag's own handler sends on Enter", () => {
     const sending = boxes().filter((b) => b.hint === "send" && b.tag === "textarea");
 
-    /* The three, named, so a fourth textarea claiming Send has to be decided
-       rather than inherited. */
+    /* The four, named, so a fifth textarea claiming Send has to be decided
+       rather than inherited. Help's question box since 2026-10-07 (261007k). */
     expect(sending.map((b) => b.key).sort()).toEqual([
       "CandidatesPanel.tsx › cnd-box",
       "ChatPanel.tsx › chat-edit-box",
       "ChatPanel.tsx › chat-input",
+      "HelpAsk.tsx › Ask a question about Spideryarn",
     ]);
 
     for (const box of sending) {

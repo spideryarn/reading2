@@ -77,7 +77,11 @@ let signedInAs: string | null = "user-1";
 
 const { apiFetch, NONE_YET_AS_NULL } = await import("../src/web/lib/api.js");
 
-/** The ten reads that may answer `200 null` — `NONE_YET_AS_NULL` in lib/api.ts. */
+/**
+ * The sixteen reads that may answer `200 null` — `NONE_YET_AS_NULL` in
+ * lib/api.ts. Every artefact read since plan 261007n; the list is
+ * src/store/artefact-not-made-yet.ts.
+ */
 const NONE_YET_READS = [
   "quiz",
   "crossrefs",
@@ -89,6 +93,12 @@ const NONE_YET_READS = [
   "debate",
   "glossary",
   "quotes",
+  "tweets",
+  "relations",
+  "skim",
+  "sketch",
+  "illustrated",
+  "arc",
 ] as const;
 
 function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NULL): void {
@@ -143,8 +153,13 @@ function assertNoneYetInventory(source: string, offlinePattern = NONE_YET_AS_NUL
     new RegExp(String.raw`^\/api\/(?:${names.join("|")})\/[^/?]+$`).source,
   );
   expect(offlinePattern.flags).toBe("");
-  /* The scan saw the routes that were not moved, so "no others" means it. */
-  expect(plain).toEqual(expect.arrayContaining(["tweets", "relations", "skim", "sketch", "arc"]));
+  /* The scan saw by-slug GETs that are not artefact reads and so are not
+     wrapped — the article itself, its metadata, the works citing it — so the
+     equality above was taken over the whole file, not a universe narrowed to
+     the wrapped ones (docs/postmortems/261006m-an-exact-inventory-check-silently-narrows-its-universe.md).
+     And none of the sixteen is among them. */
+  expect(plain).toEqual(expect.arrayContaining(["article", "metadata", "citers"]));
+  for (const name of NONE_YET_READS) expect(plain, name).not.toContain(name);
   for (const name of wrapped) expect(offlinePattern.test(`/api/${name}/x`), name).toBe(true);
   for (const name of plain) expect(offlinePattern.test(`/api/${name}/x`), name).toBe(false);
 }

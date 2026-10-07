@@ -2959,7 +2959,11 @@ export type RateBucket =
   /* The mail to the admin about a reader's feedback — not a fetch and not
      money, but the shared Resend quota auth mail also needs
      (src/feedback-notice.ts § `FEEDBACK_NOTICE_POLICY`, plan 261002j). */
-  | "feedback-notice";
+  | "feedback-notice"
+  /* *Ask about Spideryarn* on the Help pages — a streamed answer from the
+     whole Help, free to the reader and so bounded here instead, with a global
+     fuse (src/help-chat-call.ts § `HELP_CHAT_RATE_POLICY`, plan 261007k). */
+  | "help-chat";
 
 /**
  * **How many outbound fetches one reader's pointer may cause.**

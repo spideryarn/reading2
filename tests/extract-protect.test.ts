@@ -92,7 +92,7 @@ const dom = (html: string): Document =>
 
 /**
  * What one extraction of one fixture came to. `html` is kept only for the five
- * fixtures the detailed tests need — 70 whole pages in memory is a cost with no
+ * fixtures the detailed tests need — 78 whole pages in memory is a cost with no
  * buyer.
  */
 interface Arm {
@@ -170,7 +170,7 @@ async function armOf(html: string, url: string, slug: string, keepHtml: boolean)
 }
 
 /**
- * **Both arms of all 37 fixtures, run once and in sequence.**
+ * **Both arms of all 39 fixtures, run once and in sequence.**
  *
  * Sequence is required rather than tidy: `withProtectionDisabled` is module
  * state, so two extractions in flight at once in different arms would see each
@@ -207,7 +207,7 @@ async function runCorpus(): Promise<Map<string, Row>> {
 }
 
 /**
- * Started at import and awaited by each test below. Roughly three minutes: 70
+ * Started at import and awaited by each test below. Roughly three minutes: 78
  * runs of stage 2 over pages up to a megabyte, and running it once is what
  * keeps that from being six.
  *
@@ -794,7 +794,7 @@ describe("rule B's boundary — 25 points of weight, and not one paragraph paid 
  * The corpus residual, both arms.
  * ------------------------------------------------------------------ */
 
-describe("the residual — what this pass does to the other 32 fixtures", CORPUS_TIMEOUT, () => {
+describe("the residual — what this pass does to the other 35 fixtures", CORPUS_TIMEOUT, () => {
   /**
    * **Both arms are run.** The first draft's spike did not: for a zero-stamp
    * fixture it assigned the treatment result *from* the control and compared
@@ -802,12 +802,12 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
    * checks that cannot fail. So the control here is a second real extraction
    * with the pass disabled, and the comparison is of bytes.
    */
-  it("stamps exactly four fixtures and leaves the other thirty-one alone", async () => {
+  it("stamps exactly four fixtures and no others", async () => {
     const corpus = await CORPUS;
-    /* 37 since 2026-10-06: `hal-anubis` and then `winehq-anubis` joined, and
-       both are refused, so they move neither the four stamped nor the
-       twenty-nine compared. */
-    expect(corpus.size).toBe(37);
+    /* 39 since 2026-10-07: the two reader-comment fixtures joined. Both
+       extract without a protection stamp, so they move the comparison from
+       twenty-nine to thirty-one. */
+    expect(corpus.size).toBe(39);
     const stamped = [...corpus].filter(([, r]) => r.kind === "extracted" && Object.keys(r.on.kept).length > 0);
     expect(stamped.map(([n]) => n).sort()).toEqual([
       "ar5iv-attention",
@@ -819,8 +819,9 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
      * **The plan says five, and five is wrong.** It reasons *"30 zero-stamp
      * fixtures, because five fixtures are stamped, not four"*; the measurement
      * was three stamped, two refused and thirty compared. The 30 was right and
-     * its arithmetic was not. Rule C added Quanta (below), so it is now four
-     * stamped and twenty-nine compared.
+     * its arithmetic was not. Rule C added Quanta (below), so it became four
+     * stamped and twenty-nine compared; the two reader-comment fixtures make
+     * that thirty-one now. Four other fixtures are refused in both arms.
      */
     expect(stamped).toHaveLength(4);
   });
@@ -844,7 +845,7 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
     expect(r.on.digest).toBe(r.off.digest);
   });
 
-  it("is byte-identical on all twenty-nine zero-stamp fixtures that extract at all", async () => {
+  it("is byte-identical on all thirty-one zero-stamp fixtures that extract at all", async () => {
     const corpus = await CORPUS;
     const compared: string[] = [];
     const differed: string[] = [];
@@ -858,7 +859,7 @@ describe("the residual — what this pass does to the other 32 fixtures", CORPUS
       expect(row.off.kept, name).toEqual({});
     }
     expect(differed).toEqual([]);
-    expect(compared).toHaveLength(29);
+    expect(compared).toHaveLength(31);
   });
 
   it("refuses the two bot walls with the typed refusal, in both arms", async () => {

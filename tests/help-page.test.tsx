@@ -36,6 +36,8 @@ import {
 } from "../src/web/help/help-anchors.js";
 import { HELP_GROUPS, HELP_SYNONYMS, helpEntry, helpPlace } from "../src/web/help/help-content.js";
 import { HelpPage } from "../src/web/help/HelpPage.js";
+import { SignedInShell } from "../src/web/BackLink.js";
+import { SignedInReader } from "../src/web/lib/made-for.js";
 import { HELP_HREF, navigate, parseRoute } from "../src/web/router.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -307,6 +309,18 @@ function mountAt(address: string): void {
   act(() => root.render(<HelpPage />));
 }
 
+function mountForReader(readerId: string): void {
+  act(() =>
+    root.render(
+      <SignedInReader.Provider value={readerId}>
+        <SignedInShell.Provider value={true}>
+          <HelpPage />
+        </SignedInShell.Provider>
+      </SignedInReader.Provider>,
+    ),
+  );
+}
+
 const address = (): string => location.pathname + location.search + location.hash;
 const h1 = (): string => host.querySelector("h1")?.textContent ?? "";
 const words = (): string => host.querySelector("article")?.textContent ?? "";
@@ -349,6 +363,28 @@ function traverse(to: string): void {
 }
 
 describe("the contents page", () => {
+  it("shows a new reader none of the previous reader's question", () => {
+    history.replaceState(null, "", "/help");
+    mountForReader("reader-a");
+    const question = host.querySelector<HTMLTextAreaElement>(
+      'textarea[aria-label="Ask a question about Spideryarn"]',
+    );
+    if (!question) throw new Error("no Help question box");
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(question, "A's private question");
+      question.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(question.value).toBe("A's private question");
+
+    mountForReader("reader-b");
+    expect(
+      host.querySelector<HTMLTextAreaElement>(
+        'textarea[aria-label="Ask a question about Spideryarn"]',
+      )?.value,
+    ).toBe("");
+  });
+
   it("is headed Help, keeps the title the server pre-renders, and has the search box", () => {
     mountAt("/help");
     expect(h1()).toBe("Help");

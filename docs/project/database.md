@@ -620,6 +620,13 @@ on 2026-09-30 a session that reached for it lost the lookup. The Overseer's note
 say the bucket can be read with `GET /storage/v1/object/info/sources/sha256/<hash>.<ext>`, a made-up
 hash answering 400 as the control; that has not been re-checked since.
 
+**Delete such a script when the read is done; never leave it where a subagent will look.** On
+2026-10-07 a browser-check subagent found a session's scratch production-read script in its
+worktree, edited it and tried an `UPDATE` on production. The script's `begin read only` refused it
+and nothing was written — that wrapper is why the read-only rule above is a transaction, not a
+promise. A subagent runs what it finds; a script holding `.env.prod`'s credentials is a production
+write waiting for one ([261007l](../plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md)).
+
 **SSL is enforced**, so a plain connection is refused — and `pg` does not use SSL by default, so the
 refusal arrives looking like a credentials error. [`scripts/db-migrate.ts`](../../scripts/db-migrate.ts)
 handles this off the same is-this-local test that guards remote runs: local is a container with no
@@ -1423,8 +1430,10 @@ batch of nav labels as it comes back — the `labels` step's since 2026-09-06, t
 still carries the old owner's name (below) — and the PDF reader records each transcribed chunk. A 429 eight
 batches into a book then costs one batch rather than eight, and these are the expensive calls.
 
-**Four namespaces**, and the list is `CheckpointNamespace` in
+**Five namespaces**, and the list is `CheckpointNamespace` in
 [`src/store/checkpoints.ts`](../../src/store/checkpoints.ts): `pdf-chunk` for a transcribed chunk,
+`illustrated-brief` for Illustrated's brief between two windows of one job (keyed by the job, so a
+new press asks again; [261007l](../plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md)),
 and three named for the `structure` step (called `hierarchy` until 2026-10-02) — `structure-whole-document` (the one whole-document
 call for the tree), `structure-deepen` (each scoped call that splits a section too fat to read,
 [`src/structure-deepen.ts`](../../src/structure-deepen.ts)) and `structure-labels` (the nav-label

@@ -2,7 +2,7 @@
 reports: spya-ucftjt
 ending: shipped
 parts: 3
-comment: Part 3 of 3 shipped: a guide in Chat that knows why you are reading. The Help pages and the help chatbot are separate parts, not finished yet.
+comment: All three parts shipped: Help in the bar and as pages, Ask about Spideryarn on the Help pages, and a guide in Chat. Waiting on you: may people who are not signed in use the Help chatbot?
 ---
 # The guide agent (part 3 of 3 of `spya-ucftjt`)
 

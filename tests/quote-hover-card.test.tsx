@@ -285,6 +285,15 @@ describe("resting on a quote", () => {
     expect(card()).not.toBe(null);
   });
 
+  /* 600ms, not the 900ms it had from 2026-10-02: a reader asked for a tooltip
+     on quotes that already had one, which suggests the card was not being
+     found (qi-78gf6x87). A literal, so the constant cannot drift back. */
+  it("is open 600ms after the pointer rests on a quote", () => {
+    paint();
+    rest(quoteMark(0), 610);
+    expect(card(), "still waiting at 600ms").not.toBe(null);
+  });
+
   it("keeps the short warm swap once another card is already open", () => {
     paint();
     rest(quoteMark(0), QUOTE_OPEN_MS + 10);

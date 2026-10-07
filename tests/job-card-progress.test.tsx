@@ -48,6 +48,7 @@ import {
   DRIVER_STALLED,
   KEEP_A_TAB_OPEN,
   RUNNING_A_WHILE,
+  STOP_CAME_TOO_LATE,
   STOPPING_AFTER_STEP,
   TAKING_LONGER,
   WAITING_TO_CONTINUE,
@@ -336,6 +337,17 @@ it("does not call a step unusual when nothing measured what usual is", () => {
 it("says what Stop is waiting for, rather than an indefinite Stopping…", () => {
   card(job({ cancelling: true }));
   expect(host.textContent).toContain(STOPPING_AFTER_STEP);
+});
+
+/* And what became of it: a Stop that reached the last step while it was
+   finishing loses, and the card says so rather than going from "Stopping…" to
+   finished without a word. docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md. */
+it("says when the Stop came too late, and says nothing of a Stop on an ordinary finish", () => {
+  const steps: JobStep[] = [{ name: "fetch", label: "Fetching the page", status: "done" }];
+  card(job({ status: "done", steps, finishedAt: ago(1_000), stopCameTooLate: true }));
+  expect(host.textContent).toContain(STOP_CAME_TOO_LATE);
+  card(job({ status: "done", steps, finishedAt: ago(1_000) }));
+  expect(host.textContent).not.toContain(STOP_CAME_TOO_LATE);
 });
 
 /**

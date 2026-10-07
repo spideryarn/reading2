@@ -15,8 +15,8 @@
  * `Cited` draws what a model wrote, so whatever it does not understand it
  * shows as the characters that arrived: it must never lose text. These files
  * are ours, so whatever this walk does not understand it **throws** on: a
- * numbered list, a block quote, an image, a line of HTML, a token nobody
- * defined. A test renders every file (tests/help-page.test.tsx renders the
+ * numbered list, a block quote, a picture anywhere but alone in its
+ * paragraph, a line of HTML, a token nobody defined. A test renders every file (tests/help-page.test.tsx renders the
  * page), so a construct that would have been drawn wrongly is a red test
  * instead. Adding one is a case in `drawBlock` or `drawInline`, and its twin
  * in the text walk below.
@@ -29,6 +29,12 @@
  * were made of when they were TSX (`p`, `ul`, `li`, `strong`, `em`, `code`,
  * `kbd`, `a`), with no class of their own: HelpPage.tsx § `WORDS_CLASS`
  * styles them once, by element.
+ *
+ * And, since 2026-10-07, **a picture**: an image alone in its paragraph,
+ * `![alt](images/name.png "caption")`, drawn as a `<figure>` with the title
+ * as its caption — the one place a file's words get classes of their own
+ * (§ HelpFigure). The file must be in help-images.ts. In the text walk a
+ * picture is its caption. docs/plans/261007l-help-screenshots-and-gifs.md.
  *
  * ## Links are final addresses, and every one is checked
  *
@@ -63,6 +69,7 @@ import { MODE_LABEL } from "../../title-text.js";
 import { CHANGELOG_LABEL, HELP_HREF } from "../router.js";
 import { helpHref, resolveHelpAnchor, type HelpAnchor } from "./help-anchors.js";
 import { MODE_WHEN, ModesTable } from "./help-mode-when.js";
+import { HELP_IMAGES, type HelpImage } from "./help-images.js";
 import { helpPageBody } from "./help-pages.js";
 import { HelpSub, PageLink } from "./help-parts.js";
 
@@ -232,6 +239,44 @@ export function targetOf(url: string, where: string): Target {
   throw new Error(`Help page ${where}: a link must be a path on this site, found ${url}`);
 }
 
+/* ───────────────────────────── pictures ───────────────────────────── */
+
+type ImageNode = Extract<PhrasingContent, { type: "image" }>;
+
+/** `images/<name>` from a topic's file, `../images/<name>` from one in a folder. */
+const IMAGE_PATH = /^(?:\.\.\/)?images\/([a-z0-9-]+\.(?:png|gif))$/;
+
+interface Figure {
+  image: HelpImage;
+  alt: string;
+  caption: string;
+}
+
+/**
+ * **A paragraph that is one picture and nothing else**, or null when it holds
+ * no picture at all. A picture anywhere else — in a sentence, a list, a link,
+ * beside another — reaches `drawInline`, which refuses it. The path's folder
+ * is not checked here, only its name: tests/help-images.test.ts checks that
+ * each path resolves from where its file is.
+ */
+function figureOf(node: Paragraph, where: string): Figure | null {
+  const only = node.children.length === 1 ? node.children[0] : undefined;
+  if (only?.type !== "image") return null;
+  const alt = only.alt?.trim() ?? "";
+  const caption = only.title?.trim() ?? "";
+  if (alt === "") throw new Error(`Help page ${where}: a picture needs alt text, ![what it shows](…)`);
+  if (caption === "") throw new Error(`Help page ${where}: a picture needs a caption, ![…](${only.url} "the caption")`);
+  const name = IMAGE_PATH.exec(only.url)?.[1];
+  if (name === undefined) throw new Error(`Help page ${where}: a picture's path is images/<name>.png or .gif, found ${only.url}`);
+  const image = Object.hasOwn(HELP_IMAGES, name) ? HELP_IMAGES[name] : undefined;
+  if (image === undefined) throw new Error(`Help page ${where}: ${name} is not in help-images.ts`);
+  return { image, alt, caption: proseOf(caption, where) };
+}
+
+function imageAlone(node: ImageNode, where: string): never {
+  throw new Error(`Help page ${where}: a picture must be alone in its own paragraph, found ${node.url}`);
+}
+
 /* ───────────────────────────── as React ───────────────────────────── */
 
 interface Ctx {
@@ -274,6 +319,8 @@ function drawInline(node: PhrasingContent, key: number, ctx: Ctx): ReactNode {
         </PageLink>
       );
     }
+    case "image":
+      return imageAlone(node, ctx.where);
     default:
       throw new Error(`Help page ${ctx.where}: nothing draws a "${node.type}" inside a line`);
   }
@@ -296,11 +343,51 @@ function drawList(list: List, key: number, ctx: Ctx): ReactNode {
   );
 }
 
+/**
+ * **A picture and its caption.** Its own classes, unlike the other elements
+ * here, which HelpPage.tsx § `WORDS_CLASS` styles by element: a figure needs a
+ * frame and a quieter caption, and nothing else on the page is one. Drawn at
+ * half its pixels, since every picture is shot at 2×; a narrow column shrinks
+ * it (tailwind.css § images gives every `img` `max-width: 100%` and
+ * `height: auto`). The thin rule gives a dark screenshot an edge on a light
+ * page.
+ */
+function HelpFigure({ image, alt, caption }: Figure) {
+  const img = (
+    <img
+      src={image.src}
+      width={image.w / 2}
+      height={image.h / 2}
+      alt={alt}
+      loading="lazy"
+      decoding="async"
+      className="tw:rounded-md tw:border tw:border-rule"
+    />
+  );
+  return (
+    <figure className="tw:m-0 tw:my-2 tw:flex tw:flex-col tw:gap-2">
+      {/* A GIF has a still for a reader who asked for less motion (help-images.ts § still). */}
+      {image.still === undefined ? (
+        img
+      ) : (
+        <picture>
+          <source media="(prefers-reduced-motion: reduce)" srcSet={image.still.src} />
+          {img}
+        </picture>
+      )}
+      <figcaption className="tw:text-xs tw:leading-relaxed tw:text-ink-faint">{caption}</figcaption>
+    </figure>
+  );
+}
+
 function drawBlock(node: RootContent, key: number, ctx: Ctx): ReactNode {
   switch (node.type) {
-    case "paragraph":
+    case "paragraph": {
       if (isTableToken(node)) return <ModesTable key={key} />;
+      const figure = figureOf(node, ctx.where);
+      if (figure !== null) return <HelpFigure key={key} {...figure} />;
       return <p key={key}>{drawInlines(node.children, ctx)}</p>;
+    }
     case "heading":
       /* One level, drawn as the small subheading a mode's two halves have
          always had. A page's own title is its front matter, never a `#`.
@@ -386,6 +473,8 @@ function plainInline(node: PhrasingContent, where: string): string {
       /* Checked as the drawn walk checks it, so the two refuse the same files. */
       linkTarget(node, where);
       return plainInlines(node.children, where);
+    case "image":
+      return imageAlone(node, where);
     default:
       throw new Error(`Help page ${where}: nothing reads a "${node.type}" inside a line`);
   }
@@ -400,9 +489,13 @@ function plainList(list: List, where: string): string[] {
 
 function plainBlock(node: RootContent, where: string): string[] {
   switch (node.type) {
-    case "paragraph":
+    case "paragraph": {
       if (isTableToken(node)) return MODES.map((m) => `${MODE_LABEL[m]}: reach for it when ${MODE_WHEN[m]}`);
+      /* A picture is its caption: the words a reader can search for. */
+      const figure = figureOf(node, where);
+      if (figure !== null) return [figure.caption];
       return [plainInlines(node.children, where)];
+    }
     case "heading":
       if (node.depth !== 2) throw new Error(`Help page ${where}: only ## headings are drawn`);
       return [plainInlines(node.children, where)];

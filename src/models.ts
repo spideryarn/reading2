@@ -511,6 +511,28 @@ export const QUICK_SEARCH_MODEL = "typesafe/jev-1.13";
 export const COMMAND_PICK_MODEL = "typesafe/jev-1.13";
 
 /**
+ * **What answers a question asked on the Help pages** — *Ask about
+ * Spideryarn* (src/help-chat-call.ts, plan 261007k). A cheap model, because
+ * Greg asked for one (*"probably the help page agent uses a much dumber model,
+ * so it's cheaper"*) and because the whole Help, about 28k tokens, is in every
+ * request.
+ *
+ * **Measured for this job on 2026-10-07**, against DeepSeek V4.1 Flash, in
+ * docs/investigations/261007b-help-chat-model-and-refusals.md: every
+ * off-topic and jailbreak question declined, answers grounded in the pages,
+ * about a second to the first word, and a prefix cache that reads across
+ * different questions ($0.0068 cold, $0.0006 warm). DeepSeek answered as
+ * well but three to four times slower, on whichever small upstream OpenRouter
+ * picked, with a cache that hit about half the time. Its own literal, though the
+ * string is currently the same as `QUICK_MODEL_OPENROUTER`'s, so moving one job
+ * does not move the other; and
+ * not a `Task`, so no environment override can unpin it from what the eval
+ * measured. Moving it to a non-OpenAI model is also a decision about caching:
+ * `help-chat` in src/ai-call.ts says why.
+ */
+export const HELP_CHAT_MODEL = "openai/gpt-5.6-luna";
+
+/**
  * **What turns a dictation into text.** Not on a tier, for the same reason the
  * PDF reader is not: a tier is a judgment about how much reasoning a job needs,
  * and this one needs none — it needs ears and a vocabulary list.
@@ -937,7 +959,12 @@ export type NonTaskAiJob =
      lens proposed from the reader's profile, on `QUICK_MODEL_OPENROUTER`
      (src/command-suggest-call.ts, plan 261005k). Not a `Task`, for
      `command-pick-words`'s reason: it is the model the eval measured. */
-  | "command-suggest";
+  | "command-suggest"
+  /* **A question asked on the Help pages, answered from them** — streamed on
+     `HELP_CHAT_MODEL` (src/help-chat-call.ts, plan 261007k). Not a `Task`:
+     its model is the eval's choice, not a tier, and an override would unpin
+     it. */
+  | "help-chat";
 
 /**
  * **Every model call this app pays for**, whether or not it is a tier decision.
@@ -1461,6 +1488,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "command-pick-words": "chat",
   /* The bar's short list: one small JSON answer. src/command-suggest-call.ts. */
   "command-suggest": "chat",
+  /* A streamed answer in prose, on chat/completions. src/help-chat-call.ts. */
+  "help-chat": "chat",
   embeddings: "embeddings",
   /* **What an eval would use if it went through the gateway** — and `rescue`,
      the only one that does, posts to chat/completions. The declared bypasses in
@@ -1736,6 +1765,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
   { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
   { job: "command-suggest", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },
+  { job: "help-chat", id: HELP_CHAT_MODEL, provider: "openrouter" },
   /* `DIG_DEEPER_MODEL` in src/dig-deeper.ts is this same constant; named here
      by its source because that file imports this one. */
   { job: "dig-deeper", id: HIGH_POWER_MODEL_OPENROUTER, provider: "openrouter" },

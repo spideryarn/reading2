@@ -14,6 +14,8 @@ The main column is always the article itself, word for word. The AI’s work sit
 modes, the spine and the cards, so you can tell what came from the author and what came from the
 model — see [the AI’s words and the author’s](/help/ai-words).
 
+![The reading view: a Structure panel on the left lists the article’s parts and sections, and the article itself fills the right](images/reading-view.png "The article stays in the main column, word for word; the AI’s work sits beside it, here in Structure’s panel.")
+
 A good way to use it: get your bearings first ([the spine](/help/spine),
 [Structure](/help/mode-structure), [Skim](/help/mode-skim)), then read, stopping to ask, define or
 mark things as you go. Afterwards, test what you kept. The aim is not to spend less time on the

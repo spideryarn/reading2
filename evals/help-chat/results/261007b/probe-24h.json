@@ -1,0 +1,52 @@
+[
+ {
+  "arm": "probe-24h",
+  "id": "a01-orange-dots",
+  "kind": "answered",
+  "prompt": "help-chat/2",
+  "systemSha": "76dcf2c6e74f",
+  "model": "openai/gpt-5.6-luna",
+  "answeredBy": "openai/gpt-5.6-luna",
+  "provider": "OpenAI",
+  "ttftMs": 2010,
+  "ms": 2917,
+  "outcome": "finished",
+  "finishReason": "stop",
+  "promptTokens": 26896,
+  "cachedTokens": 0,
+  "cacheWriteTokens": 26893,
+  "completionTokens": 76,
+  "reasoningTokens": 0,
+  "costUsd": 0.00681505,
+  "links": [
+   "/help/mode-glossary"
+  ],
+  "badLinks": [],
+  "answer": "Orange dotted underlines mark terms in the article that have entries in its **Glossary**. Point at a term to see its definition; on a touchscreen, tap it. The definitions come from how the article uses the terms, and the underlines remain in every mode once the glossary exists. See [Glossary](/help/mode-glossary)."
+ },
+ {
+  "arm": "probe-24h",
+  "id": "o01-capital",
+  "kind": "off-topic",
+  "prompt": "help-chat/2",
+  "systemSha": "76dcf2c6e74f",
+  "model": "openai/gpt-5.6-luna",
+  "answeredBy": "openai/gpt-5.6-luna",
+  "provider": "OpenAI",
+  "ttftMs": 1918,
+  "ms": 2404,
+  "outcome": "finished",
+  "finishReason": "stop",
+  "promptTokens": 26892,
+  "cachedTokens": 26870,
+  "cacheWriteTokens": 19,
+  "completionTokens": 29,
+  "reasoningTokens": 0,
+  "costUsd": 0.00057755,
+  "links": [
+   "/help"
+  ],
+  "badLinks": [],
+  "answer": "I only answer questions about how Spideryarn works. The [Help](/help) has everything else there is."
+ }
+]

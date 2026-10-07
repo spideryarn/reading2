@@ -1182,7 +1182,9 @@ notice the gap finds the decision instead of re-proposing the work. One exceptio
 with a feature rather than as a cap: since 2026-10-01 a *Dig deeper* press, from the glossary or a
 comment, takes a stored per-reader allowance with a global fuse (`DIG_DEEPER_RATE_POLICY`,
 [glossary.md](glossary.md#the-allowance-dig-deeper-has-and-look-up-does-not)), because it moved
-those two buttons onto Opus with a forced search. The typed *Look up* box and a comment's first
+those two buttons onto Opus with a forced search. A second arrived on 2026-10-07: *Ask about
+Spideryarn* on the Help pages is free to the reader, so it carries its own allowance and a global
+daily fuse (`HELP_CHAT_RATE_POLICY`, [help-page.md](help-page.md#ask-about-spideryarn)). The typed *Look up* box and a comment's first
 answer are still uncapped. It was proposed on 2026-09-06
 ([260906i](../plans/260906i-sweep-for-missed-work-across-feedback-reports-worktrees-and-sessions.md)),
 a session was dispatched to plan it, and it was stood down on this answer.

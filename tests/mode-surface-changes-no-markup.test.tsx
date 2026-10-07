@@ -639,7 +639,10 @@ async function mountSearchVisitor(): Promise<void> {
   await act(async () => {
     root.render(
       createElement(SearchPanel, {
-        access: { kind: "visitor" as const },
+        access: {
+          kind: "visitor" as const,
+          copy: { signedIn: false, sessionUnconfirmed: false, sharedBy: "public" as const, copyFrom: null },
+        },
         matcher: "meaning" as const,
         onMatcher: () => {},
         find: null,
@@ -1467,7 +1470,7 @@ const VISIBLE_FAILURE = {
 function mountVisitor(): ReactNode {
   return createElement(VisitorBand, {
     gap: { kind: "owners-only", feature: "the glossary" },
-    signedIn: false,
+    copy: { signedIn: false, sessionUnconfirmed: false, sharedBy: "public", copyFrom: null },
   });
 }
 

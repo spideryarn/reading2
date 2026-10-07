@@ -1,7 +1,7 @@
 ---
 id: q-jb5cnd
 report: spya-tddvg2
-status: open
+status: answered
 asked: 2026-10-07
 title: May security-map.md list the two new guards the guide added?
 refs: SPIDERYARN-READING2-E7 · docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md § A rule-doc edit proposed, not made
@@ -21,3 +21,9 @@ B. Yes, with changes (say which).
 C. No: these belong in chat-tools.md only (they are described there already).
 
 Recommendation: A.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> q-jb5cnd yes
+
+A, applied as worded. The row's last sentence changes again when the guide may open modes itself (q-tyvutf), and the session building that updates it.

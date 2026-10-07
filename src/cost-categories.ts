@@ -204,6 +204,9 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* The bar's short list from why you are reading — a reader who pressed the
      row and is watching the bar. src/command-suggest-call.ts, plan 261005k. */
   "command-suggest": "interactive request work",
+  /* A question on the Help pages — a reader watching the answer arrive, with
+     no article. src/help-chat-call.ts, plan 261007k. */
+  "help-chat": "interactive request work",
   /* **The fix this table was written for.** Hover a link in the article and this
      says how it stands to the piece being read — docs/project/links.md. It is
      request-scope, reader-triggered, and was in no category at all. */

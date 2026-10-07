@@ -450,9 +450,12 @@ Greg, in two feedback reports:
   page**; and *open Quotes*, which selects it and opens the band on its row. **Pointer only.** A
   tap on a bare quote still selects its paragraph (TableView's `NOT_A_BLOCK_SELECTION`, the reason
   above), and a quote is not a tab stop — a quote that is also a term, a citation or inside a link
-  gets the card through those, as before. **It waits 900ms rather than 320ms** before opening on a
+  gets the card through those, as before. **It waits 600ms rather than 320ms** before opening on a
   quote and nothing else (`QUOTE_OPEN_MS`), because a quote is a passage the reader rests in while
-  reading, not a word they point at; still a guess to be felt in use.
+  reading, not a word they point at, and a fast card would keep popping up over the text. It was
+  900ms from 2026-10-02 to 2026-10-07, and shortened because a reader asked for a tooltip on quotes
+  that already had one (spya-tpmde9), which suggests 900ms was long enough that the card went
+  unfound. Still a guess to be felt in use.
 - **In Quotes mode, ‹ › under the list and ← / →** step the band's own list, in its order, through
   one rule (`stepQuote`) — [keyboard.md](keyboard.md) § ← / → in Quotes. Both step only
   over quotes the prose fills (`useQuoteMarks`' `steppable`), so a row whose block is gone is

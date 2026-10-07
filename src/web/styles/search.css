@@ -555,6 +555,11 @@
 
 /* ---- nothing to show, in its five flavours ---- */
 
+/* The private-copy offer, where the owner's box would be (plan 261007m): the empty
+   state's inset, and room on the right for the band's info button, which sat on
+   its first line on a phone. */
+.srch-copy { margin: 0; padding: 0.85rem 2rem 0 0.9rem; font-size: 0.9rem; line-height: 1.5; color: var(--ink-faint); }
+
 .srch-empty { padding: 0.85rem 0.9rem; color: var(--ink-faint); }
 .srch-empty p { margin: 0 0 0.5rem; }
 .srch-empty-hint { font-size: 0.9rem; line-height: 1.5; }

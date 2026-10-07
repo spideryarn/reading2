@@ -27,7 +27,13 @@ import { SOURCES } from "../src/paper-sources.js";
 import { ANSWER_TOKENS as DEBATE_ANSWER_TOKENS } from "../src/debate.js";
 import { SYNTHESIS_ANSWER_TOKENS } from "../src/debate-themes.js";
 import { ideasAnswerTokens, suggestedIdeas } from "../src/ideas.js";
-import { ILLUSTRATED_ANSWER_TOKENS } from "../src/illustrated.js";
+import {
+  BRIEF_CAP_MS,
+  ILLUSTRATED_ANSWER_TOKENS,
+  PLATE_CAP_MS,
+  SETTLE_MARGIN_MS,
+} from "../src/illustrated.js";
+import { MAX_PLATES } from "../src/illustrated-plate.js";
 import { QUIZ_MAX_TOKENS } from "../src/quiz.js";
 import { SKETCH_ANSWER_TOKENS } from "../src/sketch.js";
 import { budgetFor, deadlineFor } from "../src/token-budget.js";
@@ -462,20 +468,31 @@ describe("the job lease and the platform's kill", () => {
   });
 
   /**
-   * PINS AN OPEN DEFECT: the brief's estimated full-token time alone exceeds
-   * the claim, before any plates. This is an estimate at the measured Sonnet
-   * rate, not a claim that every brief takes this long. See 261007h's
-   * "Open design question: Illustrated outlasts a claim".
+   * **Every Illustrated request fits a claim, with room to settle.** Until
+   * 2026-10-07 this was an open-defect pin: the brief's full-token time was
+   * 948 s against a 740 s claim, and the plates had no clock at all. The step is
+   * now two units, each started only with room for its own clock plus
+   * `SETTLE_MARGIN_MS`, with the brief banked between them
+   * (docs/plans/261007l-illustrated-fits-a-claim-and-a-late-stop-says-so.md).
    *
-   * Pin the exact observed estimate so a larger allowance cannot quietly make
-   * this gap worse. A red pin is news, including an improvement; when the
-   * defect is fixed, replace it with brief time < claim and account for plates.
-   * This follows tests/adversarial-shapes.test.ts's open-defect pins.
+   * - the brief's clock is its full-token time, and the brief plus the margin
+   *   fits inside the step's own reservation, so a claim that admitted the
+   *   step can start the brief without handing straight back;
+   * - every plate of the largest set, each on its own clock, plus the margin,
+   *   fits a claim.
    */
-  it("PINS AN OPEN DEFECT: Illustrated's brief is estimated at 948 s against a 740 s claim", () => {
-    const briefMs = tokenTimeMs("illustrated", ILLUSTRATED_ANSWER_TOKENS);
-    expect(briefMs, "the known brief-time estimate changed — reassess the open defect").toBe(948_000);
-    expect(claimMs, "the claim changed — reassess the open defect").toBe(740_000);
+  it("fits each Illustrated unit inside a claim, with room to settle", () => {
+    expect(BRIEF_CAP_MS, "the brief's clock is its full-token time").toBe(
+      tokenTimeMs("illustrated", ILLUSTRATED_ANSWER_TOKENS),
+    );
+    expect(
+      BRIEF_CAP_MS + SETTLE_MARGIN_MS,
+      "a claim that admits the step must be able to start the brief",
+    ).toBeLessThanOrEqual(STEP_BUDGET_MS.illustrated);
+    expect(
+      MAX_PLATES * PLATE_CAP_MS + SETTLE_MARGIN_MS,
+      "the largest set of plates must fit a fresh claim",
+    ).toBeLessThan(claimMs);
   });
 
   /** Reserve a fresh claim after every Sketch duration in the recorded sample.
