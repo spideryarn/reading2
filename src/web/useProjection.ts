@@ -42,6 +42,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProjectionPoint, ProjectionResponse, SkipCounts } from "../types.js";
 import { apiFetch, readJson } from "./lib/api.js";
+import { describeFetchFailure } from "./lib/describe-failure.js";
 
 type ProjectionStatus = "idle" | "loading" | "ready" | "error";
 
@@ -198,7 +199,7 @@ export function useProjection(slug: string, enabled: boolean): UseProjection {
         setState((was) =>
           was.slug === slug && was.status === "ready"
             ? was
-            : { ...IDLE, slug, status: "error", error: (err as Error).message },
+            : { ...IDLE, slug, status: "error", error: describeFetchFailure(err as Error) },
         );
       } finally {
         /* **On settle, not on success**, so a picture that failed does not

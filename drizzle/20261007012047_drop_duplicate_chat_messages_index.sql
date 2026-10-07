@@ -1,0 +1,19 @@
+-- Drop `chat_messages_thread_ordinal_idx`, an exact duplicate of the index
+-- behind the UNIQUE constraint `chat_messages_thread_ordinal`.
+-- docs/plans/261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md § Stage 5
+--
+-- 0002 made the UNIQUE one on (article_id, thread_id, ordinal); 0003, the next
+-- migration, made this one on the same three columns, not unique. Same table,
+-- method, columns, operator classes and ordering, no predicate: read from
+-- pg_index in production and locally on 2026-10-07 (01:20 UTC), and it is the
+-- only such pair in the schema. The UNIQUE index serves every read this one did.
+--
+-- An index, not data: nothing a reader wrote goes, and it is undone with
+--   CREATE INDEX "chat_messages_thread_ordinal_idx"
+--     ON "spideryarn"."chat_messages" ("article_id","thread_id","ordinal");
+--
+-- `--custom`, because the index was never declared in src/db/schema.ts, so
+-- drizzle-kit has nothing to diff. No `IF EXISTS`, on purpose: a database
+-- without it is not the database this was checked against, and a drop that
+-- silently did nothing would say `✓ migrations applied` over that.
+DROP INDEX "spideryarn"."chat_messages_thread_ordinal_idx";
