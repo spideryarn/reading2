@@ -63,7 +63,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { ID_PATTERN } from "../ids.js";
+import { ID_PATTERN, ID_PREFIX } from "../ids.js";
 import type { Assets } from "../assets.js";
 /* Referee mode's stored result shape. It lives in src/referee-criteria.ts
    rather than src/types.ts because the validator that guarantees it is in the
@@ -5703,6 +5703,72 @@ export const feedbackShippedEmails = spideryarn.table(
     check(
       "feedback_shipped_emails_detail_length",
       sql`${t.detail} is null or char_length(${t.detail}) <= 200`,
+    ),
+  ],
+);
+
+/**
+ * **What an admin replied to a question an agent asked** — one row a reply,
+ * written only by `POST /api/admin/feedback/answers`, read by the Earlier tab
+ * (the admin's own newest reply under each open question) and by
+ * `scripts/feedback-questions.ts --answers` (every reply, for agents).
+ * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
+ *
+ * > you can ask me inside the feedback dialogue on Spideryarn, and I can
+ * > respond there
+ * >
+ * > — Greg, 2026-10-06 (`spya-sshjd2`)
+ *
+ * **A table of its own, not rows of `feedback`**: a reply is not a report, and
+ * as one it would have appeared as a second open report on `/admin/feedback`
+ * and in Sentry (GPT Sol's plan review, F2). Nothing here is mirrored anywhere.
+ *
+ * `question_id` is a text id with **no foreign key**: the question is a file in
+ * git (`docs/user-feedback/questions/`), compiled into the server, and the
+ * route checks the id against that list before it writes. Append-only: a
+ * second reply to one question is a second row.
+ */
+export const feedbackQuestionAnswers = spideryarn.table(
+  "feedback_question_answers",
+  {
+    /** Client-minted, and the idempotency key, exactly as `feedback.id` is. */
+    id: text("id").notNull(),
+    /** `auth.users(id)`. FK in the migration by hand, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** `q-k3m9qt`: src/feedback-question-values.ts § `isFeedbackQuestionId`. */
+    questionId: text("question_id").notNull(),
+    /** What the admin typed or said. Plain text. */
+    body: text("body").notNull(),
+    /**
+     * **Which deployment wrote the row, asked of the server**, as
+     * `feedback.environment` is and from the same mapping. It is what lets the
+     * script that reads production tell a reply written there from one written
+     * by a local stack pointed at the wrong database (plan 261007d, F13).
+     */
+    environment: text("environment").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    /** The composite key is the idempotency key, as on `feedback`. */
+    primaryKey({ columns: [t.ownerId, t.id] }),
+    check("feedback_question_answers_id_format", sql`${t.id} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX}'`)}`),
+    /* The same six characters after `q-` as after `spya-`: one id rule. */
+    check(
+      "feedback_question_answers_question_id_format",
+      sql`${t.questionId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX.replace(ID_PREFIX, "q-")}'`)}`,
+    ),
+    /* `feedback_environment`'s list, written out for the reason given there. */
+    check(
+      "feedback_question_answers_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+    /* Non-empty and capped, in `feedback_body_shape`'s style. 12,000 is
+       `MAX_FEEDBACK_ANSWER_CHARS` in src/types.ts, the cap the reply box and
+       the route hold a reply to; tests/feedback-store.test.ts writes exactly
+       the cap and one character more. */
+    check(
+      "feedback_question_answers_body_shape",
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 12000`,
     ),
   ],
 );

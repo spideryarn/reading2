@@ -4,8 +4,9 @@ Up: [feedback.md](../project/feedback.md) · [feedback-reports.md](../project/fe
 reports `spya-cnbv8f` and `spya-sshjd2` (SPIDERYARN-READING2-E2, -E3) · queue item `qi-ewwnsr85` ·
 session and worktree `fbcnbv8f-earlier-tab-deferred-and-ask`
 
-Status as of 2026-10-07: **Stage 1 built in `16963ad41`; review fixes applied in this worktree but
-not committed. Stage 2 is not built** — there is still no `feedback-questions` implementation.
+Status as of 2026-10-07: **Stage 1 built in `16963ad41`, its review fixes in `394aed534`. Stage 2
+is built in this worktree and not yet committed, reviewed by GPT Sol or seen in a browser**
+(§ Progress).
 
 ## What Greg asked for
 
@@ -275,23 +276,26 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
 
 ### Stage 2 — needs input (`spya-sshjd2`)
 
-- [ ] Tests first, red: the question parser and compile (bad id, unknown field, body over the
+- [x] Tests first, red: the question parser and compile (bad id, unknown field, body over the
       cap, answered ones left out, `refs` not in the wire shape); the routes (questions and
       answers for an admin, 403 otherwise, an unknown question id refused, a retried POST
       idempotent); the store (answers owner-scoped; `tests/owner-isolation.test.ts`); the dialog
       (questions first in *Needs a decision*, a linked report's number, the reply box, dictation
-      wiring, answered state); the script (non-admin rows dropped, answered files dropped).
-- [ ] `docs/user-feedback/questions/`, the compile step, `src/feedback-questions.generated.ts`.
-- [ ] Migration: `feedback_question_answers`, with the app role's grants checked against
-      `database.md`.
-- [ ] Route, store, dialog, `scripts/feedback-questions.ts`.
-- [ ] Move *Waiting on Greg now* into question files, each bullet's own words reshaped only as
+      wiring, answered state); the script (non-admin rows dropped; **not** "answered files
+      dropped", which F14 replaced: a reply is left out only when its id is in `acted:`).
+- [x] `docs/user-feedback/questions/`, the compile step, `src/feedback-questions.generated.ts`.
+- [x] Migration: `feedback_question_answers` (`20261007051332`), applied locally only. The app
+      role reaches it through the schema's default privileges (`database.md` § Roles); nothing
+      is granted in the migration, and nobody has checked the grant on production.
+- [x] Route, store, dialog, `scripts/feedback-questions.ts`.
+- [x] Move *Waiting on Greg now* into question files, each bullet's own words reshaped only as
       far as ask-me-questions.md needs, plus the two questions below; the section becomes a
-      signpost.
-- [ ] Docs: `feedback-reports.md` (*Awaiting Greg* writes a question file; a short section on
+      signpost. Eight of the twelve lines moved; four were left in place because the plan each
+      links already records Greg's answer (§ Progress).
+- [x] Docs: `feedback-reports.md` (*Awaiting Greg* writes a question file; a short section on
       asking and on acting on an answer; the sweep reads the directory and runs `--answers`),
-      `feedback.md`, `admin.md`, `overseer.md` only where it names `awaiting-approval.md` as a
-      signpost, `/help`.
+      `feedback.md`, `admin.md`, `dictation.md`. `overseer.md` does not name
+      `awaiting-approval.md`, and `/help` does not describe the Earlier tab, so neither changed.
 - [ ] Gates, Sol code review, a browser pass in a Sonnet subagent, commit.
 
 ### Finish
@@ -311,3 +315,14 @@ Discovery on the plan is closed after two rounds; the code reviews check these a
   review worktree: numeric typos no longer look like attempted abuse, the CLI accepts the full
   positive Postgres-integer range, two comments no longer describe the wrong report or a resolved
   question, and the production `FeedbackHost` → admin-list seam has a mutation-checked test.
+- Stage 2 built, 2026-10-07, not committed. Ten question files: eight from the waiting list and
+  the two in § Questions for Greg. **Four waiting-list lines were not moved**, because the plan
+  each links already records his answer: reading time (`spya-dxufdw`, *Decided: A*, 2026-10-05),
+  sharing an article (`spya-hwdefp` and `spya-v322fd`, three questions each *Decided: A*,
+  2026-10-05), the command bar and Debate's box (`spya-thpsnd` part 3, *Q-bar-4 yes* and
+  *Q-suggest-together*), and the citation index (`spya-zuk4f7`, *yes, OpenAlex*, 2026-10-04).
+  They are still listed in `awaiting-approval.md`, under a sentence saying so, and the notes of
+  the first two and the last still say *awaiting*; a person or the next sweep takes them off.
+  Mutations seen red: the owner predicate on each of the three reads, the environment check and
+  the `acted` filter in `--answers`, the 409 in the store and in the route, and the open-only
+  filter in the compile and in the route.

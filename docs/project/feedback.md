@@ -8,7 +8,7 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 ## In this doc
 
 - [§ One box](#one-box-since-2026-09-02) — why the dialog is one box, not three (history)
-- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), and [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment)
+- [§ Your earlier reports](#your-earlier-reports-since-2026-09-16) — the Earlier tab, [§ Shipped or not](#shipped-or-not-since-2026-09-30) (how a note's header becomes a "shipped" mark), [§ What became of each report](#what-became-of-each-report-for-an-admin-since-2026-10-07) (an admin's four statuses, the `#number`, and the note's comment), and [§ Questions for an admin](#questions-for-an-admin-and-replies-to-them-since-2026-10-07) (an agent's questions at the top of *Needs a decision*, the reply box and its microphone, where a reply is stored)
 - [§ The thank-you](#the-thank-you-and-getting-out-of-it) — the message after sending, and the toast
 - [§ The keyboard](#the-keyboard-and-the-button-under-it) — the phone keyboard's Done/Send, and shortcuts
 - [§ Where it came from](#where-it-came-from) — Greg's original request, verbatim
@@ -295,10 +295,74 @@ the admin route answers 404 (a server from before it, during a deploy or after a
 falls back to the plain list and three pills for that opening. Any other failure, or an answer
 that fails the browser's check of it, is the ordinary "would not load" sentence with Try again.
 
-Nothing here writes to production: a status or a comment changes when a note changes and the
-commit carrying it is deployed. Questions for Greg shown in the tab, with a reply box, are stage 2
-of the same plan and are not built yet.
+Nothing in this subsection writes to production: a status or a comment changes when a note
+changes and the commit carrying it is deployed.
 [261007d](../plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md).
+
+### Questions for an admin, and replies to them, since 2026-10-07
+
+> Perhaps you could even find some way of signalling when you need input from me. […] you'd show
+> my report and then their question from you, and then some kind of input box with a voice
+> dictation button […] And in fact, it should be possible for you to ask my input on things that
+> aren't tied specifically to a feedback report.
+>
+> — Greg, 2026-10-06 (`spya-sshjd2`)
+
+**An agent asks by committing a file; the admin answers in the dialog; an agent reads the answer
+with a script.** Nothing an agent runs writes to production, and no route was added outside the
+sign-in gate. The price is that a question appears only after a deploy. How an agent writes one and
+acts on the reply is
+[feedback-reports.md § Asking Greg a question](feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer);
+this is what the app does with it.
+
+```
+ docs/user-feedback/questions/q-….md ──▶ scripts/feedback-endings.ts ──▶ src/feedback-questions.generated.ts
+                                                                          (server only)
+ GET  /api/admin/feedback/earlier  ──▶ questions: every open one, with the admin's newest reply
+ POST /api/admin/feedback/answers  ──▶ a row in feedback_question_answers
+ scripts/feedback-questions.ts --answers  ◀── reads those rows from production, read-only
+```
+
+- **Where they show.** `GET /api/admin/feedback/earlier` carries `questions` on every answer:
+  every open question, oldest first, whatever the filter. The tab draws them **at the top of
+  *Needs a decision***, above the reports, and says *"3 open questions"* beside that pill in every
+  view. The pill's number is still its count of reports, and the pills still sum to All: a question
+  is not a report, and its report may be shipped, set aside, or nothing at all.
+- **What one shows.** When it was asked; the report it is about, as `#number` and that report's
+  first line, **only when the report is the admin's own** (the lookup is owner-scoped, so a
+  question about another reader's report shows none of it); its title and its text, which an agent
+  wrote, in the model's face and as plain text with its line breaks ([fonts.md](fonts.md)); and the
+  admin's newest reply, *Answered · when*, in the reader's face. The file's `refs:` and `acted:`
+  lines are for agents: they are never compiled into the server, and the browser refuses a question
+  carrying any field but the six.
+- **Replying.** *Reply* opens a box under the question, one box at a time; a box that is shut keeps
+  its words. It has its own microphone ([dictation.md](dictation.md)): a second
+  `useDictationField`, with its own keeper name (`feedback-reply`) so a recording left by the Write
+  box is never offered here. The microphone stops when the box goes out of sight (another filter,
+  the Write tab, the dialog shut), as the Write box's does, and *Send reply* is off while it is
+  listening or transcribing. A half-written reply holds the page against an automatic reload, as a
+  half-written report does.
+- **Where a reply goes.** `POST /api/admin/feedback/answers` with `{ id, question, body }` and
+  nothing else: any other key is refused. The `id` is minted by the browser, so a retry is safe:
+  **201** for a new reply, **200** with the stored row for the same reply again, **409** when that
+  id is already a different reply, which changes nothing. The browser keeps one id for one question
+  and one set of words, and mints a new one when the words change, so it does not meet the 409. A
+  question id this build has no file for is a 400. **A reply to a question already marked answered
+  is accepted**: it may have been typed in a tab opened before that deploy, and the words are kept.
+- **The row.** `feedback_question_answers`, keyed `(owner_id, id)`: the question's id, the words
+  (at most 12,000 characters, `MAX_FEEDBACK_ANSWER_CHARS`), when, and the `environment` the server
+  itself was running in, which is what lets the script tell a production row from a local one. **A
+  reply is not a report**: it is never in the Earlier list, on `/admin/feedback`, in Sentry, in the
+  endings map or in a shipped email, and it is not rate-limited (the route is admin-only, and an
+  admin has no cap).
+- **When it fails.** The words stay in the box. A 404 means the page is newer than the server that
+  answered (a rollback, or the minutes of a deploy) and says to copy the words, reload and reply
+  again; anything else says to try again. If the `questions` part of the list's answer is not what
+  the browser expects, the whole list shows the ordinary "would not load" sentence, never some of
+  the questions.
+
+After a reply the card says *Answered* and offers *Reply again*; the question itself leaves the
+dialog when an agent marks its file `status: answered` and that commit is deployed.
 
 ## The thank-you, and getting out of it
 
@@ -491,6 +555,9 @@ which *is* the verified account id.
 | its Earlier tab: the reader's own reports | [`src/web/FeedbackEarlier.tsx`](../../src/web/FeedbackEarlier.tsx), and `GET /api/feedback` in [`src/routes.ts`](../../src/routes.ts) |
 | whether each earlier report shipped | the notes' headers in [`docs/user-feedback/`](../user-feedback/), compiled by [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts); read in [`src/feedback-ending.ts`](../../src/feedback-ending.ts) |
 | an admin's Earlier tab: status, number, comment | `GET /api/admin/feedback/earlier` in [`src/routes.ts`](../../src/routes.ts); `listMineByStatus` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); the same `FeedbackEarlier.tsx` |
+| questions for an admin: the files, the compile, what the server reads | [`docs/user-feedback/questions/`](../user-feedback/questions/), [`scripts/feedback-endings.ts`](../../scripts/feedback-endings.ts) § `parseQuestionFile`, [`src/feedback-question.ts`](../../src/feedback-question.ts), the rules in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts) |
+| replies to them: the route, the store, the table, the box | `POST /api/admin/feedback/answers` in [`src/routes.ts`](../../src/routes.ts); `submitAnswer` and `newestAnswers` in [`src/store/pg-feedback.ts`](../../src/store/pg-feedback.ts); `feedbackQuestionAnswers` in [`src/db/schema.ts`](../../src/db/schema.ts); `EarlierQuestions` in `FeedbackEarlier.tsx` |
+| listing questions and reading replies, for agents | [`scripts/feedback-questions.ts`](../../scripts/feedback-questions.ts) |
 | the microphone on its box | [dictation.md](dictation.md), and two guards this dialog needs that the others do not — see its header |
 | the diagnostics allowlist, shared by both halves | [`src/feedback-payload.ts`](../../src/feedback-payload.ts) |
 | the client ring buffer the diagnostics read | [`src/web/log-buffer.ts`](../../src/web/log-buffer.ts) |

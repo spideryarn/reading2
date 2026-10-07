@@ -7312,14 +7312,58 @@ export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
 }
 
 /**
+ * **An admin's reply to a question, as the Earlier tab shows it under the
+ * question**: the newest one this admin has sent. Their own words back to them.
+ */
+export interface AdminFeedbackQuestionAnswer {
+  id: string;
+  body: string;
+  /** ISO. */
+  createdAt: string;
+}
+
+/**
+ * **One open question an agent has put to the admin** — part of
+ * `GET /api/admin/feedback/earlier`. An agent wrote `title` and `body` (a
+ * file under docs/user-feedback/questions/, compiled into the server): plain
+ * text, to be drawn as text with its line breaks kept. The file's `refs` and
+ * `acted` lines are for agents and are never here.
+ */
+export interface AdminFeedbackQuestion {
+  /** `q-k3m9qt`. */
+  id: string;
+  title: string;
+  body: string;
+  /** `yyyy-mm-dd`: the day it was asked. */
+  asked: string;
+  /**
+   * The report it is about, when it names one **and that report is this
+   * admin's own**; otherwise null, and the body has to stand without it.
+   */
+  report: { id: string; number: number; firstLine: string } | null;
+  /** This admin's newest reply, or null. */
+  answer: AdminFeedbackQuestionAnswer | null;
+}
+
+/**
  * The whole answer. **Counts are report counts** under each filter, uncapped,
- * on every answer, and the four statuses sum to `all`. Stage 2 of 261007d adds
- * a `questions` array beside these; nothing here changes shape for it.
+ * on every answer, and the four statuses sum to `all`.
+ *
+ * `questions` is every open question, oldest first, **the same under every
+ * `show`**: a question's report may be shipped, set aside or absent, so the
+ * list is not narrowed by the filter (plan 261007d, decision 7). The dialog
+ * draws them in *Needs a decision* and counts them beside that pill.
  */
 export interface AdminEarlierFeedbackPage {
   reports: AdminEarlierFeedback[];
   more: boolean;
   counts: Record<AdminEarlierFeedbackShow, number>;
+  questions: AdminFeedbackQuestion[];
+}
+
+/** What `POST /api/admin/feedback/answers` answers with: the stored reply, on a 201 and on a 200 alike. */
+export interface AdminFeedbackAnswerReceipt {
+  answer: AdminFeedbackQuestionAnswer;
 }
 
 /**

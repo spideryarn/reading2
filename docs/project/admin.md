@@ -247,6 +247,12 @@ Earlier tab, read through the owner-scoped `feedbackStore`, never `adminStore`. 
 namespace because it carries what no other reader is sent: that a report was ignored, whether its
 note says declined or awaiting, its stored number, and the note's comment
 ([feedback.md § What became of each report](feedback.md#what-became-of-each-report-for-an-admin-since-2026-10-07)).
+The same answer carries the questions agents have put to the administrator, and
+**`POST /api/admin/feedback/answers`** stores a reply to one: a row in `feedback_question_answers`
+under the signed-in administrator's own id, again through `feedbackStore`. It is the second write
+under `/api/admin/feedback/` (the first is the Ignore mark), it touches no report and no other
+reader's data, and it is under the namespace because only an administrator is asked anything
+([feedback.md § Questions for an admin](feedback.md#questions-for-an-admin-and-replies-to-them-since-2026-10-07)).
 
 The metadata is exact and worth listing rather than gesturing at: the account **id**, the **email
 address**, the **providers** GoTrue records for it (`google`, `email`), whether that address is

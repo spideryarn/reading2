@@ -45,10 +45,10 @@
  * this file writes. docs/project/logging.md.
  */
 
-import { and, asc, desc, eq, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { feedback as feedbackTable } from "../db/schema.js";
+import { feedback as feedbackTable, feedbackQuestionAnswers as answersTable } from "../db/schema.js";
 import { feedbackPageAt, feedbackPageLabel } from "../feedback-page.js";
 import { log } from "../log.js";
 import { currentOwnerId } from "../owner.js";
@@ -70,7 +70,11 @@ import {
   type MyFeedbackStatusPage,
   type FeedbackStore,
   type FeedbackSubmission,
+  type FeedbackAnswerSubmission,
+  type LinkedFeedbackReport,
   type NewFeedback,
+  type NewFeedbackAnswer,
+  type StoredFeedbackAnswer,
 } from "./contracts.js";
 import { guardDbStore } from "./db-errors.js";
 
@@ -255,6 +259,27 @@ function toReport(row: ReportRow): FeedbackReport {
     sentryEventId: row.sentryEventId,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** The four fields of a reply that are the caller's to read back. */
+const ANSWER_COLUMNS = {
+  id: answersTable.id,
+  questionId: answersTable.questionId,
+  body: answersTable.body,
+  createdAt: answersTable.createdAt,
+};
+
+function toAnswer(row: { id: string; questionId: string; body: string; createdAt: Date }): StoredFeedbackAnswer {
+  return { id: row.id, questionId: row.questionId, body: row.body, createdAt: row.createdAt.toISOString() };
+}
+
+/** As much of a report's first line as fits beside a question's title. */
+const FIRST_LINE_CHARS = 140;
+
+/** The first line with anything on it, cut at `FIRST_LINE_CHARS` with a mark that it was. */
+function firstLineOf(body: string): string {
+  const line = body.split(/\r\n|[\n\r]/).find((one) => one.trim() !== "")?.trim() ?? "";
+  return line.length > FIRST_LINE_CHARS ? `${line.slice(0, FIRST_LINE_CHARS).trimEnd()}…` : line;
 }
 
 /** How much the reader wrote. The one number this file logs about their words. */
@@ -494,6 +519,67 @@ const rawPgFeedbackStore: FeedbackStore = {
         counts,
       };
     }, SNAPSHOT);
+  },
+
+  async submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission> {
+    const db = getDb();
+    const ownerId = currentOwnerId();
+    /* **`on conflict do nothing`, then look**: the insert is the only write and
+       it either lands or does not, so two copies of one retry cannot both
+       create, and neither meets a raw uniqueness error. The key is
+       `(owner_id, id)`, so the row found below is this owner's by construction. */
+    const [created] = await db
+      .insert(answersTable)
+      .values({
+        id: input.id,
+        ownerId,
+        questionId: input.questionId,
+        body: input.body,
+        environment: input.environment,
+      })
+      .onConflictDoNothing({ target: [answersTable.ownerId, answersTable.id] })
+      .returning(ANSWER_COLUMNS);
+    if (created) {
+      /* Lengths and ids, never the words (docs/project/logging.md). */
+      logger.info({ id: input.id, question: input.questionId, chars: input.body.length }, "feedback question answered");
+      return { kind: "created", answer: toAnswer(created) };
+    }
+    const [existing] = await db
+      .select(ANSWER_COLUMNS)
+      .from(answersTable)
+      .where(and(eq(answersTable.ownerId, ownerId), eq(answersTable.id, input.id)));
+    /* A conflict with no row to find: rows here are never deleted, so this is
+       a bug to hear about, not an outcome to pick a status for. */
+    if (!existing) throw new Error("feedback answer conflicted with a row that cannot be read");
+    /* The same reply again is the retry it looks like. Anything else under
+       this id is a second, different reply, and the stored one stands. */
+    if (existing.questionId !== input.questionId || existing.body !== input.body) {
+      logger.warn({ id: input.id }, "feedback answer refused: its id is already another reply");
+      return { kind: "conflict" };
+    }
+    logger.info({ id: input.id, repeat: true }, "feedback question already answered with this reply");
+    return { kind: "duplicate", answer: toAnswer(existing) };
+  },
+
+  async newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]> {
+    if (questionIds.length === 0) return [];
+    /* `distinct on`: the first row of each question in newest-first order. The
+       owner predicate is always there, and the question one beside it. */
+    const rows = await getDb()
+      .selectDistinctOn([answersTable.questionId], ANSWER_COLUMNS)
+      .from(answersTable)
+      .where(and(eq(answersTable.ownerId, currentOwnerId()), inArray(answersTable.questionId, [...questionIds])))
+      .orderBy(answersTable.questionId, desc(answersTable.createdAt), desc(answersTable.id));
+    return rows.map(toAnswer);
+  },
+
+  async linkedReports(ids: readonly string[]): Promise<LinkedFeedbackReport[]> {
+    if (ids.length === 0) return [];
+    const rows = await getDb()
+      .select({ id: feedbackTable.id, number: feedbackTable.number, body: feedbackTable.body })
+      .from(feedbackTable)
+      .where(and(eq(feedbackTable.ownerId, currentOwnerId()), idMember(ids)));
+    return rows.map((row) => ({ id: row.id, number: row.number, firstLine: firstLineOf(row.body) }));
   },
 
   async markMirrorAttempted(id: string): Promise<void> {

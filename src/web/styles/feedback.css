@@ -285,6 +285,91 @@ a.fb-earlier-page:focus-visible {
   outline-offset: -1px;
 }
 
+/* Questions an agent has put to an admin (261007d stage 2): at the top of
+   Needs a decision, above the reports. Every colour here is one the list
+   already uses. Block-level throughout, so a phone needs no rule of its own. */
+.fb-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.fb-questions[hidden] { display: none; }
+.fb-questions-heading {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.fb-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* One question: a card, so its reply box plainly belongs to it. */
+.fb-question {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+}
+.fb-question > * { max-width: 100%; }
+.fb-question .fb-earlier-meta { margin: 0; }
+.fb-question-title {
+  margin: 0;
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* Plain text with its own line breaks: the options are one a line. */
+.fb-question-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fb-question-report-line { overflow-wrap: anywhere; }
+/* What the admin replied, set apart the way a note's comment is. */
+.fb-question-answer {
+  align-self: stretch;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--rule-strong);
+}
+.fb-question-answer-body {
+  margin: 0.15rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fb-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-self: stretch;
+}
+.fb-reply-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fb-reply-send:disabled { opacity: 0.45; cursor: default; }
+/* On the Needs a decision pill, after its report count: how many questions. */
+.fb-show-questions { font-weight: 400; }
+
 .fb-head {
   display: flex;
   align-items: baseline;

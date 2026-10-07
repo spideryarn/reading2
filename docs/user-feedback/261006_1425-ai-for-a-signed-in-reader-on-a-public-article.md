@@ -30,3 +30,7 @@ Queue entry `qi-qw7tggag`. Plan:
 [261006k § Questions for Greg](../plans/261006k-signed-in-reader-ai-on-someone-else-s-public-article.md#questions-for-greg),
 reviewed by GPT Sol
 ([review](../plans/261006k-signed-in-reader-ai-on-someone-else-s-public-article-plan-review-sol.md)).
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-re2u3r.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

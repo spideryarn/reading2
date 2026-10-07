@@ -1,7 +1,7 @@
 ---
 reports: spya-dxufdw
-ending: awaiting
-comment: Waiting on you: no delay was found. Most likely Experimental features was off when the article loaded. The question is whether reading time should come out from behind that switch. Four options, A to D.
+ending: shipped
+comment: You chose A on 2026-10-05: reading time came out from behind Experimental features, for every owner. A switch to turn it off and a way to erase it are not built yet.
 ---
 # The reading-time line appears about a minute after the article loads
 

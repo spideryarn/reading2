@@ -37,3 +37,7 @@ What we did, in
 measurement and the documented behaviour. Greg: when a build with it is live, Skim on a phone held
 sideways should show the quote smaller than the article text. If it does not, say so and this
 reopens.
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-dhnbhw.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

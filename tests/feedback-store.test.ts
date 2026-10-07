@@ -60,7 +60,7 @@ import { closeDb, getDb } from "../src/db/client.js";
  * the whole store layer inside an `it` puts five seconds of module transform
  * inside a five-second test timeout on a busy machine.
  */
-import { feedback as feedbackTable } from "../src/db/schema.js";
+import { feedback as feedbackTable, feedbackQuestionAnswers as answersTable } from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { runAsOwner, type OwnerId } from "../src/owner.js";
@@ -73,6 +73,7 @@ import {
 import {
   FEEDBACK_ENVIRONMENTS,
   FEEDBACK_KINDS,
+  MAX_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_BODY_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   MAX_FEEDBACK_URL_CHARS,
@@ -201,6 +202,7 @@ async function clear(): Promise<void> {
   const db = getDb();
   for (const owner of [ALICE, BOB]) {
     await db.delete(feedbackTable).where(eq(feedbackTable.ownerId, owner));
+    await db.delete(answersTable).where(eq(answersTable.ownerId, owner));
   }
 }
 
@@ -1125,6 +1127,161 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       ]);
       /* An empty table: nothing to backfill, and the first report is 1. */
       expect(await run("")).toEqual([{ id: "after", number: 1 }]);
+    });
+  });
+
+  describe("an admin's replies to questions (261007d stage 2)", () => {
+    const Q1 = "q-k3m9qt";
+    const Q2 = "q-zz9zz9";
+    const reply = (over: { id: string; questionId?: string; body?: string; environment?: FeedbackEnvironment }) => ({
+      questionId: Q1,
+      body: "1A, and do the second one too",
+      environment: "test" as FeedbackEnvironment,
+      ...over,
+    });
+    const answersOf = async (owner: OwnerId) =>
+      getDb().select().from(answersTable).where(eq(answersTable.ownerId, owner));
+
+    it("stores a new reply, and says so", async () => {
+      const id = mintId();
+      const stored = await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id })));
+      expect(stored.kind).toBe("created");
+      if (stored.kind === "conflict") throw new Error("unreachable");
+      expect(stored.answer).toMatchObject({ id, questionId: Q1, body: "1A, and do the second one too" });
+      expect(Number.isNaN(Date.parse(stored.answer.createdAt))).toBe(false);
+      const rows = await answersOf(ALICE);
+      expect(rows).toHaveLength(1);
+      /* Server-authored, and stored as given: the script's provenance check reads it (F13). */
+      expect(rows[0]).toMatchObject({ id, ownerId: ALICE, questionId: Q1, environment: "test" });
+    });
+
+    it("answers the same owner, id, question and body again with the stored row, writing nothing (F15)", async () => {
+      const id = mintId();
+      const first = await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id })));
+      const again = await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id })));
+      expect(again.kind).toBe("duplicate");
+      if (first.kind === "conflict" || again.kind === "conflict") throw new Error("unreachable");
+      expect(again.answer).toEqual(first.answer);
+      expect(await answersOf(ALICE)).toHaveLength(1);
+    });
+
+    it("refuses the same id with a different body or question, and changes nothing (F15)", async () => {
+      const id = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id })));
+      expect((await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id, body: "2B instead" })))).kind).toBe("conflict");
+      expect((await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id, questionId: Q2 })))).kind).toBe("conflict");
+      const rows = await answersOf(ALICE);
+      expect(rows.map((row) => [row.questionId, row.body])).toEqual([[Q1, "1A, and do the second one too"]]);
+    });
+
+    it("stores one row when the same reply arrives twice at the same moment", async () => {
+      const id = mintId();
+      const both = await Promise.all([
+        runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id }))),
+        runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id }))),
+      ]);
+      expect(both.map((one) => one.kind).sort()).toEqual(["created", "duplicate"]);
+      expect(await answersOf(ALICE)).toHaveLength(1);
+    });
+
+    it("keeps one owner's replies from another: the same id is two rows, and each reads only their own", async () => {
+      const id = mintId();
+      const mine = await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id, body: "Alice's" })));
+      /* Not a conflict: the key is (owner_id, id), so Bob's id cannot collide with Alice's. */
+      const theirs = await runAsOwner(BOB, () => pgFeedbackStore.submitAnswer(reply({ id, body: "Bob's" })));
+      expect([mine.kind, theirs.kind]).toEqual(["created", "created"]);
+      const alices = await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([Q1, Q2]));
+      expect(alices.map((answer) => answer.body)).toEqual(["Alice's"]);
+      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.newestAnswers([Q1, Q2]));
+      expect(bobs.map((answer) => answer.body)).toEqual(["Bob's"]);
+
+      /* And a retry is judged against the owner's own row: each gets their own
+         back as a duplicate, never a conflict with the other's words, and never
+         the other's words. */
+      const mineAgain = await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id, body: "Alice's" })));
+      const theirsAgain = await runAsOwner(BOB, () => pgFeedbackStore.submitAnswer(reply({ id, body: "Bob's" })));
+      expect(mineAgain).toMatchObject({ kind: "duplicate", answer: { body: "Alice's" } });
+      expect(theirsAgain).toMatchObject({ kind: "duplicate", answer: { body: "Bob's" } });
+    });
+
+    it("hands back the newest reply to each question asked about, and none for the rest", async () => {
+      const older = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: older, body: "first thought" })));
+      await getDb()
+        .update(answersTable)
+        .set({ createdAt: sql`now() - interval '1 hour'` })
+        .where(and(eq(answersTable.ownerId, ALICE), eq(answersTable.id, older)));
+      await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "second thought" })));
+      await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), questionId: Q2, body: "about the other" })));
+
+      const both = await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([Q1, Q2]));
+      expect(Object.fromEntries(both.map((answer) => [answer.questionId, answer.body]))).toEqual({
+        [Q1]: "second thought",
+        [Q2]: "about the other",
+      });
+      expect(Object.keys(both[0] ?? {}).sort()).toEqual(["body", "createdAt", "id", "questionId"]);
+      const one = await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([Q2]));
+      expect(one.map((answer) => answer.questionId)).toEqual([Q2]);
+      expect(await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([]))).toEqual([]);
+    });
+
+    it("takes a reply of exactly the cap, and the database refuses one character more", async () => {
+      const at = await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) })),
+      );
+      expect(at.kind).toBe("created");
+      await expect(
+        runAsOwner(ALICE, () =>
+          pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1) })),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "   " }))),
+      ).rejects.toThrow();
+      await expect(
+        runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), questionId: "spya-k3m9qt" }))),
+      ).rejects.toThrow();
+      expect(await answersOf(ALICE)).toHaveLength(1);
+    });
+
+    it("takes every environment the types allow", async () => {
+      for (const environment of FEEDBACK_ENVIRONMENTS) {
+        const stored = await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), environment })));
+        expect(stored.kind, environment).toBe("created");
+      }
+    });
+
+    it("looks up a question's report among the owner's own only: number and first line", async () => {
+      const mine = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: mine, body: "The first line.\nAnd a second." })));
+      const bobs = mintId();
+      await runAsOwner(BOB, () => pgFeedbackStore.submit(report({ id: bobs, body: "Bob's words" })));
+      /* The same id under Bob as Alice's: Alice must get her own row, never his. */
+      await runAsOwner(BOB, () => pgFeedbackStore.submit(report({ id: mine, body: "Bob's, under Alice's id" })));
+
+      const found = await runAsOwner(ALICE, () => pgFeedbackStore.linkedReports([mine, bobs, "spya-n0such"]));
+      expect(found).toHaveLength(1);
+      expect(found[0]).toMatchObject({ id: mine, firstLine: "The first line." });
+      expect(Number.isSafeInteger(found[0]?.number)).toBe(true);
+      expect(Object.keys(found[0] ?? {}).sort()).toEqual(["firstLine", "id", "number"]);
+      expect(await runAsOwner(ALICE, () => pgFeedbackStore.linkedReports([]))).toEqual([]);
+
+      /* A long first line is cut, with a mark that it was. */
+      const long = mintId();
+      await runAsOwner(ALICE, () => pgFeedbackStore.submit(report({ id: long, body: "word ".repeat(100) })));
+      const [cut] = await runAsOwner(ALICE, () => pgFeedbackStore.linkedReports([long]));
+      expect(cut?.firstLine.length).toBeLessThanOrEqual(141);
+      expect(cut?.firstLine.endsWith("…")).toBe(true);
+    });
+
+    it("logs how long a reply was, never what it said", async () => {
+      const id = mintId();
+      const logged = await logLinesWhile(async () => {
+        await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id, body: "a thaumaturgical decision" })));
+      });
+      expect(logged).toContain("feedback question answered");
+      expect(logged).toContain(id);
+      expect(logged).not.toContain("thaumaturgical");
     });
   });
 

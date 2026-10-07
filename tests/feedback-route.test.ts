@@ -49,7 +49,15 @@ import {
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   MAX_FEEDBACK_URL_CHARS,
 } from "../src/types.js";
-import type { FeedbackReport, FeedbackSubmission, NewFeedback } from "../src/store/contracts.js";
+import type {
+  FeedbackAnswerSubmission,
+  FeedbackReport,
+  FeedbackSubmission,
+  LinkedFeedbackReport,
+  NewFeedback,
+  NewFeedbackAnswer,
+  StoredFeedbackAnswer,
+} from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
 
@@ -75,6 +83,16 @@ let countAnswer: unknown = { all: 0, in: 0 };
 let statusListed: { limit: number; endings: unknown; show: string; owner: string }[] = [];
 /** What the fake `listMineByStatus` answers with, or an Error to throw. */
 let statusAnswer: unknown = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
+/** Every `submitAnswer` the route made, with the owner in force (261007d stage 2). */
+let answersSubmitted: { input: NewFeedbackAnswer; owner: string }[] = [];
+/** What the fake `submitAnswer` answers with; null means "created, echoing the input". */
+let answerOutcome: FeedbackAnswerSubmission | null = null;
+/** The question ids each `newestAnswers` asked about, and the replies it hands back. */
+let newestAsked: { ids: readonly string[]; owner: string }[] = [];
+let newestAnswer: StoredFeedbackAnswer[] = [];
+/** The report ids each `linkedReports` asked about, and what it hands back. */
+let linkedAsked: { ids: readonly string[]; owner: string }[] = [];
+let linkedAnswer: LinkedFeedbackReport[] = [];
 /** What the fake store answers with. Set per test. */
 let answer: FeedbackSubmission;
 /** What `captureFeedback` does. A test makes it throw. */
@@ -136,6 +154,23 @@ vi.mock("../src/feedback-endings.generated.js", () => ({
   },
 }));
 
+/* The questions, fixed here for the same reason. One open about the admin's
+   own report, one open about nothing, one open about a report the admin did
+   not file, and one already answered: known to the POST, never sent by the GET. */
+vi.mock("../src/feedback-questions.generated.js", () => ({
+  FEEDBACK_QUESTION_STATUS: {
+    "q-aaaaaa": "open",
+    "q-bbbbbb": "open",
+    "q-cccccc": "open",
+    "q-dddddd": "answered",
+  },
+  FEEDBACK_OPEN_QUESTIONS: [
+    { id: "q-aaaaaa", title: "One switch or two?", report: "spya-wa1t00", asked: "2026-10-05", body: "Background.\n\nA. One.\nB. Two." },
+    { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
+    { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
+  ],
+}));
+
 vi.mock("../src/store/index.js", async (importActual) => {
   const actual = await importActual<typeof import("../src/store/index.js")>();
   return {
@@ -161,6 +196,23 @@ vi.mock("../src/store/index.js", async (importActual) => {
         statusListed.push({ limit, endings, show, owner: currentOwnerId() });
         if (statusAnswer instanceof Error) throw statusAnswer;
         return statusAnswer;
+      },
+      submitAnswer: async (input: NewFeedbackAnswer) => {
+        answersSubmitted.push({ input, owner: currentOwnerId() });
+        return (
+          answerOutcome ?? {
+            kind: "created",
+            answer: { id: input.id, questionId: input.questionId, body: input.body, createdAt: "2026-10-07T09:00:00.000Z" },
+          }
+        );
+      },
+      newestAnswers: async (ids: readonly string[]) => {
+        newestAsked.push({ ids, owner: currentOwnerId() });
+        return newestAnswer;
+      },
+      linkedReports: async (ids: readonly string[]) => {
+        linkedAsked.push({ ids, owner: currentOwnerId() });
+        return linkedAnswer;
       },
       markMirrorAttempted: async (id: string) => {
         attempted.push(id);
@@ -390,6 +442,12 @@ beforeEach(() => {
   countAnswer = { all: 0, in: 0 };
   statusListed = [];
   statusAnswer = { reports: [], more: false, counts: { open: 0, waiting: 0, aside: 0, shipped: 0 } };
+  answersSubmitted = [];
+  answerOutcome = null;
+  newestAsked = [];
+  newestAnswer = [];
+  linkedAsked = [];
+  linkedAnswer = [];
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
@@ -612,6 +670,7 @@ describe("GET /api/admin/feedback/earlier", () => {
       more: true,
       /* Report counts, and the four sum to All. */
       counts: { all: 70, open: 3, waiting: 2, aside: 5, shipped: 60 },
+      questions: expect.any(Array),
     });
     expect(JSON.stringify(reply.body)).not.toContain("somebody else's report");
     expect(statusListed).toEqual([
@@ -686,6 +745,178 @@ describe("GET /api/admin/feedback/earlier", () => {
       counts: { all: 1, shipped: 0, unshipped: 1 },
     });
     expect(statusListed).toEqual([]);
+  });
+});
+
+/**
+ * **The questions an agent has put to the admin**, sent with every answer of
+ * `GET /api/admin/feedback/earlier`, and `POST /api/admin/feedback/answers`,
+ * which stores a reply. 261007d stage 2.
+ */
+describe("questions for the admin, and replies to them", () => {
+  const EARLIER = "/api/admin/feedback/earlier";
+  const ANSWERS = "/api/admin/feedback/answers";
+  const get = (path = EARLIER, verify?: Parameters<typeof handleApi>[2]) =>
+    call(undefined, { method: "GET", path, ...(verify ? { verify } : {}) });
+  const post = (body: unknown, verify?: Parameters<typeof handleApi>[2]) =>
+    call(body, { method: "POST", path: ANSWERS, ...(verify ? { verify } : {}) });
+  const acceptSomebodyElse: Parameters<typeof handleApi>[2] = async () => ({
+    ok: true,
+    claims: {
+      sub: "0000f5e1-0000-4000-8000-00000000beef",
+      email: "somebody-else@example.test",
+      role: "authenticated",
+      is_anonymous: false,
+    },
+  });
+  type Sent = { questions: Record<string, unknown>[] };
+
+  it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {
+    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?" }];
+    newestAnswer = [{ id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }];
+    const reply = await get();
+    expect(reply.status).toBe(200);
+    expect((reply.body as Sent).questions).toEqual([
+      {
+        id: "q-aaaaaa",
+        title: "One switch or two?",
+        body: "Background.\n\nA. One.\nB. Two.",
+        asked: "2026-10-05",
+        report: { id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?" },
+        answer: null,
+      },
+      {
+        id: "q-bbbbbb",
+        title: "A question about nothing filed",
+        body: "Stands alone.",
+        asked: "2026-10-06",
+        report: null,
+        answer: { id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
+      },
+      /* Its report is not this admin's, so the store found none: nothing of it is sent. */
+      { id: "q-cccccc", title: "About a reader's report", body: "The body says it all.", asked: "2026-10-07", report: null, answer: null },
+    ]);
+    /* Both lookups ran as the signed-in admin, for the open questions only. */
+    expect(newestAsked).toEqual([{ ids: ["q-aaaaaa", "q-bbbbbb", "q-cccccc"], owner: TEST_OWNER }]);
+    expect(linkedAsked).toEqual([{ ids: ["spya-wa1t00", "spya-n0tm1n"], owner: TEST_OWNER }]);
+  });
+
+  it("never sends an answered question, whatever the store says about it", async () => {
+    /* A store that handed back a reply to the answered one must not bring it in. */
+    newestAnswer = [{ id: "spya-repzyy", questionId: "q-dddddd", body: "late", createdAt: "2026-10-07T08:00:00.000Z" }];
+    const sent = (await get()).body as Sent;
+    expect(sent.questions.map((question) => question.id)).toEqual(["q-aaaaaa", "q-bbbbbb", "q-cccccc"]);
+    expect(JSON.stringify(sent)).not.toContain("q-dddddd");
+    expect(newestAsked[0]?.ids).not.toContain("q-dddddd");
+  });
+
+  it("sends the same questions under every show, and exactly six fields of each", async () => {
+    for (const show of ["all", "open", "waiting", "aside", "shipped"]) {
+      const sent = (await get(`${EARLIER}?show=${show}`)).body as Sent;
+      expect(sent.questions.map((question) => question.id), show).toEqual(["q-aaaaaa", "q-bbbbbb", "q-cccccc"]);
+      for (const question of sent.questions) {
+        expect(Object.keys(question).sort()).toEqual(["answer", "asked", "body", "id", "report", "title"]);
+      }
+    }
+  });
+
+  it("does not let a linked report from the store name a question that did not ask for it", async () => {
+    /* The store is asked for two ids; one it should never return is ignored. */
+    linkedAnswer = [{ id: "spya-0ther0", number: 9, firstLine: "unrelated" }];
+    const sent = (await get()).body as Sent;
+    expect(sent.questions.every((question) => question.report === null)).toBe(true);
+  });
+
+  it("stores a reply: 201, the server's own environment, the signed-in owner, never cached", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "  1A, please  " });
+    expect(reply.status).toBe(201);
+    expect(reply.headers["cache-control"]).toBe("private, no-store");
+    expect(reply.body).toEqual({ answer: { id: "spya-repzyy", body: "1A, please", createdAt: "2026-10-07T09:00:00.000Z" } });
+    expect(answersSubmitted).toEqual([
+      {
+        input: { id: "spya-repzyy", questionId: "q-aaaaaa", body: "1A, please", environment: "test" },
+        owner: TEST_OWNER,
+      },
+    ]);
+    /* A reply is not a report: nothing is filed, mirrored or mailed. */
+    expect(submitted).toEqual([]);
+    expect(attempted).toEqual([]);
+    expect(notices).toEqual([]);
+  });
+
+  it("answers a retry of the same reply 200 with the stored row, and a reused id 409 (F15)", async () => {
+    const body = { id: "spya-repzyy", question: "q-aaaaaa", body: "1A" };
+    answerOutcome = {
+      kind: "duplicate",
+      answer: { id: "spya-repzyy", questionId: "q-aaaaaa", body: "1A", createdAt: "2026-10-07T08:59:00.000Z" },
+    };
+    const again = await post(body);
+    expect(again.status).toBe(200);
+    expect(again.body).toEqual({ answer: { id: "spya-repzyy", body: "1A", createdAt: "2026-10-07T08:59:00.000Z" } });
+
+    answerOutcome = { kind: "conflict" };
+    const reused = await post({ ...body, body: "2B" });
+    expect(reused.status).toBe(409);
+    expect(reused.body).not.toHaveProperty("answer");
+    expect(JSON.stringify(reused.body)).not.toContain("2B");
+  });
+
+  it("accepts a reply to a question already marked answered: a late reply is not lost (F14)", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-dddddd", body: "I had more to say" });
+    expect(reply.status).toBe(201);
+    expect(answersSubmitted.map((one) => one.input.questionId)).toEqual(["q-dddddd"]);
+  });
+
+  it("refuses a question this build has no file for, and reaches no store", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-zzzzzz", body: "1A" });
+    expect(reply.status).toBe(400);
+    expect(await post({ id: "spya-repzyy", question: "constructor", body: "1A" })).toMatchObject({ status: 400 });
+    expect(await post({ id: "spya-repzyy", question: "spya-wa1t00", body: "1A" })).toMatchObject({ status: 400 });
+    expect(answersSubmitted).toEqual([]);
+  });
+
+  it("refuses a body with any field but the three, in fixed prose", async () => {
+    const SECRET = "thaumaturgical";
+    for (const extra of [{ environment: "production" }, { ownerId: TEST_OWNER }, { [SECRET]: 1 }, { createdAt: "2020-01-01" }]) {
+      const reply = await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "1A", ...extra });
+      expect(reply.status).toBe(400);
+      expect(JSON.stringify(reply.body)).not.toContain(SECRET);
+    }
+    expect(answersSubmitted).toEqual([]);
+  });
+
+  it("refuses a bad id, an empty reply, a reply over the cap, and a body that is not an object", async () => {
+    const good = { id: "spya-repzyy", question: "q-aaaaaa", body: "1A" };
+    expect((await post({ ...good, id: "212" })).status).toBe(400);
+    expect((await post({ ...good, id: undefined })).status).toBe(400);
+    expect((await post({ ...good, body: "   " })).status).toBe(400);
+    expect((await post({ ...good, body: 7 })).status).toBe(400);
+    expect((await post({ ...good, body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS + 1) })).status).toBe(400);
+    expect((await post([good])).status).toBe(400);
+    expect(answersSubmitted).toEqual([]);
+    /* The positive control: exactly the cap is stored. */
+    expect((await post({ ...good, body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) })).status).toBe(201);
+    /* And a cap's worth of four-byte characters still fits the request limit. */
+    expect((await post({ ...good, body: "é".repeat(MAX_FEEDBACK_ANSWER_CHARS) })).status).toBe(201);
+  });
+
+  it("is a 403 for a signed-in reader who is not an admin, on both routes, and reaches no store", async () => {
+    const reply = await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "1A" }, acceptSomebodyElse);
+    expect(reply.status).toBe(403);
+    expect((await get(EARLIER, acceptSomebodyElse)).status).toBe(403);
+    expect(answersSubmitted).toEqual([]);
+    expect(newestAsked).toEqual([]);
+    expect(linkedAsked).toEqual([]);
+    /* Signed out: 401. */
+    expect((await call({ id: "spya-repzyy", question: "q-aaaaaa", body: "1A" }, { method: "POST", path: ANSWERS, headers: {} })).status).toBe(401);
+  });
+
+  it("logs the reply's length, never its words", async () => {
+    const logged = await logLinesWhile(async () => {
+      await post({ id: "spya-repzyy", question: "q-aaaaaa", body: "a thaumaturgical decision" });
+    });
+    expect(logged).toContain("spya-repzyy");
+    expect(logged).not.toContain("thaumaturgical");
   });
 });
 

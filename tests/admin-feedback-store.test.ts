@@ -50,6 +50,7 @@ import {
 } from "../src/store/pg-admin-feedback.js";
 import { ADMIN_FEEDBACK_MAX, decodeFeedbackCursor, encodeFeedbackCursor } from "../src/types.js";
 import { reportSql } from "../scripts/feedback-reporter.js";
+import { ANSWERS_DEPLOYED_SQL, answersSql, classifyAnswers } from "../scripts/feedback-questions.js";
 import { listSql, showSql } from "../scripts/feedback-unswept.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -661,6 +662,66 @@ describe("the admin feedback read on Postgres", () => {
         expect(await rowsOf(showSql(T, "number"), String(number))).toEqual([]);
         expect(await rowsOf(reportSql("number", T), String(number))).toEqual([]);
       });
+    });
+
+    /**
+     * **The replies' reader, against a real table** (261007d stage 2).
+     * `scripts/feedback-questions.ts --answers` reads production and reaches
+     * `dev` before the deploy that creates `feedback_question_answers`, so it
+     * asks whether the table exists first. Here: this database's table, a
+     * name that is not a table, and the select itself over two owners' rows.
+     */
+    it("is read by the questions script's two selects: the table asked about, then every owner's replies", async () => {
+      const mine = mintId();
+      const theirs = mintId();
+      await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submitAnswer({ id: mine, questionId: "q-k3m9qt", body: "Alice's reply", environment: "test" }),
+      );
+      await runAsOwner(BOB, () =>
+        pgFeedbackStore.submitAnswer({ id: theirs, questionId: "q-k3m9qt", body: "Bob's reply", environment: "test" }),
+      );
+      type Row = { id: string; owner_id: string; question_id: string; body: string; environment: string; created_at: string | Date };
+      try {
+        await getDb().transaction(async (tx) => {
+          const deployed = (await tx.execute(sql.raw(ANSWERS_DEPLOYED_SQL))) as unknown as { rows: { deployed: unknown }[] };
+          expect(deployed.rows).toEqual([{ deployed: true }]);
+          /* The same statement about a table that is not there: false, and no error. */
+          const absent = (await tx.execute(
+            sql.raw(ANSWERS_DEPLOYED_SQL.replace("feedback_question_answers", "feedback_question_answers_not_yet")),
+          )) as unknown as { rows: { deployed: unknown }[] };
+          expect(absent.rows).toEqual([{ deployed: false }]);
+
+          const read = (await tx.execute(sql.raw(answersSql()))) as unknown as { rows: Row[] };
+          const ours = read.rows.filter((row) => row.id === mine || row.id === theirs);
+          /* Across owners, as an agent must see them: the script, not the store, decides whose count. */
+          expect(ours.map((row) => [row.owner_id, row.body]).sort()).toEqual(
+            [
+              [ALICE, "Alice's reply"],
+              [BOB, "Bob's reply"],
+            ].sort(),
+          );
+          expect(ours.every((row) => row.question_id === "q-k3m9qt" && !Number.isNaN(new Date(row.created_at).getTime()))).toBe(true);
+          /* And what the script makes of rows a local stack wrote: it cannot tell. */
+          const verdict = classifyAnswers(
+            ours.map((row) => ({
+              id: row.id,
+              ownerId: row.owner_id,
+              questionId: row.question_id,
+              body: row.body,
+              environment: row.environment,
+              createdAt: new Date(row.created_at),
+            })),
+            [],
+          );
+          expect(verdict.kind).toBe("cannot-tell");
+        });
+      } finally {
+        for (const [owner, id] of [[ALICE, mine], [BOB, theirs]] as const) {
+          await getDb().execute(
+            sql`delete from spideryarn.feedback_question_answers where owner_id = ${owner} and id = ${id}`,
+          );
+        }
+      }
     });
 
     it("answers null for a pair that is not a report, and writes nothing", async () => {

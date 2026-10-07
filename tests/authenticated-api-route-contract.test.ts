@@ -384,6 +384,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback/earlier"],
   },
   {
+    /* An admin's reply to a question an agent asked, 261007d stage 2. One segment, as `earlier` is. */
+    match: { kind: "literal", path: "/api/admin/feedback/answers" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/feedback/answers"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
     /* PATCH since 261003j: mark one report ignored, or take the mark back. */
     methods: ["GET", "PATCH"],
@@ -944,11 +950,11 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
 /** Loud failure controls. Never the oracle — see the header. */
 /* 93 since the private link's one matcher, 2026-10-05 (plan 261005e); 94 with
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
-   feedback (plan 261007d). */
-const EXPECTED_MATCHER_COUNT = 95;
+   feedback (plan 261007d); 96 with their replies to questions (its stage 2). */
+const EXPECTED_MATCHER_COUNT = 96;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
-   with the admin's earlier feedback. */
-const EXPECTED_GUARD_COUNT = 117;
+   with the admin's earlier feedback; 118 with their replies to questions. */
+const EXPECTED_GUARD_COUNT = 118;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2107,6 +2113,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/feedback",
         // an admin's own earlier reports, 261007d — beside the list across owners
         "GET literal /api/admin/feedback/earlier",
+        // an admin's reply to a question, 261007d stage 2 — beside the list that carries the questions
+        "POST literal /api/admin/feedback/answers",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",

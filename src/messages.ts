@@ -641,11 +641,15 @@ export const CODE_KINDS: Record<string, FailureKind> = {
      the dialog puts a Copy button beside it for the case where it keeps failing.
      `fb-store` is a deployment running without the database reports are kept in,
      which another go cannot fix. `fb-list` is the transient failure to read the
-     reports back. See § feedback below, and
+     reports back. `fb-reply` is an admin's reply to a question not getting
+     through, and `fb-reply-stale` the same on a page older than the server it
+     reached: both leave the words in the box. See § feedback below, and
      docs/project/feedback.md. */
   "fb-send": "retry",
   "fb-store": "ours",
   "fb-list": "retry",
+  "fb-reply": "retry",
+  "fb-reply-stale": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -5766,6 +5770,34 @@ export const FEEDBACK_EARLIER_FAILED: ReaderFacingFailure = {
   message:
     "Your earlier feedback would not load just now. What you sent is safe with us — trying again " +
     "in a moment usually works. [fb-list]",
+};
+
+/**
+ * **A reply to a question did not get through** — the reply box under a
+ * question in an admin's Earlier tab (plan 261007d). `retry`: the words are
+ * still in the box, and sending the same words again is safe, because the
+ * reply carries an id the server answers twice with the one stored row.
+ */
+export const FEEDBACK_REPLY_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That reply did not get through. Your words are still in the box — trying again in a moment " +
+    "usually works. [fb-reply]",
+};
+
+/**
+ * **The server this page reached has no way to take a reply** — a 404 from
+ * `POST /api/admin/feedback/answers`: a page loaded from a newer build than
+ * the server answering it, after a rollback or in the minutes of a deploy.
+ * Sending again from this page cannot work until one of them changes, so the
+ * sentence says what does, and says to copy first: the box is not kept across
+ * a reload.
+ */
+export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "This page and the server are out of step, so that reply was not sent. Your words are still " +
+    "in the box: copy them, reload the page, and reply again. [fb-reply-stale]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

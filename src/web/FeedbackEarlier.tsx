@@ -47,6 +47,19 @@
  * to ask, and the server decides who is answered.
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  *
+ * > you'd show my report and then their question from you, and then some kind
+ * > of input box with a voice dictation button […] it should be possible for
+ * > you to ask my input on things that aren't tied specifically to a feedback
+ * > report.
+ * >
+ * > — Greg, 2026-10-06 (`spya-sshjd2`)
+ *
+ * So the admin's answer also carries **every open question an agent has
+ * asked** (a file under docs/user-feedback/questions/, compiled into the
+ * server). They are drawn at the top of *Needs a decision*, counted beside
+ * that pill in every view, and each has a reply box with a microphone
+ * (`EarlierQuestions`). A reply is a row of its own, never a report.
+ *
  * ## Once per opening, per filter
  *
  * Each filter is read the first time it is chosen and kept while the reader
@@ -59,12 +72,20 @@
  * dialog shut, and a per-filter sequence drops a Try again's older twin.
  */
 import { LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { MAX_FEEDBACK_COMMENT_CHARS } from "../feedback-ending-values.js";
-import { isSpideryarnId } from "../ids.js";
-import { FEEDBACK_EARLIER_FAILED } from "../messages.js";
 import {
+  isFeedbackQuestionId,
+  MAX_FEEDBACK_QUESTION_BODY_CHARS,
+  MAX_FEEDBACK_QUESTION_TITLE_CHARS,
+} from "../feedback-question-values.js";
+import { isSpideryarnId, mintId } from "../ids.js";
+import { FEEDBACK_EARLIER_FAILED, FEEDBACK_REPLY_FAILED, FEEDBACK_REPLY_STALE } from "../messages.js";
+import {
+  MAX_FEEDBACK_ANSWER_CHARS,
+  type AdminFeedbackQuestion,
+  type AdminFeedbackQuestionAnswer,
   ADMIN_EARLIER_FEEDBACK_SHOWS,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
@@ -79,10 +100,14 @@ import {
   type EarlierFeedbackStatus,
   type FeedbackKind,
 } from "../types.js";
+import { keepDictation } from "./dictation-keep.js";
+import { useReaderTranscriber } from "./dictation-upload.js";
+import { DictationButton, DictationStrip } from "./DictationStrip.js";
 import { apiFetch } from "./lib/api.js";
 import { Link } from "./Link.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { parseRoute, readHref } from "./router.js";
+import { useDictationField } from "./useDictationField.js";
 
 /**
  * **Which list an answer is**: every reader's (`plain`, `GET /api/feedback`),
@@ -121,6 +146,7 @@ const IDLE: EarlierState = { kind: "idle" };
 
 const ADMIN_PATH = "/api/admin/feedback/earlier";
 const PLAIN_PATH = "/api/feedback";
+const ANSWERS_PATH = "/api/admin/feedback/answers";
 
 /**
  * **A path on this site, and nothing a browser could read as leaving it** —
@@ -233,7 +259,69 @@ function isAdminEarlierFeedbackPage(
     if (reports.filter((report) => report.status === status).length > (counts[status] as number)) return false;
   }
   if (which !== "all" && reports.some((report) => report.status !== which)) return false;
-  return true;
+  return areQuestions((value as { questions?: unknown }).questions);
+}
+
+/** A reply as the server sends it back: an id, words, and a time that parses. */
+function isQuestionAnswer(value: unknown): value is AdminFeedbackQuestionAnswer {
+  if (typeof value !== "object" || value === null) return false;
+  const answer = value as Record<string, unknown>;
+  return (
+    typeof answer.id === "string" && isSpideryarnId(answer.id) &&
+    typeof answer.body === "string" && answer.body.trim() !== "" &&
+    typeof answer.createdAt === "string" && !Number.isNaN(Date.parse(answer.createdAt))
+  );
+}
+
+const QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
+
+/**
+ * **The questions half of the admin answer, as strict as the reports half.**
+ * Exactly the six fields of each, so anything meant for agents that a server
+ * one day sent would fail here instead of being carried around; ids no two
+ * share; text within the caps the compiler holds a file to. A list that fails
+ * fails the whole answer: the failure sentence, never some of the questions.
+ */
+function areQuestions(value: unknown): value is AdminFeedbackQuestion[] {
+  if (!Array.isArray(value) || !value.every(isQuestion)) return false;
+  return new Set(value.map((question) => question.id)).size === value.length;
+}
+
+/** Text that says something and fits its cap. */
+const isTextWithin = (value: unknown, cap: number): value is string =>
+  typeof value === "string" && value !== "" && value.length <= cap;
+
+/** The report a question is about, as its card shows it: an id, a number, a first line. */
+function isLinkedReport(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const linked = value as Record<string, unknown>;
+  return (
+    typeof linked.id === "string" && isSpideryarnId(linked.id) &&
+    Number.isSafeInteger(linked.number) && (linked.number as number) > 0 &&
+    typeof linked.firstLine === "string"
+  );
+}
+
+function isQuestion(value: unknown): value is AdminFeedbackQuestion {
+  if (typeof value !== "object" || value === null) return false;
+  const question = value as Record<string, unknown>;
+  return (
+    Object.keys(question).sort().join() === QUESTION_KEYS.join() &&
+    isFeedbackQuestionId(question.id) &&
+    isTextWithin(question.title, MAX_FEEDBACK_QUESTION_TITLE_CHARS) &&
+    isTextWithin(question.body, MAX_FEEDBACK_QUESTION_BODY_CHARS) &&
+    typeof question.asked === "string" && dayOf(question.asked) !== null &&
+    (question.report === null || isLinkedReport(question.report)) &&
+    (question.answer === null || isQuestionAnswer(question.answer))
+  );
+}
+
+/** `6 Oct 2026` for `2026-10-06`, or null when it is not a day. In UTC: a date has no zone to shift in. */
+function dayOf(asked: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(asked)) return null;
+  const date = new Date(`${asked}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 /**
@@ -273,6 +361,124 @@ export interface EarlierFeedback {
   choice: EarlierChoice;
   setShow(show: AnyShow): void;
   retry(): void;
+  /**
+   * Every open question, for an admin, from any answer of this opening (each
+   * carries them all); `null` for every other reader and until one lands.
+   */
+  questions: AdminFeedbackQuestion[] | null;
+  replies: QuestionReplies;
+}
+
+/** Where the open reply box's send has got to. */
+export type ReplyStage = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; message: string };
+
+/**
+ * **The admin's replies in progress**, held by the hook the dialog keeps
+ * mounted, so a half-written reply survives a look at another tab, another
+ * filter, and the dialog being shut. One box open at a time.
+ */
+export interface QuestionReplies {
+  /** The question whose reply box is open, or null. */
+  openId: string | null;
+  /** What is typed so far in each question's box. A box that is shut keeps its words. */
+  drafts: Readonly<Record<string, string>>;
+  stage: ReplyStage;
+  /** Replies sent from this page, newest per question: shown at once, ahead of the list's older answer. */
+  sent: Readonly<Record<string, AdminFeedbackQuestionAnswer>>;
+  /** Whether anything unsent is held: words in a box, or a send in the air. */
+  holds: boolean;
+  open(id: string): void;
+  close(): void;
+  setDraft(id: string, text: string): void;
+  send(id: string): Promise<void>;
+}
+
+/**
+ * The replies' state and the one POST. **A send's id belongs to its question
+ * and its words**: a retry of the same words carries the same id, which the
+ * server answers with the stored row (200), and edited words get a new id, so
+ * the server never sees one id with two bodies (its 409).
+ */
+function useQuestionReplies(): QuestionReplies {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
+  const [stage, setStage] = useState<ReplyStage>({ kind: "idle" });
+  const [sent, setSent] = useState<Readonly<Record<string, AdminFeedbackQuestionAnswer>>>({});
+  const draftsRef = useRef(drafts);
+  draftsRef.current = drafts;
+  /* A ref as well as the stage: two presses in one frame both see the old render. */
+  const sending = useRef(false);
+  const attempt = useRef<{ question: string; body: string; id: string } | null>(null);
+
+  const open = useCallback((id: string) => {
+    if (sending.current) return;
+    setOpenId(id);
+    setStage({ kind: "idle" });
+  }, []);
+  const close = useCallback(() => {
+    if (sending.current) return;
+    setOpenId(null);
+    setStage({ kind: "idle" });
+  }, []);
+  const setDraft = useCallback((id: string, text: string) => {
+    setDrafts((all) => ({ ...all, [id]: text }));
+  }, []);
+
+  const send = useCallback(async (question: string) => {
+    const body = (draftsRef.current[question] ?? "").trim();
+    if (sending.current || body === "" || body.length > MAX_FEEDBACK_ANSWER_CHARS) return;
+    const previous = attempt.current;
+    const id = previous !== null && previous.question === question && previous.body === body ? previous.id : mintId();
+    attempt.current = { question, body, id };
+    sending.current = true;
+    setStage({ kind: "sending" });
+    let failed = FEEDBACK_REPLY_FAILED.message;
+    try {
+      const res = await apiFetch(ANSWERS_PATH, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, question, body }),
+      });
+      if (res.status === 404) {
+        failed = FEEDBACK_REPLY_STALE.message;
+      } else if (res.ok) {
+        /* 201, or 200 for a retry the server had already stored. Only a
+           well-formed stored reply counts: a 2xx with anything else in it is
+           not evidence the words were kept. */
+        const receipt = (await res.json()) as { answer?: unknown } | null;
+        const answer = receipt?.answer;
+        if (isQuestionAnswer(answer)) {
+          attempt.current = null;
+          sending.current = false;
+          setSent((all) => ({ ...all, [question]: answer }));
+          setDrafts((all) => {
+            const { [question]: _sent, ...rest } = all;
+            return rest;
+          });
+          setOpenId((current) => (current === question ? null : current));
+          setStage({ kind: "idle" });
+          return;
+        }
+      }
+    } catch {
+      /* The network, or a body that was not JSON: the same sentence. */
+    }
+    sending.current = false;
+    setStage({ kind: "failed", message: failed });
+  }, []);
+
+  const holds = stage.kind === "sending" || Object.values(drafts).some((text) => text.trim() !== "");
+  return { openId, drafts, stage, sent, holds, open, close, setDraft, send };
+}
+
+/** The questions any admin answer of this opening carried: the showing filter's first. */
+function questionsOf(choice: EarlierChoice, states: EarlierStates): AdminFeedbackQuestion[] | null {
+  if (choice.detail !== "admin") return null;
+  for (const which of [choice.show, ...ADMIN_EARLIER_FEEDBACK_SHOWS]) {
+    const state = states[which];
+    if (state?.kind === "loaded" && state.detail === "admin") return state.page.questions;
+  }
+  return null;
 }
 
 /** The list's own filter for a wanted one: itself when that list has it, otherwise All. */
@@ -384,7 +590,15 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     if (open && wanted && earlier.kind === "idle") void load(askOf(detail, show));
   }, [open, wanted, earlier.kind, detail, show, load]);
 
-  return { earlier, choice, setShow, retry: () => void load(askOf(detail, show)) };
+  const replies = useQuestionReplies();
+  return {
+    earlier,
+    choice,
+    setShow,
+    retry: () => void load(askOf(detail, show)),
+    questions: questionsOf(choice, states),
+    replies,
+  };
 }
 
 /** Shorter than the toggle's "A problem": this is a label on a row, not a choice. */
@@ -496,7 +710,17 @@ function when(iso: string, now: number): string {
  * a pill never shows a guess. All has one too, or it would look as though All
  * had no number. docs/plans/261003b-earlier-tab-counts-on-the-pills.md.
  */
-export function EarlierFilter({ choice, onShow }: { choice: EarlierChoice; onShow(show: AnyShow): void }) {
+export function EarlierFilter({
+  choice,
+  onShow,
+  questions: asked = null,
+}: {
+  choice: EarlierChoice;
+  onShow(show: AnyShow): void;
+  /** The open questions, for an admin; null or none says nothing on the pill. */
+  questions?: readonly AdminFeedbackQuestion[] | null;
+}) {
+  const questions = asked?.length ?? 0;
   /* Three pills for every reader, five for an admin (261007d). A row that
      wraps: five do not fit one line on a phone (`.fb-kind`). */
   const pills: { which: AnyShow; word: string; count: number | null }[] =
@@ -529,6 +753,14 @@ export function EarlierFilter({ choice, onShow }: { choice: EarlierChoice; onSho
               <span className="fb-show-count">{count}</span>
             </>
           )}
+          {/* Beside the report count, never added to it: a question is not a
+              report, and the pills' counts still sum to All (261007d). */}
+          {which === "waiting" && choice.detail === "admin" && questions > 0 ? (
+            <span className="fb-show-questions">
+              {" · "}
+              {questions} open {questions === 1 ? "question" : "questions"}
+            </span>
+          ) : null}
         </button>
       ))}
     </fieldset>
@@ -650,6 +882,200 @@ function AdminRow({ report, now }: { report: AdminEarlierFeedback; now: number }
         </p>
       ) : null}
     </li>
+  );
+}
+
+/**
+ * **The box an admin replies to one question in**, with its own microphone.
+ * Mounted only while that question's box is open, so there is at most one, and
+ * the dialog's Write box keeps the only other `useDictationField`.
+ *
+ * `active` is whether the box can be seen: the dialog open, on Earlier, in
+ * *Needs a decision*. **Going out of sight stops the microphone**, exactly as
+ * the Write box's is stopped on a tab change and on close: the hook's own
+ * `toggle` (a stop, so what was said lands in the draft), never the field's,
+ * which would pull focus into a box that has just been hidden.
+ */
+function ReplyBox({
+  question,
+  replies,
+  active,
+}: {
+  question: AdminFeedbackQuestion;
+  replies: QuestionReplies;
+  active: boolean;
+}) {
+  const box = useRef<HTMLTextAreaElement>(null);
+  const draft = replies.drafts[question.id] ?? "";
+  const over = draft.length > MAX_FEEDBACK_ANSWER_CHARS;
+  const sending = replies.stage.kind === "sending";
+  const transcribe = useReaderTranscriber();
+  /* Read at call time, so a double press on Stop sees this render's `busy`. */
+  const busyRef = useRef(false);
+  const trySend = () => {
+    if (!active || busyRef.current) return;
+    void replies.send(question.id);
+  };
+  const dictate = useDictationField({
+    value: draft,
+    onChange: (next) => replies.setDraft(question.id, next),
+    box,
+    /* Not the article being read: a question is about the app, so the
+       transcript is primed with the app's words and the reader's profile. */
+    context: { kind: "profile" },
+    transcribe,
+    /* Its own keeper name, so a recording left by the Write box is never
+       offered here or the other way round; and only while it can be seen. */
+    ...(active ? { keep: keepDictation("feedback-reply") } : {}),
+    /* A double press on Stop also sends (dictation.md), by the same guarded
+       function the button calls, and never from a box out of sight. */
+    onDone: trySend,
+    doneKey: active ? `reply:${question.id}` : "reply:hidden",
+  });
+  busyRef.current = dictate.busy;
+  const { armed, toggle } = dictate.dictation;
+  useEffect(() => {
+    if (!active && armed) toggle();
+  }, [active, armed, toggle]);
+
+  /* ⌘/Ctrl+Enter sends the reply, and goes no further: the dialog's own
+     handler is for the Write form. */
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    trySend();
+  };
+
+  return (
+    <div className="fb-reply">
+      <textarea
+        ref={box}
+        className="fb-input fb-reply-input"
+        rows={3}
+        aria-label={`Your reply to: ${question.title}`}
+        value={draft}
+        readOnly={dictate.readOnly || sending}
+        onChange={(event) => replies.setDraft(question.id, event.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder="Your reply. “1A” is enough…"
+      />
+      {over ? (
+        <span className="fb-over">
+          {draft.length} characters — the limit is {MAX_FEEDBACK_ANSWER_CHARS}.
+        </span>
+      ) : null}
+      <div className="fb-reply-actions">
+        {dictate.dictation.supported && (
+          <DictationButton
+            dictation={dictate.dictation}
+            toggle={dictate.toggle}
+            disabled={sending}
+            again={dictate.again}
+            sendingAfter={dictate.sendingAfter}
+          />
+        )}
+        <button
+          type="button"
+          className="fb-copy fb-reply-send"
+          disabled={sending || dictate.busy || over || draft.trim() === ""}
+          onClick={trySend}
+        >
+          {sending ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
+          Send reply
+        </button>
+        <button type="button" className="fb-copy" disabled={sending} onClick={replies.close}>
+          Cancel
+        </button>
+      </div>
+      <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
+      {replies.stage.kind === "failed" ? (
+        <p className="fb-shot-problem" role="alert">
+          {replies.stage.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * **The questions an agent has put to the admin**, above the reports in
+ * *Needs a decision* (261007d). Each: when it was asked and which report it is
+ * about, its title, its text, the admin's newest reply if there is one, and
+ * either the reply box or the button that opens it.
+ *
+ * **Drawn only in *Needs a decision*, once that filter's own answer is in**,
+ * so a read that failed shows its failure sentence and nothing else; and only
+ * while the Earlier panel itself is on screen (`open` and `onEarlier`). Out of sight
+ * it is hidden rather than unmounted, so an open reply box keeps its
+ * microphone's words through a look at another filter or the Write tab. The
+ * question's words are a model's and are drawn as text (styles/voices.css
+ * gives them the model's face); the reply is the admin's own.
+ */
+export function EarlierQuestions({
+  questions,
+  replies,
+  choice,
+  earlier,
+  open,
+  onEarlier,
+}: {
+  questions: AdminFeedbackQuestion[] | null;
+  replies: QuestionReplies;
+  choice: EarlierChoice;
+  earlier: EarlierState;
+  /** Whether the dialog is open, */
+  open: boolean;
+  /** and on its Earlier tab. */
+  onEarlier: boolean;
+}) {
+  if (questions === null || questions.length === 0) return null;
+  const showing = open && onEarlier && choice.show === "waiting" && earlier.kind === "loaded";
+  const now = Date.now();
+  return (
+    <section className="fb-questions" hidden={!showing} aria-label="Questions for you">
+      <h3 className="fb-questions-heading">
+        {questions.length} open {questions.length === 1 ? "question" : "questions"} for you
+      </h3>
+      <ol className="fb-questions-list">
+        {questions.map((question) => {
+          const answer = replies.sent[question.id] ?? question.answer;
+          return (
+            <li key={question.id} className="fb-question" data-question={question.id}>
+              <p className="fb-earlier-meta">
+                Asked {dayOf(question.asked) ?? question.asked}
+                {question.report === null ? null : (
+                  <>
+                    {" · about "}
+                    <span className="fb-earlier-number">#{question.report.number}</span>{" "}
+                    <span className="fb-question-report-line">{question.report.firstLine}</span>
+                  </>
+                )}
+              </p>
+              <h4 className="fb-question-title">{question.title}</h4>
+              <p className="fb-question-text">{question.body}</p>
+              {answer === null ? null : (
+                <div className="fb-question-answer">
+                  <p className="fb-earlier-meta">
+                    <span className="fb-earlier-shipped">Answered</span>
+                    {" · "}
+                    <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
+                  </p>
+                  <p className="fb-question-answer-body">{answer.body}</p>
+                </div>
+              )}
+              {replies.openId === question.id ? (
+                <ReplyBox question={question} replies={replies} active={showing} />
+              ) : (
+                <button type="button" className="fb-copy" onClick={() => replies.open(question.id)}>
+                  {answer === null ? "Reply" : "Reply again"}
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 

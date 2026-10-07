@@ -13,15 +13,28 @@ import { describe, expect, it } from "vitest";
 import {
   combineEndings,
   compileEndings,
+  compileQuestions,
   GENERATED_PATH,
   parseNoteHeader,
+  parseQuestionFile,
+  QUESTIONS_GENERATED_PATH,
   readNotes,
+  readQuestionFiles,
   renderModule,
+  renderQuestionsModule,
   syncGenerated,
 } from "../scripts/feedback-endings.js";
 import { feedbackComment, feedbackIdsByEnding, isFeedbackShipped, shippedFeedbackIds } from "../src/feedback-ending.js";
 import { MAX_FEEDBACK_COMMENT_CHARS as MAX_COMMENT_CHARS } from "../src/feedback-ending-values.js";
 import { FEEDBACK_NOTE_COMMENTS, FEEDBACK_NOTE_ENDINGS } from "../src/feedback-endings.generated.js";
+import { feedbackQuestionStatus, openFeedbackQuestions } from "../src/feedback-question.js";
+import {
+  isFeedbackQuestionId,
+  MAX_FEEDBACK_QUESTION_BODY_CHARS,
+  MAX_FEEDBACK_QUESTION_TITLE_CHARS,
+  mintFeedbackQuestionId,
+} from "../src/feedback-question-values.js";
+import { FEEDBACK_OPEN_QUESTIONS, FEEDBACK_QUESTION_STATUS } from "../src/feedback-questions.generated.js";
 
 const note = (header: string, body = "# A note\n") => `---\n${header}\n---\n${body}`;
 
@@ -71,7 +84,7 @@ describe("the committed map", () => {
     const files = readdirSync(web, { recursive: true, encoding: "utf8" }).filter((name) => /\.tsx?$/.test(name));
     expect(files.length).toBeGreaterThan(100);
     const importers = files.filter((name) =>
-      /feedback-(endings|questions)\.generated|feedback-ending\.js/.test(readFileSync(path.join(web, name), "utf8")),
+      /feedback-(endings|questions)\.generated|feedback-(ending|question)\.js/.test(readFileSync(path.join(web, name), "utf8")),
     );
     expect(importers).toEqual([]);
   });
@@ -288,5 +301,118 @@ describe("which note's comment a report shows (261007d, decision 4)", () => {
     const text = renderModule(endings, comments);
     expect(text).toContain('  "spya-aaaaaa": "It says \\"no\\" \\\\ and why",');
     expect(text).toContain("export const FEEDBACK_NOTE_COMMENTS");
+  });
+});
+
+/**
+ * **Questions for Greg, compiled** (261007d stage 2): one file a question
+ * under docs/user-feedback/questions/, compiled into
+ * src/feedback-questions.generated.ts by the same command as the endings.
+ */
+describe("a question file", () => {
+  const HEADER = "id: q-k3m9qt\nreport: spya-aaaaaa\nstatus: open\nasked: 2026-10-07\ntitle: Should the box take longer reports?";
+  const file = (header = HEADER, body = "The background.\n\nA. Leave it.\nB. Raise it.\n") => `---\n${header}\n---\n${body}`;
+  const parse = (text: string, name = "q-k3m9qt.md") => parseQuestionFile(name, text);
+
+  it("reads the seven header fields and the body as plain text, lines kept", () => {
+    expect(parse(file(`${HEADER}\nrefs: qi-8qvg5gwv docs/plans/261007b.md\nacted: spya-bbbbbb, spya-cccccc`))).toEqual({
+      id: "q-k3m9qt",
+      report: "spya-aaaaaa",
+      status: "open",
+      asked: "2026-10-07",
+      title: "Should the box take longer reports?",
+      refs: "qi-8qvg5gwv docs/plans/261007b.md",
+      acted: ["spya-bbbbbb", "spya-cccccc"],
+      body: "The background.\n\nA. Leave it.\nB. Raise it.",
+    });
+    expect(parse(file(HEADER.replace("spya-aaaaaa", "none")))).toMatchObject({ report: null, acted: [] });
+  });
+
+  it("refuses a bad id, and an id that is not the file's name", () => {
+    expect(parse(file(HEADER.replace("q-k3m9qt", "q-K3M9QT")))).toMatch(/id/);
+    expect(parse(file(HEADER.replace("q-k3m9qt", "spya-k3m9qt")))).toMatch(/id/);
+    expect(parse(file(), "q-zzzzzz.md")).toMatch(/file/);
+    expect(isFeedbackQuestionId(mintFeedbackQuestionId())).toBe(true);
+    expect(isFeedbackQuestionId("q-")).toBe(false);
+  });
+
+  it("refuses an unknown field, a missing one, and a duplicate", () => {
+    expect(parse(file(`${HEADER}\nending: awaiting`))).toMatch(/unknown header field/);
+    for (const field of ["id", "report", "status", "asked", "title"]) {
+      const without = HEADER.split("\n").filter((line) => !line.startsWith(`${field}:`)).join("\n");
+      expect(parse(file(without)), field).toMatch(new RegExp(field));
+    }
+    expect(parse(file(`${HEADER}\ntitle: again`))).toMatch(/duplicate/);
+    expect(parse("no header at all\n")).toMatch(/header/);
+  });
+
+  it("refuses a status, a date, a report or an acted id outside the rule", () => {
+    expect(parse(file(HEADER.replace("status: open", "status: closed")))).toMatch(/status/);
+    expect(parse(file(HEADER.replace("2026-10-07", "7 Oct 2026")))).toMatch(/asked/);
+    expect(parse(file(HEADER.replace("2026-10-07", "2026-02-30")))).toMatch(/asked/);
+    expect(parse(file(HEADER.replace("spya-aaaaaa", "212")))).toMatch(/report/);
+    expect(parse(file(HEADER.replace("spya-aaaaaa", "spya-aaaaaa, spya-bbbbbb")))).toMatch(/report/);
+    expect(parse(file(`${HEADER}\nacted: 212`))).toMatch(/acted/);
+  });
+
+  it("refuses a title or a body over its cap, and an empty one", () => {
+    const long = "x".repeat(MAX_FEEDBACK_QUESTION_TITLE_CHARS + 1);
+    expect(parse(file(HEADER.replace("Should the box take longer reports?", long)))).toMatch(/title/);
+    expect(parse(file(HEADER.replace("Should the box take longer reports?", long.slice(1))))).toMatchObject({ id: "q-k3m9qt" });
+    expect(parse(file(HEADER, "x".repeat(MAX_FEEDBACK_QUESTION_BODY_CHARS + 1)))).toMatch(/body/);
+    expect(parse(file(HEADER, "x".repeat(MAX_FEEDBACK_QUESTION_BODY_CHARS)))).toMatchObject({ id: "q-k3m9qt" });
+    expect(parse(file(HEADER, "  \n"))).toMatch(/body/);
+  });
+
+  it("compiles every id with its status, and the words of the open ones only; refs never", () => {
+    const answered = HEADER.replace("q-k3m9qt", "q-answrd").replace("status: open", "status: answered");
+    const { questions, problems } = compileQuestions([
+      { name: "q-k3m9qt.md", text: file(`${HEADER}\nrefs: qi-secret-ref SPIDERYARN-READING2-E8`) },
+      { name: "q-answrd.md", text: file(answered, "An answered question's words.") },
+      { name: "q-brokn2.md", text: file(HEADER) },
+      { name: "README.txt", text: "not a question" },
+    ]);
+    expect(problems).toHaveLength(2);
+    expect(problems[0]).toMatch(/^q-brokn2\.md: /);
+    expect(problems[1]).toMatch(/^README\.txt: /);
+    const text = renderQuestionsModule(questions);
+    expect(text).toContain('"q-answrd": "answered"');
+    expect(text).toContain('"q-k3m9qt": "open"');
+    expect(text).toContain("Should the box take longer reports?");
+    expect(text).not.toContain("An answered question's words.");
+    expect(text).not.toContain("qi-secret-ref");
+    expect(text).not.toContain("SPIDERYARN-READING2-E8");
+  });
+
+  it("names two files that claim one id", () => {
+    const { problems } = compileQuestions([
+      { name: "q-k3m9qt.md", text: file() },
+      { name: "q-k3m9qt.md", text: file() },
+    ]);
+    expect(problems.join("\n")).toMatch(/more than once/);
+  });
+});
+
+describe("the committed questions", () => {
+  it("are what the files say now, and every file parses", () => {
+    const { questions, problems } = compileQuestions(readQuestionFiles());
+    expect(problems, "a question file does not parse").toEqual([]);
+    expect(
+      readFileSync(QUESTIONS_GENERATED_PATH, "utf8"),
+      "src/feedback-questions.generated.ts is stale: npx tsx scripts/feedback-endings.ts",
+    ).toBe(renderQuestionsModule(questions));
+  });
+
+  it("is what the server reads: open ones with their words, every id with its status", () => {
+    const open = openFeedbackQuestions();
+    expect(open).toEqual(FEEDBACK_OPEN_QUESTIONS);
+    expect(open.length, "the positive control: there is at least one open question").toBeGreaterThan(0);
+    for (const question of open) {
+      expect(feedbackQuestionStatus(question.id)).toBe("open");
+      expect(Object.keys(question).sort()).toEqual(["asked", "body", "id", "report", "title"]);
+    }
+    expect(Object.keys(FEEDBACK_QUESTION_STATUS).length).toBeGreaterThanOrEqual(open.length);
+    expect(feedbackQuestionStatus("q-zzzzzz")).toBeNull();
+    expect(feedbackQuestionStatus("constructor")).toBeNull();
   });
 });

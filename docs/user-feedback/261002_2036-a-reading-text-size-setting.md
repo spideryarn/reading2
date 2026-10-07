@@ -17,3 +17,7 @@ then let's discuss first"*, and it would: the paragraphs follow one variable cle
 the browser at three widths), but headings, captions and footnotes are fixed sizes, so a larger
 setting makes a paragraph bigger than its own headings. The three options and the recommendation
 are in [261003a § The question for Greg](../plans/261003a-reading-text-size-setting.md).
+
+**The question for Greg is now a file**, `docs/user-feedback/questions/q-wux4k7.md`, moved there from
+`awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
+([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).

@@ -1,7 +1,7 @@
 ---
 reports: spya-hwdefp, spya-v322fd
-ending: awaiting
-comment: Waiting on you: not built, because you asked to discuss first and every version changes who may read an article. Three stages, three questions. Recommended: a private link first.
+ending: shipped
+comment: You chose A on 2026-10-05: the private link is built (stage 1). Stages 2 and 3, comments for people with the link and named email addresses, are written up and not built (qi-mgxnj233).
 ---
 # Share an article with some people
 

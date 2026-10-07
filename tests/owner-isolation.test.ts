@@ -1488,6 +1488,33 @@ describe("one owner's article, asked for by another", { timeout: 20_000 }, () =>
     });
     expect(theirs).toBeNull();
   });
+
+  it("does not share a reply to a question (261007d stage 2)", async () => {
+    /* `feedback_question_answers` is keyed by owner like every other table a
+       person writes to. One admin's reply must not come back under another
+       account, and another account reusing the id must not be told about it. */
+    const { pgFeedbackStore } = await import("../src/store/pg-feedback.js");
+    const { feedbackQuestionAnswers } = await import("../src/db/schema.js");
+    const id = mintId();
+    const question = "q-k3m9qt";
+    const as = <T>(owner: OwnerId, body: () => Promise<T>) =>
+      runInRequest(async () => {
+        setRequestOwner(owner);
+        return body();
+      });
+    try {
+      const mine = await as(theEnvironmentsOwner, () =>
+        pgFeedbackStore.submitAnswer({ id, questionId: question, body: "only mine to read", environment: "test" }),
+      );
+      expect(mine.kind).toBe("created");
+      expect(await as(OUTSIDER, () => pgFeedbackStore.newestAnswers([question]))).toEqual([]);
+      /* The positive control: the owner reads it back, so "empty" above is the filter. */
+      const back = await as(theEnvironmentsOwner, () => pgFeedbackStore.newestAnswers([question]));
+      expect(back.map((answer) => answer.id)).toContain(id);
+    } finally {
+      await getDb().delete(feedbackQuestionAnswers).where(eq(feedbackQuestionAnswers.id, id));
+    }
+  });
 });
 
 /** Read once, out here, where `currentOwnerId()` still answers from the environment. */
