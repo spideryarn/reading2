@@ -82,6 +82,8 @@ import { notesFit } from "./marginalia/press.js";
 import { storageReader } from "./lib/storage-reader.js";
 import { rootFontPx, usableWidth } from "./reader/measure.js";
 import { useExperimental } from "./useExperimental.js";
+import { peekAskPurpose } from "./ask-purpose.js";
+import { firstOpenHeld, holdFirstOpen, releaseWhenDecided } from "./first-open-purpose.js";
 
 /**
  * The parameters worth putting back. Most only draw a view on arrival;
@@ -145,6 +147,10 @@ export const NEVER_REMEMBERED = [
   /* Names an open conversation. `NEEDS_AN_EXPLICIT_PRESS` below is why we do
      not put the reader back into a conversation mode at all, either. */
   "thread",
+  /* "Open the guide", which Chat turns into `thread=<the guide's id>` the
+     moment its list answers (params.ts § `guideParam`): an instruction, not a
+     place, and gone from the address before anything could remember it. */
+  "guide",
   /* Search mode's matcher, the thing being matched, and the ordering of its
      results. A search *outlines* the passages that match, so replaying last
      week's over the prose changes what the article looks like on arrival.
@@ -576,6 +582,11 @@ export function writeLastView(
  * for a wider window. **A signed-out visit no longer counts against the reader
  * who then signs in** (2026-10-06): it is recorded for nobody, and the reader's
  * own first open is still to come.
+ *
+ * **The add page's mark holds it** (since 2026-10-07, plan 261007j F4): while
+ * the mark names this slug, the default waits for the owner's purpose read,
+ * which may turn it into the guide (`?mode=chat&guide=1`) instead of the
+ * modal. first-open-purpose.ts is that one decision.
  */
 
 /**
@@ -641,8 +652,7 @@ export function withoutArticleState(search: string): string {
 
 /**
  * **The address a claimed first open arrives at, or `null` to leave it.**
- * Asked once the experimental switch has answered, which on a cold load is a
- * moment after the claim — so everything that could have changed in that
+ * Asked after the claim — so everything that could have changed in that
  * moment is asked again here:
  *
  * - a signed-out reader gets none. A stranger's first sight of a shared
@@ -726,6 +736,7 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
     arrivedFor.current = { slug, view, readerId };
     if (slug === null) {
       firstOpenFor.current = null;
+      holdFirstOpen(null);
       return;
     }
     /* § A change of reader, above. Only while the address still names this
@@ -739,6 +750,16 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
        needs there to be none. */
     firstOpenFor.current =
       view === "article" && claimFirstOpen(slug, readerId, search, stored) ? { slug, readerId } : null;
+    /* **The add page's mark holds the default** until the purpose read has
+       answered, because no reason stored may mean the guide rather than
+       Summary (first-open-purpose.ts, plan 261007j F4). Measured here, at the
+       claim, so `PurposePrompt` can know whether to ask before the settings
+       store has answered. Every arrival holds afresh or drops the hold. */
+    holdFirstOpen(
+      firstOpenFor.current !== null && peekAskPurpose(slug)
+        ? { slug, readerId, ordinary: firstOpenSearch(usableWidth(), rootFontPx()) }
+        : null,
+    );
     /* A view change keeps the old restoration rule: only a new slug (or a new
        reader) restores. But metadata must not claim the reading view's first
        arrival. */
@@ -755,13 +776,18 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
     history.replaceState(history.state, "", href);
   }, [slug, view, readerId]);
 
-  /* **The first-open default, applied once the settings store has answered**,
-     because that store is where `signedIn` comes from. (Until 2026-10-05 its
-     experimental switch also decided whether Marginalia was part of the
-     default; plan 261005d.) If the answer is already in the store, this runs
-     in the same commit as the claim above, before paint. Otherwise it waits
-     for settings, which can arrive before or after the article payload. A
-     store that never answers means no default.
+  /* **The first-open default.** The ordinary path keeps its existing timing:
+     once the settings store has answered, because that store is where it has
+     historically taken `signedIn`. (Until 2026-10-05 its switch also decided
+     whether Marginalia was part of the default; plan 261005d.)
+
+     **A marked first open is different:** register its release immediately.
+     Waiting on the unrelated settings read can strand the new coordinator
+     when that read fails or serves an offline copy: PurposePrompt has cleared
+     the mark and suppressed its modal, but no guide/default can ever be
+     released. `App` hands this hook a null slug until the session is known, so
+     `readerId` already answers signed-in status for this held path. The apply
+     still waits for the purpose outcome in first-open-purpose.ts.
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never
@@ -771,16 +797,25 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
   const { loaded, signedIn } = useExperimental();
   useLayoutEffect(() => {
     const claimed = firstOpenFor.current;
-    if (slug === null || view !== "article" || !loaded || claimed?.slug !== slug || claimed.readerId !== readerId) return;
+    if (slug === null || view !== "article" || claimed?.slug !== slug || claimed.readerId !== readerId) return;
+    const held = firstOpenHeld(slug, readerId);
+    if (!held && !loaded) return;
     firstOpenFor.current = null;
-    const href = firstOpenHref(
-      slug,
-      location.pathname,
-      location.search,
-      { signedIn },
-      firstOpenSearch(usableWidth(), rootFontPx()),
-    );
-    if (href !== null) history.replaceState(history.state, "", href);
+    const apply = (firstOpen: string) => {
+      const href = firstOpenHref(
+        slug,
+        location.pathname,
+        location.search,
+        { signedIn: held ? readerId !== null : signedIn },
+        firstOpen,
+      );
+      if (href !== null) history.replaceState(history.state, "", href);
+    };
+    /* Held by the add page's mark: applied when the purpose read answers,
+       which may be now (first-open-purpose.ts). `firstOpenHref` is asked
+       then, so a reader who moved meanwhile is still left alone. */
+    if (held) releaseWhenDecided(slug, readerId, apply);
+    else apply(firstOpenSearch(usableWidth(), rootFontPx()));
   }, [slug, view, readerId, loaded, signedIn]);
 
   useEffect(() => {

@@ -185,6 +185,8 @@ describe("the search engine rule 1 depends on", () => {
   it("asks Exa for a Candidates turn, and caps results rather than pretending to cap searches", async () => {
     const { webSearchTool } = await import("../src/converse.js");
     const tool = webSearchTool("candidates");
+    /* Only the guide has none (src/converse.ts § webSearchTool). */
+    if (!tool) throw new Error("Candidates must have a web search");
     expect(tool.parameters).toMatchObject({ engine: "exa" });
     /* `max_uses` is **not** enforced: the same probe sent `max_uses: 2`, asked
        for six searches, and OpenRouter reported six executed. `max_total_results`

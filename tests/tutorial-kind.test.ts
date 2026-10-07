@@ -37,7 +37,7 @@ describe("the kind itself", () => {
   it("is a thread kind, and a single-thread one like Learn", () => {
     expect(isThreadKind("tutorial")).toBe(true);
     /* Explore joined them on 2026-10-03: tests/explore-kind.test.ts. */
-    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore"]);
+    expect(SINGLE_THREAD_KINDS).toEqual(["learn", "tutorial", "explore", "guide"]);
     expect(isSingleThreadKind("tutorial")).toBe(true);
     expect(isSingleThreadKind("chat")).toBe(false);
     expect(isSingleThreadKind("candidates")).toBe(false);

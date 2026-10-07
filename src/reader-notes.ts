@@ -269,6 +269,8 @@ function kindWords(kind: ThreadKind): string {
       return "Explore";
     case "candidates":
       return "Referee candidates";
+    case "guide":
+      return "the guide";
     default: {
       const unknown: never = kind;
       return String(unknown);

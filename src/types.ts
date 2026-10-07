@@ -3982,8 +3982,15 @@ export const LEARN_STANCES: readonly LearnStance[] = [
  * against the rows already there, and every existing row satisfies a wider one —
  * so drizzle/0050_candidates_thread_kind.sql is a drop and a re-add with no data
  * movement between them. docs/plans/260831an-referee-mode-for-peer-reviewers.md § 4.
+ *
+ * **`guide` since 2026-10-07**: a conversation about how to read this piece
+ * with Spideryarn, opened in the Chat band, one per article. Single-thread like
+ * Learn's three but not one of them (`LearnKind` below), and not a chat either:
+ * its own prompt (`GUIDE_SYSTEM`, src/converse.ts), its own tools
+ * (`GUIDE_TOOLS`, src/chat-tools.ts), no web search, no `visible` blocks.
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
  */
-export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore";
+export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore" | "guide";
 
 /**
  * The thread kinds, as a value, and the predicate both ends validate with.
@@ -4002,7 +4009,7 @@ export type ThreadKind = "chat" | "learn" | "candidates" | "tutorial" | "explore
  * fixture-file reader, `kindFromFile` in src/chat.ts: it supplies `"chat"` only
  * for an absent kind, and reads `RETIRED_THREAD_KINDS` below.
  */
-export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "tutorial", "explore"];
+export const THREAD_KINDS: readonly ThreadKind[] = ["chat", "learn", "candidates", "tutorial", "explore", "guide"];
 
 /**
  * **Words a thread kind used to be, and what each became.** The database
@@ -4023,20 +4030,37 @@ export const RETIRED_THREAD_KINDS = {
  * **The kinds an article has at most one of** — Learn's Recall, Tutorial and
  * Explore, each its own single conversation with no list (docs/plans/261001m-remember-is-its-own-single-thread.md,
  * Tutorial since docs/plans/261002i-one-adaptive-recall-and-a-tutorial-sub-mode-for-remember.md,
- * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md).
+ * and Explore since docs/plans/261003l-reader-notes-chat-tool-and-explore-sub-mode-of-remember.md),
+ * and the guide since docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md.
  * A partial unique index per kind holds it in the database
  * (`chat_threads_one_learn`, `chat_threads_one_tutorial`,
- * `chat_threads_one_explore`); this is the list `targetOf` in src/chat.ts and
- * `ConversationBand` read, so the two ends agree.
+ * `chat_threads_one_explore`, `chat_threads_one_guide`); this is the list
+ * `targetOf` in src/chat.ts reads, so the two ends agree.
  *
  * Single-thread is ONE property. It does not say what a kind is called, what
- * its empty box says, or whether it offers Live — those are decided per kind.
+ * its empty box says, whether it offers Live, or whether Learn draws it — those
+ * are decided per kind, and the last by `LearnKind` below.
  */
-export const SINGLE_THREAD_KINDS = ["learn", "tutorial", "explore"] as const satisfies readonly ThreadKind[];
+export const SINGLE_THREAD_KINDS = ["learn", "tutorial", "explore", "guide"] as const satisfies readonly ThreadKind[];
 export type SingleThreadKind = (typeof SINGLE_THREAD_KINDS)[number];
 
 export function isSingleThreadKind(kind: ThreadKind | undefined): kind is SingleThreadKind {
   return kind !== undefined && (SINGLE_THREAD_KINDS as readonly string[]).includes(kind);
+}
+
+/**
+ * **The kinds Learn draws** — Recall, Tutorial and Explore: Learn's layout,
+ * its sub-mode switch, its drafts. Every one is single-thread, but not every
+ * single-thread kind is Learn's: the guide is one per article and lives in the
+ * Chat band. Kept apart from `SINGLE_THREAD_KINDS` so a guide is never drawn
+ * as a Learn view by accident (GPT Sol's F2 on
+ * docs/plans/261007j-the-guide-a-conversation-about-how-to-read-this.md).
+ */
+export const LEARN_KINDS = ["learn", "tutorial", "explore"] as const satisfies readonly SingleThreadKind[];
+export type LearnKind = (typeof LEARN_KINDS)[number];
+
+export function isLearnKind(kind: ThreadKind | undefined): kind is LearnKind {
+  return kind !== undefined && (LEARN_KINDS as readonly string[]).includes(kind);
 }
 
 /**

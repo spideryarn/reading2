@@ -13,11 +13,11 @@ import { apiFetch } from "./lib/api.js";
  * The answer, or `null` when there is none to be had — a refusal, a timeout,
  * a lost connection, a reply that is not JSON.
  *
- * **One value for every failure, and no sentence from the server**, because
- * the bar says one thing for all of them and for `none`
- * (`COULD_NOT_TELL`): the reader's next move is the same, and the bar's own
- * list is still under their hands. An abort lands here too; the caller has
- * already stopped listening by then.
+ * **One value for every failure, and no sentence from the server.** The bar
+ * says the same `COULD_NOT_TELL` sentence for this and for a real `none`, but
+ * keeps them distinct: a failure retains *Try again*, while `none` may offer
+ * the guide. An abort lands here too; the caller has already stopped listening
+ * by then.
  */
 export async function askForPick(request: PickRequest, signal: AbortSignal): Promise<PickAnswer | null> {
   try {

@@ -73,6 +73,7 @@ pure and both are tested — [`tests/url-state.test.ts`](../../tests/url-state.t
 | `mode` | which **mode** owns the band between the spine and the prose, absent for `plain` — the article on its own, and the default since 2026-08-31 — [260826a-chat-mode.md](../plans/260826a-chat-mode.md). **A retired mode's name still resolves**, to the mode that took it over: `?mode=outline` opens Structure since 2026-09-10, and `?mode=hierarchy` does too; `?mode=trajectory` opens Skim; `?mode=remember` opens Learn; `?mode=tweets` is rewritten to `?mode=summary&summary=thread` (`liftLegacyTweets` in [`router.ts`](../../src/web/router.ts)) (`RETIRED_MODES` and `modeFromParam` in [`src/modes.ts`](../../src/modes.ts), called by both `modeParam` and the server's `readMode`). The address is not rewritten; it keeps `mode=outline` until the reader changes mode — [260910g](../plans/260910g-structure-mode-subsumes-outline.md) | push | `?mode=chat` |
 | `margin` | whether **Marginalia's column of notes** is on, right of the prose — a switch of its own beside `mode` since 2026-10-01, so the notes can sit beside any band; absent is off. **`?mode=marginalia`**, and the old **`?mode=annotations`** from the one day the mode was called Annotations and was a value of `mode`, read as Plain on both client and server and are rewritten on arrival (a *replace*) to `?margin=1`; a remembered one is translated the same way (`rememberableSearch`). Which words count is `isMarginaliaModeWord` in [`src/modes.ts`](../../src/modes.ts). Not `notes`, which is one letter from `note` — [261001i](../plans/261001i-annotations-column-beside-a-band-mode.md), [261001n](../plans/261001n-rename-annotations-mode-to-marginalia-and-the-three-column-interface-vision.md) | push | `?margin=1` |
 | `thread` | which conversation is open — **`mode` decides how it is drawn** | **replace** | `?thread=spya-k3m9qt` |
+| `guide` | **open this article's guide in Chat**, whether or not it exists yet (one per article, so a link cannot know its id). Chat's band reads it once its list has loaded, opens the stored guide or begins one, replaces `thread` with its id and drops `guide`, so the address becomes the ordinary `?mode=chat&thread=<id>`. Acted on only while `mode=chat`; never restored — [261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) ([`params.ts`](../../src/web/params.ts) § `guideParam`) | **replace** | `?mode=chat&guide=1` |
 | `chatfrom` | which source Chat's list of conversations is narrowed to: `chats`, `debate`, `glossary`, `citations`, `learn` (Recall, Tutorial and Explore together) or `passage`; absent is All, and so is an unknown word. A word this article has no conversation from is replaced with All once the list has loaded — [chat-tools.md § Chat's list shows every conversation about the article](chat-tools.md#chats-list-shows-every-conversation-about-the-article) ([`params.ts`](../../src/web/params.ts) § `chatFromParam`) | **replace** | `?chatfrom=learn` |
 | `term` | which glossary term is selected, absent for a list nobody has picked from — [glossary.md](glossary.md) | **replace** | `?term=spya-h4r2wd` |
 | `idea` | which idea is selected, absent for a list nobody has picked from — [ideas.md](ideas.md). Mirrors `term` above in every respect, including the reason it replaces rather than pushes | **replace** | `?idea=spya-k3m9qt` |
@@ -788,10 +789,11 @@ it.
   default once.
 - **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
   experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
-  switch on. The default still waits for the settings store's answer, because that is where
+  switch on. The ordinary default still waits for the settings store's answer, because that is where
   "signed in" comes from. If settings are already loaded, the address is settled before paint;
   otherwise the default waits for them, whether the article payload has arrived yet or not. The
-  shelf does not load settings itself. A store that never answers means no default.
+  shelf does not load settings itself. A store that never answers means no ordinary default; the
+  marked add-page path below does not depend on that unrelated read.
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.
@@ -800,6 +802,16 @@ it.
   **Write it**. Arriving with the notes on makes their *so / but / vs* words if the article has
   none, once, which is what Greg asked for
   ([marginalia.md § Relation words](marginalia.md#relation-words)).
+- **Or the guide, when the add page asked why and nobody said**, since 2026-10-07
+  ([261007j](../plans/261007j-the-guide-a-conversation-about-how-to-read-this.md) F4). While the
+  add page's *ask why* mark names this article, the default waits for the owner's purpose read, and
+  one coordinator decides ([`first-open-purpose.ts`](../../src/web/first-open-purpose.ts)): a reason
+  stored, or a read that failed, gets the table above; no reason with room for a band gets
+  `?mode=chat&guide=1` (and `&margin=1` where the table would have had it) and no modal; no reason
+  on a phone gets the modal over the article alone, as before. The coordinator registers before the
+  settings answer, so the purpose read can land first and a settings failure cannot strand the
+  decision. A failed read keeps the mark, so the next load asks with the
+  modal, which is what it always did ([reader-profile.md](reader-profile.md)).
 
 Deferred, and named in
 [260905d](../plans/260905d-remember-where-you-were-in-an-article-and-move-the-design-link-into-admin.md):

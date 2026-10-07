@@ -278,6 +278,19 @@ the HTML page for a link share is the plain shell. **The reader's export drops t
 What stage 1 accepts is in the plan: the key is in a URL, so it is in the browser history of
 whoever opens it and in Vercel's own access log, and anyone who has the link can pass it on.
 
+**And since 2026-10-07, a gift voucher's email**
+([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md)). A voucher may name one
+of the administrator's own articles as a starter, and when it is private its email carries the
+private link. The key is read through `shareLinkStore.read`, the owner's read, by a second caller
+([`voucher-starter.ts`](../../src/store/voucher-starter.ts)), which never makes a link. It is then in
+the kept copy of that email (`billing_voucher_emails.body_text` and `body_html`, so a retry sends the
+same bytes; the admin page reads that table's status columns, never its bodies), in what Resend
+keeps of what it sent, and in the recipient's inbox, which is the point. It is not in
+`billing_vouchers`, which keeps the article's id and slug, nor in `GET /api/admin/vouchers`, a log
+line or Sentry: the voucher writes go through `guardDbStore`, because a failed email insert puts
+the whole email in Drizzle's error. `tests/share-link-token-stays-home.test.ts` pins the two
+callers of the read, and `tests/voucher-starter.test.ts` the rest.
+
 #### And since 2026-09-04 there is a page over it, which holds one defence
 
 `/read/public` ([public-shelf.md](public-shelf.md), `PublicLibraryPage` in

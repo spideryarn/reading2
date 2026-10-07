@@ -169,6 +169,7 @@ describe("every Postgres store, asked for the seam it was guarded under", () => 
     ["../src/store/pg-high-power.js", "pgHighPowerStore", "high-power"],
     ["../src/store/pg-feedback.js", "pgFeedbackStore", "feedback"],
     ["../src/store/realtime-sessions-pg.js", "pgRealtimeSessionStore", "realtime-sessions"],
+    ["../src/store/pg-vouchers.js", "pgVoucherStore", "vouchers"],
   ];
 
   for (const [module, name, seam] of seams) {
@@ -409,6 +410,9 @@ describe("no Postgres store is selected without a guard", () => {
       "pgTagStore",
       "pgUploadStore",
       "pgVisibilityStore",
+      /* Gift vouchers' admin writes, 2026-10-07 (261007j, Sol's F1): a failed
+         gift email insert binds the whole email, a private link's key included. */
+      "pgVoucherStore",
     ]);
   });
 

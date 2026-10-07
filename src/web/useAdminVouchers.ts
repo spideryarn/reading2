@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AdminVoucher, VoucherCreated } from "../admin-vouchers.js";
+import type { AdminVoucher, VoucherCreated, VoucherUpdated } from "../admin-vouchers.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 
@@ -35,6 +35,11 @@ export interface NewVoucherInput {
   readonly recipientNote: string | null;
   /** Their name: the email opens *Dear <name>,*. Plan 261007f. */
   readonly recipientName: string | null;
+  /**
+   * One of the administrator's own articles, by slug, for the email to link,
+   * or null for none. Never its link: the server reads that. Plan 261007j.
+   */
+  readonly starterSlug: string | null;
 }
 
 export interface VoucherPatchInput {
@@ -51,6 +56,16 @@ export type CreateAnswer =
   | { readonly kind: "created"; readonly email: VoucherCreated["email"] }
   | { readonly kind: "refused"; readonly message: string };
 
+/**
+ * What a change came to: saved, or refused in a sentence. `starter` is the
+ * server's word on a real change of address for a voucher with a starter
+ * article — `dropped` when the new email had to go without it — and null
+ * otherwise (plan 261007j, Sol's F3).
+ */
+export type UpdateAnswer =
+  | { readonly kind: "saved"; readonly starter: NonNullable<VoucherUpdated["starter"]> | null }
+  | { readonly kind: "refused"; readonly message: string };
+
 export interface UseAdminVouchers {
   /** `null` while the first request is in flight — not "no vouchers". */
   vouchers: AdminVoucherRow[] | null;
@@ -60,9 +75,11 @@ export interface UseAdminVouchers {
   reload: () => Promise<void>;
   /** Never rejects. */
   create: (input: NewVoucherInput) => Promise<CreateAnswer>;
-  /** Resolves to null on success, or the server's sentence on refusal. Never rejects. */
-  update: (id: string, patch: VoucherPatchInput) => Promise<string | null>;
-  /** Send one voucher email again, by its id. As `update`. */
+  /** An unchanged pending attempt may be replayed even if its starter is no longer eligible. */
+  canReplay: (input: NewVoucherInput) => boolean;
+  /** Never rejects. */
+  update: (id: string, patch: VoucherPatchInput) => Promise<UpdateAnswer>;
+  /** Send one voucher email again, by its id. Resolves to null on success, or the server's sentence. Never rejects. */
   retry: (emailId: string) => Promise<string | null>;
 }
 
@@ -77,6 +94,24 @@ type Written = { readonly ok: true; readonly body: unknown } | { readonly ok: fa
 /** The `email` field of a write's answer, when it is a string — `queued`, `replayed`, `sending`. */
 function emailField(body: unknown): unknown {
   return typeof body === "object" && body !== null ? (body as { email?: unknown }).email : undefined;
+}
+
+/** The `starter` field of a PATCH's answer, when it is one the page knows. */
+function starterField(body: unknown): NonNullable<VoucherUpdated["starter"]> | null {
+  const said = typeof body === "object" && body !== null ? (body as { starter?: unknown }).starter : undefined;
+  return said === "kept" || said === "dropped" ? said : null;
+}
+
+/** The identity used both for sending again and for the form's replay exception. */
+function createKey(input: NewVoucherInput): string {
+  return JSON.stringify([
+    input.email,
+    input.articles,
+    input.note,
+    input.recipientNote,
+    input.recipientName,
+    input.starterSlug,
+  ]);
 }
 
 export function useAdminVouchers(): UseAdminVouchers {
@@ -162,13 +197,7 @@ export function useAdminVouchers(): UseAdminVouchers {
 
   const create = useCallback(
     async (input: NewVoucherInput): Promise<CreateAnswer> => {
-      const key = JSON.stringify([
-        input.email,
-        input.articles,
-        input.note,
-        input.recipientNote,
-        input.recipientName,
-      ]);
+      const key = createKey(input);
       const pending =
         pendingCreate.current?.key === key ? pendingCreate.current : { key, id: crypto.randomUUID() };
       pendingCreate.current = pending;
@@ -182,13 +211,15 @@ export function useAdminVouchers(): UseAdminVouchers {
     [write, readAgainLater],
   );
 
+  const canReplay = useCallback((input: NewVoucherInput) => pendingCreate.current?.key === createKey(input), []);
+
   const update = useCallback(
-    async (id: string, patch: VoucherPatchInput) => {
+    async (id: string, patch: VoucherPatchInput): Promise<UpdateAnswer> => {
       const written = await write(`${PATH}/${encodeURIComponent(id)}`, "PATCH", patch);
-      if (!written.ok) return written.message;
+      if (!written.ok) return { kind: "refused", message: written.message };
       /* Only a real change of address queues an email (261001p). */
       if (emailField(written.body) === "queued") readAgainLater();
-      return null;
+      return { kind: "saved", starter: starterField(written.body) };
     },
     [write, readAgainLater],
   );
@@ -203,5 +234,5 @@ export function useAdminVouchers(): UseAdminVouchers {
     [write, readAgainLater],
   );
 
-  return { vouchers, error, loading, reload, create, update, retry };
+  return { vouchers, error, loading, reload, create, canReplay, update, retry };
 }
