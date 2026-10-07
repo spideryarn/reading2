@@ -7990,12 +7990,14 @@ async function serveApi(
      five days, with its handler sitting a line below unreached.
      docs/postmortems/260901a-the-route-the-query-string-hid.md. */
   const path = url.split("?")[0] ?? url;
-  /* **The other half of the same split, parsed once.** Four route families read
-     a query string, and before this each parsed the URL again for itself — one
-     of them out of `req.url` directly, which is the escape hatch that made the
-     `path`/`rawUrl` distinction above a convention rather than a rule. Handing
-     the parsed parameters down means no handler below has a reason to hold a
-     URL string at all. GPT Sol's finding 1, 2026-09-01. */
+  /* **The other half of the same split, parsed once.** Every route that reads
+     a query string reads this one. Before it each parsed the URL again for
+     itself — one of them out of `req.url` directly, which is the escape hatch
+     that made the `path`/`rawUrl` distinction above a convention rather than a
+     rule. Handing the parsed parameters down means no handler below has a
+     reason to hold a URL string at all. GPT Sol's finding 1, 2026-09-01. (One
+     did anyway until 2026-10-07: the comments read parsed `req.url` again for
+     `?anchors=`.) */
   const query = new URLSearchParams(url.slice(path.length).replace(/^\?/, ""));
 
 
@@ -8205,9 +8207,9 @@ async function serveApi(
  * The request, as the dispatchers below take it.
  *
  * **Three fields, three jobs, and the split is the whole point.** `path` is what
- * every route matches on. `query` is what the four route families that take
- * parameters read — the shelf's `?archived=1`, search's `?q=`, the reader's
- * `?slug=`, chat's `?summary=1`. `rawUrl` is for the 404 message, which is worth
+ * every route matches on. `query` is what the routes that take parameters
+ * read — the shelf's `?archived=1`, the reader's `?slug=`, chat's
+ * `?summary=1`, and the rest. `rawUrl` is for the 404 message, which is worth
  * printing in full. All three are computed once in `serveApi`.
  *
  * Matching a route against a URL with a query string on it cannot match
@@ -10372,7 +10374,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
     method: "GET",
     pattern: COMMENTS_PATTERN,
     article: "first-capture",
-    handler: async ({ request: { req, res } }, captures) => {
+    handler: async ({ request: { res, query } }, captures) => {
       const slug = slugPart(captures, 1);
       const comments = await sweepOrphaned(slug);
       /* **Whole-block bookmarks go only to a client that asks for them.** A tab
@@ -10382,8 +10384,7 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          Such a tab simply does not see the bookmark until it reloads; the row is
          untouched. GPT Sol's plan review of 260912c. Delete the filter once no
          client can be older than the parameter. */
-      const wholeBlock =
-        new URL(req.url ?? "/", "http://local").searchParams.get("anchors") === "whole-block";
+      const wholeBlock = query.get("anchors") === "whole-block";
       send(res, 200, {
         comments: wholeBlock ? comments : comments.filter((c) => c.quote !== undefined),
       });
