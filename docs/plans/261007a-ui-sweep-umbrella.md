@@ -590,4 +590,45 @@ contrast at 820.
 
 ## What landed
 
-*(filled in as clusters land)*
+- **K2, keys pressed while composing — landed 2026-10-07**, `67ce4c833` and `b03381467` on `dev`
+  ([its plan](261007a-ui-sweep-k2-composition-keys.md), which holds the census of every Enter and
+  Escape handler and what each does). The two shared Escape listeners and fourteen text boxes no
+  longer close, clear, cancel, save or navigate on a key the input method is using; `TagEditor`
+  and `CommandBar` use the house test; /profile's contents list has a visible, inset focus mark
+  (7.3:1 dark, 5.7:1 light). About sixty test cases seen red, 25 mutations, and a browser check
+  through Chrome's own composition API (`Input.imeSetComposition`), not synthetic events. The rule
+  is written into [keyboard.md](../project/keyboard.md) § "A key an input method is using is not
+  ours". **What the plan had wrong:** a guard in the handler is not enough for a
+  `type="search"` box, because Chrome empties it on Escape by itself and the old handlers were
+  hiding that with `preventDefault`; jsdom has no such default, so only the browser showed it.
+  **GPT Sol's review found the cluster's sharpest defect:** seven handlers returned on a composing
+  key *before* their conditional `stopPropagation`, so a composing Escape leaked to `document`
+  where an ordinary one was contained. Left: `GlossaryPanel`'s "ask a term" box (K4's file, added
+  to K4), `ShelfTags`'s popover (added to K3), and, losing no text, `ModeHerald`, the hover cards
+  and a few forms the census lists.
+
+- **K1, CSS — landed 2026-10-07**, `74c7ec21b`, `49e5b9ad2`, `3a4d5d745` and Sol's fixes
+  `3073853b8` on `dev` ([its plan](261007a-ui-sweep-k1-css-status-rows-focus-marks.md), with the
+  measuring script and its before and after output beside it). **Status rows:** the page-level
+  rule is `.loading, pre.error`; a failed chat tool row went from 543×115px (48px padding, mono,
+  `pre-wrap`) to an ordinary 543×19px row, and a failed dock line from 113px tall to 17px.
+  `--danger` is defined in both themes as error text, `oklch(0.7 0.2 27.325)` dark and
+  `oklch(0.52 0.2 27.325)` light, 5.2:1 or better on the page, the panel and the raised surface
+  in both (the old orange at 0.7 opacity was 1.8 to 4.0:1), and is on /design. **Focus marks:**
+  five controls measured after a real Tab went from 1.4–2.7:1 (or no mark) to 4.8:1 or better,
+  each keeping its geometry; Marginalia had five such buttons, not four. **The rest:** all built
+  as specified. `tests/css-tokens.test.ts` gained a check that no outline is drawn in a surface or
+  hairline colour, seen red. GPT Sol: ready with these fixes, no P0 or P1; its two P2s were about
+  the builder's new tests (an exemption inherited from the text check; a palette pair that passed
+  as a continuous colour at 4.5001:1 where the painted 8-bit colour is 4.495:1). **What the plan
+  had wrong:** the tooltip was never off screen at 390, it filled the width to within 5px (the cap
+  is restored on that ground, and the card is 13px narrower there); two marks are never drawn at
+  once, so Marginalia's offset stays; in the dark theme `--highlight` and `--highlight-text` are
+  one colour, so two of the focus changes show only in light. Also extended: the disabled-hover
+  guard covers `aria-disabled="true"`, because Citations' Investigate lit the same way. Not
+  measured on a real page (no fixture reaches them without a model call): a real failed chat tool
+  or dock question, `.marg-question`, `.tip-hit`; those were measured on injected markup matching
+  what the components emit. Left: the ordinary `.chat-tool-detail` is `--ink-faint` at 0.7
+  opacity, about 3:1 (question 3's "faint text").
+
+*(the rest filled in as clusters land)*

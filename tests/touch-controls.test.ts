@@ -262,7 +262,7 @@ describe("a text field iOS must not zoom into", () => {
   const floorRule = () =>
     rules(coarseBlocks(readerCssNoComments())).find((r) => r.selector.includes("textarea"));
 
-  it("one rule raises every field to 1rem on a coarse pointer", () => {
+  it("one rule raises every field to 1rem, and never under 16px, on a coarse pointer", () => {
     const rule = floorRule();
     expect(rule, "no rule names `textarea` inside a coarse-pointer block").toBeDefined();
     const parts = selectors(rule?.selector ?? "");
@@ -272,7 +272,11 @@ describe("a text field iOS must not zoom into", () => {
        the keyboard, and a `<select>` takes focus — the composer's stance picker
        was still 13.28px after the first two halves shipped. */
     expect(parts.some((p) => p.includes("select")), "and a `select` half").toBe(true);
-    expect(rule?.decls ?? "").toMatch(/font-size:\s*1rem/);
+    /* `max(1rem, 16px)`, not `1rem`: iOS's threshold is 16 CSS pixels, and a
+       reader whose root size is 12px gets a 12px field from `1rem` alone
+       (measured, 2026-10-07). Never a bare `16px`, which would shrink the
+       field for a reader who has made their type larger. */
+    expect(rule?.decls ?? "").toMatch(/font-size:\s*max\(\s*1rem\s*,\s*16px\s*\)/);
   });
 
   /**

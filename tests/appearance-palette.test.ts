@@ -20,7 +20,18 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { contrast, DARK_BLOCK as dark, LIGHT_BLOCK as light, PALETTE } from "./helpers/theme-palette.js";
+import {
+  contrast,
+  DARK_BLOCK as dark,
+  decode,
+  encode,
+  LIGHT_BLOCK as light,
+  luminance,
+  PALETTE,
+  ratio,
+  resolve,
+  type Rgb,
+} from "./helpers/theme-palette.js";
 
 /** A value that names a colour itself rather than pointing at another token. */
 const LITERAL = /oklch\(|#[0-9a-f]{3,8}\b|^\d+ \d+ \d+$|\b(white|black)\b/i;
@@ -66,6 +77,12 @@ const PAIRS: [string, string, number][] = [
   /* A focus indicator is non-text: 3:1 (WCAG 1.4.11). */
   ["--ring", "--background", 3],
   ["--highlight-text", "--background", 3],
+  /* Error text, on each of the three surfaces a status row sits on: the page,
+     the band, and the raised chat dialog. `--destructive` is a fill and is not
+     held to this; on Dark's raised surface it reads 4.37:1. */
+  ["--danger", "--page", 4.5],
+  ["--danger", "--panel", 4.5],
+  ["--danger", "--surface-raised", 4.5],
 ];
 
 describe.each([
@@ -74,6 +91,18 @@ describe.each([
 ] as const)("the %s theme's core pairs", (_theme, palette) => {
   it.each(PAIRS)("%s on %s clears %s:1", (fg, bg, floor) => {
     expect(contrast(fg, bg, palette)).toBeGreaterThanOrEqual(floor);
+    if (fg === "--danger") {
+      /* K1's browser evidence samples an 8-bit sRGB canvas. Linear clipping
+         and encoded clipping agree, but rounding to bytes can take a value
+         just over the floor below it. Check that sample as well as the
+         continuous colour; this models the recorded sampling method, not
+         every browser's gamut mapping. */
+      const sampledLuminance = (name: string) => {
+        const rgb = resolve(name, palette).map((c) => decode(Math.round(255 * encode(c)) / 255)) as Rgb;
+        return luminance(rgb);
+      };
+      expect(ratio(sampledLuminance(fg), sampledLuminance(bg))).toBeGreaterThanOrEqual(floor);
+    }
   });
 });
 

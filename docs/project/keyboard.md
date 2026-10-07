@@ -630,6 +630,28 @@ rather than `disabled` so the card still opens on an empty box
 ([260929g § Part C](../plans/260929g-shelf-search-focus-and-metadata-chord.md)). Tests:
 `tests/the-enter-key-really-sends.test.tsx`.
 
+### A key an input method is using is not ours
+
+A reader typing Japanese or Chinese presses Enter to accept a candidate word and Escape to dismiss
+the candidate list. Neither is a press on anything of ours, so while a composition is open **no
+text box saves, sends, clears, cancels or navigates on them, and no surface closes**. The one test
+is `isImeComposing` in [`key-chord.ts`](../../src/web/key-chord.ts), which reads the native flag,
+React's, and the older `keyCode` 229. Four things a new handler has to get right:
+
+- **The two shared Escape listeners ask it too**: `useEscapeToClose` (Chat, Comment, Annotate) and
+  the Dock drawer's capture listener. A guard in the box alone leaves the panel closing around it.
+- **Where a handler stops propagation on purpose, the test comes after the stop**, so a composing
+  key is contained like any other.
+- **A box in a form cancels a composing Enter** (`preventDefault`), so the form's implicit submit
+  cannot send a half-chosen word. Everywhere else a composing key is left untouched.
+- **A `type="search"` box cancels a composing Escape**, because the browser itself empties such a
+  box on Escape. Measured in Chrome on 2026-10-07; jsdom has no such default, so only a browser
+  shows it.
+
+Which handlers were fixed, and which were left and why:
+[261007a K2](../plans/261007a-ui-sweep-k2-composition-keys.md). Tests:
+`tests/one-escape-closes-one-surface.test.tsx` (the surfaces) and `tests/chat-composing-keys.test.tsx`.
+
 ## G, the one letter
 
 **G opens the glossary on a term in the paragraph you are on**, focused on that term's row with its

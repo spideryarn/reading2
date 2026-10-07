@@ -737,8 +737,14 @@ with the ordinary prompt.
 **creates** the thread, the anchor is a **whole block** (`{ blockId }`, no quote), and the effective
 kind is **`chat`**. Refused rather than dropped, the posture the anchor rule beside it already takes:
 a request the server silently reinterprets stores a press nobody made *and* answers with the teaching
-prompt, and nothing on screen says so. The first of the three is checked twice — early for the
-sentence, and again under `inTurnOrder` so a thread cannot appear between the look and the write.
+prompt, and nothing on screen says so. The first of the three is checked three times: early for the
+sentence, again under `inTurnOrder`, and by `withTurn` in [`src/chat.ts`](../../src/chat.ts) inside
+the store's transaction. Only the last is a guarantee: `inTurnOrder` orders one server's requests,
+and a second server can create the thread after either of the route's looks. Until 2026-10-07 the
+transaction did not check it (nor the anchor rule beside it, which now has the same three places and
+its 409), and this paragraph said the lock was enough
+([plan 261007b](../plans/261007b-seventh-sweep-chat-and-comment-invariants.md), B). `withTurn`'s
+refusal is a 400 as the route's is (`ChatTurnRefused`), where its other refusals are 409s.
 Each violation is its own 400 with its own sentence;
 `tests/chat-help-route.test.ts` pins all four, and pins that what `helpAboutBlock` sends still gets
 through. Found by GPT Sol reviewing the built code, 2026-09-05.

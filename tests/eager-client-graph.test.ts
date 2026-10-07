@@ -567,6 +567,11 @@ const SHARED_WITH_READER = [
      `modes.ts` and `router.ts`. */
   "src/web/help/help-anchors.ts",
   "src/web/jump-history.ts",
+  /* Arrived 2026-10-07 behind `TitleEditor` and `TagEditor`, both already
+     here: each now asks `isImeComposing` whether a key belongs to an input
+     method (plan 261007a-ui-sweep-k2). The reader had it already, through the
+     Dock; a leaf with no imports of its own, so nothing follows it in. */
+  "src/web/key-chord.ts",
   "src/web/lib/DataTable.tsx",
   /* Arrived 2026-10-06 by the second predicted route: `DataTable.tsx`, already
      here, gained an import of it for its `sidewaysCue` prop (plan 261006g
