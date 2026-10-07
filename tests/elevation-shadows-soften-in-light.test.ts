@@ -74,11 +74,17 @@ describe("elevation shadows", () => {
 
   it("define --shadow-strength in the dark block at 1 and lighter in the light block", () => {
     const tokens = readFileSync(join(WEB, "styles", "tokens.css"), "utf8");
-    const values = [...tokens.matchAll(/--shadow-strength:\s*([\d.]+)\s*;/g)].map((m) => Number(m[1]));
-    /* Dark first, pixel-identical to the old literals; light second, and less. */
-    expect(values).toHaveLength(2);
-    expect(values[0]).toBe(1);
-    expect(values[1]).toBeGreaterThan(0);
-    expect(values[1]).toBeLessThan(1);
+    const light = tokens.indexOf(':root[data-theme="light"]');
+    expect(light, "the light block").toBeGreaterThan(0);
+    const values = [...tokens.matchAll(/--shadow-strength:\s*([\d.]+)\s*;/g)].map((m) => ({
+      value: Number(m[1]),
+      inLight: (m.index ?? 0) > light,
+    }));
+    /* Dark first, so the old literals compute unchanged; light second, and
+       less — the same ratio as the three tokens beside it. */
+    expect(values).toEqual([
+      { value: 1, inLight: false },
+      { value: 0.38, inLight: true },
+    ]);
   });
 });

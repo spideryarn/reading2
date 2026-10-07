@@ -100,3 +100,24 @@ The queue itself (the Overseer owns it). Font sizes across modes (`qi-f8h393sb`)
 ## Review
 
 GPT Sol on this plan (read-only), then one code review over all five commits.
+
+## What GPT Sol's plan review changed
+
+[Review](261007m-plan-review-sol.md): READY WITH CHANGES, no P0 or P1.
+
+- **M1** (S1 keeps `chat-loading`'s geometry): built that way already — `as="div"
+  className="chat-loading" delayMs={0}`. Not taken: extending the controller lifecycle test to
+  the prop through Live shutdown, pending DELETE and restore — the prop is `resetting !== "idle"`,
+  read straight from the state those paths already set and the existing Learn tests drive.
+- **M2** (S2's touch floor): Citations' pair had a 36px `min-height` under `pointer: coarse` and
+  Glossary's did not, so the pair would have been one size for a mouse and two for a finger.
+  Glossary's Dig deeper and Ask in chat take the same floor.
+- **M3** (S3's size floor): `--control-h-lg` is 2.75rem, 33px at a 12px root, where Diagram's bar
+  held 44px. Diagram's squares are `max(44px, var(--control-h-lg))`; the test holds that. Sol also
+  preferred broad buttons under a coarse pointer; overruled — the queue item asks for Quotes' and
+  Skim's shape, which Greg approved, and 44px stays a thumb's target. Quotes and Skim have the same
+  12px-root shrink; not touched here, said in the debrief.
+- **M4** (S4's test could pass with 1 in both themes): the token test now asserts 1 outside the
+  light block and 0.38 inside it. Sol favoured the factor over six tokens and agreed dark computes
+  unchanged.
+- **M5** (S5 must hold through every state and a narrow band, not just idle at 390): taken into S5.
