@@ -685,6 +685,25 @@
   ]
  },
  {
+  "id": "submode:referee:hidden",
+  "label": "Hidden text",
+  "description": "Text the document hides from a reader but a model would read, found in its source",
+  "aliases": [
+   "Referee",
+   "Hidden text Referee",
+   "Referee Hidden text",
+   "Hidden text mode"
+  ],
+  "kind": "submode",
+  "generates": false,
+  "contexts": [
+   "owner-article",
+   "owner-article-archived",
+   "reader-on-someone-elses-article",
+   "owner-metadata"
+  ]
+ },
+ {
   "id": "submode:debate:reception",
   "label": "Reception",
   "description": "What others have written about this piece itself: replies, reviews, and work that cites it and says something about it",

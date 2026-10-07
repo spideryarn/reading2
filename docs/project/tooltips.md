@@ -271,7 +271,7 @@ cross-family review caught them —
 It arrived for the Diagram band on Greg's ask — *"add detailed tooltips to the various
 diagram-buttons etc to explain how things work"* (2026-08-30) — and the same ask came again for
 [Referee mode](referee-mode.md) on 2026-09-02, which is now the largest customer: about thirty
-controls across four sub-modes, where the unguessable half is a model call being spent, a
+controls across five sub-modes, where the unguessable half is a model call being spent, a
 placement being discarded, or a number that reads like a score and is not
 ([referee-mode.md § Every control says what it does](referee-mode.md#every-control-says-what-it-does)).
 [`DiagramPanel.tsx`](../../src/web/DiagramPanel.tsx) is the idiom to copy: a row of chips wrapped in

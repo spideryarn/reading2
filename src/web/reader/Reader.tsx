@@ -3955,7 +3955,7 @@ export function Reader({
              `annotateKey`. Read by tests/annotate-dialog-keeps-a-draft.test.tsx. */
           key={annotateKey(annotating)}
           anchor={annotating}
-          /* **Referee mode only**, and all four of its sub-modes: the criteria
+          /* **Referee mode only**, and all five of its sub-modes: the criteria
              are fetched inside the section rather than lifted out of the
              Criteria panel, which only mounts on one of them. */
           placing={mode === "referee"}

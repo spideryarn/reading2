@@ -28,11 +28,11 @@ import { REFEREE_SUB_MODES } from "../../sub-modes.js";
 import { useRenderCount } from "../../perf.js";
 import { ControlTip, Tooltip, TooltipGroup } from "../../Tooltip.js";
 import { usePressToggle } from "../../usePressToggle.js";
-/* Referee mode's rule 5, and the one thing in the band that is not a sub-mode:
-   the deterministic scan of the document's own source, inside Notices because
-   a hidden instruction bears on all four panels. src/injection-scan.ts
-   is the scanner and it calls no model. */
-import { SourceScanNotice, sourceScanOpens } from "../../SourceScanNotice.js";
+/* Referee mode's rule 5: the deterministic scan of the document's own source,
+   the Hidden text sub-mode since 2026-10-07 (plan 261007h). It was inside
+   Notices before that. src/injection-scan.ts is the scanner and it calls no
+   model. */
+import { type SourceScanMark, SourceScanNotice, sourceScanMark } from "../../SourceScanNotice.js";
 import { type SourceScanState, useSourceScan } from "../../useSourceScan.js";
 import { CriteriaBand, WHAT_THE_RANK_IS, WHAT_THE_TICK_DOES } from "../../CriteriaPanel.js";
 import { ClaimsBand } from "../../ClaimsPanel.js";
@@ -44,9 +44,10 @@ import { ModeSurface } from "../../ModeSurface.js";
  * **Referee mode — for somebody who has been asked to peer-review this piece.**
  *
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md. The band itself is
- * stage 1 — the confidentiality notice, the four buttons, and a line per panel
- * saying what that panel will do — and it still calls no model. All four panels
- * underneath it can: Criteria, Claims, Mirror and Candidates.
+ * stage 1 — the confidentiality notice, the original four buttons, and a line
+ * per panel saying what that panel will do — and it still calls no model. Those
+ * four model-facing panels are Criteria, Claims, Mirror and Candidates; Hidden
+ * text is the fifth panel and calls no model.
  *
  * There are **four** of them and the plan on disk says three: `candidates` was
  * added on Greg's say-so the same night, overruling the cut the plan's appendix
@@ -71,11 +72,20 @@ import { ModeSurface } from "../../ModeSurface.js";
  * tooltip or something, or create a warning tooltip."* Measured that day at
  * 1280 × 800: the criterion box started 607px down a 760px band.
  *
- * So the top of the band is one row — the four chips and a **Notices** button —
+ * So the top of the band is one row — the chips and a **Notices** button —
  * and the panel starts under it. Notices opens `.ref-brief`, which holds the
- * confidentiality sentences and the source scan. *How Referee mode works* is the
- * band's (i), in the corner where every other mode keeps its own.
+ * confidentiality sentences. *How Referee mode works* is the band's (i), in the
+ * corner where every other mode keeps its own.
  * docs/plans/261003k-referee-mode-puts-the-actions-first-and-the-notices-behind-one-button.md.
+ *
+ * The source scan was in Notices too, and opened it whenever it found
+ * anything — which on arXiv HTML, where a typesetter's zero-width spaces count,
+ * was nearly every paper. Greg, 2026-10-07 (`spya-y6590g`): *"Perhaps squirrel
+ * this info away as a sub-mode? It doesn't seem important enough to be right
+ * at the top of Criteria."* So it is the fifth chip, **Hidden text**, which
+ * carries a filled dot when the scan found something with no everyday
+ * explanation and a ring when every finding wears one.
+ * docs/plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md.
  *
  * ## What the notice still is: past tense, never dismissed, nothing remembered
  *
@@ -93,10 +103,9 @@ import { ModeSurface } from "../../ModeSurface.js";
  *
  * **A collapse, not a dismissal.** Nothing is remembered: the box is shut on
  * every visit and one press opens it, so there is no state in which a referee
- * has made it go away for good. And it **opens itself when the scan found
- * something** — `sourceScanOpens`, the scan's own rule moved up one level —
- * because a finding is news about this document and the rest is the same on
- * every paper.
+ * has made it go away for good. It no longer opens itself: what it holds is
+ * the same on every paper, and the one thing that was news about a particular
+ * document, the scan, has its own chip.
  *
  * It is styled as a notice and not as an error — src/web/styles/referee.css
  * § referee mode. Nothing has gone wrong.
@@ -165,6 +174,7 @@ export function RefereeBand({
         onFound={onFound}
         openKey={openKey}
         onOpenKey={onOpenKey}
+        scan={scan}
       />
     </RefereeFrame>
   );
@@ -192,27 +202,29 @@ export function RefereeFrame({
   /** The selected sub-mode's panel. */
   children: ReactNode;
 }) {
-  /* **`null` until the referee presses Notices, and then theirs** — derived
-     rather than seeded, `SourceScanNotice`'s reason: the scan lands seconds
-     after the band opens, and a `useState` seeded from *loading* would stay
-     shut over a document with findings in it. Local state and not a `?`
-     parameter: a shut box is not view state (docs/project/url-state.md). */
-  const [noticesChoice, setNoticesChoice] = useState<boolean | null>(null);
-  const noticesOpen = noticesChoice ?? sourceScanOpens(scan);
+  /* Shut until the referee presses Notices. Local state and not a `?`
+     parameter: a shut box is not view state (docs/project/url-state.md). It
+     opened itself for a finding until 2026-10-07, when the scan left it for
+     the Hidden text chip (plan 261007h). */
+  const [noticesOpen, setNoticesOpen] = useState(false);
+  /* The mark on the Hidden text chip, and the one sentence a screen reader
+     hears about a finding from any other sub-mode. */
+  const mark = sourceScanMark(scan);
 
   return (
     <ModeSurface label="Referee" feature="gloss referee" mode="referee" about={<RefereeAbout />}>
       {/* **One row: the chips, and the one button the notices are behind.** The
           button is a sibling of the radiogroup rather than inside it, because it
-          is not one of the four. */}
+          is not one of the sub-modes. */}
       <div className="ref-top">
-        {/* Keep a live region present before the asynchronous result arrives.
-            The scan's own region mounts populated when Notices opens itself,
-            which does not establish a live update for assistive technology. */}
+        {/* Keep a live region present before the asynchronous result arrives:
+            one that mounts with its message already in it announces nothing
+            (postmortem 261003e). Silent inside Hidden text, whose own panel
+            is a live region and says it in full. */}
         <span className="sr-only" role="status" aria-live="polite">
-          {sourceScanOpens(scan) ? "The source check found text to inspect in Notices." : ""}
+          {mark !== "none" && view !== "hidden" ? "The source check found text to look at, under Hidden text." : ""}
         </span>
-        <RefereeViews slug={slug} view={view} onView={onView} />
+        <RefereeViews slug={slug} view={view} onView={onView} mark={mark} />
         <Tooltip
           placement="bottom"
           keepSide
@@ -224,8 +236,8 @@ export function RefereeFrame({
           content={
             <ControlTip
               head="Notices"
-              what="Where this article's text has already been sent, which manuscripts this mode is meant for, and the check of the source for hidden instructions."
-              how="It opens by itself when that check found something. Nothing in it is a judgement about the paper."
+              what="Where this article's text has already been sent, and which manuscripts this mode is meant for."
+              how="The same on every paper, and nothing in it is a judgement about this one. The check for hidden text is the Hidden text chip."
             />
           }
         >
@@ -233,29 +245,21 @@ export function RefereeFrame({
             type="button"
             className="ref-notices-btn"
             aria-expanded={noticesOpen}
-            onClick={() => setNoticesChoice(!noticesOpen)}
+            onClick={() => setNoticesOpen(!noticesOpen)}
           >
             <TriangleAlert size={13} aria-hidden="true" /> Notices
           </button>
         </Tooltip>
       </div>
 
-      {/* **The two things that belong to the mode rather than to a sub-mode**,
-          in one box so that together they can be given a share of the band and
-          made to scroll inside it: the wrapper is what stops them from pushing
-          the panel off the bottom of a `position: fixed` band that clips
-          nothing and scrolls nowhere. src/web/styles/referee.css § referee
-          mode, `.ref-brief`, has the measurements. src/messages.ts owns the
-          sentences. */}
+      {/* **What belongs to the mode rather than to a sub-mode**, in a box that
+          is given a share of the band and made to scroll inside it: the wrapper
+          is what stops it pushing the panel off the bottom of a
+          `position: fixed` band that clips nothing and scrolls nowhere.
+          src/web/styles/referee.css § referee mode, `.ref-brief`, has the
+          measurements. src/messages.ts owns the sentences. */}
       {noticesOpen && (
         <div className="ref-brief">
-          {/* **The scan first**, because when this box opened itself it was the
-              scan that opened it, and under three paragraphs a finding would
-              start below the fold of a box capped at 40% of the band. Rule 5:
-              the deterministic scan of the document's own source, fetched
-              beside the band rather than in front of it. */}
-          <SourceScanNotice state={scan} />
-
           <div className="ref-notice">
             <p>{REFEREE_TEXT_ALREADY_SENT}</p>
             <p className="ref-notice-also">{REFEREE_DECLARE_IT}</p>
@@ -309,6 +313,9 @@ const REFEREE_HOW_TO_READ: Record<RefereeView, readonly string[]> = {
   claims: [LINKAGE_NOT_ADEQUACY],
   mirror: [MIRROR_IS_NOT_GIVEN_THE_PAPER],
   candidates: [],
+  /* The panel says what it is for at its own foot, in every state
+     (`WHAT_THIS_IS` in SourceScanNotice.tsx), so there is nothing to move. */
+  hidden: [],
 };
 
 /**
@@ -395,6 +402,7 @@ export function RefereeViews({
   slug,
   view,
   onView,
+  mark = "none",
 }: {
   /**
    * **Only so that a press can be recorded**, and read nowhere else in here.
@@ -409,6 +417,12 @@ export function RefereeViews({
   slug: string;
   view: RefereeView;
   onView(next: RefereeView): void;
+  /**
+   * What the source scan found, as the Hidden text chip shows it
+   * (`sourceScanMark`). Optional only so the tests that render the chips
+   * alone need not invent a scan.
+   */
+  mark?: SourceScanMark;
 }) {
   return (
     <div className="ref-views" role="radiogroup" aria-label="What Referee is showing">
@@ -453,20 +467,32 @@ export function RefereeViews({
               onClick={() => {
                 /* **The gesture seam for Claims.** Pressing its chip with
                    nothing there starts it — Greg's rule about opening a mode,
-                   one level down. The other three chips arm nothing; Candidates
-                   waits for Build the reviewer brief. The table is
+                   one level down. The other four chips arm nothing; Candidates
+                   waits for Build the reviewer brief and Hidden text's scan has
+                   already run. The table is
                    src/web/activation.ts § REFEREE_TARGET, which is also where
                    the note about Candidates and the search engine lives.
 
                    Here, in the `onClick`, and deliberately **not** in `onView`'s
                    `setView` one level up: `?referee=` is query state, so Back and
-                   Forward move it too, and retracing your steps through the four
+                   Forward move it too, and retracing your steps through the five
                    chips must not buy a claims run or a web search. */
                 armActivationForRefereeView(slug, v);
                 onView(v);
               }}
             >
               {REFEREE_VIEW_LABEL(v)}
+              {/* The one mark a finding leaves outside its own sub-mode
+                  (plan 261007h): a dot, or a ring when every finding wears
+                  an everyday label. Words for a screen reader, since a dot
+                  is only a shape. */}
+              {v === "hidden" && mark !== "none" && (
+                <span className={`ref-view-dot ${mark}`}>
+                  <span className="sr-only">
+                    {mark === "found" ? " (something found)" : " (found, each with an everyday explanation)"}
+                  </span>
+                </span>
+              )}
             </button>
           </Tooltip>
         ))}
@@ -481,7 +507,7 @@ export function RefereeViews({
  * `ControlTip`'s rule, which is the whole reason the second sentence is worth a
  * hover: `what` is what the reader could have worked out by pressing the chip
  * and looking; `how` is what they could not — where the answer comes from, what
- * it costs, or what the sub-mode does *not* promise. Each of these four `how`s
+ * it costs, or what the sub-mode does *not* promise. Each of these five `how`s
  * is a refusal:
  *
  * - **Criteria** never scores the paper, and the run is a model call over the
@@ -495,8 +521,10 @@ export function RefereeViews({
  * - **Candidates** searches the web, which is a third party at a moment none of
  *   the other three reaches one, and checks no conflicts of interest
  *   (`COI_NOT_CHECKED`).
+ * - **Hidden text** calls no model, does not check PDFs and reports without
+ *   blocking anything.
  *
- * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a fifth
+ * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a sixth
  * sub-mode is a red compile here rather than a chip that silently explains
  * nothing.
  */
@@ -517,20 +545,24 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
     what: "For an editor: who could review this paper, and what expertise it would take.",
     how: "It searches the web as you talk to it, and every name carries a link a search returned. Conflicts of interest are not checked by anything here.",
   },
+  hidden: {
+    what: "Text in this document's source that a reader would not see but a model would read — white on white, too small to read, invisible characters, instructions written to a model.",
+    how: "No model is involved: it reads the original web page, before any call. It reports and blocks nothing, a PDF is not checked, and the chip carries a dot when something was found that has no everyday explanation.",
+  },
 };
 
 /**
  * What each button says — the registry's words since 2026-10-01, so the chip
  * and the command bar's row for it say the same thing (src/web/sub-modes.ts;
  * docs/plans/261001d-command-bar-lists-sub-modes.md). Still a total `Record`
- * there, so a fifth sub-mode is a red compile as well as in the switch below.
+ * there, so a sixth sub-mode is a red compile as well as in the switch below.
  */
 const REFEREE_VIEW_LABEL = (v: RefereeView): string => REFEREE_SUB_MODES[v].label;
 
 /**
  * The selected sub-mode's panel.
  *
- * An exhaustive `switch` with a `never` in the default, so a fifth member of
+ * An exhaustive `switch` with a `never` in the default, so a sixth member of
  * `RefereeView` cannot be added without a panel to draw for it — which is not
  * hypothetical: `candidates` was added the same night, and this is what said
  * where. The alternative
@@ -548,11 +580,14 @@ function RefereeSubMode({
   onFound,
   openKey,
   onOpenKey,
+  scan,
 }: {
   view: RefereeView;
   slug: string;
   blocks: Block[];
   byline?: string | undefined;
+  /** The source scan, held by `RefereeBand`; read only by the Hidden text panel. */
+  scan: SourceScanState;
   /** The referee's own placements. See `RefereeBand`, which says why. */
   comments: readonly Comment[];
   onJump(blockId: BlockId): void;
@@ -603,6 +638,13 @@ function RefereeSubMode({
          block, drawn as a citation chip in the panel, and washing the paper with
          it would say the paragraph is about a person. */
       return <CandidatesBand slug={slug} blocks={blocks} byline={byline} onJump={onJump} />;
+    case "hidden":
+      /* **The source scan, in a sub-mode of its own since 2026-10-07.** The
+         scan is the band's (`RefereeBand` fetches it once), so pressing this
+         chip runs nothing; it only shows the answer. Rule 5's five rules are
+         the component's, and moving it here changed none of them
+         (docs/project/referee-mode.md § rule 5). */
+      return <SourceScanNotice state={scan} />;
     default: {
       const unknown: never = view;
       throw new Error(`unknown referee view: ${String(unknown)}`);
