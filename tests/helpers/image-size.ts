@@ -63,3 +63,58 @@ export function imageSize(file: string): { width: number; height: number; bytes:
 
   throw new Error(`${file} is not a PNG, a JPEG or a GIF`);
 }
+
+/**
+ * The encoded image blocks in a GIF, parsed by its block boundaries.
+ *
+ * A byte scan for `21 f9 04 … 2c` can count the same sequence inside compressed
+ * pixels or an extension's payload as a frame. Walking the format also accepts
+ * a valid frame without a graphic-control extension: the image descriptor,
+ * not the optional timing block before it, is what makes a frame.
+ */
+export function gifFrameBlocks(bytes: Buffer): Buffer[] {
+  const head = bytes.subarray(0, 6).toString("latin1");
+  if ((head !== "GIF87a" && head !== "GIF89a") || bytes.length < 13) throw new Error("not a complete GIF header");
+
+  let at = 13;
+  const packed = bytes[10] as number;
+  if ((packed & 0x80) !== 0) at += 3 * (1 << ((packed & 0x07) + 1));
+  if (at > bytes.length) throw new Error("GIF ends inside its global colour table");
+
+  const skipSubBlocks = () => {
+    while (true) {
+      const length = bytes[at];
+      if (length === undefined) throw new Error("GIF ends inside a data block");
+      at += 1;
+      if (length === 0) return;
+      at += length;
+      if (at > bytes.length) throw new Error("GIF ends inside a data block");
+    }
+  };
+
+  const frames: Buffer[] = [];
+  while (at < bytes.length) {
+    const marker = bytes[at++];
+    if (marker === 0x3b) {
+      if (at !== bytes.length) throw new Error("GIF has bytes after its trailer");
+      return frames;
+    }
+    if (marker === 0x21) {
+      if (bytes[at++] === undefined) throw new Error("GIF ends before an extension label");
+      skipSubBlocks();
+      continue;
+    }
+    if (marker !== 0x2c) throw new Error(`GIF has unknown block marker 0x${marker?.toString(16) ?? "??"}`);
+
+    const start = at - 1;
+    if (at + 9 > bytes.length) throw new Error("GIF ends inside an image descriptor");
+    const imagePacked = bytes[at + 8] as number;
+    at += 9;
+    if ((imagePacked & 0x80) !== 0) at += 3 * (1 << ((imagePacked & 0x07) + 1));
+    if (at >= bytes.length) throw new Error("GIF ends before its image data");
+    at += 1; // LZW minimum code size
+    skipSubBlocks();
+    frames.push(bytes.subarray(start, at));
+  }
+  throw new Error("GIF has no trailer");
+}

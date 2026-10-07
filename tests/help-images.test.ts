@@ -25,7 +25,7 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import { describe, expect, it } from "vitest";
 
 import { HELP_IMAGES } from "../src/web/help/help-images.js";
-import { imageSize } from "./helpers/image-size.js";
+import { gifFrameBlocks, imageSize } from "./helpers/image-size.js";
 
 const PAGES = path.resolve(import.meta.dirname, "..", "src", "web", "help", "pages");
 const IMAGES = path.join(PAGES, "images");
@@ -78,15 +78,28 @@ describe("Help's pictures", () => {
     expect(image.still.src.length).toBeGreaterThan(0);
     const still = imageSize(path.join(IMAGES, image.still.file));
     expect({ w: still.width, h: still.height }).toEqual({ w: image.w, h: image.h });
-    /* More than one frame, or it is a PNG with extra steps. A frame is an
-       image descriptor (0x2C) after a graphic control extension (0x21 0xF9 0x04);
-       scripts/frames-to-gif.ts writes one per frame and merges repeats. */
+    expect(still.bytes).toBeGreaterThan(MIN_BYTES);
+    expect(still.bytes).toBeLessThanOrEqual(MAX_BYTES.png);
+    /* More than one distinct encoded image block, or it is a PNG with extra
+       steps. Parse block boundaries: marker-looking bytes can occur inside
+       compressed pixels and extensions. */
     const bytes = readFileSync(path.join(IMAGES, name));
-    let frames = 0;
-    for (let i = 0; i + 8 < bytes.length; i++) {
-      if (bytes[i] === 0x21 && bytes[i + 1] === 0xf9 && bytes[i + 2] === 0x04 && bytes[i + 8] === 0x2c) frames++;
-    }
-    expect(frames, "frames").toBeGreaterThan(1);
+    const frames = gifFrameBlocks(bytes);
+    expect(frames.length, "frames").toBeGreaterThan(1);
+    expect(new Set(frames.map((frame) => frame.toString("base64"))).size, "distinct frames").toBeGreaterThan(1);
+  });
+
+  it("does not count a frame-marker sequence inside an extension's data", () => {
+    const name = entries.find(([file]) => file.endsWith(".gif"))?.[0];
+    if (name === undefined) throw new Error("help-images.ts has no GIF to exercise the GIF parser");
+    const bytes = readFileSync(path.join(IMAGES, name));
+    const packed = bytes[10] as number;
+    const firstBlock = 13 + ((packed & 0x80) === 0 ? 0 : 3 * (1 << ((packed & 0x07) + 1)));
+    /* A valid comment extension whose payload contains the exact byte pattern
+       the old scanner called a frame. */
+    const decoy = Buffer.from([0x21, 0xfe, 9, 0x21, 0xf9, 0x04, 0, 0, 0, 0, 0, 0x2c, 0]);
+    const withDecoy = Buffer.concat([bytes.subarray(0, firstBlock), decoy, bytes.subarray(firstBlock)]);
+    expect(gifFrameBlocks(withDecoy).length).toBe(gifFrameBlocks(bytes).length);
   });
 
   it.each(entries)("%s is the size its entry says, at 2×, and not too heavy", (name, image) => {
