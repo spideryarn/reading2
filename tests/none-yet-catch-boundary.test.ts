@@ -187,7 +187,8 @@ describe.each(READS.filter(([kind]) => ["simple", "ideas", "glossary", "quotes"]
    response** — so it cannot sit inside that `Promise.all`, or a profile read
    failing after the `null` went would write a second response (GPT Sol's F1 on
    docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md).
-   The profile is settled first, so its failure is a failure in either order. */
+   Absence takes precedence over a profile failure in either order, as for
+   the other profile-dependent reads; only a made route needs the profile. */
 describe("skim: none yet beside the profile read", () => {
   const SKIM = { skim: { slug: SLUG, profileHash: null, stops: [] }, stale: false, outdated: false, notOnRoute: 0 };
   const drain = () => new Promise((settle) => setTimeout(settle, 10));
@@ -211,6 +212,27 @@ describe("skim: none yet beside the profile read", () => {
     expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
   });
 
+  for (const asks of [true, false]) {
+    it(`answers absence without waiting for a pending profile (header=${asks})`, async () => {
+      stores.profile.mockImplementation(() => new Promise(() => {}));
+      stores.loadSkim.mockRejectedValue(new ArtefactNotMadeYet("none yet"));
+      const res = await get("skim", asks);
+      expect(res.ends()).toBe(1);
+      expect(res.status).toBe(asks ? 200 : 404);
+      if (asks) expect(res.body).toBe("null");
+      else expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+    }, 1000);
+
+    it(`a profile failure after a made route remains a single 500 (header=${asks})`, async () => {
+      stores.profile.mockRejectedValue(new Error("profile failed"));
+      const res = await get("skim", asks);
+      expect(res.ends()).toBe(1);
+      expect(res.status).toBe(500);
+      expect(JSON.parse(res.body)).toHaveProperty("error");
+      expect(res.headers.get("cache-control")).toBe("private, no-store");
+    });
+  }
+
   it("serves a made route", async () => {
     const res = await get("skim");
     expect(res.status).toBe(200);
@@ -219,7 +241,7 @@ describe("skim: none yet beside the profile read", () => {
 
   for (const first of ["none yet", "the profile failure"] as const) {
     for (const asks of [true, false]) {
-      it(`writes one response, an error, when ${first} comes first (header=${asks})`, async () => {
+      it(`writes one absence response when ${first} comes first (header=${asks})`, async () => {
         let rejectSkim!: (error: Error) => void;
         let rejectProfile!: (error: Error) => void;
         stores.loadSkim.mockImplementation(() => new Promise((_, reject) => { rejectSkim = reject; }));
@@ -237,8 +259,10 @@ describe("skim: none yet beside the profile read", () => {
         const res = await reading;
         await drain();
         expect(res.ends()).toBe(1);
-        expect(res.status).toBe(500);
-        expect(JSON.parse(res.body)).toHaveProperty("error");
+        expect(res.status).toBe(asks ? 200 : 404);
+        if (asks) expect(res.body).toBe("null");
+        else expect(JSON.parse(res.body)).toEqual({ error: "none yet" });
+        expect(res.headers.get("cache-control")).toBe("private, no-store");
       });
     }
   }

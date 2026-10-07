@@ -13,7 +13,7 @@ queue item named five; Illustrated is the sixth, found missing from every list o
 question independently. Its 404 is the same fact as the others', so it belongs here.
 
 The loader half is already done: since plan 261007d all six loaders throw `ArtefactNotMadeYet`, and
-`tests/none-yet-is-not-a-404-route.test.ts` § `STILL_404` pins them. The Tweets and Skim hooks
+`tests/none-yet-is-not-a-404-route.test.ts` § "the last six loaders" pins them. The Tweets and Skim hooks
 already read a `200 null` as "none" (plan 261007e) but do not send the header.
 
 ## What changes
@@ -26,9 +26,9 @@ The same edits 261006h made, nothing new invented.
   glossary has it. **Skim** reads `loadSkim` and `resolveProfile` in parallel, and the helper
   *writes the response* when it answers, so it cannot sit inside that `Promise.all`: a profile read
   failing after the `null` went would try to write a second response (Sol F1). Both reads still
-  start together; the profile is awaited first, then the helper is handed the already-started
-  `loadSkim` promise (its rejection observed so it is never unhandled meanwhile). A profile failure
-  stays an error, never "none yet".
+  start together; the profile rejection is observed, then `loadSkim` is awaited through the
+  helper first. Absence returns immediately, even if the profile fails or remains pending; only
+  a made route awaits the profile. A profile failure beside a made route stays an error.
   The plate route `/api/illustrated/:slug/:hash.:ext` is not touched: it serves bytes, and a
   missing artefact there is a missing plate.
 - **Client reads** — every fetch of the six URLs sends the header, and "none" is `res.status ===
@@ -92,13 +92,15 @@ Illustrated belongs, and that its plate route stays as it is.
 
 ## What landed — 2026-10-07
 
-Built as planned, uncommitted, awaiting the code review.
+Built in `845373603`; the code review corrected Skim's failure precedence below.
 
 - **Routes** (`src/routes.ts`): the six `GET /api/<name>/:slug` handlers call
   `orNullWhenNotMadeYet`, outside `withProfileChanged` for tweets, sketch and illustrated. Skim
-  starts `loadSkim` and `resolveProfile` together, marks the route read's rejection observed with
-  an empty `catch`, awaits the profile, then hands the in-flight route read to the helper — so a
-  profile failure is a 500 in either order, never "none yet", and exactly one response is written.
+  starts `loadSkim` and `resolveProfile` together. After the code review, the profile rejection
+  is observed and the helper's artefact read is awaited first: absence wins in either order,
+  exactly one response is written, and a made route still reports a profile failure as 500.
+  The failing cases and root cause are recorded in
+  [the postmortem](../postmortems/261007s-await-ordering-lets-a-secondary-failure-defeat-absence.md).
   The plate route and `sendPlate` are untouched.
 - **Offline cache**: the six names joined `NONE_YET_AS_NULL` (`src/web/lib/api.ts`).
 - **Eight client reads** send the header and read "none" as a 404 or a body exactly `null`;
@@ -129,3 +131,23 @@ as the route does.
 **Behaviour change on malformed replies only.** A Sketch reply with `sketch: null` used to fall
 through `readSketch` to "none"; it is now a failed read, as for the other fourteen. The server
 never sends one.
+
+## Code review and browser check — 2026-10-07
+
+**Code review, GPT Sol** — [prompt](261007n-code-review-prompt.md),
+[answer](261007n-code-review-sol.md), of `845373603`. Verdict: land with fixes, no P0 or P1. F1
+(P2): Skim let a failed profile read beat "none yet", the reverse of the other reads; it now awaits
+the artefact first, with the profile's rejection observed, and returns on `null` before the profile
+is awaited ([postmortem](../postmortems/261007s-await-ordering-lets-a-secondary-failure-defeat-absence.md)).
+F2 (P2): no test caught a reply decoded after the reader moved to another article; 15 cases added
+across the eight reads. F3 (P3): two count comments outside the commit (`src/messages.ts`,
+`tests/store-parity.test.ts`) made count-free by the session. Its mutation table is in the answer.
+
+**Browser check** (Sonnet subagent, Playwright, local `dev-admin`, 1440 / 820 / 390, run while the
+review edited the tree): all six URLs seen requested with the header and answering `200 null` on
+articles without them; no 4xx in any console. Skim, Sketch and Illustrated showed their buttons at
+every width; on an article without tweets, relations and arc (1440 only) the three jobs started on
+arrival with no error. Articles with Skim, Sketch, relations, tweets and arc made showed them.
+Without the header the four reads with nothing made answer 404; an unknown slug is a 404 with it.
+**Not seen:** relations and arc without the header on an article lacking them (the route test covers
+it), and the job-starting views at 820 and 390.

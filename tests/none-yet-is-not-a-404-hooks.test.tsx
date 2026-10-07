@@ -436,6 +436,18 @@ function only(name: string, reply: () => Response): (url: string) => Response {
   return (url) => (url.startsWith(`/api/${name}/`) ? reply() : nullBody());
 }
 
+/** Hold JSON decoding open after the HTTP response has arrived. */
+function delayedBody(body: unknown) {
+  let release!: (body: unknown) => void;
+  const pending = new Promise<string>((resolve) => {
+    release = (value) => resolve(JSON.stringify(value));
+  });
+  const response = json(body);
+  const decoding = vi.fn(() => pending);
+  response.text = decoding;
+  return { response, release, decoding };
+}
+
 describe.each(LAST_SIX)("$name", ({ name, use, held, none, body, sent }) => {
   const url = `/api/${name}/${SLUG}`;
   const read = () => seen as LastRead & Record<string, unknown>;
@@ -459,6 +471,29 @@ describe.each(LAST_SIX)("$name", ({ name, use, held, none, body, sent }) => {
     expect(read()).toMatchObject({ status: "ready", error: null });
     expect(read()[held]).toBeTruthy();
   });
+
+  for (const late of [null, { ...body, stale: true, outdated: true, profileChanged: true }]) {
+    it(`ignores ${late === null ? "absence" : "an older artefact"} parsed after moving to another article`, async () => {
+      const delayed = delayedBody(body);
+      answer = only(name, () => delayed.response);
+      await mount(use);
+      expect(delayed.decoding).toHaveBeenCalledOnce();
+      expect(read().status).toBe("loading");
+      expect(asked.some((ask) => ask.url === url)).toBe(true);
+
+      answer = only(name, () => json(body));
+      await act(async () => root.render(createElement(Probe, { use, slug: "next-article" })));
+      await settle();
+      expect(read()).toMatchObject({ status: "ready", error: null, stale: false });
+      const before = read()[held];
+      expect(before).toBeTruthy();
+      expect(asked.some((ask) => ask.url === `/api/${name}/next-article`)).toBe(true);
+
+      await act(async () => delayed.release(late));
+      await settle();
+      expect(read()).toMatchObject({ status: "ready", error: null, stale: false, [held]: before });
+    });
+  }
 
   for (const malformed of [false, 0, "", {}, { [sent]: null }]) {
     it(`reports ${JSON.stringify(malformed)} as a failed opening read, not as none yet`, async () => {
@@ -521,6 +556,28 @@ describe("relations", () => {
     expect(seen).toEqual({ "spya-bbbbbb": "so" });
   });
 
+  for (const late of [null, {
+    ...RELATIONS,
+    relations: { ...RELATIONS.relations, relations: { "spya-bbbbbb": "but" } },
+  }]) {
+    it(`ignores ${late === null ? "absence" : "older words"} parsed after moving to another article`, async () => {
+      const delayed = delayedBody(RELATIONS);
+      answer = () => delayed.response;
+      await mountRelations();
+      expect(delayed.decoding).toHaveBeenCalledOnce();
+      expect(seen).toBeNull();
+      expect(asked.some((ask) => ask.url === `/api/relations/${slug}`)).toBe(true);
+      answer = () => json(RELATIONS);
+      await act(async () => root.render(createElement(Probe, { use: shown, slug: `${slug}-next` })));
+      await settle();
+      expect(seen).toEqual({ "spya-bbbbbb": "so" });
+      await act(async () => delayed.release(late));
+      await settle();
+      expect(seen).toEqual({ "spya-bbbbbb": "so" });
+      expect(posted).toEqual([]);
+    });
+  }
+
   for (const malformed of [false, 0, "", {}, { relations: null }]) {
     it(`reads ${JSON.stringify(malformed)} as a failed read, not as none yet: nothing drawn, no job, one re-read`, async () => {
       answer = () => json(malformed);
@@ -558,6 +615,25 @@ describe("Illustrated's readiness check on the Sketch", () => {
     expect(kind()).toBe("ready");
   });
 
+  for (const late of [null, { sketch: SKETCH, ...FLAGS, stale: true }]) {
+    it(`ignores ${late === null ? "absence" : "a stale Sketch"} parsed after moving to another article`, async () => {
+      const delayed = delayedBody({ sketch: SKETCH, ...FLAGS });
+      answer = sketchSays(() => delayed.response);
+      await mount(use);
+      expect(delayed.decoding).toHaveBeenCalledOnce();
+      expect(kind()).toBe("checking");
+      expect(asked.some((ask) => ask.url === `/api/sketch/${SLUG}`)).toBe(true);
+      answer = sketchSays(() => json({ sketch: SKETCH, ...FLAGS }));
+      await act(async () => root.render(createElement(Probe, { use, slug: "next-article" })));
+      await settle();
+      expect(kind()).toBe("ready");
+      expect(asked.some((ask) => ask.url === "/api/sketch/next-article")).toBe(true);
+      await act(async () => delayed.release(late));
+      await settle();
+      expect(kind()).toBe("ready");
+    });
+  }
+
   for (const malformed of [false, 0, "", {}, { sketch: null }, { stale: false, profileChanged: false }]) {
     it(`${JSON.stringify(malformed)} is unknown, never ready`, async () => {
       answer = sketchSays(() => json(malformed));
@@ -581,6 +657,22 @@ describe("the Sketch chip's caption", () => {
   it("a real Sketch gives its caption", async () => {
     answer = () => json({ sketch: SKETCH, ...FLAGS });
     await mount(useSketchCaption);
+    expect(seen).toBe(SKETCH.caption);
+  });
+
+  it("ignores a caption parsed after moving to another article", async () => {
+    const delayed = delayedBody({ sketch: { ...SKETCH, caption: "The older caption." }, ...FLAGS });
+    answer = () => delayed.response;
+    await mount(useSketchCaption);
+    expect(delayed.decoding).toHaveBeenCalledOnce();
+    expect(seen).toBeNull();
+    expect(asked.some((ask) => ask.url === `/api/sketch/${SLUG}`)).toBe(true);
+    answer = () => json({ sketch: SKETCH, ...FLAGS });
+    await act(async () => root.render(createElement(Probe, { use: useSketchCaption, slug: "next-article" })));
+    await settle();
+    expect(seen).toBe(SKETCH.caption);
+    await act(async () => delayed.release({ sketch: { ...SKETCH, caption: "The older caption." }, ...FLAGS }));
+    await settle();
     expect(seen).toBe(SKETCH.caption);
   });
 

@@ -4548,8 +4548,8 @@ export const OWNED_ARTEFACT = {
  * The dash after the list does the same job for the first half.
  *
  * A `StepName` with no entry in `OWNED_ARTEFACT` falls back to *"your <name>"*
- * rather than being dropped. Only six artefacts can carry a `profileHash` and
- * all six are in the table, so this is unreachable today — but a silently
+ * rather than being dropped. Every artefact that can carry a `profileHash` is
+ * in the table, so this is unreachable today — but a silently
  * shortened list is the failure that would matter here, since the whole point
  * of the sentence is that it is complete.
  */

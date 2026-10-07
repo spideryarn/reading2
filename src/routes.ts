@@ -10300,21 +10300,17 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
          comparison `sameStamp` makes on the stamp (src/skim.ts). Both
          reads start before either is awaited.
 
-         **And not a `Promise.all` any more**, because no route yet is
-         `200 null` to a client that asks, and `orNullWhenNotMadeYet` writes
-         that response itself. Inside a `Promise.all` it could send the `null`
-         and then have a failed profile read try to write a second response
-         (GPT Sol's F1 on docs/plans/261007n-the-last-six-artefact-reads-answer-none-yet-as-200-null.md).
-         So the profile is settled first — its failure is a failure whichever
-         read finishes first, never "none yet" — and the helper is handed the
-         route read already in flight. The empty `catch` only marks that
-         read's rejection as observed while the profile is awaited; the
-         helper still receives the rejection, from the original promise. */
-      const reading = loadSkim(at);
-      reading.catch(() => {});
-      const now = await resolveProfile(at);
-      const found = await orNullWhenNotMadeYet({ req, res }, () => reading);
-      if (!found) return;
+         If no Skim route has been made, a client that asks gets `200 null`;
+         `orNullWhenNotMadeYet` writes that response itself. Await the
+         artefact first, outside `Promise.all`, so absence takes precedence
+         over a profile failure and cannot be followed by a second response.
+         Observe the profile rejection while the artefact is awaited; only a
+         made route needs the profile, as with `withProfileChanged`. */
+      const profile = resolveProfile(at);
+      void profile.catch(() => {});
+      const found = await orNullWhenNotMadeYet({ req, res }, () => loadSkim(at));
+      if (found === null) return;
+      const now = await profile;
       const body: SkimResponse = {
         ...found,
         profileChanged: routeProfileIsStale(
