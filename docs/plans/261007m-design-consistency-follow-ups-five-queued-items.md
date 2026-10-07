@@ -167,3 +167,13 @@ the added C1 regression.
 Typechecking passed via `node --import tsx scripts/typecheck.ts` (the npm script's `tsx` launcher
 cannot create its IPC socket here). Full `npm test` is blocked by the unavailable local database;
 lint of the two changed code/test files reports only two existing specificity warnings.
+
+## What landed
+
+S1 `bd7a7056a`, S2 `1cf3d283c`, S4 `13a22e307`, S3 + plan-review fixes `157cf5bd3`, S5 `4f85b5d01`,
+GPT Sol's code-review fix C1 `f398443df` ([review](261007m-code-review-sol.md), READY WITH THESE
+FIXES). Browser check at 1440, 1024, 768 (the 288px band) and 390, mouse and emulated touch: every
+item as planned; dark shadows equal the old literals, light ones 0.38 of them; Start over shows its
+line 29ms after the press. **Left:** Quotes' and Skim's arrows still shrink to 33px at a 12px root
+(Sol's C2); Citations' row still wraps raggedly at 390 and 1024, now with 32px buttons — the same
+shape it had before.

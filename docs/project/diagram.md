@@ -896,12 +896,15 @@ to each other and the cost of missing is going somewhere you did not mean to.
 Under the picture rather than over it, for the same reason the whole footer card
 is there.
 
-They are **outlines, not filled buttons**, and that is a correction. The first
-version gave them `--surface-raised`, which at 160×44 is two mid-grey slabs in a
-panel where every other control is a thin border — they read as *disabled* while
-live, which is the same mistake
-[design-css-overview.md](design-css-overview.md) records against the shelf's
-primary button. The fill now arrives on hover, where it means something.
+They are **Quotes' and Skim's 44px squares** since 2026-10-07: the raised ground, the
+`--rule-strong` border and the house radius, centred round the readout, with a `max(44px, …)`
+floor so a small root size cannot shrink them (plan
+[261007m § S3](../plans/261007m-design-consistency-follow-ups-five-queued-items.md); Greg,
+2026-10-07: *"controls that do the same job should look the same in every mode"*). Until then
+each filled a third of the panel, about 160×44, as a thin outline — because the very first
+version had filled them at that size and two big grey slabs read as *disabled*. At 44×44 the
+fill is the other steppers' and does not. What stays Diagram's own: the chevrons point up and
+down, an end is `aria-disabled`, and the readout is a tab stop for its card.
 
 **They step by distinct row, not by node**, and that is the one piece of design
 in them. `layout.nodes` is in preorder, so on Force the root, part 1 and
