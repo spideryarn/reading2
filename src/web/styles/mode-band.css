@@ -202,7 +202,9 @@
    (`flex: none`, `nowrap`) and the group takes at most its row
    (`max-width: 100%`, `min-width: 0`); the chosen part is kept in view by
    useRevealChosen.ts, the logic OrderGroup's order rows share. The scrollbar is
-   hidden, as the order rows' is on touch: the bar's own outline is the frame.
+   thin and left showing: a bar that clips exactly between two parts hides a
+   whole option, and only the scrollbar says there is more (GPT Sol, F2 review
+   K4). It appears only when the parts overflow, and a touch screen overlays it.
    The focus ring is drawn inside each button, so the clipping costs it nothing. */
 .summ-views {
   display: inline-flex;
@@ -211,11 +213,10 @@
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: none;
+  scrollbar-width: thin;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
 }
-.summ-views::-webkit-scrollbar { display: none; }
 .summ-view-btn {
   flex: none;
   display: inline-flex;
@@ -269,9 +270,11 @@
    line is already its own height (BandWaiting.tsx). `content` rather than text,
    so nothing is in the live region to announce early. */
 .band-waiting-ghost {
-  flex: none;
   visibility: hidden;
 }
+/* Only the spinner is fixed. The sentence must shrink and wrap exactly like
+   the visible span, or its reserved height changes when the words arrive. */
+svg.band-waiting-ghost { flex: none; }
 .band-waiting-ghost::before {
   content: attr(data-words);
 }

@@ -381,7 +381,9 @@ function RouteSpark({ positions, current }: { positions: readonly (number | null
 function RouteHead({ view, total }: { view: SkimView; total: number }) {
   const [sparkOpen, setSparkOpen] = useState(false);
   const depths = useRef<HTMLFieldSetElement>(null);
-  useRevealChosen(depths, view.depth);
+  // A refreshed route can first offer the bar without changing the chosen
+  // depth. Reattach the reveal and its observers when that fieldset appears.
+  useRevealChosen(depths, view.depths.length > 1 ? view.depth : null);
   const here = view.rows[view.position - 1]?.position ?? null;
   const said =
     `Stop ${view.position} of ${total}` +

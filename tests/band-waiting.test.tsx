@@ -13,6 +13,7 @@
  *   not jump when the line lands.
  * - A wait that ends before the threshold never shows at all.
  */
+import { readFileSync } from "node:fs";
 import { act, createElement, StrictMode, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -48,6 +49,32 @@ afterEach(() => {
 const line = () => host.querySelector('[role="status"]');
 
 describe("BandWaiting", () => {
+  it("lets the unseen sentence shrink just like the visible sentence, keeping only the spinner fixed", () => {
+    // jsdom cannot measure wrapping, but it can establish the flex sizing that
+    // controls it. The browser geometry regression checks the resulting heights.
+    const css = readFileSync("src/web/styles/mode-band.css", "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .filter((m) => m[1]?.includes(".band-waiting"))
+      .map((m) => m[0]);
+    expect(rules.length).toBeGreaterThan(0);
+    const style = document.createElement("style");
+    style.textContent = rules.join("\n");
+    document.head.append(style);
+    try {
+      paint(<BandWaiting>A sentence long enough to wrap in a narrow band.</BandWaiting>);
+      const span = host.querySelector("span")!;
+      const spinner = host.querySelector("svg")!;
+      const beforeShrink = getComputedStyle(span).flexShrink || "1";
+      expect(getComputedStyle(spinner).flexShrink).toBe("0");
+      wait(SLOW_AFTER_MS);
+      const afterShrink = getComputedStyle(host.querySelector("span")!).flexShrink || "1";
+      expect(beforeShrink).toBe(afterShrink);
+      expect(beforeShrink).toBe("1");
+    } finally {
+      style.remove();
+    }
+  });
+
   it("answers a press immediately, without waiting for even a zero-delay timer", () => {
     paint(<BandWaiting delayMs={0}>Reading the paper…</BandWaiting>);
     expect(line()?.textContent).toBe("Reading the paper…");
