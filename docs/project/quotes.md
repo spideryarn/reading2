@@ -850,7 +850,8 @@ the request goes out. The two verbs exist for the same reason: `ensure` is unfor
 **both** the automatic run and the empty state's button call, because `work_key` is computed from the
 request and two keys are two paid jobs; `regenerate` is forced and is **Find more** beside a
 result that is already there — and, on a stale one, *Choose them again* (§ Find more
-appends).
+appends). Both are held from the press until the list the run wrote has been read, and so is the
+command bar's *Find more*: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
 An automatic run uses the reader's profile, as does *Choose them again*; only **Find more** asks in

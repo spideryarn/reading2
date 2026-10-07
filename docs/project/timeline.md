@@ -230,7 +230,9 @@ The loop that made Greg choose a button in the first place —
 the request goes out. Hence the two verbs on the hook: `ensure` is unforced and is what **both** the
 automatic run and the empty state's button call, because `work_key` is computed from the request and
 two keys are two paid jobs; `regenerate` is forced and is *Read it again*, offered beside a timeline
-that is already there. [`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
+that is already there, and held from the press until the new timeline has been read
+([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+[`src/web/useAutoRun.ts`](../../src/web/useAutoRun.ts).
 
 The reader profile is not in this stage's stamp at all (§ Freshness), so this is the one of the five
 with no profile tickbox to replace and nothing extra to say about an automatic run.

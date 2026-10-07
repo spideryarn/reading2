@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 /**
- * **Regenerate's hold, in the six modes that have a forced rewrite** — Quiz,
- * Summary, Thread, Ideas, Glossary and Sketch. src/web/rewrite-hold.ts;
- * docs/plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md § 2a.
+ * **Regenerate's hold, in the modes that have a forced rewrite** — a row each
+ * in `ROWS`. src/web/rewrite-hold.ts;
+ * docs/plans/261004c-sweep-cluster-5-a-failed-read-can-be-retried-and-says-a-readers-sentence.md § 2a
+ * for the first of them, and
+ * docs/plans/261007b-seventh-sweep-rewrite-hold-on-the-six-forced-verbs-without-one.md
+ * for the ones whose forced control is not the profile badge's Regenerate.
+ * The second half of the file (§ the membership guard) fails a hook that
+ * forces its step and is neither a row here nor a named exclusion.
  *
  * One table, a row per mode, and each row mounts the real band: the real hook,
  * the real panel, the real `useStepJob`, the real `useOrderedRead` and **the
@@ -185,12 +190,28 @@ interface Row {
   mount(show: boolean): ReactNode;
   /** Every forced paid control besides the badge's Regenerate, by its label. */
   forced: string[];
-  /** A forced control pressed directly: its label, and whether it needs a stale artefact. */
-  direct: { label: string; stale: boolean }[];
+  /**
+   * A forced control pressed directly: its label, whether it needs a stale
+   * artefact, and what its POST carries besides the step.
+   */
+  direct: { label: string; stale: boolean; posts?: Record<string, unknown> }[];
+  /**
+   * **The forced control these tests press, for a mode with no Regenerate in a
+   * profile badge** — Illustrated's *Paint again*, Quotes' *Find more*, a stale
+   * banner's run button. Absent: the badge's Regenerate.
+   */
+  verb?: string;
+  /**
+   * The artefact these tests serve when they do not say. A mode whose only
+   * forced control is on its stale banner needs a stale one, before and after.
+   */
+  shape?: Shape;
   /** The quiet line a held panel with nothing running draws. */
   waiting: string;
   /** Its read-only retry. */
   readAgain: string;
+  /** What the POST these tests' press makes carries besides the step. */
+  posts?: Record<string, unknown>;
 }
 
 const noop = () => {};
@@ -202,11 +223,20 @@ const { IdeasBand } = await import("../src/web/modes/ideas/IdeasMode.js");
 const { GlossaryBand } = await import("../src/web/modes/glossary/GlossaryMode.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { SketchView } = await import("../src/web/SketchView.js");
+const { IllustratedView } = await import("../src/web/IllustratedView.js");
+const { QuotesBand } = await import("../src/web/modes/quotes/QuotesMode.js");
+const { useQuotesRead } = await import("../src/web/useQuotes.js");
+const { TimelineBand } = await import("../src/web/modes/timeline/TimelineMode.js");
+const { FaqBand } = await import("../src/web/modes/faq/FaqMode.js");
+const { DebateBand } = await import("../src/web/modes/debate/DebateMode.js");
+const { CitationsBand } = await import("../src/web/modes/citations/CitationsMode.js");
+const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useFreshReads, useRewriteHold } = await import("../src/web/rewrite-hold.js");
 
 /* Quiz and Glossary read above their band (ArticlePage.tsx § `OwnedReader`), so
-   closing the band leaves the read mounted. The other four read inside it. */
+   closing the band leaves the read mounted. Summary, Thread, Ideas and Sketch
+   read inside it. */
 function QuizOuter({ show }: { show: boolean }) {
   const read = useQuizRead(SLUG);
   return show ? createElement(QuizInner, { read }) : null;
@@ -221,6 +251,27 @@ function GlossaryOuter({ show }: { show: boolean }) {
     ? createElement(GlossaryBand, { slug: SLUG, read, onJump: noop, onSelected: noop, onAskChat: noop })
     : null;
 }
+
+/* Quotes and Citations read above their band too, for the marks in the prose
+   (useQuotes.ts § `useQuotesRead`, useCitations.ts § `useCitationsRead`). */
+function QuotesOuter({ show }: { show: boolean }) {
+  const read = useQuotesRead(SLUG);
+  return show
+    ? createElement(QuotesBand, { slug: SLUG, read, onJump: noop, steps: [], yours: { rows: [], blocks: [], onOpen: noop } })
+    : null;
+}
+function CitationsOuter({ show }: { show: boolean }) {
+  const read = useCitationsRead(SLUG);
+  return show
+    ? createElement(CitationsBand, { slug: SLUG, read, onJump: noop, focus: null, onFocusTaken: noop })
+    : null;
+}
+
+/** **The only forced control is on the stale banner**, so the artefact these rows are served is stale, before and after. */
+const ON_THE_BANNER: Shape = { stale: true, profiled: false };
+
+const DEBATE_LOSSES = { uncited: 0, selfSource: 0, unverifiedSource: 0, directnessUnverified: 0, sourceIsCopy: 0, claimNotInBlock: 0, unknownBlockId: 0, malformed: 0 };
+const DEBATE_COUNTS = { returnedSources: 1, reportedRows: 1, keptRows: 1, omittedOverCap: 0, lost: DEBATE_LOSSES, webSearches: 1 };
 
 const summary = (show: boolean) =>
   show ? createElement(SummaryBand, { slug: SLUG, article: ARTICLE, onJump: noop }) : null;
@@ -356,8 +407,8 @@ const ROWS: Row[] = [
     mount: (show) => createElement(GlossaryOuter, { show }),
     forced: ["Find more", "Write a new list"],
     direct: [
-      { label: "Write a new list", stale: true },
-      { label: "Find more", stale: false },
+      { label: "Write a new list", stale: true, posts: { useProfile: false } },
+      { label: "Find more", stale: false, posts: { useProfile: false } },
     ],
     waiting: "The new terms haven't loaded yet.",
     readAgain: "Try again",
@@ -392,6 +443,234 @@ const ROWS: Row[] = [
     forced: [],
     direct: [],
     waiting: "The new picture hasn't loaded yet.",
+    readAgain: "Try again",
+  },
+  /* The rows below have no Regenerate in a profile badge: each names the forced
+     control it has as `verb`. Plan 261007b. */
+  {
+    name: "Illustrated",
+    step: "illustrated",
+    path: "/api/illustrated/",
+    body: (which, { stale }) => ({
+      /* No clock on a painting either: what differs is the plate. */
+      illustrated: {
+        version: "illustrated/1",
+        generator: "a-model",
+        illustrator: "an-image-model",
+        style: "A plain register.",
+        profileHash: null,
+        plates: [
+          {
+            sceneId: "overview",
+            title: `${SAYS[which]} plate`,
+            prompt: "A workbench, in gouache.",
+            vignettes: [{ block: "spya-bbbbbb", quote: "The instrument was built", depicts: "A rig on a workbench" }],
+            image: { sha256: (which === "old" ? "a" : "b").repeat(64), ext: "jpeg", bytes: 73_000, width: 1024, height: 1536 },
+          },
+        ],
+      },
+      stale,
+      outdated: false,
+      /* Never changed: that would relabel the button *Draw the Sketch, then
+         paint again*, and which label it has is not what this file is about. */
+      profileChanged: false,
+    }),
+    mount: (show) => (show ? createElement(IllustratedView, { slug: SLUG, blocks: BLOCKS, onJump: noop }) : null),
+    verb: "Paint again",
+    forced: ["Paint again"],
+    direct: [{ label: "Paint again", stale: false }],
+    waiting: "The new picture hasn't loaded yet.",
+    readAgain: "Try again",
+  },
+  {
+    name: "Quotes",
+    step: "quotes",
+    path: "/api/quotes/",
+    body: (which, { stale, profiled }) => ({
+      quotes: {
+        ...stamp(which, profiled),
+        quotes: [
+          {
+            id: "spya-qte234",
+            blockId: "spya-bbbbbb",
+            text: `${SAYS[which]} was built first`,
+            start: 0,
+            reason: "It is the sentence the piece turns on.",
+            importance: 90,
+            striking: 80,
+          },
+        ],
+        discarded: { unfound: 0, otherVoice: 0, wrongLength: 0, overlapping: 0, overCap: 0, malformed: 0 },
+      },
+      stale,
+      outdated: false,
+      profileChanged: false,
+    }),
+    mount: (show) => createElement(QuotesOuter, { show }),
+    /* The appending verb. *Choose them again* is the stale banner's, and
+       replaces. A profiled list is added to with the profile, which is the
+       request's default and so not in the POST. */
+    verb: "Find more",
+    forced: ["Find more", "Choose them again"],
+    direct: [
+      { label: "Find more", stale: false, posts: { useProfile: false } },
+      { label: "Choose them again", stale: true },
+    ],
+    waiting: "The new quotes haven't loaded yet.",
+    readAgain: "Try again",
+  },
+  {
+    name: "Timeline",
+    step: "timeline",
+    path: "/api/timeline/",
+    body: (which, { stale }) => ({
+      timeline: {
+        ...stamp(which, false),
+        events: [
+          {
+            id: "spya-evt234",
+            label: `${SAYS[which]} calibration`,
+            dating: { kind: "words", phrase: "before the theory" },
+            order: 1,
+            modality: "happened",
+            occurrences: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 }],
+          },
+        ],
+        orderConflicts: 0,
+      },
+      stale,
+      outdated: false,
+    }),
+    mount: (show) =>
+      show
+        ? createElement(TimelineBand, { slug: SLUG, blocks: BLOCKS, onJump: noop, onFound: noop, openKey: null, onOpenKey: noop })
+        : null,
+    verb: "Read it again",
+    shape: ON_THE_BANNER,
+    forced: ["Read it again"],
+    direct: [{ label: "Read it again", stale: true }],
+    waiting: "The new timeline hasn't loaded yet.",
+    readAgain: "Try again",
+  },
+  {
+    name: "FAQ",
+    step: "faq",
+    path: "/api/faq/",
+    body: (which, { stale }) => ({
+      faq: {
+        ...stamp(which, false),
+        questions: [
+          {
+            id: "faq-q1",
+            question: `${SAYS[which]}: why trust the rig?`,
+            passages: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 }],
+          },
+        ],
+        dropped: { unknownIds: 0, unquoted: 0, tooLong: 0, duplicate: 0, unanchored: 0, overCap: 0, malformed: 0 },
+      },
+      stale,
+      outdated: false,
+    }),
+    mount: (show) => (show ? createElement(FaqBand, { slug: SLUG, onJump: noop }) : null),
+    verb: "Find them again",
+    shape: ON_THE_BANNER,
+    forced: ["Find them again"],
+    direct: [{ label: "Find them again", stale: true }],
+    waiting: "The new questions haven't loaded yet.",
+    readAgain: "Try again",
+  },
+  {
+    name: "Debate",
+    step: "debate",
+    path: "/api/debate/",
+    body: (which, { stale }) => ({
+      debate: {
+        version: "test",
+        generator: "test",
+        slug: SLUG,
+        sourceHash: "hash",
+        /* Debate's only clock, and so its identity. */
+        searchedAt: AT[which],
+        direct: {
+          rows: [
+            {
+              id: "spya-dbt234",
+              url: "https://example.org/leiden",
+              title: `${SAYS[which]} replication`,
+              sourceQuote: "We could not reproduce the calibration.",
+              relation: "disputes",
+              lean: "leans-against",
+              applies: "A replication reached the opposite reading.",
+              articleReferenceQuote: "The instrument was built",
+              /* `quoted`, or the identification bar hides the row. */
+              identifies: [
+                { kind: "quoted", quote: "The instrument was built first", blockId: "spya-bbbbbb", coverage: 0.9, density: 0.9 },
+                { kind: "named", by: "title", witness: "A piece" },
+              ],
+            },
+          ],
+          counts: DEBATE_COUNTS,
+        },
+        claims: { rows: [], counts: { ...DEBATE_COUNTS, returnedSources: 0, reportedRows: 0, keptRows: 0 } },
+        elapsedMs: 1,
+      },
+      stale,
+      outdated: false,
+    }),
+    mount: (show) =>
+      show
+        ? createElement(DebateBand, {
+            slug: SLUG,
+            onJump: noop,
+            blockOrder: new Map(BLOCKS.map((b, i) => [b.id, i])),
+            publishedAt: undefined,
+            articleTitle: "A piece",
+            claimChats: { summaries: [], onCheck: noop, onLens: noop, onOpen: noop },
+          })
+        : null,
+    verb: "Search again",
+    shape: ON_THE_BANNER,
+    forced: ["Search again"],
+    direct: [{ label: "Search again", stale: true }],
+    waiting: "The new search hasn't loaded yet.",
+    readAgain: "Try again",
+  },
+  {
+    name: "Citations",
+    step: "citations",
+    path: "/api/citations/",
+    body: (which, { stale }) => ({
+      citations: {
+        ...stamp(which, false),
+        citations: [
+          {
+            id: "spya-c7t2wd",
+            key: "work:elements of episodic memory|tulving|1983",
+            title: `${SAYS[which]} of Episodic Memory`,
+            authors: "Tulving",
+            year: "1983",
+            why: "The idea the piece tests.",
+            relevance: 0.9,
+            influence: 0.9,
+            mentions: [{ blockId: "spya-bbbbbb", quote: "The instrument was built", start: 0 }],
+            citedAt: ["spya-bbbbbb"],
+            firstCited: "spya-bbbbbb",
+            citedInBody: true,
+            url: "https://scholar.google.com/scholar?q=Elements",
+            linkFrom: "search",
+          },
+        ],
+        capped: false,
+      },
+      stale,
+      outdated: false,
+    }),
+    mount: (show) => createElement(CitationsOuter, { show }),
+    verb: "Find them again",
+    shape: ON_THE_BANNER,
+    forced: ["Find them again"],
+    direct: [{ label: "Find them again", stale: true }],
+    waiting: "The new citations haven't loaded yet.",
     readAgain: "Try again",
   },
 ];
@@ -431,8 +710,22 @@ const press = async (label: string) => {
 };
 const onScreen = (which: Which) => (document.body.textContent ?? "").includes(SAYS[which]);
 
-/** The badge's Regenerate, read by opening its panel and closing it again. */
+/**
+ * **Whether a forced run can be asked for right now.** The badge's Regenerate,
+ * read by opening its panel and closing it again — or, for a row with a `verb`,
+ * that control.
+ *
+ * A `verb` row answers `"disabled"` whenever there is nothing to press, which
+ * is two cases: the button is disabled, or `RewriteWaiting` stands in its place
+ * (IdeasPanel.tsx § `run`). And it answers `"enabled"` for a **Retry** too:
+ * `JobProgress` draws that in the run button's place under a failed job, and a
+ * hook hides the failure for as long as it holds (`failed: hold.rewriting ?
+ * null : …`), so a Retry on screen is the hold having let go.
+ */
 async function regenerate(): Promise<"enabled" | "disabled" | "absent"> {
+  if (row.verb) {
+    return [...buttons(row.verb), ...buttons("Retry")].some((b) => !b.disabled) ? "enabled" : "disabled";
+  }
   const badge = document.querySelector<HTMLButtonElement>(".prof-badge");
   if (!badge) return "absent";
   await act(async () => badge.click());
@@ -442,25 +735,36 @@ async function regenerate(): Promise<"enabled" | "disabled" | "absent"> {
   await press("Done");
   return state;
 }
+/** The forced control itself, on screen and pressable: the row's `verb`, or the badge's Regenerate with its panel opened. */
+async function forcedButton(): Promise<HTMLButtonElement> {
+  if (!row.verb) {
+    const badge = document.querySelector<HTMLButtonElement>(".prof-badge");
+    expect(badge, "the profile icon").not.toBeNull();
+    await act(async () => badge!.click());
+    await flush();
+  }
+  const [b] = buttons(row.verb ?? "Regenerate");
+  expect(b?.disabled, `${row.verb ?? "Regenerate"} is offered before the press`).toBe(false);
+  return b!;
+}
 async function pressRegenerate() {
-  const badge = document.querySelector<HTMLButtonElement>(".prof-badge");
-  expect(badge, "the profile icon").not.toBeNull();
-  await act(async () => badge!.click());
+  const b = await forcedButton();
+  await act(async () => b.click());
   await flush();
-  expect(buttons("Regenerate")[0]?.disabled, "Regenerate is offered before the press").toBe(false);
-  await press("Regenerate");
 }
 /** No forced control can be pressed: each is gone, or disabled. */
 async function expectHeld(why: string) {
-  expect(await regenerate(), `${why}: the badge's Regenerate`).toBe("disabled");
+  expect(await regenerate(), `${why}: ${row.verb ?? "the badge's Regenerate"}`).toBe("disabled");
   for (const label of row.forced) {
     expect(buttons(label).filter((b) => !b.disabled), `${why}: ${label}`).toHaveLength(0);
   }
 }
 
 const PROFILED: Shape = { stale: false, profiled: true };
+/** The shape the row on stage is served when a test does not say. */
+const usual = (): Shape => row.shape ?? PROFILED;
 
-function start(which: Row, shape: Shape = PROFILED) {
+function start(which: Row, shape: Shape = which.shape ?? PROFILED) {
   row = which;
   path = `${row.path}${SLUG}`;
   serve = () => json(row.body("old", shape));
@@ -551,7 +855,7 @@ describe.each(ROWS)("$name", (mode) => {
     await pressRegenerate();
     showBand = false;
     await paint();
-    cache.set(path, { body: mode.body("new", PROFILED), savedAt: 2 });
+    cache.set(path, { body: mode.body("new", usual()), savedAt: 2 });
     serve = dropped;
     finishJob();
     showBand = true;
@@ -607,7 +911,7 @@ describe.each(ROWS)("$name", (mode) => {
     await paint();
     /* Another reader (Marginalia or another tab) has updated the shared copy.
        Quiz and Glossary keep their read instance while the band is closed. */
-    cache.set(path, { body: mode.body("new", PROFILED), savedAt: 2 });
+    cache.set(path, { body: mode.body("new", usual()), savedAt: 2 });
     serve = dropped;
     showBand = true;
     await paint();
@@ -622,14 +926,10 @@ describe.each(ROWS)("$name", (mode) => {
   it("holds the forced verb synchronously before the next render", async () => {
     start(mode);
     await paint();
-    const badge = document.querySelector<HTMLButtonElement>(".prof-badge");
-    await act(async () => badge!.click());
-    await flush();
-    const [button] = buttons("Regenerate");
-    expect(button?.disabled).toBe(false);
+    const button = await forcedButton();
     await act(async () => {
-      button!.click();
-      button!.click();
+      button.click();
+      button.click();
     });
     await flush();
     expect(posted, "the hold fences the verb before React disables its controls").toHaveLength(1);
@@ -640,7 +940,7 @@ describe.each(ROWS)("$name", (mode) => {
     await paint();
     expect(onScreen("old")).toBe(true);
     await pressRegenerate();
-    expect(posted).toEqual([{ slug: SLUG, steps: [mode.step], force: [mode.step] }]);
+    expect(posted).toEqual([{ slug: SLUG, steps: [mode.step], force: [mode.step], ...(mode.posts ?? {}) }]);
 
     serve = broken;
     finishJob();
@@ -649,11 +949,35 @@ describe.each(ROWS)("$name", (mode) => {
     await expectHeld("the reload failed");
     expect(posted, "exactly one forced POST").toHaveLength(1);
 
-    serve = () => json(mode.body("new", PROFILED));
+    serve = () => json(mode.body("new", usual()));
     await press("Try again");
     expect(onScreen("new")).toBe(true);
     expect(await regenerate(), "the replacement is here").toBe("enabled");
     expect(posted).toHaveLength(1);
+  });
+
+  /* The gap itself, with nothing else going wrong: the job has left the list
+     and the GET that will bring its result is still in the air. The old
+     artefact is on screen, and without the hold its forced control is live. */
+  it("holds every forced control while the completion GET is still in the air", async () => {
+    start(mode);
+    await paint();
+    await pressRegenerate();
+    jobs = [job(mode.step, "running")];
+    await paint();
+
+    let land!: (res: Response) => void;
+    serve = () => new Promise((resolve) => { land = resolve; });
+    finishJob();
+    await paint();
+    expect(onScreen("old"), "the old artefact is still what is drawn").toBe(true);
+    await expectHeld("the job is done and its result has not been read");
+    expect(posted, "exactly one forced POST").toHaveLength(1);
+
+    await act(async () => land(json(mode.body("new", usual()))));
+    await flush();
+    expect(onScreen("new")).toBe(true);
+    expect(await regenerate(), "the replacement is here").toBe("enabled");
   });
 
   it("lets go when the job fails", async () => {
@@ -692,7 +1016,7 @@ describe.each(ROWS)("$name", (mode) => {
     finishJob();
     await paint();
 
-    await act(async () => landOld(json(mode.body("old", PROFILED))));
+    await act(async () => landOld(json(mode.body("old", usual()))));
     await flush();
     expect(onScreen("old")).toBe(true);
     expect(reads, "the read that will answer has been asked for").toBe(before + 1);
@@ -720,7 +1044,7 @@ describe.each(ROWS)("$name", (mode) => {
     await expectHeld("the reload was answered from the offline copy");
     expect(document.body.textContent).toContain(mode.waiting);
 
-    serve = () => json(mode.body("new", PROFILED));
+    serve = () => json(mode.body("new", usual()));
     const before = reads;
     await press(mode.readAgain);
     expect(reads, "one GET").toBe(before + 1);
@@ -749,7 +1073,7 @@ describe.each(ROWS)("$name", (mode) => {
     await press(mode.readAgain);
     await expectHeld("a second copy");
 
-    serve = () => json(mode.body("new", PROFILED));
+    serve = () => json(mode.body("new", usual()));
     await press(mode.readAgain);
     expect(posted).toHaveLength(1);
     expect(onScreen("new")).toBe(true);
@@ -818,19 +1142,19 @@ describe.each(ROWS)("$name", (mode) => {
     showBand = false;
     await paint();
     showBand = true;
-    serve = () => json(mode.body("old", PROFILED));
+    serve = () => json(mode.body("old", usual()));
     await paint();
     expect(await regenerate()).toBe("enabled");
   });
 
   /* F5: the badge is not the only forced control, and a stale or unprofiled
      artefact has no badge to hold. */
-  it.each(mode.direct)("F5: $label holds itself, on an artefact with no profile", async ({ label, stale }) => {
+  it.each(mode.direct)("F5: $label holds itself, on an artefact with no profile", async ({ label, stale, posts }) => {
     start(mode, { stale, profiled: false });
     await paint();
     expect(buttons(label).filter((b) => !b.disabled), `${label} is offered`).toHaveLength(1);
     await press(label);
-    expect(posted).toEqual([{ slug: SLUG, steps: [mode.step], force: [mode.step], ...(mode.step === "glossary" ? { useProfile: false } : {}) }]);
+    expect(posted).toEqual([{ slug: SLUG, steps: [mode.step], force: [mode.step], ...(posts ?? {}) }]);
 
     serve = broken;
     finishJob();

@@ -74,6 +74,7 @@ import { apiFetch } from "./lib/api.js";
 import { SKETCH_WAIT } from "./sketch-cost.js";
 import { laterClickOfMany, pressEnlarges } from "./enlargePress.js";
 import { ReadError } from "./ReadError.js";
+import { RewriteWaiting } from "./RewriteWaiting.js";
 import { ControlTip, Tooltip, TooltipGroup } from "./Tooltip.js";
 import { type UseIllustrated, useIllustrated } from "./useIllustrated.js";
 import { type UseDictationField, useDictationField } from "./useDictationField.js";
@@ -420,9 +421,13 @@ function YourNote({ note }: { note: string | undefined }) {
  * **Paint again, beside a picture that is there** — with whatever is in the box.
  * Forced, because an unforced run would skip a current picture with the same
  * note while the reader watched a job change nothing.
+ *
+ * **Held from the press until the new painting has been read** (`rewriting`,
+ * rewrite-hold.ts): the job leaving the list is not the painting arriving, and
+ * a press in between is a second run of the dearest job there is.
  */
 function PaintAgain({ view, steer }: { view: UseIllustrated; steer: SteerNote }) {
-  const busy = view.job !== null || view.starting;
+  const busy = view.job !== null || view.starting || view.rewriting;
   return (
     <div className="ill-run">
       {view.profileChanged && <p className="ill-empty-why">{SKETCH_THEN_PAINT_WORK}</p>}
@@ -662,6 +667,12 @@ export function IllustratedView({ slug, blocks, onJump }: Props) {
       {/* A re-read that failed, beside the painting it could not replace —
           SketchView.tsx § OwnerSketch has the same line and the reason. */}
       {view.error && <ReadError error={view.error} onRetry={view.retryRead} />}
+      {/* A repaint finished and its painting is not here yet — the read, never
+          a second paid repaint. SketchView.tsx § `progress` has the same line,
+          in the same words, for the same reason. */}
+      {view.rewriting && !view.job && !view.starting && !view.failed && !view.error && (
+        <RewriteWaiting line="The new picture hasn't loaded yet." onRead={view.refresh} />
+      )}
 
       {notes.length > 0 && <p className="ill-note">{notes.join(" ")}</p>}
 

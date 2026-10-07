@@ -140,6 +140,11 @@ argument*, *Draw the Sketch, then paint*, or *Paint again*, which sits beside a 
 already there and is forced. The design and its review are
 [261002j](../plans/261002j-illustrated-steering-note.md).
 
+*Paint again* is held from the press until the new painting has been read, so one press cannot buy
+two paintings: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
+While it is held with nothing running, the band says *The new picture hasn't loaded yet.* and offers
+*Try again*, which only reads.
+
 Four things to know before touching it:
 
 - **The note is the job's, not the article's.** It is a field of `POST /api/jobs`

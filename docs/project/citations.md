@@ -839,8 +839,13 @@ work inside the fence, after filtering and caps; our words also say what the cou
 ## Making it again
 
 From the Metadata page: *AI processing* has a Citations row, since 2026-09-29, and it is the
-only redo — the panel says nothing when its list was made by an older prompt
-([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). A press is one
+only redo on a list the article still matches — the panel says nothing when its list was made by an
+older prompt
+([260929c](../plans/260929c-no-notice-when-a-mode-was-made-by-an-older-prompt.md)). When the
+article has changed under the list, the banner that says so has *Find them again*, which is held
+from the press until the new list has been read
+([reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result)).
+A press is one
 model call and no web search (that is *Look it up*, per row); the list is replaced only if the run
 succeeds, and a work found again keeps its id, so a link *Look it up* stored stays with it. The row is
 drawn with the experimental switch off too, as Timeline's and Debate's are. Why it is safe to offer

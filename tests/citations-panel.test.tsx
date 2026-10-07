@@ -416,6 +416,8 @@ function owner(over: Partial<UseCitations> = {}): UseCitations {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     findNote: null,
     investigating: null,
     investigateStage: null,

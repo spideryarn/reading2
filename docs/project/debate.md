@@ -50,6 +50,10 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
 - **Claims**: what has been written about the claims the piece makes. One open disclosure per
   claim, in article order, headed by the article's own words; the relevance bar belongs here.
 
+When the article has changed since the search ran, a banner says so and offers *Search again*.
+That button is held from the press until the new search has been read, so one press cannot buy two
+searches: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
+
 Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
 steered**: its two searches choose their own queries, and what they keep is one result per article,
 the same for the owner and for every visitor. What the owner can do, since 2026-10-05, is start a

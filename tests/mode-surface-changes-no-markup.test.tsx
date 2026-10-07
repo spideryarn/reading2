@@ -1350,6 +1350,8 @@ function quotesOwner(quotes: Quotes | null): QuotesOwner {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
   };
 }
 
@@ -1370,6 +1372,8 @@ function timelineOwner(timeline: Timeline | null, over: Partial<TimelineOwner> =
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }
@@ -1391,6 +1395,8 @@ function debateOwner(debate: Debate | null, over: Partial<DebateOwner> = {}): De
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }

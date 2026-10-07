@@ -85,6 +85,8 @@ function owner(over: Partial<UseFaq> = {}): UseFaq {
     ensure: async () => {},
     regenerate: async () => {},
     cancel: () => {},
+    rewriting: false,
+    refresh: async () => {},
     ...over,
   };
 }
