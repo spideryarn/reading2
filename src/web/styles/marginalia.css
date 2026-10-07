@@ -92,7 +92,7 @@
   cursor: help;
 }
 .marg-question:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 
@@ -113,7 +113,7 @@
 }
 .marg-idea:focus-visible,
 .marg-arc:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 /* A relation word — so, but, vs: how this paragraph bears on the one before
@@ -133,7 +133,7 @@
   color: var(--ink-soft);
 }
 .marg-relation:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 .marg-stamp {
@@ -188,7 +188,7 @@ p.marg-shut {
   text-overflow: ellipsis;
 }
 .marg-shut-button:focus-visible {
-  outline: 2px solid var(--rule-strong);
+  outline: 2px solid var(--highlight-text);
   outline-offset: 2px;
 }
 /* **The line answers the pointer** (Greg, spya-xf6m2u: the card said to press
