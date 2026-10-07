@@ -1,0 +1,1 @@
+CREATE INDEX "revision_blocks_article_block" ON "spideryarn"."revision_blocks" USING btree ("article_id","block_id");

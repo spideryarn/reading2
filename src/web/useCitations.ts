@@ -55,7 +55,6 @@ import type {
   PaperPassage,
 } from "../types.js";
 import { NONE_YET_AS_NULL_HEADER } from "../types.js";
-import { wentQuiet } from "../messages.js";
 import { useOrderedRead } from "./useOrderedRead.js";
 import { type FreshReads, useFreshReads, useRewriteHold } from "./rewrite-hold.js";
 import { type StepFailure, useStepFinished, useStepJob } from "./useStepJob.js";
@@ -63,7 +62,7 @@ import { useAutoRun } from "./useAutoRun.js";
 import { apiFetch, readJson } from "./lib/api.js";
 import { describeFetchFailure } from "./lib/describe-failure.js";
 import { MalformedReply, ReaderFacingError } from "./lib/reader-facing.js";
-import { readAnswerStream, StreamStalled } from "./lib/sse.js";
+import { readAnswerStream } from "./lib/sse.js";
 
 type CitationsStatus = "loading" | "none" | "ready" | "error";
 
@@ -570,7 +569,7 @@ export function useCitationsRead(slug: string): CitationsRead {
         setInvestigateDraft(null);
         setInvestigateFailed({
           id,
-          message: err instanceof StreamStalled ? wentQuiet(err.seconds).message : (err as Error).message,
+          message: describeFetchFailure(err as Error),
           previousAt,
           previousLookupAt,
           lookupKept,

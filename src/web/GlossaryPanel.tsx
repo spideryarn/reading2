@@ -84,6 +84,7 @@ import type { AddedTerm, BlockId, GlossaryEntry, GlossaryLookup, Job } from "../
 import { parseAskedTerm } from "../asked-term.js";
 import type { TermSort } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
+import { isImeComposing } from "./key-chord.js";
 import { ScoreBars } from "./ScoreBars.js";
 import { OrderGroup } from "./OrderGroup.js";
 import { BlockNav, nudgeTo } from "./BlockNav.js";
@@ -1544,7 +1545,17 @@ function Term({
                 {entry.blocks.length === 1 ? "used in" : `used in ${entry.blocks.length} places`}
               </span>
               {entry.blocks.map((id) => (
-                <BlockRef key={id} id={id} onJump={onJump} />
+                <BlockRef
+                  key={id}
+                  id={id}
+                  /* Recorded, as the stepper's own arrows record it below, so
+                     Next goes on from the chip the reader pressed. Until
+                     2026-10-07 the chip jumped and the counter stayed put. */
+                  onJump={(to) => {
+                    setAtBlock(id);
+                    onJump(to);
+                  }}
+                />
               ))}
               {/* Greg, 2026-08-26: *"a way in both Ideas and Glossary modes to
                   jump to prev/next exemplifying block"*. The chips have always
@@ -1740,6 +1751,14 @@ function AskATerm({
           maxLength={MAX_ASKED_TERM}
           placeholder="Look up a term…"
           aria-label="Look up a term in this article"
+          /* A key an input method is using is not ours
+             (docs/project/keyboard.md): its Enter accepts a candidate, so the
+             form must not submit a half-chosen word, and its Escape dismisses
+             the list, where the browser itself would empty a `type="search"`
+             box. Every other key is left alone. */
+          onKeyDown={(e) => {
+            if (isImeComposing(e) && (e.key === "Enter" || e.key === "Escape")) e.preventDefault();
+          }}
           onChange={(e) => {
             setTerm(e.target.value);
             /* The previous answer goes the moment the box changes. It belongs to

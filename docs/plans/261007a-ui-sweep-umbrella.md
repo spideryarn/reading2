@@ -631,4 +631,58 @@ contrast at 820.
   what the components emit. Left: the ordinary `.chat-tool-detail` is `--ink-faint` at 0.7
   opacity, about 3:1 (question 3's "faint text").
 
+- **K3, the shelf's passage filter and false copy — landed 2026-10-07**, `3aad96ec5` and Sol's
+  fixes `5b93f7b0e` on `dev` ([its plan](261007a-ui-sweep-k3-shelf-filter-and-false-copy.md)).
+  The passage list obeys topics and tags as well as Unread, derived from `narrowShelf` with an
+  empty query; a test over all sixteen filter combinations, red first, and red again against the
+  version that derives from the card rows. In a browser, six topics with a query matching no
+  card listed 1 to 13 passages each and none from outside the topic. The false sentences are
+  corrected (Learn's accessible name, Admin home, the shelf card's "Built", two "zoom" sentences,
+  `SHARED_LINK_CARRIES`); Citations and FAQ say "Finding…"; the shelf's details trigger has a
+  focus mark; the rebuild failure goes through the shared helper; the counts on topic and tag
+  chips went from 3.2:1 to 5.7:1 or better in both themes. **GPT Sol's review found two P1s:**
+  with "Include archived" on and its listing still loading or failed, hidden archived hits were
+  described as "already opened" (the sentence now says only that they are not shown); and the
+  builder's guard on the tag popover kept it open by `preventDefault`, against the rule K2 had
+  just written that a composing key is left untouched, which Radix makes impossible from inside
+  its own callback, so it is a capture listener scoped to the open popover. Two postmortems came
+  with it (`261007b`, `261007c`). **What the plan had wrong:** the counts are drawn in
+  `ShelfTermChip.tsx` (and `ShelfTagFilter.tsx`), not `ShelfTerms.tsx`, and fail in dark too; "one
+  composition check" could not satisfy the written rule. Left: `SHARED_WITH_YOU` in
+  `src/messages.ts` still says "at every zoom level" and nothing imports it; "the one admin page
+  that writes" survives in a comment, a test comment and a heading in `admin.md`; the shelf's
+  two "also found in" sections are told about Unread and topics but not tags.
+
+- **K4, failure sentences and panel states — landed 2026-10-07**, `b007f68cd`, `012af29a1`,
+  `675d794f9`, `e707aa87f`, `5d593947c` and Sol's fixes `911317050` on `dev`
+  ([its plan](261007a-ui-sweep-k4-failure-sentences-and-panel-states.md)). **The throw seam:**
+  a stream that ends early throws a `ReaderFacingError`; a refused completion throws
+  `MalformedReply` (its old sentence told the reader to try again, which is a second paid call
+  when the answer had already been stored). **The catches:** six hooks and four more sites call
+  `describeFetchFailure`; one test file poses only `fetch`, so the real transport marking is what
+  is exercised, over seven kinds of failure (25 of 39 cases red first). **Skim's purpose box**
+  re-reads what is stored before it says anything: stored, it carries on; not stored, it says so;
+  unreadable, it says it cannot tell. **Panels:** Quotes shows a running or failed job at its
+  ceiling (and the seventh sweep's rewrite hold, which arrived mid-build, shows there too);
+  a glossary occurrence chip moves the stepper; Referee's Criteria and Mirror offer Try again only
+  when `worthRetrying`; Search's order row has a named group, pressed states, a guarded hover, a
+  focus mark and a 40px floor for a finger, with every resting value at 1440 measured identical
+  before and after; the hint under failed searches has three wordings, for all, none and some rows
+  retryable. 47 mutations, all noticed. **GPT Sol's verdict was "not ready"**, on one finding the
+  builder could not fix inside its manifest: `COULD_NOT_REACH` said "nothing was sent or received
+  just now", false for a stream or download cut part-way, and K4 routed six more failures to it.
+  **Fixed by the orchestrator in `src/messages.ts`** (the clause is gone; the comment says why),
+  so nothing is overruled. Sol's other fixes: Skim's recovered save skipped `profileSaved()`; "That
+  was not saved" could be false if another tab overwrote a landed save; the Search hints promised
+  a certain failure where the real refusal says "most likely". **What the plan and brief had
+  wrong:** Diagram's projection and similar reads are POSTs that can call a paid embedding, not
+  plain GETs (the builder aborted them in the browser; nothing was spent); on the server a forced
+  Quotes run over a current list is always an append, so only the client's verb differed.
+  Left: Mirror, under a failure that cannot be retried, has no pressable control until the
+  sub-mode is re-entered (needs `useMirror.ts`); `ProfileBox`, `SettingsSection` and the Add page
+  still say "Not saved — …" for every rejection, the defect Skim had (the shared fix is in
+  `useAutosavedText`); the lost-connection mark for a blob read is written inline twice and wants
+  a `readBlob` beside `readJson`; two comments in `DiagramPanel.tsx` say "the server's own words"
+  of a sentence that is now sometimes the client's.
+
 *(the rest filled in as clusters land)*
