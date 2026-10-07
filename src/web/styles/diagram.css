@@ -187,6 +187,12 @@
    six words and wrong for the server's own reason, which runs to three lines in
    this band — side by side, the sentence and the button squeeze each other. */
 .diag-wait.wide { flex-direction: column; gap: 0.55rem; }
+/* **The failure's own sentence, inside the wait or the Force strip** — those
+   two serve waits and empties too, so they keep the faint grey and only the
+   sentence that says something failed is `--danger`, as every band's failure
+   is (plan 261007h § F4 and § Judgement calls: a grey failure cannot be told
+   from never having asked). Its *Try again* (`.diag-again`) keeps its own ink. */
+.diag-failed { color: var(--danger); }
 
 /* **The second try, drawn as a link and sized as a target.** It sits inside a
    sentence in both places it appears — the wait, and the Force strip above the

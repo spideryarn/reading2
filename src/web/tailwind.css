@@ -195,6 +195,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /* Error TEXT (`tw:text-danger`): a failure sentence. `--destructive` above is
+     a fill. styles/tokens.css § --danger; plan 261007h § F4. */
+  --color-danger: var(--danger);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);

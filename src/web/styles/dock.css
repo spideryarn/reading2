@@ -831,16 +831,18 @@
    § the drawer. It is the third carrier of what the red `!` on the Comments
    button means, and the only one a finger can reach.
 
-   `--ink` rather than the red, with the mark on the button carrying the alarm:
-   this is a whole sentence sitting at the top of a panel the reader has just
-   opened, and a paragraph of red is shouting where the button has already
-   shouted. The rule under it separates it from the list without making it a
-   box. */
+   `--danger`, the error-text colour every failure sentence takes (plan
+   261007h § F4). It was `--ink` until 2026-10-07, on the ground that a
+   paragraph of red shouts where the button's mark has already shouted; but a
+   failure in plain ink reads as one more line of the panel, and one colour for
+   every failure is what lets a reader tell one at a glance. `--danger` is the
+   text tone, not the fill, so it is a sentence in red rather than a red block.
+   The rule under it separates it from the list without making it a box. */
 .dock-drawer-error {
   margin: 0 0 0.7rem;
   padding-bottom: 0.7rem;
   border-bottom: 1px solid var(--rule);
-  color: var(--ink);
+  color: var(--danger);
   font-family: var(--font-ui);
   font-size: 0.85rem;
   line-height: 1.5;

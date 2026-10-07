@@ -47,7 +47,7 @@
  */
 import { spawn } from "node:child_process";
 import { constants, hostname } from "node:os";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,13 +67,17 @@ import { openReadinessStore, procStartToken, readinessDirFromEnv } from "../tool
 import { runnerChildEnv, stampTree } from "../tools/fleet/readiness-git.js";
 import {
   CHECK_KINDS,
+  READINESS_PREPARATION_ENV,
   SCRIPT_FOR_KIND,
+  asPreparation,
   describeFailedTestFiles,
   failedTestFilesForOutcome,
   outcomeFromExit,
   type CheckKind,
   type FinishedRecord,
+  type Preparation,
   type StartedRecord,
+  type TreeStamp,
 } from "../tools/fleet/readiness.js";
 import { READINESS_ADMISSION_TOKEN_ENV } from "../vitest-admission.js";
 
@@ -167,7 +171,48 @@ function scriptBodies(root: string): Record<string, string> {
  * check spawn came to be the one that was missed — GPT Sol's F1, 2026-09-09.
  */
 export function checkChildEnv(admissionToken: string): NodeJS.ProcessEnv {
-  return { ...runnerChildEnv(process.env), [READINESS_ADMISSION_TOKEN_ENV]: admissionToken };
+  const env: NodeJS.ProcessEnv = { ...runnerChildEnv(process.env), [READINESS_ADMISSION_TOKEN_ENV]: admissionToken };
+  // This wrapper consumes the one-run statement. A descendant wrapper must
+  // not inherit it after the suite has changed the prepared corpus.
+  delete env[READINESS_PREPARATION_ENV];
+  return env;
+}
+
+/**
+ * The loop's {@link Preparation}, from the variable it sets, or null — for no
+ * variable, one that does not parse, or one about a commit other than the one
+ * this run is on, or a hash that does not match its current `.env.local`.
+ * Checked at both ends: the loop's hash precedes the wrapper's launch, and a
+ * symlink's contents can change without making the Git tree dirty.
+ */
+export function preparationFromEnv(
+  raw: string | undefined,
+  tree: TreeStamp,
+  envLocalSha256: string | null,
+): Preparation | null {
+  if (raw === undefined || raw === "") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  const preparation = asPreparation(parsed);
+  if (preparation === null) return null;
+  if (tree.kind !== "known" || tree.dirty || tree.sha !== preparation.sha) return null;
+  if (envLocalSha256 === null || envLocalSha256 !== preparation.envLocalSha256) return null;
+  // Verification is this wrapper's statement at finish, not an assertion an
+  // incoming loop variable may make about a check that has not run yet.
+  const { envLocalVerified: _incomingVerification, ...statement } = preparation;
+  return statement;
+}
+
+function envLocalHash(cwd: string): string | null {
+  try {
+    return createHash("sha256").update(readFileSync(path.join(cwd, ".env.local"))).digest("hex");
+  } catch {
+    return null;
+  }
 }
 
 async function main(): Promise<void> {
@@ -248,7 +293,11 @@ async function main(): Promise<void> {
     commandLine: null as string | null,
     treeAtStart: stampTree(cwd),
     source: "wrapper" as const,
+    preparation: null as Preparation | null,
   };
+  /* The loop's statement about this checkout, kept only when it is about the
+     commit this run is actually on. A hand run has none, and says so. */
+  common.preparation = preparationFromEnv(process.env[READINESS_PREPARATION_ENV], common.treeAtStart, envLocalHash(cwd));
 
   const pending: StartedRecord = { ...common, state: "started" };
   try {
@@ -364,8 +413,11 @@ async function main(): Promise<void> {
     counts,
   ));
 
+  const treeAtEnd = stampTree(cwd);
+  const finishedPreparation = preparationFromEnv(JSON.stringify(common.preparation), treeAtEnd, envLocalHash(cwd));
   const finished: FinishedRecord = {
     ...common,
+    preparation: finishedPreparation === null ? null : { ...finishedPreparation, envLocalVerified: true },
     scope,
     commandLine,
     state: "finished",
@@ -374,7 +426,7 @@ async function main(): Promise<void> {
     outcome,
     exit,
     counts,
-    treeAtEnd: stampTree(cwd),
+    treeAtEnd,
     logPath: null,
     why,
     /* Decided AFTER the outcome and from nothing the outcome reads, so the

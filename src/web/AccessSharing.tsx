@@ -700,7 +700,7 @@ export function AccessSharing({
         </>
       )}
 
-      {error && <p className="tw:m-0 tw:mt-3 tw:text-destructive">{error}</p>}
+      {error && <p className="tw:m-0 tw:mt-3 tw:text-danger">{error}</p>}
     </div>
   );
 }
@@ -947,7 +947,7 @@ export function CopyLink({
       <p
         data-copy-status=""
         aria-live="polite"
-        className={state === "failed" ? "tw:m-0 tw:mt-1 tw:text-destructive" : "tw:sr-only"}
+        className={state === "failed" ? "tw:m-0 tw:mt-1 tw:text-danger" : "tw:sr-only"}
       >
         {state === "failed" ? SHARING_COPY_FAILED : state === "copied" ? "Link copied." : ""}
       </p>

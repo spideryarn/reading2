@@ -97,6 +97,16 @@ the token alphas to about 0.35–0.4 of Dark, as the marketing pages' `--site-li
 rather than a new `rgb(0 0 0 / …)`; in a `tw:` string, `tw:shadow-[var(--shadow-pop)]` compiles to
 a `box-shadow`. Not elevation, so not these: swatch rings, inset marks, table dividers, focus rings.
 
+**A failure sentence is `--danger`; `--destructive` is a fill.** Since 2026-10-07 every sentence
+saying something failed, in every band, its editors and dialogs, takes `--danger` (`tw:text-danger`),
+held at 4.5:1 on the page, the band and the raised surface by
+[`tests/appearance-palette.test.ts`](../../tests/appearance-palette.test.ts); the destructive
+button and the failed count chip keep `--destructive`. Not the orange (that means "the AI's" or
+"chosen"), and not the faint grey (that means "not made yet") —
+[261007h § F4](../plans/261007h-design-system-refresh-controls-that-do-the-same-job-look-the-same-in-every-mode.md);
+[`tests/failure-colour-and-order-chips.test.ts`](../../tests/failure-colour-and-order-chips.test.ts)
+lists the sites.
+
 ### Both of those are checked, because both had already happened
 
 [`tests/css-tokens.test.ts`](../../tests/css-tokens.test.ts) reads every repository stylesheet the client loads —
@@ -276,9 +286,9 @@ will eventually have to decide whether they are a system or an accident:
 
 - **The z-index budget.** Still not a system, but no longer unwritten — see
   [the stacking order](#the-stacking-order-which-is-real-even-though-it-is-not-a-scale) above.
-- **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page are
-  settled — see [controls.md](controls.md) — but that is one row
-  of one page agreeing with itself, not a scale, and it should not be read as one.
+- **Spacing.** No scale. `rem` values chosen per rule. Control *heights* on a list page, and
+  the controls every mode shares, are settled — see [controls.md](controls.md) — but that is
+  controls agreeing with each other, not a scale, and it should not be read as one.
 - **Breakpoints.** The reading view has exactly one, `max-width: 731px` (`NARROW_WINDOW_MAX` in
   [`layout.ts`](../../src/web/layout.ts), written as a literal in the stylesheets, and paired with
   `max-height: 620px` where a short window needs the same rules), plus the widths at which the columns
@@ -309,9 +319,10 @@ will eventually have to decide whether they are a system or an accident:
 - **[fonts.md](fonts.md)** — a face for each voice: the author's in a serif, the model's in IBM
   Plex Mono, the reader's in Arial, the chrome in Geist; the rule for deciding whose words an element
   shows, and how to put a new one in its voice.
-- **[controls.md](controls.md)** — why a button in this app had a 2px white `outset` border and no
-  pointer cursor for months, what our hand-written substitute for Tailwind's preflight covers, and
-  the one height and one radius the controls on a list page now agree on.
+- **[controls.md](controls.md)** — **controls that do the same job look the same in every mode**:
+  the shared piece for each kind and checks of the pieces and listed callers; then why a button in this
+  app had a 2px white `outset` border and no pointer cursor for months, what our hand-written
+  substitute for Tailwind's preflight covers, and the heights and radii the controls agree on.
 - **[narrow-windows.md](narrow-windows.md)** — a row of things whose widths you do not control must
   be allowed to wrap; the reading view's columns are given up in JavaScript rather than at a
   breakpoint; and `env(safe-area-inset-*)`, every value of which is `0px` on every machine we
@@ -340,7 +351,9 @@ will eventually have to decide whether they are a system or an accident:
   [`DesignPage.tsx`](../../src/web/DesignPage.tsx) renders every token, face, weight, button
   variant, toggle state and icon size on one page against the real ground, with contrast ratios
   computed in the browser from *resolved* values. Look at it after changing anything in
-  `tokens.css`. It catches what tests cannot: a token change where every component still renders,
+  `tokens.css`. Its **Controls across modes** section draws one example of each control the modes
+  share, with a checklist for whoever adds a mode — look there before drawing a new one
+  ([controls.md](controls.md#controls-that-do-the-same-job-look-the-same)). It catches what tests cannot: a token change where every component still renders,
   nothing throws, and one variant nobody looked at is now unreadable. **Linked from `/admin` and
   shown only to the administrator** since 2026-09-05 — a courtesy rather than a gate, since the page
   is in every reader's bundle and the address answers 200 whoever asks

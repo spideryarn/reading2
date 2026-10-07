@@ -1468,7 +1468,7 @@ export function AddPage({
           see `failure` above. */}
       <QuotaNotice
         message={engineFailure(mine) ?? failure?.reason ?? (vanished ? ADD_IMPORT_LOST : queue.error)}
-        className="tw:mb-4 tw:text-sm tw:text-destructive"
+        className="tw:mb-4 tw:text-sm tw:text-danger"
       />
 
       {/* From the first render until the poll brings the job back — the POST

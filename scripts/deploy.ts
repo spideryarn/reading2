@@ -5,6 +5,7 @@
  *     npm run deploy -- --dry-run          # every local gate, nothing external
  *     npm run deploy -- --verify-only      # check what is live, deploy nothing
  *     npm run deploy -- --force-gate=test  # named, loud, printed in the summary
+ *     npm run deploy -- --ready            # the newest commit the readiness loop saw green
  *
  * Anything else — a typo, a flag npm swallowed because the `--` was dropped,
  * `--host` without `--verify-only` — is refused with exit 2 before anything
@@ -98,6 +99,9 @@ import {
   type VercelDeployment,
 } from "./deploy-checks.js";
 import { storageBucketProblems } from "./storage-buckets.js";
+import { newestReadyCommit, readyTrunkGap, TEST_EVIDENCE_MAX_AGE_MS, testEvidenceFor, type TestEvidence } from "./deploy-evidence.js";
+import { openReadinessStore, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
+import { readinessRunnerPath, type Reading } from "../tools/fleet/readiness.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SCOPE = "greg-detre";
@@ -200,6 +204,8 @@ const SKIP_MIGRATIONS = MODE.op !== "verify" && MODE.skipMigrations;
 /** Only `--verify-only` may look anywhere but production: a deploy verifies what it shipped. */
 const TARGET_HOST = MODE.op === "verify" ? (MODE.host ?? HOST) : HOST;
 const FORCED_GATES: ReadonlySet<string> = MODE.op === "verify" ? new Set() : MODE.forcedGates;
+/** `--ready`: deploy the newest commit the readiness loop saw green, not HEAD. docs/plans/261007k. */
+const READY = MODE.op !== "verify" && MODE.ready;
 
 /* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
@@ -370,10 +376,128 @@ function takeLock(): () => void {
 }
 
 /* ------------------------------------------------------------------ */
+/* What the readiness loop already knows                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * `origin/dev` after a fetch, or null when either failed — which every caller
+ * treats as a refusal, never as agreement.
+ */
+function fetchTrunk(): string | null {
+  const fetched = run("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"]);
+  if (fetched.code !== 0) return null;
+  try {
+    return git("rev-parse", `origin/${TRUNK_BRANCH}`);
+  } catch {
+    return null;
+  }
+}
+
+/** Is `a` an ancestor of (or equal to) `b`? null when git could not say — an unknown sha, say. */
+function isAncestor(a: string, b: string): boolean | null {
+  const r = spawnSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: ROOT, stdio: "ignore" });
+  return r.status === 0 ? true : r.status === 1 ? false : null;
+}
+
+/** sha256 of the primary's `.env.local`, hex, or null when there is none. */
+function envLocalSha256(): string | null {
+  const file = path.join(ROOT, ".env.local");
+  return existsSync(file) ? createHash("sha256").update(readFileSync(file)).digest("hex") : null;
+}
+
+/**
+ * The readiness store's runs over the window a reused gate may draw on, or why
+ * it could not be read. On a machine with no store — Greg's laptop — this is
+ * the refusal, and the deploy runs its suite as it always has.
+ */
+function readinessReadings(nowMs: number): { readings: Reading[]; unreadable: number } | { why: string } {
+  const opened = openReadinessStore(readinessDirFromEnv());
+  if (opened.kind === "refused") return { why: opened.why };
+  try {
+    const read = opened.store.read({ sinceMs: nowMs - TEST_EVIDENCE_MAX_AGE_MS, nowMs });
+    return { readings: read.readings, unreadable: read.unreadable.length };
+  } catch (err) {
+    return { why: `the readiness store could not be read: ${(err as Error).message}` };
+  }
+}
+
+/** Whether the store proves `sha`'s test gate. Asked at the gate itself, so a run that finished meanwhile counts. */
+function testEvidenceAt(sha: string): TestEvidence {
+  const nowMs = Date.now();
+  const store = readinessReadings(nowMs);
+  if ("why" in store) return { kind: "run", why: store.why };
+  return testEvidenceFor({
+    sha,
+    readings: store.readings,
+    unreadable: store.unreadable,
+    nowMs,
+    runnerCwd: readinessRunnerPath(ROOT),
+    envLocalSha256: envLocalSha256(),
+  });
+}
+
+/**
+ * **`--ready`: the newest commit on `origin/dev` whose test gate the store
+ * already proves**, or null with the reasons recorded as a failure. It does
+ * not fall back to HEAD: the operator asked for a green commit, and deploying
+ * some other kind without saying so is what this flag replaced.
+ */
+function chooseReadyCommit(): string | null {
+  const trunkSha = fetchTrunk();
+  if (trunkSha === null) {
+    record("--ready: read origin/dev", [`could not fetch or read origin/${TRUNK_BRANCH}`]);
+    return null;
+  }
+  const nowMs = Date.now();
+  const store = readinessReadings(nowMs);
+  if ("why" in store) {
+    record("--ready: a green commit", [store.why]);
+    return null;
+  }
+  const shas = new Set<string>();
+  for (const r of store.readings) {
+    if (r.record.source === "wrapper" && r.record.treeAtStart.kind === "known") shas.add(r.record.treeAtStart.sha);
+  }
+  const env = envLocalSha256();
+  const candidates = [...shas].map((sha) => {
+    const onTrunk = isAncestor(sha, trunkSha) === true;
+    let ancestors = 0;
+    if (onTrunk) {
+      try {
+        ancestors = Number(git("rev-list", "--count", sha));
+      } catch {
+        ancestors = 0;
+      }
+    }
+    const evidence = testEvidenceFor({
+      sha,
+      readings: store.readings,
+      unreadable: store.unreadable,
+      nowMs,
+      runnerCwd: readinessRunnerPath(ROOT),
+      envLocalSha256: env,
+    });
+    return { sha, evidence, onTrunk, ancestors };
+  });
+  const chosen = newestReadyCommit(isAncestor, candidates);
+  if (chosen.kind === "none") {
+    record("--ready: a green commit", [
+      `no commit on origin/${TRUNK_BRANCH} has a readiness run the deploy can reuse ` +
+        `(last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h). Newest first:`,
+      ...chosen.why.map((w) => `  ${w}`),
+      "Wait for the readiness loop to pass a commit, or deploy the tip without --ready.",
+    ]);
+    return null;
+  }
+  ok(`--ready: ${chosen.sha.slice(0, 8)} is the newest commit on origin/${TRUNK_BRANCH} the readiness loop saw green`);
+  return chosen.sha;
+}
+
+/* ------------------------------------------------------------------ */
 /* 1. Preflight                                                        */
 /* ------------------------------------------------------------------ */
 
-async function preflight(): Promise<string> {
+async function preflight(): Promise<string | null> {
   step("Preflight");
 
   /* `--show-current` rather than `rev-parse --abbrev-ref HEAD`: the latter
@@ -389,12 +513,18 @@ async function preflight(): Promise<string> {
     ok(`on ${branch}`);
   }
 
-  const sha = git("rev-parse", "HEAD");
-  info(`deploying ${sha.slice(0, 8)}  ${git("log", "-1", "--format=%s")}`);
+  const sha = READY ? chooseReadyCommit() : git("rev-parse", "HEAD");
+  if (sha === null) return null;
+  info(`deploying ${sha.slice(0, 8)}  ${git("log", "-1", "--format=%s", sha)}`);
 
   /* Read-only: `git fetch` of one branch moves no local ref and touches
-     nobody's work. */
-  run("git", ["fetch", "origin", "main", "--quiet"]);
+     nobody's work. **Its result is read**: an ignored failure left a stale
+     `origin/main` answering the ancestry question below (GPT Sol on 261007k). */
+  const fetchedMain = run("git", ["fetch", "origin", "main", "--quiet"]);
+  if (fetchedMain.code !== 0) {
+    record("git fetch origin main", [tail(fetchedMain.out, 5)]);
+    return null;
+  }
   const behind = Number(git("rev-list", "--count", `${sha}..origin/main`) || "0");
   const ahead = Number(git("rev-list", "--count", `origin/main..${sha}`) || "0");
   if (behind > 0) {
@@ -415,17 +545,24 @@ async function preflight(): Promise<string> {
      not the trunk is meaningless. Deleting the guard would make the two
      independent gates one gate by accident. */
   if (branch === TRUNK_BRANCH) {
-    const fetched = run("git", ["fetch", "origin", TRUNK_BRANCH, "--quiet"]);
-    let trunkSha: string | null = null;
-    if (fetched.code === 0) {
-      try {
-        trunkSha = git("rev-parse", `origin/${TRUNK_BRANCH}`);
-      } catch {
-        trunkSha = null;
+    const trunkSha = fetchTrunk();
+    if (READY) {
+      /* Under --ready the candidate was chosen from dev's history on purpose,
+         so being behind is reported, not refused; not being on it at all is
+         still refused. `readyTrunkGap` has the reasoning. Its own gate name, so
+         a `--force-gate` for one cannot pass the other. */
+      const problem = readyTrunkGap({ sha, trunkSha, isAncestor: trunkSha === null ? null : isAncestor(sha, trunkSha) });
+      gate(`in origin/${TRUNK_BRANCH}`, problem === null, () => problem ?? "");
+      if (problem === null && trunkSha !== null && trunkSha !== sha) {
+        info(
+          `origin/${TRUNK_BRANCH} is ${git("rev-list", "--count", `${sha}..${trunkSha}`)} commit(s) ahead of this one; ` +
+            "they are not in this deploy",
+        );
       }
+    } else {
+      const problem = trunkGap({ branch, sha, trunkSha });
+      gate(`level with origin/${TRUNK_BRANCH}`, problem === null, () => problem ?? "");
     }
-    const problem = trunkGap({ branch, sha, trunkSha });
-    gate(`level with origin/${TRUNK_BRANCH}`, problem === null, () => problem ?? "");
   }
 
   /* **The release notes ship in the deploy they describe** — `changelogGap`,
@@ -433,7 +570,14 @@ async function preflight(): Promise<string> {
      what Vercel builds; a pending file written but not committed ships nothing. */
   {
     const notes = notesAt(sha, ROOT);
-    gate("changelog", notes.gap === null, () => notes.gap ?? "");
+    gate("changelog", notes.gap === null, () =>
+      notes.gap === null
+        ? ""
+        : READY
+          ? `${notes.gap}\n         Under --ready this usually means the newest green commit is older than the latest\n` +
+            "         release notes: wait for the readiness loop to pass a commit after them, then deploy again."
+          : notes.gap,
+    );
     if (notes.gap === null) {
       info(
         notes.pending
@@ -775,24 +919,22 @@ function gatesAt(sha: string): void {
     registered = true;
 
     /**
-     * Dependencies. Sharing the main tree's `node_modules` is what makes this
-     * gate cost two seconds instead of twenty-four — but it is only honest while
-     * the lockfile has not moved, because a shared `node_modules` describes
-     * *this laptop*, not the commit. When the lockfile is part of what is
-     * shipping, the cheap version cannot see a dependency that was added, so it
-     * escalates rather than warning: a warning about a gate that cannot see the
-     * thing it is gating is not a gate.
+     * **Dependencies, installed from this commit's own lockfile, every time.**
+     *
+     * This used to share the primary's `node_modules` unless the lockfile had
+     * moved since `origin/main` — two seconds instead of twenty-four. But what
+     * the primary has installed is whatever *its* last install read, and under
+     * `--ready` the candidate is usually older than the primary's HEAD; if the
+     * lockfile changed in between, the old comparison saw nothing and the
+     * gates ran on the newer tree's packages (GPT Sol on 261007k, P1-3). Asking
+     * which lockfile the primary's install came from has no reliable answer, so
+     * this stopped asking. It took 41 s on the box (2026-10-07), against a test
+     * gate of an hour.
      */
-    const lockChanged = git("diff", "--name-only", "origin/main", sha).split("\n").includes("package-lock.json");
-    if (lockChanged) {
-      info("package-lock.json is part of this deploy — installing properly rather than sharing node_modules");
-      const ci = run("npm", ["ci", "--silent", "--no-audit", "--no-fund"], { cwd: wt });
-      if (ci.code !== 0) {
-        record("npm ci at this commit", [tail(ci.out, 15)]);
-        return;
-      }
-    } else {
-      symlinkSync(path.join(ROOT, "node_modules"), path.join(wt, "node_modules"));
+    const ci = run("npm", ["ci", "--silent", "--no-audit", "--no-fund"], { cwd: wt });
+    if (ci.code !== 0) {
+      record("npm ci at this commit", [tail(ci.out, 15)]);
+      return;
     }
 
     /* One command, because `npm run build` **is** both passes as of 2026-09-03
@@ -879,6 +1021,22 @@ function gatesAt(sha: string): void {
     const tc = run("npm", ["run", "--silent", "typecheck"], { cwd: wt, env: BUILD_ENV });
     gate("typecheck", tc.code === 0, () => tail(tc.out, 20));
 
+    /**
+     * **The suite, or the readiness loop's run of it on this exact commit.**
+     * `testEvidenceFor` (scripts/deploy-evidence.ts) says which, and every way
+     * it can say no ends here, running the suite as this gate always has. It
+     * changes where the evidence comes from, never whether there is any.
+     * docs/plans/261007k.
+     */
+    const evidence = testEvidenceAt(sha);
+    if (evidence.kind === "reuse") {
+      testEvidenceNote = `test: ${evidence.sentence}`;
+      ok(`test — ${evidence.sentence}`);
+      return;
+    }
+    testEvidenceNote = `test: ran the suite here — no readiness run could stand in for it: ${evidence.why}`;
+    info(`test evidence: running the suite here — ${evidence.why}`);
+
     /* vitest's own `json` reporter beside its usual one, so a red gate can name
        every failing test rather than the last two of 24. The report lives in
        the temp directory; what must outlive it is kept by `testGateFailure`. */
@@ -926,6 +1084,9 @@ function gatesAt(sha: string): void {
  * release's, named in the report (docs/project/overseer.md § Deploying).
  */
 let testGateReport: string[] | null = null;
+
+/** Where the `test` gate's evidence came from, said again in the summary. Null when the gate was never reached. */
+let testEvidenceNote: string | null = null;
 
 function testGateFailure(
   out: string,
@@ -1688,6 +1849,7 @@ async function main(): Promise<void> {
   const release = takeLock();
   try {
     const sha = await preflight();
+    if (sha === null) return summarise(null);
     gatesAt(sha);
     if (failures.length) return summarise(null);
 
@@ -1806,6 +1968,13 @@ function summarise(previous: string | null): void {
     const what = didDeploy ? "DEPLOYED" : "CHECKED";
     say(`${RED}${what} WITH ${forced.join(", ").toUpperCase()} GATE(S) FORCED${OFF}`);
     say(`${DIM}An override is a debt entry, not a workflow. docs/plans/260827v-deploy-pipeline.md${OFF}`);
+    say();
+  }
+
+  /* Whether the suite ran here or a readiness run stood in for it — said in
+     every summary that got that far, so a log read later cannot leave it open. */
+  if (testEvidenceNote) {
+    say(testEvidenceNote);
     say();
   }
 

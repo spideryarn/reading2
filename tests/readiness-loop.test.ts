@@ -1320,7 +1320,7 @@ describe("the unattended process boundary", () => {
     const body = source.slice(start, end);
     const primaryGuard = body.indexOf("runnerWorktreeProblem(primary)");
     const primaryFetch = body.indexOf('requireCommand(primary, "git", ["fetch"');
-    const runnerGuard = body.indexOf("runnerWorktreeProblem(runner,");
+    const runnerGuard = body.indexOf("runnerWorktreeProblem(runner,", primaryFetch);
     const runnerMerge = body.indexOf('requireCommand(runner, "git", ["merge"');
     expect(primaryGuard).toBeGreaterThan(-1);
     expect(primaryFetch).toBeGreaterThan(primaryGuard);

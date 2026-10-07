@@ -356,15 +356,12 @@
 /* The poles' two inputs and the criterion box. There was a scale `<select>` in
    here until 2026-09-02, when the ramp became a property of the mode
    (`?refscale=`) rather than of a criterion — CriteriaPanel.tsx says why. */
+/* Their border, corner, ground, padding and focus are every band's text box's:
+   mode-band.css § text boxes in the bands. */
 .crit-text, .crit-poles input {
   width: 100%;
   font: inherit;
   font-size: 0.91rem;
-  color: var(--ink);
-  background: var(--page);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  padding: 0.25rem 0.35rem;
 }
 .crit-poles { display: flex; flex-direction: column; gap: 0.25rem; }
 
@@ -390,24 +387,15 @@
 }
 .crit-preset:hover { color: var(--ink); border-color: var(--rule-strong); }
 
-.crit-run {
-  align-self: flex-start;
-  font: inherit;
-  font-size: 0.88rem;
-  padding: 0.15rem 0.6rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--panel);
-  color: var(--ink);
-  cursor: pointer;
-}
-/* **`aria-disabled`, not `:disabled`** — CriteriaPanel.tsx § the run button
-   says why the button stays hoverable and focusable while the form is
-   incomplete, and where its inertness actually lives. This rule is the whole of
-   what `:disabled` was doing for it. */
-.crit-run[aria-disabled="true"] { opacity: 0.5; cursor: default; }
+/* *Run this criterion*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+   the class is a hook, and only where it sits is here.
+   Its unavailable look under `aria-disabled` is the Button's own
+   (components/ui/button.tsx § THREE); CriteriaPanel.tsx § the run button says
+   why it is `aria-disabled` rather than `disabled`. */
+.crit-run { align-self: flex-start; }
 
-.crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
+/* A failure sentence: `--danger`, as in every band (plan 261007h § F4). */
+.crit-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
 .crit-retry {
   font: inherit;
   font-size: 0.84rem;
@@ -621,22 +609,11 @@ a.crit-jump.block-ref:hover { color: var(--ink); opacity: 1; text-decoration: no
    the button until 2026-10-03; it is behind `.ref-rules` now.) */
 .clm-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 
-.clm-run {
-  align-self: flex-start;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.clm-run:hover:not(:disabled) { border-color: var(--ink-faint); }
-.clm-run:disabled { opacity: 0.6; cursor: default; }
-.clm-run:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* *Pull the paper's claims*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+   the class is a hook, and only where it sits is here. */
+.clm-run { align-self: flex-start; }
 
-.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--ink); }
+.clm-error { margin: 0.25rem 0; font-size: 0.86rem; color: var(--danger); }
 .clm-retry {
   border: 0;
   padding: 0;
@@ -704,22 +681,11 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 
 .mir { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.45rem 0.35rem 0.6rem; }
 
-.mir-run {
-  align-self: flex-start;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.mir-run:hover:not(:disabled) { border-color: var(--ink-faint); }
-.mir-run:disabled { opacity: 0.6; cursor: default; }
-.mir-run:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* The mirror's run: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+   the class is a hook, and only where it sits is here. */
+.mir-run { align-self: flex-start; }
 
-.mir-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
+.mir-error { margin: 0; font-size: 0.86rem; color: var(--danger); }
 /* **Not an error colour, and not an error shape.** An empty answer is the
    commonest correct outcome this feature has; the sentence beside it is an
    answer, so it reads like every other quiet line in a panel. */
@@ -817,31 +783,16 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
    likeliest to misread, since every other sub-mode is the referee's. */
 .cnd-what { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
 .cnd-quiet { margin: 0; font-size: 0.84rem; line-height: 1.45; color: var(--ink-faint); }
-.cnd-error { margin: 0; font-size: 0.86rem; color: var(--ink); }
+.cnd-error { margin: 0; font-size: 0.86rem; color: var(--danger); }
 
 /* **The one press that spends money**, and the line under it that says so.
    `StartBrief` in CandidatesPanel.tsx says why this is a button rather than a
-   `useEffect`. Drawn like a real action — filled, full width, an icon that names
-   the web — because a quiet link would be the sub-mode looking broken until
-   somebody found it. */
+   `useEffect`. Drawn like a real action — full width, an icon that names the
+   web — because a quiet link would be the sub-mode looking broken until
+   somebody found it. Its look is shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+   the class is a hook, and only where it sits is here. */
 .cnd-start { display: flex; flex-direction: column; gap: 0.25rem; }
-.cnd-start-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.3rem;
-  width: 100%;
-  font: inherit;
-  font-size: 0.86rem;
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  cursor: pointer;
-}
-.cnd-start-btn:hover { border-color: var(--ink-faint); }
-.cnd-start-btn:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+.cnd-start-btn { width: 100%; }
 .cnd-start-note { margin: 0; font-size: 0.81rem; line-height: 1.45; color: var(--ink-faint); }
 
 .cnd-list-box {
@@ -920,31 +871,14 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 .cnd-stop:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
 
 .cnd-composer { display: flex; flex-direction: column; gap: 0.25rem; }
+/* The box's border, corner, ground, padding and focus are every band's text
+   box's: mode-band.css § text boxes in the bands. */
 .cnd-box {
   width: 100%;
-  padding: 0.35rem 0.4rem;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--page);
-  color: var(--ink);
   font: inherit;
   font-size: 0.88rem;
   resize: vertical;
 }
-.cnd-box:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
-.cnd-send {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  color: var(--ink);
-  font-size: 0.86rem;
-  cursor: pointer;
-}
-.cnd-send:hover:not(:disabled) { border-color: var(--ink-faint); }
-.cnd-send:disabled { opacity: 0.6; cursor: default; }
-.cnd-send:focus-visible { outline: 2px solid var(--highlight-text); outline-offset: 1px; }
+/* *Ask*: shadcn's outline `Button`, the run button every mode shares (plan 261007h § F3);
+   the class is a hook, and only where it sits is here. */
+.cnd-send { align-self: flex-start; }

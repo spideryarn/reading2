@@ -972,9 +972,11 @@ that cannot be reached is not an explanation.
 - **The *Run this criterion* card was unreadable in the state that needed it.** A `disabled` button
   emits no pointer and no focus events, so nothing opens a card on one — and the referee who wants to
   know what the button costs, or why it is dead, is standing in front of exactly that. It carries
-  `aria-disabled` now, so it stays hoverable, focusable and announced as unavailable, with
-  `.crit-run[aria-disabled="true"]` in [`styles/referee.css`](../../src/web/styles/referee.css) doing what `:disabled`
-  used to. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
+  `aria-disabled` now, so it stays hoverable, focusable and announced as unavailable, with the
+  shadcn `Button`'s own `aria-disabled:` classes
+  ([`components/ui/button.tsx`](../../src/web/components/ui/button.tsx) § THREE, since plan 261007h
+  § F3; a rule in `styles/referee.css` until then) doing what `:disabled` used to — half opacity,
+  no hover, and no `pointer-events: none`. **`aria-disabled` does not stop an activation**, so the inertness stays where it already
   was: the form's `onSubmit` returns on an incomplete criterion, which catches the click, the Enter
   and the Space alike.
 - **The rank numeral's card was hover-only and could not be otherwise.** The numeral is a `<span>`
