@@ -50,6 +50,7 @@ import { COULD_NOT_REACH, PAGE_FAULT, THREAD_RECHECK_FAILED } from "../src/messa
 import type { Mode } from "../src/modes.js";
 import { MODE_LABEL } from "../src/title-text.js";
 import type { Article, Block, BlockId } from "../src/types.js";
+import { MalformedReply } from "../src/web/lib/reader-facing.js";
 
 const OWNER = { id: "owner-1", email: "owner@example.com" };
 
@@ -1063,6 +1064,30 @@ describe.each([
     await settle();
   }
 
+  const expectMalformedReply = () => {
+    /* PAGE_FAULT alone also accepts a missing import's ReferenceError. Pin
+       the deliberate refusal, through the real catch's diagnostic. */
+    expect(console.error).toHaveBeenCalledWith(expect.any(String), expect.any(MalformedReply));
+  };
+
+  it.each(["empty", "legacy"] as const)("accepts a stored %s artefact", async (variant) => {
+    /* The current writers refuse empty output, but the store can still
+       answer 200 for an empty array or an older producer's object. */
+    const envelope = BODIES[kind] as Record<string, object>;
+    const key = kind === "tweets" ? "thread" : "skim";
+    const artefact = {
+      ...envelope[key],
+      ...(kind === "tweets"
+        ? { version: "tweets/1", tweets: variant === "empty" ? [] : ["A stored legacy post."] }
+        : { version: "trajectory/1", stops: variant === "empty" ? [] : [{ quoteId: "spya-qte234", depth: 1, role: "An old stop" }] }),
+    };
+    await mount({ body: { ...envelope, [key]: artefact } });
+    expect(seen.read.status).toBe("ready");
+    expect(seen.read.error).toBeNull();
+    expect(seen.artefact).toEqual(artefact);
+    expect(posts).toEqual([]);
+  });
+
   it.each(broken.map((body) => ({ body, says: JSON.stringify(body) })))(
     "a malformed revalidation ($says) keeps the accepted answer and its flags, and says so",
     async ({ body }) => {
@@ -1071,10 +1096,13 @@ describe.each([
       expect(kept).toBeTruthy();
       expect(seen.read.status).toBe("ready");
 
+      vi.mocked(console.error).mockClear();
+
       answers = ready({ body });
       await act(async () => seen.read.refresh());
       await settle(2);
       expect(seen.read.error).toBe(recheck);
+      expectMalformedReply();
       expect(seen.read.status).toBe("ready");
       expect(seen.artefact, "a rejected reply replaced the loaded artefact").toBe(kept);
       expect(seen.flags, "a rejected reply's flags were published").toEqual(seen.flags.map(() => false));
@@ -1095,6 +1123,7 @@ describe.each([
     "a malformed opening read ($says) is a failed read, not an artefact",
     async ({ body }) => {
       await mount({ body });
+      expectMalformedReply();
       expect(seen.read.status).toBe("error");
       expect(seen.read.error).toBe(PAGE_FAULT.message);
       expect(seen.artefact).toBeNull();

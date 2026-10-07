@@ -120,9 +120,9 @@ export function useTweets(slug: string): UseTweets {
         /* A reply without a thread is published nowhere: a `MalformedReply`,
            caught below like any failed read, so a thread already on screen
            stays and an opening read says `PAGE_FAULT`
-           (tests/read-error-matrix.test.tsx). A thread is all the server
-           itself requires before it answers 200 (`loadTweets`,
-           src/store/pg.ts), so no reply it sends fails this. */
+           (tests/read-error-matrix.test.tsx). The writer and legacy fixtures
+           store objects. `loadTweets` (src/store/pg.ts) checks only truthiness,
+           so a hand-stored primitive could pass the server and fail here. */
         const thread = (found as Partial<ThreadResponse> | undefined)?.thread;
         if (typeof thread !== "object" || thread === null) {
           throw new MalformedReply("the thread reply has no thread");

@@ -53,7 +53,8 @@ It is drawn where FAQ draws its own, by the same component, so no layout was dec
 first, unforced and in the same job, when they are missing or stale.
 
 - The hold is keyed by `(slug, "skim")` and follows the one job the press made. That job is over
-  when the route is written, so the hold lasts through any Quotes or Ideas it made on the way.
+  when it finishes, fails or is stopped, so the hold lasts through any Quotes or Ideas it makes
+  on the way and uses the same release rules if a prerequisite fails.
   The request still forces `skim` alone.
 - A held Skim does not hold a prerequisite's own forced control (*Find more* in Quotes, Regenerate
   in Ideas), and a held one of those does not hold *Plan it again*. Each has its own key.
@@ -65,7 +66,7 @@ first, unforced and in the same job, when they are missing or stale.
   hash moved. Pressed over a held route it starts a run, but for a different purpose, so it is
   not the duplicate the hold exists for. Left as it is.
 
-Two tests pin the first and third points
+Tests pin the whole job and the deferred press, including failure and cancellation before Skim writes
 (§ *Skim: the forced run and its prerequisites*).
 
 **Mutations, each put back afterwards** (the Skim rows, 29 tests):
@@ -118,8 +119,9 @@ already requires before answering 200. `loadTweets` (`src/store/pg.ts`) answers 
 stored thread is truthy; `loadSkim` answers 404 unless `skim.stops` is an array; the routes add the
 flags (`src/routes.ts`). The two threads stored in the fixture corpus (`writes`, `noema-…`) are
 wrapped as the route wraps them and are accepted (§ *every thread stored in the fixture corpus*).
-**Not sampled:** the corpus holds no Skim route, and no stored row in any database was read, so
-for Skim the argument is the route's code alone. One gap in it: a stored thread that is truthy and
+**Not sampled when this was built:** the corpus holds no Skim route, and no stored row in any
+database had been read, so for Skim the argument was the route's code alone. The local database
+has been sampled since (§ Review status). One gap in it: a stored thread that is truthy and
 not an object (a string) would pass the server and be refused here. The stage writes objects only.
 
 The flags and `notOnRoute` are not type-checked, as in the nine: a reply with a route and no
@@ -137,9 +139,12 @@ The flags and `notOnRoute` are not type-checked, as in the nine: a reply with a 
 | Thread: refuse only an absent `thread` | 3 |
 | Thread: `null` is not absence | 1 |
 
-**A hole in these tests, closed by the typecheck and not by them.** With `MalformedReply` not
+**A hole in these tests, initially closed by the typecheck and not by them.** With `MalformedReply` not
 imported, the throw was a `ReferenceError` and every row still passed, because any thrown thing
-lands in the same catch. `npm run typecheck` is what refused it.
+lands in the same catch. `npm run typecheck` is what refused it. The code review added assertions
+for the actual `MalformedReply` in the catch's diagnostic: removing both imports still passed
+the original 26 rows, then failed 24 malformed-reply rows with those assertions (the two absence
+rows still passed).
 
 **What the documents got wrong.**
 
@@ -199,11 +204,54 @@ through the checked-empty answer first.
 **What the documents got wrong.** Nothing in substance. The brief's "Illustrated's second none
 branch" and "Sketch's empty-scenes branch" are as described.
 
+## Review status
+
+GPT Sol reviewed the three commits
+([answer](261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags-code-review-sol.md),
+[prompt](261007e-seventh-sweep-skim-hold-two-unchecked-replies-and-the-picture-flags-code-review-prompt.md)).
+**Verdict: ship with these fixes applied**, and no further behavioural defect found. Its fixes
+landed as one commit after being checked independently:
+
+- **C1 (P2), fixed.** The malformed-reply rows passed with a `ReferenceError` in place of the
+  authored failure. They now assert that what the catch logged is a `MalformedReply`. Checked
+  again here: with the import removed from `useSkim.ts`, 12 of the file's 94 tests fail (all
+  Skim's malformed rows); from `useTweets.ts`, the 12 Thread rows.
+- **C2 (P3), fixed.** The comment and the docs said Skim's job is over "when the route is
+  written". It is over when it finishes, fails or is stopped. The wording is corrected in
+  `useSkim.ts`, [skim.md](../project/skim.md) and § 1 above, and six lifecycle cases were added
+  (Quotes or Ideas fails; is stopped; succeeds and then Skim is refused; each with the completion
+  GET never answered). Checked here: with `ended` made to ignore a job whose `skim` step never
+  started, the four fail-and-stop cases go red (`expected 'disabled' to be 'enabled'`); the two
+  refused cases stay green, as that mutation does not touch them.
+- **C3 (P3), comment only.** `useTweets.ts` said no reply the server sends fails the check. A
+  stored thread that is truthy and not an object would pass `loadTweets` and be refused by the
+  client. The comment now says so; the check is unchanged.
+
+`useSkim.ts` and `useTweets.ts` differ from the builder's commits in comments only. One thing was
+changed in the review answer itself: its six file links were written from the repository root and
+failed `tests/doc-links.test.ts`, so they are now relative.
+
+**Stored artefacts, sampled after the review** (the local database, counts only, read-only; not
+production). For Skim the check is: the stored value is a JSON object whose `stops` is an array.
+
+| Stored in `article_revisions` | Found | Pass | Fail |
+|---|---:|---:|---:|
+| Skim routes, the 50 sampled (current revisions first) | 50 | 50 | 0 |
+| Skim routes, every stored one | 222 | 222 | 0 |
+| Threads, every stored one | 395 | 395 | 0 |
+
+So no stored reply would be refused. Of these, 40 routes and 52 threads are on an article's
+current revision, which is the only one the routes serve. These are a development database's rows; production was
+not read.
+
+**The one new reader-facing sentence, for Greg to veto:** *The new route hasn't loaded yet.*
+
 ## Left
 
 - **The command bar's *Run again* row** still bypasses every hold, Skim's now included. Known,
-  pinned by a test, not this cluster's.
-- ***Plan the route for this* over a held route** starts an unforced run for a new purpose (§ 1).
-- **Stored Skim routes were not sampled** from any database (§ 2).
-- **No browser pass and no cross-family review yet.** The caller runs the GPT review before this
-  is pushed.
+  pinned by a test, P1 by Sol's grading, not this cluster's.
+- ***Plan the route for this* over a held route** starts an unforced run for a different reading
+  purpose (§ 1). Judged a legitimately different request, and left.
+- **A stored thread that is truthy and not an object** would pass the server and be refused by
+  the client (C3). None observed, in the corpus or in the local database.
+- **No browser pass.**

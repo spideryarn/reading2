@@ -189,10 +189,10 @@ Stage 5, asked for by Greg on 2026-09-28 (his words are in the
 
   **What the hold does about the Quotes and the Ideas.** It is keyed by the article and the `skim`
   step, and it follows the one job the press made. When that job chooses the Quotes or finds the
-  Ideas first, the hold lasts through them, because the job is not over until the route is
-  written. It holds nothing of theirs: *Find more* in Quotes and Regenerate in Ideas have holds of
-  their own, under their own steps, and a held one of those does not hold *Plan it again*. A
-  press made while the Quotes or Ideas read is still out is kept as an intent and made once, when
+  Ideas first, the hold lasts through them while that job runs. Failure or cancellation in a
+  prerequisite releases it too. It holds nothing of theirs: *Find more* in Quotes and Regenerate
+  in Ideas have holds of their own, under their own steps, and a held one of those does not hold
+  *Plan it again*. A press made while the Quotes or Ideas read is still out is kept as an intent and made once, when
   they answer; the hold starts when the request is made. The unforced run (the empty state's
   button, the automatic run, *Plan the route for this*) is never held.
 

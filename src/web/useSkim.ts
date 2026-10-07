@@ -229,10 +229,10 @@ export function useSkim(slug: string, quotes: QuotesRead, ideas: IdeasRead): Use
 
      **The hold is about this step's forced run and nothing before it.** It is
      keyed by `(slug, "skim")`, and it follows the one job the press made,
-     prerequisites and all: that job ends when the route is written, so a run
-     that chose the Quotes first is held for the whole of it. It holds neither
-     the Quotes' nor the Ideas' own forced controls, which have holds of their
-     own under their own steps, and neither of those holds this. `ensure` is
+     prerequisites and all: a run that chose the Quotes first is held for the
+     whole job. Failure or cancellation in a prerequisite ends it too. It
+     holds neither the Quotes' nor the Ideas' own forced controls, which have
+     holds of their own under their own steps, and neither of those holds this. `ensure` is
      never held: unforced, it is the request the server de-duplicates. */
   const hold = useRewriteHold({
     slug,

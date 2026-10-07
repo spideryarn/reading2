@@ -1450,6 +1450,35 @@ describe("Skim: the forced run and its prerequisites", () => {
     also: Object.fromEntries(Object.entries(skim.also ?? {}).filter(([key]) => key !== prefix)),
   });
 
+  it.each((["quotes", "ideas"] as const).flatMap((prerequisite) =>
+    (["error", "cancelled", "skim-refused"] as const).map((outcome) => ({ prerequisite, outcome })),
+  ))("releases after $prerequisite ends with $outcome, even without a new route", async ({ prerequisite, outcome }) => {
+    start(without(`/api/${prerequisite}/`));
+    await paint();
+    await pressRegenerate();
+    jobs = [{
+      ...job(prerequisite, "running"),
+      steps: [{ name: prerequisite, status: "running" }, { name: "skim", status: "pending" }],
+    } as Job];
+    await paint();
+    await expectHeld("the prerequisite is still running");
+
+    /* Keep the completion read in the air: the terminal job alone must
+       release, even though Skim never wrote a replacement. */
+    serve = () => new Promise(() => {});
+    jobs = [{
+      ...job(prerequisite, outcome === "cancelled" ? "cancelled" : "error"),
+      steps: [
+        { name: prerequisite, status: outcome === "skim-refused" ? "done" : "error" },
+        { name: "skim", status: outcome === "skim-refused" ? "error" : "pending" },
+      ],
+    } as Job];
+    await paint();
+    expect(await regenerate(), outcome).toBe("enabled");
+    expect(onScreen("old")).toBe(true);
+    expect(posted).toHaveLength(1);
+  });
+
   it("holds through a job that chose the Quotes first, and forces the route alone", async () => {
     start(without("/api/quotes/"));
     await paint();
@@ -1492,6 +1521,7 @@ describe("Skim: the forced run and its prerequisites", () => {
     });
     await flush();
     expect(posted, "nothing is asked for until the request can name its prerequisites").toHaveLength(0);
+    await expectHeld("the kept intent already takes the control away before the POST");
 
     await act(async () => landIdeas(json(skim.also!["/api/ideas/"])));
     await flush();
