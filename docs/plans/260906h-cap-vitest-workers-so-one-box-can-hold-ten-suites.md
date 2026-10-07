@@ -235,3 +235,8 @@ confirmed the root placement holds for every invocation shape, and found three m
 
   Worth doing separately: every other check ran on an 18-core Mac with no machine file, so all of
   them would have passed just the same if `homedir()` resolved somewhere else on Linux.
+
+## History moved from testing.md (2026-10-07)
+
+On 2026-09-06 eight concurrent runs put 76 fork workers on the 16-core box and
+made it unusable for everybody, including the agents whose tests they were.

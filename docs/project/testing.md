@@ -40,7 +40,7 @@ npm run test:watch # while working
 **`npm test` needs a build first, and does not make one**: several files read `dist/` or
 `api-dist/` and fail, naming the command, when it is missing — `npm run build`, then
 `npm run build:fleet` for the fleet tests. `npm run worktree:setup` and `npm run check` both build;
-a bare `npm test` in a fresh clone does not. (Until 2026-10-06 one of the three skipped instead.)
+a bare `npm test` in a fresh clone does not.
 
 Run [`npm run typecheck`](typechecking.md) alongside it before committing. The two catch different
 things and neither is a substitute for the other — vitest never looks at the types, and `tsc` never
@@ -69,8 +69,7 @@ looking at them — see [typechecking.md](typechecking.md).
 
 **One suite gets half the cores, not all of them.** Vitest's default is `availableParallelism() - 1`,
 decided by each run in ignorance of every other — fine on a machine running one suite, and not what
-either of ours is. On 2026-09-06 eight concurrent runs put 76 fork workers on the 16-core box and
-made it unusable for everybody, including the agents whose tests they were. The numbers, the cost of
+either of ours is. The numbers, the cost of
 the cap and the options passed over are in
 [260906h](../plans/260906h-cap-vitest-workers-so-one-box-can-hold-ten-suites.md).
 
@@ -160,8 +159,7 @@ Vitest reads `VITEST_MAX_WORKERS` itself — in `resolveConfig`, **after** the l
 singleton and which is serial on purpose. A flag meaning "use less of this machine" silently changed
 what the suite tests, and bought back the nondeterministic red that
 [260903e](../plans/260903e-a-private-test-database-so-the-suite-stops-racing-dev-servers.md) exists
-to remove. It had already been typed in good faith: 260906f records
-`VITEST_MAX_WORKERS=4 npm run check` as a "reduced-contention full gate".
+to remove.
 
 So `resolveParallelWorkers()` reads the variable and `delete`s it, which is the only lever a config
 file has — everything vitest does with it happens later.
@@ -207,15 +205,9 @@ constructor, a dynamic import, a transitive `getDb()` — and it does not look f
 Those turn up the other way round, and then get a lane plus a declared entry in
 `LANES_BEYOND_THE_SCAN` saying how each was found. There are five today, all of them Storage: they
 talk to the bucket over HTTP and never touch Postgres, so no `DATABASE_URL` poison could have caught
-them. GPT Sol found four by reading the map against `src/store/blobs.ts` (one of them,
-`upload-acquire`, calls `pgReady(`, so the scan sees it and it is not on the list); poisoning
-`SUPABASE_URL` found the other two on its first full run — including one that names no store at all
-and reaches the bucket through the pipeline's own acquire step, which nothing but running it could
-have caught. Five is a working door; a page of them would mean the scan needs a better predicate.
-
-`tests/health.test.ts` was the fifth and is not one any more: it reached Postgres through the health
-handler's own `getDb()` until it was given a real `pgReady(` gate, which the scan sees — so the
-exemption went stale the moment the fix landed, and the guard said so before anybody had to.
+them. Five is a working door; a page of them would mean the scan needs a better predicate.
+How those were found, and the one that left the list, are in
+[261007g-testing-history.md § Three lanes](../plans/261007g-testing-history.md#three-lanes-and-which-one-your-test-is-in).
 
 ### A private database is not a bare clone
 
@@ -255,13 +247,8 @@ Six files reach Storage: `raw-source-store`, `upload-acquire`, `uploads-api`,
 `acquire-extract-blocks-end-to-end`. They are all in `private-postgres` — the only lane that both
 leaves `SUPABASE_URL` alone and runs serially — so they cannot collide **inside one run**. Two
 separate `npm test` invocations still share the bucket. `LANES_BEYOND_THE_SCAN` in
-`tests/store-migration-registry.ts` carries the per-file reason.
-
-They were in the `unit` lane until 2026-09-04, reaching the real shared bucket while that lane's
-documentation said it had no database; the poison covered `DATABASE_URL` and Storage is chosen from
-`SUPABASE_URL` plus `SUPABASE_SERVICE_ROLE_KEY`. GPT Sol found four of them reviewing T-D and the
-new poison found two more the first time it ran, which is the argument for a semantic backstop in
-one sentence.
+`tests/store-migration-registry.ts` carries the per-file reason. Where they were before 2026-09-04
+is in [261007g-testing-history.md § Storage is not isolated](../plans/261007g-testing-history.md#storage-is-not-isolated).
 
 ### The lease, and the database left behind by a killed run
 
@@ -313,21 +300,6 @@ restrain.
 It is also the only way to point a run at another database from the command line:
 `SPIDERYARN_ENV_PINNED=DATABASE_URL DATABASE_URL=… npx vitest …` works where `DATABASE_URL=… npx
 vitest` does not.
-
-### With Docker off, `npm test` is red — and was before the lanes existed
-
-Worth writing down because two documents claimed otherwise. Files that go through `pgReady` skip
-loudly; a dozen private-lane files do not, because their fixtures reach the database outside any
-gate. Measured 2026-09-04 with `DATABASE_URL` pointed at a dead port: **12 files failing** under the
-three-lane config, and **9 of the same 10 sampled** under the single-project config from before the
-lanes, for identical reasons. The lanes did not cause it. `tests/health.test.ts` was the one file
-the lanes could have been blamed for, and it now has a gate.
-
-Only "the stack is not running" turns into a skip, and it has to say so itself: the factory raises
-`StackUnreachable` from the three places that can mean nothing else, and
-[`private-db-global.ts`](../../tests/setup/private-db-global.ts) skips on that class alone. Until
-2026-09-04 it skipped on *any* error, so a failed dump, a failed restore, a cluster mismatch or a
-failed migration all printed "no private database" and skipped ninety suites.
 
 ### `TEST DATABASE CONTENDED`
 
@@ -484,22 +456,13 @@ disagree with Chrome. See [comments.md § The offset space](comments.md#offset-s
 - **The React reading view, as a browser draws it.** Component tests exist now — hundreds of files
   under `// @vitest-environment jsdom`, and `renderToStaticMarkup` (§ *Rendering a component, without
   a testing library*) — but `@testing-library/react` was never added, and nothing in the suite
-  covers the whole rendered view; a few Chrome tests do compute styles and layout, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts). The paragraphs below are the 2026-08-25 measurement of that gap, when there were
-  no DOM tests at all.
+  covers the whole rendered view; a few Chrome tests do compute styles and layout, such as [`prose-marks-stay-inline-in-chrome.test.ts`](../../tests/prose-marks-stay-inline-in-chrome.test.ts).
 
-  **The gap is bigger than "no DOM tests" sounds, and 2026-08-25 measured it.** Adopting Tailwind
-  produced three bugs the whole suite was blind to: a generated `.outline` utility drawing a border
-  round the table, unlayered CSS outranking every utility we meant to write, and `dark:` rules that
-  applied or not depending on the *viewer's* OS setting
-  ([web-client.md § Four guards](web-client.md#four-guards-all-in-tailwindcss)). Every one produced
-  valid CSS that rendered. None of them could have gone red here, because nothing renders React and
-  nothing computes a style — and the third could not have gone red in a DOM test either, since jsdom
-  has no OS to ask.
-
-  So that was the moment to reconsider `@testing-library/react` (we went without), and to be honest
-  about its ceiling: it would have caught the class names, not the cascade. Anything that depends on
+  Anything that depends on
   the *resolved* value has to be checked in a real browser
   ([browser-testing.md](browser-testing.md#do-not-judge-colour-from-a-screenshot)).
+  The 2026-08-25 measurement of that gap is in
+  [261007g-testing-history.md § What we test](../plans/261007g-testing-history.md#what-we-test-and-what-we-dont).
 - **Readability itself** ([content-extraction.md](content-extraction.md)). Needs a large fixture
   corpus. Worth doing when extraction bugs start costing time.
 
@@ -642,8 +605,7 @@ this; nothing yet catches the email half, which is why it is written down here.
 ## What a brand-new test file owes the two registries
 
 Two gates in `tests/store-migration-registry.test.ts` fire on files that are not conversions at
-all, and each one reads as something else when it does. Written down on 2026-09-08 after a new
-route test tripped two of them inside twenty minutes of being committed. There were three until
+all, and each one reads as something else when it does. There were three until
 2026-10-06; the third is kept below, struck, because the entries it asked for are still in the file.
 
 1. **A lane, or the database looks broken.** A file absent from `TEST_LANES` defaults to `unit`,
@@ -732,9 +694,6 @@ labels written in separate parallel calls are as good as ones written in a singl
 coverage, length, template repetition, vocabulary retention, and the seam test, over artefacts that
 already exist, so the eval itself calls nothing and is cheap to re-run.
 
-It earned its keep on the first run: vocabulary retention caught the batch prompt turning the
-author's "technorati" into "technologists", which every other check was happy with.
-
 Two habits it made explicit and worth carrying to the next eval:
 
 - **A verdict line is read as a conclusion, so do not print one at all unless the numbers support
@@ -795,14 +754,8 @@ Vitest's default is 5 seconds. That is generous for a function call and meaningl
 starts `tsx`, which has to compile the script and its imports before it does the thing you are
 testing.
 
-On 2026-08-28 all four cases in `tests/store-export-fails-closed.test.ts` went red at
-`Test timed out in 5000ms`, each taking 11-19 seconds. Nothing was wrong with the code or the tests:
-the machine had a load average of **108** and 56 vitest workers alive, because six sessions were
-sharing one laptop. The same file passes with a realistic ceiling, and a mutation still reddens
-exactly the cases it should — so the ceiling did not weaken anything.
-
-The cost of that red was not the failure, it was the **wording**. "Timed out" reads like a hang, so
-it gets investigated as one. Half an hour went on a number.
+The incidents behind this section are in
+[261007g-testing-history.md § A test that spawns a process](../plans/261007g-testing-history.md#a-test-that-spawns-a-process-needs-its-own-timeout).
 
 So: **if a test shells out, give it an explicit timeout and say in a comment why that number.** Sixty
 seconds is the convention here (`tests/pdf-read.test.ts`, `tests/store-export-fails-closed.test.ts`).
@@ -822,19 +775,10 @@ had `SPAWN_TIMEOUT = 60_000` since `96c7661e` — added at 12:03 on 2026-08-28, 
 The lesson is not about this file: a paragraph that names offenders is a list that goes stale
 silently, because fixing one is never the same edit as un-naming it.
 
-**And the paragraph's own prediction came true on 2026-09-03.** A `npm run check` run on a box
-carrying eleven worktrees came back with seven failures. Six were 5-second timeouts in suites that
-pass in isolation; the seventh was a real regression that a guard had caught. Telling them apart cost
-a second full pass, and the expensive half was not the re-run — it was that the noise and the signal
-were indistinguishable until it finished.
-[260903d](../plans/260903d-improve-the-codebase-second-sweep.md) § T1.2.
-
 **So re-run each red file alone before calling any of them a regression.** A file that passes alone
 was the box; one that fails alone is a real failure, and yours if it passes on the commit before
 your change. The exception is `TEST DATABASE CONTENDED`, which is never retried
-([above](#test-database-contended)). On 2026-09-03 three full runs produced 22, 2 and 2
-failures and all but three assertions passed in isolation — and those three were real, hiding in a
-batch of twenty.
+([above](#test-database-contended)).
 
 **And one timeout can fail the rest of its file.** A vitest timeout inside React's `act()` leaves
 the root mid-render, and every later test in that file renders an empty host. On 2026-09-02 three
@@ -925,15 +869,10 @@ section belongs to — [silent-success.md](../reusable/silent-success.md).
 **A long gate reports on a commit, not on the tree you are standing in.** Record the sha the run
 started from, and before acting on a failure, and above all before telling its owner, check that
 sha is still your `HEAD`; `git merge-base --is-ancestor <fix> HEAD` says whether a fix is already
-in. On 2026-09-08 three sessions reported the same `fixture-ids` red to its owner after the fix
-had merged, one of them from a tree that already held it.
+in.
 
-**Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.** This
-section used to give the raw incantation with `-s gate` hard-coded in it, and both halves drifted:
-the second agent to run it in a minute got `duplicate session` and improvised a name, and agents who
-had lost a one-shot session to a quoting mistake made a bare `bash -l` session and typed into it
-instead. A bare session never exits. On 2026-09-05 eight of those husks were sitting on the box
-under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of them fifteen hours old.
+**Do not hand-roll the `tmux new-session` yourself, and never leave a bare session behind.**
+A bare session never exits.
 `gjd-remote ls` now tells `shell busy` from `shell idle` so a husk is visible as one, and
 `gjd-remote kill <name>` will end any of them; the script above is so there is nothing to kill.
 
@@ -943,10 +882,7 @@ under names nobody recognised — `gateA`, `stageDbase`, `stage2base` — one of
   or deleted runs the other two and exits 0 — found 2026-09-07 when a brief named
   `streaming-route-request-lifetime.test.ts` after it had become `referee-stream-lifetime.test.ts`.
   The `Test Files N passed` count is the only place the missing file shows.
-- **A list built from your diff misses the route's other callers.** On 2026-09-10 a change to a
-  box-action request body passed eight scoped suites and typecheck, while
-  `tests/fleet-quarantine.test.ts`, which posts to the same route and was in nobody's diff, lost
-  three guarantees; only the full suite saw it. `grep -rl '<the url>' tests/` finds the files that
+- **A list built from your diff misses the route's other callers.** `grep -rl '<the url>' tests/` finds the files that
   drive a route.
 - **After merging `dev`, choose the re-run from what the merge brought in, not from what your change
   is about.** Note `HEAD` before the merge and run `git diff --name-only <that sha> HEAD` after it
@@ -1303,15 +1239,15 @@ anything that is not failing, wherever it happens.** The interception is the mec
 timing. That is why moving a warning into a test body does not help, and why putting the reason in a
 test name does not either — the default reporter prints no passing test names at all.
 
-**Failing instead of skipping was the wrong fix at the time** — it reddened the suite for everyone
-without a local Postgres, when a missing database was a fact about a laptop. That stopped being true
-on 2026-09-05, when the database became mandatory: the next section is where the failing went.
+How the Postgres suites used to skip, before 2026-09-05, is in
+[261007g-testing-history.md § A suite that cannot run](../plans/261007g-testing-history.md#a-suite-that-cannot-run-and-how-to-make-it-say-so).
 
-**Until then most of the Postgres suites skipped in silence**, because they warned with
-`console.warn`. No suite skips over a missing database any more, but **if you ever see a skipped
+No suite skips over a missing database any more, but **if you ever see a skipped
 case, re-run that file with `--reporter=verbose` before believing anything about it** — a skip is
 [silent-success.md](../reusable/silent-success.md) in its quietest form: the count changes, so
 something is visibly not happening, and only the *why* is missing.
+
+<a id="with-docker-off-npm-test-is-red-and-was-before-the-lanes-existed"></a>
 
 ### When a skip is not acceptable: never, since 2026-09-05
 
@@ -1319,9 +1255,7 @@ something is visibly not happening, and only the *why* is missing.
 ([database.md](database.md)), so a machine with no database cannot run this application at all, and a
 suite that skipped over that would be describing a configuration that does not exist.
 
-That is a change of policy, and the thing it replaced is worth knowing. A hundred-odd suites used to
-take themselves out when the database was missing, in the one part of the summary nobody reads: a run
-could pass, or fail for something else entirely, with every one of them absent. `REQUIRE_POSTGRES=1`
+`REQUIRE_POSTGRES=1`
 was the escape hatch for the runs that cared. **The flag is gone from every decision** — nothing
 reads it, and `scripts/check.ts` no longer sets it either.
 
@@ -1497,15 +1431,10 @@ deletes rows before releasing loses the release to the first failed delete. Both
 [`tests/lock-lifecycle.test.ts`](../../tests/lock-lifecycle.test.ts) checks against `pg_locks` on
 keys minted per run. A suite whose whole teardown *is* the release needs neither.
 
-**Measured 2026-08-30.** Two concurrent `npx vitest run` processes over the seven job-slot files,
-with the key neutralised so the lock excludes nobody: **23 to 50 failures per run** across four runs,
-four to six of the seven files red, where every one of those files is green alone. With the lock
-taken by all of them: **0 failures**, across four concurrent pairs and a wider nine-file set, and 162
-passed / 162 passed on an independent second reading.
+The 2026-08-30 measurement of the lock, taken while one `running` row was still the limit for the
+whole table, is in [261007g-testing-history.md § One database](../plans/261007g-testing-history.md#one-database-many-suites-the-three-shared-resources).
 
-The spread is the point. The first version of this paragraph said "39 failures in each" — a
-suspiciously equal pair, taken before a change to the teardown — and it was replaced after
-re-measuring. Contention does not produce tidy numbers, so a tidy one is the reading to distrust.
+Contention does not produce tidy numbers, so a tidy one is the reading to distrust.
 
 **The failures do not say "contention".** They arrive as `expected 'busy' to be 'claimed'`, as
 `duplicate key … articles_slug_unique`, and as `23503` foreign-key violations against a revision that
@@ -1514,9 +1443,7 @@ clock: `insertWhenSlotFree`'s budget is 40 × 500ms, so a **~20,500ms** case is 
 out. Do not raise a timeout to make it go away.
 
 Read the clock and the message as answering **different questions**: the clock says why the case was
-slow, the assertion says what failed. On 2026-08-30 six cases failed at 20,468 / 20,438 / 20,589ms and
-the duration was read as though it were the failure. It was not — the assertions were ordinary diffs
-like `expected 'running' to be 'error'`, and the 20 seconds was the wait in front of them.
+slow, the assertion says what failed.
 
 **A wedged row's second symptom points at the database.** The suite it blocks hangs — 316 seconds
 on 2026-08-31, against 6 once the row was gone — and the *next* run then skips itself with
@@ -1525,19 +1452,12 @@ connection timeout`. That reads as a sick database and is a knock-on from the hu
 fine throughout, answering in 15ms on 32 of 100 connections. **Clear the row before believing
 anything about the database.**
 
-**The claimant is usually not another suite — it is a wedged row.** That day's holder was a job left
-`running` by an *aborted teardown*: `store-jobs-parity`'s `afterAll` deleted articles before jobs, the
-foreign key refused, the first delete threw, and the rest of the teardown never ran. Waiting cannot
-clear that, which is exactly what `insertWhenSlotFree`'s message says and why it says it. The fix was
-to delete jobs first and key the teardown by slug rather than by minted ids. **A teardown that can
+**The claimant is usually not another suite — it is a wedged row.** Waiting cannot
+clear that, which is exactly what `insertWhenSlotFree`'s message says and why it says it. **A teardown that can
 throw half-way through is a global-resource leak**, so order it so the last thing deleted is the thing
 everything else references.
 
-**Do not filter test output you may need later.** The only record of those six failures came through
-`… | grep -E "FAIL|× |Tests |not to contain|to contain" | head -8`, which does not match
-`AssertionError`, `expected` or `Received`. The timings survived and the assertion text did not, so
-weeks later the transcript could still prove *how slow* the failures were and could no longer say
-*what they claimed* — and two plausible explanations for them could not be told apart. Capture the run
+**Do not filter test output you may need later.** Capture the run
 to a file and grep the file.
 
 **If you add a suite that starts a job**, take the lock: `pgReady` first, then `takeRunLock` only when
@@ -1612,10 +1532,7 @@ node -e 'for (let i = 0; i < 3; i++) console.log(crypto.randomUUID())'
 
 Half the suite mints from the `00000000-0000-4000-8000-…` block, and that is exactly what makes
 counting inside it dangerous: the next number that *looks* free usually is not, and there is no way to
-tell a harmless clash from a destructive one by looking at the id. `tests/find-article.test.ts` took
-`…c4`, `…f1` and `…f2` on 2026-08-31 and collected three collisions at once — with `source-store`,
-`chat-anchor` and `publish-session-cleanup-log`. Only the `…f1` pair could actually destroy a row;
-that is not a distinction worth relying on, and the file now uses random ids.
+tell a harmless clash from a destructive one by looking at the id.
 
 Leave the existing block-style ids alone. Rewriting them buys nothing and a shared *foreign key*
 written longhand is a different problem with a different fix — import the constant, the way the suite now
