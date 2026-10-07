@@ -30,7 +30,7 @@ import { mulberry32 } from "../debate/label-sheet.js";
 import { priceOf } from "../dig-deeper/arms.js";
 import { type Judge, judgeById } from "../dig-deeper/judges.js";
 import { finishTree } from "./arms.js";
-import type { CallRecord, Ledger } from "./calls.js";
+import { type CallRecord, evalSpend, type Ledger } from "./calls.js";
 import type { Doc } from "./corpus.js";
 
 /** Two families, neither the one that wrote the trees' sibling model alone: Anthropic and OpenAI. */
@@ -321,12 +321,7 @@ export async function judgePair(opts: {
         return { json: null, error: `${status ? `HTTP ${status}` : (err as Error).name}` };
       }
     },
-    {
-      attribution: { scopeKind: "eval", articleSlug: doc.slug },
-      sink: async (row) => {
-        rows.push(row);
-      },
-    },
+    evalSpend(opts.ledger, doc.slug, rows),
   );
   release();
   for (const row of rows) opts.ledger.write(opts.cell, `judge:${judge.id}`, undefined, 1, row);

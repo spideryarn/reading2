@@ -16,9 +16,9 @@
  *
  * **What it writes.** Only files under `evals/results/citations-influence/`,
  * and never over one that is there. `generateCitations` returns the list and
- * stores nothing (the step's caller does the storing), and the call is made
- * outside every spend collector, so it writes no `ai_calls` row either
- * (docs/project/cost-tracking.md): the tokens are in the result file instead.
+ * stores nothing (the step's caller does the storing). Its one database write is
+ * the `ai_calls` row each call records: `run` opens the ledger with `withLedger`
+ * (docs/project/cost-tracking.md). The tokens are in the result file as well.
  *
  * **What `run` leaves out**: `previous` is null (it only decides which ids the
  * rows inherit, and ids are not measured), the registry lookup that follows the
@@ -217,6 +217,7 @@ async function run(arm: string, n: number, slugs: string[]): Promise<void> {
   const store = await import("../src/store/index.js");
   const { closeDb } = await import("../src/db/client.js");
   const { generateCitations, systemPrompt, PROMPT_VERSION } = await import("../src/citations.js");
+  const { withLedger } = await import("../src/cli-ledger.js");
 
   /* Refuse before spending anything, not after the first article. */
   const existing = slugs.map((s) => resultPath(`${arm}-${n}`, s)).filter((f) => fs.existsSync(f));
@@ -226,7 +227,8 @@ async function run(arm: string, n: number, slugs: string[]): Promise<void> {
   fs.mkdirSync(OUT, { recursive: true });
   const systemPromptSha256 = createHash("sha256").update(systemPrompt()).digest("hex");
 
-  await runAsOwner(environmentOwnerId(), async () => {
+  /* The ledger closes, and its writes land, before `closeDb` below. */
+  await withLedger("eval", () => runAsOwner(environmentOwnerId(), async () => {
     for (const slug of slugs) {
       const out = resultPath(`${arm}-${n}`, slug);
       const article = await store.loadArticle(slug);
@@ -268,7 +270,7 @@ async function run(arm: string, n: number, slugs: string[]): Promise<void> {
           `${result.model}, ${result.inputTokens} in, ${result.outputTokens} out, ${Math.round(result.elapsedMs / 1000)}s`,
       );
     }
-  });
+  }));
   await closeDb();
 }
 

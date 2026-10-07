@@ -22,6 +22,7 @@
  * The final build over the whole body stays with the caller.
  */
 import type Anthropic from "@anthropic-ai/sdk";
+import { UnrecordedSpendRefused } from "./ai-spend.js";
 import { CallDeadlineReached } from "./call-failure.js";
 import { anthropicCallFailed } from "./anthropic-call.js";
 import { MAX_BATCH } from "./labels.js";
@@ -628,6 +629,9 @@ export async function runSlices(opts: {
         call = streamMessage("structure", q.params, { power, signal: own.signal });
         message = await call.finalMessage();
       } catch (err) {
+        /* An eval with no ledger open, stopped before it spent. Not a slice
+           that failed: every other slice would be refused the same way. */
+        if (err instanceof UnrecordedSpendRefused) throw err;
         /* A transport rejection can win the event-loop race with its cap's
            timer. Check the clock too, before finally removes the active cap
            and clears that timer; otherwise a second chance can outlive it. */

@@ -9,7 +9,7 @@ Up: [security-map.md](security-map.md)
 - [§ The four things worth knowing](#the-four-things-worth-knowing-before-you-touch-any-of-it) — 401 vs 503, the gate's place in `handleApi`
 - [§ A request made for one reader is never sent as another](#a-request-made-for-one-reader-is-never-sent-as-another) — two accounts in one browser
 - [§ The signed-out page is the landing page](#the-signed-out-page-is-the-landing-page) — what a visitor sees instead of a form
-- [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet) — Google sign-in in production (history)
+- [§ The button on the live site did not work at first](#the-button-on-the-live-site-did-not-work-at-first) — Google sign-in in production (history)
 - [§ Email](#email) — who sends auth mail
 - [§ What auth is for here](#what-auth-is-for-here) — the open proxy and the open wallet
 - [§ Whose data is it](#whose-data-is-it) — owner scoping from the gate to the store
@@ -285,7 +285,7 @@ width it will be drawn at (the column is 720 px, so 1440), drop it in `assets/`,
 `SHOTS` entry with the real numbers. The `Shot` component takes a max-width utility, which is how
 the portraits avoid filling the column.
 
-## The button on the live site does not work yet
+## The button on the live site did not work at first
 
 **Resolved: this section is history.** Google sign-in works in production — Greg, 2026-10-07:
 *"yes it does"*.
@@ -560,10 +560,10 @@ mounted on every route, a verify call that silently accepts an unsigned token. S
 
 ## What is not done
 
-- **Google sign-in in production**, still, as of 2026-08-27 — see
-  [§ The button on the live site does not work yet](#the-button-on-the-live-site-does-not-work-yet)
-  just below, which is the current state and the two things that fix it. The `VITE_*` half of this
-  bullet is done: both variables are on the Vercel project, Production only, and the site renders.
+- ~~**Google sign-in in production**~~ — **done**: it works (Greg, 2026-10-07). What broke it at
+  first, and the two settings that fixed it, are in
+  [§ The button on the live site did not work at first](#the-button-on-the-live-site-did-not-work-at-first).
+  Both `VITE_*` variables are on the Vercel project, Production only, and the site renders.
 - **No general per-reader dollar spend limit**, deliberately: [ai-gateway.md § What stops a reader spending our money](ai-gateway.md#what-stops-a-reader-spending-our-money-and-what-does-not) records the global OpenRouter cap and Greg's decision; [billing.md](billing.md) covers the ingest allowance already enforced.
 - ~~**Email in production** needs SMTP~~ — **done 2026-09-29**: sign-up confirmations go through
   Resend ([§ Email](#email)). `mailer_autoconfirm` is still false there, so a sign-up sends a

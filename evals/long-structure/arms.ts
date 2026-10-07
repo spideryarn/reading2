@@ -11,10 +11,10 @@
  *  - `C`: as B, but the per-part call returns starts and titles only, and a
  *    third round writes the gists.
  *
- * Every arm runs cold (no checkpoint is read or written), writes nothing to
- * the database, and hands back a `ModelNode` proposal. `finishTree` is the one
- * build every proposal goes through; a tree that fails it is a failed cell,
- * never mended.
+ * Every arm runs cold (no checkpoint is read or written), writes only paid
+ * calls to `ai_calls` on real runs, and hands back a `ModelNode` proposal.
+ * `finishTree` is the one build every proposal goes through; a tree that fails
+ * it is a failed cell, never mended.
  */
 import { type AiCallRow, collectSpend } from "../../src/ai-spend.js";
 import { buildBoundedHeadingTree } from "../../src/heading-tree.js";
@@ -54,6 +54,7 @@ import {
   type CallContext,
   type CallRecord,
   estimateUsd,
+  evalSpend,
   type FailureReason,
   inPool,
   type Ledger,
@@ -272,12 +273,7 @@ export async function armA(ctx: ArmContext): Promise<ArmResult> {
         deps: SLICE_DEPS,
         deadline: slicesDeadline(begun.at, STEP_BUDGET_MS),
       }),
-    {
-      attribution: { scopeKind: "eval", articleSlug: doc.slug },
-      sink: async (row) => {
-        rows.push(row);
-      },
-    },
+    evalSpend(ctx.ledger, doc.slug, rows),
   );
   release();
   /* `runSlices` does not say which call was which. The root call is the last

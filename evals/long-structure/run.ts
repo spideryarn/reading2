@@ -29,8 +29,9 @@
  * file is never bought again; a crashed or capped run picks up at the first
  * cell without one. Judgements are files the same way.
  *
- * Reads the local database only. Writes no row anywhere. Results hold ids,
- * titles and gists, never block prose.
+ * Reads the local database and writes one `ai_calls` row per paid call on real
+ * runs. Fake runs never use the database sink. Results hold ids, titles and
+ * gists, never block prose.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";

@@ -47,8 +47,9 @@
  *
  * ## What it writes
  *
- * **Nothing to the database.** Reads through `pgArticleReader`; the spend
- * collector has no sink, so no `ai_calls` row. Files only:
+ * **One `ai_calls` row per model call, and nothing else to the database.**
+ * Reads through `pgArticleReader`; the spend collector writes to the ledger
+ * (an eval's spend is refused without one). Files:
  * `evals/results/skim-coverage-<ts>.json`.
  *
  * ## The metrics, per depth (Gist ≤1, More ≤2, Most ≤3)
@@ -142,6 +143,7 @@ const { environmentOwnerId, runAsOwner } = await import("../../src/owner.js");
 const { blockIndex } = await import("../../src/section-path.js");
 const { isBody } = await import("../../src/block-policy.js");
 const { collectSpend, totalSpend } = await import("../../src/ai-spend.js");
+const { costStore } = await import("../../src/store/ai-calls.js");
 const NEW = await import("../../src/skim.js");
 const { passRoute } = await import("../../src/web/skim-route.js");
 /* The old module, loaded by path so nothing in the repo imports a file that
@@ -351,7 +353,10 @@ async function runOne(inp: Input, arm: Arm, run: number): Promise<RunResult> {
         profile: null,
       });
     },
-    { attribution: { scopeKind: "eval", articleSlug: slug } },
+    {
+      attribution: { scopeKind: "eval", ownerId: environmentOwnerId(), articleSlug: slug },
+      sink: (row) => costStore.record(row),
+    },
   );
   const skim = result.skim;
   const byId = new Map(quotes.quotes.map((q) => [q.id, q]));

@@ -11,9 +11,9 @@ Up: [dev-and-deployment-overview.md](dev-and-deployment-overview.md)
 - [§ Environment variables](#environment-variables) — what is set on Vercel and what each one breaks
 - [§ `/api/health`, and why to look at it first](#apihealth-and-why-to-look-at-it-first) — what the endpoint checks and how it once lied
 - [§ The five that fail quietly](#the-five-that-fail-quietly) — failures that reported success: TypeScript, routing, `require(ESM)`, the certificate, the body, the bucket
-- [§ What does not work in production yet](#what-does-not-work-in-production-yet) — the filesystem wall and its four wrong diagnoses (history)
+- [§ What did not work in production at first](#what-did-not-work-in-production-at-first) — the filesystem wall and its four wrong diagnoses (history)
 - [§ What the reader sees when the server fails](#what-the-reader-sees-when-the-server-fails) — why an outage showed as a JSON parse error
-- [§ Still to do before this is a real deployment](#still-to-do-before-this-is-a-real-deployment) — the first-deploy checklist, all done (history)
+- [§ What it took to become a real deployment](#what-it-took-to-become-a-real-deployment) — the first-deploy checklist, all done (history)
 - [§ It is up, and here is the reading of it](#it-is-up-and-here-is-the-reading-of-it) — the first healthy `/api/health`, and what it does not prove (history)
 - [§ See also](#see-also) — the tutorial, the plan, and the neighbouring docs
 
@@ -271,8 +271,25 @@ sharing the primary's `node_modules` (41 s on the box), because under `--ready` 
 whatever the primary installed. And **a failed `git fetch origin main` stops the deploy**: its
 result used to be ignored, leaving a stale `origin/main` to answer the ancestry check.
 
-Not built: a `release/<sha>` branch for fixing a non-test gate without taking the rest of `dev` —
+**How it relates to Greg's branch idea.** He proposed pushing a release candidate to a branch,
+deploying from there, fixing bugs on that branch and merging the fixes back to `dev`, *"so any new
+stuff that happens on dev won't affect the deploy"*. `--ready` gets that isolation a different way:
+it pins the deploy to one commit the loop has already tested, with no branch.
+
+```
+branch:   dev ──●──●──●──●──►            --ready:  dev ──●──●──✓──●──●──►
+                 \                                           │
+                  release ──fix──fix──► deploy               └──► deploy ✓, tests reused
+```
+
+What `--ready` adds is that it never deploys a commit nobody has tested, which was the whole of
+2026-10-07's five failed attempts. What it lacks is somewhere to fix forward: a red on the candidate
+is fixed on `dev`, and the deploy waits for the loop to pass a later commit. That wait is its
+weakness. A full run is 80–90 minutes, the loop skips while the box swaps, and on 2026-10-07 a stale
+local migration-ledger row stopped it for an evening, so on a busy day there may be no green commit
+for hours. Not built, for that case: the `release/<sha>` branch for fixing a candidate in place —
 [261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief).
+Build it the first time `--ready` waits too long or a release needs a fix of its own.
 
 ### The gate needs both halves of the artefact store
 
@@ -1149,11 +1166,11 @@ The fallback itself is right and should stay — a laptop with no Supabase conta
 and the function comment says so. What was missing is any signal that it happened *in an environment
 where it is wrong*. That is now [`/api/health`'s](#apihealth-and-why-to-look-at-it-first) job, below.
 
-## What does not work in production yet
+## What did not work in production at first
 
 Reading an article, the shelf, comments, **chat and meaning-search** all come
-from Postgres now — the last two since step 10 landed on 2026-08-26. What still
-writes to a local filesystem, which a serverless host does not have:
+from Postgres now — the last two since step 10 landed on 2026-08-26. What
+wrote to a local filesystem, which a serverless host does not have — both fixed since:
 
 - **adding an article** — **fixed on 2026-08-30, and everything below it is the
   history of a wall that is no longer there.** An article pasted at the live site
@@ -1262,7 +1279,7 @@ client `fetch` now reads its response through — see
 It matters here rather than only there: when this deployment breaks, what the
 reader is told about it is the only symptom most people will ever report.
 
-## Still to do before this is a real deployment
+## What it took to become a real deployment
 
 0. ~~**Get `main` building**~~ — green on 2026-08-27, commit `6e0d62f`.
 

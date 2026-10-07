@@ -1,7 +1,7 @@
 ---
 id: q-hhbddw
 report: spya-eqjfgv
-status: open
+status: answered
 asked: 2026-10-07
 title: Should a blog post's reader comments be kept, folded away, instead of left out?
 refs: SPIDERYARN-READING2-EJ · qi-7j766kvb · qi-e69nfvkx · docs/plans/261007k-readers-comments-left-out-of-a-blog-import-on-every-pass.md · docs/user-feedback/261007_1008-readers-comments-left-out-of-a-blog-import.md
@@ -19,3 +19,9 @@ B. Keep them beside the article, not inside it. They are stored separately and s
 C. Keep them inside the article under a folded Comments heading. Looks the simplest, but it is not: every mode listed above would have to learn to skip them, or each would treat commenters as the author. Not recommended.
 
 Recommendation: A for now, and B if you find yourself wanting a thread more than once. Which blogs do you read where the comments are worth having? That would decide whether B covers them.
+
+## Greg's answer, 2026-10-07 (in chat, relayed by the Overseer)
+
+> q-hhbddw yes exclude them
+
+Settled: blog comments stay out of imports, as built. qi-e69nfvkx dropped.
