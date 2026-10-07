@@ -28,9 +28,11 @@
  * `data-more-start` / `data-more-end` on the row while it can scroll further
  * that way, and mode-band.css § the part-switcher draws a short fade on that
  * edge only (the designer's review of plan 261007h § F2). Because a fade can
- * cover the edge of a button, the reveal stops a fade's width short of an edge
- * with more beyond it, for the chosen button and for a focused one alike (GPT
- * Sol, F2 review K4).
+ * cover the edge of a button, the reveal stops a fade's width (plus any outer
+ * outline) short of an edge with more beyond it. Reflows preserve the focused
+ * button, when there is one; a new selection reveals the chosen one. If the
+ * button cannot fit between the fades, the row keeps its marks but omits the
+ * mask. Manual scrolling only updates the marks; it does not undo a swipe.
  *
  * Where nothing overflows there is nothing to scroll, no mark and no fade, and
  * this does nothing.
@@ -51,8 +53,9 @@ function fadePx(el: Element): number {
 
 /**
  * Scroll `group` the least distance that shows `button` whole and clear of
- * the fade on any edge that has more beyond it. Where there is nothing beyond,
- * the browser's own clamp stops the scroll at the end and the fade is gone.
+ * the fade on any edge that has more beyond it. Omit the mask if the button
+ * cannot fit between its fades; a button wider than the viewport shows its
+ * reading start. At a row's end the browser clamps the scroll and its fade goes.
  */
 export function revealButton(group: HTMLElement, button: HTMLElement): void {
   const view = group.getBoundingClientRect();
@@ -62,10 +65,21 @@ export function revealButton(group: HTMLElement, button: HTMLElement): void {
   const rtl = getComputedStyle(group).direction === "rtl";
   const leftMore = rtl ? button.nextElementSibling : button.previousElementSibling;
   const rightMore = rtl ? button.previousElementSibling : button.nextElementSibling;
-  const fade = fadePx(group);
-  const left = view.left + (leftMore ? fade : 0);
-  const right = view.right - (rightMore ? fade : 0);
-  if (box.left < left) group.scrollLeft -= left - box.left;
+  const style = getComputedStyle(button);
+  const outline = Math.max(
+    0,
+    (Number.parseFloat(style.outlineWidth) || 0) + (Number.parseFloat(style.outlineOffset) || 0),
+  );
+  const wantedFade = fadePx(group);
+  const tooWide = box.width + outline * 2 > view.width - (leftMore ? wantedFade : 0) - (rightMore ? wantedFade : 0);
+  group.toggleAttribute("data-more-unmasked", tooWide);
+  const fade = tooWide ? 0 : wantedFade;
+  const left = view.left + (leftMore ? fade : 0) + outline;
+  const right = view.right - (rightMore ? fade : 0) - outline;
+  /* When even the unmasked viewport is too small, align the reading start
+     consistently rather than alternate between two impossible edge fits. */
+  if (box.width > right - left) group.scrollLeft += rtl ? box.right - right : box.left - left;
+  else if (box.left < left) group.scrollLeft -= left - box.left;
   else if (box.right > right) group.scrollLeft += box.right - right;
 }
 
@@ -79,20 +93,23 @@ export function revealChosen(group: HTMLElement): void {
  * Mark the edges `group` can still scroll towards: `data-more-start`,
  * `data-more-end`, or neither. `scrollLeft` counts from the start edge in
  * either direction (negative in a right-to-left row), so its size is the
- * distance from the start. A pixel's slack, because zoom makes it fractional.
+ * distance from the start. Clamp elastic overscroll before marking; taking an
+ * absolute value would turn a bounce past the start into a false start fade.
+ * A pixel's slack, because zoom makes it fractional.
  */
 export function markMore(group: HTMLElement): void {
   const max = group.scrollWidth - group.clientWidth;
-  const from = Math.abs(group.scrollLeft);
+  const rtl = getComputedStyle(group).direction === "rtl";
+  const from = Math.max(0, Math.min(max, rtl ? -group.scrollLeft : group.scrollLeft));
   group.toggleAttribute("data-more-start", max > 1 && from > 1);
   group.toggleAttribute("data-more-end", max > 1 && from < max - 1);
 }
 
 /**
- * Reveal the chosen button of `ref`'s row now, whenever `chosen` changes, and
- * after any resize, font swap or change in the row's children; reveal a button
- * that takes focus; and keep the row's `data-more-*` marks true on each of
- * those and on every scroll.
+ * Reveal the chosen button of `ref`'s row now and whenever `chosen` changes.
+ * After a resize, font swap or child-list change, preserve a focused button,
+ * otherwise reveal the choice. Reveal a button that takes focus, and keep the
+ * row's `data-more-*` marks true on each of those and on every scroll.
  *
  * @param chosen the chosen option's key — a change re-runs the reveal. It is
  *   the trigger, not an input: the chosen button is read from the DOM.
@@ -104,10 +121,14 @@ export function useRevealChosen(ref: RefObject<HTMLElement | null>, chosen: unkn
     if (!group) return;
     const mark = () => markMore(group);
     const reveal = () => {
-      revealChosen(group);
+      const focused = group.ownerDocument.activeElement;
+      if (focused instanceof HTMLElement && focused.parentElement === group) revealButton(group, focused);
+      else revealChosen(group);
       mark();
     };
-    reveal();
+    // A selection change reveals the choice; later reflows preserve focus.
+    revealChosen(group);
+    mark();
     group.addEventListener("scroll", mark, { passive: true });
     /* A button reached by Tab can sit under a fade; bring it clear. */
     const onFocus = (event: FocusEvent) => {
@@ -123,8 +144,8 @@ export function useRevealChosen(ref: RefObject<HTMLElement | null>, chosen: unkn
     for (const child of group.children) ro?.observe(child);
     /* A constrained row's box does not change when a new option makes its
        contents wider, and existing buttons only move — neither wakes a
-       ResizeObserver. Observe new children too, then put the chosen one back
-       in view. `childList` deliberately ignores `aria-pressed`/`aria-checked`:
+       ResizeObserver. Observe new children too, then reveal the focused button
+       or the choice. `childList` ignores `aria-pressed`/`aria-checked`:
        `chosen` owns that path synchronously through the layout effect. */
     const mutations =
       typeof MutationObserver === "undefined"

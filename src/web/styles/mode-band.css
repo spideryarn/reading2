@@ -257,17 +257,18 @@
    (`.gloss-sort-group`, OrderGroup.tsx) that can scroll further. The marks are
    useRevealChosen.ts § markMore's, set only while there is more to scroll on
    that side, so a row that fits — every bar at 1440 — has no mask at all. It
-   is short, 1.25rem, and the reveal keeps the chosen or focused button that
-   far from a faded edge, so it covers part of a neighbour and never the
-   button in play or its focus ring. `--more-fade` is the same number as
-   MORE_FADE_REM there. */
+   is short, 1.25rem; revealing a chosen or focused button keeps its box and
+   outline clear of the fade. A chip too wide for those margins omits the
+   mask (`data-more-unmasked`), so repeated reveals do not fight over which
+   edge to show. A manual swipe can move any chip under the fade again.
+   `--more-fade` is the same number as MORE_FADE_REM there. */
 :is(.summ-views, .gloss-sort-group)[data-more-start] { --more-start: var(--more-fade); }
 :is(.summ-views, .gloss-sort-group)[data-more-end] { --more-end: var(--more-fade); }
-:is(.summ-views, .gloss-sort-group):is([data-more-start], [data-more-end]) {
+:is(.summ-views, .gloss-sort-group):is([data-more-start], [data-more-end]):not([data-more-unmasked]) {
   --more-fade: 1.25rem;
   mask-image: linear-gradient(to right, transparent, #000 var(--more-start, 0px), #000 calc(100% - var(--more-end, 0px)), transparent);
 }
-:is(.summ-views, .gloss-sort-group):is([data-more-start], [data-more-end]):dir(rtl) {
+:is(.summ-views, .gloss-sort-group):is([data-more-start], [data-more-end]):not([data-more-unmasked]):dir(rtl) {
   mask-image: linear-gradient(to left, transparent, #000 var(--more-start, 0px), #000 calc(100% - var(--more-end, 0px)), transparent);
 }
 

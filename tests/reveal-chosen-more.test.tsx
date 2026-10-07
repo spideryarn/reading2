@@ -11,9 +11,9 @@
 import { readFileSync } from "node:fs";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderGroup } from "../src/web/OrderGroup.js";
-import { MORE_FADE_REM, markMore, revealChosen } from "../src/web/useRevealChosen.js";
+import { MORE_FADE_REM, markMore, revealButton, revealChosen } from "../src/web/useRevealChosen.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -73,6 +73,22 @@ describe("markMore", () => {
     markMore(g);
     expect(marks(g)).toBe("- -");
   });
+
+  it.each(["ltr", "rtl"])("ignores elastic scroll beyond either %s edge", (direction) => {
+    const g = document.createElement("div");
+    g.style.direction = direction;
+    metrics(g, 400, 300);
+    const sign = direction === "rtl" ? -1 : 1;
+    g.scrollLeft = -20 * sign;
+    markMore(g);
+    expect(marks(g)).toBe("- end");
+    g.scrollLeft = 120 * sign;
+    markMore(g);
+    expect(marks(g)).toBe("start -");
+    g.scrollLeft = 50 * sign;
+    markMore(g);
+    expect(marks(g)).toBe("start end");
+  });
 });
 
 describe("revealChosen keeps the chosen button clear of a fade", () => {
@@ -102,6 +118,30 @@ describe("revealChosen keeps the chosen button clear of a fade", () => {
     revealChosen(g);
     expect(g.scrollLeft).toBe(100 - fade);
   });
+
+  it("keeps an outward focus ring clear of the fade, too", () => {
+    const g = row(5, 1);
+    const b = g.children[1] as HTMLElement;
+    b.style.outlineWidth = "2px";
+    b.style.outlineOffset = "1px";
+    g.scrollLeft = 95;
+    revealButton(g, b);
+    expect(g.scrollLeft).toBe(100 - fade - 3);
+  });
+
+  it.each([180, 240])("reveals a %ipx chip consistently when the fade leaves too little room", (width) => {
+    const g = row(5, 1);
+    const b = g.children[1] as HTMLElement;
+    b.getBoundingClientRect = () => rect(100 - g.scrollLeft, width);
+    revealChosen(g);
+    expect(g.hasAttribute("data-more-unmasked")).toBe(true);
+    const once = g.scrollLeft;
+    revealChosen(g);
+    expect(g.scrollLeft).toBe(once);
+    b.getBoundingClientRect = () => rect(100 - g.scrollLeft, 80);
+    revealChosen(g);
+    expect(g.hasAttribute("data-more-unmasked")).toBe(false);
+  });
 });
 
 describe("useRevealChosen, through OrderGroup", () => {
@@ -115,6 +155,83 @@ describe("useRevealChosen, through OrderGroup", () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps the focused part revealed across reflows, then reveals a new choice", async () => {
+    let resize: ResizeObserverCallback | undefined;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+    vi.spyOn(HTMLDivElement.prototype, "getBoundingClientRect").mockImplementation(() => rect(0, 200));
+    vi.spyOn(HTMLButtonElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLButtonElement) {
+      return rect(100 * Number(this.dataset.i) - this.parentElement!.scrollLeft, 80);
+    });
+    const draw = (selected: number, extra = false) => (
+      <OrderGroup label="Order the terms by" selected={String(selected)}>
+        {[0, 1, 2, 3, ...(extra ? [4] : [])].map((i) => (
+          <button key={i} type="button" data-i={i} aria-pressed={i === selected} />
+        ))}
+      </OrderGroup>
+    );
+    act(() => root.render(draw(0)));
+    const g = host.querySelector<HTMLElement>('[role="group"]')!;
+    const focused = g.querySelector<HTMLElement>('[data-i="3"]')!;
+    act(() => focused.focus());
+    expect(g.scrollLeft).toBe(180);
+    act(() => resize?.([], {} as ResizeObserver));
+    expect(g.scrollLeft).toBe(180);
+    await act(() => root.render(draw(0, true)));
+    expect(g.scrollLeft).toBe(180 + MORE_FADE_REM * 16);
+    act(() => root.render(draw(1, true)));
+    expect(g.scrollLeft).toBe(100 - MORE_FADE_REM * 16);
+  });
+
+  it("clears marks when a resize makes the row fit, and removes listeners on unmount", () => {
+    let resize: ResizeObserverCallback | undefined;
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resize = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    vi.spyOn(Element.prototype, "scrollWidth", "get").mockReturnValue(400);
+    const width = vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(300);
+    vi.spyOn(HTMLDivElement.prototype, "getBoundingClientRect").mockImplementation(() => rect(0, 200));
+    vi.spyOn(HTMLButtonElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLButtonElement) {
+      return rect(100 * Number(this.dataset.i) - this.parentElement!.scrollLeft, 90);
+    });
+    act(() => root.render(
+      <OrderGroup label="Order" selected="0">
+        {[0, 1, 2].map((i) => <button key={i} type="button" data-i={i} aria-pressed={i === 0} />)}
+      </OrderGroup>,
+    ));
+    const g = host.querySelector<HTMLElement>('[role="group"]')!;
+    expect(marks(g)).toBe("- end");
+    width.mockReturnValue(400);
+    act(() => resize?.([], {} as ResizeObserver));
+    expect(marks(g)).toBe("- -");
+    act(() => root.render(null));
+    expect(disconnect).toHaveBeenCalled();
+    width.mockReturnValue(300);
+    g.scrollLeft = 100;
+    g.dispatchEvent(new Event("scroll"));
+    (g.children[1] as HTMLElement).dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    expect(marks(g)).toBe("- -");
+    expect(g.scrollLeft).toBe(100);
   });
 
   it("marks the row on opening and again when it is scrolled", () => {
@@ -184,7 +301,10 @@ describe("the fade's CSS", () => {
 
   it("is drawn only on a marked row, and is as wide as the reveal allows for", () => {
     expect(masked.length).toBeGreaterThan(0);
-    for (const [, selector] of masked) expect(selector).toMatch(/\[data-more-(start|end)\]/);
+    for (const [, selector] of masked) {
+      expect(selector).toMatch(/\[data-more-(start|end)\]/);
+      expect(selector).toContain(":not([data-more-unmasked])");
+    }
     expect(css).toMatch(new RegExp(`--more-fade:\\s*${MORE_FADE_REM}rem`));
   });
 });
