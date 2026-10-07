@@ -184,6 +184,42 @@ empty tuple says that without admitting the rest.
 **One thing to know:** `jsonb_array_length` raises on a non-array, so a `claims` of `{}` is refused
 with error 22023 rather than with the constraint's name. No writer can produce one.
 
+## Stage 4: `upload_source_guesses.created_at`
+
+**Production, read 2026-10-07 01:16 UTC:** 5 rows (1 `found`, 4 `none`), none with `claimed_at` at
+the epoch or null, and no `created_at` column. Local: 25 rows.
+
+**The SQL** (`drizzle/20261007011627_upload_source_guesses_created_at.sql`). Drizzle generated one
+statement, `ADD COLUMN "created_at" timestamp with time zone DEFAULT now()`, which would have
+stamped the migration's own time on the 5 existing rows (U11). **Hand-split**, the snapshot left
+alone:
+
+```sql
+ALTER TABLE "spideryarn"."upload_source_guesses" ADD COLUMN "created_at" timestamp with time zone;
+ALTER TABLE "spideryarn"."upload_source_guesses" ALTER COLUMN "created_at" SET DEFAULT now();
+```
+
+Checked after applying locally: 25 rows, **0** with a `created_at`; the column is nullable with
+default `now()`. Not backfilled from `claimed_at`, which may be a later claim or the epoch.
+
+**No store change.** `claim`'s insert does not name the column, so the default fills it, and its
+`ON CONFLICT DO UPDATE` and `release` do not name it either, so neither can move it. `claimed_at`
+means what it meant: the eligibility clock.
+
+**Tested:** `tests/created-at-on-action-tables.test.ts` drives the real store: stamped on the first
+claim, unchanged through a release (which sets `claimed_at` to the epoch) and a reclaim; and a row
+with a null `created_at` stays null through a reclaim and a finish. **Red before the migration**
+(`column "created_at" does not exist`). `tests/action-tables-have-created-at.test.ts` refused the
+generated one-statement form before the split, by name.
+
+**What the docs got wrong:** the Opus cross-review said to *"change
+`tests/action-tables-have-created-at.test.ts:64` to `{ column: "created_at" }`"*. That test fails
+on exactly that: *"upload_source_guesses has created_at now, so its entry in WITHOUT_CREATED_AT is
+stale — delete the entry"*. The entry is deleted, as GPT Sol's document said. And the entry itself
+was the finding: the test accepts any timestamp column as a stand-in and cannot see that one
+moves. [sql.md § Store when it happened](../project/sql.md#store-when-it-happened) now says to read
+the writers before listing one.
+
 ## Waiting to be applied to production
 
 In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
@@ -191,3 +227,4 @@ In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
 1. `20261007005448_revision_blocks_article_block_index`
 2. `20261007010230_referee_criteria_shape_all_or_none`
 3. `20261007010954_referee_claims_empty_unless_done`
+4. `20261007011627_upload_source_guesses_created_at`

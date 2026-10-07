@@ -4853,8 +4853,25 @@ export const uploadSourceGuesses = spideryarn.table(
     /** Billed searches the provider reported — nullable, and null is not zero (as `citation_finds`). */
     searches: integer("searches"),
     model: text("model"),
+    /**
+     * **The eligibility clock, not when the row was made.** `claim` re-stamps
+     * it on every reclaim, and `release` sets it to the Unix epoch so the row
+     * is reclaimable at once (src/store/pg-source-guesses.ts). Until
+     * 2026-10-07 it was also this table's only "when", and it stopped being one
+     * the first time a search failed. `created_at` below is that.
+     */
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /**
+     * **When this row was first written** — the first claim on this article.
+     * Filled by the database default; no store names it, so the upsert in
+     * `claim` and the `release` that zeroes `claimed_at` cannot move it.
+     * **Null means before 2026-10-07, when we started keeping it** — nullable
+     * on purpose, since no row is given an invented time, and not backfilled
+     * from `claimed_at`, which may be a later claim or the epoch. AGENTS.md
+     * § Writing code, "Store when it happened".
+     */
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   },
   (t) => [
     check("upload_source_guesses_status", sql`${t.status} in ('searching', 'found', 'none')`),

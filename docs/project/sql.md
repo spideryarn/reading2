@@ -117,6 +117,12 @@ including the next one, and an upsert's `do update` cannot move it.
 holds it: a table with no `created_at` fails unless it is listed there with the timestamp column
 that plays that part, or with the reason it needs none.
 
+**A stand-in has to be a time that stays put, and the test cannot tell.** It reads the column's
+name and type. `upload_source_guesses.claimed_at` was listed as that table's "when" until
+2026-10-07, and it is the claim's eligibility clock: every reclaim re-stamps it and a release sets
+it to the Unix epoch. Before listing a column there, read every writer of it; if any moves it,
+the table needs a `created_at` of its own.
+
 **Adding one to a table that already has rows is two statements, not the one drizzle generates:**
 
 ```sql
