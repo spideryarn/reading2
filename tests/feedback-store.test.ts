@@ -632,12 +632,12 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
   });
 
   it("takes a body of exactly the database's cap, and refuses one character more", async () => {
-    /* **`MAX_FEEDBACK_BODY_CHARS`, not `MAX_FEEDBACK_ANSWER_CHARS`, and the gap
-       between them is the point.** The reader meets the smaller one, in the
-       route and in the dialog. The column has to admit the larger, because the
-       migration that made one box out of three glued three separately-capped
-       answers together — a 4,000 CHECK would have made a row that was legal when
-       it was filed illegal afterwards. */
+    /* **`MAX_FEEDBACK_BODY_CHARS`, the number written into the CHECK.** Equal to
+       the reader's `MAX_FEEDBACK_ANSWER_CHARS` since plan 261007j (20,000), and
+       never below 12,072: the migration that made one box out of three glued
+       three separately-capped answers together, and a lower CHECK would make a
+       row that was legal when it was filed illegal afterwards. */
+    expect(MAX_FEEDBACK_BODY_CHARS).toBe(20_000);
     const atTheCap = "x".repeat(MAX_FEEDBACK_BODY_CHARS);
     const filed = await runAsOwner(ALICE, () =>
       pgFeedbackStore.submit(report({ id: mintId(), body: atTheCap })),

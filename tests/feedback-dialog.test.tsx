@@ -1920,6 +1920,18 @@ describe("the Earlier tab", () => {
     );
   });
 
+  /* A page the server cut short to fit a response (long reports, plan 261007j)
+     is a real answer, and the line counts what it holds rather than the cap. */
+  it("says how many it is showing when the server sent fewer than the cap", async () => {
+    listAnswer = page({ ...REPORTS, more: true, counts: MANY });
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain(
+      `Showing the ${REPORTS.reports.length} most recent of your 345 reports.`,
+    );
+  });
+
   /* SPIDERYARN-READING2-95: "Perhaps include a number/badge in the tab-pills
      for Shipped and Not shipped?" */
   it("puts each filter's count on its pill once an answer lands, and none before", async () => {
@@ -1974,7 +1986,7 @@ describe("the Earlier tab", () => {
         counts: { all: EARLIER_FEEDBACK_LIMIT, shipped: EARLIER_FEEDBACK_LIMIT, unshipped: 0 },
       },
     ],
-    ["more with fewer reports than the cap", { ...REPORTS, more: true, counts: MANY }],
+    ["more with no reports at all", { reports: [], more: true, counts: MANY }],
     ["no more but a count past the list", { ...REPORTS, counts: { all: 3, shipped: 1, unshipped: 2 } }],
     ["a negative count", { ...REPORTS, counts: { all: 2, shipped: 3, unshipped: -1 } }],
     ["a shipped row above a zero shipped count", { ...REPORTS, counts: { all: 2, shipped: 0, unshipped: 2 } }],
@@ -1984,6 +1996,22 @@ describe("the Earlier tab", () => {
     ],
   ])("refuses an answer with %s as the wrong shape", async (_case, body) => {
     listAnswer = page(body);
+    mount();
+    click(tab("Earlier"));
+    await act(async () => {});
+    expect(panelOf("Earlier").textContent).toContain("[fb-list]");
+  });
+
+  it.each([false, true])("refuses more than the report cap when more=%s", async (more) => {
+    const count = EARLIER_FEEDBACK_LIMIT + 1 + Number(more);
+    listAnswer = page({
+      reports: Array.from({ length: EARLIER_FEEDBACK_LIMIT + 1 }, (_, i) => ({
+        ...REPORTS.reports[0],
+        id: `spya-over-cap-${i}`,
+      })),
+      more,
+      counts: { all: count, shipped: count, unshipped: 0 },
+    });
     mount();
     click(tab("Earlier"));
     await act(async () => {});

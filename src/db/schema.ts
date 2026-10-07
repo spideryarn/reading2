@@ -5560,27 +5560,26 @@ export const feedback = spideryarn.table(
      * well as in the route, because a rule enforced in TypeScript holds only for
      * the callers that went through that TypeScript.
      *
-     * **12,072 is `MAX_FEEDBACK_BODY_CHARS`** in src/types.ts. Written out here
+     * **20,000 is `MAX_FEEDBACK_BODY_CHARS`** in src/types.ts. Written out here
      * rather than imported for the reason the vocabularies above are — and
      * pinned to that constant behaviourally by tests/feedback-store.test.ts,
      * which writes exactly the cap and exactly one character more.
      *
-     * **It is three old answers, not one.** The backfill of 2026-09-02 glued
-     * three answers, each capped at 4,000
+     * **It was 12,072 until 2026-10-07, three old answers.** The backfill of
+     * 2026-09-02 glued three answers, each capped at 4,000
      * (`MAX_LEGACY_FEEDBACK_ANSWER_CHARS`), under their headings, and three full
-     * ones come to exactly this. A 4,000 CHECK would either fail the migration
-     * on a row that was legal when it was filed, or force it to truncate, which
-     * throws away something a reader wrote. GPT Sol's review of the plan,
-     * 2026-09-02.
+     * ones come to exactly that, so the cap may never go below it: a lower CHECK
+     * would fail on a row that was legal when it was filed. GPT Sol's review of
+     * that plan, 2026-09-02.
      *
-     * The cap the reader meets is `MAX_FEEDBACK_ANSWER_CHARS`, which the route
-     * refuses past and the dialog says. It was 4,000 and has been 12,000 since
-     * 2026-10-07, inside this number on purpose: raising it moved nothing here
-     * (plan 261007b, which also sets out raising this one, for Greg).
+     * Since plan 261007j it is 20,000, the same number the reader meets in the
+     * dialog and the route (`MAX_FEEDBACK_ANSWER_CHARS`): fifteen minutes of
+     * dictation, and still short of a long article. Greg said yes to it,
+     * 2026-10-07.
      */
     check(
       "feedback_body_shape",
-      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 12072`,
+      sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 20000`,
     ),
     /**
      * The third closed vocabulary, written out by hand for the reason the two

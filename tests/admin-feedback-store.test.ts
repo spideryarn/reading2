@@ -48,7 +48,12 @@ import {
   readFeedbackScreenshotAcrossOwners,
   setFeedbackIgnoredAcrossOwners,
 } from "../src/store/pg-admin-feedback.js";
-import { ADMIN_FEEDBACK_MAX, decodeFeedbackCursor, encodeFeedbackCursor } from "../src/types.js";
+import {
+  ADMIN_FEEDBACK_MAX,
+  FEEDBACK_LIST_BYTES,
+  decodeFeedbackCursor,
+  encodeFeedbackCursor,
+} from "../src/types.js";
 import { listSql, showSql } from "../scripts/feedback-unswept.js";
 import { pgReady } from "./helpers/pg-ready.js";
 import { seedAuthUser } from "./helpers/seed-auth-user.js";
@@ -433,6 +438,83 @@ describe("the admin feedback read on Postgres", () => {
     expect(short.reports).toHaveLength(n - 1);
     expect(short.hasMore).toBe(true);
     expect(short.nextCursor).not.toBeNull();
+  });
+
+  /**
+   * **A page is bounded by its size, not only its count** — plan 261007j. A
+   * report may be 20,000 characters, so 200 of them is 4 MB and 500 is 10 MB,
+   * against the 4.5 MB a Vercel response may be. The page stops before the
+   * report that would take it past the budget, and the walk still reaches every
+   * report exactly once, because the cursor is the last row actually returned.
+   *
+   * A small budget passed in, so the case needs five reports rather than three
+   * hundred; the real one is held to the platform's ceiling just below.
+   */
+  it.each([
+    ["ASCII", "x".repeat(10_000)],
+    ["UTF-8", "界".repeat(3_334)],
+    ["JSON escapes", "\u0001".repeat(1_667)],
+  ])("stops a %s page at its byte budget inside equal timestamps, and reaches every report once", async (_encoding, body) => {
+    const ids: string[] = [];
+    const bodies = new Map<string, string>();
+    for (let i = 0; i < 5; i++) {
+      const id = mintId();
+      ids.push(id);
+      bodies.set(id, `${i} ${body}`);
+      await runAsOwner(ALICE, () =>
+        pgFeedbackStore.submit(report({ id, body: bodies.get(id)! })),
+      );
+    }
+    /* Force the size boundary inside a tied group at full database precision,
+       ahead of any rows another suite left behind. The id orders that group. */
+    await getDb().execute(sql`
+      update spideryarn.feedback
+         set created_at = (select max(created_at) from spideryarn.feedback) + interval '1 second'
+       where owner_id = ${ALICE}
+    `);
+    const newestFirst = [...ids].sort().reverse();
+    const budget = 25_000;
+
+    const walked: string[] = [];
+    let cursor = null as Awaited<ReturnType<typeof listFeedbackAcrossOwners>>["nextCursor"];
+    let pages = 0;
+    for (; pages < 50; ) {
+      const got = await listFeedbackAcrossOwners(ADMIN_FEEDBACK_MAX, cursor, "everyone", budget);
+      pages++;
+      expect(got.reports.length, "a page always carries at least one report").toBeGreaterThan(0);
+      if (got.reports.length > 1) {
+        expect(Buffer.byteLength(JSON.stringify(got.reports))).toBeLessThanOrEqual(budget);
+        expect(Buffer.byteLength(JSON.stringify(got))).toBeLessThan(budget + 4 * 1024);
+      }
+      for (const row of got.reports.filter((r) => r.ownerId === ALICE)) {
+        expect(row.body).toBe(bodies.get(row.id));
+      }
+      if (pages === 1) {
+        expect(got.reports.map((r) => r.id)).toEqual(newestFirst.slice(0, 2));
+        expect(got.hasMore).toBe(true);
+        expect(got.nextCursor).toMatchObject({ ownerId: ALICE, id: newestFirst[1] });
+      }
+      walked.push(...got.reports.filter((r) => r.ownerId === ALICE).map((r) => r.id));
+      cursor = got.nextCursor;
+      expect(cursor === null).toBe(!got.hasMore);
+      if (!cursor) break;
+    }
+    expect(walked).toEqual(newestFirst);
+    expect(cursor, "the final page is exhausted, with no continuation").toBeNull();
+    expect(pages, "five 10 KB reports under a 25 KB budget take several pages").toBeGreaterThan(2);
+  });
+
+  it("budgets the real page under the platform's response ceiling", () => {
+    /* A page of more than one report stays inside the budget; a page of one is
+       at most one report. The largest one report can be: a body at the cap
+       where every character escapes to six bytes, a URL at its cap the same,
+       and 4 KB for every other field and key. Plus 4 KB for what wraps the
+       list (`hasMore`, the cursor). */
+    const worstReport = 20_000 * 6 + 2048 * 6 + 4 * 1024;
+    const VERCEL_RESPONSE_BYTES = 4.5 * 1024 * 1024;
+    expect(Math.max(FEEDBACK_LIST_BYTES, worstReport) + 4 * 1024).toBeLessThan(
+      VERCEL_RESPONSE_BYTES,
+    );
   });
 
   it("hands back null for a report with no screenshot, and for a pair that is not a report", async () => {

@@ -100,7 +100,12 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
   if (![all, shipped, unshipped].every((n) => Number.isSafeInteger(n) && (n as number) >= 0)) return false;
   if ((all as number) !== (shipped as number) + (unshipped as number)) return false;
   const here = counts[which] as number;
-  if (page.more && page.reports.length !== EARLIER_FEEDBACK_LIMIT) return false;
+  /* `more` with a short page is real: the server cuts a list of long reports to
+     what fits one response (src/types.ts § `FEEDBACK_LIST_BYTES`). Never empty,
+     and never over the cap. */
+  if (page.reports.length > EARLIER_FEEDBACK_LIMIT || (page.more && page.reports.length === 0)) {
+    return false;
+  }
   if (page.reports.length > here || page.more !== (here > page.reports.length)) return false;
   if (!page.reports.every((value: unknown) => {
     if (typeof value !== "object" || value === null) return false;
@@ -446,7 +451,7 @@ export function EarlierList({
             /* "of N", so the reader need not take the cap on trust
                (SPIDERYARN-READING2-95: "Is that true?"). */
             <p className="fb-earlier-status">
-              Showing the {EARLIER_FEEDBACK_LIMIT} most recent of your {counts[show]} {CAP_NOUN[show]}.
+              Showing the {reports.length} most recent of your {counts[show]} {CAP_NOUN[show]}.
             </p>
           ) : null}
         </>
