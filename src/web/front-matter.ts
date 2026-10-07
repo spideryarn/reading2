@@ -47,8 +47,6 @@ const MAX_SENTENCE_SHARE = 0.04;
  * statement and the keywords, and those are not contact details.
  */
 const LEAD_EXCUSE_WORDS = 20;
-/** A lead phrase "opens" a block when at most this many words come before it. */
-const LEAD_OPENS_WITHIN = 2;
 
 const LETTER = /\p{L}/u;
 const EMAIL = /[^\s@]+@[^\s@]+\.[^\s@]+/;
@@ -63,6 +61,14 @@ const INSTITUTION =
 
 /** How a contact or contribution line starts. Any capitals: "E-mail:", "EQUAL CONTRIBUTION". */
 const LEAD = /correspondence|corresponding authors?|e-?mail:|equal contributions?|contributed equally|orcid/i;
+
+/** Labels for authored material that can sit near a byline but is not author detail. */
+const CONTENT_LABEL =
+  /^(?:acknowledg(?:e)?ments?|keywords?|funding|competing interests?|conflicts? of interest|data availability)\s*:/i;
+
+/** Organisation and job words that make a comma-split byline piece unsafe to treat as a person. */
+const NON_PERSON_BYLINE =
+  /(?:^The\b|\b(?:University|Université|Universität|Universidad|Università|Universiteit|Departments?|Institute|Institut|College|School|Faculty|Laborator(?:y|ies)|Centre|Center|Hospital|Academy|Times|Press|Journal|News|Correspondents?|Editors?|Reporters?|Writers?|Staff|Team|Group)\b)/u;
 
 /** Small words an affiliation uses in lower case ("University of Toronto"). Not counted either way. */
 const JOINING = new Set(["of", "and", "for", "the", "in", "at"]);
@@ -99,14 +105,17 @@ const collapse = (text: string): string => text.trim().replace(/\s+/g, " ");
  * lands).
  *
  * **Two to five words, and never a lone surname**: Long, Young, Field and Li
- * are words, and "Hasson, Uri" yields nothing. A byline that is not a list of
- * names ("Jane Roe Affiliation: …", stored on old arXiv imports) is one long
- * piece and yields nothing either.
+ * are words, and "Hasson, Uri" yields nothing. Comma-split organisation and
+ * job fragments are dropped too: treating "The New York Times" or "Senior
+ * Correspondent" as a person makes an ordinary title-cased deck evidence for
+ * hiding. A byline that is not a list of names ("Jane Roe Affiliation: …",
+ * stored on old arXiv imports) is one long piece and yields nothing either.
  */
 function authorNames(meta: FrontMatterArticle["meta"]): string[] {
   const fromByline = (meta.byline ?? "")
     .split(/[;,&]|\sand\s/)
-    .map((piece) => piece.replace(/^[^\p{L}]+|[^\p{L}.]+$/gu, ""));
+    .map((piece) => collapse(piece.replace(/^[^\p{L}]+|[^\p{L}.]+$/gu, "")))
+    .filter((piece) => !NON_PERSON_BYLINE.test(piece));
   const given = [...(meta.authors ?? []).map((a) => a.name), ...fromByline];
   return given.map(collapse).filter((name) => {
     const n = words(name).length;
@@ -118,17 +127,50 @@ function authorNames(meta: FrontMatterArticle["meta"]): string[] {
  * Where `name` is in `text` as a whole phrase with its capitals, or -1. A
  * footnote mark may be glued to either end: a digit or a symbol
  * ("Layfield1,2*"), or after the name one lower-case letter that is itself
- * followed by a mark ("Singha,1", a superscript `a`). Any other letter may not.
+ * followed by a real digit or footnote symbol ("Singha,1", a superscript
+ * `a`). A longer surname ending `a,` without that mark may not.
  */
 function findName(text: string, name: string): number {
   for (let at = text.indexOf(name); at >= 0; at = text.indexOf(name, at + 1)) {
     const before = text[at - 1] ?? " ";
     const end = at + name.length;
     const after = text[end] ?? " ";
-    const letterMark = /^\p{Ll}[^\p{L}\s]/u.test(text.slice(end, end + 2));
+    const letterMark = /^\p{Ll}(?:[,;]?)[\d*∗†‡§¶‖]/u.test(text.slice(end));
     if (!LETTER.test(before) && (!LETTER.test(after) || letterMark)) return at;
   }
   return -1;
+}
+
+/**
+ * Known names are evidence when removing all of them leaves only byline
+ * separators and marks. A real footnote mark on one known name is enough on
+ * its own, preserving partial metadata lists whose other authors are unknown.
+ * Unmatched words stay visible, including title-cased decks that name one or
+ * more of the authors.
+ */
+function hasNameEvidence(text: string, names: readonly string[]): boolean {
+  const matches = [...new Set(names)].flatMap((name) => {
+    const at = findName(text, name);
+    return at < 0 ? [] : [{ at, name }];
+  });
+  if (matches.length === 0) return false;
+  if (
+    matches.some(({ at, name }) => {
+      const after = text.slice(at + name.length);
+      return (
+        /^\p{Ll}(?:[,;]?)[\d*∗†‡§¶‖]/u.test(after) ||
+        /^(?:[,;]?\d|[*∗†‡§¶‖])/u.test(after)
+      );
+    })
+  ) {
+    return true;
+  }
+
+  let rest = text;
+  for (const { at, name } of matches.sort((a, b) => b.at - a.at)) {
+    rest = rest.slice(0, at) + rest.slice(at + name.length);
+  }
+  return !LETTER.test(rest.replace(/\band\b/giu, ""));
 }
 
 /** Test 1: something in the block says it is byline material. */
@@ -136,22 +178,48 @@ function hasEvidence(text: string, names: readonly string[]): boolean {
   return (
     EMAIL.test(text) ||
     INSTITUTION.test(text) ||
-    LEAD.test(text) ||
-    names.some((name) => findName(text, name) >= 0)
+    opensWithLead(text) ||
+    hasNameEvidence(text, names)
   );
 }
 
-/** Whether a lead phrase starts the block, give or take a mark and a word or two. */
+/** Whether a lead phrase starts the block, allowing only observed label prefixes. */
 function opensWithLead(text: string): boolean {
   const lead = LEAD.exec(text);
   if (lead === null) return false;
-  const before = words(text.slice(0, lead.index)).filter((w) => LETTER.test(w));
-  return before.length <= LEAD_OPENS_WITHIN;
+  const before = words(text.slice(0, lead.index))
+    .map(bare)
+    .filter((w) => LETTER.test(w))
+    .join(" ")
+    .toLowerCase();
+  if (before === "") return true;
+  if (
+    /^(?:for|address for)$/u.test(before) &&
+    /^(?:correspondence|corresponding authors?|e-?mail:)/i.test(lead[0])
+  ) {
+    return true;
+  }
+  return (
+    /^(?:(?:these|all|both|the) )?authors?$/u.test(before) &&
+    /^contributed equally$/i.test(lead[0])
+  );
+}
+
+/** A short lead line whose lowercase words are part of a known label, not enough to make it prose. */
+function leadExcusesLowercase(text: string): boolean {
+  if (!opensWithLead(text)) return false;
+  const lead = LEAD.exec(text);
+  if (lead === null) return false;
+  if (/equal contributions?|contributed equally/i.test(lead[0])) return true;
+  if (/^\s*:/u.test(text.slice(lead.index + lead[0].length))) return true;
+  if (EMAIL.test(text)) return true;
+  const label = text.replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "").trim();
+  return /^corresponding authors?$/i.test(label);
 }
 
 /**
- * Test 2: whether the block reads as a sentence. Two measures, and failing
- * either is enough.
+ * Test 2: whether the block reads as prose. Two measures, plus conservative
+ * guards for shapes those measures cannot recognise.
  *
  * - **Mostly lower case.** An affiliation is mostly capitalised and a sentence
  *   is not: this is what stops a standfirst such as "Researchers at Stanford
@@ -161,11 +229,19 @@ function opensWithLead(text: string): boolean {
  *   work" is all lower case.
  * - **Sentence words.** More than a couple of them and it is a sentence, even
  *   one written in capitals.
+ * - **The measures' blind spots stay visible.** A labelled acknowledgement,
+ *   keyword or funding statement is not author detail. A word in a script
+ *   without upper/lower case cannot count as evidence of an affiliation, and
+ *   a short institution-heavy line with a lowercase word and sentence-ending
+ *   punctuation is treated as prose. Known short contribution/contact labels
+ *   retain their narrow exception.
  */
 function readsAsProse(text: string): boolean {
+  if (CONTENT_LABEL.test(text)) return true;
   const all = words(text);
   let counted = 0;
   let lower = 0;
+  let uncased = 0;
   let sentence = 0;
   for (const word of all) {
     const w = bare(word);
@@ -174,10 +250,14 @@ function readsAsProse(text: string): boolean {
     const first = w[0];
     if (first === undefined || !LETTER.test(first) || JOINING.has(w.toLowerCase())) continue;
     counted++;
-    if (first === first.toLowerCase() && first !== first.toUpperCase()) lower++;
+    if (first === first.toLowerCase() && first === first.toUpperCase()) uncased++;
+    else if (first === first.toLowerCase()) lower++;
   }
   if (sentence > Math.max(MAX_SENTENCE_WORDS, MAX_SENTENCE_SHARE * all.length)) return true;
-  if (all.length < LEAD_EXCUSE_WORDS && opensWithLead(text)) return false;
+  if (uncased > 0) return true;
+  const leadException = all.length < LEAD_EXCUSE_WORDS && leadExcusesLowercase(text);
+  if (lower > 0 && /[.!?]["')\]]*$/u.test(text.trim()) && !leadException) return true;
+  if (leadException) return false;
   return counted > 0 && lower / counted > MAX_LOWER;
 }
 

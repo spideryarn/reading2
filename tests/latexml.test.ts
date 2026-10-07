@@ -515,7 +515,13 @@ describe("fix 5 — the byline is the paper's authors", () => {
       for (const href of ['href="https://github.com/someone/code"', 'href="https://orcid.org.example.test/0000-0003-1737-4407"', 'href="https://orcid.org/"']) {
         expect(names(latexml(linked.replace(orcid, href))), href).toBeNull();
       }
-      for (const inside of ["Daniel Probst, John Smith", "Daniel Probst and John Smith", 'Daniel Probst <span class="ltx_text">Code</span>']) {
+      for (const inside of [
+        "Profile",
+        "Daniel Probst John Smith",
+        "Daniel Probst, John Smith",
+        "Daniel Probst and John Smith",
+        'Daniel Probst <span class="ltx_text">Code</span>',
+      ]) {
         const html = linked.replace("Daniel Probst</a>", `${inside}</a>`);
         expect(html, inside).not.toBe(linked);
         expect(names(latexml(html)), inside).toBeNull();
@@ -528,6 +534,12 @@ describe("fix 5 — the byline is the paper's authors", () => {
         expect(linked, from).toContain(from);
         expect(names(latexml(linked.replace(from, to))), to).toBeNull();
       }
+    });
+    it("a comma is accepted only between two creators", () => {
+      const html = latexml(
+        '<div class="ltx_authors"><span class="ltx_creator ltx_role_author"><span class="ltx_personname">Jane Roe</span></span><span class="ltx_author_before">, </span></div>',
+      );
+      expect(names(html)).toBeNull();
     });
     it("institutions and icon links marked up as creators (2610.08781): nothing is read", () => {
       const fixture08781 = fx("authors-2610-08781");

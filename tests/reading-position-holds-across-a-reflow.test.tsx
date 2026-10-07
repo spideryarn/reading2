@@ -47,7 +47,13 @@ import {
   glideTarget,
   scrollToBlock,
 } from "../src/web/scroll.js";
-import { clearFoldArticle, isFolded, setFoldArticle, toggleFold } from "../src/web/fold.js";
+import {
+  clearFoldArticle,
+  isFolded,
+  setFoldArticle,
+  toggleFold,
+  toggleFrontMatter,
+} from "../src/web/fold.js";
 import { useReadingPosition } from "../src/web/reader/useReadingPosition.js";
 
 enableHistorySync();
@@ -550,5 +556,22 @@ describe("an article whose front matter is shut", () => {
     await settle();
     expect(isFolded(block(2))).toBe(false);
     expect(isFolded(block(0))).toBe(true); // the echo stays
+  });
+
+  it("rewrites a front-matter position when the reader shuts the run", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(2)}`);
+    render("portrait", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(false);
+
+    toggleFrontMatter();
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
+    expect(atNow()).toBe(block(4));
+
+    rowHeight = LANDSCAPE;
+    render("landscape", SPANNING);
+    await settle();
+    expect(isFolded(block(2))).toBe(true);
   });
 });

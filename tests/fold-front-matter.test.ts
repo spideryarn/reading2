@@ -292,10 +292,10 @@ describe("visibleFrom: where a block in the shut run lands", () => {
     expect(visibleFrom("spya-n")).toBe("spya-n");
   });
 
-  it("is the block itself when the run is the end of the article", () => {
+  it("has no visible destination when the run is the end of the article", () => {
     const short = blocks.slice(0, 4);
     setFoldArticle("slug", short, echo, front);
-    expect(visibleFrom("spya-n")).toBe("spya-n");
+    expect(visibleFrom("spya-n")).toBeNull();
   });
 });
 

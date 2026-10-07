@@ -165,6 +165,13 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          function throw the answer away. The rects are the expensive half of
          this measurement (performance.md). GPT Sol, 2026-08-30. */
       const jumpInFlight = glideTarget() !== null;
+      /* Closing the front matter can leave the address holding a finer block
+         inside it. Canonicalise that held value before asking whether the
+         measured section changed: `positionToWrite` deliberately returns
+         null while two ids are in the same section, but the hidden id must
+         still be replaced or the next restore would open the run again. */
+      const held =
+        synced.current === null ? null : (visibleFrom(synced.current) as BlockId | null);
       const next = positionToWrite({
         sections,
         rowOf,
@@ -176,7 +183,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
         line: stickyOffset() + 1,
         jumpInFlight,
         atTop: window.scrollY <= stickyOffset(),
-        held: synced.current,
+        held,
         anchored: (arrivalAnchor()?.id as BlockId | undefined) ?? null,
         /* A folded section start is never written: restoring it would unfold
            it (scroll.ts § `scrollToBlock`). fold.ts. `isFoldedAway`, not
@@ -188,7 +195,13 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
           return s !== undefined && isFoldedAway(s.blockId);
         },
       });
-      if (next === null) return;
+      if (next === null) {
+        if (held !== synced.current) {
+          synced.current = held;
+          void setAt(held);
+        }
+        return;
+      }
       /* **A section that starts in the shut front matter is written as its
          first visible block** (fold.ts § `visibleFrom`; Greg, spya-duh4w3).
          The restore effect and the re-anchor above both go through
@@ -196,7 +209,7 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
          reload, or a turned phone, would have opened it under a reader who was
          in the abstract. A finer block inside the section is a value this spy
          already leaves standing (position.ts § `positionToWrite`). */
-      const at = next.at === null ? null : (visibleFrom(next.at) as BlockId);
+      const at = next.at === null ? null : (visibleFrom(next.at) as BlockId | null);
       synced.current = at;
       void setAt(at);
     };

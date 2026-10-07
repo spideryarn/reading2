@@ -619,11 +619,16 @@ const TRAILING_MARKS = /[\s*∗†‡§¶‖]+$/u;
 /** What may stand between two creators, spaces collapsed and lower-cased. A closed list: each was seen on a page. */
 const BETWEEN_CREATORS: ReadonlySet<string> = new Set(["", "and", ","]);
 
+const AUTHOR_CREATOR = "span.ltx_creator.ltx_role_author";
+
 /** What a creator may hold beside its one personname: the notes block, and the footnote `\thanks` makes. */
 const BESIDE_THE_NAME = "span.ltx_author_notes, span.ltx_note.ltx_role_thanks";
 
 /** One person's ORCID record, and nothing else at that address. */
 const ORCID_RECORD = /^https?:\/\/orcid\.org\/\d{4}-\d{4}-\d{4}-\d{3}[\dX]\/?$/u;
+
+/** Labels an ORCID link can display instead of the person's name. */
+const ORCID_LINK_LABEL = /\b(?:orcid|profile|record)\b/iu;
 
 /**
  * **The names in a LaTeXML title block, in the page's order — or `null`.**
@@ -648,9 +653,11 @@ const ORCID_RECORD = /^https?:\/\/orcid\.org\/\d{4}-\d{4}-\d{4}-\d{3}[\dX]\/?$/u
  *
  * **Names only**, and a name is the personname's own text: an ORCID link, a
  * superscript and a footnote are left out. One link is read into: a name that
- * is itself the text of a link to that person's ORCID record, the logo beside
- * it left out. Any other link in a personname refuses, which is what keeps a
- * "Code" or "Dataset" link marked up as a creator from being read as a person.
+ * is itself the two-word text of a link to that person's ORCID record, the
+ * logo beside it left out. This is the exact observed widening: a one-word
+ * control label and four whitespace-joined name words both refuse. Any other
+ * link in a personname refuses, which is what keeps a "Code" or "Dataset"
+ * link marked up as a creator from being read as a person.
  *
  * The footnote beside the personname hides nobody. A creator still holds
  * exactly one personname and no words of its own, so a second name after the
@@ -670,13 +677,21 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
   const block = blocks[0];
   if (blocks.length !== 1 || block === undefined || !noOwnText(block)) return null;
   const names: string[] = [];
-  for (const child of Array.from(block.children)) {
+  const children = Array.from(block.children);
+  for (const [i, child] of children.entries()) {
     if (child.matches("span.ltx_author_before")) {
       const between = (child.textContent ?? "").replace(/\s+/gu, " ").trim().toLowerCase();
-      if (child.children.length !== 0 || !BETWEEN_CREATORS.has(between)) return null;
+      if (
+        child.children.length !== 0 ||
+        !BETWEEN_CREATORS.has(between) ||
+        !children[i - 1]?.matches(AUTHOR_CREATOR) ||
+        !children[i + 1]?.matches(AUTHOR_CREATOR)
+      ) {
+        return null;
+      }
       continue;
     }
-    if (!child.matches("span.ltx_creator.ltx_role_author") || !noOwnText(child)) return null;
+    if (!child.matches(AUTHOR_CREATOR) || !noOwnText(child)) return null;
     const parts = Array.from(child.children);
     const person = parts.filter((p) => p.matches("span.ltx_personname"));
     if (person.length !== 1 || parts.some((p) => p !== person[0] && !p.matches(BESIDE_THE_NAME))) return null;
@@ -687,10 +702,15 @@ export function latexmlAuthorNames(doc: Document): string[] | null {
   return names.length > 0 ? names : null;
 }
 
-/** A link to one person's ORCID record that holds words and, at most, the logo: no element with text of its own. */
+/** The observed two-word ORCID-linked name, with at most a wordless logo beside its text. */
 function isOrcidLinkedName(el: Element): boolean {
   if (!el.matches("a.ltx_ref.ltx_href") || !ORCID_RECORD.test(el.getAttribute("href") ?? "")) return false;
-  return Array.from(el.children).every((part) => part.matches(".ltx_graphics") && (part.textContent ?? "").trim() === "");
+  if (!Array.from(el.children).every((part) => part.matches(".ltx_graphics") && (part.textContent ?? "").trim() === "")) return false;
+  const linked = (el.textContent ?? "").trim().replace(/\s+/gu, " ");
+  /* The one measured widening is a two-word name. Stay closed: a one-word
+     control label and four whitespace-joined name words are both plausible
+     text inside the same link and neither is plainly one person. */
+  return linked.split(" ").length === 2 && !ORCID_LINK_LABEL.test(linked);
 }
 
 /** The one name a `personname` holds, or `null` if it holds anything that is not plainly one. */

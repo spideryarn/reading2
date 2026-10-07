@@ -223,6 +223,7 @@ function steppableStarts(all: readonly number[], blocks: readonly Block[]): numb
     if (id !== undefined) {
       if (isFoldedAway(id)) continue;
       const lands = visibleFrom(id);
+      if (lands === null) continue;
       while (blocks[row] !== undefined && blocks[row]?.id !== lands) row++;
     }
     if (starts[starts.length - 1] !== row) starts.push(row);

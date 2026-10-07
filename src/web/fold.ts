@@ -53,8 +53,8 @@
  *
  * ## What it is not
  *
- * Not persisted and not in the URL: reload and everything is open again (plan
- * § Deferred). One article at a time, because there is one prose table.
+ * Not persisted and not in the URL: reload opens every real fold and shuts the
+ * front matter again. One article at a time, because there is one prose table.
  */
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import type { Block, BlockId } from "../types.js";
@@ -391,11 +391,12 @@ export function toggleFrontMatter(): void {
  *   a turned phone would restore it through `scrollToBlock` and open the front
  *   matter under a reader who was in the abstract.
  *
- * A run that ends the article has nothing after it, and `id` comes back.
+ * A run that ends the article has nothing visible to land on, and answers
+ * `null`: a wholly hidden section is not a navigation stop.
  */
-export function visibleFrom(id: string): string {
+export function visibleFrom(id: string): string | null {
   if (!article || frontWanted || !article.inFront.has(id as BlockId)) return id;
-  return article.afterFront ?? id;
+  return article.afterFront;
 }
 
 /**

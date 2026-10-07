@@ -112,6 +112,7 @@ describe("frontMatter: what counts as evidence", () => {
     const meta = { authors: [author("Dhairyya Singh"), author("Anna C. Schapiro")] };
     expect(run([title, para("a", "Dhairyya Singha,1 , and Anna C. Schapiroa,1"), abstract], meta)).toEqual(["a"]);
     expect(run([title, para("a", "Dhairyya Singhal and Anna C. Schapiros"), abstract], meta)).toEqual([]);
+    expect(run([title, para("a", "Dhairyya Singha, Nobel Laureate"), abstract], meta)).toEqual([]);
     expect(run([title, para("a", "McDhairyya Singh"), abstract], meta)).toEqual([]);
   });
 
@@ -210,6 +211,58 @@ describe("frontMatter: what must not fold", () => {
   it("leaves a short line of prose that only mentions a lead phrase further in", () => {
     const line = para("a", "A long and bitter correspondence followed the paper");
     expect(run([title, line, abstract])).toEqual([]);
+  });
+
+  it("leaves a short sentence that starts with a lead word", () => {
+    expect(run([title, para("a", "Correspondence followed for years."), abstract])).toEqual([]);
+  });
+
+  it("leaves a short institution-dominated sentence", () => {
+    expect(run([title, para("a", "Harvard University Press declined."), abstract])).toEqual([]);
+  });
+
+  it("leaves labelled content that is not author detail", () => {
+    expect(
+      run([title, para("a", "Acknowledgements: We thank Harvard University."), abstract]),
+    ).toEqual([]);
+    expect(
+      run([title, para("a", "Keywords: Correspondence, University, ORCID"), abstract]),
+    ).toEqual([]);
+    expect(run([title, para("a", "Funding: Stanford University."), abstract])).toEqual([]);
+  });
+
+  it("leaves prose in a script without upper and lower case", () => {
+    const sentence = para("a", "清华 University 的研究人员发现了一种新的治疗方法。");
+    expect(run([title, sentence, abstract])).toEqual([]);
+  });
+
+  it("leaves a title-cased subtitle that mentions correspondence mid-line", () => {
+    const subtitle = para(
+      "a",
+      "Letters Reveal How Private Correspondence Changed Modern Literature",
+    );
+    expect(run([title, subtitle, abstract])).toEqual([]);
+  });
+
+  it("leaves a title-cased subtitle with a lead phrase near its start", () => {
+    const subtitle = para("a", "How Correspondence Changed Modern Literature");
+    expect(run([title, subtitle, abstract])).toEqual([]);
+  });
+
+  it("does not turn an outlet fragment in a comma-separated byline into a name", () => {
+    const deck = para("a", "The New York Times Reports From Kyiv");
+    expect(run([title, deck, abstract], { byline: "Jane Doe, The New York Times" })).toEqual([]);
+  });
+
+  it("leaves a title-cased subtitle that mentions one of the authors", () => {
+    const deck = para("a", "Jane Doe On Why Memory Matters");
+    expect(run([title, deck, abstract], { authors: [author("Jane Doe")] })).toEqual([]);
+  });
+
+  it("leaves a title-cased subtitle that mentions two of the authors", () => {
+    const deck = para("a", "Jane Doe And John Roe Discuss Memory");
+    const meta = { authors: [author("Jane Doe"), author("John Roe")] };
+    expect(run([title, deck, abstract], meta)).toEqual([]);
   });
 
   it("folds nothing when block 0 is not an h1", () => {
