@@ -169,8 +169,18 @@ Each put in, the named suites run, and taken out (`grep MUTATION` empty afterwar
 
 ## Gates
 
-See the report in the hand-off; the numbers are recorded there once the final merge of `dev` has
-been run.
+After merging `origin/dev` (2026-10-07):
+
+- `npm run typecheck`: 4 projects, all 3374 source files covered, no errors.
+- `tests/jobs-walk.test.ts` 42 passed (Postgres lane); `tests/jobs-tier0-offline.test.ts` passed;
+  with `store-migration-registry`, `doc-links`, the new assets test, the illustrated step test and
+  three neighbours: 9 files, 166 tests, 166 passed.
+- The job, queue, claim, session, retry, billing, pipeline-step and job-card suites by file, in
+  three more runs: 18 files / 198 tests, 18 / 278, 18 / 443; all passed.
+- Biome on the ten touched source and test files: one error, one warning and seven complexity
+  notices, all present at `HEAD` before the change (checked for `src/pipeline.ts` by linting the
+  pre-change file).
+- Not run: the full `npm test`.
 
 ## Left
 
