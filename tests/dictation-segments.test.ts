@@ -24,7 +24,7 @@ import { act, createElement, type ReactNode, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetMicrophoneLock } from "../src/web/mic-lock.js";
-import { PART_MS } from "../src/web/mic-recording.js";
+import { MAX_MS, PART_MS } from "../src/web/mic-recording.js";
 import type { TranscriptionResult } from "../src/web/transcriber.js";
 import { joinTranscripts, useDictation } from "../src/web/useDictation.js";
 import { useDictationField } from "../src/web/useDictationField.js";
@@ -141,7 +141,7 @@ const failed = (retryable: boolean): TranscriptionResult => ({
 });
 
 let clock = 0;
-/** The ceiling's callback, caught so a test can reach five minutes without waiting them. */
+/** The ceiling's callback, caught so a test can reach the cap without waiting for it. */
 let ceilings: Array<() => void> = [];
 
 type Path = "recogniser" | "no recogniser";
@@ -206,7 +206,7 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockImplementation(() => base + clock);
   const realSetTimeout = window.setTimeout.bind(window);
   vi.spyOn(window, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
-    if (ms === 5 * 60_000) {
+    if (ms === MAX_MS) {
       ceilings.push(fn);
       return 0;
     }
@@ -537,6 +537,31 @@ describe.each<Path>(["recogniser", "no recogniser"])("a long dictation, %s", (pa
     expect(calls.map((c) => c.signal?.aborted)).toEqual([false, false, false]);
     for (const [i, w] of ["a", "b", "c"].entries()) await answer(i, ok(w));
     expect(h.transcripts).toEqual(["a b c"]);
+    /* The words arriving must not take the reason with them: it is the only
+       thing on screen saying why the microphone went off (spya-n8cuqq). */
+    expect(h.get().error).toContain("[mic-full]");
+    expect(h.get().error).toContain("15 minutes");
+    h.unmount();
+  });
+
+  /* The countdown invites a press on Stop as it reaches zero. Landing just
+     after the cap, that press used to find a session already stopping, start a
+     new dictation, and abort the uploads of the one just recorded. GPT Sol's
+     plan review of 261007b, P7. */
+  it("a press on Stop just after the cap changes nothing", async () => {
+    const h = drive();
+    await longDictation(h, path);
+    act(() => ceilings[0]?.());
+    act(() => h.get().toggle());
+    if (path === "recogniser") act(() => recognition().onend?.());
+    await settle();
+    act(() => h.get().toggle());
+    await settle();
+    expect(calls, "the press started a new dictation").toHaveLength(3);
+    expect(calls.map((c) => c.signal?.aborted)).toEqual([false, false, false]);
+    for (const [i, w] of ["a", "b", "c"].entries()) await answer(i, ok(w));
+    expect(h.transcripts).toEqual(["a b c"]);
+    expect(h.get().error).toContain("[mic-full]");
     h.unmount();
   });
 

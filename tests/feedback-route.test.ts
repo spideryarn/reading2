@@ -44,6 +44,8 @@ import { currentOwnerId } from "../src/owner.js";
 import {
   EARLIER_FEEDBACK_LIMIT,
   MAX_FEEDBACK_ANSWER_CHARS,
+  MAX_FEEDBACK_BODY_CHARS,
+  MAX_LEGACY_FEEDBACK_ANSWER_CHARS,
   MAX_FEEDBACK_SCREENSHOT_BYTES,
   MAX_FEEDBACK_URL_CHARS,
 } from "../src/types.js";
@@ -650,9 +652,9 @@ describe("POST /api/feedback", () => {
       /* Six bytes per unit once escaped, at the cap, three times over — the
          *legacy* shape, because that is the largest body this route still takes
          and therefore the one the outer limit has to clear. */
-      steps: "\u0001".repeat(MAX_FEEDBACK_ANSWER_CHARS),
-      expected: "\u0002".repeat(MAX_FEEDBACK_ANSWER_CHARS),
-      actual: "\u0003".repeat(MAX_FEEDBACK_ANSWER_CHARS),
+      steps: "\u0001".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+      expected: "\u0002".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
+      actual: "\u0003".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS),
       body: undefined,
       /* `isSlug` caps a slug at 60 characters — src/ingest.ts. */
       slug: `a${"b".repeat(59)}`,
@@ -809,8 +811,38 @@ describe("POST /api/feedback", () => {
     expect(submitted).toHaveLength(0);
   });
 
+  /* Fifteen minutes of dictation is about 13,000 characters at an even pace,
+     and the box used to stop taking them at 4,000 — Greg, spya-n8cuqq, was cut
+     off in this box. Plan 261007b. The database's CHECK already admits 12,072. */
+  it("takes a report as long as a fifteen-minute dictation", async () => {
+    expect(MAX_FEEDBACK_ANSWER_CHARS).toBe(12_000);
+    expect(MAX_FEEDBACK_ANSWER_CHARS).toBeLessThanOrEqual(MAX_FEEDBACK_BODY_CHARS);
+    const reply = await call(minimal({ body: "x".repeat(MAX_FEEDBACK_ANSWER_CHARS) }));
+    expect(reply.status).toBe(201);
+    expect(submitted).toHaveLength(1);
+  });
+
+  /* A stale client's three answers are glued into one `body`. Each kept its old
+     4,000 cap when the single box's went up, because three at the new one would
+     pass this route, fail the column's CHECK, and reach the reader as a database
+     error with no sentence. */
+  it("holds an old client's three answers to the cap they were written under", async () => {
+    const over = await call(
+      minimal({ body: undefined, steps: "x".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS + 1) }),
+    );
+    expect(over.status).toBe(400);
+    expect(String(over.body.error)).toMatch(/\[fb-long\]/);
+    expect(submitted).toHaveLength(0);
+
+    const full = "x".repeat(MAX_LEGACY_FEEDBACK_ANSWER_CHARS);
+    const reply = await call(minimal({ body: undefined, steps: full, expected: full, actual: full }));
+    expect(reply.status).toBe(201);
+    expect(submitted).toHaveLength(1);
+    expect(submitted[0]?.body.length).toBe(MAX_FEEDBACK_BODY_CHARS);
+  });
+
   it("refuses an answer past the cap, and never quotes it back", async () => {
-    const prose = "The unbearable lightness of a very long paragraph. ".repeat(200);
+    const prose = "The unbearable lightness of a very long paragraph. ".repeat(300);
     const reply = await call(minimal({ body: prose }));
     expect(reply.status).toBe(400);
     expect(String(reply.body.error)).toMatch(/\[fb-long\]/);

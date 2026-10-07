@@ -20,6 +20,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MAX_BYTES,
+  MAX_MS,
   PART_BYTES,
   PART_MS,
   chunkVerdict,
@@ -496,7 +497,12 @@ describe("recording a track", () => {
     const tape = recordTrack(track);
     latest().emit(4096);
     vi.setSystemTime(new Date("2026-08-27T14:37:20"));
+    /* Five minutes is where it used to stop, with no warning — Greg, spya-n8cuqq,
+       2026-10-06: *"if there is going to be a cap, let's make it at least 15
+       minutes."* Plan 261007b. */
     await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(latest().state, "it still stops at five minutes").toBe("recording");
+    await vi.advanceTimersByTimeAsync(MAX_MS - 5 * 60_000);
     expect(latest().state).toBe("inactive");
     const out = await tape?.stop();
     expect(out?.parts[0]?.capped).toBe(true);
@@ -689,9 +695,31 @@ describe("recording in parts", () => {
     talk(PART_MS, 5000);
     talk(59_000, 5000);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(capped, "the ceiling is still five minutes").toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(MAX_MS - 5 * 60_000);
     expect(capped).toHaveLength(1);
     const out = await tape?.stop();
     expect(out?.parts.map((p) => p.capped)).toEqual([false, false, true]);
+  });
+
+  /* The ceiling is a timer, and a timer in a throttled tab or on a laptop that
+     slept fires late. The strip's countdown reads the wall clock, so without
+     this it sits at 0:00 over a microphone that is still on. Same rule as
+     rotation: decided when the recorder hands over a chunk. GPT Sol's plan
+     review of 261007b, P5. */
+  it("caps on the first chunk past the deadline when the timer is late, and only once", async () => {
+    const capped: number[] = [];
+    const tape = recordTrack(track, { onCapped: () => capped.push(1) });
+    expect(tape?.endsAt).toBe(Date.now() + MAX_MS);
+    talk(PART_MS, 5000);
+    expect(capped).toHaveLength(0);
+    /* The clock passes the deadline with no timer having run. */
+    talk(MAX_MS, 5000);
+    expect(capped).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(MAX_MS);
+    expect(capped, "the late timer capped it a second time").toHaveLength(1);
+    const out = await tape?.stop();
+    expect(out?.parts.at(-1)?.capped).toBe(true);
   });
 
   it("sends nothing onward after a cancel", async () => {

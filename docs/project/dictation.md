@@ -571,11 +571,28 @@ The rules that make it safe, each a decision in
   exists from the press, and the superseding abort runs on every browser, not only where there is a
   recogniser.
 
-**The ceiling on a whole dictation stays at five minutes** (`MAX_MS`), and hitting it ends the
-dictation and transcribes what was said, under `[mic-full]` with a sentence that is now true. Not
-higher, although parts would allow it: five minutes of speech is about what the largest box —
-Feedback's 4,000 characters — holds, and the other boxes take 600 to 4,000. A ceiling sized from
-each box's own limit is the later refinement.
+**The ceiling on a whole dictation is fifteen minutes** (`MAX_MS`), and hitting it ends the
+dictation and transcribes what was said, under `[mic-full]`. It was five until 2026-10-07, sized to
+what Feedback's box then held, and Greg met it there in the middle of a long thought
+(`spya-n8cuqq`):
+
+> if you're ever going to cut me off like that, you should give me some kind of feedback of some
+> kind. But more importantly, let's make sure if there is going to be a cap, let's make it at least
+> 15 minutes.
+
+**So it cannot arrive unnoticed.** There had been a sentence, in small type, shown once the
+microphone was already off, and somebody thinking aloud is not looking at the box. Now, in the last
+minute (`CAP_WARNING_MS`), the strip takes its warning look and counts down, *"Dictation stops in
+0:45"*; a rising two-note chime plays when that minute starts and a falling three-note one at the
+cap ([`quiet-chime.ts`](../../src/web/quiet-chime.ts)), each once; and the `[mic-full]` sentence
+stays after the words arrive. The hook hands the strip `endsAt`, set when the tape's ceiling timer
+is armed, so the countdown and the timer share a zero. A screen reader is told once, not each
+second. The fleet dashboard gets the cap and the chimes with the hook, and its own strip counts down
+too. Feedback's limit went from 4,000 to 12,000 characters the same day, so the box holds what the
+cap lets in ([feedback.md](feedback.md)). The other boxes keep their own limits: a long dictation
+into a small one overflows it, as it did before. A cap is still there because a microphone left on
+by mistake records, uploads and is billed for as long as it runs.
+[261007b](../plans/261007b-dictation-says-when-it-is-about-to-stop-and-runs-fifteen-minutes.md).
 
 **What is not verified.** A spike on the box (plan § The spike) rotated five parts in Chrome 152
 and Chromium 151: every part decoded on its own, and a seam loses **up to ~70 ms** — the old
@@ -741,7 +758,7 @@ a recorder that hit its cap. They live beside the code that raises them.
 | | |
 |---|---|
 | `[mic-blocked]` `[mic-no-service]` `[mic-no-connection]` `[mic-none]` `[mic-language]` `[mic-stopped]` | the browser's recogniser, in [`dictation-errors.ts`](../../src/web/dictation-errors.ts) — and **the reader rarely sees any of them now**, because a recogniser that dies while the tape is running is a decoration failing, not a dictation failing |
-| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the five-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
+| `[mic-unplugged]` `[mic-no-start]` `[mic-full]` `[mic-broken]` `[mic-empty]` `[mic-silent]` `[mic-unexpected]` | the capture and the ending, in [`useDictation.ts`](../../src/web/useDictation.ts) — `[mic-full]` is the fifteen-minute ceiling and `[mic-broken]` a part that lost audio; [§ The sizes](#the-sizes-and-the-wall-behind-them) |
 | `[mic-no-tape]` | no recording was made at all, so there was no authoritative pass |
 | `[mic-recovered]` `[mic-cut-off]` | a recording an earlier page left behind, offered back — whole, or cut off mid-sentence; [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) |
 | `[mic-format]` `[mic-too-long]` `[mic-slow]` `[mic-offline]` | the upload, in [`dictation-upload.ts`](../../src/web/dictation-upload.ts) |

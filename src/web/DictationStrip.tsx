@@ -47,7 +47,7 @@ import { Download, Loader2, Mic, RotateCcw, Square, TriangleAlert, X } from "luc
 import { useEffect, useState } from "react";
 import { MicLevel } from "./MicLevel.js";
 import { type MicDevice, listInputs } from "./mic-devices.js";
-import { type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
+import { CAP_WARNING_MS, type MicRecording, formatDuration, recordingFilename } from "./mic-recording.js";
 import type { DictationRecording, UseDictation } from "./useDictation.js";
 import { useNow } from "./useNow.js";
 import { useOnline } from "./useOnline.js";
@@ -84,11 +84,16 @@ const DONE_WORDS: Record<DoneAction, { again: string; button: string; strip: str
  * What the strip says, in one place — because it is also what the live region
  * says, and the two must not be allowed to drift apart.
  */
-function dictationWords(d: UseDictation, sendingAfter: boolean, done: DoneAction): string {
+function dictationWords(d: UseDictation, sendingAfter: boolean, done: DoneAction, ending: boolean): string {
   if (d.transcribing) {
     return sendingAfter ? DONE_WORDS[done].strip : "Turning that into text…";
   }
   if (d.phase === "opening") return "Opening the microphone…";
+  /* **Before `quiet`**: being stopped in a minute is the more urgent of the
+     two, and it is true whether or not the microphone hears anything. The
+     seconds are not in this sentence because the live region says it — the
+     countdown is drawn beside it, where a screen reader is not read each tick. */
+  if (ending) return "Dictation stops in less than a minute";
   if (d.quiet) {
     /* **Not a diagnosis.** `quiet` means nothing crossed −55 dBFS for ten
        seconds, which a thinking reader in a quiet room produces too — so the
@@ -320,7 +325,13 @@ export function DictationStrip({
   const [picking, setPicking] = useState(false);
   const [devices, setDevices] = useState<MicDevice[]>([]);
   const busy = dictation.armed || dictation.transcribing;
-  const words = dictationWords(dictation, sendingAfter, done);
+  /* **The last minute before the cap** (`MAX_MS`, plan 261007b). The clock only
+     runs while there is a cap to run towards. Rounded up, so the countdown
+     never reads 0:00 while the microphone is still on. */
+  const now = useNow(dictation.endsAt === null ? null : 1000);
+  const left = dictation.armed && dictation.endsAt !== null ? dictation.endsAt - now : null;
+  const ending = left !== null && left <= CAP_WARNING_MS;
+  const words = dictationWords(dictation, sendingAfter, done, ending);
 
   /* The device list is fetched when the picker is opened rather than kept in
      sync all the time: `enumerateDevices` returns **blank labels until
@@ -358,17 +369,19 @@ export function DictationStrip({
            stay an observation rather than a diagnosis — `audio-level.ts` says
            why — and the warm colour is `.prof-mic-warn`'s: a fact worth
            knowing, not a failure. Greg, SPIDERYARN-READING2-7Z; plan 261001k. */
-        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}`}>
+        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}${ending ? " ending" : ""}`}>
           {dictation.armed && (
             <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
           )}
-          {dictation.quiet && (
+          {(dictation.quiet || ending) && (
             <TriangleAlert size={13} className="prof-quiet-icon" aria-hidden="true" />
           )}
           {dictation.transcribing && <Loader2 size={13} className="spin" aria-hidden="true" />}
           {/* The live region above is already saying this. */}
           <span className="prof-listening-what" aria-hidden="true">
-            {words}
+            {ending && left !== null
+              ? `Dictation stops in ${formatDuration(Math.ceil(Math.max(0, left) / 1000) * 1000)}`
+              : words}
           </span>
           {dictation.armed && dictation.startedAt !== null && (
             <Elapsed since={dictation.startedAt} />

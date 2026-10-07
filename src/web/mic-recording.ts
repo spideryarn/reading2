@@ -54,7 +54,7 @@
  * ## What it costs
  *
  * ~5.6 KB/s at 32 kbps (measured: 7 chunks, 13,971 bytes in 2.5s). Both a
- * five-minute cap and a byte cap, because `audioBitsPerSecond` is a hint an
+ * time cap and a byte cap, because `audioBitsPerSecond` is a hint an
  * encoder may exceed and a bound derived from it is arithmetic rather than a
  * guarantee (GPT Sol, item 10). It lives in memory as `Blob` chunks and in
  * **no other place** — never uploaded, never written to disk by us, dropped the
@@ -133,6 +133,12 @@ export interface TapeEvents {
 /** A recording in progress. Exactly one of `stop` / `cancel` is called, once. */
 export interface MicTape {
   /**
+   * `Date.now()` at which this tape will cap itself ({@link MAX_MS}). The
+   * countdown is drawn from this number and the cap is decided against it, so
+   * the two cannot disagree.
+   */
+  endsAt: number;
+  /**
    * Stop, and hand back every part once the recorders have finished with them.
    * Null when there is nothing worth offering.
    *
@@ -172,8 +178,8 @@ export interface Attempt {
  * rather than a preference.
  *
  * Speech does not need 32 kbps of AAC; the caps bound the size either way, and
- * AAC's own default measured ~14 KB/s, which fits five minutes inside
- * {@link MAX_BYTES} with room to spare.
+ * AAC's own default measured ~14 KB/s, which fits a two-minute part
+ * ({@link PART_MS}) inside {@link MAX_BYTES} with room to spare.
  *
  * Bare `audio/mp4` is absent for a different reason — see the header. It is not
  * an oversight and putting it back breaks the feature silently.
@@ -231,13 +237,23 @@ const TIMESLICE_MS = 1000;
  * transcribed the first few minutes and replaced the whole of what was said
  * with them. GPT Sol's plan review, item 2.
  *
- * **Five minutes, and not higher, although segments would allow it** (plan
- * 260929f, R7). Five minutes of speech is about what the largest box, Feedback's
- * 4,000 characters, holds; twenty would be ~18,000 characters into boxes that
- * take 600 to 4,000. What segments removed is the byte cutoff that used to end a
- * Chrome dictation at two and a half minutes, well before this.
+ * **Fifteen minutes since 2026-10-07; it was five** (plan 261007b). Five was
+ * sized to the largest box, Feedback's 4,000 characters, and Greg met it in
+ * that box in the middle of a long thought (spya-n8cuqq): *"if there is going
+ * to be a cap, let's make it at least 15 minutes."* Parts mean no request grows
+ * with this number. What it still bounds is a microphone left on by mistake,
+ * which records, uploads and is billed for as long as it runs.
+ *
+ * Exported because the cap's own sentence and the strip's countdown both state
+ * it, and a second copy of the number is how they come to disagree.
  */
-const MAX_MS = 5 * 60_000;
+export const MAX_MS = 15 * 60_000;
+/**
+ * **How long before {@link MAX_MS} the reader is warned**: the strip counts
+ * down and a chime plays. The old cap said nothing until the microphone was
+ * already off, in a line nobody talking was looking at.
+ */
+export const CAP_WARNING_MS = 60_000;
 /**
  * **The tape rotates to a new part at two minutes or 80% of {@link MAX_BYTES},
  * whichever comes first** — see {@link chunkVerdict}.
@@ -485,6 +501,25 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
     }
   };
 
+  /**
+   * **The one deadline**, read by the timer below, by every arriving chunk and
+   * by the strip's countdown ({@link MicTape.endsAt}).
+   *
+   * A timer alone is not a deadline: in a throttled tab, or on a laptop that
+   * slept, it fires late, and a countdown reading the wall clock would then sit
+   * at 0:00 over a microphone that is still on. So `cap` is also called from
+   * `onData`, like the rotation, and does nothing the second time. GPT Sol's
+   * plan review of 261007b, P5.
+   */
+  const endsAt = Date.now() + MAX_MS;
+  const cap = () => {
+    if (capped || stopping || cancelled) return;
+    capped = true;
+    window.clearTimeout(ceiling);
+    for (const q of parts) halt(q);
+    events.onCapped?.();
+  };
+
   const mimeOf = (p: Part) => p.rec.mimeType || attempts[at]?.type || "audio/webm";
 
   const fileOf = (p: Part): MicRecording => {
@@ -555,6 +590,9 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
     events.onChunk?.(index < 0 ? parts.length : index, data, mimeOf(p));
     /* Only the part being recorded rotates. A part already closing is handing
        over its terminal chunk, which is its own and moves nothing. */
+    /* The deadline, asked of the clock each time a chunk arrives as well as by
+       the timer — see `cap`. Before the rotation, which a capped tape skips. */
+    if (Date.now() >= endsAt) cap();
     if (verdict === "rotate" && p === current && p.state === "recording" && !stopping && !capped) {
       rotate(p);
     }
@@ -680,11 +718,7 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
   }
   if (parts.length === 0) return null;
 
-  ceiling = window.setTimeout(() => {
-    capped = true;
-    for (const q of parts) halt(q);
-    events.onCapped?.();
-  }, MAX_MS);
+  ceiling = window.setTimeout(cap, MAX_MS);
 
   const stopAll = () => {
     window.clearTimeout(ceiling);
@@ -718,6 +752,7 @@ export function recordTrack(track: MediaStreamTrack, events: TapeEvents = {}): M
   };
 
   return {
+    endsAt,
     async stop() {
       stopping = true;
       stopAll();
