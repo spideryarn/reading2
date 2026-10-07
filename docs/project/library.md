@@ -592,7 +592,7 @@ deferred: [261003d](../plans/261003d-your-own-tags-on-articles-on-the-shelf-and-
   case would need a vocabulary table to stay one spelling per reader when two first adds race; the
   topic pills are lowercase anyway. The spelling rule (trimmed, inner whitespace collapsed, NFC, 1–40
   characters, no comma, no control character) is [`src/tags.ts`](../../src/tags.ts) § `normaliseTag`,
-  and the same rule is a CHECK on `article_tags.tag`.
+  and the CHECK on `article_tags.tag` holds the spelling rules with a much higher length ceiling.
 - **One table, `article_tags`**, keyed `(article_id, tag)`, cascading with the article, no
   `owner_id` — ownership comes through the article, as for every table under `articles`. Reader
   state, so on `articles` and not on a revision, for § Shelf state's reason.

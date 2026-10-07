@@ -7193,9 +7193,10 @@ export type DebateFound = DebateResponse;
  * Greg's call, and docs/project/privacy.md says so to the reader in as many
  * words, which is the part that makes it a choice rather than a leak.
  *
- * 2048 is the practical ceiling every browser and proxy agrees on. It is a
- * `CHECK` in src/db/schema.ts as well, because a cap the server forgets is not
- * a cap.
+ * 2048 is the practical ceiling every browser and proxy agrees on. The route
+ * is what holds it; `feedback_url_shape` in src/db/schema.ts is a ceiling far
+ * above it that only catches a runaway (docs/project/sql.md § "Except a size
+ * limit"), so this can move without a migration.
  */
 export const MAX_FEEDBACK_URL_CHARS = 2048;
 
@@ -7435,10 +7436,12 @@ export const EARLIER_FEEDBACK_LIMIT = 50;
  * Past it the failure is a sentence asking the reader to trim, with every word
  * still in the box.
  *
- * **Equal to `MAX_FEEDBACK_BODY_CHARS` below, on purpose**: what the reader may
- * send is what the database will keep. Still a cap, and the cap still matters:
- * it is what stops a pasted article becoming an attachment on its way to
- * Sentry. 20,000 characters is a short article, and that is the trade Greg took.
+ * **Equal to `MAX_FEEDBACK_BODY_CHARS` below, on purpose.** Still a cap, and
+ * the cap still matters: the dialog and the route holding it are what stop a
+ * pasted article becoming an attachment on its way to Sentry. 20,000 characters
+ * is a short article, and that is the trade Greg took. The database's CHECK is
+ * a ceiling far above it that only catches a runaway (docs/project/sql.md §
+ * "Except a size limit"), so this number moves without a migration.
  */
 export const MAX_FEEDBACK_ANSWER_CHARS = 20_000;
 
@@ -7447,36 +7450,41 @@ export const MAX_FEEDBACK_ANSWER_CHARS = 20_000;
  * shape before 2026-09-02, still folded into one `body` by src/routes.ts §
  * `feedbackBody`. It was `MAX_FEEDBACK_ANSWER_CHARS` until that one went up;
  * these stay at the 4,000 they were written under: three of them under their
- * headings come to 12,072, inside the column's CHECK.
+ * headings come to 12,072, inside `MAX_FEEDBACK_BODY_CHARS`.
  */
 export const MAX_LEGACY_FEEDBACK_ANSWER_CHARS = 4_000;
 
 /**
- * The longest a `feedback.body` may be **in the database** — the number written
- * into `feedback_body_shape` (src/db/schema.ts), which tests/feedback-store.test.ts
- * holds to this one by writing exactly it and one character more.
+ * The longest a `feedback.body` the route will file — the reader's one box,
+ * or a stale client's three answers folded into one.
+ *
+ * Until plan 261007o this was also the number written into
+ * `feedback_body_shape` (src/db/schema.ts). That CHECK is now a ceiling of a
+ * million characters that only catches a runaway (docs/project/sql.md §
+ * "Except a size limit"), so the route is the guard and this moves without a
+ * migration.
  *
  * It was 12,072 until 2026-10-07, which is three old answers: reports filed
  * before 2026-09-02 are three answers, each capped at
  * `MAX_LEGACY_FEEDBACK_ANSWER_CHARS`, glued under the headings src/feedback.ts
  * used to write, and the migration that wrote them into `body` needed a CHECK
- * that admitted three full ones rather than one that cut them. **Whatever this
- * becomes, it may not go below 12,072**, or a row that was legal when it was
- * filed becomes illegal.
+ * that admitted three full ones rather than one that cut them. The database's
+ * ceiling must still admit those existing rows; this constant limits new reports.
  *
  * Since plan 261007j it is 20,000, equal to `MAX_FEEDBACK_ANSWER_CHARS`: the
- * reader's limit and the database's are one number.
+ * reader's one-box limit and the route's combined-body limit are one number.
  */
 export const MAX_FEEDBACK_BODY_CHARS = 20_000;
 
 /**
- * The largest screenshot the database will take, in **decoded** bytes.
+ * The largest screenshot the route will file, in **decoded** bytes.
  *
  * The dialog shrinks a picture until it is under 90% of this
- * (src/web/feedback-screenshot.ts); this is the ceiling that holds whatever the
- * dialog does, because client-side downscaling is not validation. A CHECK on
- * `octet_length` rather than a rule in TypeScript, so it holds for every writer
- * including a script — docs/project/sql.md.
+ * (src/web/feedback-screenshot.ts); the route holds it whatever the dialog
+ * does, because client-side downscaling is not validation. The
+ * `feedback_screenshot_size` CHECK in src/db/schema.ts is a ceiling of 50 MiB
+ * that only catches a runaway, not this limit (docs/project/sql.md § "Except a
+ * size limit", plan 261007o).
  *
  * **Two megabytes since 2026-10-03; it was 400,000.** At the old number a
  * screenshot with a photograph in it had to go at about 640 pixels to fit, which
@@ -7484,10 +7492,8 @@ export const MAX_FEEDBACK_BODY_CHARS = 20_000;
  * a JSON body and Vercel refuses a request over 4.5 MB before our code runs:
  * two megabytes is 2.67 MB on the wire, and five would be 6.7 MB.
  *
- * **Three places hold this number and must move together**: this constant, the
- * `feedback_screenshot_size` CHECK in src/db/schema.ts, and a migration that
- * drops and re-adds that CHECK. tests/feedback-store.test.ts files one at
- * exactly this size and one a byte over, against the real table.
+ * Raising it is this constant and nothing else, up to Vercel's limit above;
+ * tests/feedback-route.test.ts holds the route to it.
  */
 export const MAX_FEEDBACK_SCREENSHOT_BYTES = 2_000_000;
 

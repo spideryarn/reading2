@@ -731,10 +731,11 @@ describe("the close reason", () => {
   });
 
   it("refuses anything long enough to be a payload rather than a reason", () => {
-    /* The bound matches the CHECK on the column, so the two cannot disagree
-       about what fits. A closed union was the alternative and was rejected: the
-       list of reasons belongs to useLiveConversation.ts, and a server-side copy
-       that lagged it would refuse a true report about how a conversation ended. */
+    /* This bound is the app's guard; the column's CHECK is a much higher
+       ceiling against runaway writes. A closed union was the alternative and
+       was rejected: the list of reasons belongs to useLiveConversation.ts, and
+       a server-side copy that lagged it would refuse a true report about how a
+       conversation ended. */
     expect(() => realtimeCloseReason("x".repeat(65))).toThrow(/short string/);
     expect(() => realtimeCloseReason({ why: "no" })).toThrow(/short string/);
   });
