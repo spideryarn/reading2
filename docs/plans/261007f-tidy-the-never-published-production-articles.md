@@ -14,9 +14,10 @@ The Overseer's relay adds the conditions: its own small plan with the safeguards
 uploads, billing rows, and a retry of the same URL reusing them); read-only counts first; the delete
 reviewed by GPT Sol; and say exactly what was deleted.
 
-**Status, 2026-10-07: planned, script written and tested, production dry run done. Nothing has been
-deleted.** The `--delete` run is for whoever is cleared to write production, after the GPT Sol review
-below and the backup step.
+**Status, 2026-10-07: planned, script written and tested, reviewed by GPT Sol ("safe after these
+changes"), its seven findings dealt with ([§ Review status](#review-status)), and the production dry
+run repeated with the hardened script. Nothing has been deleted.** A second, narrow GPT review of R1
+and R7 is pending. The one run is described in [§ How to run it](#how-to-run-it).
 
 ## In plain words
 
@@ -196,20 +197,29 @@ or in nothing for a week or more.
 ## 4. The rule
 
 An article is deleted only if **all** of these hold, re-checked by a second, independent query and
-again for each article immediately before its own `destroy`:
+again for each article **inside `destroy`'s own transaction, after its locks** (§ 5):
 
 1. **Never published** (§ 1's predicate).
 2. **No revision rows at all** — a leftover draft or failed revision belongs to the draft sweep, and
    one present means something touched it recently.
 3. **No job rows for its slug**, of any status, any owner. A job is the only thing that can publish,
    and the only thing that offers Retry.
-4. **No billing reservation**, by `article_id` or by slug.
+4. **No billing reservation**, by `article_id` or by slug, any owner.
 5. **No reader state**: zero rows in every reader table in § 2, and no title, purpose, archive,
-   share token, non-private visibility or open.
-6. **Quiet for seven days**: the newest of the article's own timestamps, its jobs', checkpoints'
-   `last_used_at`, model calls', uploads' and revisions' is more than seven days old. Seven because
-   the failed jobs that offered Retry are themselves gone well before then for this owner, and an
-   import nobody has touched for a week is not one somebody is in the middle of.
+   share token (now or ever), non-private visibility, publication time, open (count or time), or
+   high-powered-AI switch (`high_power_since`, added on Sol's R4).
+6. **Quiet for seven days**: every clock is more than seven days old — the article's `created_at`,
+   `updated_at` and `last_opened_at`; its jobs' created, started and finished; its checkpoints'
+   `created_at` and `last_used_at`; its model calls' `created_at`, `started_at` and `finished_at`;
+   its uploads' `minted_at`; its revisions' `created_at`; and its block identities' `first_seen_at`.
+   (The first version's second query asked only four of these; Sol's R4.) Seven because the failed
+   jobs that offered Retry are themselves gone well before then for this owner, and an import nobody
+   has touched for a week is not one somebody is in the middle of. **`--delete` will not run with
+   fewer** (Sol's R3); a dry run may look with a shorter window.
+
+Both queries protect exactly this list, each in its own SQL;
+[`tests/never-published-tidy.test.ts`](../../tests/never-published-tidy.test.ts) § "the two queries
+protect the same things" sets each item alone and fails if either query lets it through.
 
 **It admits 12 of the 13 today.** Recommendation: **delete all that are eligible on the day it is
 run**, rather than a further age threshold — nothing distinguishes the 9-day-old ones from the
@@ -229,21 +239,34 @@ npx tsx scripts/never-published-tidy.ts                  # local, dry run
 npx tsx scripts/never-published-tidy.ts --prod           # production, dry run (read-only)
 npx tsx scripts/never-published-tidy.ts --prod --delete \
   --ids <file of reviewed article ids> --backup-dir <dir outside the repo>
+npx tsx scripts/never-published-tidy.ts --restore <backup file>   # the undo; --prod only to undo the real run
 ```
 
 - **Target.** `--prod` reads `DATABASE_URL` from `.env.prod` directly (`draftBacklogTarget`, shared
   with the draft script); without it, `.env.local`'s. A shell export aims nothing. It prints `Target:`,
-  `Env:` and `Mode:` before anything else. Read the `Target:` line.
+  `Env:` and `Mode:` before anything else. Read the `Target:` line. **Without `--prod`, a target that
+  is not local (`isLocalDatabaseUrl`) is refused before connecting** — so a production URL pasted
+  into `.env.local` cannot be reached by accident (Sol's R2).
 - **Dry run** (the default): one `begin read only`, checked with `transaction_read_only` before any
   read; never a `SET`. It prints every never-published article — id, short id, created date, days
   quiet, block ids, checkpoints, model calls, uploads, and why it is held back — then what the
   eligible set would delete and unlink, then the second query's counts over those ids, which must all
   be zero with every id found.
-- **`--delete`** refuses, before any write, unless: the two queries agree; the eligible set is no
-  larger than `MAX_PER_RUN` (20); it equals the ids in `--ids` exactly, in both directions (the
-  reviewed list, pinned); and the backup has been written. Then, **per article**: re-prove it alone
-  (read-only); `runAsOwner(owner, () => pgShelfStore.destroy(slug))` — the store's own transaction,
-  locks and refusals; print its id. It stops at the first refusal and says how many went before.
+- **`--delete`** refuses, before any write, unless: `--quiet-days` is at least 7; the two queries
+  agree; the eligible set is no larger than `MAX_PER_RUN` (20); it equals the ids in `--ids` exactly,
+  in both directions (the reviewed list, pinned); and the backup has been written **and verified**
+  (§ 6). Then, **per article**: re-prove it alone (read-only, a cheap early refusal); then
+  `runAsOwner(owner, () => pgShelfStore.destroy(slug, { beforeDelete }))` — the store's own
+  transaction, locks and refusals, plus **the decision taken again under those locks**:
+  `beforeDelete` runs after `destroy` holds the owner's billing row and the article row and has
+  passed its live-job and stranded-reservation checks, and before anything is deleted, and it
+  refuses unless the locked row is the pinned article id, the whole rule above still holds
+  (`proveEligible`, at READ COMMITTED, so it sees everything committed before the locks were
+  granted), and every row about to go (`articles`, `block_identities`, `checkpoints`, the `ai_calls`
+  it will unlink, the `uploads` it will leave) is exactly the row in the backup file. One deletion
+  path: `DestroyOptions.beforeDelete` in [`src/store/contracts.ts`](../../src/store/contracts.ts),
+  which the reader's Delete button does not pass. It stops at the first refusal and says how many
+  went before.
 - **After:** a fresh survey says how many of the pinned ids are gone and how many never-published
   rows remain; the model-call rows named in the backup are counted again, and must all still exist
   with `article_id` null. Any mismatch exits 1.
@@ -255,11 +278,16 @@ npx tsx scripts/never-published-tidy.ts --prod --delete \
   `process.env.DATABASE_URL` after `loadEnvLocal()`. The script calls `loadEnvLocal()` first and
   then assigns the target, before anything has built the pool; so `.env.local` cannot win.
 
-**Why a publish cannot slip in between the check and the delete.** Publishing requires a job, and a
-job that appeared after the survey is either seen by the per-article re-check (any status) or still
-live when `destroy` locks the slug's jobs and refuses. A job cannot be created *and* publish in the
-milliseconds between the two. The one route around it is someone running a pipeline stage from the
-command line against that production slug at that moment; that is named here rather than guarded.
+**Why nothing can slip in between the check and the delete.** The first version argued this from
+timing ("a job cannot be created *and* publish in the milliseconds between the two"), and Sol's R1
+showed the gap was not milliseconds: `destroy` can wait for the billing lock, and a title or purpose
+saved by `PATCH /api/library/:slug` (which works on unpublished articles) in that wait would have
+been deleted unseen. Now the deciding check runs **after** the locks, in the deleting transaction.
+Anything committed before the locks were granted is seen by it; anything that writes the article
+row afterwards (a PATCH, an open, `lockOrCreateArticle`, `tryEnqueue`) waits for the article lock,
+and any row inserted with a foreign key to the article takes a key-share lock that conflicts with it,
+so it waits too and then finds the article gone. Tested: a title PATCHed while `destroy` waits on a
+billing lock the test holds is refused under the lock, and the article survives with the title.
 
 **Cost today, without the index.** `revision_blocks_article_block` (plan
 [261007c](261007c-seventh-sweep-schema-declare-and-enforce-what-the-data-already-satisfies.md) /
@@ -287,12 +315,27 @@ A delete cannot be undone by the app.
 - **Recommended: the script's own backup**, which `--delete` will not run without. One JSON file of
   every `articles`, `block_identities` and `checkpoints` row it is about to remove (via
   `row_to_json`, so exact column values), plus the `ai_calls` ids whose `article_id` it will null and
-  the `uploads` ids left with a stale slug — read in one read-only transaction. Restoring is
-  inserting the articles, then the identities and checkpoints, then setting `ai_calls.article_id`
-  back for those ids. The file holds content (checkpoints are transcriptions of Greg's PDFs), so the
-  script writes it `0600`, refuses a directory inside the repository, and it must never be committed.
-  Suggested place: `/var/tmp/spideryarn-backups/261007f-never-published/` on the box, kept until a
-  week after the delete.
+  the `uploads` ids left with a stale slug — read in one read-only transaction. **Verified before any
+  delete**: written `0600`, its mode checked, read back from disk, parsed, and every table's count
+  and the article ids compared with what the database gave; the parsed file is what the check under
+  the lock compares against. The file holds content (checkpoints are transcriptions of Greg's PDFs),
+  so the script refuses a directory inside the repository — by name before creating anything, and
+  again **by real path** once it exists, so a symlink from outside that points in is caught (Sol's
+  R7) — and it must never be committed. Suggested place:
+  `/var/tmp/spideryarn-backups/261007f-never-published/` on the box, kept until a week after the
+  delete.
+- **The restore exists and has been exercised** (Sol's R7): `--restore <backup file>`
+  (`restoreBackup`), in one transaction, refuses if any backed-up article is already there, inserts
+  the articles, then the identities and checkpoints, through `json_populate_recordset` over each
+  table's own row type (every column back exactly as `row_to_json` wrote it), then points each
+  unlinked `ai_calls` row at its article again where its `article_id` is still null; every count
+  must match the file or it all rolls back. The `uploads` rows are never changed, so nothing is put
+  back for them. Exercised only on throwaway local rows: two never-published articles made by
+  `lockOrCreateArticle`, the checkpoint store and the cost ledger's own `record`, deleted through
+  the command, restored through the command, and every column of `articles`, `block_identities`,
+  `checkpoints` and the owner's `ai_calls` compared with a snapshot taken before — equal; a second
+  restore refuses and changes nothing. **It has not been run against production**, and is to be
+  only to undo this plan's delete, by whoever ran it.
 
 ## 7. Going forwards
 
@@ -321,14 +364,87 @@ the `revision_blocks (article_id, block_id)` index in production first.
 - **New:** every PDF behind these rows was later imported successfully, so the checkpoints are not
   even a saving deferred.
 
+## Review status
+
+GPT Sol reviewed the plan and the script at `f81253134`, read-only
+([prompt](261007f-tidy-the-never-published-production-articles-review-prompt.md),
+[answer](261007f-tidy-the-never-published-production-articles-review-sol.md)). Verdict: **"Safe
+after these changes. I would allow none with the current script."** It confirmed the predicate, the
+attachment counts (13 articles, 9,303 identities, 196 checkpoints; 332 `ai_calls` kept and
+unlinked; 6 uploads kept), that `destroy` needs no revision and writes no visibility audit, that the
+freeze trigger and the billing-row insert touch nothing here, that `/admin/costs` keeps the money,
+and that waiting for the index is right. Subject to fresh proofs it would allow exactly the 13 in
+§ 1's table, `spya-xytyjz` only after 2026-10-08 18:31 UTC.
+
+| finding | what it said | what was done |
+|---|---|---|
+| **R1** (P0) | The proof committed before `destroy` waited for its locks; a title or purpose saved in that window would be deleted unseen. Check eligibility under the locks, and that the rows match the backup. | `destroy` gained an optional `beforeDelete` hook, run in its transaction after its locks and checks; the script re-checks the pinned id, the whole rule and the rows against the backup there (§ 5). Test: a title PATCHed while `destroy` waits on a held billing lock is refused, the article survives — red before the hook. Also: a block identity minted after the backup is refused. |
+| **R2** (P1) | Without `--prod`, a production URL in `.env.local` was trusted. | Refused before connecting unless `--prod`, by `isLocalDatabaseUrl`. Tested through `main`; zero connects. |
+| **R3** (P1) | `--quiet-days 1` was accepted for deletion. | `--delete` refuses fewer than 7, in `main` and again in `checkDeletion`. Test red first (it deleted). |
+| **R4** (P1) | The second query missed `updated_at`, `last_opened_at`, `ai_calls.finished_at`; neither protected `high_power_since`. | Both queries now protect the list in § 4, each in its own SQL; 23 single-item cases require both to refuse. The old proof fails 5 of them, the old survey 6. |
+| **R5** (P2) | The upload fallbacks in `routes.ts` reach these rows; "no route" was false. | Corrected in § 3 as an existing defect with a follow-up; `routes.ts` not changed. |
+| **R6** (P2) | Tests did not cover `main`'s orchestration. | `main` takes its world as `MainDeps`; missing or wrong ids, a missing ids file, a remote target without `--prod`, a weak quiet window, a failing backup and a late title each stop it before `destroy`. Each guard removed in turn turns its test red. |
+| **R7** (P2) | No restore; the outside-repo check was lexical; the backup was not verified. | `--restore`, exercised on throwaway local rows, every column equal; real-path check; read-back verification before any delete (§ 6). |
+
+A second, narrow GPT review of R1 and R7 runs before the delete.
+
+## How to run it
+
+**Once**, by the Overseer, with Greg's knowledge, and only when **all** of these are true:
+
+1. **The production deploy that applies `revision_blocks_article_block` has happened, and the index
+   is verified in production** — not inferred from the deploy. Read-only, as `spideryarn_app`:
+
+   ```sql
+   begin read only;
+   select indexname, indexdef from pg_indexes
+    where schemaname = 'spideryarn' and tablename = 'revision_blocks' order by 1;
+   rollback;
+   ```
+
+   It must list `revision_blocks_article_block` on `(article_id, block_id)`. On 2026-10-07 06:49
+   UTC it did **not** (three rows: `revision_blocks_fts`, `revision_blocks_revision_id_block_id_pk`,
+   `revision_blocks_revision_ordinal`).
+2. **It is after 2026-10-08 18:31 UTC**, so `spya-xytyjz` has had its seven quiet days.
+3. **A fresh `--prod` dry run** says 13 eligible, `found 13; published 0; revisions 0; jobs 0;
+   reservations 0; reader state 0; recent 0`, and the 13 are exactly these.
+4. **The ids file holds exactly the 13 Sol allowed**, one per line:
+
+   ```
+   992df6bf-77c6-4dab-9879-8360f3e28bae  # spya-np5eep
+   d64ade3c-abbc-4622-a2cf-f66f4d5cd6a4  # spya-ve4avb
+   f55a3fd4-9ed5-46e3-b975-3ed1de5fe1b8  # spya-tx8r32
+   bf6cb59f-af56-4b57-9983-87117098f55d  # spya-fwp82p
+   dddf7746-b943-4671-aeab-312f28c1dfbc  # spya-ssves7
+   02e7bc66-67c4-49b5-983e-b240757cd806  # spya-g4d2n9
+   91f949a8-41dd-4fb9-a0f9-af8253e86873  # spya-y3wj6a
+   4d91981f-9bb3-4e3a-8ccb-ae443ceeef30  # spya-hwsqfk
+   3e954894-9b9d-4ff6-b349-94e5b988a101  # spya-yn6pr0
+   60cbe2a2-ac22-444f-89b6-e2320f1d843c  # spya-vj2z4v
+   f2b52cf2-0268-4703-bc3e-356b16f307f9  # spya-x5ff2s
+   ce425589-a285-4675-9327-ff8794117c2c  # spya-fdcs3c
+   82b5bb6c-e603-404c-94da-036719cda430  # spya-xytyjz (only after 2026-10-08 18:31 UTC)
+   ```
+
+   No additions. If the dry run disagrees in any way, stop and ask; do not edit the list to fit.
+5. **The second GPT review of R1 and R7 has come back clean**, and the script run is the reviewed one.
+
+Then:
+
+```
+npx tsx scripts/never-published-tidy.ts --prod --delete \
+  --ids <that file> --backup-dir /var/tmp/spideryarn-backups/261007f-never-published/
+```
+
+The backup is written and verified before the first delete, by the command itself. Paste its
+whole output under Results, with exactly what was deleted. To undo:
+`npx tsx scripts/never-published-tidy.ts --prod --restore <the backup file it printed>`.
+
 ## Done means
 
-- GPT Sol reviews this plan and the script (`--sandbox review`, then the code review that fixes) —
-  **not yet run**; the brief asks for the delete to be reviewed before it happens.
-- After the deploy that applies the index, and after 2026-10-08 18:31 UTC: a fresh `--prod` dry run;
-  the ids file written from it and checked against this plan's table; `--prod --delete --ids …
-  --backup-dir …` run by whoever is cleared to write production; its output pasted under Results,
-  with exactly what was deleted.
+- GPT Sol's review — done, findings dealt with above; the narrow second review of R1 and R7 —
+  pending.
+- The run in [§ How to run it](#how-to-run-it), its output pasted under Results.
 
 ## Results
 
@@ -368,18 +484,78 @@ The second query, over those 12 ids:
 Nothing deleted.
 ```
 
+### Production dry run with the hardened script, 2026-10-07, 06:48 UTC
+
+After R1–R7, the same command, read-only. The rule now protects more (§ 4), and nothing changed:
+
+```
+Target: postgresql://spideryarn_app.alschkahzfagtppxspfq@aws-0-eu-west-2.pooler.supabase.com:6543/postgres
+Env:    /home/greg/code/spideryarn2/.env.prod
+Mode:   dry run (read-only transaction; see the header for --delete)
+Role:   spideryarn_app
+Rule:   never published; no revision, job or reservation; no reader state; nothing moved for 7 days
+
+Never-published articles: 13, eligible: 12
+  article id                            short id     created     quiet  ids    ckpt  calls  uploads  held because
+  992df6bf-77c6-4dab-9879-8360f3e28bae  spya-np5eep  2026-09-03    33d    195     0      1        0  (eligible)
+  d64ade3c-abbc-4622-a2cf-f66f4d5cd6a4  spya-ve4avb  2026-09-03    33d    695     0      1        0  (eligible)
+  f55a3fd4-9ed5-46e3-b975-3ed1de5fe1b8  spya-tx8r32  2026-09-03    33d      0     0      0        1  (eligible)
+  bf6cb59f-af56-4b57-9983-87117098f55d  spya-fwp82p  2026-09-04    32d   2024    56     88        1  (eligible)
+  dddf7746-b943-4671-aeab-312f28c1dfbc  spya-ssves7  2026-09-04    32d   2010    54     90        1  (eligible)
+  02e7bc66-67c4-49b5-983e-b240757cd806  spya-g4d2n9  2026-09-04    32d   2036    54     91        1  (eligible)
+  91f949a8-41dd-4fb9-a0f9-af8253e86873  spya-y3wj6a  2026-09-07    29d      0     0      0        1  (eligible)
+  4d91981f-9bb3-4e3a-8ccb-ae443ceeef30  spya-hwsqfk  2026-09-12    24d      0     0      0        0  (eligible)
+  3e954894-9b9d-4ff6-b349-94e5b988a101  spya-yn6pr0  2026-09-28     9d    245     0      1        0  (eligible)
+  60cbe2a2-ac22-444f-89b6-e2320f1d843c  spya-vj2z4v  2026-09-28     9d      0     0      0        0  (eligible)
+  f2b52cf2-0268-4703-bc3e-356b16f307f9  spya-x5ff2s  2026-09-28     9d      0     0      1        0  (eligible)
+  ce425589-a285-4675-9327-ff8794117c2c  spya-fdcs3c  2026-09-28     9d      0     0      0        0  (eligible)
+  82b5bb6c-e603-404c-94da-036719cda430  spya-xytyjz  2026-10-01     5d   2098    32     59        1  recent
+
+The eligible 12 would delete: 7205 block identities, 164 checkpoints, 0 revisions, 0 jobs (cascade / destroy); and unlink 273 ai_calls (kept, article_id set null) and 5 uploads (kept, stale slug).
+
+The second query, over those 12 ids:
+  found 12; published 0; revisions 0; jobs 0; reservations 0; reader state 0; recent 0
+✓ all 12 found, none protected
+
+Nothing deleted.
+```
+
+And the same read-only run at `--quiet-days 5` (a dry run may look with a shorter window; `--delete`
+would refuse it), to see the 13th's protections now rather than tomorrow — only its quietness holds
+it back:
+
+```
+  82b5bb6c-e603-404c-94da-036719cda430  spya-xytyjz  2026-10-01     5d   2098    32     59        1  (eligible)
+
+The eligible 13 would delete: 9303 block identities, 196 checkpoints, 0 revisions, 0 jobs (cascade / destroy); and unlink 332 ai_calls (kept, article_id set null) and 6 uploads (kept, stale slug).
+
+The second query, over those 13 ids:
+  found 13; published 0; revisions 0; jobs 0; reservations 0; reader state 0; recent 0
+✓ all 13 found, none protected
+```
+
+And the index, read-only (`begin read only` / `pg_indexes` / `rollback`, as `spideryarn_app`,
+`transaction_read_only = on`, 06:49 UTC): **not yet in production** —
+`revision_blocks_fts`, `revision_blocks_revision_id_block_id_pk`, `revision_blocks_revision_ordinal`.
+
 ### Tests
 
 [`tests/never-published-tidy.test.ts`](../../tests/never-published-tidy.test.ts), private Postgres
-lane, its own owner and throwaway articles made by `lockOrCreateArticle`: the rule admits a quiet
-untouched failed import and holds back one each with a job, a reader's title, a failed revision and
-recent activity, each for its own reason; a published one is never a candidate; `--delete` refuses a
-list that differs from the pinned ids (either way), an unproven survey, one over the cap, a bad ids
-file, a backup directory inside the repo, and an article that gained a job after the survey (and
-then deletes nothing); and the real delete backs up (file mode 0600, the rows present), destroys
-exactly the pinned article through `pgShelfStore.destroy`, cascades its ids and checkpoints, leaves
-the other, and finds nothing on a second run. Seen red: disabling the job hold and the per-article
-re-check each fails its test.
+lane, its own owner and throwaway articles made by `lockOrCreateArticle`, 46 tests: the rule admits a
+quiet untouched failed import and holds back one each with a job, a reader's title, a failed revision
+and recent activity, each for its own reason; a published one is never a candidate; the two queries
+refuse each of 23 protected things set alone (R4); `--delete` refuses a list that differs from the
+pinned ids (either way), an unproven survey, one over the cap, a weak quiet window, a bad ids file,
+a backup directory inside the repo by name or by symlink, an article that gained a job after the
+survey, a title saved while `destroy` waited for the billing lock (R1), and rows the backup does not
+hold; `main` itself refuses a remote target without `--prod`, `--quiet-days 1`, a missing `--ids`,
+a missing or wrong ids file, a failing backup and a late title, each without reaching `destroy`
+(R6); the real delete, directly and through `main`, backs up (0600, verified), destroys exactly the
+pinned article, cascades its ids and checkpoints, leaves the other, and finds nothing on a second
+run; and delete-then-`--restore` gives back every column (R7). Seen red: each guard in `main`, the
+read-only re-proof, the hook call in `destroy`, the backup comparison, the real-path check and the
+restore's ledger relink, each removed in turn, fails its test; and the R1, R3 and R4 tests were red
+against the code before their fix.
 
 ## Appendix: every statement run against production, with its output
 
