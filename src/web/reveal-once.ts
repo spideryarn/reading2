@@ -21,8 +21,9 @@
  * **A section already on screen at the start is never hidden**, so nothing the
  * reader is looking at blinks out and back in when the effect runs after paint.
  *
- * **Sections that arrive later are picked up** by a `MutationObserver`:
- * `PublicShowcase` renders after its fetch, well after the page mounted.
+ * **Sections that arrive later are picked up** by a `MutationObserver`.
+ * `PublicShowcase` currently mounts its section immediately; its fetch adds
+ * articles inside that section, rather than a new reveal target.
  *
  * Returns the stop, which un-hides whatever is still waiting — the page calls
  * this from an effect (`useRevealOnce`), so a client-side move between `/`,
@@ -55,8 +56,9 @@ export function watchReveals(root: ParentNode = document): () => void {
           observer.unobserve(entry.target);
         }
       },
-      /* A little way in, so the rise is seen rather than finished below the fold. */
-      { rootMargin: "0px 0px -8% 0px" },
+      /* Use the whole viewport: even vertical percentage root margins resolve
+         against its width, so an inset can erase a wide, short window's root
+         or keep a section at the page's foot from ever entering it. */
     );
     io = observer;
     const take = (el: Element) => {

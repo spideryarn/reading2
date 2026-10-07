@@ -137,6 +137,12 @@
   border-bottom: 1px solid transparent;
   transition: border-color 180ms ease, background-color 180ms ease;
 }
+/* The new signed-out document shell replaces an inset-aware way home. Keep
+   the row below the notch while the sticky background covers the unsafe area;
+   DocumentPage subtracts this same inset from its floor and adds it to anchors. */
+.site-document-nav > .site-nav {
+  padding-top: var(--safe-top);
+}
 /* Painted only once the page has moved, so the bar is invisible over the hero
    and becomes a surface over content. `animation-timeline: scroll()` does this
    with no scroll listener and no React state; where it is unsupported the bar

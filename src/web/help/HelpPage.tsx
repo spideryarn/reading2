@@ -301,9 +301,10 @@ export function HelpPage() {
  * One section: its heading with a `#` beside it, and its words.
  *
  * `scroll-mt` so the heading lands below the corner logo (signed in) or the
- * 56px site bar (signed out) rather than under it —the same clearance PrivacyPage.tsx's sections take. `data-section` is
- * the attribute the Metadata page's sections carry, kept for the same reader:
- * anything that walks a page's sections.
+ * site bar (signed out) rather than under it. `DocumentPage` adds the safe
+ * top inset to this clearance signed out, as on Privacy's sections.
+ * `data-section` is the attribute the Metadata page's sections carry, kept
+ * for the same reader: anything that walks a page's sections.
  */
 function HelpSectionView({ entry: e }: { entry: Entry }) {
   return (
