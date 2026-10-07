@@ -8,7 +8,7 @@ Committed: `ae0a8f00e` (one commit). `git diff ae0a8f00e~1 ae0a8f00e`; `git show
 
 The plan is `docs/plans/261007j-gift-voucher-starter-article-by-private-link.md` (§ The server, § What the recipient gets, § Where the key goes) and your own plan review is `docs/plans/261007j-voucher-starter-plan-review-sol.md` (F1–F5; F1–F3 are this stage's). Read the stage 1 entry in the plan's Log too.
 
-Evidence: the DB-backed suites cannot run in your sandbox (no network, no Postgres). I ran them: `docs/plans/261007j-stage-1-db-suites-output.txt` (8 files, 236 tests, green). You may run anything that needs nothing outside the tree, e.g. `npx vitest run tests/share-link-token-stays-home.test.ts` and `npm run typecheck`.
+Evidence: the DB-backed suites cannot run in your sandbox (no network, no Postgres). I ran them: `docs/plans/261007j-voucher-starter-stage-1-db-suites-output.txt` (8 files, 236 tests, green). You may run anything that needs nothing outside the tree, e.g. `npx vitest run tests/share-link-token-stays-home.test.ts` and `npm run typecheck`.
 
 ## What to do
 

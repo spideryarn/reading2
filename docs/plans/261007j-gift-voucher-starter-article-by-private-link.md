@@ -263,17 +263,33 @@ on 2026-10-07.
     (the import box promises `go`), `doc-links`, `admin-only-routes`, `client-imports`,
     `voices-css` green. Biome on the four files: one info, `VoucherRow`'s complexity 28 (27 at
     HEAD).
-- 2026-10-07: GPT Sol's stage 1 code review ([prompt](261007j-stage-1-code-review-prompt.md),
-  [answer](261007j-stage-1-code-review-sol.md)): *land with the fixes made*. F6 (P1) a concurrent
+- 2026-10-07: GPT Sol's stage 1 code review ([prompt](261007j-voucher-starter-stage-1-code-review-prompt.md),
+  [answer](261007j-voucher-starter-stage-1-code-review-sol.md)): *land with the fixes made*. F6 (P1) a concurrent
   identical create was refused when the starter was not ready; F7 (P1) a readdress could email a
   replacement article imported at a deleted starter's slug, now checked by article id under the
   lock; F8 (P3) a comment. Fixed by the reviewer, red first (`tests/voucher-starter-races.test.ts`),
   gates rerun here: 7 suites, 182 tests. Postmortem `261007n`.
-- 2026-10-07: GPT Sol's stage 2 code review ([prompt](261007j-stage-2-code-review-prompt.md),
-  [answer](261007j-stage-2-code-review-sol.md)): *land with the fixes made*. Fixed by the reviewer,
+- 2026-10-07: GPT Sol's stage 2 code review ([prompt](261007j-voucher-starter-stage-2-code-review-prompt.md),
+  [answer](261007j-voucher-starter-stage-2-code-review-sol.md)): *land with the fixes made*. Fixed by the reviewer,
   red first: F9 (P1) a lost answer's replay was blocked by the starter's live state; F10 (P1) the
   import box's `type="url"` validation blocked Create; F11 (P1) the sketch drew the author's title
   in the app's font; F12 (P2) a renamed shelf title now says the email uses the original. F13 (P1,
   from before this job) a create's answer cleared a draft typed while it was in flight: reported,
   then fixed here red first (the form clears only the draft it sent). Postmortems `261007o`–`r`.
   Sol on Refresh: enough for the new-tab flow; a reload on focus would be a convenience, not built.
+- 2026-10-07: browser check by a Sonnet subagent on the box (Playwright, system Chrome), at
+  1280×900, 820×1180 and 390×844. Passed at all three: the picker after *Note to them*, the three
+  status lines (public; private with link on; private with no link, with Create disabled and *Make
+  one on its page* at `/read/<slug>/metadata?section=access-sharing` in a new tab), the sketch's
+  starter line, the import link to `/add/<url>` in a new tab, Enter in the import box opening it
+  and sending no create, and no horizontal scroll. Shots: `261007j-shot-desktop-form.png`,
+  `-desktop-nolink`, `-ipad-form`, `-phone-form`. **Not checked in a browser: a create with a
+  starter, and its table row**, because the shared local database refused every migration (a
+  ledger row from a peer's unlanded migration, as 261007f found), so the voucher list was a 500
+  there. That path is covered by the database suites and `tests/admin-vouchers-page.test.tsx`.
+- 2026-10-07: merged `origin/dev`. The journal conflicted with `20261007094018_feedback_body_twenty_thousand`;
+  ours was unpublished and generated, so it was rebuilt on top (same SQL, now
+  `20261007134629_billing_voucher_starter_article`), `db:chain` clean. Full `npm test` after the
+  merge: 1811 files passed, 2 failed, both from the merge meeting this work and both fixed: the
+  shelf-error line moved to `tw:text-danger` (dev's 261007h), and the race test's fixture uuids
+  were made its own. Typecheck green.

@@ -340,7 +340,7 @@ function StarterPicker({
           Import in a new tab
         </a>
       </div>
-      {shelfError && <p className="tw:m-0 tw:text-destructive">Couldn’t read your articles. {shelfError}</p>}
+      {shelfError && <p className="tw:m-0 tw:text-danger">Couldn’t read your articles. {shelfError}</p>}
       <StarterStatus state={state} id={statusId} replay={replay} />
     </div>
   );

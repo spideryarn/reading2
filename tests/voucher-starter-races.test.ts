@@ -43,10 +43,10 @@ vi.mock("../src/store/pg-voucher-emails.js", async (importOriginal) => ({
 import { createVoucher, updateVoucher, type NewVoucher } from "../src/store/pg-vouchers.js";
 import type { StarterResolution } from "../src/store/voucher-starter.js";
 
-const creator = "00000000-0000-4000-8000-000000000001";
-const articleId = "00000000-0000-4000-8000-000000000002";
+const creator = "26100700-7a5e-4000-8000-000000000001";
+const articleId = "26100700-7a5e-4000-8000-000000000002";
 const input: NewVoucher = {
-  id: "00000000-0000-4000-8000-000000000003",
+  id: "26100700-7a5e-4000-8000-000000000003",
   email: "first@example.invalid",
   articles: 5,
   note: null,
@@ -108,7 +108,7 @@ describe("readdress keeps the article's identity when its slug is reused", () =>
     fixture.reads = [[{ ...seen, starterArticleId: null }], [{ ...seen, starterArticleId: null }]];
     const resolveStarter = vi.fn(async (): Promise<StarterResolution> => ({
       kind: "ready",
-      starter: { ...ready.starter, articleId: "00000000-0000-4000-8000-000000000004", title: "Replacement" },
+      starter: { ...ready.starter, articleId: "26100700-7a5e-4000-8000-000000000004", title: "Replacement" },
     }));
     expect(await updateVoucher(input.id, { email: "second@example.invalid" }, { audience, resolveStarter }))
       .toMatchObject({ kind: "updated", giftDelivery: "delivery", starter: "dropped" });
@@ -120,7 +120,7 @@ describe("readdress keeps the article's identity when its slug is reused", () =>
     fixture.reads = [[seen], [{ ...seen, starterArticleId: null }]];
     const resolveStarter = async (): Promise<StarterResolution> => ({
       kind: "ready",
-      starter: { ...ready.starter, articleId: "00000000-0000-4000-8000-000000000004", title: "Replacement" },
+      starter: { ...ready.starter, articleId: "26100700-7a5e-4000-8000-000000000004", title: "Replacement" },
     });
     expect(await updateVoucher(input.id, { email: "second@example.invalid" }, { audience, resolveStarter }))
       .toMatchObject({ kind: "updated", starter: "dropped" });

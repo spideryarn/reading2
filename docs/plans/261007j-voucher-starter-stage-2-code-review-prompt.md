@@ -6,7 +6,7 @@ Repo: /var/tmp/spideryarn-worktrees/voucher-starter-article (worktree of spidery
 
 Committed: `90d414d4c` (one commit). `git show --stat 90d414d4c` lists every path; `git diff 90d414d4c~1 90d414d4c`. Start with `src/web/AdminVouchersPage.tsx`, `src/web/useAdminVouchers.ts`, `tests/admin-vouchers-page.test.tsx`. That does not limit scope.
 
-The plan: `docs/plans/261007j-gift-voucher-starter-article-by-private-link.md` (§ Why the form links out, § What Greg sees, Stage 2, and the Log's "Stage 2 built" entry, which lists five departures from the plan). The server contract it talks to is stage 1, `ae0a8f00e` and `1d1fb6418` (already reviewed by you: `docs/plans/261007j-stage-1-code-review-sol.md`). Your plan review: `docs/plans/261007j-voucher-starter-plan-review-sol.md` — F4 and F5 are the client's.
+The plan: `docs/plans/261007j-gift-voucher-starter-article-by-private-link.md` (§ Why the form links out, § What Greg sees, Stage 2, and the Log's "Stage 2 built" entry, which lists five departures from the plan). The server contract it talks to is stage 1, `ae0a8f00e` and `1d1fb6418` (already reviewed by you: `docs/plans/261007j-voucher-starter-stage-1-code-review-sol.md`). Your plan review: `docs/plans/261007j-voucher-starter-plan-review-sol.md` — F4 and F5 are the client's.
 
 These tests need no database; run them yourself: `npx vitest run tests/admin-vouchers-page.test.tsx tests/what-the-enter-key-promises.test.tsx tests/client-imports.test.ts`, and `npm run typecheck`.
 
