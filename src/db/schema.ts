@@ -2037,10 +2037,17 @@ export const refereeCriteria = spideryarn.table(
     /* Poles and scale are exactly the diverging kind's, and all three arrive or
        none of them does. Half a diverging criterion is one that cannot be drawn
        and cannot be described in words, and it would reach the panel looking
-       fine. */
+       fine.
+
+       **Counted, not compared.** Until 2026-10-07 this was `(kind =
+       'diverging') = (all three are not null)`, which says the first half and
+       not the second: on a kind with no ends both sides are false as soon as
+       ONE of the three is null, so one or two stray fields passed. No row ever
+       had any (0 of 10 in production, 0 of 11 locally) because `configToRow`
+       nulls all three, and `configFromRow` would have dropped them unread. */
     check(
       "referee_criteria_diverging_shape",
-      sql`(${t.kind} = 'diverging') = (${t.poleAgainst} is not null and ${t.poleFavour} is not null and ${t.scale} is not null)`,
+      sql`num_nonnulls(${t.poleAgainst}, ${t.poleFavour}, ${t.scale}) = case when ${t.kind} = 'diverging' then 3 else 0 end`,
     ),
     check("referee_criteria_scale", sql`${t.scale} is null or ${t.scale} in ('rg','br')`),
     /* An attempt is both columns or neither — see `search_runs_attempt_both`.

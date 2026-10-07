@@ -1,0 +1,2 @@
+ALTER TABLE "spideryarn"."referee_criteria" DROP CONSTRAINT "referee_criteria_diverging_shape";--> statement-breakpoint
+ALTER TABLE "spideryarn"."referee_criteria" ADD CONSTRAINT "referee_criteria_diverging_shape" CHECK (num_nonnulls("spideryarn"."referee_criteria"."pole_against", "spideryarn"."referee_criteria"."pole_favour", "spideryarn"."referee_criteria"."scale") = case when "spideryarn"."referee_criteria"."kind" = 'diverging' then 3 else 0 end);

@@ -99,8 +99,46 @@ asserted, because a minted test database is too small for the planner to prefer 
 are never deleted, so this FK only ever fires on an id that was never minted"*. They are deleted
 with their article, which is the only time this key is expensive. Corrected in place.
 
+## Stage 2: the criterion shape is all three or none
+
+**Production, read 2026-10-07 01:02 UTC:** 10 rows (6 `diverging`, 4 `single`), **0** violating the
+stronger rule. Local: 0 of 11. The catalog expression was the weak one, as GPT Sol quoted it.
+
+**The SQL** (`drizzle/20261007010230_referee_criteria_shape_all_or_none.sql`, generated, unedited):
+
+```sql
+ALTER TABLE "spideryarn"."referee_criteria" DROP CONSTRAINT "referee_criteria_diverging_shape";
+ALTER TABLE "spideryarn"."referee_criteria" ADD CONSTRAINT "referee_criteria_diverging_shape"
+  CHECK (num_nonnulls("pole_against", "pole_favour", "scale") = case when "kind" = 'diverging' then 3 else 0 end);
+```
+
+Same name, stronger rule. Postgres validates the re-added CHECK against the stored rows, so a
+violating row would fail the migration with 23514 and roll back the DROP with it. That is the
+wanted outcome: rewriting a reader's criterion is not a migration's to do.
+
+**The mechanism "no ordinary write violates this" rests on:** one function,
+`configToRow` in `src/referee-criteria.ts`, produces the four columns, and it nulls all three for
+any kind but `diverging`. Every writer, read:
+
+| Writer | What it does to the four columns |
+|---|---|
+| `begin`, the insert (`pg-referee-criteria.ts`) | all four from `configToRow` |
+| `begin`, the reset of a failed row | all four from `configToRow`, in one `SET` |
+| `finish`, `recolour`, the orphan sweep | names none of them |
+| `scripts/backfill-plain-titles.ts` | `results` only |
+| `scripts/db-reown.ts` | `owner_id` only |
+| test fixtures (six files insert directly) | `single` with no ends, or `diverging` with all three |
+
+**Tested** in `tests/db-referee-criteria.test.ts`: *refuses a stray pole or scale on a kind that has
+no ends* (four inserts with one or two stray fields, and the partial `UPDATE` that changes the kind
+and leaves a pole behind), **red before the migration** (`promise resolved … instead of
+rejecting`), green after; and *takes what configToRow writes, for every kind, on an insert and on a
+reset*, which hands the database that function's output for all three kinds and every reset
+between them.
+
 ## Waiting to be applied to production
 
 In order. None has been applied; `npm run deploy` (the Overseer's) applies them.
 
 1. `20261007005448_revision_blocks_article_block_index`
+2. `20261007010230_referee_criteria_shape_all_or_none`
