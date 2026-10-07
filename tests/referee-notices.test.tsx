@@ -167,10 +167,13 @@ describe("a finding marks the Hidden text chip and opens nothing", () => {
 
   it("updates an existing live region when findings arrive, and says where to look", () => {
     paint(LOADING);
-    const announcement = host.querySelector('[role="status"][aria-live="polite"]');
+    const status = '[role="status"][aria-live="polite"]';
+    const announcement = host.querySelector(status);
+    expect(host.querySelectorAll(status)).toHaveLength(1);
     expect(announcement, "no live region exists before the result arrives").not.toBeNull();
     expect(announcement?.textContent).toBe("");
     paint(examined([HIDDEN]));
+    expect(host.querySelectorAll(status)).toHaveLength(1);
     expect(host.querySelector('[role="status"][aria-live="polite"]')).toBe(announcement);
     expect(announcement?.textContent).toContain("The source check found text to look at, under Hidden text.");
     paint(examined([]));

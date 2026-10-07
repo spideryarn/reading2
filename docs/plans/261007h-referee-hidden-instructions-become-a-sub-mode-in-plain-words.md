@@ -123,12 +123,14 @@ Presentation only, all in [`SourceScanNotice.tsx`](../../src/web/SourceScanNotic
    whole hidden sentence is a run of Unicode tag characters, and when there are any, what they
    spell is quoted here.* A sentence is the same whatever the document says, so it explains and
    does not judge.
-3. **Where it is, in words, when the path says so plainly**, and **said as markup**: *marked up as
-   maths* when the path names a MathML element, *as a link*, *as a table*, *as a figure*, and
-   nothing otherwise or when the row's paths disagree. Never *inside a maths formula*: the tag
-   names are the document's own, and a hostile one can wrap a payload in `<mo>` (review, finding
-   3). The CSS path and the code-point evidence stay, smaller, under *In the source:*, because a
-   referee who wants to go and look needs them, and the rules say evidence is shown.
+3. **The CSS path stays evidence, not a place description.** The first implementation inferred
+   *marked up as maths* from it, but code review found that an attacker-controlled id can contain
+   the path's own ` > ` separator and forge a tag step. The result shape has no structured,
+   trustworthy place field, so the UI does not claim one. The path and code-point evidence stay,
+   smaller, under *In the source:*. Bidi controls are printed as code points rather than allowed to
+   reorder the finding, path or detail that names them. Paths and detail are capped in this display:
+   unlike the finding text, the answer shape does not cap them, and an attacker-written id, class or
+   CSS value must not be able to fill the panel and push the finding's own words out of reach.
 4. **A quote with nothing visible in it is not drawn as an empty quote.** It says *nothing visible
    beside it*.
 
@@ -196,7 +198,8 @@ security file, so I have not made it unattended.
 [261007h-referee-hidden-instructions-plan-review-sol.md](261007h-referee-hidden-instructions-plan-review-sol.md),
 verdict *not ready as written*, eight findings. Taken: 1 (a labelled-only result still marks the
 chip and is announced: a ring), 2 (the caveat is in the key, every path is listed, *in N places*
-is gone, a collision test), 3 (place words are said as markup), 4 (the tripwire tests and
+is gone, a collision test), 3 (place words were first said as markup, then removed in code review
+because the path separators themselves are forgeable), 4 (the tripwire tests and
 `security.md` named and changed), 5 (`REFEREE_TARGET` total), 6 (the live region stays one
 permanently mounted node; test of node identity kept), 7 (Option A as annotation only, Option B's
 predicate by namespace, the false auto-open claim deleted).
@@ -210,11 +213,12 @@ grouping drops nothing a referee could read.
 ## Testing
 
 - `tests/referee-notices.test.tsx`: Notices holds no scan and stays shut when the scan found
-  something; the Hidden text chip carries its dot for an unlabelled finding and not for a
+  something; the Hidden text chip carries a dot for an unlabelled finding and a ring for a
   labelled-only result; the status line says where to look.
 - `tests/source-scan-notice.test.tsx`: all five rules still pass; new cases for grouping (39
   identical → one row, *39 times*; a different `text` among copies is its own row; a labelled row
-  is not merged with an unlabelled one), for the kind sentence, the place words, and the
+  is not merged with an unlabelled one), for every grouping-key field, the kind sentence, hostile
+  path separators, visible bidi controls, bounded attacker-written paths and evidence, and the
   empty-quote line.
 - `tests/command-bar-sub-modes.test.tsx` and the rest of the suite: the fifth view reaches the
   command bar.

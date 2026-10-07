@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * **The four rules the source-scan notice is under, as tests.**
+ * **The five rules the source-scan notice is under, as tests.**
  *
  * The scan itself has a corpus (tests/injection-scan.test.ts) and had no caller
  * for a day. What this file is about is the other half of the same failure:
  * a scanner that finds a hidden instruction and a panel that draws the result
- * wrongly are the same outcome for the referee, and three of the four ways to
+ * wrongly are the same outcome for the referee, and four of the five ways to
  * draw it wrongly look perfectly fine on a screenshot.
  *
  * 1. **Never say "nothing found" when nothing was looked at.** A PDF is not
@@ -457,6 +457,20 @@ describe("findings in plain words, identical ones once", () => {
     expect(text()).toContain("This text is not hidden");
   });
 
+  it("never merges findings whose kinds or evidence differ", () => {
+    const anotherKind: ScanFinding = { ...HIDDEN, kind: "tiny-font" };
+    const anotherDetail: ScanFinding = { ...HIDDEN, detail: "opacity: 0" };
+    paint(examined({ findings: [HIDDEN, anotherKind, anotherDetail] }));
+    expect(rows()).toHaveLength(3);
+    expect(rows().map((row) => row.getAttribute("data-kind"))).toEqual([
+      "colour-on-background",
+      "tiny-font",
+      "colour-on-background",
+    ]);
+    expect(text()).toContain("color: #ffffff on the page's default white background");
+    expect(text()).toContain("opacity: 0");
+  });
+
   it("merges findings whose capped fields agree, and lists both of their paths", () => {
     /* `text` is capped and `where` has no sibling index, so two different
        things in the source can read the same. The row says how many, and
@@ -473,15 +487,44 @@ describe("findings in plain words, identical ones once", () => {
     expect(text()).toContain("Unicode tag characters");
   });
 
-  it("says where it is as markup, never as meaning", () => {
-    paint(examined({ findings: LATEXML }));
-    expect(text()).toContain("marked up as maths");
-    expect(text()).not.toContain("inside a maths formula");
+  it("does not infer a place from the attacker-written source path", () => {
+    paint(examined({
+      findings: [typesetter('body > p#ordinary > math > span')],
+    }));
+    expect(text()).not.toContain("marked up as");
   });
 
-  it("names no place when the paths disagree about one", () => {
-    paint(examined({ findings: [typesetter(PATHS[0]), typesetter("body > p > a")] }));
-    expect(text()).not.toContain("marked up as");
+  it.each([
+    ["right-to-left override", "\u202e", "U+202E"],
+    ["Arabic letter mark", "\u061c", "U+061C"],
+  ])("prints the %s visibly instead of letting it reorder the finding", (_name, control, label) => {
+    paint(examined({
+      findings: [{
+        ...HIDDEN,
+        where: `body > p#before${control}after`,
+        text: `READ ${control}THIS`,
+        detail: `contains ${control} a bidi control`,
+      }],
+    }));
+    expect(text()).toContain(label);
+    expect(host.textContent).not.toContain(control);
+  });
+
+  it("caps attacker-written paths and evidence without hiding the finding's words", () => {
+    const tail = "ATTACKER-CONTROLLED-TAIL";
+    paint(examined({
+      findings: [{
+        ...HIDDEN,
+        where: `body > p#${"x".repeat(10_000)}${tail}`,
+        detail: `style: ${"y".repeat(10_000)}${tail}`,
+      }],
+    }));
+
+    expect(text()).toContain(PAYLOAD);
+    expect(host.querySelector(".ref-scan-where")?.textContent?.length).toBeLessThan(1_000);
+    expect(host.querySelector(".ref-scan-detail")?.textContent?.length).toBeLessThan(1_000);
+    expect(text()).toContain("shortened");
+    expect(text()).not.toContain(tail);
   });
 
   it("says there are no visible words rather than drawing an empty quote", () => {

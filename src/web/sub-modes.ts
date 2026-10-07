@@ -1,6 +1,6 @@
 /**
  * **The sub-modes, named once** — the chips inside a mode that change the whole
- * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's four views,
+ * band: Learn's Recall | Tutorial | Explore | Quiz, Diagram's five pictures, Referee's five views,
  * Summary's Brief | Fuller | Thread, Structure's Fisheye | Expanded, Debate's Reception | Claims.
  *
  * Greg, 2026-10-01 (SPIDERYARN-READING2-77):

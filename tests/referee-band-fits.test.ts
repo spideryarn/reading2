@@ -33,8 +33,9 @@
  *
  * - a rule capping `.ref-brief` and giving it its own scrollbar, plus a floor
  *   under `.ref-panel` so it is no longer the child that gives way;
- * - markup that actually puts the notice and the scan inside a `.ref-brief`,
- *   and leaves the chips and the panel outside it.
+ * - markup that actually puts the notice inside a `.ref-brief`, and leaves the
+ *   chips and the panel outside it. The scan moved into that panel on
+ *   2026-10-07, so it no longer contributes to the preamble's height at all.
  *
  * Delete the wrapper from the band and the CSS matches nothing; every other test
  * still passes and the mode is unusable again. So this file pins the pairing,
@@ -93,6 +94,24 @@ describe("the stylesheet caps the preamble and floors the panel", () => {
     expect(min).not.toBe("0");
     expect(min).not.toBe("0px");
     expect(min).toMatch(/^[\d.]+\s*(?:rem|px|em)$/);
+  });
+});
+
+describe("the Hidden text mark is visible in either state", () => {
+  it("gives the ring a size and border, and fills an unexplained finding", () => {
+    const ring = bodyOf(".ref-view-dot");
+    expect(ring).not.toBeNull();
+    expect(ring).toMatch(/width:\s*(?!0(?:\D|$))[^;]+;/);
+    expect(ring).toMatch(/height:\s*(?!0(?:\D|$))[^;]+;/);
+    expect(ring).toMatch(/border:\s*[^;]+;/);
+    expect(bodyOf(".ref-view-dot.found")).toMatch(/background:\s*[^;]+;/);
+  });
+});
+
+describe("five chips at phone width", () => {
+  it("wraps the row rather than wrapping a multi-word chip", () => {
+    expect(bodyOf(".ref-top")).toMatch(/flex-wrap:\s*wrap/);
+    expect(bodyOf(".ref-view-btn")).toMatch(/white-space:\s*nowrap/);
   });
 });
 

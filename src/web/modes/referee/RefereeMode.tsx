@@ -44,9 +44,10 @@ import { ModeSurface } from "../../ModeSurface.js";
  * **Referee mode — for somebody who has been asked to peer-review this piece.**
  *
  * docs/plans/260831an-referee-mode-for-peer-reviewers.md. The band itself is
- * stage 1 — the confidentiality notice, the four buttons, and a line per panel
- * saying what that panel will do — and it still calls no model. All four panels
- * underneath it can: Criteria, Claims, Mirror and Candidates.
+ * stage 1 — the confidentiality notice, the original four buttons, and a line
+ * per panel saying what that panel will do — and it still calls no model. Those
+ * four model-facing panels are Criteria, Claims, Mirror and Candidates; Hidden
+ * text is the fifth panel and calls no model.
  *
  * There are **four** of them and the plan on disk says three: `candidates` was
  * added on Greg's say-so the same night, overruling the cut the plan's appendix
@@ -82,7 +83,8 @@ import { ModeSurface } from "../../ModeSurface.js";
  * was nearly every paper. Greg, 2026-10-07 (`spya-y6590g`): *"Perhaps squirrel
  * this info away as a sub-mode? It doesn't seem important enough to be right
  * at the top of Criteria."* So it is the fifth chip, **Hidden text**, which
- * carries a dot when the scan found something with no everyday explanation.
+ * carries a filled dot when the scan found something with no everyday
+ * explanation and a ring when every finding wears one.
  * docs/plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md.
  *
  * ## What the notice still is: past tense, never dismissed, nothing remembered
@@ -465,14 +467,15 @@ export function RefereeViews({
               onClick={() => {
                 /* **The gesture seam for Claims.** Pressing its chip with
                    nothing there starts it — Greg's rule about opening a mode,
-                   one level down. The other three chips arm nothing; Candidates
-                   waits for Build the reviewer brief. The table is
+                   one level down. The other four chips arm nothing; Candidates
+                   waits for Build the reviewer brief and Hidden text's scan has
+                   already run. The table is
                    src/web/activation.ts § REFEREE_TARGET, which is also where
                    the note about Candidates and the search engine lives.
 
                    Here, in the `onClick`, and deliberately **not** in `onView`'s
                    `setView` one level up: `?referee=` is query state, so Back and
-                   Forward move it too, and retracing your steps through the four
+                   Forward move it too, and retracing your steps through the five
                    chips must not buy a claims run or a web search. */
                 armActivationForRefereeView(slug, v);
                 onView(v);
@@ -504,7 +507,7 @@ export function RefereeViews({
  * `ControlTip`'s rule, which is the whole reason the second sentence is worth a
  * hover: `what` is what the reader could have worked out by pressing the chip
  * and looking; `how` is what they could not — where the answer comes from, what
- * it costs, or what the sub-mode does *not* promise. Each of these four `how`s
+ * it costs, or what the sub-mode does *not* promise. Each of these five `how`s
  * is a refusal:
  *
  * - **Criteria** never scores the paper, and the run is a model call over the
@@ -518,8 +521,10 @@ export function RefereeViews({
  * - **Candidates** searches the web, which is a third party at a moment none of
  *   the other three reaches one, and checks no conflicts of interest
  *   (`COI_NOT_CHECKED`).
+ * - **Hidden text** calls no model, does not check PDFs and reports without
+ *   blocking anything.
  *
- * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a fifth
+ * A total `Record`, beside `REFEREE_VIEW_LABEL` and for its reason: a sixth
  * sub-mode is a red compile here rather than a chip that silently explains
  * nothing.
  */
@@ -550,14 +555,14 @@ const REFEREE_VIEW_TIP: Record<RefereeView, { what: string; how: string }> = {
  * What each button says — the registry's words since 2026-10-01, so the chip
  * and the command bar's row for it say the same thing (src/web/sub-modes.ts;
  * docs/plans/261001d-command-bar-lists-sub-modes.md). Still a total `Record`
- * there, so a fifth sub-mode is a red compile as well as in the switch below.
+ * there, so a sixth sub-mode is a red compile as well as in the switch below.
  */
 const REFEREE_VIEW_LABEL = (v: RefereeView): string => REFEREE_SUB_MODES[v].label;
 
 /**
  * The selected sub-mode's panel.
  *
- * An exhaustive `switch` with a `never` in the default, so a fifth member of
+ * An exhaustive `switch` with a `never` in the default, so a sixth member of
  * `RefereeView` cannot be added without a panel to draw for it — which is not
  * hypothetical: `candidates` was added the same night, and this is what said
  * where. The alternative

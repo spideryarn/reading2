@@ -55,7 +55,7 @@ describe("the referee mode itself", () => {
 });
 
 describe("which sub-mode a link asks for", () => {
-  it("recognises the four, and nothing else", () => {
+  it("recognises the five, and nothing else", () => {
     for (const view of REFEREE_VIEWS) expect(isRefereeView(view)).toBe(true);
     expect(isRefereeView("verdict")).toBe(false);
     expect(isRefereeView("Criteria")).toBe(false);

@@ -48,7 +48,7 @@
  * used sparingly (docs/project/url-state.md), and a column is a migration for
  * a checkbox — never arises.
  *
- * ## The four rules this component is under, and where each is enforced
+ * ## The five rules this component is under, and where each is enforced
  *
  * 1. **Never say "nothing found" when nothing was looked at.** The `switch` on
  *    `scan.examined` is exhaustive with a `never` in the default, and the
@@ -77,6 +77,9 @@
  *    A `"visible-instruction"` carries a required `caveat` — a paper *about*
  *    prompt injection quotes payloads for a living — and the row prints it.
  *    Hidden text has no innocent explanation and gets no such line.
+ * 5. **The panel is shut unless something was found.** `shown()` returns the
+ *    computed default beside the words, and only a non-empty finding list sets
+ *    `open`; a labelled finding still counts.
  *
  * **It reports and decides nothing.** No score, no verdict, no refusal, and it
  * blocks no model call. It is a way for a referee to find out that somebody
@@ -167,40 +170,29 @@ const KIND_MEANS: Record<FindingKind, string> = {
 };
 
 /**
- * **Where it is, in words**, when the source path says so plainly — and
- * nothing otherwise, rather than a guess. The path is `pathOf`'s in
- * src/injection-scan.ts: at most four `tag#id.class` steps, innermost last.
- * MathML first, because it is where a typesetter's invisible operators live.
- *
- * **Said as markup, never as meaning** — *marked up as maths*, not *inside a
- * maths formula* — because the tag names are the document's own, and a
- * hostile one can wrap a payload in `<mo>` as easily as a typesetter does.
- * GPT Sol's review of plan 261007h, finding 3. Element names only, never a
- * class or an id, which are freer still.
- */
-const MATHML = new Set([
-  "math", "semantics", "annotation", "annotation-xml", "mrow", "mo", "mi", "mn", "ms", "mtext",
-  "mspace", "msub", "msup", "msubsup", "mfrac", "msqrt", "mroot", "mstyle", "mtable", "mtr", "mtd",
-  "munder", "mover", "munderover", "mpadded", "mphantom", "menclose", "merror", "mmultiscripts",
-]);
-const PLACES: readonly { words: string; tags: readonly string[] }[] = [
-  { words: "marked up as maths", tags: [...MATHML] },
-  { words: "marked up as a figure", tags: ["figure", "figcaption"] },
-  { words: "marked up as a table", tags: ["table", "thead", "tbody", "tr", "td", "th", "caption"] },
-  { words: "marked up as a link", tags: ["a"] },
-  { words: "marked up as a heading", tags: ["h1", "h2", "h3", "h4", "h5", "h6"] },
-];
-
-export function placeInWords(where: string): string | undefined {
-  const tags = where.split(" > ").map((step) => step.split(/[#.]/)[0]?.toLowerCase() ?? "");
-  return PLACES.find((place) => tags.some((tag) => place.tags.includes(tag)))?.words;
-}
-
-/**
  * Characters that draw nothing, and whitespace: what is left of a finding's
  * quoted text once they are gone is what a reader would actually see.
  */
 const DRAWS_NOTHING = /[\s­​-‏‪-‮⁠-⁤⁦-⁩﻿\u{E0000}-\u{E007F}]/gu;
+
+/**
+ * Direction controls in returned document strings can also make the browser
+ * visually reorder the evidence that names them. Show the code point instead. The
+ * source path and finding text are both document-written, so both pass through
+ * this boundary; React escaping alone does not neutralise Unicode bidi.
+ */
+const BIDI_CONTROL = /\p{Bidi_Control}/gu;
+
+/** Keep an attacker-written id, class or CSS value from becoming the whole panel. */
+const MAX_EVIDENCE_TEXT = 500;
+
+function visibleEvidence(value: string, cap = Number.POSITIVE_INFINITY): string {
+  const visible = value.length > cap ? `${value.slice(0, cap)}… [shortened]` : value;
+  return visible.replace(BIDI_CONTROL, (control) => {
+    const codePoint = control.codePointAt(0);
+    return codePoint === undefined ? "" : `⟦U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}⟧`;
+  });
+}
 
 /**
  * **Findings that read the same are one row, with a count.**
@@ -216,7 +208,9 @@ const DRAWS_NOTHING = /[\s­​-‏‪-‮⁠-⁤⁦-⁩﻿\u{E0000}-\u{E007F}]/
  * **Two findings in one row may be two different things in the source** —
  * `text` is capped, and `where` is a four-step hint with no sibling index —
  * so a row never claims they are the same place: it says how many findings it
- * stands for, and lists every distinct source path in full.
+ * stands for, and lists every distinct source path. A path is capped only when
+ * drawn: ids and classes belong to the document, so one must not fill the panel
+ * and push the finding's own words out of reach.
  */
 interface Group {
   key: string;
@@ -290,7 +284,7 @@ function ordered(findings: ScanFinding[]): ScanFinding[] {
  * **One state of the panel: what it says shut, what it hides, and how worried a
  * referee should be.**
  *
- * All four together in one returned object rather than three functions
+ * All five together in one returned object rather than separate functions
  * switching over the same union, because the failure that matters is them
  * disagreeing — a headline saying *nothing was checked* over a tooltip saying
  * *nothing was found* is worse than either sentence alone.
@@ -583,8 +577,8 @@ function WhatWasNotChecked({ scan }: { scan: HtmlSourceScan }) {
 }
 
 /**
- * **One row: what was found, where in words, the words themselves, what the
- * trick is, and then the evidence for somebody who will go and look.**
+ * **One row: what was found, the words themselves, what the trick is, and then
+ * the evidence for somebody who will go and look.**
  *
  * Plan 261007h put the plain words first and the CSS path and code points
  * last and smaller, under *In the source*. Both stay: the rules say evidence
@@ -594,10 +588,6 @@ function Finding({ group }: { group: Group }) {
   const { finding, count, paths } = group;
   const ordinary = finding.ordinary === undefined ? undefined : ownLabel(ORDINARY_LABEL, finding.ordinary);
   const means = ownLabel(KIND_MEANS, finding.kind);
-  /* Said only when every path agrees, so a row never claims a place for
-     copies that are somewhere else. */
-  const placeWords = paths.map(placeInWords);
-  const place = placeWords.every((p) => p === placeWords[0]) ? placeWords[0] : undefined;
   const visible = finding.text.replace(DRAWS_NOTHING, "") !== "";
   return (
     /* `data-` attributes so tests/source-scan-notice.test.tsx can assert the
@@ -611,16 +601,10 @@ function Finding({ group }: { group: Group }) {
       data-count={count}
     >
       <span className="ref-scan-kind">{ownLabel(KIND_LABEL, finding.kind) ?? plainWords(finding.kind)}</span>
-      {(count > 1 || place !== undefined) && (
-        <span className="ref-scan-count">
-          {[count > 1 ? `${count} times` : undefined, place]
-            .filter((part) => part !== undefined)
-            .join(", ")}
-        </span>
-      )}
+      {count > 1 && <span className="ref-scan-count">{count} times</span>}
       {ordinary !== undefined && <span className="ref-scan-tag">{ordinary}</span>}
       {visible ? (
-        <q className="ref-scan-text">{finding.text}</q>
+        <q className="ref-scan-text"><bdi>{visibleEvidence(finding.text)}</bdi></q>
       ) : (
         /* An empty pair of quote marks reads as a rendering bug. */
         <span className="ref-scan-text ref-scan-empty">No visible words beside it.</span>
@@ -637,10 +621,11 @@ function Finding({ group }: { group: Group }) {
         {paths.map((path, i) => (
           <span key={path}>
             {i > 0 ? "; " : ""}
-            <span className="ref-scan-where">{path}</span>
+            <bdi className="ref-scan-where">{visibleEvidence(path, MAX_EVIDENCE_TEXT)}</bdi>
           </span>
         ))}{" "}
-        · <span className="ref-scan-detail">{finding.detail}</span>
+        ·{" "}
+        <bdi className="ref-scan-detail">{visibleEvidence(finding.detail, MAX_EVIDENCE_TEXT)}</bdi>
       </span>
     </li>
   );

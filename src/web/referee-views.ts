@@ -50,8 +50,8 @@ export const REFEREE_VIEWS = [
      referee's, and the plan's appendix had cut it for exactly that reason
      (§ Appendix — ideas considered and not picked: it serves a different user,
      and a plausible name with a real URL is the thing a model hallucinates
-     best). Greg overruled the cut on 2026-08-31. It stays last in the list
-     because the first three are one person's job and this is somebody else's. */
+     best). Greg overruled the cut on 2026-08-31. It follows the first three,
+     which are one person's job, because this is somebody else's. */
   "candidates",
   /* **The check of the document's own source for text hidden from the
      reader** — src/web/SourceScanNotice.tsx. No model, and nothing to start:

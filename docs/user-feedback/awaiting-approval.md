@@ -13,6 +13,17 @@ in this directory records which, and the line comes off.
 
 ## Waiting on Greg now
 
+- 2026-10-07 · SPIDERYARN-READING2-EH (spya-y6590g; the report itself shipped: the hidden-text
+  check is its own Referee sub-mode, in plain words, this is its deferred half) · on arXiv papers
+  the check still flags each zero-width space that arXiv's converter puts in a formula, so its chip
+  shows a dot. Your idea was a small-LLM pre-filter, but whoever hid the text also writes what the
+  model would judge, so it could be talked into hiding a real attack. Recommended instead (B): a
+  few deterministic lines in the scanner marking a lone zero-width character inside maths as
+  ordinary, still listed. Or A, the LLM as a note beside each row that can never hide one; or C,
+  leave it. Either A or B edits a security defence, so nothing was built · qi-xwj659j8 ·
+  [261007h § Questions for Greg](../plans/261007h-referee-hidden-instructions-become-a-sub-mode-in-plain-words.md#questions-for-greg) ·
+  [note](261007_0544-referee-hidden-instructions-into-a-sub-mode-in-plain-words.md)
+
 - 2026-10-06 · SPIDERYARN-READING2-E4 (spya-rvbmss; the report itself shipped: two readers'
   copies of one article are now tested end to end, this is its deferred half) · two small design
   questions. Q1: when two readers both share one article, the public shelf shows two identical

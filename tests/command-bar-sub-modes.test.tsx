@@ -366,6 +366,7 @@ describe("the `generates` marker on a sub-mode row", () => {
     expect(marked("Learn › Recall")).toBe(false);
     expect(marked("Referee › Criteria")).toBe(false);
     expect(marked("Referee › Mirror")).toBe(false);
+    expect(marked("Referee › Hidden text")).toBe(false);
   });
 
   it("is what `subModeGenerates` says, for every sub-mode", () => {
@@ -474,6 +475,19 @@ describe("Enter on a sub-mode row, on the reading view", () => {
     expect(pendingActivation("a-piece", "quiz")).toBeNull();
   });
 
+  it("opens Referee on Hidden text and arms nothing", () => {
+    const onMode = vi.fn();
+    reading({ onMode });
+    openBar();
+    type("hidden text");
+    const hidden = subRows().find((row) => fullName(row) === "Referee › Hidden text");
+    expect(hidden).toBeDefined();
+    act(() => hidden?.click());
+    expect(onMode).toHaveBeenCalledWith("referee", { mode: "referee", view: "hidden" });
+    expect(pendingActivation("a-piece", "claims")).toBeNull();
+    expect(pendingActivation("a-piece", "candidates")).toBeNull();
+  });
+
   it("writes mode and sub-mode as one pushed Reader navigation, undone by one Back", async () => {
     readingThroughReader("?mode=diagram&diagram=trail&thread=spya-k3m9qt");
     const push = vi.spyOn(history, "pushState");
@@ -527,6 +541,25 @@ describe("Enter on Structure › Expanded, on the reading view", () => {
       const params = new URLSearchParams(location.search);
       return params.get("mode") === "structure" && params.get("structure") === "expanded";
     });
+  });
+});
+
+describe("Enter on Referee › Hidden text, on the reading view", () => {
+  it("writes the fifth Referee view in one navigation and arms nothing", async () => {
+    readingThroughReader("?mode=plain");
+    const push = vi.spyOn(history, "pushState");
+    openBar();
+    type("hidden text");
+    const hidden = subRows().find((row) => fullName(row) === "Referee › Hidden text");
+    expect(hidden).toBeDefined();
+    act(() => hidden?.click());
+    await until(() => {
+      const params = new URLSearchParams(location.search);
+      return params.get("mode") === "referee" && params.get("referee") === "hidden";
+    });
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(pendingActivation("a-piece", "claims")).toBeNull();
+    expect(pendingActivation("a-piece", "candidates")).toBeNull();
   });
 });
 
@@ -649,6 +682,13 @@ describe("the registry's two answers agree", () => {
     expect(subModeGenerates(candidates)).toBe(false);
     /* And Claims still does, so the row above is not passing on an empty table. */
     expect(subModeTarget({ mode: "referee", view: "claims" })).toBe("claims");
+  });
+
+  it("Hidden text arms nothing and is not marked as generating", () => {
+    const hidden: SubMode = { mode: "referee", view: "hidden" };
+    expect(subModeTarget(hidden)).toBeNull();
+    expect(bandTarget("referee", { ...DEFAULTS, referee: "hidden" })).toBeNull();
+    expect(subModeGenerates(hidden)).toBe(false);
   });
 
   it("Quiz clears the thread, in the same write", () => {

@@ -354,7 +354,7 @@ export const HELP_MODES: Record<Mode, HelpModeExtra> = {
           </li>
           <li>
             <strong>Hidden text</strong>: the check of the original web page for words a reader would
-            not see but an AI would read. Its chip carries a dot when it found something.
+            not see but an AI would read. Its chip carries a mark when it found something.
           </li>
         </ul>
         <p>Referee is only for whoever added the article.</p>

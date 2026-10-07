@@ -128,12 +128,10 @@ Greg, 2026-10-03 (`spya-vbeyse`):
 Measured that day at 1280 × 800, the criterion box started 607px down a 760px band. So, top to
 bottom, the band is now:
 
-1. **One row: the four chips and a *Notices* button**, with the band's (i) in the corner.
-2. **The Notices box, only while it is open** — the source scan, then the confidentiality
-   sentences in full. It is shut on every visit and remembers nothing. **It opens itself when the
-   scan found something** (`sourceScanOpens` in
-   [`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx), the scan's own rule, so a
-   labelled finding counts and a scan that lands late still opens it).
+1. **One row: the five chips and a *Notices* button**, with the band's (i) in the corner.
+2. **The Notices box, only while it is open** — the confidentiality sentences in full. It is shut
+   on every visit, remembers nothing and never opens itself. The document-specific source scan is
+   the Hidden text chip below.
 3. **The panel**, which starts with one line saying what to do in this sub-mode: the first
    sentence of the chip's own hover card, from the same constant. In Criteria, Claims and Mirror
    that line ends in a small button, ***How to read this*** (§ How to read a panel, below).
@@ -182,11 +180,13 @@ rows of CSS path. Now:
   can wear one on purpose; a ring and not a dot, because arXiv's own furniture would otherwise light
   the dot on nearly every paper.
 - **Each finding is in plain words** — a sentence per kind saying what the trick is and what it
-  would look like if it mattered, where it sits *as markup* ("marked up as maths", never "inside a
-  formula": the tag names are the document's own), and the CSS path and code points last, under
-  *In the source*. **Identical findings are one row with a count**, keyed on every field a referee
-  reads except the path, so a payload's own words always make it a row of its own; every path is
-  still listed.
+  would look like if it mattered, with the CSS path and code points last, under *In the source*.
+  The path stays raw evidence rather than becoming a place description: ids and classes are
+  document-written, and can forge its separators too. Bidi controls are printed as code points so
+  they cannot reorder the evidence that names them; paths and detail are capped on screen so an
+  attacker-written id, class or CSS value cannot bury the finding's words. **Identical findings are
+  one row with a count**, keyed on every field a referee reads except the path, so a payload's own
+  words always make it a row of its own; every path is still listed.
 
 **What this gave up**: rule 5's *before anything else*. A referee who never presses the chip sees
 a dot, not the finding. That was Greg's call. **What it did not do** is the pre-filter he asked
@@ -859,7 +859,7 @@ Where the cards are, and the one thing each says that the label cannot:
 
 | Control | The half a press would not tell you |
 |---|---|
-| the four sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts |
+| the five sub-mode chips ([`RefereeMode.tsx`](../../src/web/modes/referee/RefereeMode.tsx) § `RefereeViews`) | Criteria never scores; Claims asserts linkage and not adequacy; Mirror is never given the paper and stores nothing; Candidates reaches a search engine and checks no conflicts; Hidden text calls no model and does not check PDFs |
 | the three kind chips | `KIND_NOTE` — the same string the panel prints under the selected kind, so the two kinds a referee has *not* pressed explain themselves too |
 | the preset chips | they replace the whole form: text, kind and both poles |
 | *Run this criterion*, *Pull the paper's claims*, *Try again* | one model call over the whole paper, at full price, nothing resumed |
@@ -1170,23 +1170,19 @@ chips started below the fold, `.ref-panel` was **0px tall with 321px of content 
 nothing clipped — Criteria, Claims, Mirror and Candidates were all simply unreachable, on any window
 shorter than about 1400px. Every test was green throughout, because jsdom has no layout engine.
 
-The fix is a `.ref-brief` wrapper around the notice and the scan, capped at 40% of the band with its
-own scroll, and a `min-height` floor under `.ref-panel` so it is no longer the one child flexbox is
-willing to squeeze — [`src/web/styles/referee.css`](../../src/web/styles/referee.css) § *referee mode* carries the
-measurements and the two fixes that were passed over. A referee still meets the whole
-confidentiality notice without scrolling at 1280 × 720; below the notice, the scan is one scroll
-away behind a trailing fade, and the panel keeps 294px. Verified across four sub-modes at seven
-viewport sizes from 1280 × 1400 down to 390 × 560 and 900 × 337.
+The original fix was a `.ref-brief` wrapper around the notice and scan, capped at 40% of the band
+with its own scroll, and a `min-height` floor under `.ref-panel`. Since 2026-10-07 `.ref-brief`
+contains only the confidentiality notice and the scan uses the panel's own scroller. The cap and
+floor remain the pair that keeps an opened notice from squeezing the selected panel away —
+[`src/web/styles/referee.css`](../../src/web/styles/referee.css) § *referee mode*.
 
 [`tests/referee-band-fits.test.ts`](../../tests/referee-band-fits.test.ts) holds the half a test can
 reach: the rules exist and say the right thing, and the markup they are aimed at still puts the
-notice and the scan inside the wrapper and the chips and the panel outside it. It is explicit that
+notice inside the wrapper, the scan outside it, and the chips and panel outside it. It is explicit that
 it cannot measure anything, and why a test that tried would have passed before the fix.
 
-**Both boxes collapse now** — 2026-09-02, and it is a product change rather than a second layout
-fix. The ordinary first screen of the preamble is two lines, so the cap and its trailing fade are
-what hold the *open* case rather than the every-visit one; the measurements above are of that open
-case and are still the ones to design against.
+**Both disclosures collapse**: Notices only on a press, Hidden text open by default only for a
+finding. That is a product choice rather than the layout fix above.
 
 ## What the evidence actually says, and where the plan overstated it
 
@@ -1276,7 +1272,7 @@ referee copy has to be written around:
 
 **The line between this and the general page.** A referee is a deep reader with a deadline and a
 form to fill in. Everything on the general page is true for them; what the referee page adds is the
-four sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
+five sub-modes, the confidentiality sentence, and the promise that nothing here forms the judgment
 for you.
 
 ## See also
@@ -1290,7 +1286,7 @@ for you.
 - [260831e-helping-peer-reviewers/](../research/260831e-helping-peer-reviewers/README.md) — the
   research behind both: what journals and funders will let AI touch, the prior art and its cognitive
   offloading evidence, and the editor's side of the desk.
-- [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the four sub-modes, named once.
+- [`src/web/referee-views.ts`](../../src/web/referee-views.ts) — the five sub-modes, named once.
 - [`src/referee-criteria.ts`](../../src/referee-criteria.ts), [`src/referee-mirror.ts`](../../src/referee-mirror.ts),
   [`src/referee-claims.ts`](../../src/referee-claims.ts),
   [`src/referee-candidates.ts`](../../src/referee-candidates.ts) — the four model-facing modules.

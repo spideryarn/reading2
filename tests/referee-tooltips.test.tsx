@@ -337,8 +337,8 @@ function expectEarnsItsHover(card: Card, control: string): void {
 /* ----------------------------------------------------- the sub-mode chips -- */
 
 /**
- * The four chips at the top of the mode, which were the only radiogroup in the
- * app carrying nothing at all — four one-word labels over four sub-modes that do
+ * The chips at the top of the mode, which were the only radiogroup in the app
+ * carrying nothing at all — originally four one-word labels over sub-modes that do
  * unrelated things, one of which spends money and one of which is never given
  * the paper.
  *

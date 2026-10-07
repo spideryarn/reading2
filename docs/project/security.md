@@ -1029,7 +1029,11 @@ Three properties, and each is a decision rather than an implementation detail:
   and — exactly as with the chat fence [above](#prompt-injection-and-what-the-fence-does-not-do) —
   **it is not called a defence**.
 - **It reports; it decides nothing.** No boolean, no score, no refusal. A finding is a place in the
-  source and the words that were there, for a person to look at.
+  source and the words that were there, for a person to look at. The browser treats the returned
+  path as opaque, document-written evidence rather than reparsing it into a place claim, prints
+  bidi controls as code points so they cannot reorder what the referee sees, and caps paths and
+  detail in the display so an attacker-written id, class or CSS value cannot fill the panel
+  ([`SourceScanNotice.tsx`](../../src/web/SourceScanNotice.tsx)).
 - **`ordinary` is a label, not a filter.** Pages hide text for good reasons all day: a nav submenu, a
   print-only block, a `sr-only` skip link, a closed `<details>`. Those findings are *labelled* and
   still returned, because the label is read off class names and element names and is therefore
