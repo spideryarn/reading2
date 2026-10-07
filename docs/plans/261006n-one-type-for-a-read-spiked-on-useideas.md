@@ -184,3 +184,214 @@ stages and stop condition are the orchestrator's (Claude's), not Greg's.
 
 - Plan: GPT Sol, read-only, 2026-10-06, **ready with these fixes, for the spike**; applied above. No
   second round: the fixes narrow the work, and the code gets its own review.
+
+## What the spike found
+
+Built 2026-10-07 on branch `worktree-sweep7-read-type-spike`, not pushed. Three commits, each green:
+
+| Commit | What |
+|---|---|
+| `f36f463c7` | Stage 1: `tests/ideas-read-states.test.tsx` (new) and three tests in `tests/skim-panel.test.tsx`, against the code as it was. No source change. |
+| `751cab265` | Stage 2a, the smaller change: the list and its four flags as one `IdeasAnswer \| null` inside `useIdeasRead`; `status`, `error` and everything the hook returns unchanged. One file. |
+| `781589b13` | Stage 2b, the full union on top: `src/web/read-state.ts`, `useIdeasRead` on one `Read<IdeasAnswer>`, five consumers moved, ten test files changed in how they read or pose the state. |
+
+**The recommendation is at the end: land stages 1 and 2a, do not land 2b.** What follows is the
+evidence, including the parts that point the other way.
+
+### 2a against 2b, measured
+
+Non-comment, non-blank production lines (block comments stripped, then blank and `//` lines dropped):
+
+| File | Before | After 2a | After 2b |
+|---|---|---|---|
+| `src/web/read-state.ts` | – | – | 33 |
+| `src/web/useIdeas.ts` | 150 | 162 | 126 |
+| `src/web/IdeasPanel.tsx` | 276 | 276 | 280 |
+| `src/web/modes/ideas/IdeasMode.tsx` | 141 | 141 | 143 |
+| `src/web/useSkim.ts` | 159 | 159 | 161 |
+| `src/web/modes/skim/SkimMode.tsx` | 485 | 485 | 485 |
+| `src/web/marginalia/MarginaliaColumn.tsx` | 642 | 642 | 644 |
+| **Total** | **1853** | **1865** | **1872** |
+| The six existing files alone | 1853 | 1865 | 1839 |
+
+| Measure | Before | After 2a | After 2b |
+|---|---|---|---|
+| `useState`s in `useIdeasRead` (`FreshReads` untouched, not counted) | 7 | 3 | 1 |
+| Places a consumer tests two separately stored read facts together | 6 | 6 | 3 |
+| – of those, in `IdeasPanel` | 3 | 3 | 3 |
+| `statusOf` call sites in production | – | – | 1 (`useIdeas`, for `useAutoRun`) |
+| `answerOf` / `failureOf` call sites in production (helpers the plan did not list) | – | – | 5 / 1 |
+| Existing test files edited | 0 | 0 | 10 |
+| `expect(…)` lines changed in an existing test | 0 | 0 | 0 |
+| Biome's cognitive complexity for `IdeasPanel` (limit 25) | under | under | 27 |
+
+How the "two facts" row was counted. Before: the panel's footer gate (`ideas`, `status`, `stale`,
+`error`), its list gate (`ideas` with `status`) and its badge (`ideas` guarding `profiled`);
+`useSkim`'s `status === "ready" && stale`; `SkimMode`'s `status === "ready" ? ideas`;
+Marginalia's `status === "ready" && !stale ? ideas`. After 2b a test that narrows one value
+(`kind === "known" && answer !== null`) is not counted, which is the review's R7 point; what is
+left is the panel's same three, two of them because `IdeasAccess` hands the owner's list down a
+second time beside the read.
+
+2a's twelve extra lines are the `IdeasAnswer` declaration and a return statement that spells the
+five old fields out of it. 2b's hook is 24 lines shorter than the original and 36 shorter than
+2a's; the consumers grow by 10 between them, and the new module is 33.
+
+### The stop condition, line by line (as revised by R7)
+
+- **A `useState` beside the `Read`, or any independently stored duplicate read fact?** No. One
+  `useState<Read<IdeasAnswer>>`; `useFreshReads` is called exactly as before.
+- **A consumer other than the `useAutoRun` boundary needs `statusOf`?** No: one production caller.
+  But two more readers were needed that the plan did not have: `answerOf` ("the answer if there is
+  one", five callers) and `failureOf` ("the failure to say", one). And the test helper calls
+  `statusOf`, because three tables walk Ideas beside sibling hooks that still publish four words.
+- **Lines** (evidence, not a threshold): the six existing files went down by 14; with
+  `read-state.ts` the total went up by 19. 2a went up by 12. **`IdeasPanel` tests two facts together
+  in more places than today?** No, the same three; and it is the one file that got measurably harder
+  for the linter to follow.
+- **The duplicate read storage is deleted?** Yes.
+- **Visible behaviour, requests and spending unchanged?** Yes by every test: the 51 in
+  `tests/ideas-read-states.test.tsx` read the screen and count GETs and POSTs, and pass on all three
+  commits without an assertion changing. **No browser pass was done**; the plan's "Done when" asks
+  for one and it is outstanding if 2b is kept.
+- **An existing test needed a change to what it asserts?** No. Zero `expect(…)` lines changed. Ten
+  files changed how they read or pose the state: seven wrap the hook in
+  `tests/helpers/ideas-read-fields.ts § flat`, three build a posed owner with its `ideasReadFrom`,
+  and the stage-1 file changed its one adapter, `seen()`.
+- **Breaking a transition turns an integrated test red?** Yes: 51 breaks of the 2b code, all red
+  through the hook-and-panel suite rather than the transition table. They include the five the brief
+  named (`failedRead` returning `asking`; `retrying` keeping a known null; a transition at the start
+  of an ordinary reload; `statusOf` letting `recheck` change `none` or `ready`; each of the four
+  flags dropped). One is red by hanging: `load` closing over the read re-reads for ever. One was
+  green at first, removing the footer's `!stale` gate, and a test was added for it; that gap was in
+  the original code too.
+- **Harder to read?** Not answered by a reviewer: this stage ran without the Sol code review or the
+  Opus reader, which the plan asks for and which should be given both versions. The builder's own
+  reading: the hook is clearer, the panel is not.
+
+### What 2b gives that 2a does not, compiled
+
+Wrong consumer code was written twice in a scratch file, once against 2a's interface and once
+against 2b's, and compiled with `tsc -p src/web/tsconfig.json`. The scratch file is deleted; these
+are its results.
+
+| Case | 2a | 2b |
+|---|---|---|
+| **A. Postmortem 261004c.** The empty state is drawn and the failed re-read is never looked at. | compiles | **compiles** |
+| **B. Postmortem 261006g.** The page hands a child only "the list or null", so the child cannot tell asking from failed. | compiles | **compiles** (`answerOf(read)?.ideas ?? null`) |
+| **C. 261006g, the other way.** The child takes the whole read, switches on it with a `never` default, and forgets "still asking". | refused | refused |
+| **D.** A state that cannot happen, posed: ready, with no list, stale and profiled. | compiles | refused |
+| **E.** A fact read where it does not exist: `stale` under "none yet"; the error of a read still out. | compiles | refused |
+| **F.** The right code: draw the list when status says there is one. | refused (`ideas` is possibly null), so the consumer tests two facts | compiles |
+
+```
+C, 2a  (57,13): error TS2322: Type '"loading"' is not assignable to type 'never'.
+C, 2b  (69,13): error TS2322: Type '{ kind: "asking"; }' is not assignable to type 'never'.
+D, 2b  (86,82): error TS2353: Object literal may only specify known properties, and 'stale' does not exist in type '{ kind: "known"; answer: IdeasAnswer | null; recheck: string | null; }'.
+E, 2b  (93,63): error TS18047: 'o.read.answer' is possibly 'null'.
+E, 2b  (99,44): error TS2339: Property 'error' does not exist on type '{ kind: "asking"; }'.
+F, 2a  (104,33): error TS18047: 'o.ideas' is possibly 'null'.
+```
+
+So the plan review's R4 is confirmed and is the central finding: **2b's types refuse neither of the
+two postmortems the plan was written to prevent.** A consumer can still draw "none yet" and ignore
+`recheck`, and can still pass a child less than the whole read; the helper that makes consumers
+short, `answerOf`, is exactly the two-state door of 261006g. What stops both is the stage-1 tests,
+which hold a read open and read the screen. What 2b's types do refuse is D and E: a contradictory
+state, and a fact read where there is none. D is real (a fixture in
+`tests/no-profile-row-beside-paid-buttons.test.tsx` posed exactly it: `status: "ready"` with
+`ideas: null`), but no production code in `useIdeas` could reach it: the stage-1 adapter threw on any
+such combination for as long as the flat fields existed and never fired outside a deliberate break.
+
+2a alone already gives one compile-time gain: a flag left out of the answer object is a compile
+error, where a forgotten `setStale` was a stale `false`.
+
+### Three other hooks, on paper (R8)
+
+- **`useQuotes`** (always mounted; a forced run that appends). **Fits, with nothing beside the
+  read.** Its read state is `useIdeasRead`'s line for line: `Read<QuotesAnswer>` with the same four
+  flags. Being always mounted is `useStepFinished` calling `refresh`, and the appending run is the
+  rewrite hold keyed on `generatedAt`; neither is read state.
+- **`useGlossary`** (local patches over the value; pending hide writes). **Fits one read store, but
+  not the three writers.** `panelRun` goes inside the answer. `patchEntry` rewrites one entry of a
+  known answer in place, which is a fourth writer the transition table does not have; the reset when
+  the slug changes under an always-mounted read is a fifth (back to `asking`). The pending hides
+  (`hiding` and its refs) and the look-up and ask-a-term state are operations, independent, and stay
+  as they are.
+- **`useSketch`** (an empty answer that carries `faults`). **Does not fit as the type stands.** A
+  sketch can be read and have no usable scene: today that is `status: "none"` with `faults` set, a
+  third thing between "none yet" and "a picture". `answer: null` cannot carry the faults, and an
+  answer of `{ sketch: null, faults }` makes the shared `statusOf` say `ready`, which would stop
+  `useAutoRun` drawing one. It needs its own answer shape (a picture, or the faults of one that
+  could not be used) and its own four-word mapping. Writing it out also confirmed what Opus's
+  investigation said: that branch sets `sketch`, `faults` and `drawn` and **leaves `stale`,
+  `outdated`, `profiled` and `profileChanged` from the previous answer** (`useSketch.ts`, the
+  `checked.scenes.length === 0` branch). `useIllustrated`'s second "none" branch does the same. That
+  is the bug 2a's shape removes, live, in two hooks this spike was told not to touch.
+
+So R8 holds: there is no set of hooks "that share Ideas' shape" to roll out to mechanically. Of
+these three, one is a copy, one needs more writers than the table has, and one needs a different
+type.
+
+### What the plan and the investigations got wrong, or did not say
+
+- **"The type prevents two of the seven postmortems outright"** (this plan, § What the two
+  investigations found). False, as R4 already said and cases A and B now show by compiling.
+- **The files list** named seven source files and "tests". The tests were the larger half: ten
+  existing files. Two of them reach the hook through a cast (`as { status: string }` in
+  `tests/artefact-read-hooks.test.tsx`, `SevenRead` in
+  `tests/none-yet-is-not-a-404-hooks.test.tsx`), so the compiler did not report the removed fields
+  there; they would have failed only at run time.
+- **"`statusOf` … for the two consumers that want the four words"** undercounts what consumers
+  want. One wanted four words. Five wanted the answer or null, and one the failure or null.
+- **`outdated` is read by no production consumer of the Ideas read.** The panel's banner for it
+  went in plan 260929c and `useSkim` ignores it on purpose. It is carried, typed and tested, and
+  drawn nowhere.
+- **The `current()` check straight after `apiFetch` cannot be observed on its own**: the check
+  after the body is read catches every reply the first one does. Removing it alone turned nothing
+  red, in the original code and in 2b. Kept, as R3 says.
+- **Neither investigation priced the tables.** Three suites walk every artefact hook through one
+  sequence by field name. While migrated and unmigrated hooks coexist, each migrated row needs an
+  adapter back to the flat fields, which is what `flat` is.
+
+### Recommendation
+
+**Land stage 1 and stage 2a. Do not land 2b, and do not roll the union out.** Then give 2a's shape,
+one nullable answer object, to the hooks that reset flags by hand, starting with `useSketch` and
+`useIllustrated`, where a reset is already missing.
+
+The reason, in the order it weighs:
+
+1. **The stated purpose is not met.** The plan exists because of 261004c and 261006g, and 2b's
+   compiler accepts both mistakes. What catches them is a test that holds the read open, and those
+   tests now exist for Ideas and are independent of which shape the hook has.
+2. **The review's own bar was "the full union stays only if hook and panel are clearer than 2a."**
+   The hook is: three writers, a retry with no dependency on state, 36 fewer lines than 2a. The panel
+   is not: the same three joint tests, four more lines, three derived locals at the top, and the
+   linter's complexity over its limit for the first time.
+3. **The cost of rolling out is mostly tests, and it repeats.** One hook took ten test files. Its
+   siblings are rows in the same three tables, so each migration either grows the adapter or waits
+   for a single switch at the end, with both forms in the tree for the whole of it.
+4. **The paper exercise found one hook in three that is a copy.** Glossary needs writers the table
+   does not have and Sketch needs a different type, so the "one type" would be one type with local
+   exceptions from the second batch on.
+5. **2a's benefit is the one with a live instance.** Flags outliving their list is the class with a
+   bug in the tree today (Sketch), and 2a removes it in one file with no consumer or test touched.
+
+What to land: **`f36f463c7` and `751cab265`**, plus one line from `781589b13` that stage 1 needs
+since the rewrite-hold cluster landed on `dev`: the posed Quotes read in
+`tests/ideas-read-states.test.tsx` needs `fresh` (and that commit's added footer test is worth
+taking with it; under 2a its adapter stays as stage 1 wrote it). `781589b13` stays on the branch for
+whoever wants to read the union in place.
+
+**The strongest argument against this recommendation.** The hook is where all seven postmortems
+were written, and 2b's hook is plainly the better one: every way the state can change is one of
+three named functions with a table test, and a combination that means nothing cannot be stored.
+"The tests catch it" is what was true, in principle, before each of the seven. The spike also
+measured 2b at its worst: the first hook pays for `read-state.ts` alone, the panel's extra weight is
+partly `IdeasAccess` carrying the list twice (fixable, and out of this spike's scope), and the
+adapters in the tests exist only while the two forms coexist. Somebody who expects to touch these
+thirteen hooks often over the next six months could reasonably pay the one-off churn for a shape in
+which the next hook cannot forget a transition. If that is the view, the order would be Quotes,
+then FAQ, Timeline and Debate (the read halves Marginalia uses), with Glossary and Sketch each
+decided on their own and last.
