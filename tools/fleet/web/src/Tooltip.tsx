@@ -45,8 +45,28 @@
  * the same sentence into the trigger's own accessible name, from the same
  * `Tip` object — one source, two surfaces, and a test can read it out of the
  * DOM without simulating a pointer.
+ *
+ * **`enabled` and `positionReference` are props, and the product has neither.**
+ * Both are for the session list's preview (SessionsPanel.tsx § `PreviewOn`).
+ * `enabled={false}` switches a card off IN PLACE: wrapping a trigger in a
+ * `Tooltip` only some of the time moves it in the tree, so React builds a new
+ * node and whatever held the old one — focus above all — is holding nothing.
+ * `positionReference` draws the card beside a different element from the one
+ * that opens it, because a title button is only as wide as its text and a card
+ * anchored to it lands on top of the row it describes. **Never hand
+ * `setPositionReference` a `null`**: it overwrites the reference the trigger's
+ * ref set, that ref is memoised and is not called again, and the card is then
+ * positioned against nothing — at the top-left corner, with no error.
  */
-import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type Ref } from "react";
+import {
+  cloneElement,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
 import {
   FloatingArrow,
   FloatingDelayGroup,
@@ -91,6 +111,8 @@ export function Tooltip({
   placement = "top",
   mouseOnly = false,
   className,
+  enabled = true,
+  positionReference,
 }: {
   /** The panel's contents. Rendered only while open. */
   content: ReactNode;
@@ -107,8 +129,23 @@ export function Tooltip({
   mouseOnly?: boolean;
   /** Extra class on the panel, for a per-use accent. */
   className?: string;
+  /**
+   * **`false` is no card at all, on the same trigger node**: nothing opens it,
+   * an open one closes, and the trigger gets no `aria-describedby`. For a
+   * trigger that has a card only some of the time. See the header.
+   */
+  enabled?: boolean;
+  /**
+   * **Draw the card beside this element instead of beside the trigger.** Hover
+   * and focus stay on the trigger; only the geometry moves, the arrow and
+   * `flip` included. Omitted or `null`, the trigger is the reference.
+   */
+  positionReference?: Element | null;
 }) {
   const [open, setOpen] = useState(false);
+  // Switched off while open. The four hooks below stop listening, so nothing
+  // else would ever close it — and it would reopen by itself when switched on.
+  if (!enabled && open) setOpen(false);
   const arrowRef = useRef<SVGSVGElement>(null);
 
   const { refs, floatingStyles, context } = useFloating({
@@ -146,15 +183,27 @@ export function Tooltip({
       // into one, and a panel that lingered while the pointer crossed it would
       // sit on top of the thing being pointed at.
       handleClose: null,
+      enabled,
     }),
     // Keyboard parity: every trigger is a real button, so tabbing to one shows
     // what hovering it does.
-    useFocus(context),
+    useFocus(context, { enabled }),
     // Escape, and an outside press — which is how a card opened by a finger is
     // put away again.
-    useDismiss(context),
-    useRole(context, { role: "tooltip" }),
+    useDismiss(context, { enabled }),
+    useRole(context, { role: "tooltip", enabled }),
   ]);
+
+  const { setPositionReference, domReference } = refs;
+  useLayoutEffect(() => {
+    // Only ever an element — see the header for what a `null` does here.
+    if (positionReference == null) return;
+    setPositionReference(positionReference);
+    // Taken away again: back to the trigger, unless this is the unmount.
+    return () => {
+      if (domReference.current !== null) setPositionReference(domReference.current);
+    };
+  }, [positionReference, setPositionReference, domReference]);
 
   // Once the group is warm, neighbours appear with no fade at all: a fade reads
   // as lag when the panel is meant to be tracking the pointer along a row.

@@ -22,7 +22,7 @@
  * `tailwind-merge`, because nothing here takes a className from a caller that
  * could conflict with its own.
  */
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 
 /* One direction only: `Tooltip.tsx` imports nothing of this page's, so a
    heading that can carry a card costs no cycle. */
@@ -109,12 +109,16 @@ export function Mono({ children }: { children: ReactNode }): ReactNode {
 export function Card({
   className,
   children,
+  ref,
 }: {
   className?: string;
   children: ReactNode;
+  /** The card's own element, for a caller that has to measure against it. */
+  ref?: Ref<HTMLDivElement>;
 }): ReactNode {
   return (
     <div
+      ref={ref}
       data-slot="card"
       className={cx("tw:rounded-xl tw:border tw:border-rule tw:bg-panel", className)}
     >

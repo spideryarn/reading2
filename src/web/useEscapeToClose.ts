@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 
+import { isImeComposing } from "./key-chord.js";
+
 /**
  * Escape closes this dialog. Three panels — `ChatDialog`, `AnnotateDialog`,
  * `CommentDialog` — wanted exactly this: a bubble-phase `window` listener,
@@ -53,12 +55,19 @@ import { useEffect } from "react";
  * day somebody adds a `.show()`, this query has to be narrowed. `Dock.tsx`
  * makes the same query for the same reason, twice in `useCommandBarChord` and
  * once in the drawer's own capture listener.
+ *
+ * **Nor an Escape that belongs to an input method** (2026-10-07). A reader
+ * typing Japanese or Chinese presses Escape to dismiss the candidate list, and
+ * that press closed the panel they were typing in. Asked here, once, so it
+ * holds for every box inside the three dialogs, including the ones with no key
+ * handler of their own. The Dock's drawer asks the same thing of its own
+ * listener. docs/plans/261007a-ui-sweep-k2-composition-keys.md.
  */
 export function useEscapeToClose(onClose: () => void, enabled = true): void {
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || isImeComposing(e)) return;
       if (document.querySelector("dialog[open]") !== null) return;
       onClose();
     };

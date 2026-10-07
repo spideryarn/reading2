@@ -407,6 +407,10 @@ options), the choice and what was deferred are
   because a quiz does.
 - **Not drawn for a stale quiz**, whose passages may no longer be the prose; drawn for an outdated
   one. Not drawn for a visitor: the public payload has no quiz.
+- **They arrive when the run finishes, wherever you are by then.** The read listens for its own
+  step (`useStepFinished`), so a quiz started in the band and finished after you left it still
+  reaches the prose with no reload. It did not until 2026-10-06
+  ([`tests/always-mounted-reads-refresh.test.tsx`](../../tests/always-mounted-reads-refresh.test.tsx)).
 - **Shown whether or not you have read the passage.** The reading levels move every minute and would
   re-render the whole article through `memo(TableView)`; a question before its passage is a
   pre-question, not a giveaway.

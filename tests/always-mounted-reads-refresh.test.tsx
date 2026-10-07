@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * **An always-mounted read hears its own step finish** — Citations, Glossary
- * and Quotes, whose reads `OwnedReader` holds in every mode because the prose
- * marks them (and Marginalia shows the citations).
+ * **An always-mounted read hears its own step finish** — Citations, Glossary,
+ * Quotes and Quiz, whose reads `OwnedReader` holds in every mode because the
+ * prose marks them (and Marginalia shows the citations).
  *
  * Until 2026-10-02 every revalidation of these belonged to the band: a run
  * that finished after the reader had left the band reached neither the prose
@@ -10,10 +10,17 @@
  * now listens through `useStepFinished` (src/web/useStepJob.ts), quietly —
  * the same fix as Marginalia's (tests/marginalia-live-refresh.test.tsx, plan
  * 261002d), whose harness this is: the real `jobEngine` on a mocked network.
+ * Quiz had been hoisted two days before that fix and was left out of it, and
+ * out of `READS` below, until 2026-10-06. The inventory check derives the
+ * slug-taking hooks in `OwnedReader`: each must have a row here or a named
+ * exclusion with its own reason and coverage.
  *
  * The main case leaves the band unmounted. The companion cases check the
  * duplicate-refresh cost with it open, and the read's subscription lifecycle.
  */
+import { readFileSync } from "node:fs";
+import { parse } from "@babel/parser";
+import { VISITOR_KEYS, type Node } from "@babel/types";
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +50,7 @@ vi.mock("../src/web/lib/api.js", async () => {
 const { useCitationsRead } = await import("../src/web/useCitations.js");
 const { useGlossaryRead } = await import("../src/web/useGlossary.js");
 const { useQuotesRead } = await import("../src/web/useQuotes.js");
+const { useQuizRead } = await import("../src/web/useQuiz.js");
 const { jobEngine } = await import("../src/web/jobEngine.js");
 const { useStepJob } = await import("../src/web/useStepJob.js");
 
@@ -50,6 +58,7 @@ const READS = [
   ["citations", useCitationsRead],
   ["glossary", useGlossaryRead],
   ["quotes", useQuotesRead],
+  ["quiz", useQuizRead],
 ] as const;
 
 let host: HTMLDivElement;
@@ -198,4 +207,57 @@ describe("a run that finishes after the reader left the band", () => {
 
     expect(artefactReads().length).toBe(before);
   });
+});
+
+/** Direct hook calls with the article slug, inside the always-mounted owner.
+ * Aliased hook calls or a hook hiding the slug in a wrapper are beyond this
+ * syntax check; comments, imports and calls elsewhere cannot satisfy it. */
+function ownerHooks(source: string): string[] {
+  const ast = parse(source, { sourceType: "module", plugins: ["typescript", "jsx"] });
+  const owner = ast.program.body.find((node) => node.type === "FunctionDeclaration" && node.id?.name === "OwnedReader");
+  expect(owner, "the always-mounted composition must be found").toBeDefined();
+  const hooks = new Set<string>();
+  function visit(node: Node): void {
+    if (node.type === "CallExpression" && node.callee.type === "Identifier"
+      && /^use[A-Z]/.test(node.callee.name)
+      && node.arguments.some((arg) => arg.type === "Identifier" && arg.name === "slug")) {
+      hooks.add(node.callee.name);
+    }
+    for (const key of VISITOR_KEYS[node.type] ?? []) {
+      const child = (node as unknown as Record<string, unknown>)[key];
+      for (const value of Array.isArray(child) ? child : [child]) {
+        if (value && typeof value === "object" && "type" in value) visit(value as Node);
+      }
+    }
+  }
+  if (owner) visit(owner);
+  return [...hooks].sort();
+}
+
+const EXCLUDED_OWNER_HOOKS = {
+  useLateStructure: "Swaps the article tree; late-structure.test.tsx covers completion and first-poll reconciliation.",
+  useStepJob: "Structure job controls, not an artefact read; useLateStructure owns its result.",
+  useComments: "Reader-written rows, not generated artefacts; refreshed by their own actions.",
+  useChatAnchors: "Reader chat threads, not generated artefacts; refreshed by chat events.",
+  useCrossrefs: "No shared band/read interface; crossrefs-revalidate.test.tsx exercises its completion listener.",
+  useArc: "Combined read and automatic job; arc-idle-poll.test.ts and arc tests cover its own lifecycle.",
+  useReadingTime: "Reader time measurements, not a generated artefact.",
+};
+const classifiedOwnerHooks = () => [
+  ...READS.map(([, use]) => use.name),
+  ...Object.keys(EXCLUDED_OWNER_HOOKS),
+].sort();
+
+it("every always-mounted slug-taking hook is covered or explicitly excluded", () => {
+  const source = readFileSync("src/web/article/ArticlePage.tsx", "utf8");
+  expect(ownerHooks(source)).toEqual(classifiedOwnerHooks());
+});
+
+it("the inventory guard rejects a newly hoisted read even without a row", () => {
+  const source = readFileSync("src/web/article/ArticlePage.tsx", "utf8");
+  const anchor = "  const crossrefs = useCrossrefs(slug);";
+  expect(source.split(anchor)).toHaveLength(2);
+  const mutated = source.replace(anchor, `${anchor}\n  useTimelineRead(slug);`);
+  expect(ownerHooks(mutated)).toEqual([...classifiedOwnerHooks(), "useTimelineRead"].sort());
+  expect(ownerHooks(mutated)).not.toEqual(classifiedOwnerHooks());
 });

@@ -250,12 +250,13 @@ describe("the readiness mode's registrations", () => {
     expect(MODE_LABELS["readiness"]).toBe("Readiness");
   });
 
-  it("is mounted in App.tsx, which no type can check", () => {
-    /* A source check, the same kind `tests/fleet-web.test.tsx` uses for the
-       other modes: the alternative is a button that switches to a blank page. */
+  it("mounts its own panel in App.tsx, which no type can check", () => {
+    /* Since 2026-10-06 the mount is an exhaustive `switch`, so a MISSING arm
+       fails typecheck. What no type sees is an arm that mounts another mode's
+       panel, so this reads the arm: the case, then its panel before the next. */
     const app = readFileSync(join(__dirname, "..", "tools", "fleet", "web", "src", "App.tsx"), "utf8");
-    expect(app).toContain('mode === "readiness"');
-    expect(app).toContain("<ReadinessPanel");
+    const arm = /case "readiness":([\s\S]*?)\n {6}case "/.exec(app)?.[1] ?? "";
+    expect(arm).toContain("<ReadinessPanel");
   });
 
   it("has an icon and a tip in the Dock", () => {

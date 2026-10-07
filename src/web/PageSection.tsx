@@ -181,12 +181,16 @@ export function Section({
           /* The heading itself is the control, so the target is the whole line
              rather than a 12px chevron. `aria-expanded` on the button and
              nothing on the section: the button is what opens, and the h2 stays
-             a heading so the page's outline is the same shut or open. */
+             a heading so the page's outline is the same shut or open.
+
+             The focus mark is the app's usual outline as well as the colour:
+             until 2026-10-07 the outline was off and the colour change was
+             the whole mark. Nothing on /profile or Metadata clips it. */
           <button
             type="button"
             onClick={() => setOpen((was) => !was)}
             aria-expanded={showing}
-            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-none tw:focus-visible:text-highlight-text"
+            className="tw:flex tw:items-center tw:gap-2 tw:border-0 tw:bg-transparent tw:p-0 tw:text-inherit tw:uppercase tw:tracking-[0.09em] tw:cursor-pointer tw:hover:text-highlight-text tw:focus-visible:outline-2 tw:focus-visible:outline-offset-2 tw:focus-visible:outline-highlight-text tw:focus-visible:text-highlight-text"
           >
             {head}
             {showing ? <ChevronDown size={13} /> : <ChevronRight size={13} />}

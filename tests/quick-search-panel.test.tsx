@@ -493,6 +493,26 @@ describe("the box's clear cross", () => {
     expect(cross()).toBeNull();
   });
 
+  /* An input method's Escape dismisses its candidate list; the reader's words
+     stay. Plan 261007a-ui-sweep-k2. */
+  it.each([
+    ["isComposing", { isComposing: true }],
+    ["keyCode 229", { keyCode: 229 } as KeyboardEventInit],
+  ])("is not what a composing Escape does (%s)", async (_how, init) => {
+    const { access, edits } = typingOwner();
+    await mount({ access, runs: [], start: "quick", active: [] });
+    type("日本語の");
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init });
+    act(() => {
+      input().dispatchEvent(escape);
+    });
+    expect(input().value).toBe("日本語の");
+    expect(edits.at(-1)).toBe("日本語の");
+    /* Cancelled, because a `type="search"` box is emptied by the browser itself
+       on Escape; jsdom has no such default, so this flag is all it can show. */
+    expect(escape.defaultPrevented).toBe(true);
+  });
+
   /* GPT Sol's F5 on the plan: the matcher buttons sit 0.4rem under the field,
      and this field clips nothing, so the finger target is the field's height
      and no taller — wider, not deeper. */
