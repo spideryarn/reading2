@@ -471,4 +471,94 @@ describe("the command refuses, and never reaches destroy", () => {
     const weak = await survey(1);
     expect(() => checkDeletion(weak, [a.id])).toThrow(/at least 7/);
   });
+
+  /** One eligible article, and `main` run over it with `args`; what it threw, and what it touched. */
+  async function runOn(name: string, args: (s: ReturnType<typeof scratch>, a: { id: string; slug: string }) => string[], over: Partial<MainDeps> = {}, pinned?: (a: { id: string }) => string[]) {
+    const a = await failedFirstImport(name, { identities: 2, checkpoint: true });
+    await age([a.id]);
+    const s = scratch(pinned ? pinned(a) : [a.id]);
+    const h = harness(over);
+    try {
+      const err = await main(args(s, a), h.deps).then(() => null, (e: unknown) => e as Error);
+      return { a, err, calls: h.calls, lines: h.lines, survives: await stillThere(a.id) };
+    } finally {
+      s.done();
+    }
+  }
+
+  it("--delete without --ids", async () => {
+    const r = await runOn("no-ids", (s) => ["--delete", "--backup-dir", s.backupDir]);
+    expect(r.err?.message).toMatch(/--delete needs --ids/);
+    expect([r.calls.backup, r.calls.destroy, r.survives]).toEqual([0, [], true]);
+  });
+
+  it("an --ids file that is not there", async () => {
+    const r = await runOn("ids-missing", (s) => ["--delete", "--ids", path.join(s.dir, "nope.txt"), "--backup-dir", s.backupDir]);
+    expect(r.err?.message).toMatch(/ENOENT/);
+    expect([r.calls.backup, r.calls.destroy, r.survives]).toEqual([0, [], true]);
+  });
+
+  it("an --ids file that pins an id the survey does not admit, as well as the eligible one", async () => {
+    const extra = "33333333-3333-4333-8333-333333333333";
+    const r = await runOn("ids-wrong", (s) => ["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], {}, (a) => [a.id, extra]);
+    expect(r.err?.message).toMatch(/not the pinned list/);
+    expect([r.calls.backup, r.calls.destroy, r.survives]).toEqual([0, [], true]);
+  });
+
+  it("an --ids file that leaves the eligible article out", async () => {
+    const other = "44444444-4444-4444-8444-444444444444";
+    const r = await runOn("ids-short", (s) => ["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], {}, () => [other]);
+    expect(r.err?.message).toMatch(/not the pinned list/);
+    expect([r.calls.backup, r.calls.destroy, r.survives]).toEqual([0, [], true]);
+  });
+
+  it("a backup that fails to write", async () => {
+    const r = await runOn("backup-fails", (s) => ["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], {
+      writeBackup: async () => {
+        throw new Error("disk full");
+      },
+    });
+    expect(r.err?.message).toBe("disk full");
+    expect([r.calls.destroy, r.survives]).toEqual([[], true]);
+  });
+
+  it("a title saved after the backup, before the delete", async () => {
+    const r = await runOn("late-title-main", (s) => ["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], {
+      writeBackup: async (db, ids, dir) => {
+        const written = await writeBackup(db, ids, dir);
+        await getDb().update(articles).set({ titleOverride: "Typed just now" }).where(inArray(articles.id, [...ids]));
+        return written;
+      },
+    });
+    expect(r.err).toBeInstanceOf(TidySafetyError);
+    expect(r.err?.message).toMatch(/no longer eligible/);
+    expect([r.calls.destroy, r.survives]).toEqual([[], true]);
+  });
+});
+
+describe("the command, when nothing is in the way", () => {
+  it("backs up, deletes the pinned article through destroy, and says so", async () => {
+    const a = await failedFirstImport("main-gone", { identities: 3, checkpoint: true });
+    await age([a.id]);
+    const s = scratch([a.id]);
+    const h = harness();
+    try {
+      expect(await main(["--delete", "--ids", s.idsFile, "--backup-dir", s.backupDir], h.deps)).toBe(0);
+    } finally {
+      s.done();
+    }
+    expect([h.calls.connect, h.calls.backup, h.calls.destroy]).toEqual([1, 1, [a.slug]]);
+    expect(await stillThere(a.id)).toBe(false);
+    expect(h.lines.join("\n")).toMatch(/1 of 1 gone/);
+  });
+
+  it("a dry run touches nothing", async () => {
+    const a = await failedFirstImport("main-dry");
+    await age([a.id]);
+    const h = harness();
+    expect(await main([], h.deps)).toBe(0);
+    expect([h.calls.backup, h.calls.destroy]).toEqual([0, []]);
+    expect(await stillThere(a.id)).toBe(true);
+    expect(h.lines.join("\n")).toMatch(/Nothing deleted/);
+  });
 });
