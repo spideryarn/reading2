@@ -64,6 +64,9 @@ const PROMISES: Record<string, string> = {
   "AdminVouchersPage.tsx › voucher-new-articles": "go",
   "AdminVouchersPage.tsx › voucher-new-recipient-name": "go",
   "AdminVouchersPage.tsx › voucher-new-note": "go",
+  /* Enter opens the add page for the pasted address, in a new tab; it never
+     creates the voucher (plan 261007j). */
+  "AdminVouchersPage.tsx › voucher-new-import": "go",
   /* Enter commits an edit in place. */
   "AdminVouchersPage.tsx › Email address": "done",
   "AdminVouchersPage.tsx › Articles": "done",

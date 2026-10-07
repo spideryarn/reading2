@@ -833,7 +833,13 @@ lands ([261002b](../plans/261002b-voucher-note-to-recipient-gift-on-profile-whol
 the sketch quotes the subject and heading from `src/admin-vouchers.ts` and describes the body), and
 since 2026-10-07 an optional *Their name* above the note, which opens the email *Dear <name>,* and
 is drawn in the sketch as it is typed ([261007f](../plans/261007f-gift-voucher-recipient-name-and-a-starter-article-written-up.md); the table shows it under the address, and Edit can change
-it, which re-sends nothing) — over
+it, which re-sends nothing), and an optional *Starter article*: one of the administrator's own
+articles from their shelf (`useShelf`, abstract-only papers left out, read again on *Refresh* and
+when an import finishes), with *Import in a new tab* to the add page and, for a private article with
+no link, *Make one on its page* to its Access & sharing card. Create waits while the chosen article
+could not be linked, and the page never asks for the key
+([261007j](../plans/261007j-gift-voucher-starter-article-by-private-link.md); the table shows the
+starter's title under the address, and a readdress whose new email had to go without it says so) — over
 a plain table rather than `DataTable`: one order, the server's, and rows that turn into forms. Each
 row shows the status (*Waiting for sign-up*, *Claimed by* the claimant's current address *on* the
 day, or *Revoked*), the claimant's free usage as the server counts it, and Edit and Revoke/Restore.

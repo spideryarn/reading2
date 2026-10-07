@@ -231,3 +231,35 @@ on 2026-10-07.
     The no-starter goldens in `tests/billing-voucher-emails.test.ts` pass unedited.
   - **Gates.** `npm run typecheck` green; the touched suites green; full `npm test` 1800 of 1806
     files before the export/shelf fixes above, the rest listed in the stage report.
+- 2026-10-07: **Stage 2 built** by an Opus subagent, not committed, while Sol reviewed stage 1's
+  server files in the same tree (no file in common).
+  - **What it is.** `AdminVouchersPage.tsx`: a *Starter article* select after the note (the shelf's
+    articles less `minimal`, newest by `addedAt` first, *None* by default) with *Refresh*; *Or import
+    one* and an *Import in a new tab* link to `addHref(url)` (Enter in that box follows the link and
+    never submits the voucher); a status line per state — linked (*the email will carry it*),
+    public (a link to its public page, *no key involved*), no link (*Make one on its page*,
+    `readHref(slug, "section=access-sharing", "metadata")`, the bar's own `?section=` address, new
+    tab), and, holding Create back, no link, gone from the shelf, abstract-only, or shelf not read.
+    Create is disabled with `aria-describedby` on that line, and `submit` refuses too. The sketch
+    draws `giftEmailStarterLine(title)`; the table draws *Starter: title* (author's voice) or
+    *slug (deleted)*. `useAdminVouchers`: `starterSlug` in `NewVoucherInput` and the fingerprint;
+    `update` returns `UpdateAnswer` (`saved` with `starter` or `refused`), and a `dropped` puts
+    *Saved. The email to the new address went without the starter article…* in the row.
+  - **What the plan did not know.** `useShelf` does not reload on imports by itself: `Library.tsx`
+    wires `useJobs("watches-queue", reload)`, and the form does the same, so an import this tab's
+    engine sees finish reloads the shelf (one more idle poll while the page is open). A link made in
+    the other tab makes no job, so that one is *Refresh*. The shelf never lists an article still
+    being imported, so the plan's *still being added* line is the *not on your shelf* state. The
+    page reads the reader from `SignedInReader`, which `App` provides around every signed-in page.
+    The sketch uses the shelf's title, and the email the revision's own, so a renamed article
+    reads differently in the two (said in `EmailSketch`'s comment).
+  - **Red first.** 14 new cases in `tests/admin-vouchers-page.test.tsx`, all red before the code
+    (no picker, no starter line, no dropped line); the old fixtures gained `starter: null`, the
+    wire's real shape. Three deliberate breaks each failed their tests: the slug out of the
+    fingerprint (only *mints a new id when only the starter changed*), no-link and the other
+    waiting states made ready (the three Create-waits cases), `dropped` not parsed (the readdress
+    warning).
+  - **Gates.** `npm run typecheck` green; `admin-vouchers-page`, `what-the-enter-key-promises`
+    (the import box promises `go`), `doc-links`, `admin-only-routes`, `client-imports`,
+    `voices-css` green. Biome on the four files: one info, `VoucherRow`'s complexity 28 (27 at
+    HEAD).

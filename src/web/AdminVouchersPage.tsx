@@ -13,11 +13,16 @@
  * followed by a fresh read (useAdminVouchers.ts), so the table shows what the
  * server holds rather than what this page hoped.
  *
+ * **A voucher may name a starter article** for its email to link (plan
+ * 261007j): picked from the administrator's own shelf, with links out to the
+ * add page and the article's sharing card rather than a copy of either. This
+ * page never asks for, holds or shows a private link's key.
+ *
  * A plain table rather than `DataTable`: there are few vouchers, one order
  * (newest first, the server's), and a row that turns into a form, which a
  * TanStack cell renderer would make harder to read rather than easier.
  */
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 
 import {
@@ -26,23 +31,30 @@ import {
   cleanRecipientName,
   giftEmailGreeting,
   giftEmailHeading,
+  giftEmailStarterLine,
   giftEmailSubject,
 } from "../admin-vouchers.js";
 import { readableDate } from "../billing-plan.js";
+import type { LibraryEntry } from "../types.js";
 import { Shell } from "./AdminPage.js";
 import { Button } from "./components/ui/button.js";
+import { SignedInReader } from "./lib/made-for.js";
 import { SidewaysScrollBox } from "./lib/SidewaysScrollBox.js";
 import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { exactly } from "./relative-time.js";
-import { ADMIN_HREF } from "./router.js";
+import { ADMIN_HREF, addHref, readHref } from "./router.js";
 import {
   type AdminVoucherRow,
   type CreateAnswer,
+  type UpdateAnswer,
   type UseAdminVouchers,
   useAdminVouchers,
   type VoucherPatchInput,
 } from "./useAdminVouchers.js";
+import { useJobs } from "./useJobs.js";
 import { useNow } from "./useNow.js";
+import { useShelf } from "./useShelf.js";
+import { articleTitleVoice, voiceClass } from "./voice.js";
 
 /** The table's name: its caption, and its scroll box's while it scrolls. */
 const CAPTION = "Every gift voucher, newest first";
@@ -60,6 +72,12 @@ const HEAD = `${CELL} tw:whitespace-nowrap tw:text-left tw:text-xs tw:font-mediu
 /** The default a new voucher offers: Greg's own example, *"e.g. 20 free articles"*. */
 const DEFAULT_ARTICLES = 20;
 const RECIPIENT_NAME_TOO_LONG = `recipientName must be at most ${RECIPIENT_NAME_MAX} characters.`;
+/** The starter's status line, which the disabled Create button points at. */
+const STARTER_STATUS = "voucher-new-starter-status";
+/** After a readdress whose new email could not link the starter (plan 261007j, Sol's F3). */
+const STARTER_DROPPED =
+  "Saved. The email to the new address went without the starter article: it can no longer be " +
+  "linked (deleted, not yet readable, or its private link is off).";
 
 function recipientNameTooLong(name: string): boolean {
   return [...name].length > RECIPIENT_NAME_MAX;
@@ -82,19 +100,263 @@ function wholeNumber(raw: string): number | null {
   return raw.trim() !== "" && Number.isInteger(n) ? n : null;
 }
 
-function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
+/**
+ * **Where a chosen starter article stands**, read from the administrator's own
+ * shelf row (plan 261007j). Only `none`, `public` and `linked` let Create go;
+ * the server checks the same and refuses with a sentence if this was stale.
+ *
+ * - `reading`: an article is chosen and the shelf is not on screen (a 401
+ *   cleared it, say), so nothing is known.
+ * - `gone`: no longer on the shelf — deleted or archived since it was chosen.
+ *   An import still running is not on the shelf yet either, so it is never
+ *   offered.
+ * - `unread`: a paper with only its title and abstract read, which a private
+ *   link refuses (`NOT_READ_YET_SHARE`). Never offered; here so a shelf
+ *   that changed under a choice still says why.
+ */
+type StarterState =
+  | { readonly kind: "none" }
+  | { readonly kind: "reading" }
+  | { readonly kind: "gone" }
+  | { readonly kind: "unread"; readonly entry: LibraryEntry }
+  | { readonly kind: "public"; readonly entry: LibraryEntry }
+  | { readonly kind: "linked"; readonly entry: LibraryEntry }
+  | { readonly kind: "no-link"; readonly entry: LibraryEntry };
+
+function starterState(slug: string, shelf: readonly LibraryEntry[] | null): StarterState {
+  if (slug === "") return { kind: "none" };
+  if (shelf === null) return { kind: "reading" };
+  const entry = shelf.find((a) => a.slug === slug);
+  if (!entry) return { kind: "gone" };
+  if (entry.processing === "minimal") return { kind: "unread", entry };
+  if (entry.visibility === "public") return { kind: "public", entry };
+  return entry.privateLinkOn ? { kind: "linked", entry } : { kind: "no-link", entry };
+}
+
+/** Whether Create may go with this starter. */
+function starterReady(state: StarterState): boolean {
+  switch (state.kind) {
+    case "none":
+    case "public":
+    case "linked":
+      return true;
+    case "reading":
+    case "gone":
+    case "unread":
+    case "no-link":
+      return false;
+    default: {
+      const never: never = state;
+      return never;
+    }
+  }
+}
+
+/** What a starter can be: the shelf's articles that have been read, newest first. */
+function starterChoices(shelf: readonly LibraryEntry[] | null): LibraryEntry[] {
+  return (shelf ?? [])
+    .filter((a) => a.processing !== "minimal")
+    .sort((a, b) => (a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0));
+}
+
+/** A link that opens beside this page, so the voucher draft is still here after. */
+function NewTab({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="tw:text-highlight-text tw:underline">
+      {children}
+    </a>
+  );
+}
+
+/** An article's title, in the voice of whoever wrote it (fonts.md). */
+function EntryTitle({ entry }: { entry: LibraryEntry }) {
+  return <span className={voiceClass(articleTitleVoice(Boolean(entry.titleOverridden)))}>{entry.title}</span>;
+}
+
+/** The line under the picker: what the email will do with the chosen article, and what waits. */
+function StarterStatus({ state, id }: { state: StarterState; id: string }) {
+  const waits = <> Create voucher waits until it has one.</>;
+  let said: ReactNode;
+  switch (state.kind) {
+    case "none":
+      return null;
+    case "reading":
+      said = <>Reading your articles… Create voucher waits until they are here.</>;
+      break;
+    case "gone":
+      said = <>That article is no longer on your shelf. Choose another, or none.</>;
+      break;
+    case "unread":
+      said = (
+        <>
+          <EntryTitle entry={state.entry} /> has only its title and abstract read, so it cannot be
+          shared yet. Choose another, or none.
+        </>
+      );
+      break;
+    case "public":
+      said = (
+        <>
+          <EntryTitle entry={state.entry} />: public. The email links to{" "}
+          <NewTab href={readHref(state.entry.slug)}>its public page</NewTab>; no key involved.
+        </>
+      );
+      break;
+    case "linked":
+      said = (
+        <>
+          <EntryTitle entry={state.entry} />: its private link is on. The email will carry it.
+        </>
+      );
+      break;
+    case "no-link":
+      said = (
+        <>
+          <EntryTitle entry={state.entry} />: private, with no private link yet.{" "}
+          <NewTab href={readHref(state.entry.slug, "section=access-sharing", "metadata")}>
+            Make one on its page
+          </NewTab>{" "}
+          (a new tab), then Refresh here.{waits}
+        </>
+      );
+      break;
+    default: {
+      const never: never = state;
+      return never;
+    }
+  }
+  return (
+    <p id={id} className="tw:m-0 tw:break-words tw:text-xs tw:text-muted-foreground">
+      {said}
+    </p>
+  );
+}
+
+/**
+ * **The starter article: pick one of yours, or import one in another tab** —
+ * plan 261007j, Greg 2026-10-07: *"make the UI easy to generate an article
+ * with a shareable link … at the same time as generating the gift voucher"*.
+ *
+ * It links out rather than importing or making the link here (the plan's §
+ * Why the form links out): the add page and the article's own sharing card
+ * already own that delicate work, and this page reads the result back through
+ * the shelf — on Refresh, and whenever an import this tab can see finishes,
+ * as the shelf page does. **The key is never asked for**: the shelf says only
+ * whether the link is on, and the server reads the key when it sends.
+ */
+function StarterPicker({
+  choices,
+  slug,
+  onChoose,
+  state,
+  statusId,
+  shelfError,
+  reload,
+}: {
+  choices: readonly LibraryEntry[];
+  slug: string;
+  onChoose: (slug: string) => void;
+  state: StarterState;
+  statusId: string;
+  shelfError: string | null;
+  reload: () => void;
+}) {
+  const [url, setUrl] = useState("");
+  const importLink = useRef<HTMLAnchorElement>(null);
+  const href = url.trim() === "" ? undefined : addHref(url);
+
+  return (
+    <div className="tw:mt-3 tw:flex tw:flex-col tw:gap-2 tw:text-xs tw:text-muted-foreground">
+      <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-2">
+        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1">
+          <span>
+            <span className="tw:text-sm tw:font-medium tw:text-foreground">Starter article</span> (optional —
+            their email links it, to start with; your articles, newest first)
+          </span>
+          <select
+            id="voucher-new-starter"
+            value={slug}
+            onChange={(e) => onChoose(e.target.value)}
+            className={`${INPUT} tw:w-full tw:min-w-0`}
+          >
+            <option value="">None</option>
+            {choices.map((a) => (
+              <option key={a.slug} value={a.slug}>
+                {a.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="button" onClick={reload} title="Read your articles again" className={BUTTON}>
+          <RefreshCw size={12} />
+          Refresh
+        </button>
+      </div>
+      <div className="tw:flex tw:flex-wrap tw:items-end tw:gap-2">
+        <label className="tw:flex tw:min-w-0 tw:flex-1 tw:basis-56 tw:flex-col tw:gap-1">
+          Or import one (it opens the add page; choose it here once it is on your shelf)
+          <input
+            id="voucher-new-import"
+            type="url"
+            inputMode="url"
+            enterKeyHint="go"
+            autoComplete="off"
+            placeholder="https://…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={(e) => {
+              /* Enter here opens the add page; it must not create the voucher. */
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              importLink.current?.click();
+            }}
+            className={`${INPUT} tw:w-full`}
+          />
+        </label>
+        <a
+          ref={importLink}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={href === undefined}
+          className={`${BUTTON} tw:no-underline ${href === undefined ? "tw:pointer-events-none tw:opacity-50" : ""}`}
+        >
+          Import in a new tab
+        </a>
+      </div>
+      {shelfError && <p className="tw:m-0 tw:text-destructive">Couldn’t read your articles. {shelfError}</p>}
+      <StarterStatus state={state} id={statusId} />
+    </div>
+  );
+}
+
+function CreateForm({ create, readerId }: { create: UseAdminVouchers["create"]; readerId: string }) {
   const [email, setEmail] = useState("");
   const [articles, setArticles] = useState(String(DEFAULT_ARTICLES));
   const [note, setNote] = useState("");
   const [recipientNote, setRecipientNote] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [starterSlug, setStarterSlug] = useState("");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
+  /* The administrator's own shelf, for the starter. Read again when an import
+     finishes (the shelf page's own wiring, Library.tsx) and on Refresh. */
+  const shelf = useShelf(readerId);
+  const reloadShelf = shelf.reload;
+  /* A failed read is already in `shelf.error`, which the picker shows. */
+  const readShelfAgain = useCallback(() => void reloadShelf().catch(() => {}), [reloadShelf]);
+  useJobs("watches-queue", readShelfAgain);
+  const choices = useMemo(() => starterChoices(shelf.articles), [shelf.articles]);
+  const starter = starterState(starterSlug, shelf.articles);
+  const starterOk = starterReady(starter);
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     setDone(null);
+    /* The button is disabled too; this is Enter in a field. */
+    if (!starterOk) return;
     const count = wholeNumber(articles);
     if (count === null) {
       setRefusal("Articles must be a whole number.");
@@ -112,6 +374,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       note: note.trim() === "" ? null : note,
       recipientNote: recipientNote.trim() === "" ? null : recipientNote,
       recipientName: cleanRecipientName(recipientName),
+      starterSlug: starterSlug === "" ? null : starterSlug,
     });
     setBusy(false);
     setRefusal(answer.kind === "refused" ? answer.message : null);
@@ -122,6 +385,7 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
       setNote("");
       setRecipientNote("");
       setRecipientName("");
+      setStarterSlug("");
     }
   }
 
@@ -215,8 +479,22 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
             otherwise.
           </p>
         </div>
-        <EmailSketch articles={wholeNumber(articles)} name={recipientName} note={recipientNote} />
+        <EmailSketch
+          articles={wholeNumber(articles)}
+          name={recipientName}
+          note={recipientNote}
+          starterTitle={"entry" in starter ? starter.entry.title : null}
+        />
       </div>
+      <StarterPicker
+        choices={choices}
+        slug={starterSlug}
+        onChoose={setStarterSlug}
+        state={starter}
+        statusId={STARTER_STATUS}
+        shelfError={shelf.error}
+        reload={readShelfAgain}
+      />
       {/* The submit is the form's last control and its one filled button —
           *"Make the 'Create voucher' button more visible"*, the same report.
           It was a quiet outline pill in the middle of the first row. */}
@@ -233,7 +511,11 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
             className={`${INPUT} tw:w-full`}
           />
         </label>
-        <Button type="submit" disabled={busy}>
+        <Button
+          type="submit"
+          disabled={busy || !starterOk}
+          aria-describedby={starterOk ? undefined : STARTER_STATUS}
+        >
           {busy ? "Creating…" : "Create voucher"}
         </Button>
       </div>
@@ -255,9 +537,23 @@ function CreateForm({ create }: { create: UseAdminVouchers["create"] }) {
  * its line breaks plain and escapes it when it builds the email. It is in
  * italics and unlabelled, as in the email. **The greeting** is the email's own
  * line too (`giftEmailGreeting`), drawn only when a name is typed, because the
- * email has no such line otherwise (plan 261007f).
+ * email has no such line otherwise (plan 261007f). **The starter's line** is
+ * `giftEmailStarterLine` with the title as the shelf has it, drawn only when
+ * one is chosen (plan 261007j). The email uses the article's own title, so a
+ * title the administrator renamed on the shelf reads differently there.
  */
-function EmailSketch({ articles, name, note }: { articles: number | null; name: string; note: string }) {
+function EmailSketch({
+  articles,
+  name,
+  note,
+  starterTitle,
+}: {
+  articles: number | null;
+  name: string;
+  note: string;
+  /** The chosen starter's title, for its line; never its link (plan 261007j). */
+  starterTitle: string | null;
+}) {
   const n = articles !== null && articles >= 1 ? articles : 1;
   const trimmed = note.trim();
   const who = cleanRecipientName(name);
@@ -279,6 +575,14 @@ function EmailSketch({ articles, name, note }: { articles: number | null; name: 
         <p className="tw:m-0 tw:mb-2 tw:whitespace-pre-wrap tw:break-words tw:border-l-2 tw:border-highlight tw:pl-2 tw:text-foreground">
           <em>{trimmed}</em>
         </p>
+      )}
+      {/* The email's own line, then its button; the address stays out of
+          this page, key and all (plan 261007j). */}
+      {starterTitle !== null && (
+        <>
+          <p className="tw:m-0 tw:break-words tw:text-foreground">{giftEmailStarterLine(starterTitle)}</p>
+          <p className="tw:m-0 tw:mb-2">…and a “Read it” button that opens it.</p>
+        </>
       )}
       <p className="tw:m-0">
         …then a short paragraph from us: what Spideryarn is and how to collect the articles (or, if
@@ -429,6 +733,35 @@ function usage(v: AdminVoucherRow): string {
   }
 }
 
+/**
+ * What a row says after a change: the server's refusal, or — when a new
+ * address resent the gift and its starter article could no longer be linked —
+ * that the email went without it (plan 261007j, Sol's F3).
+ */
+function whatTheChangeCameTo(answer: UpdateAnswer): { refusal: string | null; saved: string | null } {
+  if (answer.kind === "refused") return { refusal: answer.message, saved: null };
+  return { refusal: null, saved: answer.starter === "dropped" ? STARTER_DROPPED : null };
+}
+
+/**
+ * The article a voucher's email linked, under its address — by title, never
+ * by link. Fixed at create, so not in Edit (plan 261007j). The title is the
+ * revision's own, the author's words; a deleted article keeps its slug.
+ */
+function StarterLine({ starter }: { starter: AdminVoucherRow["starter"] }) {
+  if (starter === null) return null;
+  return (
+    <div className="tw:break-words tw:text-xs tw:text-muted-foreground" title={starter.slug}>
+      Starter:{" "}
+      {starter.title === null ? (
+        `${starter.slug} (deleted)`
+      ) : (
+        <span className={voiceClass("author")}>{starter.title}</span>
+      )}
+    </div>
+  );
+}
+
 function VoucherRow({
   voucher,
   update,
@@ -448,6 +781,8 @@ function VoucherRow({
   const [email, setEmail] = useState(voucher.email);
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  /* Said after a save that went through but did not do all it might have. */
+  const [saved, setSaved] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const wasEditing = useRef(false);
@@ -467,13 +802,17 @@ function VoucherRow({
 
   async function send(patch: VoucherPatchInput): Promise<boolean> {
     setBusy(true);
+    setSaved(null);
     const answer = await update(voucher.id, patch);
     setBusy(false);
-    setRefusal(answer);
-    return answer === null;
+    const said = whatTheChangeCameTo(answer);
+    setRefusal(said.refusal);
+    setSaved(said.saved);
+    return answer.kind === "saved";
   }
 
   function startEditing() {
+    setSaved(null);
     setArticles(String(voucher.articles));
     setNote(voucher.note ?? "");
     setRecipientNote(voucher.recipientNote ?? "");
@@ -547,6 +886,7 @@ function VoucherRow({
             <div className="tw:break-words tw:text-xs tw:text-muted-foreground">{voucher.recipientName}</div>
           )
         )}
+        <StarterLine starter={voucher.starter} />
       </td>
       <td className={`${CELL} tw:text-right tw:tabular-nums`}>
         {editing ? (
@@ -621,6 +961,11 @@ function VoucherRow({
             {refusal}
           </p>
         )}
+        {saved && (
+          <p role="status" className="tw:m-0 tw:mb-2 tw:max-w-56 tw:text-xs tw:text-foreground">
+            {saved}
+          </p>
+        )}
         {editing ? (
           <form
             id={`voucher-${voucher.id}`}
@@ -657,6 +1002,9 @@ function VoucherRow({
 export function AdminVouchersPage() {
   useDocumentTitle(pageTitle({ kind: "admin", page: "vouchers" }));
   const { vouchers, error, loading, reload, create, update, retry } = useAdminVouchers();
+  /* Whose shelf the starter picker reads. App draws every admin page signed
+     in, inside this provider; null would be a page drawn outside it. */
+  const readerId = useContext(SignedInReader);
   /* For the *may or may not have gone* warning on a send stuck past ten minutes. */
   const now = useNow();
 
@@ -667,7 +1015,11 @@ export function AdminVouchersPage() {
         counts only while they are on the Free plan.
       </p>
 
-      <CreateForm create={create} />
+      {readerId === null ? (
+        <Refusal message="Sign in again to create a voucher." />
+      ) : (
+        <CreateForm create={create} readerId={readerId} />
+      )}
 
       {error && <Refusal message={vouchers ? `Refresh failed, so this is the previous list. ${error}` : error} />}
 
