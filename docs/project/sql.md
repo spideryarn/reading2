@@ -1,7 +1,11 @@
 # How we use SQL here
 
+Up: [architecture.md](architecture.md)
+
 What to reach for when you add a column or a table. [database.md](database.md) is the operating
-manual — which store is live, how migrations are applied, and the traps that have cost a day each.
+manual — which store is live, how migrations are applied, and the traps that have cost a day each;
+[§ A new migration, in five lines](database.md#a-new-migration-in-five-lines) is how one is named,
+generated and applied.
 This file is shorter and is about **taste**: the shape we want the schema to have.
 
 Greg, 2026-08-31, when the experimental-features switch needed somewhere to live:
@@ -154,7 +158,7 @@ or "before 2026-10-03".
 
 A field you filter, sort, join or constrain on is a column. JSON is what you reach for when the
 value is **one opaque thing the database has no business reading**, and the schema has a few of
-those on purpose: `article_revisions.summary`, `.ideas`, `.sketch`, `glossary_lookups.citations`.
+those on purpose: `article_revisions.ideas`, `.sketch`, `.simple_summary`, `glossary_lookups.citations`.
 Each is an artefact that only means anything against the article it was written for, and
 [src/db/schema.ts](../../src/db/schema.ts) states the case beside each one.
 
@@ -230,6 +234,7 @@ caught, in review, in a statement written specifically to prevent that failure.
 
 ## See also
 
-- [database.md](database.md) — the store, the migrations, and the traps.
+- [database.md](database.md) — the store, the migrations ([how a new one is named and
+  applied](database.md#a-new-migration-in-five-lines)), and the traps.
 - [experimental-features.md](experimental-features.md) — the switch this file's example is about.
 - [`src/db/schema.ts`](../../src/db/schema.ts) — every table, with the reasoning beside it.

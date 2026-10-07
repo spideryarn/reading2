@@ -33,7 +33,9 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PAGE_FAULT } from "../src/messages.js";
 import type { Comment, LibraryEntry } from "../src/types.js";
+import { couldNotReach } from "../src/web/lib/reader-facing.js";
 import type { Shelf } from "../src/web/ShelfEntry.js";
 
 /**
@@ -408,5 +410,39 @@ describe("the shelf's rebuild button, when the queue refuses the job", () => {
 
     expect(sent.map((s) => s.method)).toContain("POST");
     expect(reported).toEqual([`Couldn't queue a rebuild: ${SAID}`]);
+  });
+
+  /* The other two things that catch can be handed, neither written for a
+     reader: the browser's own words for a request that never arrived ("Failed
+     to fetch" in Chrome, "Load failed" in Safari), and an exception nobody
+     expected. Until 2026-10-07 both were printed after the colon as they came
+     (plan 261007a § K3). The transport failure goes through the real
+     `apiFetch`, which is what marks it as one. */
+  async function pressRebuildWhen(fetchRejectsWith: Error): Promise<string[]> {
+    const reported: string[] = [];
+    const shelf = { report: (m: string) => reported.push(m) } as unknown as Shelf;
+    const entry = { slug: "a-slug", title: "A piece", url: "https://example.com/a-piece" } as unknown as LibraryEntry;
+    await act(async () => {
+      root.render(createElement(Actions, { entry, shelf, onEdit: () => {} }));
+    });
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(fetchRejectsWith)));
+    const rebuild = [...container.querySelectorAll("button")].find((b) =>
+      /Re-fetch and rebuild/i.test(`${b.title} ${b.getAttribute("aria-label") ?? ""}`),
+    );
+    await act(async () => rebuild?.click());
+    await settle();
+    return reported;
+  }
+
+  it("says the server could not be reached, not the browser's words for it", async () => {
+    const reported = await pressRebuildWhen(new TypeError("Failed to fetch"));
+    expect(reported).toEqual([`Couldn't queue a rebuild: ${couldNotReach("Failed to fetch")}`]);
+  });
+
+  it("says the page's own sentence for an exception nobody wrote for a reader", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reported = await pressRebuildWhen(new Error("Cannot read properties of undefined (reading 'x')"));
+    quiet.mockRestore();
+    expect(reported).toEqual([`Couldn't queue a rebuild: ${PAGE_FAULT.message}`]);
   });
 });

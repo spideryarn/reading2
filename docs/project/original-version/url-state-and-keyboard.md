@@ -83,3 +83,7 @@ A one-line hint, or a `?` overlay, is the cheapest possible fix and is currently
 - [../keyboard.md](../keyboard.md) — ours: arrows aimed by the pointer
 - [reading-view-ui.md](reading-view-ui.md) — the panes this state drove
 - [tool-framework.md](tool-framework.md) — where the palette's entries came from
+
+---
+
+Up: [overview.md](overview.md)

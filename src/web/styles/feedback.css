@@ -387,7 +387,7 @@ a.fb-earlier-page:focus-visible {
 .fb-show-button[aria-pressed="true"] {
   color: var(--highlight-text);
   border-color: var(--highlight);
-  background: color-mix(in oklch, var(--highlight) 12%, transparent);
+  background: color-mix(in oklab, var(--highlight) 12%, transparent);
 }
 /* The count on an Earlier pill (261003b): the word's own colour, so it keeps
    the pill's contrast, with tabular figures. */

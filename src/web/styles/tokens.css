@@ -118,8 +118,8 @@
      the comment (`HighlightColour`, src/types.ts) so they can be retuned here
      without a migration. docs/plans/261003e-span-highlights-with-a-colour.md.
 
-     One set, because the app is dark only (styles/tokens.css § DARK ONLY); if
-     light mode ever comes back these need a light twin like everything else.
+     Dark's set. Light's is in the `:root[data-theme="light"]` block at the
+     foot of this file.
 
      Kept clear of the other fills in the prose — "don't put three meanings on
      one hue" (original-version/highlighting.md): the yellow sits at 100°, well

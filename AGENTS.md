@@ -71,6 +71,8 @@ listed here; the names under each are files in `docs/project/`.
   `tweets.md` (the piece as a thread; the one mode that writes on arrival) ·
   `comments.md` (bookmark or annotate a passage; the AI is a tick-box) ·
   `chat-tools.md` (what chat may call) ·
+  `chat-from-a-mode.md` (an "Ask in chat" button in a mode: which modes have one, and every place
+  a new one has to be told to) ·
   `live-conversation.md` (talking to the article out loud) ·
   `learn-mode.md` (Learn mode: say what you took from it, and find out) ·
   `quiz.md` (the other half: the article asks, you answer) ·
@@ -81,7 +83,7 @@ listed here; the names under each are files in `docs/project/`.
   `touch.md` ·
   `phone-and-touch.md` (the map for a phone, an iPad and a finger: what Greg asked for, and where
   the code branches) · `url-state.md` · `library.md` (the shelf) ·
-  `shelf-terms.md` (the topics above it, picked without a model) ·
+  `shelf-terms.md` (the topics above it: a model names them, a program stands in when it has not) ·
   `public-shelf.md` (the other one: `/read/public`, for strangers) ·
   `public-readable-sharing.md` (what we tell the author of a republished article) · `page-titles.md` ·
   `reader-profile.md` · `experimental-features.md` (the switch on /profile) ·
@@ -122,6 +124,8 @@ listed here; the names under each are files in `docs/project/`.
   `feedback.md` (the Feedback button, and where a bug report goes) ·
   `feedback-reports.md` (and what an agent does with one afterwards) ·
   `hetzner-remote-server-box.md` (the always-on box, and `gjd-remote`) ·
+  `fleet-and-overseer-overview.md` (the hub for the fleet dashboard and the Overseer: which of their
+  docs to open for what, and where the code is) ·
   `overseer-direction.md` (where the Overseer and its fleet dashboard are going, and what talking to
   a session actually costs) ·
   `overseer.md` (the runbook the Overseer itself reads: its four gates, and its standing jobs) ·

@@ -4309,7 +4309,7 @@ export const SHARING_MARK_NAME_PRIVATE = "Private — change who can read this";
  * sentence, nothing to keep in step.
  */
 export const SHARED_LINK_CARRIES =
-  "A shared link carries the article, its table of contents, every zoom level, and the reading " +
+  "A shared link carries the article, its table of contents, and the reading " +
   "aids written for it — including the summaries, glossary, ideas, quotes, timeline, skim, " +
   "FAQ, citations and Debate. It also carries the " +
   "marks, notes and searches of whoever added it. Their conversations with the model are not " +

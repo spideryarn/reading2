@@ -48,7 +48,9 @@
    sits in, then the paragraph itself, so a claim can be checked without leaving
    the sentence you are reading. The `tip-cite` names are from when it was the
    citation chips' alone. */
-.tooltip.tip-cite { max-width: 26rem; }
+/* Wider than the base card, and under the same viewport cap: a bare `26rem`
+   replaced tooltip.css's `min()` and is 416px, more than a phone is wide. */
+.tooltip.tip-cite { max-width: min(26rem, calc(100vw - 1.75rem)); }
 .tip-cite-head {
   /* The section's title — words, so the UI face; it used to be the block id,
      in `--font-id`, which the id's own link already shows. */

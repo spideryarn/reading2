@@ -1,13 +1,15 @@
 # Marginalia
 
+Up: [reading-view-overview.md](reading-view-overview.md)
+
 The column of notes to the right of the prose, each level with the block it is about. Its address is
-`?margin=1`, and it stands beside whichever band is open. Up from here:
-[reading-view-overview.md](reading-view-overview.md). Where this is meant to go is
+`?margin=1`, and it stands beside whichever band is open. Where this is meant to go is
 [interface-vision.md](interface-vision.md): the right column is for what is anchored to the text.
 
-The code is `src/web/marginalia/`: `notes.ts` decides which note goes beside which block (pure, and
-tested in `tests/marginalia-notes.test.ts`), `MarginaliaColumn.tsx` draws them and the head, and
-`press.ts` decides what the Dock button does on a narrow window.
+The code is [`src/web/marginalia/`](../../src/web/marginalia/): [`notes.ts`](../../src/web/marginalia/notes.ts) decides which note goes beside which block (pure, and
+tested in [`tests/marginalia-notes.test.ts`](../../tests/marginalia-notes.test.ts)), [`MarginaliaColumn.tsx`](../../src/web/marginalia/MarginaliaColumn.tsx) draws them and the head,
+[`tips.ts`](../../src/web/marginalia/tips.ts) holds every note's card, and
+[`press.ts`](../../src/web/marginalia/press.ts) decides what the Dock button does on a narrow window.
 
 **The block's gutter of icons sits between the prose and the notes.** It moved to the right of the
 block on 2026-10-03 ([261003c](../plans/261003c-block-gutter-icons-move-to-the-right-of-the-block.md)),

@@ -112,7 +112,7 @@ Every call writes a row to a Postgres `ai_calls` table: token counts, cost (join
 table), latency, a correlation id, and the raw SDK response as JSONB.
 
 The database is overkill for a filesystem app with one user. **The field list is not** — that is
-what makes "what does a tree cost" answerable, and it is [Q7](../open-questions.md#q7).
+what makes "what does a tree cost" answerable, and it was Q7, now answered in [ai-gateway.md](../ai-gateway.md#what-an-article-costs) and [cost-tracking.md](../cost-tracking.md).
 
 Their minimal load-bearing set, which is a good sidecar shape as-is:
 
@@ -184,15 +184,15 @@ CLI stage with no HTTP request waiting on it, so the only real deadline is the o
 under "Future Work". A year of production and the question "what does this cost us" was still
 unanswerable, because the logging existed and nobody ever aggregated it.
 
-That is the trap to avoid on [Q7](../open-questions.md#q7): logging the numbers is not the same as
-knowing them. Print a total at the end of `npm run toc`.
+That is the trap to avoid on cost (was Q7; see [cost-tracking.md](../cost-tracking.md)): logging the numbers is not the same as
+knowing them.
 
 ## Streaming
 
 Only non-streaming `generateText` for document analysis, which is correct — this is batch work done
 ahead of time, and there is no reader waiting on it. Streaming was discussed only for chat.
 
-Our pipeline is the same: generation happens in `npm run toc` / `npm run arc`, not while someone
+Our pipeline is the same: generation happens in the pipeline stages (`npm run structure` and the other stage commands), not while someone
 reads. The one place it doesn't hold is [comments](../comments.md), where a reader *is* waiting —
 and that is the one place streaming would be worth having.
 
@@ -202,4 +202,8 @@ and that is the one place streaming would be worth having.
 - [prompt-caching.md](prompt-caching.md) — the piece they designed and never built, and the one we should
 - [summaries.md](summaries.md) — batching many results into one call, and its failure mode
 - [tool-framework.md](tool-framework.md) — the layer above this, and why we're not building it
-- [../open-questions.md#q7](../open-questions.md#q7) — which model, and what a tree costs
+- [../ai-gateway.md § What an article costs to arrive](../ai-gateway.md#what-an-article-costs) — which model, and what a tree costs (was Q7, closed)
+
+---
+
+Up: [overview.md](overview.md)

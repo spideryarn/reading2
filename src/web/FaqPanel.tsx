@@ -174,7 +174,7 @@ export function FaqPanel({ access, order: chosenOrder, onOrder, bar: chosenBar, 
       label={label}
       step="faq"
       icon={<BadgeQuestionMark size={13} />}
-      runningLabel="Reading…"
+      runningLabel="Finding…"
     />
   );
 

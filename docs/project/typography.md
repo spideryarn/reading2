@@ -1,5 +1,7 @@
 # Typography
 
+Up: [design-css-overview.md](design-css-overview.md)
+
 > **Split out of [design-css-overview.md](design-css-overview.md) on 2026-09-07**, verbatim apart
 > from the heading levels and a couple of "see above" links that had to become cross-doc ones. That
 > doc is still the map — the stylesheets in load order, which mechanism owns what, the colour
@@ -55,7 +57,7 @@ Two numbers from that research doc *are* worth keeping, because they are indepen
   and the footnotes opt out as a block, both for reasons given in place. All three are self-limiting:
   below about 900px the measure is wider than the cell and none of them does anything. The separate
   mechanism that centres the whole *table* when the article is the only thing on the page is
-  § plain, centred in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css), and
+  `.reader.text-alone table.zoom` in [`styles/narrow-window.css`](../../src/web/styles/narrow-window.css), and
   `PROSE_ALONE_MAX_REM` in [`layout.ts`](../../src/web/layout.ts) — **its
   masthead follows the prose too, and learning that it did not was the expensive part.** Two correct
   changes landing on two branches, one moving the prose within its cell and one widening the cell,
@@ -81,8 +83,8 @@ the tokens, and how to put a new element in its voice: **[fonts.md](fonts.md)**.
 
 `--reading-weight` is **450, not 400**. Light text on a dark ground optically thins; the previous
 app's own wishlist named the fix — *"add ~50 to the weight axis in dark mode"* — and could not use
-it, having no variable face. Geist's axis runs 100–900, so we can. Drop it to 400 the day a light
-theme appears.
+it, having no variable face. Geist's axis runs 100–900, so we can. It is 400 on the light theme
+(`:root[data-theme="light"]` in [`styles/tokens.css`](../../styles/tokens.css)), since 2026-10-03.
 
 ## Vertical rhythm
 

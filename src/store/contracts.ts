@@ -1124,8 +1124,9 @@ export interface ChatStore {
     slug: string,
     /**
      * `anchor` is applied **only when this turn creates the thread** — see
-     * `withTurn` in src/chat.ts, which both stores call. An anchor for a thread
-     * that already exists is refused by the route, not quietly dropped here.
+     * `withTurn` in src/chat.ts. A different anchor for a thread that already
+     * exists is refused there with a `ChatConflict`, inside the transaction,
+     * as well as by the route; the identical one passes.
      */
     turn: {
       threadId: string;

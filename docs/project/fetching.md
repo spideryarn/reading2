@@ -1,5 +1,7 @@
 # Fetching — stage 1, and the things other people's servers do
 
+Up: [architecture.md](architecture.md)
+
 Getting the bytes, and knowing what they are. One module,
 [`src/fetch.ts`](../../src/fetch.ts), reached one way: the [ingest queue](ingest-queue.md), whether
 an article is being added from a browser or from `npm run ingest -- <url>`
@@ -22,6 +24,20 @@ Where it sits: **stage 1** of [the pipeline](architecture.md#pipeline), feeding
 [content extraction](content-extraction.md). It is not runnable on its own — see
 [below](#npm-run-fetch-is-gone-and-what-went-with-it) for why a fetch-only job is a thing the queue
 cannot express. `npm run ingest -- <url>` runs it, and everything after it.
+
+## In this doc
+
+- [§ What it does that a bare `fetch` doesn't](#what-it-does-that-a-bare-fetch-doesnt) — the list of protections
+- [§ The shape](#the-shape) — the entry points and typed failures
+- [§ The evidence](#the-evidence) — size, encoding, document kind, certificates, redirects, timeouts, retries: why each rule exists
+- [§ What stage 1 leaves behind](#what-stage-1-leaves-behind-since-2026-08-31-nothing-on-disk) — the stored object and manifest; `npm run fetch` is gone
+- [§ A paper source](#a-paper-source-one-paper-several-addresses) — a DOI or landing page leading to the paper
+- [§ Not everything gets fetched](#not-everything-gets-fetched-rawmanifest-has-an-origin) — uploads and `RawManifest.origin`
+- [§ The user-agent question](#the-user-agent-question) — why we send what we send
+- [§ Addresses we won't dial](#addresses-we-wont-dial) — SSRF and private addresses
+- [§ Dependencies, and the ones we didn't take](#dependencies-and-the-ones-we-didnt-take) — library choices
+- [§ What's still loose](#whats-still-loose) — known gaps
+- A bot-check page is stage 2's refusal, not this stage's: [content-extraction.md § Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor)
 
 ## What it does that a bare `fetch` doesn't
 
@@ -242,7 +258,11 @@ label loses to document markup:
 - Academic publishers serve real PDFs as `application/octet-stream` and `text/plain`. A `%PDF-`
   magic number is still a PDF.
 - A Cloudflare challenge page served from a `.pdf` URL is still HTML. `doi.org/10.1145/1629575.1629587`
-  redirects cleanly to `dl.acm.org` and is then met with *"Just a moment…"*.
+  redirects cleanly to `dl.acm.org` and is then met with *"Just a moment…"*. **Stage 1 does not
+  recognise a bot check; stage 2 does** — the typed refusal, the registry in
+  [`src/challenge-page.ts`](../../src/challenge-page.ts) and how to add a vendor are in
+  [content-extraction.md § The three ways this stage refuses](content-extraction.md#the-three-ways-this-stage-refuses)
+  and [§ Adding a provider](content-extraction.md#adding-a-provider-a-bot-check-from-a-new-vendor).
 - `httpbin.org/status/401` sends **no `Content-Type` header at all**, so "the header is absent" is a
   case, not an edge case.
 
@@ -336,7 +356,7 @@ the backoff applies (`src/retry-after.ts`).
 
 **`writeRaw` writes no files.** It used to write `data/<slug>/raw.html` (or `raw.pdf`) and a
 `raw.json` manifest beside it; it now returns the manifest and the *store* decides where that goes —
-`raw.json` on the filesystem, columns on `article_revisions` in Postgres. The bytes go where they
+columns on `article_revisions` in Postgres (`raw.json` on the filesystem, until that store went). The bytes go where they
 were already going: the content-addressed `sources` bucket, under `canonicalKey(storedSha256, kind)`,
 through [`src/store/blobs.ts`](../../src/store/blobs.ts), which is itself selected (`blobs-fs.ts`
 locally, `blobs-supabase.ts` deployed).
@@ -487,7 +507,26 @@ has the measurement and the ranking, and
 [the plan](../plans/261005m-a-landing-page-link-imports-the-paper-the-other-paper-sources.md) says
 which sources were left out and why). NBER came a few hours after the other five, in
 [261006i § Stage 3](../plans/261006i-an-article-is-found-by-the-address-it-was-asked-for-and-a-redirect-that-ends-on-a-paper-source-imports-the-paper.md#stage-3-nber-and-osf-decided-by-the-probe),
-which also says why OSF is still not one.
+which also decided against OSF.
+
+**OSF Preprints, PsyArXiv and SocArXiv are not a source, and `asked_url` did not change that.** The
+landing page (`osf.io/preprints/<server>/<id>`) is an empty shell that JavaScript fills, and the PDF
+at `osf.io/download/<id>/` redirects through `files.osf.io` to
+`storage.googleapis.com/…/<content hash>` with a signed query that differed between two requests
+ten seconds apart
+([the probe](../plans/261006i-evidence/probe-nber-osf-redirects.txt), section B;
+[261005e § Address grammar](../research/261005e-where-a-reader-s-paper-link-points-the-other-sources-measured-and-ranked.md#address-grammar-for-the-sources-worth-code-now)).
+That signed address would be the article's `final_url`, which the source link and Refresh both read
+(`urlForSlug` in [`src/pipeline.ts`](../../src/pipeline.ts), asked by `enqueue` in
+[`src/jobs.ts`](../../src/jobs.ts)). `articles.asked_url` (`slugForUrlKey`,
+[`src/store/find-article.ts`](../../src/store/find-article.ts)) makes a paper findable by the pasted
+link only when its `final_url` or revision's `requested_url` resolves to a registered paper source;
+OSF is not registered. Adding an OSF source would enable that lookup but fix neither the source
+link nor Refresh. The plan names the two ways out and builds
+neither: the paper's `canonicalUrl` (`ResolvedPaper`,
+[`src/paper-sources.ts`](../../src/paper-sources.ts)) stored as the article's address, or Refresh
+sent through `asked_url`. Not established: how long a signed address keeps answering (the probe
+repeated once, after ten seconds), and which of the two ways is wanted.
 
 | Source | What it recognises | What it fetches, in order |
 |---|---|---|
@@ -681,8 +720,8 @@ purpose rather than reproducing by default.
 
 ## Dependencies, and the ones we didn't take
 
-Two were added, both already present in the tree as jsdom's transitive dependencies, so neither cost
-an install:
+Two were added for decoding, both already present in the tree as jsdom's transitive dependencies,
+so neither cost an install:
 
 - **`html-encoding-sniffer`** — the spec's charset sniffing, as jsdom implements it.
 - **`@exodus/bytes`** — a WHATWG-conformant `TextDecoder`. Taken because Node's got windows-1252
@@ -692,10 +731,11 @@ an install:
 
 Deliberately not taken, each considered and rejected:
 
-- **`undici`** as a direct dependency, for `headersTimeout`/`bodyTimeout` stall detection and custom
-  TLS options. One whole-request deadline via `AbortSignal.timeout` is simpler to reason about, and
-  a stall is bounded by it anyway. Add it if per-hop stall detection or AIA repair ever becomes
-  worth building.
+- **`undici`'s `headersTimeout`/`bodyTimeout` stall detection and custom TLS options.** (`undici`
+  itself *is* a direct dependency since 2026-08-29, for the DNS-pinned connection above.) One
+  whole-request deadline via `AbortSignal.timeout` is simpler to reason about, and a stall is
+  bounded by it anyway. Use them if per-hop stall detection or AIA repair ever becomes worth
+  building.
 - **`iconv-lite` / `chardet`** — Node has shipped full ICU since v13, so the decoding table is
   there; the gap was conformance and detection, not coverage. `chardet` guesses statistically, and
   we always have headers and markup, so the deterministic algorithm is strictly better.

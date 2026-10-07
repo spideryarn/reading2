@@ -1,8 +1,9 @@
 # Public-readable sharing, and what we tell the person who wrote it
 
 `/features/public-readable-sharing` — the single place the claims we make about republishing
-somebody else's article are written down. Part of
-[reading-view-overview.md](reading-view-overview.md).
+somebody else's article are written down.
+
+Up: [reading-view-overview.md](reading-view-overview.md)
 
 > Perhaps we should even have a separate page at `/features/public-readable-sharing` or similar that
 > describes this in more detail as the single source of truth, and then we can signpost to that from
@@ -15,6 +16,18 @@ Its two neighbours, and the split between them is the thing to hold on to:
 [privacy.md](privacy.md) is **what we will do when somebody asks**; and this is **what we do with an
 article in the meantime**. One home per fact, so the takedown promise is not restated here and the
 robots headers are not restated there.
+
+## In this doc
+
+- [§ The page has two readers](#the-page-has-two-readers-and-that-is-the-design-constraint) — the rules for writing or rewording the page
+- [§ Two of the five briefed claims were false](#two-of-the-five-briefed-claims-were-false-which-is-the-fact-worth-carrying-forward) — what is actually true about training, canonical, origin link and consent (and the review that found eight more overclaims)
+- [§ The three awkward facts](#the-three-awkward-facts-named-on-purpose) — what the page admits on purpose
+- [§ The banner on every shared article](#the-banner-on-every-shared-article) — what a visitor sees without looking for the page
+- [§ A private link](#a-private-link-the-same-republishing-to-fewer-people) — republishing to fewer people, and the Sharing section
+- [§ While the article is still importing](#while-the-article-is-still-importing) — a visitor who arrives early
+- [§ Where the code is](#where-the-code-is) — the page, strings, address and tests
+- [§ The claims that can go stale silently](#the-claims-that-can-go-stale-silently-and-the-test-that-holds-them) — which sentences are pinned to which file
+- [§ The simpler option that was passed over](#the-simpler-option-that-was-passed-over) — what we did not build
 
 ## The page has two readers, and that is the design constraint
 
@@ -283,7 +296,11 @@ limit above stands.
 | [`src/web/router.ts`](../../src/web/router.ts) § `PUBLIC_SHARING_HREF` | the address, built from `FEATURES_HREF` so the pair cannot come apart |
 | [`src/messages.ts`](../../src/messages.ts) § If something here is yours | `PUBLIC_SHELF_PROVENANCE`, `PUBLIC_SHELF_TAKEDOWN` and the three `TAKEDOWN_TIP_*` strings |
 | [`src/web/PublicLibraryPage.tsx`](../../src/web/PublicLibraryPage.tsx) | the line under the shelf's lede, and the `ControlTip` on it |
-| `tests/public-readable-sharing-page.test.tsx` | the four claims that can go stale silently |
+| [`src/web/PrivateLink.tsx`](../../src/web/PrivateLink.tsx), [`AccessSharing.tsx`](../../src/web/AccessSharing.tsx) | the two controls of Access & sharing on the Metadata page — [§ A private link](#a-private-link-the-same-republishing-to-fewer-people) |
+| [`src/web/AddShare.tsx`](../../src/web/AddShare.tsx), [`AddSharing.tsx`](../../src/web/AddSharing.tsx), [`add-share.ts`](../../src/web/add-share.ts) | sharing from the add page, while the import runs — [§ While the article is still importing](#while-the-article-is-still-importing) |
+| [`src/web/PublicChrome.tsx`](../../src/web/PublicChrome.tsx) § `SharedNotice` | the banner a visitor sees — [§ The banner](#the-banner-on-every-shared-article) |
+| [`tests/public-readable-sharing-page.test.tsx`](../../tests/public-readable-sharing-page.test.tsx) | each claim that can go stale silently, held to the file it describes ([§ below](#the-claims-that-can-go-stale-silently-and-the-test-that-holds-them)) |
+| [`public/robots.txt`](../../public/robots.txt), [`vercel.json`](../../vercel.json) | what the page says about crawlers and `noindex` — [deployment.md § Our own pages may be listed](deployment.md#our-own-pages-may-be-listed-nothing-a-reader-put-here-may) |
 
 **It is the app's only nested address.** `parseRoute` matches it above `/features`, the way
 `/read/public` sits above `/read/:slug` — not because the `/features` regex could swallow it today
@@ -321,7 +338,7 @@ deleted, because the claim can go stale in the other direction too.
 
 **A claim about a header is exactly the kind that stays on a page for a year after the header goes** —
 [silent-success.md](../reusable/silent-success.md) — so the test reads the page as text and fails
-when one of the four stops being true, the way `tests/privacy-page.test.ts` pins model names.
+when one of them stops being true, the way `tests/privacy-page.test.ts` pins model names.
 
 What the test deliberately does **not** pin is the prose. Those are words that will be rewritten,
 and a test quoting them is a test somebody edits to make green — the rule

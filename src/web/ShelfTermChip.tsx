@@ -149,7 +149,9 @@ export function TermChip({
           </span>
         )}
         <span className={isModelTopic(term) ? withVoice(LABEL, "ai") : LABEL}>{term.label}</span>
-        <span className="tw:tabular-nums tw:opacity-70">{count}</span>
+        {/* At the chip's own ink. It was dimmed to 70% until 2026-10-07,
+            which measured 3.2:1 at 12px in both themes (plan 261007a § K3). */}
+        <span className="tw:tabular-nums">{count}</span>
         {on && <X size={11} aria-hidden="true" />}
       </button>
     </Tooltip>

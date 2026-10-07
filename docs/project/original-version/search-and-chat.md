@@ -91,3 +91,7 @@ See [highlighting.md § Built](highlighting.md#built-2026-08-26-and-how-much-of-
 - [../vision.md#anti-goals](../vision.md#anti-goals) — why chat is the one to be suspicious of
 - [../comments.md](../comments.md) — what we built instead, and how it is scoped
 - [highlighting.md](highlighting.md) — the semantic endpoint, and the overlapping-marks problem all three share
+
+---
+
+Up: [overview.md](overview.md)

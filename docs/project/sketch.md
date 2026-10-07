@@ -58,6 +58,7 @@ positional hues through the same `--cat-rgb` indirection everything else uses.
 | the prompt and the model call | [`src/sketch.ts`](../../src/sketch.ts) |
 | the panel | [`src/web/SketchView.tsx`](../../src/web/SketchView.tsx), [`useSketch.ts`](../../src/web/useSketch.ts), `§ sketch` in [`styles/diagram-sketch.css`](../../src/web/styles/diagram-sketch.css) |
 | the harness that renders one offline | [`evals/sketch/`](../../evals/sketch/) |
+| the tests | [`sketch-scene.test.ts`](../../tests/sketch-scene.test.ts), [`sketch-paint.test.ts`](../../tests/sketch-paint.test.ts), [`sketch-view-drawing.test.tsx`](../../tests/sketch-view-drawing.test.tsx), [`sketch-zoom-and-peek.test.tsx`](../../tests/sketch-zoom-and-peek.test.tsx) |
 
 **One painter, two sinks.** `sketch-paint.ts` is pure and returns primitives;
 the panel maps each to an element and hangs the handlers off the nodes, and the
@@ -123,11 +124,11 @@ taste. The old `high` measurements were 121–194 seconds and about $0.20.
 - **Picking the Sketch chip draws it, if nobody ever has.** Since 2026-09-02,
   and it is the chip's `onClick` that arms it, never `?diagram=` — that is query
   state, so Back and Forward move it, and a pasted
-  `?mode=diagram&diagram=sketch` must not buy a model call. *Opening
-  Diagram costs nothing*: with nothing drawn the mode lands on the empty state
-  below, so the bar's Diagram button arms nothing at all — `diagram` is
-  deliberately absent from `MODE_TARGET`, and that mattered more from 2026-09-04,
-  when the button went into every reader's bar.
+  `?mode=diagram&diagram=sketch` must not buy a model call. *Arriving
+  costs nothing*: with nothing drawn the mode lands on the empty state
+  below. *Pressing Diagram in the bar* did arm nothing until 2026-09-06; now `diagram` is
+  a delegated row in `MODE_TARGET` and the press arms the picture `?diagram=` names
+  ([diagram.md](diagram.md#why-force-was-the-default-and-why-sketch-is-now)).
   [`src/web/activation.ts`](../../src/web/activation.ts),
   [`useAutoRun.ts`](../../src/web/useAutoRun.ts), and
   [glossary.md § That decision was reversed](glossary.md#that-decision-was-reversed-on-2026-09-02-and-the-loop-is-still-closed-structurally)

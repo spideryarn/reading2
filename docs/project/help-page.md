@@ -1,7 +1,7 @@
 # The Help page
 
 `/help` — one page, for readers, that explains what Spideryarn does and how to get the most from it.
-Part of [reading-view-overview.md](reading-view-overview.md).
+Up: [reading-view-overview.md](reading-view-overview.md)
 
 Greg, 2026-10-01 (SPIDERYARN-READING2-85, `spya-p2hamn`):
 
@@ -42,8 +42,12 @@ ourselves does not need one.
 
 - [`help-anchors.ts`](../../src/web/help/help-anchors.ts) — every anchor, the `HelpAnchor` type,
   `helpHref(anchor)`, and the aliases for retired anchors.
-- [`help-content.tsx`](../../src/web/help/help-content.tsx) — the sections, and the groups that say
-  their order. Topics are a `Record<HelpTopic, …>`, modes a `Record<Mode, …>`.
+- [`help-content.tsx`](../../src/web/help/help-content.tsx) — the groups that say the sections'
+  order. The sections themselves are split by kind: topics are a `Record<HelpTopic, …>` in
+  [`help-topics.tsx`](../../src/web/help/help-topics.tsx), modes a `Record<Mode, …>` (and the
+  "Which mode when" table) in [`help-modes.tsx`](../../src/web/help/help-modes.tsx), the questions in
+  [`help-faq.tsx`](../../src/web/help/help-faq.tsx), shared bits in
+  [`help-parts.tsx`](../../src/web/help/help-parts.tsx).
 - [`HelpPage.tsx`](../../src/web/help/HelpPage.tsx) — the page: contents, search, arrival.
 
 **A mode's section does not restate the mode.** Its heading is `MODE_LABEL`, and its first two

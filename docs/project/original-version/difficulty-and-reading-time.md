@@ -86,3 +86,7 @@ Two things ours already does better, worth not losing:
 - [../open-questions.md#q6](../open-questions.md#q6) — how we'd know any of this is working
 - [glossary.md](glossary.md) — the other place they scored things on the reader's behalf
 - [typography.md](typography.md) — the rest of what they learned about long-form reading
+
+---
+
+Up: [overview.md](overview.md)

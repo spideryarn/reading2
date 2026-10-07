@@ -7,7 +7,7 @@ npm run lint         # Biome over everything biome.jsonc's `includes` allows
 npm run lint:fix     # the same, applying the fixes Biome considers safe
 ```
 
-Fast enough not to think about — around 20ms for the whole tree — so run it alongside
+Fast enough not to think about — about 20 seconds for the whole tree (measured 2026-10-07, 3,900 files) — so run it alongside
 `npm test` and `npm run typecheck` before you commit. Or run
 [`npm run check`](static-analysis.md), which is those three plus the build and the
 project-wide analysis, with an honest split between what gates and what only advises.
@@ -19,7 +19,7 @@ The config is [`biome.jsonc`](../../biome.jsonc), and every rule turned off in i
 > `api/`, `evals/`, `styles/` and `drizzle.config.ts` were all in that hole until 2026-08-26:
 > typechecked by `scripts/typecheck.ts`, linted by no one.
 >
-> The npm script is now just `biome lint .`, which is the fix for the second half of the trap: it
+> The npm script is now just `biome lint --max-diagnostics=none .`, which is the fix for the second half of the trap: it
 > used to repeat the path list, so the script and the config could disagree — and did. Worse, a path
 > named in the script that does not exist makes Biome print an internal error and **still exit 0**.
 > One list, in the config, and `.` for the scope. One more
@@ -232,7 +232,7 @@ all — but `type` defaults to `submit`, so it is a trap laid for whoever adds o
 concatenations that wanted template literals; three `return fail(…), null` comma operators in
 [`validate-tree.ts`](../../src/validate-tree.ts) that read as a typo and are now two statements; and
 the vendored `src/web/components/ui/**` excluded rather than hand-edited, since `npx shadcn add`
-overwrites those.
+overwrites those (that exclusion did not last: `biome.jsonc` has none now — see § What's turned off).
 
 **False positives, suppressed one line at a time with the reason (5).** Never by switching a rule
 off globally. The interesting one is
@@ -262,8 +262,10 @@ general, and wrong here, and the comment says why.
 [`TableView.tsx`](../../src/web/TableView.tsx): real, but making cells focusable and Enter-activated
 is a design decision about [keyboard.md](keyboard.md), not a lint fix. And the one that matters —
 `noDangerouslySetInnerHtml` — turned out to be a genuine way for a hostile article to run JavaScript
-in the reading view. It has its own entry, [Q9](open-questions.md#q9), with the pipeline traced and
-the payloads that survive Readability. **It is deliberately not suppressed.**
+in the reading view. It had its own entry, [Q9](open-questions.md#q9), with the pipeline traced and
+the payloads that survive Readability; it was closed on 2026-08-25 when DOMPurify went in at stage 3
+([security.md](security.md)). **It was deliberately not suppressed while it was open**; the remaining
+uses carry a `biome-ignore` saying the html is sanitised at ingress.
 
 ### Suppression syntax, since it cost us three attempts
 
@@ -305,9 +307,9 @@ wanted.
 
 ## The baseline is not green yet
 
-`npm run lint` still reports a handful, and the count moves as other agents land work. What remains
-is the two `useKeyWithClickEvents` and the `dangerouslySetInnerHTML` above, plus whatever arrived
-this morning.
+`npm run lint` still reports a lot, and the count moves as other agents land work. On 2026-10-07 it
+was 89 errors and 138 warnings, plus about five thousand infos (nearly all `useLiteralKeys` and the
+complexity advisory). The cases above are no longer among them.
 
 **So `npm run lint` is not yet a gate that passes.** Don't wire it into anything that must be green
 until the baseline is cleared — and don't clear the baseline by turning rules off. Suppress a single

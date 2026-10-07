@@ -36,6 +36,13 @@ stood until 2026-08-27.
 payload tables, the reasoning behind every policy line, and the honest gap list. Open it when you are
 changing a defence; read this one when you want to know which defence you are standing on.
 
+## In this doc
+
+- [§ The one habit](#the-one-habit) — the rule to apply when no table row covers what you are doing
+- [§ The docs](#the-docs) — which security doc to open: the deep dive, auth, admin, billing
+- [§ Where the defences physically live](#where-the-defences-physically-live) — the file that enforces a given boundary, before you render, route, fetch or read on a stranger's behalf
+- [§ The fleet dashboard, which is a different product on the same box](#the-fleet-dashboard-which-is-a-different-product-on-the-same-box) — touching the dashboard or anything else served from the box
+
 ## The one habit
 
 Nearly every hole here was hidden by [silent success](../reusable/silent-success.md): the check you
@@ -98,7 +105,7 @@ An agent about to edit one of these is editing a defence, not a helper.
 | [`src/auth.ts`](../../src/auth.ts) | the gate: `requireUser` |
 | [`src/web/auth-return.ts`](../../src/web/auth-return.ts) + [`AuthCallback.tsx`](../../src/web/AuthCallback.tsx) | where a sign-in returns the reader to: same-origin only (no `//evil.example`), never the callback itself, ten minutes at most, and **forgotten on every callback failure** — AuthCallback has one `fail()` exit, the only caller of `setError`, and a test pins that ([261001i](../plans/261001i-password-reset.md)). The callback's own address is always the bare `/auth/callback`, so a one-time code cannot ride into another URL ([auth.md](auth.md), point 4) |
 | [`src/web/lib/api.ts`](../../src/web/lib/api.ts) | `apiFetch` — every request is bound to the reader the tab held as it was made, and is not sent with a token known to be another reader's (`NotThisReader`). The server cannot see this one: reader B's token on reader A's words is a valid request. [auth.md § A request made for one reader is never sent as another](auth.md#a-request-made-for-one-reader-is-never-sent-as-another) |
-| [`src/store/pg.ts`](../../src/store/pg.ts) | `ownedSlug()` — keeps one reader's shelf out of another's |
+| [`src/store/owned-slug.ts`](../../src/store/owned-slug.ts) (re-exported from `pg.ts`) | `ownedSlug()` — keeps one reader's shelf out of another's |
 | [`src/asset-delivery.ts`](../../src/asset-delivery.ts) | `storedAssetFor()` — **the storage key is rebuilt from this article's own manifest entry, never from the caller's string.** The bucket is content-addressed and shared by every article and every reader, so a route that concatenated a caller's hash into a key would be an arbitrary-object read. A hash absent from this article's manifest is a 404 **even for its owner**. Both `GET /api/asset/…` and its public twin go through it. See below |
 | [`src/db/ssl.ts`](../../src/db/ssl.ts) | `sslDecisionFor` — **the database connection verifies Supabase's certificate or does not happen.** Against the remote there is no unverified answer: a missing CA, or a TLS key in `DATABASE_URL` that `pg` would let override ours (`?sslmode=no-verify` turned checking off while we said "verified"), is a thrown error saying what to fix. Local is untouched. Every pool and script goes through it. [security.md § verified or refused](security.md#database-tls) |
 | [`src/fetch.ts`](../../src/fetch.ts) | scheme allowlist, `isBlockedAddress`, redirect limit, size cap — 50 MiB, the upload's own `MAX_UPLOAD_BYTES`, counted off the stream and stopped on the first chunk over by [`src/read-capped.ts`](../../src/read-capped.ts), which the store's read shares. [fetching.md § Size](fetching.md#size-and-the-header-that-lies-about-it) |
@@ -196,8 +203,9 @@ with a 5,000-character title, gist, site name, byline and `<h1>` measures them. 
 (`articles_public_listing`, `drizzle/20260904175802_*`) covers `visibility = 'public'` in the
 listing's exact order, so `limit` bounds the database's work and not only the reply.
 
-It also refuses to work at all on the filesystem store — `requirePostgres()` answers 501 — so a
-misconfigured dev server cannot serve a half-implemented public path.
+It used to refuse to work at all on the filesystem store — a `requirePostgres()` that answered 501.
+That store was deleted on 2026-09-05 and the check went with it: there is one store now, so there is
+no half-implemented public path for a misconfigured dev server to serve.
 
 #### And since 2026-09-06 there is a third ownerless read, which hands back bytes
 

@@ -1,5 +1,7 @@
 # The article's own images
 
+Up: [architecture.md](architecture.md)
+
 The pictures the article came with — figures, equations, data tables rendered as PNGs. Stage 4.5
 fetches them at ingest and stores them beside the document, and the reading view serves them from us.
 
