@@ -260,3 +260,14 @@ things it reported and could not fix. Both are now dealt with.
   installed and started on the box with the commands `provision.sh` runs. First real tidy run:
   138 transcripts and 142 job logs deleted, 0.54 GB, one open log kept, exit 0. First watchdog run:
   `overseer healthy`. Stages 2 and 3 built.
+- 2026-10-07: the prune run for real in this worktree: 113 screenshots, 18.7 MB. The full suite
+  then went red in one place, `tests/doc-links.test.ts`, and that found two things. Links from a
+  plan to its own pruned screenshot are the cost Greg accepted, so the test now exempts exactly
+  those. But three of the 113 were shown by `docs/project/skim.md`, a living page, and should
+  never have gone: the script now keeps any image whose name is written outside the dated
+  folders, and the three were put back before anything was pushed. So 110 deleted.
+- 2026-10-07: the same full run showed the tidy's process hides its cwd while it runs, which made
+  a worktree removal refuse. It now names itself `box-tidy`, which the liveness scan knows.
+- Full suite on the merged tree: 1762 of 1763 files passed, the one failure being the doc-links
+  case above, fixed since and re-run on its own. The commits after that run were re-tested by
+  file, not by a second eighty-minute full run.

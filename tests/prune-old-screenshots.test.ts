@@ -153,6 +153,19 @@ describe("oldScreenshots", () => {
     expect(oldScreenshots(r.dir, NOW)).toEqual([]);
   });
 
+  it("keeps an old screenshot that a doc outside the dated folders still shows", () => {
+    // Found on the first real run, 2026-10-07: docs/project/skim.md shows three
+    // images that live under docs/plans, and the prune deleted them. A plan's
+    // own dead link is the accepted cost; a living page's is a broken page.
+    const r = repo();
+    r.commit(["docs/plans/260928a-spike-stop-card.png", "docs/plans/260928a-other.png", "docs/plans/shots/deep.png"], daysAgo(30));
+    r.commit(["docs/project/skim.md"], daysAgo(30), "![the card](../plans/260928a-spike-stop-card.png)\n");
+    r.commit(["src/web/help.tsx"], daysAgo(30), 'const shot = "docs/plans/shots/deep.png";\n');
+    // A plan linking its own screenshot does not keep it.
+    r.commit(["docs/plans/260928a-plan.md"], daysAgo(30), "![other](260928a-other.png)\n");
+    expect(oldScreenshots(r.dir, NOW)).toEqual(["docs/plans/260928a-other.png"]);
+  });
+
   it("goes by the committer date, not the author date", () => {
     // A cherry-pick or an amended commit keeps the author date it was written
     // with. The screenshot reached this history two days ago.

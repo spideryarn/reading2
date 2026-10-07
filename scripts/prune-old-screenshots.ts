@@ -122,6 +122,7 @@ function isImage(file: string): boolean {
 export function oldScreenshots(repo: string, nowSeconds: number): string[] {
   const cutoff = nowSeconds - MAX_AGE_DAYS * DAY_SECONDS;
   const newest = newestTouch(repo);
+  const shown = namesShownElsewhere(repo);
   return git(repo, ["ls-files", "-z", "--", ...DATED_FOLDERS])
     .split("\0")
     .filter((file) => file !== "" && isImage(file))
@@ -129,7 +130,45 @@ export function oldScreenshots(repo: string, nowSeconds: number): string[] {
       const when = newest.get(file);
       return when !== undefined && when < cutoff;
     })
+    .filter((file) => !shown.has(path.basename(file).toLowerCase()))
     .sort();
+}
+
+/**
+ * The base names of every image file name that appears in a tracked text file
+ * OUTSIDE the dated folders.
+ *
+ * A plan's link to its own screenshot may go dead; that is the accepted cost.
+ * A living page's may not: `docs/project/skim.md` shows three images that live
+ * under `docs/plans`, and the first real run of this script deleted them
+ * (2026-10-07; put back before it was pushed). So an image whose name is
+ * written anywhere else in the repo is kept, however old.
+ *
+ * By base name, which keeps too much rather than too little: two files called
+ * `shot.png` in different folders protect each other. Any other way of matching
+ * has to resolve relative links from markdown, HTML and source alike.
+ */
+export function namesShownElsewhere(repo: string): Set<string> {
+  const extensions = IMAGE_EXTENSIONS.map((e) => e.slice(1)).join("|");
+  const run = spawnSync(
+    "git",
+    [
+      "grep", "-I", "-h", "-o", "-i", "-E", `[A-Za-z0-9._~%+-]+\\.(${extensions})`,
+      "--", ".", ...DATED_FOLDERS.map((folder) => `:(exclude)${folder}`),
+    ],
+    { cwd: repo, encoding: "utf8", maxBuffer: GIT_MAX_BUFFER },
+  );
+  // 1 is "no match", which is an empty set. Anything else is a failure, and a failure must not read as "nothing is shown".
+  if (run.status !== 0 && run.status !== 1) throw new Error(`git grep failed (${run.status}): ${run.stderr}`);
+  return new Set(run.stdout.split("\n").filter(Boolean).map((name) => decodeURIComponentSafe(name).toLowerCase()));
+}
+
+function decodeURIComponentSafe(name: string): string {
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
 }
 
 export type ApplyResult =
