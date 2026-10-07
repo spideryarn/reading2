@@ -396,6 +396,8 @@ Gates per cluster: `npm run typecheck`, the suites it touched, `npm run lint` on
 
 ## For Greg
 
+**Decided 2026-10-07, Greg:** question 1, *"yes A probably controls that do the same job should look the same in every mode, though use your judgment. and make a minimal update to docs about aiming for consistency. the agent should take screenshots for itself, but no need to show me screenshots. just proceed autonomously"*; questions 2 and 3, *"yes to all as you see fit"*. Font sizes (qi-f8h393sb) were not part of the answer. Built by session `fbrgq3f6-design-consistency` together with the design-system refresh (qi-9sv8cha4).
+
 Nothing here is built. Three questions, each with a recommendation. The version that goes to Greg
 through the Overseer is plainer and carries a picture of each "before" (U20: a question about a
 tooltip he cannot see is not answerable).

@@ -249,10 +249,10 @@ It does. Two of the reasons are specific to this repo:
    GPT Sol reviews cite them, plans say "done (`96c7661`)", every postmortem names the commit that
    introduced the bug. Rebase rewrites every commit it moves, and the reference does not break loudly:
    it keeps looking like a sha and resolves to nothing.
-2. **A replayed conflict is one round trip per commit.** Rebase replays each of your commits over the
-   new base, so a single conflict can surface as many times as you have commits — and under
-   [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md)'s *"Make a proposal.
-   Don't make changes yet"* rule, that is a round trip with Greg each time. One merge, one proposal.
+2. **A replayed conflict is one resolution per commit.** Rebase replays each of your commits over the
+   new base, so a single conflict can surface as many times as you have commits — and each time
+   [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) has you write a
+   proposal and have it checked before you edit. One merge, one proposal.
 
 And four that are ordinary good sense:
 
@@ -275,8 +275,12 @@ avoiding — and nothing downstream cares, because `git merge-base --is-ancestor
 land?" identically either way, which is what a worktree sweep asks
 ([worktrees.md](worktrees.md)).
 
-**Most landings never conflict.** A plain non-fast-forward merges automatically, so the proposal rule
-fires on real textual conflicts only, not on every push.
+**Most landings never conflict.** A plain non-fast-forward merges automatically, so a proposal is
+needed for real textual conflicts only, not on every push.
+
+**Merge `origin/dev` when you wake up, too** — after a resume, a compaction or a long wait, before
+anything else, not only when the work is done:
+[worktrees.md § The workflow](worktrees.md#the-workflow).
 
 **A merge refused over a dirty tree has once taken the edits with it.** On 2026-10-01, in a
 worktree with six modified tracked files, `git merge --no-edit origin/dev` printed *"Please commit
@@ -950,8 +954,9 @@ push would still turn that project red — but it now costs the old app rather t
 - [git-commit-changes.md](../reusable/git-commit-changes.md) — the batch version: how to decide a
   pile of uncommitted changes is finished, quiet and safe to commit
 - [git-resolve-merge-conflicts.md](../reusable/git-resolve-merge-conflicts.md) — when a pull leaves
-  conflict markers: read both sides' history, propose before editing, and don't reach for the
-  commands that discard a side
+  conflict markers: read both sides' history, write the proposal down, resolve it yourself (Sol
+  or Opus if unsure; Greg only for a real product trade-off), and don't reach for the commands that
+  discard a side
 - [deployment.md](deployment.md) — Vercel, and why it ships a working tree rather than a commit
 - [setup-dev.md](setup-dev.md) — install, dev, secrets
 - [testing.md](testing.md), [typechecking.md](typechecking.md) — what to run before you commit

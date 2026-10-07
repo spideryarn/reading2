@@ -245,6 +245,8 @@ yes. The numbers are for answering with ("1 and 3, not 2").
 
 ### 1. `version-control.md` — a merge conflict no longer goes to Greg
 
+**Decided 2026-10-07: done** (997246843). Greg: *"re version-control.md changes - yes, approved"*.
+
 **Background.** Since 2026-09-10 AGENTS.md says an agent resolves a merge conflict itself, asking
 GPT Sol or Opus when unsure, and comes to Greg only for a real product trade-off. The sixth sweep
 carried a note that `version-control.md` still said otherwise. Read end to end, it says so in one
@@ -273,6 +275,8 @@ commands that discard a side"*.
 
 ### 2. "Merge `origin/dev` when you wake" is in one doc, and not the one agents load
 
+**Decided 2026-10-07: the `version-control.md` pointer is done** (997246843); the optional AGENTS.md words were not asked for and are not added.
+
 **Background.** The rule, with Greg's words of 2026-09-06, is in `worktrees.md` § The workflow and
 nowhere else. `version-control.md` does not mention it and AGENTS.md does not either.
 
@@ -289,6 +293,8 @@ skipping it; that file is paid for on every turn.
 
 ### 3. `code-quality-overview.md` — the table of gates is missing two, and miscounts one
 
+**Decided 2026-10-07: done.** Greg, 2026-10-07: *"re wording changes … yes to all (just try to keep them minimal, especially in AGENTS.md)"*.
+
 **Background.** This table is what tells an agent which commands are gates. `scripts/check.ts` now
 runs two it does not list, and there are four tsconfig projects, not three.
 
@@ -302,6 +308,8 @@ runs two it does not list, and there are four tsconfig projects, not three.
 *Recommend:* yes to all four.
 
 ### 4. AGENTS.md — four things it should point at and does not
+
+**Decided 2026-10-07: 4a, 4b and 4c done, kept short.** Greg, 2026-10-07: *"re wording changes … yes to all (just try to keep them minimal, especially in AGENTS.md)"*.
 
 **Background.** Greg, 2026-10-06: *"…and that the important ones are linked to from @AGENTS.md"*.
 Three one-line signposts are already in (the fleet hub, `chat-from-a-mode.md`, and the corrected
@@ -328,6 +336,8 @@ change or add a sentence that tells an agent what to do, so they do.
 
 ### 5. `vision.md` — "Where this goes after granularity zoom" lists built things as future
 
+**Decided 2026-10-07: done.**
+
 **Background.** The list marks three items **Built** and leaves the rest as intentions. Two of the
 rest exist: *Notes and highlights* (Comments, since August) and *Recall* (Learn and Quiz). The
 heading also names granularity zoom, whose columns went on 2026-09-29. This is the intent doc, so I
@@ -339,6 +349,8 @@ in the same form as the three above them, and leave the heading and every other 
 *Recommend:* yes. It is the smallest change that stops the doc under-reporting what exists.
 
 ### 6. The push checkpoint — the cheapest mechanism
+
+**Decided 2026-10-07: B, a hint, to be built and judged after a week.**
 
 **Background.** The policy now says: check the docs before you push, for the areas your change
 touched. Nothing prompts it. This sweep is the evidence for what happens without a prompt: about 230
@@ -368,6 +380,8 @@ test is to run it for a week and count how often its list led to an edit.
 *Recommend:* B, built as a hint and reviewed after a week; not C. I have not built it.
 
 ### Three questions that are not wording
+
+**Answered 2026-10-07.** 1: the live endpoint is subscribed — `npm run stripe:check -- --prod` checks every event in `HANDLED_EVENTS`, this one included, and passed (so "stripe:check does not look" below was wrong). 2: Greg, *"yes it does"*; auth.md's section marked history. 3: Greg, *"yes"*; splitting is a second job.
 
 1. **Is `invoice.finalization_failed` switched on at the live Stripe endpoint?** The endpoint was
    set up on 2026-09-03; the code began handling that event on 2026-09-04. If the event was never
