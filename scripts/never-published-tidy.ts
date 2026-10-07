@@ -642,6 +642,21 @@ export async function refusalUnderTheLock(
   backup: BackupRows,
 ): Promise<string | undefined> {
   if (lockedId !== target.articleId) return `its slug now names a different article (${lockedId})`;
+  /* **Then freeze the rows the article lock does not** (GPT Sol's round-2
+     D1), before the proof and the comparison read them. A checkpoint's
+     `value` or `last_used_at` can be updated, and a `reading_time` row
+     inserted against a block identity, without either parent lock — so
+     without these, a write committed after the comparison was cascaded away
+     unseen. `FOR UPDATE` conflicts with the identity's key-share lock that
+     any new `reading_time` row's foreign key takes, and with any update of a
+     checkpoint: such a writer that got in first is waited for and then seen;
+     one that comes later waits, then fails against the deleted row. One
+     statement each, primary-key order, held to the delete; the plan's § 5
+     reasons out the lock order. */
+  await tx.execute(sql`select 1 from spideryarn.block_identities
+    where article_id = ${target.articleId}::uuid order by article_id, block_id for update`);
+  await tx.execute(sql`select 1 from spideryarn.checkpoints
+    where article_id = ${target.articleId}::uuid order by article_id, namespace, key for update`);
   const proof = await proveEligible(tx, [target.articleId], quietDays);
   if (!proofIsClean(proof, 1)) return `it is no longer eligible (${JSON.stringify(proof)})`;
   const now = await dumpRows(tx, [target.articleId]);

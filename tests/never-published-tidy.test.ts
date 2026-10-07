@@ -51,6 +51,7 @@ import { type OwnerId, runAsOwner } from "../src/owner.js";
 import { aiCallInsertValues, pgCostStore } from "../src/store/ai-calls-pg.js";
 import { createPgCheckpointStore } from "../src/store/checkpoints-pg.js";
 import { pgShareLinkStore } from "../src/store/pg-share-link.js";
+import { pgReadingTimeStore } from "../src/store/pg-reading-time.js";
 import { pgShelfStore } from "../src/store/pg-shelf.js";
 import { lockOrCreateArticle } from "../src/store/pg-revisions.js";
 import { pgReady } from "./helpers/pg-ready.js";
@@ -133,17 +134,17 @@ async function deleteThem(targets: readonly Candidate[]) {
   }
 }
 
-/** Until another backend of this database is waiting on a row lock. */
-async function waitUntilSomebodyWaitsForALock(): Promise<void> {
+/** Until at least `n` other backends of this database are waiting on a row lock. */
+async function waitUntilSomebodyWaitsForALock(n = 1): Promise<void> {
   const until = Date.now() + 10_000;
   while (Date.now() < until) {
     const { rows } = await pool.query(
       "select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'",
     );
-    if ((rows[0] as { n: number }).n > 0) return;
+    if ((rows[0] as { n: number }).n >= n) return;
     await new Promise((r) => setTimeout(r, 20));
   }
-  throw new Error("nothing ever waited for the billing lock");
+  throw new Error(`fewer than ${n} backend(s) ever waited for a lock`);
 }
 
 async function clear(): Promise<void> {
@@ -354,6 +355,101 @@ describe("--delete refuses", () => {
     }
     const [left] = await getDb().select({ title: articles.titleOverride }).from(articles).where(eq(articles.id, a.id));
     expect(left?.title).toBe("Typed while the delete waited");
+  });
+
+  describe("writers that take neither the billing nor the article lock (Sol's round-2 D1)", () => {
+    /* Each holds a row lock on its own connection, starts the delete, waits
+       until something is queued behind a lock, then lets go: the interleavings
+       that once let a committed write be cascaded away unseen. */
+    async function oneTarget(name: string) {
+      const a = await failedFirstImport(name, { identities: 2, checkpoint: true });
+      await age([a.id]);
+      const targets = checkDeletion(await survey(), [a.id]);
+      const dir = mkdtempSync(path.join(tmpdir(), "never-published-tidy-test-"));
+      const { backup } = await writeBackup(getDb(), [a.id], dir);
+      rmSync(dir, { recursive: true, force: true });
+      const holder = await pool.connect();
+      const done = async () => {
+        await holder.query("rollback").catch(() => {});
+        holder.release();
+      };
+      return { a, targets, backup, holder, done };
+    }
+    const readingTimeRows = async (articleId: string) =>
+      (await pool.query("select count(*)::int as n from spideryarn.reading_time where article_id = $1", [articleId])).rows[0]?.n;
+
+    it("a checkpoint updated after the backup, committed while the delete is under way: refused, nothing deleted", async () => {
+      /* What the checkpoint store's hit does (a fresh `last_used_at`; on a
+         write, a new value) — dated weeks back so no clock sees it, and only
+         the comparison with the backup can. Updating those columns takes no
+         lock on the article. */
+      const t = await oneTarget("late-checkpoint");
+      try {
+        await t.holder.query("begin");
+        await t.holder.query(
+          "update spideryarn.checkpoints set value = '{\"text\":\"newer\"}'::jsonb, last_used_at = now() - interval '20 days' where article_id = $1",
+          [t.a.id],
+        );
+        const run = destroyEach(getDb(), t.targets, 7, t.backup).then(() => null, (e: unknown) => e);
+        await waitUntilSomebodyWaitsForALock();
+        await t.holder.query("commit");
+        const err = await run;
+        expect(err).toBeInstanceOf(TidySafetyError);
+        expect((err as Error).message).toMatch(/under the lock.*checkpoints/);
+      } finally {
+        await t.done();
+      }
+      expect(await stillThere(t.a.id)).toBe(true);
+      const [cp] = (await pool.query("select value from spideryarn.checkpoints where article_id = $1", [t.a.id])).rows;
+      expect(cp?.value).toEqual({ text: "newer" });
+    });
+
+    it("reading time inserted before the delete locks the identities, committed while it waits: refused, the row survives", async () => {
+      /* `pgReadingTimeStore.add`'s own statement, held open: its foreign key
+         locks the block identity, not the article. */
+      const t = await oneTarget("late-reading-time");
+      try {
+        await t.holder.query("begin");
+        await t.holder.query(
+          `insert into spideryarn.reading_time (article_id, block_id, seconds)
+           select article_id, block_id, 5 from spideryarn.block_identities where article_id = $1 order by block_id limit 1`,
+          [t.a.id],
+        );
+        const run = destroyEach(getDb(), t.targets, 7, t.backup).then(() => null, (e: unknown) => e);
+        await waitUntilSomebodyWaitsForALock();
+        await t.holder.query("commit");
+        const err = await run;
+        expect(err).toBeInstanceOf(TidySafetyError);
+        expect((err as Error).message).toMatch(/under the lock.*no longer eligible/);
+      } finally {
+        await t.done();
+      }
+      expect([await stillThere(t.a.id), await readingTimeRows(t.a.id)]).toEqual([true, 1]);
+    });
+
+    it("pgReadingTimeStore.add attempted while the delete is in its hook: it waits, then fails; nothing committed is lost", async () => {
+      /* The hook is held after it has locked the identities, by a lock on the
+         checkpoint row (taken and released here, changing nothing); the add
+         arrives in that window and queues behind the identity lock. */
+      const t = await oneTarget("reading-time-in-hook");
+      const [bi] = (await pool.query("select block_id from spideryarn.block_identities where article_id = $1 order by block_id limit 1", [t.a.id])).rows;
+      let add: Promise<unknown> = Promise.resolve(null);
+      let run: Promise<unknown> = Promise.resolve(null);
+      try {
+        await t.holder.query("begin");
+        await t.holder.query("select 1 from spideryarn.checkpoints where article_id = $1 for update", [t.a.id]);
+        run = destroyEach(getDb(), t.targets, 7, t.backup).then(() => null, (e: unknown) => e);
+        await waitUntilSomebodyWaitsForALock(1);
+        add = asOwner(() => pgReadingTimeStore.add(t.a.slug, { [String(bi?.block_id)]: 5 })).then(() => null, (e: unknown) => e);
+        await waitUntilSomebodyWaitsForALock(2);
+        await t.holder.query("rollback");
+      } finally {
+        await t.done();
+      }
+      expect(await run, "the delete went ahead").toBeNull();
+      expect(await add, "the add failed rather than committing").toBeInstanceOf(Error);
+      expect([await stillThere(t.a.id), await readingTimeRows(t.a.id)]).toEqual([false, 0]);
+    });
   });
 
   it("rows the backup does not hold: a block identity minted after the backup was written", async () => {
