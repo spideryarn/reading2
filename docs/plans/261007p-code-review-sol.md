@@ -63,6 +63,10 @@ and the preceding Sol plan review. Fixes are in the working tree; no commit was 
   settings store's `loaded` flag. A failed/offline settings read can leave that arrival in Plain.
   This predates these commits and is the ordinary timing the plan explicitly retains; the marked
   path correctly bypasses it. Left unchanged.
+  **Fixed 2026-10-08:** no first open waits on the settings store now. "Signed in" comes from the
+  reader id `App` hands `useLastView` once the session is known, so the store's `loaded` was never
+  needed. `tests/first-open-default-wiring.test.tsx` § "does not wait for the settings store" was
+  red first.
 
 ## Validation
 

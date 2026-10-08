@@ -82,7 +82,6 @@ import { bandCoversProse } from "./layout.js";
 import { notesFit } from "./marginalia/press.js";
 import { storageReader } from "./lib/storage-reader.js";
 import { rootFontPx, usableWidth } from "./reader/measure.js";
-import { useExperimental } from "./useExperimental.js";
 import { peekAskPurpose } from "./ask-purpose.js";
 import { firstOpenHeld, GUIDE_FIRST_OPEN, holdFirstOpen, releaseWhenDecided } from "./first-open-purpose.js";
 
@@ -788,47 +787,38 @@ export function useLastView(slug: string | null, view: ArticleView, readerId: st
     history.replaceState(history.state, "", href);
   }, [slug, view, readerId]);
 
-  /* **The first-open default.** The ordinary path keeps its existing timing:
-     once the settings store has answered, because that store is where it has
-     historically taken `signedIn`. (Until 2026-10-05 its switch also decided
-     whether Marginalia was part of the default; plan 261005d.)
+  /* **The first-open default.** Applied as soon as it is claimed, on both
+     paths; neither waits on the settings store. Until 2026-10-08 the ordinary
+     (unmarked) path waited for that store's `loaded`, because it took
+     `signedIn` from there — so a settings read that failed, or served an
+     offline copy, left the arrival in Plain for good (CR3 of
+     docs/plans/261007p-code-review-sol.md). Nothing about the default depends
+     on the switch since 2026-10-05 (plan 261005d), and `App` hands this hook a
+     null slug until the session is known, so `readerId` already answers
+     signed-in status.
 
-     **A marked first open is different:** register its release immediately.
-     Waiting on the unrelated settings read can strand the new coordinator
-     when that read fails or serves an offline copy: PurposePrompt has cleared
-     the mark and suppressed its modal, but no guide/default can ever be
-     released. `App` hands this hook a null slug until the session is known, so
-     `readerId` already answers signed-in status for this held path. The apply
-     no longer waits for the purpose outcome (first-open-purpose.ts, plan 261007p).
+     **A marked first open** registers its release with the add page's
+     coordinator instead (first-open-purpose.ts, plan 261007p), which applies
+     it without waiting for the purpose outcome.
 
      **Measured here, once**, with the reader's own two measurements
      (reader/measure.ts): a resize afterwards moves the layout and never
-     reapplies this. `signedIn` is the store's; the reader id is here only so
-     that a default claimed for one reader is never applied for the next.
-     Declared after the claim so it sees this render's claim. */
-  const { loaded, signedIn } = useExperimental();
+     reapplies this. The reader id is also what keeps a default claimed for
+     one reader from being applied for the next. Declared after the claim so
+     it sees this render's claim. */
   useLayoutEffect(() => {
     const claimed = firstOpenFor.current;
     if (slug === null || view !== "article" || claimed?.slug !== slug || claimed.readerId !== readerId) return;
-    const held = firstOpenHeld(slug, readerId);
-    if (!held && !loaded) return;
     firstOpenFor.current = null;
     const apply = (firstOpen: string) => {
-      const href = firstOpenHref(
-        slug,
-        location.pathname,
-        location.search,
-        { signedIn: held ? readerId !== null : signedIn },
-        firstOpen,
-      );
+      const href = firstOpenHref(slug, location.pathname, location.search, { signedIn: readerId !== null }, firstOpen);
       if (href !== null) history.replaceState(history.state, "", href);
     };
-    /* Held by the add page's mark: applied immediately, without waiting on
-       either read (first-open-purpose.ts). `firstOpenHref` still checks that
-       the address names this arrival and carries no explicit article state. */
-    if (held) releaseWhenDecided(slug, readerId, apply);
+    /* `firstOpenHref` still checks that the address names this arrival and
+       carries no explicit article state. */
+    if (firstOpenHeld(slug, readerId)) releaseWhenDecided(slug, readerId, apply);
     else apply(firstOpenSearch(usableWidth(), rootFontPx()));
-  }, [slug, view, readerId, loaded, signedIn]);
+  }, [slug, view, readerId]);
 
   useEffect(() => {
     if (slug === null) return;

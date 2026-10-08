@@ -35,6 +35,7 @@ import {
   isCacheable,
   WORST_CASE_PROMPT_TOKENS,
   addSpend,
+  asksOutOfBounds,
   buildClassifierPrompt,
   callCost,
   classifyTail,
@@ -432,6 +433,20 @@ describe("the proposal-aware prompt (plan 260910f D1, D8, D9, D13)", () => {
       expect(system).toContain(word);
     }
     expect(system).not.toEqual(buildClassifierPrompt("TAIL").system);
+  });
+
+  it("tells the model the quote's bound, the same one the parse enforces, and that the options are not the quote", () => {
+    // Found on 2026-10-07 (plan 261007o § The eval): the model quoted the whole
+    // options paragraph, 413-426 characters, so the parse refused it and the
+    // Sol and Opus fixtures came back unjudged. The prompt never said 300.
+    const { system } = buildClassifierPrompt("TAIL", PROPOSAL_PROMPT_VERSION);
+    const asks = system.slice(system.indexOf("asks:"), system.indexOf("unplacedWhy:"));
+    expect(asks).toContain(`${MAX_ASKS_CHARS} characters`);
+    expect(asks).toMatch(/shortest/i);
+    // An example, and one that obeys its own rule.
+    const example = /"([^"]+)"/.exec(asks.slice(asks.indexOf("For example")))?.[1];
+    expect(example).toBeDefined();
+    expect(asksOutOfBounds(example ?? "")).toBeNull();
   });
 
   it("routes by Greg's 2026-10-07 split: Opus for judgment, Sol for technical review, Greg for dropping a case", () => {

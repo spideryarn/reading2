@@ -18,11 +18,13 @@
  *
  * **Where the reader lands no longer waits for the purpose read** (plan
  * 261007p: the guide is every first open's default, not only a reasonless
- * one's), so a held arrival is applied the moment `useLastView` can apply it.
- * It is still held, rather than handed to the ordinary path, for one reason
- * (GPT Sol's F4 on 261007p): the ordinary path waits for the settings store,
- * and a settings read that fails or serves an offline copy would then leave
- * the modal suppressed and the guide never opened.
+ * one's), so a held arrival is applied the moment `useLastView` claims it.
+ * What the hold still carries is the window's measurement at the claim and
+ * which reader it was for, so that `PurposePrompt` can settle the modal
+ * against the same arrival. (It was also, until 2026-10-08, the only first
+ * open that did not wait for the settings store — GPT Sol's F4 on 261007p;
+ * since CR3 of that plan's code review the ordinary path does not wait
+ * either.)
  *
  * **A failed read keeps the mark and decides nothing about the question**:
  * `PurposePrompt` leaves the mark for the next load — which is not a first
@@ -90,15 +92,14 @@ export function holdFirstOpen(next: { slug: string; readerId: string | null; ord
   hold = next === null ? null : { ...next, outcome: null, apply: null, applied: false };
 }
 
-/** Whether this slug and reader have the marked first-open decision, independent of settings readiness. */
+/** Whether this slug and reader have the marked first-open decision. */
 export function firstOpenHeld(slug: string, readerId: string | null): boolean {
   return hold !== null && hold.slug === slug && hold.readerId === readerId;
 }
 
 /**
  * **`useLastView`, once this arrival can be applied**, in place of applying
- * the ordinary default itself. A held arrival registers immediately so an
- * unrelated settings failure cannot strand it, and is applied then.
+ * the ordinary default itself. Registered and applied immediately.
  */
 export function releaseWhenDecided(slug: string, readerId: string | null, apply: (search: string) => void): void {
   if (!firstOpenHeld(slug, readerId) || hold === null) return;
