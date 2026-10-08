@@ -1015,6 +1015,7 @@ describe("the schema keeps the promises the plan makes", () => {
                             'articles_current_revision_fk','reader_profiles_owner_fk',
                             'uploads_owner_fk','feedback_owner_fk',
                             'feedback_question_answers_owner_fk',
+                            'feedback_question_deferrals_owner_fk',
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
@@ -1037,6 +1038,8 @@ describe("the schema keeps the promises the plan makes", () => {
            RESTRICT, as `feedback_owner_fk` is: what an admin decided is a
            record of the application, not of the account. */
         "feedback_question_answers_owner_fk",
+        /* drizzle/20261008181231, the same by hand, for the same reason. */
+        "feedback_question_deferrals_owner_fk",
         "ingest_events_owner_fk",
         /* The composite one, and the reason it is composite: a job carries
            `(ingest_event_id, owner_id)` into `ingest_events (id, owner_id)`, so

@@ -196,7 +196,7 @@ the remote box took production migrations over
 | | |
 |---|---|
 | `npm run deploy` | the whole thing |
-| `-- --ready` | deploy **the newest commit on `origin/dev` the readiness loop saw green**, not `HEAD` — [§ Deploying a commit already known green](#deploying-a-commit-already-known-green). Combines with `--dry-run` |
+| `-- --ready` | deploy from **the newest commit on `origin/dev` the readiness loop saw green**, not `HEAD`: the first commit from it that carries its release notes — [§ Deploying a commit already known green](#deploying-a-commit-already-known-green). Combines with `--dry-run` |
 | `-- --dry-run` | every local gate, nothing external. Nothing pushed, no migration applied |
 | `-- --verify-only` | check what is live right now, deploy nothing |
 | `-- --force-gate=test` | named, never blanket, and printed in the summary as `DEPLOYED WITH … FORCED` |
@@ -248,8 +248,15 @@ on `dev` got found, one per hour. The [readiness loop](readiness.md) had already
 on most of those commits. Since 2026-10-07 the deploy reads what it found
 ([261007k](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md)):
 
-- **`--ready` picks the commit.** The newest commit on `origin/dev` whose test gate the readiness
-  store already proves, and it stops if there is none rather than falling back to the tip. Its trunk
+- **`--ready` picks the commit.** The newest commit `G` on `origin/dev` whose test gate the
+  readiness store already proves, and it stops if there is none rather than falling back to the tip.
+  It then deploys **the first commit from `G` that the preflight would pass**: one carrying release
+  notes that cover it, recording the deploy now serving, and containing `origin/main`. `G` itself
+  usually cannot, because the notes are committed after it was tested; until 2026-10-08 `--ready`
+  insisted on `G` and so never deployed anything
+  ([261008h](../plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md)).
+  The test gate then reruns the test files changed between them
+  ([§ The test gate reruns only what failed](#the-test-gate-reruns-only-what-failed)). Its trunk
   gate is `in origin/dev` (an ancestor, so it was pushed) instead of `level with origin/dev`; the
   commits on `dev` after it are named and left for the next deploy.
 - **The `test` gate may be reused, in any mode.** When the store proves *this* sha, the gate prints
@@ -282,14 +289,52 @@ branch:   dev ──●──●──●──●──►            --ready: 
                   release ──fix──fix──► deploy               └──► deploy ✓, tests reused
 ```
 
-What `--ready` adds is that it never deploys a commit nobody has tested, which was the whole of
-2026-10-07's five failed attempts. What it lacks is somewhere to fix forward: a red on the candidate
-is fixed on `dev`, and the deploy waits for the loop to pass a later commit. That wait is its
-weakness. A full run is 80–90 minutes, the loop skips while the box swaps, and on 2026-10-07 a stale
-local migration-ledger row stopped it for an evening, so on a busy day there may be no green commit
-for hours. Not built, for that case: the `release/<sha>` branch for fixing a candidate in place —
-[261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief).
-Build it the first time `--ready` waits too long or a release needs a fix of its own.
+What `--ready` adds is that it never deploys far from a commit somebody has tested, which was the
+whole of 2026-10-07's five failed attempts. Its weakness is that green runs are rare on a busy day
+(one in nine on 2026-10-07/08), so there may be no `G` for hours; then a plain deploy, with the
+rerun below, is the way to ship. Still not built: the `release/<sha>` branch for fixing a candidate
+in place —
+[261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief),
+and why it was passed over again in
+[261008h](../plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md#the-simpler-option-passed-over-and-the-larger-one).
+
+### The test gate reruns only what failed
+
+> The other thing is just, it seems as though if a test, a single test fails, does that then require
+> it to run all the tests again? Because that sounds dumb. Could we not just run the test that failed
+> and if that's been fixed, assume it's okay? I'm willing to take that small risk rather rerun the
+> whole test suite every time.
+>
+> — Greg, 2026-10-08
+
+Since 2026-10-08, when nothing can stand in for the exact commit, the gate looks for **the newest
+whole-suite run on the nearest ancestor** — the deploy's own earlier runs, kept in
+`logs/deploy/test-runs/` of the primary, or the readiness loop's — and if that run was green, or red
+only in files it named, it runs just **those files plus the test files changed since**. If they pass,
+the gate passes and says `ok test — a whole run on <sha> by <who>, <age>, … plus N file(s) here`. If
+they fail, the gate is red with their names; fix them and deploy again, and the next deploy reruns
+them again from the same run. So a red gate costs one fix and a few minutes, not another hour.
+
+Everything else runs the whole suite and the line before it says why. The clauses are
+`partialEvidenceFor` and `readinessFullRuns` in
+[`scripts/deploy-evidence.ts`](../../scripts/deploy-evidence.ts), and the judgement on vitest's own
+report is [`tools/fleet/test-outcome.ts`](../../tools/fleet/test-outcome.ts); the ones worth knowing:
+the run must be at most **2 hours old** when it answers for a different commit (24 for its own); the
+nearest run decides, and a nearer one that cannot be used never falls back to an older one that can;
+a red that belongs to no file — an unhandled error, a failing teardown, a run that did not cover the
+whole suite — cannot be rerun in part; and a change to the harness since (anything under `tests/`
+that is not a test, `vitest.config.ts`, the lockfile …) means the whole suite.
+
+A run still going does not count as the nearest; it only blocks runs on its own commit. A run must
+carry the reporter's current outcome to stand in at all, here or in the exact-commit reuse above,
+so records from before 2026-10-08's change stand in for nothing.
+
+**What a pass claims** is "a whole run at that commit, plus these files here" — never that the suite
+passed at the commit deployed. The risk Greg took is a change since the run that breaks a test
+nobody reran; the readiness loop's next full run is what catches it. The failing files come from
+[`scripts/vitest-outcome-reporter.ts`](../../scripts/vitest-outcome-reporter.ts), not from vitest's
+JSON or its text, because only a reporter is told about unhandled errors, and only one that waits
+for the process to exit sees a teardown fail.
 
 ### The gate needs both halves of the artefact store
 

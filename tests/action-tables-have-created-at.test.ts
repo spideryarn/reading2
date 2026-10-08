@@ -284,8 +284,34 @@ describe("no migration invents a time for rows that already exist", () => {
     expect(files).toContain("20261003170347_store_when_it_happened.sql");
   });
 
+  /**
+   * **Migrations whose `ADD COLUMN … DEFAULT now()` has no row to stamp**, each
+   * with the reason in words. Only a table created in the same deploy
+   * qualifies: production applies both at once, so the table is empty when the
+   * column arrives. An entry is never a way round a table that has rows.
+   */
+  const NO_EXISTING_ROWS: Record<string, string> = {
+    "20261008200746_feedback_question_deferrals_created_at.sql":
+      "feedback_question_deferrals is created by 20261008181231 in the same deploy (plan 261008i), so " +
+      "production has no row for it to stamp; the generated form was applied locally before this guard " +
+      "was run, and an applied migration is never edited",
+  };
+
   it("finds no `ADD COLUMN … timestamp … DEFAULT now()` in any of them", () => {
-    expect(files.flatMap((f) => inventedTimes(f, readFileSync(path.join(DRIZZLE, f), "utf8")))).toEqual([]);
+    expect(
+      files
+        .filter((f) => !Object.hasOwn(NO_EXISTING_ROWS, f))
+        .flatMap((f) => inventedTimes(f, readFileSync(path.join(DRIZZLE, f), "utf8"))),
+    ).toEqual([]);
+  });
+
+  it("exempts only migrations that exist, each with a reason in words", () => {
+    for (const [file, reason] of Object.entries(NO_EXISTING_ROWS)) {
+      expect(files, file).toContain(file);
+      expect(reason.length, file).toBeGreaterThan(40);
+      /* And the exemption is needed: a file that no longer trips the guard comes off the list. */
+      expect(inventedTimes(file, readFileSync(path.join(DRIZZLE, file), "utf8")).length, file).toBeGreaterThan(0);
+    }
   });
 
   it("is red on the line drizzle generates, and green on the two-statement form", () => {

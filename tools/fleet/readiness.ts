@@ -47,6 +47,7 @@
  *     why every record carries two {@link TreeStamp}s and why that type has an
  *     `unknown` arm rather than a nullable sha.
  */
+import { asTestOutcome, type TestOutcome } from "./test-outcome.js";
 
 /* ------------------------------------------------------------------ *
  * Which check.
@@ -503,6 +504,21 @@ export type FinishedRecord = RunCommon & {
    * could name some failures without knowing how many it missed.
    */
   failedTestFiles: FailedTestFiles | null;
+  /**
+   * What vitest's own outcome reporter said about the suite inside this run —
+   * green, red only in the files it names, or no use — or absent when nothing
+   * wrote one (a `typecheck` run, a log reconstruction, a record from before
+   * 2026-10-08). **The deploy reads it, the tab does not**: a later deploy
+   * reruns only those files (scripts/deploy-evidence.ts, docs/plans/261008h).
+   * Unlike `failedTestFiles` it comes from the reporter, not from matching
+   * text, and it says when a failure belonged to no file.
+   *
+   * Optional for older records. A malformed supplied outcome is unusable,
+   * so broken evidence cannot be mistaken for a record that never had it.
+   */
+  testOutcome?: TestOutcome | null;
+  /** Written by the wrapper that judged the outcome, not copied from the loop. */
+  testOutcomeVersion?: number;
 };
 
 export type RunRecord = StartedRecord | FinishedRecord;
@@ -895,6 +911,8 @@ export function parseRunRecord(text: string): RunRecord | null {
   const counts = asCounts(parsed["counts"]);
   if (outcome === "pass" && countsContradictPass(counts)) return null;
 
+  const testOutcome = asTestOutcome(parsed["testOutcome"]) ??
+    (parsed["testOutcome"] == null ? null : { kind: "unusable" as const, why: "the stored test outcome is malformed" });
   return {
     ...common,
     state: "finished",
@@ -907,6 +925,8 @@ export function parseRunRecord(text: string): RunRecord | null {
     logPath: asString(parsed["logPath"]),
     why: asString(parsed["why"]),
     failedTestFiles: failedTestFilesForOutcome(outcome, asFailedTestFiles(parsed["failedTestFiles"])),
+    ...(testOutcome === null ? {} : { testOutcome }),
+    ...(Number.isInteger(parsed["testOutcomeVersion"]) ? { testOutcomeVersion: parsed["testOutcomeVersion"] as number } : {}),
   };
 }
 
