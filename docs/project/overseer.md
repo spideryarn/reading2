@@ -423,7 +423,7 @@ recurring form.
 
 ### The tick
 
-Every half hour or so, in this order — the first two need no model, the last one spends:
+Every half hour or so — the queue pacer job is what wakes you for it ([§ The standing jobs](#the-standing-jobs); if `CronList` is empty, recreate them first) — in this order; the first two need no model, the last one spends:
 
 1. **Usage and load first.** `npx tsx scripts/overseer.ts usage`, with the cache's age. The account is
    shared and exhaustion freezes you too, so pause **early enough that the five-hour window lasts until

@@ -1127,6 +1127,12 @@ is now the rollback, after `sudo systemctl disable --now overseer`. Check which 
 `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
 `systemctl is-active overseer`.
 
+**What is not under systemd: the Overseer session's own pacing.** The queue pacer, the 3-hourly
+check and their daily renewal are scheduled jobs inside the Overseer's Claude session, so they die
+with it and expire after 7 days unless renewed; on 2026-10-07 one expired and nothing deployed for
+17 hours. Their text and the restart step:
+[`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md).
+
 **The switch is one command, and it is the Overseer's**:
 `sudo npx tsx scripts/overseer-activate.ts --disarm` to read the plan, then the same with
 `--apply`. It writes `/etc/overseer.env` disarmed if it is missing, installs the unit, refuses
