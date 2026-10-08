@@ -3866,8 +3866,7 @@ export function Reader({
   const activateModeHere = useActivateMode(
     slug,
     carriedSearch(location.search),
-    subNav.diagram,
-    summaryView,
+    { diagram: subNav.diagram, summary: summaryView, debate: subNav.debate },
     onDockMode,
     isOwner,
     mode,
@@ -3882,8 +3881,7 @@ export function Reader({
   const activateModeUnarmed = useActivateMode(
     slug,
     carriedSearch(location.search),
-    subNav.diagram,
-    summaryView,
+    { diagram: subNav.diagram, summary: summaryView, debate: subNav.debate },
     onDockMode,
     false,
     mode,
@@ -4665,6 +4663,9 @@ export function Reader({
         /* The same state the Diagram band's chips read (`diagramParam`), not
            the address, which lags a chip press — Dock.tsx § Props `diagram`. */
         diagram={subNav.diagram}
+        /* The same for Debate's sub-mode: a press landing on Claims arms
+           nothing (activation.ts § `activationForDebate`). */
+        debate={subNav.debate}
         onMode={onDockMode}
         /* Which mode buttons are drawn dimmed. Empty for the owner, so the bar
            is exactly what it was; derived from `MODES` for a visitor, so a mode

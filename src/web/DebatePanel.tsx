@@ -58,6 +58,13 @@
  *    bearing first within a claim ([`debate-order.ts`](debate-order.ts)). The
  *    relevance bar (`?bears=`) is its one control.
  *
+ * **Since `debate/7` (2026-10-08) the press searches for Reception only**, and
+ * a debate stored since says `claims: {pass: "not-run"}` (src/types.ts §
+ * `DebateClaims`): Claims then says no claims search ran, never that one found
+ * nothing. An older debate's claim rows are drawn as before, under *Claims the
+ * earlier search chose*. The reader picks the claims to check instead —
+ * docs/plans/261008i-debate-claims-picked-by-the-reader.md.
+ *
  * ## Cited by, at the end of Reception, for the owner
  *
  * Since 2026-10-04 Reception ends with the papers that cite the piece, from
@@ -158,7 +165,10 @@ import {
   citedTimes,
   citersLines,
   DEBATE_BEFORE_SEARCH,
+  DEBATE_CLAIMS_EARLIER,
   DEBATE_CLAIMS_NONE,
+  DEBATE_CLAIMS_NOT_SEARCHED,
+  DEBATE_CLAIMS_NOT_SEARCHED_SHARED,
   DEBATE_EXTRACTS_ONLY,
   DEBATE_RESPONSES_NONE,
   DEBATE_CLAIMS_NONE_SHARED,
@@ -181,6 +191,7 @@ import {
   type ClaimOrigin,
   type Debate,
   type DebateBears,
+  type DebateClaimsNotRun,
   type DebateCounts,
   type DebateKeySource,
   type DebateLean,
@@ -538,14 +549,26 @@ export function sourcesNote(
  */
 function footLines(debate: {
   direct: { rows: readonly { url: string }[]; counts: DebateCounts };
-  claims: { rows: readonly { url: string }[]; counts: DebateCounts };
+  /* `null` when the claims search did not run (`debate/7` on): there are no
+     counts to say anything about, and the (i) says that instead. */
+  claims: { rows: readonly { url: string }[]; counts: DebateCounts } | null;
 }): string[] {
   return [
     keptNote(debate.direct.counts, "direct"),
     sourcesNote(debate.direct.counts, debate.direct.rows, "direct"),
-    keptNote(debate.claims.counts, "claims"),
-    sourcesNote(debate.claims.counts, debate.claims.rows, "claims"),
-  ].filter((line): line is string => line !== null);
+    debate.claims && keptNote(debate.claims.counts, "claims"),
+    debate.claims && sourcesNote(debate.claims.counts, debate.claims.rows, "claims"),
+  ].filter((line): line is string => typeof line === "string");
+}
+
+/**
+ * **Did this group's search not run?** Only the claims group can say so, and
+ * only on a debate searched at `debate/7` or later (src/types.ts §
+ * `DebateClaims`); absent `pass` is a search that ran. Generic so either arm's
+ * group, owner's or visitor's, narrows to the searched member afterwards.
+ */
+function notRun<G extends object>(group: G | DebateClaimsNotRun): group is DebateClaimsNotRun {
+  return (group as { pass?: unknown }).pass === "not-run";
 }
 
 /**
@@ -569,7 +592,10 @@ export function withheldLines(debate: PublicDebate): string[] {
 
 /** One search's withheld sentence, or nothing when the boundary withheld none. */
 function withheldNote(debate: PublicDebate, which: "direct" | "claims"): string | null {
-  const n = debate[which].sourceNotPublishable;
+  const group = debate[which];
+  /* A claims search that did not run withheld nothing. */
+  if (notRun(group)) return null;
+  const n = group.sourceNotPublishable;
   return n > 0 ? debateWithheldOnSharedLink(SEARCH_NAME[which], n) : null;
 }
 
@@ -598,7 +624,15 @@ function withheldNote(debate: PublicDebate, which: "direct" | "claims"): string 
  */
 export function emptyNote(debate: Debate | PublicDebate, which: "direct" | "claims"): string | null {
   if (debate[which].rows.length > 0) return null;
-  if (!isShared(debate)) return emptyGroupNote(debate[which].counts, which);
+  /* **No search ran, so none found nothing** — a debate searched at
+     `debate/7` or later, whose press looked for Reception only (src/types.ts §
+     `DebateClaims`). Asked first in each arm: the other sentences are about a
+     search. */
+  if (!isShared(debate)) {
+    const group = debate[which];
+    return notRun(group) ? DEBATE_CLAIMS_NOT_SEARCHED : emptyGroupNote(group.counts, which);
+  }
+  if (notRun(debate[which])) return DEBATE_CLAIMS_NOT_SEARCHED_SHARED;
   return (
     withheldNote(debate, which) ??
     (which === "direct" ? DEBATE_RESPONSES_NONE_SHARED : DEBATE_CLAIMS_NONE_SHARED)
@@ -1060,11 +1094,17 @@ export function DebatePanel({
        the stored counts behind the owner's four sentences do not cross
        (src/public-types.ts § `PublicDebateGroup`). */
     if (isShared(debate)) return withheldLines(debate);
+    const claims = debate.claims;
     return footLines({
       direct: { rows: receptionShown, counts: debate.direct.counts },
-      claims: { rows: claimsShown, counts: debate.claims.counts },
+      claims: notRun(claims) ? null : { rows: claimsShown, counts: claims.counts },
     });
   }, [debate, receptionShown, claimsShown]);
+  /* **This debate's press did not search for claims** (`debate/7` on). The
+     (i) says so for both arms, where the claims search's own sentences would
+     otherwise be; a debate stored before then shows its claim rows under
+     their own heading instead (`DEBATE_CLAIMS_EARLIER`). */
+  const claimsNotRun = debate !== null && notRun(debate.claims);
 
   /**
    * @param again beside a debate that is already there, so the run is forced.
@@ -1122,6 +1162,7 @@ export function DebatePanel({
         {foot.map((line) => (
           <p key={line}>{line}</p>
         ))}
+        {claimsNotRun && <p>{DEBATE_CLAIMS_NOT_SEARCHED_SHARED}</p>}
         <p>{DEBATE_EXTRACTS_ONLY}</p>
         {aboutCiters}
         <AboutMade
@@ -1213,11 +1254,11 @@ export function DebatePanel({
       {owner?.status === "none" && (
         <div className="gloss-empty">
           <p>Nobody has asked the web about this one yet.</p>
-          {/* The price, before the button rather than after it. Two model
-              calls that each go out to the open web is the dearest press in
-              this bar, and a reader is entitled to know that at the moment they
-              decide — and what the two searches are, in the words the two
-              sub-modes are then called by. docs/project/copy.md. */}
+          {/* The price, before the button rather than after it. A model call
+              that goes out to the open web is the dearest press in this bar,
+              and a reader is entitled to know that at the moment they decide —
+              and what it searches for: Reception only since `debate/7`, the
+              claims being the reader's to pick. docs/project/copy.md. */}
           <p className="gloss-hint">{DEBATE_BEFORE_SEARCH}</p>
           {run("Search the web")}
         </div>
@@ -1346,12 +1387,23 @@ export function DebatePanel({
                   ))}
               </>
             ) : (
-              <ClaimsList
-                groups={claimGroups}
-                onJump={onJump}
-                keyRows={keyRows}
-                chats={access.kind === "owner" ? access.claimChats : null}
-              />
+              <>
+                {/* **An older search's claims, under their own heading** — a
+                    debate stored before `debate/7`, whose press picked three or
+                    four claims by itself. Asked of the stored rows, so the
+                    heading stays when the bar or a thread hides them all. A
+                    debate searched since has none, and its empty sentence is
+                    above. */}
+                {!claimsNotRun && claimRows.length > 0 && (
+                  <h3 className="dbt-group-head">{DEBATE_CLAIMS_EARLIER}</h3>
+                )}
+                <ClaimsList
+                  groups={claimGroups}
+                  onJump={onJump}
+                  keyRows={keyRows}
+                  chats={access.kind === "owner" ? access.claimChats : null}
+                />
+              </>
             )}
 
             {/* Both searches' numbers (`footLines`) and the extracts-only

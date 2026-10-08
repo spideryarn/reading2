@@ -1406,9 +1406,11 @@ export function learnInSearch(search: string): LearnView {
  * address; an unknown value reads as Reception.
  *
  * **Writing it never spends.** Debate searches when its owner presses — the
- * mode's button, or either sub-mode's command-bar row, which arm the one
- * `debate` run (activation.ts § `subModeTarget`). Back, a pasted link and a
- * last-view restore arrive here and buy nothing.
+ * mode's button landing on Reception, or Reception's command-bar row, which
+ * arm the `debate` run; since 2026-10-08 a press landing on Claims arms
+ * nothing, because the search is for Reception only (activation.ts §
+ * `activationForDebate`). Back, a pasted link and a last-view restore arrive
+ * here and buy nothing.
  *
  * `?name=` stood here until the same day: the identification threshold
  * (`named`, `quoted`, `linked`), whose default hid the rows the search was
@@ -1424,6 +1426,18 @@ export const debateParam = createParser<DebateView>({
 })
   .withDefault("reception")
   .withOptions({ history: "push" });
+
+/**
+ * **Which sub-mode a carried `?debate=` names**, degraded as `debateParam`
+ * degrades it — `summaryInSearch`'s twin, for the bar off the reading view
+ * (Dock.tsx), which has no React state to read. On the reading view the bar is
+ * handed the parsed state, because the address lags a press (activation.ts §
+ * `PressContext`).
+ */
+export function debateInSearch(search: string): DebateView {
+  const asked = new URLSearchParams(search).get("debate");
+  return asked !== null && (DEBATE_VIEWS as readonly string[]).includes(asked) ? (asked as DebateView) : "reception";
+}
 
 /**
  * **How Reception's list is ordered** — `?debateby=`, since 2026-09-29

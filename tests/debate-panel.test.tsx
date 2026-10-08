@@ -76,8 +76,11 @@ import {
   CITERS_UNAVAILABLE,
   CITERS_UNCONFIRMED,
   CITERS_UNREAD,
+  DEBATE_CLAIMS_EARLIER,
   DEBATE_CLAIMS_NONE,
   DEBATE_CLAIMS_NONE_SHARED,
+  DEBATE_CLAIMS_NOT_SEARCHED,
+  DEBATE_CLAIMS_NOT_SEARCHED_SHARED,
   DEBATE_EXTRACTS_ONLY,
   DEBATE_TITLE_ONLY,
   DEBATE_UNDATED,
@@ -625,15 +628,16 @@ describe("the empty states are different sentences, in each sub-mode", () => {
      That is not a result at all, and saying either search sentence over it
      would be reporting a search that never happened. What it must do instead is
      name the price before the button, and say what the two searches are. */
-  it("says nothing about any search when nobody has run one, and what the two searches are", () => {
+  /* **One search since `debate/7`** (2026-10-08, plan 261008i): the words
+     before the button say what the press now buys, Reception only. */
+  it("says nothing about any search when nobody has run one, and what the one search is", () => {
     paint(owner({ status: "none", debate: null }));
     expect(text()).not.toContain(DEBATE_RESPONSES_NONE);
     expect(text()).not.toContain(debateResponsesUnverified(6));
     expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
     expect(host.querySelector(".gloss-hint")?.textContent).toBe(
-      "Two searches of the open web. Reception: what others have written about this piece. " +
-        "Claims: what has been written about the claims it makes. It takes about a minute and " +
-        "costs real money. Many pieces have no reception at all. Searched once and kept.",
+      "One search of the open web, for what others have written about this piece. It takes about " +
+        "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.",
     );
     /* No sub-mode control over a search that has not run. */
     expect(host.querySelector(".dbt-views")).toBeNull();
@@ -656,6 +660,54 @@ describe("the empty states are different sentences, in each sub-mode", () => {
     paint(owner({ debate }));
     expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
     expect(host.querySelector(".dbt-empty")).toBeNull();
+  });
+
+  /* **No claims search ran, so none found nothing** — a debate searched at
+     `debate/7` or later stores `claims: {pass: "not-run"}` (plan 261008i, F4).
+     The empty-search sentences are about a search, and none happened. */
+  it("says the claims search did not run, never that it found nothing, on a debate searched since debate/7", () => {
+    const debate = artefact({
+      direct: { rows: [], counts: counts(EMPTY) },
+      claims: { pass: "not-run", rows: [] },
+    });
+    paint(owner({ debate }), "claims");
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NOT_SEARCHED);
+    expect(text()).not.toContain(DEBATE_CLAIMS_NONE);
+    expect(text()).not.toContain(debateClaimsUnverified(0));
+    expect(text()).not.toContain(DEBATE_CLAIMS_EARLIER);
+    /* The (i): said once, and none of the claims search's own counts. */
+    const said = card();
+    expect(said).toContain(DEBATE_CLAIMS_NOT_SEARCHED_SHARED);
+    expect(said).not.toContain("The search for answers to what it claims");
+    /* Reception, which kept nothing, offers no way to a Claims with nothing in it. */
+    paint(owner({ debate }));
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_RESPONSES_NONE);
+    expect(handoff()).toBeNull();
+  });
+
+  it("tells a visitor the claims search did not run, rather than that it kept nothing", () => {
+    paintShared(shared({ claims: { pass: "not-run", rows: [] } }), "claims");
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NOT_SEARCHED_SHARED);
+    expect(text()).not.toContain(DEBATE_CLAIMS_NONE_SHARED);
+  });
+
+  /* **A debate stored before `debate/7` is read as searched**: no marker, so
+     its empty group is a search that found nothing, said as before; and its
+     rows are drawn as before, under a heading that says whose choice they were. */
+  it("reads a debate with no marker as searched, and heads its claim rows as the earlier search's", () => {
+    const empty = artefact({ claims: { rows: [], counts: counts(EMPTY) } });
+    paint(owner({ debate: empty }), "claims");
+    expect(host.querySelector(".dbt-empty")?.textContent).toBe(DEBATE_CLAIMS_NONE);
+    expect(text()).not.toContain(DEBATE_CLAIMS_NOT_SEARCHED);
+    expect(text()).not.toContain(DEBATE_CLAIMS_EARLIER);
+
+    paint(owner(), "claims");
+    expect(host.querySelector(".dbt-group-head")?.textContent).toBe(DEBATE_CLAIMS_EARLIER);
+    expect(rowTitles().length).toBeGreaterThan(0);
+    expect(card()).not.toContain(DEBATE_CLAIMS_NOT_SEARCHED_SHARED);
+    /* Reception draws no such heading. */
+    paint(owner());
+    expect(text()).not.toContain(DEBATE_CLAIMS_EARLIER);
   });
 
   it("says each search's own sentence when neither kept anything", () => {

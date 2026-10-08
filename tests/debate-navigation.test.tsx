@@ -222,10 +222,10 @@ it("explains rows withheld by the real public boundary in each empty sub-mode", 
   debate = publish({
     ...STORED,
     direct: { ...STORED.direct, rows: STORED.direct.rows.map((row) => ({ ...row, url: "http://127.0.0.1/reply" })) },
-    claims: { ...STORED.claims, rows: STORED.claims.rows.map((row) => ({ ...row, url: "http://127.0.0.1/claim" })) },
+    claims: { counts, rows: STORED.claims.rows.map((row) => ({ ...row, url: "http://127.0.0.1/claim" })) },
   });
   expect(debate.direct.sourceNotPublishable).toBe(1);
-  expect(debate.claims.sourceNotPublishable).toBe(3);
+  expect(debate.claims).toMatchObject({ sourceNotPublishable: 3 });
   boot("?mode=debate");
   expect(host.querySelector(".dbt-empty")?.textContent).toBe(debateWithheldOnSharedLink("The search for replies to this piece", 1));
   press('[aria-label="Claims, 0 sources"]');

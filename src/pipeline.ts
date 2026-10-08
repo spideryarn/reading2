@@ -5252,9 +5252,8 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       if (!article) return null;
       return {
         /* **`article.meta`, `null` and all — never a stub**, for the reason
-           `quiz` and `timeline` state above: `generateDebate` builds a stub for
-           the PROMPT and hands the fingerprint the real value, and hashing the
-           stub here would make every article without metadata report stale for
+           `quiz` and `timeline` state above: `generateDebate` hands the
+           fingerprint the real value, and hashing a stub head here would make every article without metadata report stale for
            ever with nothing red. */
         inputHash: debateFingerprint(article.blocks, article.tree, article.meta),
         promptVersion: DEBATE_PROMPT_VERSION,
@@ -5280,7 +5279,9 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
       const registryMs = Date.now() - registryStarted;
       run.debate = registered.debate;
-      const { direct, claims } = run.debate;
+      /* Reception only since `debate/7`: `claims` is stored `not-run`, so it
+         has no counts to log (src/types.ts § `DebateClaims`). */
+      const { direct } = run.debate;
       plog.info(
         {
           slug: ctx.slug,
@@ -5292,8 +5293,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              watched a cap of four results cost thirty-six searches. A run
              logging 36 is a prompt that has drifted toward thoroughness. */
           webSearches: run.webSearches,
-          /* Per group, never summed, or this line cannot say which of the two
-             searches lost rows. Counts and hostnames only — never a URL, never
+          /* Per group, never summed. Counts and hostnames only — never a URL, never
              an extract, never a quotation. docs/project/logging.md. */
           directReturned: direct.counts.returnedSources,
           directReported: direct.counts.reportedRows,
@@ -5305,11 +5305,6 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              zero and `directKept` is high on an obscure article is the rule
              failing open, not the web being kind. */
           directLost: direct.counts.lost,
-          claimsReturned: claims.counts.returnedSources,
-          claimsReported: claims.counts.reportedRows,
-          claimsKept: claims.counts.keptRows,
-          claimsOverCap: claims.counts.omittedOverCap,
-          claimsLost: claims.counts.lost,
           /* The third call's outcome, so a `failed` is visible in the logs
              rather than only as a missing box on screen (plan 260930j). */
           registryIdentified: registered.counts.identified,
@@ -5323,13 +5318,11 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
           themes: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.themes.length : null,
           keySources: run.debate.synthesis?.kind === "made" ? run.debate.synthesis.key.length : null,
         },
-        `debate ${ctx.slug}: ${direct.counts.keptRows} direct, ${claims.counts.keptRows} on its claims`,
+        `debate ${ctx.slug}: ${direct.counts.keptRows} direct`,
       );
       return {
         parts: { debate: run.debate },
-        detail:
-          `${direct.counts.keptRows} about this piece, ` +
-          `${claims.counts.keptRows} about what it claims`,
+        detail: `${direct.counts.keptRows} about this piece`,
       };
     },
   },

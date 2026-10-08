@@ -15,10 +15,14 @@ found.
 
 ![Debate’s Claims view: a relevance slider, a thread shared by two sources, one claim quoted from the piece, and under it an arXiv paper marked as a key source, Critical, with an excerpt from it](../images/mode-debate.png "Claims: one of the piece’s claims, and a paper the AI judges to dispute it. The AI tags are the model’s reading; the excerpt is the source’s own words.")
 
-- Two searches, two views. **Reception** is what others have written about this piece itself:
-  replies, reviews, and work that cites it and says something about it. **Claims** is what has been
-  written about the claims it makes, by people who may never have read it. The number on each is how
-  many sources it is showing.
+- Two views. **Reception** is what others have written about this piece itself: replies, reviews,
+  and work that cites it and says something about it. **Claims** is what has been written about the
+  claims it makes, by people who may never have read it. The number on each is how many sources it
+  is showing.
+- **Search the web** searches for Reception only. It used to pick three or four of the piece's
+  claims by itself and search those too; it no longer does, and choosing the claims to check
+  yourself is coming. A search made before that change still shows the claims it chose, under
+  **Claims the earlier search chose**.
 - In Reception, pages that link to the piece or quote it come first. Pages that only mention its
   title follow under **Names this piece by its title only**: often a paper citing it, sometimes a
   page about something else with the same title, so check before you rely on one.

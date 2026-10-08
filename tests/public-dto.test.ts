@@ -2829,6 +2829,30 @@ describe("the debate a shared link carries", () => {
     };
   }
 
+  /** The claims group of a debate stored before `debate/7`, which did search — or a failed test. */
+  function searched<G extends { pass?: "not-run" | undefined }>(claims: G | undefined): Exclude<G, { pass: "not-run" }> {
+    if (claims === undefined || claims.pass === "not-run") throw new Error("expected a searched claims group");
+    return claims as Exclude<G, { pass: "not-run" }>;
+  }
+
+  /**
+   * **A debate searched at `debate/7` or later ran no claims search, and a
+   * visitor is told so** — `{pass: "not-run"}` crosses as it is, with no
+   * `sourceNotPublishable`, rather than as an empty group, which the panel
+   * would read as a search that kept nothing (plan 261008i, F4).
+   */
+  it("carries a claims search that did not run as not run, not as an empty group", () => {
+    const built = publish({ ...debateOf([directRow()], []), claims: { pass: "not-run", rows: [] } });
+    expect(built.debate?.claims).toEqual({ pass: "not-run", rows: [] });
+    expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
+  });
+
+  it("carries a debate stored before the marker as a searched group, with no pass", () => {
+    const built = publish(debateOf([], [claimRow()]));
+    expect(built.debate?.claims).not.toHaveProperty("pass");
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(0);
+  });
+
   function debateOf(direct: DirectDebateRow[], claims: ClaimDebateRow[]): Debate {
     return {
       version: "debate/9",
@@ -2933,7 +2957,7 @@ describe("the debate a shared link carries", () => {
     );
     expect(built.debate?.searchedAt).toBe("2026-09-20T10:00:00.000Z");
     expect(built.debate?.direct.sourceNotPublishable).toBe(0);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(0);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(0);
     expect(JSON.stringify(built.debate)).not.toContain("debate registry extra must not cross");
     /* A clean article address on a linked signal crosses as itself. */
     expect(built.debate?.direct.rows[0]?.identifies[0]).toEqual({
@@ -2962,7 +2986,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.direct.rows.map((r) => r.id)).toEqual(["spya-dr0001"]);
     expect(built.debate?.direct.sourceNotPublishable).toBe(2);
     expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     const json = JSON.stringify(built);
     for (const leak of ["swordfish", "192.168.0.7", "intranet/answer"]) expect(json, leak).not.toContain(leak);
     expect(debate, "the owner's artefact and its counts are untouched").toEqual(before);
@@ -3014,7 +3038,7 @@ describe("the debate a shared link carries", () => {
       { kind: "named", by: "title", witness: TITLE },
     ]);
     expect(built.debate?.claims.rows.map((r) => r.id)).toEqual(["spya-cr0001"]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain(needle);
   });
 
@@ -3053,7 +3077,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.direct.rows).toEqual([]);
     expect(built.debate?.direct.sourceNotPublishable).toBe(1);
     expect(built.debate?.claims.rows).toEqual([]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 
@@ -3069,7 +3093,7 @@ describe("the debate a shared link carries", () => {
     expect(built.debate?.direct.rows).toEqual([]);
     expect(built.debate?.direct.sourceNotPublishable).toBe(1);
     expect(built.debate?.claims.rows).toEqual([]);
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(searched(built.debate?.claims).sourceNotPublishable).toBe(1);
     expect(JSON.stringify(built)).not.toContain("OWNERSECRET");
   });
 

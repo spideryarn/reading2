@@ -5484,15 +5484,40 @@ export function debateClaimsHandoff(sources: number): string {
 }
 
 /**
- * **What each of Debate's two searches is, said once before the button and
- * once in the band's (i).** The sub-mode control's own cards say the same of
- * each (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no sentence sits under the
- * control, because docs/project/mode.md bans a description line there.
+ * **What the press on Debate searches, said before the button.** Since
+ * `debate/7` (2026-10-08) it is one search, for Reception only: the claims are
+ * the reader's to pick (plan 261008i). The sub-mode control's own cards say
+ * what each sub-mode is (src/web/sub-modes.ts § `DEBATE_SUB_MODES`); no
+ * sentence sits under the control, because docs/project/mode.md bans a
+ * description line there.
  */
 export const DEBATE_BEFORE_SEARCH =
-  "Two searches of the open web. Reception: what others have written about this piece. " +
-  "Claims: what has been written about the claims it makes. It takes about a minute and " +
-  "costs real money. Many pieces have no reception at all. Searched once and kept.";
+  "One search of the open web, for what others have written about this piece. It takes about " +
+  "a minute and costs real money. Many pieces have no reception at all. Searched once and kept.";
+
+/**
+ * **Claims, on a debate whose press did not search for claims** — every one
+ * searched at `debate/7` or later (src/types.ts § `DebateClaims`). Never the
+ * empty-search sentences above: no search ran, so none found nothing.
+ *
+ * The owner's says what is coming, because the press that used to fill this
+ * is gone and the list to pick from is the next stage of plan 261008i.
+ * **Temporary**: that stage replaces it.
+ */
+export const DEBATE_CLAIMS_NOT_SEARCHED =
+  "Claims are no longer searched along with Reception. A list of the piece's claims, for you to " +
+  "pick which ones to check, is coming next.";
+
+/** …the visitor's, and the band's (i) for both: what is true of the stored search, and only that. */
+export const DEBATE_CLAIMS_NOT_SEARCHED_SHARED = "This search did not look into what the piece claims.";
+
+/**
+ * **The heading over the claim rows an older search stored** — a debate
+ * searched before `debate/7`, when the press also picked three or four claims
+ * by itself and searched them. Its rows are drawn as they always were, under
+ * this, so they are not taken for claims the reader chose.
+ */
+export const DEBATE_CLAIMS_EARLIER = "Claims the earlier search chose";
 
 /* ---- Reception's *Cited by*: the papers that cite the piece, from OpenAlex ----
 

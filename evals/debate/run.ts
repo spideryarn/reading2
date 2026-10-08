@@ -65,11 +65,8 @@ import { currentSpend, type SpendRecord } from "../../src/ai-spend.js";
 import type { Article } from "../../src/article-input.js";
 import { withLedger } from "../../src/cli-ledger.js";
 import { isBodyEvidence } from "../../src/block-policy.js";
-import { articleWithIds } from "../../src/article-prompt.js";
 import {
   blockTextById,
-  CLAIMS_PROMPT,
-  CLAIMS_SYSTEM,
   DIRECT_SYSTEM,
   directPrompt,
   generateDebate,
@@ -81,8 +78,7 @@ import { loadEnvLocal } from "../../src/env.js";
 import { isMain } from "../../src/is-main.js";
 import { modelFor } from "../../src/models.js";
 import { environmentOwnerId, runAsOwner } from "../../src/owner.js";
-import { fallbackHeadTitle } from "../../src/source-hash.js";
-import { type Block, identificationLevel, type Meta } from "../../src/types.js";
+import { type Block, identificationLevel } from "../../src/types.js";
 import { costOf, formatRunCost, type RunCost } from "./cost.js";
 import { JournalFile, readJournal } from "./journal-file.js";
 import { type ReplayedAttempt, replayJournal, replayLines } from "./replay.js";
@@ -364,7 +360,7 @@ async function loadArticleFor(slug: string): Promise<Article> {
 /**
  * **What a run would buy, and from where — for free.**
  *
- * The store read, the fingerprint and the two prompts are all built here and
+ * The store read, the fingerprint and pass A's prompt are all built here and
  * nothing is dispatched, so the one thing `check` cannot cover — that this slug
  * really is readable as this owner, and that pass A has a URL to search for —
  * is answerable without opening the wire. `evals/summaries/run.ts plan` is the
@@ -377,9 +373,7 @@ async function commandPlan(o: Options): Promise<void> {
   if (!slug) throw new Error("plan needs --slug <article-slug>");
   const article = await loadArticleFor(slug);
   const evidence = article.blocks.filter(isBodyEvidence);
-  const meta: Meta = article.meta ?? ({ title: fallbackHeadTitle(article.tree) } as Meta);
   const directUser = directPrompt(article.meta, article.tree);
-  const claimsSystem = `${articleWithIds(meta, evidence)}\n\n---\n\n${CLAIMS_SYSTEM}`;
 
   console.log(`# What a run on "${slug}" would buy\n`);
   console.log(`  blocks           ${String(article.blocks.length)} (${String(evidence.length)} of them argument rather than apparatus)`);
@@ -389,7 +383,7 @@ async function commandPlan(o: Options): Promise<void> {
   console.log(`  inputFingerprint ${inputFingerprint(article.blocks, article.tree, article.meta)}`);
   console.log(`  model            ${modelFor("debate", "standard")}`);
   console.log(`\n  pass A  system ${String(DIRECT_SYSTEM.length)} chars (${sha256Of(DIRECT_SYSTEM).slice(0, 12)}), user ${String(directUser.length)} chars (${sha256Of(directUser).slice(0, 12)})`);
-  console.log(`  pass B  system ${String(claimsSystem.length)} chars (${sha256Of(claimsSystem).slice(0, 12)}), user ${String(CLAIMS_PROMPT.length)} chars (${sha256Of(CLAIMS_PROMPT).slice(0, 12)})`);
+  /* No pass B line: a press stopped running it at `debate/7` (plan 261008i). */
 
   if (!article.meta?.url) {
     console.log(

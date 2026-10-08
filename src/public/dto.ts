@@ -814,7 +814,14 @@ function publicDebate(debate: Debate, finalUrl: string | null): PublicDebate {
   return {
     searchedAt: debate.searchedAt,
     direct: { rows: direct, sourceNotPublishable: directWithheld },
-    claims: { rows: claims, sourceNotPublishable: claimsWithheld },
+    /* A debate searched at `debate/7` or later ran no claims search, and says
+       so rather than crossing as an empty group, which a visitor's panel would
+       read as a search that kept nothing (src/types.ts § `DebateClaims`). It
+       has no rows, so there is nothing above for it to withhold. */
+    claims:
+      debate.claims.pass === "not-run"
+        ? { pass: "not-run", rows: [] }
+        : { rows: claims, sourceNotPublishable: claimsWithheld },
     ...(synthesis === undefined ? {} : { synthesis }),
   };
 }

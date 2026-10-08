@@ -72,6 +72,7 @@ import type {
   DebateBears,
   DebateLean,
   DebateRelation,
+  DebateClaimsNotRun,
   DebateSynthesis,
   FaqQuestion,
   SimpleLevel,
@@ -783,6 +784,11 @@ export interface PublicDebateGroup<Row> {
   sourceNotPublishable: number;
 }
 
+/** The claims group as a visitor gets it: searched (a legacy debate), or not run. src/types.ts § `DebateClaims`. */
+export type PublicDebateClaims =
+  | (PublicDebateGroup<PublicClaimDebateRow> & { pass?: undefined })
+  | DebateClaimsNotRun;
+
 /**
  * **The Debate, as a visitor gets it** — since 2026-09-29, the fourth mode plan
  * 260929c moved off `owners-only` (SPIDERYARN-READING2-56), by the contract its
@@ -797,7 +803,13 @@ export interface PublicDebateGroup<Row> {
 export interface PublicDebate {
   searchedAt: string;
   direct: PublicDebateGroup<PublicDirectDebateRow>;
-  claims: PublicDebateGroup<PublicClaimDebateRow>;
+  /**
+   * The claims search's rows — or `{pass: "not-run"}` for a debate searched at
+   * `debate/7` or later, when the press stopped searching for claims
+   * (src/types.ts § `DebateClaims`). Carried across as it is stored, so a
+   * visitor is never told a search found nothing when none ran.
+   */
+  claims: PublicDebateClaims;
   /**
    * **The threads and the key sources** — since 2026-10-01 (plan 261001b,
    * SPIDERYARN-READING2-6M). The model's words over the rows both passes kept;

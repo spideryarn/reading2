@@ -233,7 +233,7 @@ describe("Debate's threads and key sources (6M)", () => {
         made([{ ...THEME_AB, gist: `Both agree, as does ${privateWords}.` }]),
       ),
     );
-    expect(built.debate?.claims.sourceNotPublishable).toBe(1);
+    expect(built.debate?.claims).toMatchObject({ sourceNotPublishable: 1 });
     expect(built.debate).not.toHaveProperty("synthesis");
     expect(JSON.stringify(built)).not.toContain(privateWords);
   });
