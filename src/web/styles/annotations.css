@@ -1158,10 +1158,16 @@ td.text.has-hit[data-hues="8"] {
    see src/web/chat-handoff.ts. */
 .cmt-followup {
   display: flex;
+  /* Wraps so the dictation strip's lines can sit under the row rather than in
+     it, squeezing the box and sliding the microphone sideways as their words
+     change (GPT Sol's code review of 261008d). The row itself never wraps: the
+     box shrinks first. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem;
   margin-top: 0.7rem;
 }
+.cmt-followup .dictation-line { flex-basis: 100%; }
 .cmt-followup input {
   flex: 1;
   min-width: 0;

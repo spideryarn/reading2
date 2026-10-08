@@ -1,0 +1,15 @@
+- **P1 — [DictationStrip.tsx:339](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/src/web/DictationStrip.tsx:339): stale warning returned during Retry.** `retry()` retains `deviceUnavailable` while returning to `transcribing`, resurrecting an ended warning with different wording. I made the warning part of the remembered microphone account, cleared at idle. [The regression](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/tests/dictation-strip-holds-still.test.tsx:134) failed first with “Using another one.”
+
+- **P1 — [DictationStrip.tsx:417](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/src/web/DictationStrip.tsx:417): picker survived `transcribing → opening`.** It disappeared temporarily, then reopened when the new dictation acquired a label. I close it when a fresh opening has no microphone account. [The regression](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/tests/dictation-strip-holds-still.test.tsx:185) failed first when the old picker reappeared.
+
+- **P1 — [mode-band.css:1138](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/src/web/styles/mode-band.css:1138): retained strip lines could join Learn’s voice row and displace the microphone.** A concurrent worktree change now gives every strip line its own full-width row and order. [voice-row.test.tsx:193](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/tests/voice-row.test.tsx:193) is red against `96124f2c2`.
+
+- **P1, report only — [CommentDialog.tsx:847](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/src/web/CommentDialog.tsx:847): comment follow-up still risks moving the microphone horizontally.** The input, buttons, and changing strip remain in one non-wrapping flex row; Stop changes the status row’s intrinsic width and the flexible input absorbs that delta. This needs a layout decision, so I did not change it.
+
+- **P2, report only — [NewSessionPanel.tsx:551](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/tools/fleet/web/src/NewSessionPanel.tsx:551): fleet control can jump rows near a wrap threshold.** [DictationControl.tsx:262](/var/tmp/spideryarn-worktrees/fbbtjtbb-dictation-mic-grant-double-tap/tools/fleet/web/src/DictationControl.tsx:262) changes button text, meter, and status width at Stop. I left this outside-stage layout decision untouched.
+
+`TalkLabel` accessibility is sound: Learn hides the whole repeated label; Quiz exposes only the visible grid sibling because `visibility:hidden` removes the ghost from the accessibility tree. `profile.css` is loaded through `tailwind.css → styles.css`. Warning wording is now byte-identical across Stop.
+
+Gates: 20 test files and 460 tests passed. Exact `npm run typecheck` was blocked before compilation by sandbox IPC `EPERM`; the same `scripts/typecheck.ts` run via Node’s `tsx` hook passed all four projects and the 3,509-file coverage guard. No commit made.
+
+**Verdict: two lifecycle bugs are fixed, but the comment follow-up movement remains a release-blocking design/layout finding.**

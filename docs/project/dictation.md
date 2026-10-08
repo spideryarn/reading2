@@ -358,6 +358,16 @@ quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the com
   dictation. After that, or once the press is taken, it is `disabled` as it always was. The field
   returns `again` only while a second press would count, which is the whole of how the button
   knows. Not `aria-disabled`: that says "cannot be used" at the one moment it can (GPT Sol).
+- **The button has to be where the first press left it.** Nothing that positions it may change
+  size at Stop. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
+  strip *under* the button moves the button down; the "Microphone: … Change" line did exactly that
+  until 2026-10-08, and Greg's second tap missed (`spya-pd9fnc`). So the strip keeps that line, the
+  "Couldn't use" warning and an open picker drawn, switched off, until the words land, and a
+  labelled microphone's word (`TalkLabel`: *Listening…* / *Writing it down…*) holds the wider
+  word's width while a dictation runs. Something new in the strip or beside the button follows the
+  same rule: drawn from listening through transcribing, or not at all.
+  [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md),
+  `tests/dictation-strip-holds-still.test.tsx`.
 - **Once taken, the strip says** *"Turning that into text, then sending…"*.
 - **It sends only where it was said.** A box that is reused across things — one comment dialog for
   every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is

@@ -336,6 +336,32 @@ export function TalkLabel({
   );
 }
 
+type MicAccount = {
+  label: string | null;
+  chosen: boolean;
+  unavailable: UseDictation["deviceUnavailable"];
+};
+
+function currentMicAccount(dictation: UseDictation): MicAccount | null {
+  const label = dictation.deviceLabel;
+  const unavailable = dictation.deviceUnavailable;
+  if (label === null && unavailable === false) return null;
+  return {
+    label,
+    chosen: dictation.deviceId !== null && !unavailable,
+    unavailable,
+  };
+}
+
+function sameMicAccount(left: MicAccount | null, right: MicAccount | null): boolean {
+  if (left === null || right === null) return left === right;
+  if (left.label !== right.label || left.chosen !== right.chosen) return false;
+  if (left.unavailable === false || right.unavailable === false) {
+    return left.unavailable === right.unavailable;
+  }
+  return left.unavailable.wanted === right.unavailable.wanted;
+}
+
 /**
  * The line under the box: the meter, what is happening, how long for, which
  * microphone, and anything that went wrong.
@@ -387,13 +413,17 @@ export function DictationStrip({
      effect, because an effect paints one frame without the line first — the
      very shift this exists to remove. Each branch only sets when the value
      differs, so it settles in one extra pass. */
-  const [kept, setKept] = useState<{ label: string; chosen: boolean } | null>(null);
+  const [kept, setKept] = useState<MicAccount | null>(null);
   if (dictation.armed) {
     const label = dictation.deviceLabel;
-    const chosen = dictation.deviceId !== null && !dictation.deviceUnavailable;
-    if (label === null ? kept !== null : kept?.label !== label || kept.chosen !== chosen) {
-      setKept(label === null ? null : { label, chosen });
-    }
+    /* A fresh press can supersede a transcription before its words land.
+       `opening` then has no device account yet; an open picker belongs to the
+       recording that just ended and must not reappear when this one's label
+       arrives. A recogniser restart within one recording keeps its label, so
+       it does not take this branch. */
+    if (dictation.phase === "opening" && label === null && picking) setPicking(false);
+    const current = currentMicAccount(dictation);
+    if (!sameMicAccount(kept, current)) setKept(current);
   } else if (!dictation.transcribing) {
     if (kept !== null) setKept(null);
     /* The picker, open at Stop, stays drawn (switched off) until the words
@@ -402,7 +432,9 @@ export function DictationStrip({
        F2). */
     if (picking) setPicking(false);
   }
-  const mic = dictation.armed || dictation.transcribing ? kept : null;
+  const account = dictation.armed || dictation.transcribing ? kept : null;
+  const mic = account?.label ? { label: account.label, chosen: account.chosen } : null;
+  const unavailable = account?.unavailable ?? false;
 
   /* The device list is fetched when the picker is opened rather than kept in
      sync all the time: `enumerateDevices` returns **blank labels until
@@ -440,7 +472,7 @@ export function DictationStrip({
            stay an observation rather than a diagnosis — `audio-level.ts` says
            why — and the warm colour is `.prof-mic-warn`'s: a fact worth
            knowing, not a failure. Greg, SPIDERYARN-READING2-7Z; plan 261001k. */
-        <p className={`prof-listening${dictation.quiet ? " quiet" : ""}${ending ? " ending" : ""}`}>
+        <p className={`dictation-line prof-listening${dictation.quiet ? " quiet" : ""}${ending ? " ending" : ""}`}>
           {dictation.armed && (
             <MicLevel level={dictation.level} detected={dictation.meter === "detected"} />
           )}
@@ -480,7 +512,7 @@ export function DictationStrip({
           a phone it shrank to nothing. "Your choice" comes from the remembered
           pick, not from the label, which says nothing reliable about it. */}
       {mic && (
-        <p className="prof-mic-line">
+        <p className="dictation-line prof-mic-line">
           <span className="prof-mic-line-key">Microphone:</span>{" "}
           <span className="prof-mic-device" title={mic.label}>
             {mic.label}
@@ -509,14 +541,14 @@ export function DictationStrip({
           (spya-k3q9mc). "Couldn't use", not "isn't connected": all we know is
           that asking for it by id failed. */}
       {/* Through `transcribing` too, for the microphone line's reason above. */}
-      {(dictation.armed || dictation.transcribing) && dictation.deviceUnavailable && (
-        <p className="prof-mic-warn">
-          {deviceUnavailableWords(dictation.deviceUnavailable.wanted, mic?.label ?? null)}
+      {unavailable && (
+        <p className="dictation-line prof-mic-warn">
+          {deviceUnavailableWords(unavailable.wanted, mic?.label ?? null)}
         </p>
       )}
 
       {picking && mic && (
-        <p className="prof-mic-picker">
+        <p className="dictation-line prof-mic-picker">
           <label htmlFor="dictation-mic">Microphone</label>
           <select
             id="dictation-mic"
@@ -560,7 +592,7 @@ export function DictationStrip({
           sentence. Two copies in the accessibility tree is the error read
           twice. */}
       {dictation.error && (
-        <p className="prof-box-error" aria-hidden="true">
+        <p className="dictation-line prof-box-error" aria-hidden="true">
           <TriangleAlert size={12} /> {dictation.error}
         </p>
       )}
@@ -647,7 +679,7 @@ function SaveRecording({
   const only = recording.parts.length === 1 ? recording.parts[0] : undefined;
 
   return (
-    <p className="prof-recording">
+    <p className="dictation-line prof-recording">
       {/* **One sentence for both cases, because there are two now.** It used to
           say "Nothing was transcribed", which was true while the audio was kept
           only when the box was empty. Since 2026-09-05 it is kept whenever the

@@ -1130,8 +1130,12 @@ svg.band-waiting-ghost { flex: none; }
    full-width *Use your profile* row sat before it in the DOM and forced every
    later item onto the next line; with that row gone the strip would otherwise
    join the textarea's line and squeeze it. `.chat-live-status` below does the
-   same for itself. */
-.chat-composer .prof-listening { flex-basis: 100%; }
+   same for itself.
+   **Every line the strip draws**, not only the first: the "Microphone: …
+   Change" line had no basis, and in Learn it joined the voice row and pushed
+   the microphone off the band (plan 261008d). Every line carries
+   `.dictation-line` for this, and tests/voice-row.test.tsx checks each does. */
+.chat-composer .dictation-line { flex-basis: 100%; }
 .chat-input {
   flex: 1;
   /**
@@ -1664,4 +1668,5 @@ svg.band-waiting-ghost { flex: none; }
   max-width: 100%;
 }
 .learn .chat-send { order: 4; margin-left: auto; }
-.learn .prof-listening { order: 6; }
+/* All of the strip's lines below the voice row, in their own order. */
+.learn .dictation-line { order: 6; }

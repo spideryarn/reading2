@@ -14,7 +14,7 @@
  * jsdom has no layout, so this pins the lines that are present; the plan's
  * browser check measures the button itself.
  */
-import { act, createElement } from "react";
+import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DictationStrip, TalkLabel } from "../src/web/DictationStrip.js";
@@ -70,15 +70,40 @@ function transcribing(from: UseDictation): UseDictation {
   return { ...from, phase: "transcribing", armed: false, transcribing: true, startedAt: null, deviceLabel: null };
 }
 
+function opening(from: UseDictation): UseDictation {
+  return {
+    ...from,
+    phase: "opening",
+    armed: true,
+    transcribing: false,
+    startedAt: null,
+    deviceLabel: null,
+    deviceUnavailable: false,
+  };
+}
+
 function idle(from: UseDictation): UseDictation {
   return { ...from, phase: "idle", armed: false, transcribing: false, startedAt: null, deviceLabel: null };
 }
 
-const show = (d: UseDictation) => act(() => root.render(createElement(DictationStrip, { dictation: d })));
+/* Every lifecycle assertion runs through StrictMode's repeated render. A
+   render-phase state adjustment that does not settle would fail the suite. */
+const show = (d: UseDictation) =>
+  act(() =>
+    root.render(createElement(StrictMode, null, createElement(DictationStrip, { dictation: d }))),
+  );
 const micLine = () => host.querySelector(".prof-mic-line");
 const warn = () => host.querySelector(".prof-mic-warn");
 
 describe("the strip across Stop", () => {
+  it("takes the current microphone account when opening becomes listening", () => {
+    const listening = base();
+    show(opening(listening));
+    expect(micLine()).toBeNull();
+    show(listening);
+    expect(micLine()?.textContent).toContain(LABEL);
+  });
+
   it("keeps the microphone line while the words are being made, with Change switched off", () => {
     const listening = base();
     show(listening);
@@ -98,10 +123,26 @@ describe("the strip across Stop", () => {
     const listening: UseDictation = { ...base(), deviceUnavailable: { wanted: "AirPods" } };
     show(listening);
     expect(warn()).not.toBeNull();
+    const beforeStop = warn()?.textContent;
     show(transcribing(listening));
     expect(warn(), "the warning went at Stop, so the button above it moved").not.toBeNull();
+    expect(warn()?.textContent, "the warning changed width at Stop").toBe(beforeStop);
     show(idle(listening));
     expect(warn()).toBeNull();
+  });
+
+  it("does not bring the ended dictation's microphone warning back during Retry", () => {
+    const listening: UseDictation = { ...base(), deviceUnavailable: { wanted: "AirPods" } };
+    show(listening);
+    show(transcribing(listening));
+    show(idle(listening));
+    expect(warn()).toBeNull();
+
+    /* retry() changes the hook's phase but deliberately retains the old
+       deviceUnavailable fact. The strip has already ended that microphone
+       account, so this upload-only retry must not resurrect half of it. */
+    show(transcribing(idle(listening)));
+    expect(warn(), "the ended dictation's warning came back during Retry").toBeNull();
   });
 
   it("does not invent a line for a dictation that never had a label", () => {
@@ -140,11 +181,35 @@ describe("the microphone picker across Stop (GPT Sol's plan review, F2)", () => 
     show(base());
     expect(picker(), "the picker came back open on the next dictation").toBeNull();
   });
+
+  it("does not carry an open picker through transcribing into a new dictation", () => {
+    const first = base();
+    show(first);
+    act(() => micLine()?.querySelector("button")?.click());
+    const picker = () => host.querySelector(".prof-mic-picker");
+    expect(picker()).not.toBeNull();
+
+    show(transcribing(first));
+    expect(picker()).not.toBeNull();
+    show(opening(first));
+    expect(picker()).toBeNull();
+
+    show({ ...base(), deviceLabel: "MacBook Microphone" });
+    expect(picker(), "the previous dictation's picker opened over the new one").toBeNull();
+  });
 });
 
 describe("the word beside a labelled microphone (GPT Sol's plan review, F1)", () => {
   const label = (d: UseDictation, readOnly: boolean) =>
-    act(() => root.render(createElement(TalkLabel, { field: { dictation: d, readOnly }, className: "x" })));
+    act(() =>
+      root.render(
+        createElement(
+          StrictMode,
+          null,
+          createElement(TalkLabel, { field: { dictation: d, readOnly }, className: "x" }),
+        ),
+      ),
+    );
   const visible = () =>
     [...host.querySelectorAll(".x > span")]
       .filter((s) => !s.classList.contains("talk-label-ghost"))
