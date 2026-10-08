@@ -3009,6 +3009,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      runs the tool (and Live's tool endpoint) as one owner against the other's
      slug and thread id. No model is called. */
   "tests/reader-notes-owner-isolation.test.ts": "private-postgres",
+  "tests/chat-gist-store.test.ts": "private-postgres",
   /* Explore's notes digest, 261003l stage 2. Seeds one article, a comment and
      finished conversations of several kinds, and posts chat turns through the
      route with `fetch` stubbed to keep the request and fail. No model is called. */

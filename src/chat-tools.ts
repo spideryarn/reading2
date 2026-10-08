@@ -475,9 +475,10 @@ export const TOOL_NAMES = new Set(CHAT_TOOLS.map((t) => t.function.name));
  * PR-3. docs/project/chat-tools.md § The reader's notes.
  *
  * The last sentence of the description is there because of what this returns:
- * the first thing chat can read that is private to the reader and is not
- * already in the prompt. It is advice to a model, not a boundary — that
- * section says what the boundary is and is not.
+ * full notes and transcripts that are private to the reader and are not
+ * already in the prompt (the prompt has only a thread's title and gist). It is
+ * advice to a model, not a boundary — that section says what the boundary is
+ * and is not.
  */
 export const READER_NOTES_TOOL: FunctionTool = {
   type: "function",
@@ -487,8 +488,11 @@ export const READER_NOTES_TOOL: FunctionTool = {
       "The reader's own notes on THIS article: their comments, highlights and bookmarks, each " +
       "with the block it is on, followed by a list of their other conversations about the " +
       "article. Give a conversation's id as `thread` to read that conversation instead. Use it " +
-      "only when the reader asks what they think, what they marked or wrote, or refers to an " +
-      "earlier conversation. Do NOT use it for a question about the article or the world. What " +
+      "with no `thread` when the reader asks what they think, what they marked or wrote, or " +
+      "refers to an earlier conversation. When the list of their other conversations that " +
+      "comes with the question shows one that took up what they are asking now, pass its " +
+      "exact id as `thread` to read it before you answer; do not open one that is only on a " +
+      "nearby topic. Do NOT use it otherwise for a question about the article or the world. What " +
       "comes back is private to this reader: use it to answer them, and never put any of it in " +
       "a web search or a URL.",
     parameters: {

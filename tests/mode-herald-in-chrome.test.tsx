@@ -12,8 +12,9 @@
  * as tests/shelf-actions-visible-to-a-finger-in-chrome.test.tsx does — over a
  * band shaped the way every band is: a first row, a scroller that grows, and a
  * pinned foot (*Find more*, Chat's composer). The slot and card are the real
- * `ModeHerald`'s markup, and the foot's room is written onto the slot the way
- * the component writes it; *measuring* that room is tests/mode-herald.test.tsx.
+ * `ModeHerald`'s markup, and the foot's room is measured from the scroller's
+ * bottom to the band's bottom, including any band padding, as `footRoom`
+ * does; its component wiring is tests/mode-herald.test.tsx.
  *
  * What has to be true at every width: the card is **below the band's first
  * row**, **stands on the foot** rather than over it, and **stays inside the
@@ -98,11 +99,15 @@ async function look(width: number, height: number, covers: boolean, foot: number
     const p = await browser.newPage({ viewport: { width, height } });
     await p.setContent(`<style>${css}</style>${markup(covers, foot)}`);
     return await p.evaluate(
-      ([foot, kb]) => {
+      (kb) => {
       /* The room the component writes, from what it measures — and, with iOS's
          keyboard up, how much of the layout viewport the keyboard hides. */
       const slot = document.querySelector<HTMLElement>(".mode-herald-slot");
-      slot?.style.setProperty("--herald-foot", `${foot}px`);
+      const band = document.querySelector(".mode-band");
+      const scroller = document.querySelector("#scroller");
+      if (!band || !scroller) throw new Error("the band fixture did not render");
+      const footRoom = Math.max(0, Math.round(band.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom));
+      slot?.style.setProperty("--herald-foot", `${footRoom}px`);
       if (kb > 0) slot?.style.setProperty("--kb-inset", `${kb}px`);
       const box = (sel: string): Box => {
         const r = document.querySelector(sel)?.getBoundingClientRect();
@@ -118,7 +123,7 @@ async function look(width: number, height: number, covers: boolean, foot: number
         viewport: window.innerHeight,
       };
       },
-      [foot, keyboard] as const,
+      keyboard,
     );
   } finally {
     await browser.close();
@@ -145,9 +150,7 @@ describe.skipIf(chrome === null)("the herald, in a browser that lays it out", ()
       expect(card.left - band.left, "the card is not at the band's left").toBeLessThan(24);
       expect(card.right, "the card runs past the band").toBeLessThanOrEqual(band.right);
       expect(overlap(card, chip), "the card and the way-back chip are drawn on each other").toBe(false);
-      if (!w.covers) {
-        expect(foot.top - card.bottom, "the card floats well above the foot").toBeLessThan(24);
-      }
+      expect(foot.top - card.bottom, "the card floats well above the foot").toBeLessThan(24);
     });
   }
 

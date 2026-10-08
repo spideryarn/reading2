@@ -513,17 +513,12 @@ value is written here or anywhere in the repo; each line names where one lives.
    `npx tsx scripts/tmux-job.ts env OVERSEER_SCRATCH=<dir> bash scripts/overseer-tools/feedback-sweep-loop.sh`.
    Check each loop's log under `logs/tmux-jobs/` a minute later; a loop that could not find its
    directory has already exited.
-   **Then create the session's three scheduled jobs** (the queue pacer, the 3-hourly check and
-   their daily renewal) from
-   [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md),
-   exactly as written. They live only in that Claude session's memory, so every restart of the
-   session needs this step; `CronList` should show three. **The watchdog notices if you forget**:
-   from the first pacer tick on, `overseer-watchdog` fails with a `pacer` line once
-   `~/.overseer/pacer-heartbeat` is 90 minutes old, or at once if the file is missing while a
-   session holds the Overseer claim. It also fails with a `deploy-lag` line when `origin/main` is
-   more than 12 hours behind `origin/dev`, for which it fetches both branches into their tracking
-   refs as the box user every five minutes: that needs the `spideryarn` token in `/etc/github-tokens` (step 5) and
-   nothing else. Read both with `journalctl -u overseer-watchdog -n 6`.
+   **Then create the session's scheduled jobs** from
+   [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md);
+   no systemd unit does this for you.
+   The watchdog alarms when they stop, and its `deploy-lag` check fetches `dev` and `main` as the
+   box user every five minutes, which needs the `spideryarn` token in `/etc/github-tokens` (step 5)
+   and nothing else.
 10. **Only if somebody needs to watch the browser**: `start-vnc`
     ([Watching the browser](#watching-the-browser)). Nothing starts it at boot.
 

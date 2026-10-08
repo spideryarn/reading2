@@ -1127,6 +1127,9 @@ is now the rollback, after `sudo systemctl disable --now overseer`. Check which 
 `npx tsx scripts/overseer.ts diagnose` (its `daemon` line names the pid) and
 `systemctl is-active overseer`.
 
+**Not under systemd: the Overseer session's own pacing** — what to recreate after the session
+restarts is [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md).
+
 **The switch is one command, and it is the Overseer's**:
 `sudo npx tsx scripts/overseer-activate.ts --disarm` to read the plan, then the same with
 `--apply`. It writes `/etc/overseer.env` disarmed if it is missing, installs the unit, refuses

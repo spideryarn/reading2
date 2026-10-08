@@ -221,7 +221,7 @@ bottom.
 ![the step row, 1440px](261008c-shot-4-steps-1440.png)
 
 Seen and not ours: on the Guide thread on a phone, a "↩ back to …" chip (the guide's Back) sits
-over the composer's placeholder. Reported, not touched.
+over the composer's placeholder. Reported, not touched; fixed in [261008f](261008f-the-way-back-chip-covers-chat-s-input-on-a-phone.md).
 
 ## Code review (GPT Sol, write-capable) — [261008c-code-review-sol.md](261008c-code-review-sol.md)
 

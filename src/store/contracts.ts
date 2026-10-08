@@ -1100,9 +1100,10 @@ export interface SweepOptions {
  *   write-everything — which is precisely the read-modify-write the table
  *   exists to delete. There is one caller and it does one thing, so the method
  *   is that thing.
- * - **`finishTurn` returns nothing.** Both call sites discard the list today,
- *   and returning it costs a full read of every thread in the article on every
- *   streamed answer.
+ * - **`finish` returns only whether this attempt landed.** Returning the whole
+ *   list would cost a full read of every thread in the article on every
+ *   streamed answer. The update already knows whether its attempt fence
+ *   matched, and the route needs that one bit before it may refresh a gist.
  *
  * `begin` / `retry` / `edit` keep the thread *with its messages*, because
  * `streamChat` builds the model's history from `thread.messages.slice(0, -2)`.
@@ -1203,7 +1204,7 @@ export interface ChatStore {
     messageId: string,
     patch: Partial<ChatMessage>,
     opts: { attempt: string; now?: (() => string) | undefined },
-  ): Promise<void>;
+  ): Promise<boolean>;
 
   /**
    * Blank the last answer so the model can have another go at the same
@@ -1246,6 +1247,17 @@ export interface ChatStore {
 
   rename(slug: string, threadId: string, title: string): Promise<ChatThread[]>;
   remove(slug: string, threadId: string): Promise<ChatThread[]>;
+
+  /**
+   * **Store a conversation's one-line gist** (src/chat-gist.ts), written from
+   * the thread as it stood at `basedOn` — the snapshot used to make the gist.
+   *
+   * Written **only if nothing has been stored in the thread since**, so a slow
+   * gist of an older transcript cannot land over a newer one; the newer turn
+   * writes its own. Returns whether it was written. Does not touch
+   * `updated_at`, which the list sorts by (the reason `rename` does not).
+   */
+  setGist(slug: string, threadId: string, gist: string, basedOn: ChatThread): Promise<boolean>;
 
   /**
    * **The reader pressed Hint under a Recall answer.** Stamps

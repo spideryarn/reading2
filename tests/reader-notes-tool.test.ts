@@ -429,7 +429,10 @@ describe("readerNotesDigest — the notes and the index, under one budget", () =
       note({ quote: "q".repeat(3_000), start: 0, body: "b".repeat(3_000) }),
     );
     const threads = Array.from({ length: 300 }, (_, i) =>
-      thread(`spya-z${String(i).padStart(5, "0")}`, { title: "long title ".repeat(300) }),
+      thread(`spya-z${String(i).padStart(5, "0")}`, {
+        title: "long title ".repeat(300),
+        gist: "specific conclusion ".repeat(300),
+      }),
     );
     const out = digest(comments, threads);
     const bodies = fenced(out.content);

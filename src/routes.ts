@@ -385,7 +385,8 @@ import {
 import { errorFields, log, since } from "./log.js";
 import { type CitedCandidate, withCitedInSpideryarn } from "./cited-in-spideryarn.js";
 import { authoredSentence, sayToReader } from "./reader-sentence.js";
-import { readerNotesDigest } from "./reader-notes.js";
+import { otherConversationsSection, readerNotesDigest } from "./reader-notes.js";
+import { gistOf, type ChatGistGateway } from "./chat-gist.js";
 import { placeQuoteInBlock } from "./quote-in-block.js";
 import { processSingleton } from "./process-state.js";
 import { captureFailure, setMonitoringUser } from "./monitoring.js";
@@ -2966,6 +2967,87 @@ async function exploreNotes(
   }
 }
 
+/**
+ * **The reader's other conversations on this article, for a typed Chat turn**
+ * — `otherConversationsSection` in src/reader-notes.ts, plan
+ * docs/plans/261008e-chat-knows-the-reader-s-other-conversations.md. `null`
+ * for any other kind and when there is no other conversation.
+ *
+ * `exploreNotes`' rules, for its reasons: the store answers for the signed-in
+ * owner only, and **a failed load costs the list, not the turn** — the tool is
+ * still offered and says so honestly if it fails too. Logged: the slug and
+ * counts, never a title or a gist.
+ */
+async function chatOthers(slug: string, thread: Pick<ChatThread, "id" | "kind">): Promise<string | null> {
+  if (thread.kind !== "chat") return null;
+  try {
+    const section = otherConversationsSection(await chatStore.load(slug), thread.id);
+    if (section === null) return null;
+    log("model").info(
+      { slug, conversations: section.total, conversationsShown: section.shown, chars: section.content.length },
+      "chat: the reader's other conversations go with the turn",
+    );
+    return section.content;
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "chat: could not read the reader's other conversations; answering without them",
+    );
+    return null;
+  }
+}
+
+/**
+ * **Write a conversation's one-line gist after an answer is stored** —
+ * src/chat-gist.ts, plan 261008e. Called by `streamChat` once the response has
+ * ended and the turn has let go of the thread — see the note at its call.
+ *
+ * Re-reads the thread rather than trusting the turn's copy, so the gist
+ * describes what is stored, and writes it only if nothing has been stored in
+ * the thread since (`chatStore.setGist`'s `basedOn`). Never a Candidates
+ * thread, which no index lists.
+ *
+ * **Never throws, and a failure costs the gist alone**: the index shows the
+ * latest question beside the title instead. Logged: the slug, the thread id,
+ * whether it was written, and an error's type — never a word of the
+ * conversation or of the gist.
+ */
+export async function refreshGist(
+  slug: string,
+  threadId: string,
+  replyId: string,
+  gateway?: ChatGistGateway,
+): Promise<void> {
+  try {
+    const thread = (await chatStore.load(slug)).find((t) => t.id === threadId);
+    if (!thread || thread.kind === "candidates") return;
+    /* Defence in depth for the exported helper. `streamChat` calls this only
+       after `finish` says its attempt landed; a direct caller still has to name
+       an answer that is now stored `done`. */
+    if (thread.messages.find((m) => m.id === replyId)?.status !== "done") return;
+    const gist = await gistOf(thread, gateway ? { gateway } : {});
+    if (gist === null) return;
+    const written = await chatStore.setGist(slug, threadId, gist, thread);
+    log("model").info({ slug, threadId, written }, "chat: conversation gist");
+  } catch (err) {
+    const status = (err as { status?: unknown } | null)?.status;
+    log("model").warn(
+      {
+        slug,
+        threadId,
+        errType: err instanceof Error ? err.name : typeof err,
+        ...(typeof status === "number" ? { status } : {}),
+      },
+      "chat: could not write the conversation's gist",
+    );
+  }
+}
+
 /** The store read behind each band's GET — total, so a new row cannot go unread. */
 const MADE_READS: Record<MadeArtefact, (slug: string) => Promise<unknown>> = {
   glossary: loadGlossary,
@@ -3567,6 +3649,8 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
   let text = "";
   /** What the tools did, kept so a turn that fails still records them. */
   const tools: ToolRun[] = [];
+  /** Whether this turn stored a finished answer, so the conversation's gist is worth rewriting. */
+  let answered = false;
   try {
     streaming.set(key, { stop, done, attempt });
     res.statusCode = 200;
@@ -3671,6 +3755,12 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
          the stored thread's kind and id, like `kind` below. `null` for every
          other kind, and for an Explore turn whose notes could not be read. */
       notes: await exploreNotes(slug, thread, article.blocks),
+      /* **The reader's other conversations, on every typed Chat turn**, each
+         with what it covered — so a new conversation can build on an earlier
+         one (plan 261008e). From the stored thread's kind and id, like
+         `notes`. `null` for every other kind, for a reader with no other
+         conversation here, and when they could not be read. */
+      others: await chatOthers(slug, thread),
       /* **How much the reader has used Spideryarn, on every guide turn**, from
          the stored thread's kind like `notes` above. `null` for every other
          kind, and for a guide turn whose count could not be read. */
@@ -3760,11 +3850,18 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         ...(event.truncated ? { truncated: true } : {}),
         ...(event.stopped ? { stopped: true } : {}),
       };
-      await chatStore.finish(slug, thread.id, reply.id, finished, { attempt: storeAttempt });
+      const landed = await chatStore.finish(slug, thread.id, reply.id, finished, { attempt: storeAttempt });
+      /* Set this before touching the socket again. If the client disappears in
+         the sliver after storage succeeds, the stored answer still deserves
+         its gist. */
+      answered = landed;
       /* `opensFree` rides on the frame and is never stored: it is a fact about
          the moment this answer finished, and only an answer this tab watched
          finish may act on it (src/web/guide-acts.ts). A guide turn's alone. */
       frame("done", made === null ? finished : { ...finished, opensFree: [...keysOpenFree(made)] });
+      /* A cross-process retry can take this row's attempt fence while the old
+         model call is still ending. That attempt may still reach this line,
+         but it must not pay for a gist of the replacement attempt. */
     }
   } catch (err) {
     /* **Nothing in here may throw**, and that is why it is wrapped again.
@@ -3813,6 +3910,15 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
     release();
     if (!res.writableEnded) res.end();
   }
+  /* **The conversation's gist, after the response has ended and the turn has
+     let go** — plan 261008e. Not before `release()`: a retry, an edit or the
+     next question would wait behind it. Awaited rather than handed off, for
+     two reasons: the request's spend collector closes when the handler
+     returns, and a model call that finishes later is recorded as late and
+     never reaches the ledger (src/ai-spend.ts); and on Vercel it is the
+     handler's own promise that keeps the instance awake (src/vercel.ts).
+     `refreshGist` never throws. */
+  if (answered) await refreshGist(slug, thread.id, reply.id);
 }
 
 /**

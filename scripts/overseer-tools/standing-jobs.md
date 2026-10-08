@@ -9,8 +9,12 @@ on 2026-09-30 expired at 23:15 UTC, and production went 17 hours without a deplo
 
 **So the renewal job deletes and recreates all three every day, itself included.** No job is ever
 older than a day. After any restart of the Overseer session, create the three below by hand,
-exactly as written. `CronList` should then show three jobs. A tick also checks that
-`~/.overseer/pacer-heartbeat` is fresh, and the watchdog alerts when it is not (see overseer.md).
+exactly as written. `CronList` should then show three jobs. Each pacer tick writes
+`~/.overseer/pacer-heartbeat`, so something outside the session can tell it has stopped:
+`overseer-watchdog` fails, every five minutes, once that file is over 90 minutes old or is missing
+while a session holds the Overseer claim, and again when production is more than 12 hours behind
+dev. Its sentences are in `journalctl -u overseer-watchdog -n 6`
+([`scripts/overseer-watchdog-checks.ts`](../overseer-watchdog-checks.ts)).
 
 `$SP` below is the Overseer's scratch directory; set it to the current session's scratchpad path.
 

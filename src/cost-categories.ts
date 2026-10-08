@@ -269,6 +269,10 @@ export const JOB_DISPOSITION: Record<AiJob, JobDisposition> = {
   /* An imported title, tidied inside `extract` or the bulk import's
      `metadata` step. src/title-tidy-model.ts. */
   "title-tidy": "step-driven",
+  /* A conversation's one-line gist, written after a chat answer is stored and
+     its response sent — request scope, owner-attributed, triggered by the
+     reader's question. src/chat-gist.ts. */
+  "chat-gist": "interactive request work",
   /* The shelf's topics, scored after `GET /api/library/terms` has answered and
      awaited before the handler returns — request scope, owner-attributed,
      triggered by a reader opening their shelf. Nobody waits on it, but it is

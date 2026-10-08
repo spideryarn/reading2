@@ -65,7 +65,18 @@ const realFetch = globalThis.fetch;
 beforeAll(() => {
   process.env.OPENROUTER_API_KEY = "test-key";
   globalThis.fetch = ((_url: string, init: RequestInit) => {
-    sent.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    const request = JSON.parse(String(init.body)) as Record<string, unknown>;
+    /* A completed turn now makes a second, structured request for its private
+       index gist. It is not the converse request this suite inspects. */
+    const format = request.response_format as { json_schema?: { name?: unknown } } | undefined;
+    if (format?.json_schema?.name === "conversation_gist") {
+      return Promise.resolve(
+        Response.json({
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ gist: "A short answer" }) } }],
+        }),
+      );
+    }
+    sent.push(request);
     const encoder = new TextEncoder();
     const frames = [
       `data: ${JSON.stringify({ model: "test/model", choices: [{ delta: { content: "Because." } }] })}\n\n`,
