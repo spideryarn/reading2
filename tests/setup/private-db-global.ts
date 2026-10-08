@@ -573,75 +573,82 @@ export default async function setup({ provide }: TestProject): Promise<() => Pro
   }
 
   return async () => {
-    const tag = runTag();
-    /* Every step the verdict rests on records its failure here, and any entry
-       fails the run — see `reportTeardownFailed`. "We could not tell" must never
-       read as "nobody was there". */
-    const problems: string[] = [];
-    const seen = new Map<number, DbSession>();
-    const remember = (rows: readonly DbSession[]) => {
-      for (const s of rows) seen.set(s.pid, s);
-    };
-
-    /* 1 and 2 — sample on the lease's own connection, then terminate this run's
-       own leftover backends so that a refusal below means somebody else. */
-    remember(await enumerateAndClearOurs(lease, db.name, tag, problems));
-
-    /* 3 — end the lease, then the non-forced drop as the atomic backstop.
-       Ending it first because `drop database` refuses while *any* session is
-       connected, this process's own included, and forcing a connection we own
-       is pointless where closing it is polite and certain. */
     try {
-      await lease.end();
-    } catch (err) {
-      problems.push(`the lease connection would not close: ${(err as Error).message}`);
-    }
-    const ordinary = await dropStaleTestDatabase(db.name);
-    if (ordinary.kind === "failed") {
-      /* Not occupancy. The drop never got far enough to look, so nothing below
-         may reason from it about who was inside. */
-      problems.push(`the ordinary DROP DATABASE failed rather than being refused: ${ordinary.why}`);
-    }
+      const tag = runTag();
+      /* Every step the verdict rests on records its failure here, and any entry
+         fails the run — see `reportTeardownFailed`. "We could not tell" must never
+         read as "nobody was there". */
+      const problems: string[] = [];
+      const seen = new Map<number, DbSession>();
+      const remember = (rows: readonly DbSession[]) => {
+        for (const s of rows) seen.set(s.pid, s);
+      };
 
-    /* 4 — a refusal is occupancy, so find out whose. */
-    if (ordinary.kind === "in-use") remember(await occupantsFromBase(db.name, tag, problems));
+      /* 1 and 2 — sample on the lease's own connection, then terminate this run's
+         own leftover backends so that a refusal below means somebody else. */
+      remember(await enumerateAndClearOurs(lease, db.name, tag, problems));
 
-    const who = classify(
-      [...seen.values()].sort((a, b) => a.pid - b.pid),
-      tag,
-      ordinary.kind === "in-use",
-    );
-    const polluted = who.strangers.length > 0 || who.ghostRefusal;
-
-    /* 5 — the drop happens whatever the verdict: a red run that also leaks a
-       12 MB database has cost more than it reported. `FORCE` only where the
-       ordinary drop did not land, and a cleanup that fails is itself a problem
-       rather than a printed regret. */
-    let dropLine = `dropped ${db.name}`;
-    if (ordinary.kind !== "dropped") {
+      /* 3 — end the lease, then the non-forced drop as the atomic backstop.
+         Ending it first because `drop database` refuses while *any* session is
+         connected, this process's own included, and forcing a connection we own
+         is pointless where closing it is polite and certain. */
       try {
-        await db.drop();
-        dropLine = `dropped ${db.name} with FORCE`;
+        await lease.end();
       } catch (err) {
-        problems.push(`the forced cleanup failed too: ${(err as Error).message}`);
-        dropLine =
-          `${db.name} is leaked; drop it with ` +
-          `npx tsx scripts/db-test-create.ts --drop ${db.name}`;
+        problems.push(`the lease connection would not close: ${(err as Error).message}`);
       }
-    }
+      const ordinary = await dropStaleTestDatabase(db.name);
+      if (ordinary.kind === "failed") {
+        /* Not occupancy. The drop never got far enough to look, so nothing below
+           may reason from it about who was inside. */
+        problems.push(`the ordinary DROP DATABASE failed rather than being refused: ${ordinary.why}`);
+      }
 
-    /* Verdict first, then what happened to the database — the cleanup's own
-       outcome is one of the things a verdict can rest on, so it is decided
-       before anything is printed. */
-    if (polluted) reportPolluted(say, db.name, tag, who, ordinary);
-    else reportExpected(say, who, ordinary.kind === "in-use");
-    if (problems.length > 0) reportTeardownFailed(say, db.name, problems);
-    if (polluted || problems.length > 0) {
+      /* 4 — a refusal is occupancy, so find out whose. */
+      if (ordinary.kind === "in-use") remember(await occupantsFromBase(db.name, tag, problems));
+
+      const who = classify(
+        [...seen.values()].sort((a, b) => a.pid - b.pid),
+        tag,
+        ordinary.kind === "in-use",
+      );
+      const polluted = who.strangers.length > 0 || who.ghostRefusal;
+
+      /* 5 — the drop happens whatever the verdict: a red run that also leaks a
+         12 MB database has cost more than it reported. `FORCE` only where the
+         ordinary drop did not land, and a cleanup that fails is itself a problem
+         rather than a printed regret. */
+      let dropLine = `dropped ${db.name}`;
+      if (ordinary.kind !== "dropped") {
+        try {
+          await db.drop();
+          dropLine = `dropped ${db.name} with FORCE`;
+        } catch (err) {
+          problems.push(`the forced cleanup failed too: ${(err as Error).message}`);
+          dropLine =
+            `${db.name} is leaked; drop it with ` +
+            `npx tsx scripts/db-test-create.ts --drop ${db.name}`;
+        }
+      }
+
+      /* Verdict first, then what happened to the database — the cleanup's own
+         outcome is one of the things a verdict can rest on, so it is decided
+         before anything is printed. */
+      if (polluted) reportPolluted(say, db.name, tag, who, ordinary);
+      else reportExpected(say, who, ordinary.kind === "in-use");
+      if (problems.length > 0) reportTeardownFailed(say, db.name, problems);
+      if (polluted || problems.length > 0) {
+        process.exitCode = 1;
+        /* After vitest has reported the run, so no test file owns this; a deploy
+           must not read the run as red only in its failed files (261008h). */
+        markFailureOutsideFiles(polluted ? "the private test database was polluted" : "the private test database's teardown failed");
+      }
+      say(dropLine);
+    } catch (err) {
+      // Vitest logs thrown teardown errors without failing the invocation.
       process.exitCode = 1;
-      /* After vitest has reported the run, so no test file owns this; a deploy
-         must not read the run as red only in its failed files (261008h). */
-      markFailureOutsideFiles(polluted ? "the private test database was polluted" : "the private test database's teardown failed");
+      markFailureOutsideFiles("the private test database's teardown threw unexpectedly");
+      throw err;
     }
-    say(dropLine);
   };
 }

@@ -14,6 +14,7 @@ import {
   type TestEvidence,
 } from "../scripts/deploy-evidence.js";
 import { parseDeployArgs } from "../scripts/deploy-checks.js";
+import { TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 import {
   PREPARATION_VERSION,
   readinessRunnerPath,
@@ -40,6 +41,7 @@ const CLEAN_ROWS = [
   row("typecheck", "clean"),
   row("build", "clean"),
   row("build:fleet", "clean"),
+  row("build:tooling", "clean"),
   row("test", "clean"),
   row("cycles", "clean"),
 ];
@@ -81,6 +83,8 @@ function check(over: Partial<FinishedRecord> = {}, hoursBefore = 2): FinishedRec
     logPath: null,
     why: null,
     failedTestFiles: null,
+    testOutcome: { kind: "pass", files: 1800 },
+    testOutcomeVersion: TEST_OUTCOME_VERSION,
     ...over,
   };
 }

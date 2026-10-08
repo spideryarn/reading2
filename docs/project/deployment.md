@@ -325,6 +325,10 @@ a red that belongs to no file — an unhandled error, a failing teardown, a run 
 whole suite — cannot be rerun in part; and a change to the harness since (anything under `tests/`
 that is not a test, `vitest.config.ts`, the lockfile …) means the whole suite.
 
+A run still going does not count as the nearest; it only blocks runs on its own commit. A run must
+carry the reporter's current outcome to stand in at all, here or in the exact-commit reuse above,
+so records from before 2026-10-08's change stand in for nothing.
+
 **What a pass claims** is "a whole run at that commit, plus these files here" — never that the suite
 passed at the commit deployed. The risk Greg took is a change since the run that breaks a test
 nobody reran; the readiness loop's next full run is what catches it. The failing files come from

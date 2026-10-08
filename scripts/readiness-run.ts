@@ -79,7 +79,7 @@ import {
   type StartedRecord,
   type TreeStamp,
 } from "../tools/fleet/readiness.js";
-import { testOutcomeFrom } from "../tools/fleet/test-outcome.js";
+import { testOutcomeFrom, TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 import { READINESS_ADMISSION_TOKEN_ENV } from "../vitest-admission.js";
 import { TEST_OUTCOME_FILE_ENV } from "./vitest-outcome-reporter.js";
 
@@ -450,7 +450,7 @@ async function main(): Promise<void> {
     /* Decided AFTER the outcome and from nothing the outcome reads, so the
        names can be wrong without the verdict being wrong. Null is "not known". */
     failedTestFiles: failedTestFilesForOutcome(outcome, failedTestFilesSeen.result()),
-    ...(outcomeFile === null || outcome === "void" ? {} : { testOutcome: testOutcomeFrom(readOutcome(outcomeFile)) }),
+    ...(outcomeFile === null || outcome === "void" ? {} : { testOutcome: testOutcomeFrom(readOutcome(outcomeFile)), testOutcomeVersion: TEST_OUTCOME_VERSION }),
   };
 
   try {

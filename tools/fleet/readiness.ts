@@ -513,10 +513,12 @@ export type FinishedRecord = RunCommon & {
    * Unlike `failedTestFiles` it comes from the reporter, not from matching
    * text, and it says when a failure belonged to no file.
    *
-   * Optional, like `preparation`, and for the same reason; malformed reads
-   * back as absent.
+   * Optional for older records. A malformed supplied outcome is unusable,
+   * so broken evidence cannot be mistaken for a record that never had it.
    */
   testOutcome?: TestOutcome | null;
+  /** Written by the wrapper that judged the outcome, not copied from the loop. */
+  testOutcomeVersion?: number;
 };
 
 export type RunRecord = StartedRecord | FinishedRecord;
@@ -909,7 +911,8 @@ export function parseRunRecord(text: string): RunRecord | null {
   const counts = asCounts(parsed["counts"]);
   if (outcome === "pass" && countsContradictPass(counts)) return null;
 
-  const testOutcome = asTestOutcome(parsed["testOutcome"]);
+  const testOutcome = asTestOutcome(parsed["testOutcome"]) ??
+    (parsed["testOutcome"] == null ? null : { kind: "unusable" as const, why: "the stored test outcome is malformed" });
   return {
     ...common,
     state: "finished",
@@ -923,6 +926,7 @@ export function parseRunRecord(text: string): RunRecord | null {
     why: asString(parsed["why"]),
     failedTestFiles: failedTestFilesForOutcome(outcome, asFailedTestFiles(parsed["failedTestFiles"])),
     ...(testOutcome === null ? {} : { testOutcome }),
+    ...(Number.isInteger(parsed["testOutcomeVersion"]) ? { testOutcomeVersion: parsed["testOutcomeVersion"] as number } : {}),
   };
 }
 

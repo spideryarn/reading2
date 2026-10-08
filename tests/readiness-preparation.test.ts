@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CORPUS_ROOT } from "../scripts/corpus-materialise.js";
 import { ensureRunnerWorktree, linkRunnerEnvLocal, preparationEnv, readinessCheckEnv, refreshRunnerCorpus } from "../scripts/readiness-loop.js";
 import { checkChildEnv, preparationFromEnv } from "../scripts/readiness-run.js";
+import { TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 import {
   PREPARATION_VERSION,
   READINESS_PREPARATION_ENV,
@@ -260,5 +261,6 @@ describe("the wrapper writes preparation into the actual started and finished re
     /* The fake npm writes no outcome, and the wrapper says so on the record
        rather than leaving it off (docs/plans/261008h). */
     expect(finished?.state === "finished" ? finished.testOutcome : null).toMatchObject({ kind: "unusable", why: expect.stringMatching(/no outcome file/) });
+    expect(finished?.state === "finished" ? finished.testOutcomeVersion : null).toBe(TEST_OUTCOME_VERSION);
   });
 });

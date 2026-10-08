@@ -8,6 +8,10 @@
 /** More failed files than this and a rerun is a full run in all but name; the deploy runs the suite. */
 export const RERUN_FILES_MAX = 40;
 
+/** The wrapper has verified the reporter protocol, including completed close.
+ * Bump when an older compact judgement can no longer support that claim. */
+export const TEST_OUTCOME_VERSION = 3;
+
 /**
  * `red-in-files` is the claim a rerun leans on: **every** failure the run had
  * is inside the files named, so running those again and seeing them pass
@@ -47,7 +51,7 @@ export function readOutcomeFile(
   }
   if (typeof v !== "object" || v === null) return { ok: false, why: "the outcome file is not an object" };
   const o = v as Record<string, unknown>;
-  if (o.schema !== 2) return { ok: false, why: `the outcome file's schema is ${String(o.schema)}, not 2` };
+  if (o.schema !== TEST_OUTCOME_VERSION) return { ok: false, why: `the outcome file's schema is ${String(o.schema)}, not ${TEST_OUTCOME_VERSION}` };
   if (o.final !== true) {
     return { ok: false, why: "the outcome file was never finalised — the run was killed, or its teardown overran, after its tests" };
   }
@@ -160,6 +164,7 @@ export function rerunVerdict(requested: readonly string[], text: string | null, 
   if ((read.reason === "passed") !== (exit === 0)) return `the rerun's outcome says ${read.reason} but vitest exited ${exit}`;
   const failed = [...new Set(read.files.filter((f) => f.state === "failed").map((f) => f.path))].sort();
   if (failed.length > 0) return `still failing: ${failed.join(" ")}`;
+  if (read.reason !== "passed" || exit !== 0) return `the rerun failed outside its modules (vitest exited ${exit})`;
   const missing = requested.filter((p) => !read.files.some((f) => f.path === p));
   if (missing.length > 0) return `the rerun never ran ${missing.join(" ")}`;
   const notPassed = requested.filter((p) => read.files.some((f) => f.path === p && f.state !== "passed"));

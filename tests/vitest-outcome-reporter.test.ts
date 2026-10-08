@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { rerunVerdict, testOutcomeFrom } from "../tools/fleet/test-outcome.js";
 
@@ -52,6 +52,38 @@ function runProject(files: Record<string, string>, opts: { args?: string[]; glob
 const PASS = `import { test } from "vitest";\ntest("ok", () => {});\n`;
 const FAIL = `import { test, expect } from "vitest";\ntest("no", () => { expect(1).toBe(2); });\n`;
 
+/* Exercise the real private teardown's exception boundary without reaching
+   any database. Child Vitest projects above run in separate processes. */
+vi.mock("pg", () => ({ Client: class {
+  on() {} async connect() {} async end() {} async query() { return { rows: [] }; }
+} }));
+vi.mock("../scripts/db-test-create.js", () => ({
+  StackUnreachable: class extends Error {},
+  scavengeTestDatabases: async () => ({ dropped: [] }),
+  createTestDatabase: async () => ({ name: "spideryarn_test_fake", url: "unused", drop: async () => {} }),
+  dropStaleTestDatabase: async () => { throw new Error("unexpected drop failure"); },
+}));
+vi.mock("./helpers/seed-local-accounts.js", () => ({ seedLocalAccounts: async () => {} }));
+vi.mock("./helpers/seed-private-billing-prices.js", () => ({ seedPrivateBillingPrices: async () => [] }));
+
+it("an unexpected exception in the private teardown marks a failure outside files", async () => {
+  const { default: setup } = await import("./setup/private-db-global.js");
+  const outside = Symbol.for("spideryarn.test-failures-outside-files");
+  const globals = globalThis as { [outside]?: string[] };
+  const before = globals[outside];
+  const exitCode = process.exitCode;
+  try {
+    const teardown = await setup({ provide: () => {} } as unknown as Parameters<typeof setup>[0]);
+    await expect(teardown()).rejects.toThrow("unexpected drop failure");
+    expect(globals[outside]).toContain("the private test database's teardown threw unexpectedly");
+    expect(process.exitCode).toBe(1);
+  } finally {
+    process.exitCode = exitCode;
+    if (before === undefined) delete globals[outside];
+    else globals[outside] = before;
+  }
+});
+
 describe("the outcome reporter, in a real vitest run", { timeout: 60_000 }, () => {
   it("a run red in one file names that file, and only it", () => {
     const r = runProject({ "a.test.mjs": PASS, "b.test.mjs": FAIL });
@@ -63,6 +95,18 @@ describe("the outcome reporter, in a real vitest run", { timeout: 60_000 }, () =
     const r = runProject({ "a.test.mjs": PASS });
     expect(r.exit).toBe(0);
     expect(testOutcomeFrom(r.text)).toEqual({ kind: "pass", files: 1 });
+  });
+
+  it("exit zero while global teardown is still pending does not finalise the report", () => {
+    const r = runProject({ "a.test.mjs": PASS }, { globalSetup: `export default () => () => new Promise(() => {});\n` });
+    expect(r.exit, r.out).toBe(0);
+    expect(testOutcomeFrom(r.text)).toMatchObject({ kind: "unusable", why: expect.stringMatching(/never finalised/) });
+  });
+
+  it("process.exit during teardown fires exit but cannot finalise an unfinished teardown", () => {
+    const r = runProject({ "a.test.mjs": PASS }, { globalSetup: `export default () => () => { process.exit(0); };\n` });
+    expect(r.exit, r.out).toBe(0);
+    expect(testOutcomeFrom(r.text)).toMatchObject({ kind: "unusable", why: expect.stringMatching(/never finalised/) });
   });
 
   it("a failing beforeAll is its file's failure", () => {

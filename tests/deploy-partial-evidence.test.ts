@@ -16,17 +16,18 @@ import {
   isTestInfrastructure,
   partialEvidenceFor,
   readinessFullRuns,
+  testEvidenceFor,
   TEST_EVIDENCE_MAX_AGE_MS,
   type DeployRunRecord,
   type FullRun,
 } from "../scripts/deploy-evidence.js";
-import { readinessRunnerPath, PREPARATION_VERSION, type FinishedRecord, type Reading } from "../tools/fleet/readiness.js";
-import { agreeingWithExit, asTestOutcome, RERUN_FILES_MAX, rerunVerdict, testOutcomeFrom } from "../tools/fleet/test-outcome.js";
+import { parseRunRecord, readinessRunnerPath, PREPARATION_VERSION, type FinishedRecord, type Reading } from "../tools/fleet/readiness.js";
+import { agreeingWithExit, asTestOutcome, RERUN_FILES_MAX, rerunVerdict, testOutcomeFrom, TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 
 const file = (path: string, state: string, project = "unit") => ({ project, path, state });
 const outcome = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
-    schema: 2,
+    schema: TEST_OUTCOME_VERSION,
     final: true,
     reason: "failed",
     unhandledErrors: 0,
@@ -54,6 +55,7 @@ describe("testOutcomeFrom", () => {
   });
 
   it.each([
+    ["a report from before teardown completion was verified", outcome({ ...GREEN, schema: 2 }), /schema/],
     ["no file at all", null, /no outcome file/],
     ["not JSON", "{", /not JSON/],
     ["the first schema", outcome({ schema: 1 }), /schema/],
@@ -241,8 +243,12 @@ describe("partialEvidenceFor", () => {
   });
 
   it("a failed file the candidate no longer has is not rerun", () => {
-    const e = evidence([run(C, red("tests/gone.test.ts", "tests/b.test.ts"))], {}, ["tests/gone.test.ts"]);
+    const e = evidence([run(C, red("tests/gone.test.ts", "tests/b.test.ts"))], { [C]: ["tests/gone.test.ts"] }, ["tests/gone.test.ts"]);
     expect(e).toMatchObject({ kind: "rerun", files: ["tests/b.test.ts"] });
+  });
+
+  it("a failed file missing without a committed deletion cannot leave nothing to rerun", () => {
+    expect(evidence([run(Y, red("tests/gone.test.ts"))], {}, ["tests/gone.test.ts"]).kind).toBe("run");
   });
 
   it("more files to rerun than a rerun is worth means the whole suite", () => {
@@ -294,6 +300,39 @@ describe("partialEvidenceFor's limits", () => {
     expect(e.kind).toBe("run");
   });
 
+  it("a nearer run outside the day window still blocks a recent run further back", () => {
+    const e = evidence([run(C, red("tests/b.test.ts"), {}, 25), run(B, green, {}, 0.5)]);
+    expect(e.kind).toBe("run");
+  });
+
+  it("an ancestor git cannot place cannot silently disappear from the timeline", () => {
+    const e = evidence([run("8".repeat(40), green), run(B, green)]);
+    expect(e.kind).toBe("run");
+  });
+
+  it("incomparable ancestor runs cannot be ordered by their history size", () => {
+    const e = partialEvidenceFor({
+      sha: Y, runs: [run(B, green), run(C, green)], nowMs: NOW,
+      isAncestor: (a, b) => a === b || b === Y,
+      ancestors, changedSince: () => [], existsAtCandidate: () => true,
+    });
+    expect(e.kind).toBe("run");
+  });
+
+  it("a run still going on a nearer commit does not decide which commit is nearest", () => {
+    /* The readiness loop is mid-run most of the time; its attempt has no verdict yet. */
+    const going = run(Y, { kind: "unusable", why: "still running" }, { refusal: "it is still running", running: true }, 0.2);
+    const e = evidence([run(C, red("tests/b.test.ts"), {}, 1), going]);
+    expect(e).toMatchObject({ kind: "rerun", files: ["tests/b.test.ts"] });
+  });
+
+  it("only a run still going is no evidence", () => {
+    const going = run(C, { kind: "unusable", why: "still running" }, { refusal: "it is still running", running: true }, 0.2);
+    const e = evidence([going]);
+    expect(e.kind).toBe("run");
+    if (e.kind === "run") expect(e.why).toMatch(/that has finished/);
+  });
+
   it("a run still going on the nearest commit blocks the finished one", () => {
     const going = run(C, { kind: "unusable", why: "still running" }, { refusal: "it is still running", running: true }, 1.5);
     const e = evidence([run(C, green, {}, 1), going]);
@@ -313,7 +352,7 @@ const steps = (test: "clean" | "failed") =>
     verdict: name === "test" ? test : ("clean" as const),
     findings: null,
   }));
-function reading(over: Partial<FinishedRecord> = {}, state: Reading["state"] = "pass"): Reading {
+function reading(over: Partial<FinishedRecord> = {}, state: Reading["state"] = "pass"): Reading & { record: FinishedRecord } {
   const at = NOW - HOUR;
   const record: FinishedRecord = {
     schema: 1,
@@ -339,6 +378,8 @@ function reading(over: Partial<FinishedRecord> = {}, state: Reading["state"] = "
     logPath: null,
     why: null,
     failedTestFiles: null,
+    testOutcome: { kind: "pass", files: 1800 },
+    testOutcomeVersion: TEST_OUTCOME_VERSION,
     ...over,
   };
   return { record, state, atMs: Date.parse(record.at), why: null };
@@ -346,9 +387,12 @@ function reading(over: Partial<FinishedRecord> = {}, state: Reading["state"] = "
 const fullRuns = (readings: Reading[]) => readinessFullRuns({ readings, runnerCwd: RUNNER, envLocalSha256: ENV, nowMs: NOW });
 
 describe("readinessFullRuns", () => {
-  it("a green check with no reporter outcome (an older record) is a pass", () => {
-    const [r] = fullRuns([reading()]);
-    expect(r).toMatchObject({ sha: C, outcome: { kind: "pass" }, refusal: null });
+  it("a green check with no reporter outcome (an older record) is refused", () => {
+    const legacy = reading();
+    delete legacy.record.testOutcome;
+    delete legacy.record.testOutcomeVersion;
+    const [r] = fullRuns([legacy]);
+    expect(r?.refusal).toMatch(/outcome proving completed teardown/);
   });
 
   it("a red check is red in the files its reporter named", () => {
@@ -389,9 +433,53 @@ describe("readinessFullRuns", () => {
     expect(r?.refusal).toMatch(/not a full/);
   });
 
-  it("a dirty or void run is about no commit, and is left out", () => {
+  it("a newer narrowed failed test remains a blocker", () => {
+    const targeted = reading({ check: "test", scope: "narrowed", outcome: "fail", exit: 1, at: new Date(NOW - 0.5 * HOUR).toISOString() }, "fail");
+    expect(evidence(fullRuns([reading(), targeted])).kind).toBe("run");
+  });
+
+  it("a dirty run is about no commit, and is left out", () => {
     expect(fullRuns([reading({ treeAtEnd: { kind: "known", sha: C, branch: null, dirty: true } })])).toEqual([]);
-    expect(fullRuns([reading({ outcome: "void", exit: null }, "void")])).toEqual([]);
+  });
+
+  it("a newer interrupted check blocks an older green check and a further ancestor", () => {
+    const interrupted = reading({ outcome: "void", exit: null, at: new Date(NOW - 0.5 * HOUR).toISOString() }, "void");
+    const runs = fullRuns([interrupted]);
+    expect(runs).toHaveLength(1);
+    expect(evidence([...fullRuns([reading()]), ...runs, run(B, green)]).kind).toBe("run");
+  });
+
+  it("a dead started check blocks a further ancestor too", () => {
+    const r = reading();
+    const { at: _at, ...common } = r.record as FinishedRecord;
+    const dead: Reading = { record: { ...common, state: "started" }, state: "void", atMs: NOW - HOUR, why: "killed" };
+    expect(evidence([...fullRuns([dead]), run(B, green)]).kind).toBe("run");
+  });
+
+  it("the exact-commit path also refuses an unusable reporter outcome", () => {
+    const e = testEvidenceFor({
+      sha: C, readings: [reading({ testOutcome: { kind: "unusable", why: "the suite was narrowed" } })],
+      unreadable: 0, nowMs: NOW, runnerCwd: RUNNER, envLocalSha256: ENV,
+    });
+    expect(e.kind).toBe("run");
+  });
+
+  it("a green record from before completed teardown was verified cannot stand in", () => {
+    const legacy = reading();
+    delete legacy.record.testOutcomeVersion;
+    const e = testEvidenceFor({ sha: C, readings: [legacy], unreadable: 0, nowMs: NOW, runnerCwd: RUNNER, envLocalSha256: ENV });
+    expect(e.kind).toBe("run");
+  });
+
+  it("the wrapper version alone cannot replace a missing outcome", () => {
+    const e = testEvidenceFor({ sha: C, readings: [reading({ testOutcome: null })], unreadable: 0, nowMs: NOW, runnerCwd: RUNNER, envLocalSha256: ENV });
+    expect(e.kind).toBe("run");
+  });
+
+  it("a malformed new outcome cannot turn into a trusted older record with no reporter", () => {
+    const r = reading();
+    const parsed = parseRunRecord(JSON.stringify({ ...r.record, testOutcome: { kind: "pass", files: 0 } }));
+    expect(parsed?.state === "finished" && parsed.testOutcome?.kind).toBe("unusable");
   });
 });
 
@@ -399,7 +487,7 @@ describe("readinessFullRuns", () => {
 
 const deployRecord = (over: Partial<DeployRunRecord> = {}): string =>
   JSON.stringify({
-    schema: 2,
+    schema: TEST_OUTCOME_VERSION,
     by: "deploy-gate",
     runId: "spideryarn-deploy-abc-cccccccc",
     sha: C,
@@ -416,6 +504,28 @@ const deployRecord = (over: Partial<DeployRunRecord> = {}): string =>
 describe("deployFullRun", () => {
   it("reads a sound record", () => {
     expect(deployFullRun(deployRecord(), "x.json", ENV)).toMatchObject({ source: "deploy-gate", sha: C, refusal: null });
+  });
+
+  it("a started deploy with no finish blocks an older green on the same commit", () => {
+    const { schema, by, runId, sha, root, atStart } = JSON.parse(deployRecord());
+    const pending = deployFullRun(JSON.stringify({ schema, by, runId, sha, root, atStart, state: "started", startedAt: new Date(NOW - 0.5 * HOUR).toISOString() }), "pending.json", ENV);
+    expect(pending).not.toHaveProperty("unreadable");
+    if ("unreadable" in pending) throw new Error(pending.unreadable);
+    expect(evidence([run(C, green), pending]).kind).toBe("run");
+    expect(pending.refusal).toMatch(/never recorded/);
+  });
+
+  it("a stored outcome must still agree with the recorded exit", () => {
+    const r = deployFullRun(deployRecord({ exit: 0 }), "x.json", ENV);
+    expect("refusal" in r && r.refusal).toMatch(/exit/);
+  });
+
+  it("an old protocol is refused but can be superseded by a later verified whole run", () => {
+    const old = deployFullRun(JSON.stringify({ ...JSON.parse(deployRecord()), schema: 2 }), "old.json", ENV);
+    expect("refusal" in old && old.refusal).toMatch(/completed teardown/);
+    const newer = deployFullRun(deployRecord({ runId: "newer", at: new Date(NOW - 0.5 * HOUR).toISOString(), exit: 0, outcome: green }), "new.json", ENV);
+    if ("unreadable" in old || "unreadable" in newer) throw new Error("both records must remain on the timeline");
+    expect(evidence([old, newer]).kind).toBe("rerun");
   });
 
   it.each([
@@ -437,6 +547,10 @@ describe("deployFullRun", () => {
     ["the first schema", JSON.stringify({ ...JSON.parse(deployRecord()), schema: 1 })],
     ["no outcome", JSON.stringify({ ...JSON.parse(deployRecord()), outcome: null })],
     ["a short sha", JSON.stringify({ ...JSON.parse(deployRecord()), sha: "ccc" })],
+    ["null", "null"],
+    ["no exit", JSON.stringify({ ...JSON.parse(deployRecord()), exit: undefined })],
+    ["no root", JSON.stringify({ ...JSON.parse(deployRecord()), root: undefined })],
+    ["no start time", JSON.stringify({ ...JSON.parse(deployRecord()), startedAt: undefined })],
   ])("%s is unreadable", (_name, text) => {
     expect(deployFullRun(text, "x.json", ENV)).toHaveProperty("unreadable");
   });
@@ -477,6 +591,10 @@ describe("rerunVerdict", () => {
 
   it("an exit that disagrees is a failure", () => {
     expect(rerunVerdict(files, ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "passed"]]), 1)).toMatch(/exited 1/);
+  });
+
+  it("a failed run with no failed module is still a red rerun", () => {
+    expect(rerunVerdict(files, ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "passed"]], "failed", 1), 1)).not.toBeNull();
   });
 
   it("a teardown failure after a green rerun is a failure", () => {

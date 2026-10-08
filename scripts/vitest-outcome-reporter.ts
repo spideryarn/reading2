@@ -18,9 +18,9 @@
  * - **It is not finished at `onTestRunEnd`.** Global teardown runs after that,
  *   and `tests/setup/private-db-global.ts` can fail the run there. So the file
  *   is written `final: false` then, and rewritten `final: true` from the
- *   process's `exit` handler with the exit code and any failure that marked
- *   itself with {@link markFailureOutsideFiles}. A run killed before `exit`
- *   leaves a file that says it never finished.
+ *   process's `exit` handler, once `close()` has completed, with the exit code
+ *   and any failure that marked itself with {@link markFailureOutsideFiles}.
+ *   A killed run or unfinished teardown leaves an unfinalised file.
  * - **It says whether it covered the whole suite**: every spec the config
  *   would collect, unfiltered, against the modules that finished, keyed by
  *   project and path, and the filters it was started with.
@@ -33,6 +33,7 @@
  */
 import { writeFileSync } from "node:fs";
 import type { Reporter, SerializedError, TestModule, TestRunEndReason, Vitest } from "vitest/node";
+import { TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 
 export const TEST_OUTCOME_FILE_ENV = "SPIDERYARN_TEST_OUTCOME_FILE";
 
@@ -50,7 +51,7 @@ export function markFailureOutsideFiles(why: string): void {
 }
 
 type Written = {
-  schema: 2;
+  schema: typeof TEST_OUTCOME_VERSION;
   final: boolean;
   reason: TestRunEndReason;
   unhandledErrors: number;
@@ -68,6 +69,7 @@ export default class OutcomeReporter implements Reporter {
   private readonly file: string | undefined;
   private ctx: Vitest | null = null;
   private written: Written | null = null;
+  private closed = false;
 
   constructor() {
     this.file = process.env[TEST_OUTCOME_FILE_ENV] || undefined;
@@ -76,6 +78,14 @@ export default class OutcomeReporter implements Reporter {
 
   onInit(ctx: Vitest): void {
     this.ctx = ctx;
+    /* Exit alone is not completion: Node may exit with an unresolved teardown
+       promise. Await the whole close, including the pools; onClose callbacks
+       run before those close promises settle in Vitest 4.1.11. */
+    const close = ctx.close.bind(ctx);
+    ctx.close = async () => {
+      await close();
+      this.closed = true;
+    };
   }
 
   async onTestRunEnd(
@@ -87,7 +97,7 @@ export default class OutcomeReporter implements Reporter {
     try {
       const files = testModules.map((m) => ({ project: m.project.name, path: this.relative(m.moduleId), state: m.state() }));
       this.written = {
-        schema: 2,
+        schema: TEST_OUTCOME_VERSION,
         final: false,
         reason,
         unhandledErrors: unhandledErrors.length,
@@ -99,7 +109,7 @@ export default class OutcomeReporter implements Reporter {
       };
       this.write();
       process.once("exit", (code) => {
-        if (this.written === null) return;
+        if (this.written === null || !this.closed) return;
         const outside = (globalThis as { [OUTSIDE]?: string[] })[OUTSIDE] ?? [];
         this.written = { ...this.written, final: true, exitCode: code, failuresOutsideFiles: [...outside] };
         this.write();

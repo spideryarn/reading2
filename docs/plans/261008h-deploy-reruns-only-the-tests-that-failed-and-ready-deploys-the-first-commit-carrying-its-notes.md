@@ -213,6 +213,31 @@ Sol's verdict was *proceed with changes*. Taken, by finding:
   only the compact judgement (the raw report is ~116 KB; the store's ceiling is 64 KB).
 - **P3-1** — the timing above is corrected.
 
+## After the code review
+
+Sol's code review ([…-code-review-sol.md](261008h-code-review-sol.md)), with write access, fixed five
+P1s and two P2s in place: the reporter finalises only after vitest's `close()` has completed (exit
+alone is not teardown done), and the private-DB teardown marks an unexpected throw too; exact-commit
+reuse now also requires a current reporter outcome, so a record from before this landed cannot
+stand in at all; void and narrowed runs stay on the timeline as blockers, and the nearest commit is
+chosen before the age limit; a partial rerun must show a passing report with exit 0; the deploy
+writes a `started` record before its suite, so an interrupted attempt blocks older evidence; the
+`.env.local` hashes are the tested worktree's; a failed file may be dropped only if its deletion is
+in the diff, and paths are read NUL-separated. Its verdict: *ship after my fixes*.
+
+One change of mine afterwards, from running the selection against the real store: **a run still
+going no longer decides which commit is nearest.** The readiness loop is mid-run most of the time,
+on a commit newer than its last verdict, and as reviewed that sent the plain deploy at `dev`'s tip
+to the whole suite (*"a run on 033f122d … is still going"*). It still blocks the runs on its own
+commit. A void run stays a blocker: it may have hung because of the code.
+
+**The transition.** Every readiness record written before this lands has no outcome of the new
+version, so neither the exact-commit reuse nor `--ready` can use them; both start working with the
+loop's first green run after the push (~75 minutes once the runner is on the new code). Checked on
+the box at 20:20 BST: `--ready` said *"9fd040df: the passing run has no version-3 outcome"*. Before
+Sol's fix, the same check picked `G = 9fd040df`, walked one commit to `C = 781c53ec` (the notes
+commit) and found nothing to rerun there.
+
 ## Tests, red first
 
 `tests/deploy-partial-evidence.test.ts`, against the pure functions: the outcome classifier (each

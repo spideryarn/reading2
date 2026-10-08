@@ -23,7 +23,7 @@
  */
 import { aboutDevTree, readinessVerdict } from "../tools/fleet/readiness-verdict.js";
 import { PREPARATION_VERSION, type FinishedRecord, type Reading } from "../tools/fleet/readiness.js";
-import { asTestOutcome, RERUN_FILES_MAX, type TestOutcome } from "../tools/fleet/test-outcome.js";
+import { asTestOutcome, RERUN_FILES_MAX, TEST_OUTCOME_VERSION, type TestOutcome } from "../tools/fleet/test-outcome.js";
 import { SUITE_BUILDS } from "./deploy-checks.js";
 
 /**
@@ -161,6 +161,10 @@ function runnerRecordProblem(opts: {
   if (prep.sha !== sha) return `${label}'s preparation is about ${prep.sha.slice(0, 8)}, not ${sha.slice(0, 8)}`;
   if (envLocalSha256 === null) return "this checkout has no .env.local to compare the run's with";
   if (prep.envLocalSha256 !== envLocalSha256) return `.env.local has changed since ${label} read it`;
+  if (record.testOutcomeVersion !== TEST_OUTCOME_VERSION) return `${label} has no version-${TEST_OUTCOME_VERSION} outcome proving completed teardown`;
+  if (testRow === "clean" && record.testOutcome?.kind !== "pass") {
+    return `${label}'s test row is clean but its reporter says ${record.testOutcome == null ? "nothing" : record.testOutcome.kind === "unusable" ? record.testOutcome.why : record.testOutcome.kind}`;
+  }
 
   /* **Every step the deploy's own gate runs before its tests, clean in this
      run's table.** `check.ts` carries on past a failed build, so a clean test
@@ -280,8 +284,8 @@ export function isTestFile(p: string): boolean {
 /**
  * **May the candidate's test gate run only some files, and which?**
  *
- * The newest run on the *nearest* ancestor of the candidate (the candidate
- * itself included) within {@link TEST_EVIDENCE_MAX_AGE_MS} decides, and it must
+ * The newest run on the *nearest* retained ancestor of the candidate (the
+ * candidate itself included) decides before age limits are applied, and it must
  * be a whole-suite run, settled, and — unless it is on the candidate itself —
  * younger than {@link CROSS_COMMIT_MAX_AGE_MS}. Green or red only in files it
  * named, the gate reruns those files and every test file changed since;
@@ -312,16 +316,32 @@ export function partialEvidenceFor(opts: {
   existsAtCandidate: (p: string) => boolean;
 }): PartialEvidence {
   const { sha, runs, nowMs, isAncestor, ancestors, changedSince, existsAtCandidate } = opts;
-  const inWindow = runs.filter((r) => nowMs - r.atMs <= TEST_EVIDENCE_MAX_AGE_MS && isAncestor(r.sha, sha) === true);
-  if (inWindow.length === 0) {
+  const related: FullRun[] = [];
+  for (const r of runs) {
+    const contains = isAncestor(r.sha, sha);
+    if (contains === null) return { kind: "run", why: `git could not place the run on ${r.sha.slice(0, 8)} in the candidate's history` };
+    if (contains) related.push(r);
+  }
+  /* **A run still going says nothing yet**, so it does not decide which
+     commit is nearest: the readiness loop is mid-run most of the time, on a
+     commit newer than its last verdict, and letting that attempt stand in
+     the way would send nearly every deploy to the whole suite (measured
+     against the store on 2026-10-08). It still blocks the runs on its own
+     commit, below — the same-commit rule `testEvidenceFor` applies. A void
+     run is different: it ended without a verdict, possibly by hanging, so it
+     stays on the timeline. */
+  const settled = related.filter((r) => r.running !== true);
+  if (settled.length === 0) {
     return {
       kind: "run",
-      why: `no full run of the suite on ${sha.slice(0, 8)} or an ancestor in the last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h`,
+      why:
+        `no full run of the suite on ${sha.slice(0, 8)} or an ancestor in the last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h` +
+        (related.length > 0 ? " that has finished" : ""),
     };
   }
 
   const depth = new Map<string, number | null>();
-  for (const r of inWindow) if (!depth.has(r.sha)) depth.set(r.sha, ancestors(r.sha));
+  for (const r of settled) if (!depth.has(r.sha)) depth.set(r.sha, ancestors(r.sha));
   if ([...depth.values()].some((d) => d === null)) {
     return { kind: "run", why: "git could not count the history of a commit a run was on" };
   }
@@ -334,11 +354,14 @@ export function partialEvidenceFor(opts: {
     };
   }
   const x = nearestShas[0] as string;
-  const onX = inWindow.filter((r) => r.sha === x).sort((a, b) => b.atMs - a.atMs);
+  if ([...depth.keys()].some((s) => s !== x && isAncestor(s, x) !== true)) {
+    return { kind: "run", why: "runs are on incomparable ancestors, so the nearest run cannot be decided" };
+  }
+  const onX = settled.filter((r) => r.sha === x).sort((a, b) => b.atMs - a.atMs);
   const chosen = onX[0] as FullRun;
-  /* A run that started before another finished sorts behind it, and is still
-     an attempt nobody knows the end of. */
-  const running = onX.find((r) => r.running === true);
+  /* A run on this same commit that has not finished may yet contradict the
+     one chosen, whenever it started. */
+  const running = related.find((r) => r.sha === x && r.running === true);
   if (running !== undefined) {
     return { kind: "run", why: `a run on ${x.slice(0, 8)} (${running.source} ${running.id}) is still going — an unfinished run cannot stand behind a deploy` };
   }
@@ -347,9 +370,12 @@ export function partialEvidenceFor(opts: {
   }
   const label = `the newest run on ${x.slice(0, 8)} (${chosen.source} ${chosen.id})`;
   if (chosen.atMs > nowMs) return { kind: "run", why: `${label} says it finished in the future on this clock` };
+  const age = nowMs - chosen.atMs;
+  if (age > TEST_EVIDENCE_MAX_AGE_MS) {
+    return { kind: "run", why: `no full run in the last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h on the nearest commit: ${label} finished ${hoursAgo(age)}` };
+  }
   if (chosen.refusal !== null) return { kind: "run", why: `${label} cannot stand in: ${chosen.refusal}` };
   if (chosen.outcome.kind === "unusable") return { kind: "run", why: `${label} cannot be rerun in part: ${chosen.outcome.why}` };
-  const age = nowMs - chosen.atMs;
   if (x !== sha && age > CROSS_COMMIT_MAX_AGE_MS) {
     return {
       kind: "run",
@@ -368,6 +394,8 @@ export function partialEvidenceFor(opts: {
   }
 
   const failed = chosen.outcome.kind === "red-in-files" ? chosen.outcome.failed : [];
+  const missing = failed.filter((p) => !existsAtCandidate(p) && !changed.includes(p));
+  if (missing.length > 0) return { kind: "run", why: `failed files are missing without a committed deletion: ${missing.join(" ")}` };
   const files = [...new Set([...failed, ...changed.filter(isTestFile)])].filter(existsAtCandidate).sort();
   if (files.length > RERUN_FILES_MAX) {
     return { kind: "run", why: `${files.length} files to rerun — more than ${RERUN_FILES_MAX}, so the suite in all but name` };
@@ -387,8 +415,7 @@ export function partialEvidenceFor(opts: {
 
 /**
  * The readiness store's runs of the suite, as {@link FullRun}s. A run about no
- * commit (dirty, or the tree moved under it) and a void one are not readings
- * about any commit, so they are left out — the verdict's rule. Everything else
+ * commit (dirty, or the tree moved under it) is left out — the verdict's rule. Everything else
  * that ran the tests on a commit is in, because a newer one can block an older
  * one: a run still going, or a `test` run rather than a full check, arrives
  * with a refusal. A full check that cannot be trusted carries the same clauses
@@ -411,7 +438,13 @@ export function readinessFullRuns(opts: {
       out.push({ ...base, outcome: { kind: "unusable", why: "still running" }, refusal: "it is still running", running: true });
       continue;
     }
-    if (record.state !== "finished" || r.state === "void" || !aboutDevTree(r, sha).ok) continue;
+    /* Check the checkout separately from scope. Narrowed runs cannot stand
+       in, but a newer red in one must still block the older whole run. */
+    if (!aboutDevTree({ ...r, record: { ...record, scope: "full" } }, sha).ok) continue;
+    if (record.state !== "finished" || r.state === "void") {
+      out.push({ ...base, outcome: { kind: "unusable", why: r.why ?? "the run never finished" }, refusal: "it did not reach a verdict" });
+      continue;
+    }
     if (record.check !== "check" || record.scope !== "full") {
       out.push({ ...base, outcome: { kind: "unusable", why: "not a full check" }, refusal: `it is a ${record.scope} \`${record.check}\` run, not a full \`npm run check\`` });
       continue;
@@ -426,9 +459,11 @@ export function readinessFullRuns(opts: {
     let outcome: TestOutcome;
     if (row === "clean") {
       outcome =
-        reported === null || reported.kind === "pass"
-          ? { kind: "pass", files: reported?.files ?? 0 }
-          : { kind: "unusable", why: `its test row is clean but vitest's reporter says ${reported.kind === "unusable" ? reported.why : reported.kind}` };
+        reported === null
+          ? { kind: "unusable", why: "its suite carries no reporter outcome" }
+          : reported.kind === "pass"
+            ? reported
+            : { kind: "unusable", why: `its test row is clean but vitest's reporter says ${reported.kind === "unusable" ? reported.why : reported.kind}` };
     } else if (row === "failed") {
       outcome =
         reported === null
@@ -457,7 +492,7 @@ export type DeployRunTree = { sha: string; clean: boolean; envLocalSha256: strin
  * file on this box can, the readiness store included (GPT Sol on 261008h, P1-9).
  */
 export type DeployRunRecord = {
-  schema: 2;
+  schema: typeof TEST_OUTCOME_VERSION;
   by: "deploy-gate";
   /** Unique per run. */
   runId: string;
@@ -475,6 +510,11 @@ export type DeployRunRecord = {
   outcome: TestOutcome;
 };
 
+/** Written before starting Vitest, then replaced by its finished record. */
+export type DeployRunStartedRecord = Pick<DeployRunRecord, "schema" | "by" | "runId" | "sha" | "root" | "startedAt" | "atStart"> & {
+  state: "started";
+};
+
 /**
  * One deploy record as a {@link FullRun}, or why it cannot be read. Unreadable
  * is the caller's to treat as a refusal of the whole partial path — a record
@@ -487,8 +527,10 @@ export function deployFullRun(text: string, id: string, envLocalSha256: string |
   } catch {
     return { unreadable: `${id} is not JSON` };
   }
+  if (v === null || typeof v !== "object" || Array.isArray(v)) return { unreadable: `${id} is not a deploy test record` };
   const outcome = asTestOutcome(v.outcome);
   const atMs = typeof v.at === "string" ? Date.parse(v.at) : Number.NaN;
+  const startedMs = typeof v.startedAt === "string" ? Date.parse(v.startedAt) : Number.NaN;
   const tree = (t: unknown): DeployRunTree | null => {
     const o = t as Record<string, unknown> | null;
     return typeof o?.sha === "string" && typeof o.clean === "boolean" && (o.envLocalSha256 === null || typeof o.envLocalSha256 === "string")
@@ -498,21 +540,34 @@ export function deployFullRun(text: string, id: string, envLocalSha256: string |
   const atStart = tree(v.atStart);
   const atEnd = tree(v.atEnd);
   if (
-    v.schema !== 2 ||
+    (v.schema !== 2 && v.schema !== TEST_OUTCOME_VERSION) ||
     v.by !== "deploy-gate" ||
     typeof v.runId !== "string" ||
+    v.runId === "" ||
+    typeof v.root !== "string" || !v.root.startsWith("/") ||
+    !Number.isFinite(startedMs) ||
     typeof v.sha !== "string" ||
     !/^[0-9a-f]{40}$/.test(v.sha) ||
-    !Number.isFinite(atMs) ||
-    outcome === null ||
-    atStart === null ||
-    atEnd === null
+    atStart === null
   ) {
     return { unreadable: `${id} is not a deploy test record` };
   }
   const sha = v.sha;
+  if (v.state === "started") {
+    /* This store is read with the deploy mutex held, so a different deploy
+       cannot still be running. Keep interrupted attempts on the timeline;
+       a whole run finishing later may supersede them. */
+    const why = "the deploy started a full suite but never recorded its finish";
+    return { source: "deploy-gate", id: v.runId, sha, atMs: startedMs, outcome: { kind: "unusable", why }, refusal: why };
+  }
+  if ((v.state !== undefined && v.state !== "finished") || !Number.isFinite(atMs) || startedMs > atMs ||
+      (v.exit !== null && (!Number.isInteger(v.exit) || (v.exit as number) < 0)) || outcome === null || atEnd === null) {
+    return { unreadable: `${id} is not a finished deploy test record` };
+  }
   const refusal =
-    atStart.sha !== sha || atEnd.sha !== sha
+    v.schema === 2
+      ? "its outcome predates the protocol proving completed teardown"
+      : atStart.sha !== sha || atEnd.sha !== sha
       ? `its checkout was not on ${sha.slice(0, 8)} at both ends`
       : !atStart.clean || !atEnd.clean
         ? "its checkout was not clean at both ends"
@@ -522,6 +577,8 @@ export function deployFullRun(text: string, id: string, envLocalSha256: string |
             ? "this checkout has no .env.local to compare the run's with"
             : atEnd.envLocalSha256 !== envLocalSha256
               ? ".env.local has changed since that run read it"
+              : outcome.kind !== "unusable" && (v.exit === null || (outcome.kind === "pass") !== (v.exit === 0))
+                ? "its outcome disagrees with its recorded exit"
               : null;
   return { source: "deploy-gate", id: v.runId, sha, atMs, outcome, refusal };
 }

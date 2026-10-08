@@ -1,0 +1,2469 @@
+diff --git a/docs/plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md b/docs/plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md
+new file mode 100644
+index 000000000..c415b437e
+--- /dev/null
++++ b/docs/plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md
+@@ -0,0 +1,234 @@
++# Deploy reruns only the tests that failed, and `--ready` deploys the first commit carrying its notes
++
++Status: built, 2026-10-08. Brief from the Overseer, from Greg's request at ~19:10 BST. GPT Sol's
++plan review ([…-plan-review-sol.md](261008h-plan-review-sol.md)) found four P1s; what each changed
++is in [§ After the plan review](#after-the-plan-review), which overrides the design below where they
++differ.
++
++> It seems as though the deployment is getting more and more kind of slow and brittle. We've made one
++> change that involves deploying from a separate branch with the deployment-ready. I don't know if
++> that's actually ever been tried, but that's one change. Maybe that'll do the job.
++>
++> The other thing is just, it seems as though if a test, a single test fails, does that then require
++> it to run all the tests again? Because that sounds dumb. Could we not just run the test that failed
++> and if that's been fixed, assume it's okay? I'm willing to take that small risk rather rerun the
++> whole test suite every time.
++>
++> If the current deploy is proving problematic, let's try this and the new `deploy --ready` approach.
++>
++> — Greg, 2026-10-08
++
++## What went wrong today
++
++Four deploy attempts on 2026-10-08 each stopped at the `test` gate on one or two reds (a
++clock-dependent test, a 30 s timeout under load in `tests/citation-investigate-route.test.ts`,
++uncompressed plan PNGs, a Help picture the wrong width). Each fix meant a new deploy, and each new
++deploy ran the whole suite again — about an hour — to learn whether the one fixed file now passed.
++The deploy's own test runs are written nowhere the next deploy can read, so it had no choice.
++
++`--ready` ([261007k](261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md)) has never
++deployed anything. **Verified why**, from `~/.fleet-readiness/runs/` and `notesAt`:
++
++1. **Green prepared runs are rare.** Since the loop began stamping its preparation (2026-10-07
++   16:13), it has finished nine `npm run check` runs: one pass (`9fd040df`, 17:02 today), six reds,
++   two voids. Before 17:02 there was nothing for `--ready` to pick.
++2. **The one green commit cannot carry its notes.** `notesAt(9fd040df)` says *"76 commit(s) after
++   91665016 change what a reader sees and no release notes describe them"*. The notes are a commit
++   on top of `dev` (`781c53ec` at 16:53, describing up to `1ca91aa8`; `a7ccdb2b` at 18:27), and a
++   commit the loop tested cannot contain a commit made after it. `--ready` deploys exactly the green
++   commit, so its `changelog` gate refuses it — *"wait for the readiness loop to pass a commit after
++   them"* — and with a full run at 70–90 minutes and only one pass in nine, that wait rarely ends.
++
++Note `781c53ec` itself **contains** `9fd040df` (checked with `git merge-base --is-ancestor`; it is
++its immediate child, adding only the notes), and its notes describe `1ca91aa8`, which `9fd040df`
++contains. The green run finished at 17:02 UTC (18:02 BST); `781c53ec` was committed at 16:53 BST,
++so the commit B would pick was on `dev` about an hour before the run that vouches for it finished.
++The design below would have picked it, subject to the other gates.
++
++## The design
++
++### A. A deploy's test gate may rerun only what failed
++
++**The rule.** Find the newest settled *full* run of the suite on a commit `X` that is an ancestor
++of the candidate `Y` (or `Y` itself) and finished within 24 hours. If that run passed, or failed
++**only in test files it named**, the gate runs just:
++
++- the files that failed at `X` (dropping any `Y` no longer has), and
++- the test files changed in `X..Y` (`git diff --name-only X Y`, matching vitest's include pattern,
++  present at `Y`) — cheap, and catches the obvious hole: a test somebody edited since.
++
++If those pass, the gate passes. It prints which run it reused, its age, the files it re-ran, and
++how many commits `X..Y` holds; the summary's `test:` line says the same. `build`, the tooling
++builds, `fixtures` and `typecheck` always run at `Y`, as today.
++
++**Every other case runs the whole suite and says why**, which is the silent-success clause this
++keeps from 261007k: no run at an ancestor in the window; the nearest one is void-only, or red with
++failures it did not name (an unhandled error, a crashed setup, an interrupted run, an old record);
++its `.env.local` differs from the primary's now; the test infrastructure changed in `X..Y`
++(`package.json`, `package-lock.json`, `vitest.config.ts`, `vitest-admission.ts`, `tests/setup/`,
++`tests/helpers/`, `tests/store-migration-registry.ts`); or the rerun's own report does not show
++every requested file ran and passed (vitest silently ignores a filter that matches nothing —
++measured).
++
++**Nearest, and the newest run there decides.** If the nearest ancestor's newest settled run is
++unusable, the gate does not fall back to an older green one: a red nobody can name, nearer `Y`, may
++be exactly what broke in between.
++
++**Green `X` counts too, not only red.** This is the consequence worth naming. A green run is a red
++run with no failed files; treating it differently would mean a deploy whose last run was red in one
++file reruns one file, while one whose last run was green reruns the whole suite — the weaker
++evidence rewarded. So a plain deploy at `dev`'s tip will usually reuse the readiness loop's latest
++run and rerun only changed test files. That is the risk Greg took — commits in `X..Y` whose
++non-test changes break a test nobody re-ran — at the size the loop's cadence sets it (`X..Y` is
++usually one or two hours of `dev`), and the loop still runs the full suite every ~75 minutes, so
++such a break shows on the Readiness tab within the hour.
++
++**Where the evidence comes from: two sources, one shape.**
++
++- **The deploy's own full runs**, newly recorded: one JSON file per run in
++  `logs/deploy/test-runs/` of the primary (gitignored; pruned after 7 days), with the sha, finish
++  time, exit code, the `.env.local` hash, and the outcome below. Only full runs are recorded; a
++  rerun is reported, not recorded, so evidence never chains.
++- **The readiness loop's `npm run check` runs**, with every per-record clause `testEvidenceFor`
++  already applies (the runner's checkout, the preparation stamp for that sha at the current
++  version with the same `.env.local` hash, clean at both ends, `typecheck` and the suite builds
++  clean in its table) — extracted into one function both paths call, not restated. Plus a new
++  optional `testOutcome` on the record.
++
++Not the readiness store for the deploy's runs: its records drive the Readiness tab's verdict about
++`dev`, and a throwaway worktree's run under `/tmp` is a different kind of claim. A file beside the
++deploy's other logs is one reader, one writer.
++
++**The outcome comes from a vitest reporter, not from scraped text.** Measured with vitest 4.1.11:
++the JSON reporter records a failing `beforeAll` on its file, but an unhandled error appears only in
++the text (`Vitest caught 1 unhandled error`). A ten-line custom reporter,
++`scripts/vitest-outcome-reporter.ts`, receives `onTestRunEnd(modules, unhandledErrors, reason)` and
++writes `{ reason, unhandledErrors, files: [{ path, state }] }` to the path in
++`SPIDERYARN_TEST_OUTCOME_FILE`. From it, one pure function decides:
++
++```
++pass         reason "passed", exit 0, no unhandled errors, ≥ 1 file, every file passed/skipped
++red-in-files reason "failed", exit ≠ 0, no unhandled errors, ≥ 1 failed file, every file
++             passed/skipped/failed (the failed ones are the rerun set)
++unusable     anything else, with why
++```
++
++CLI `--reporter` flags replace the config's (measured), so the deploy names the outcome reporter on
++its command line beside `default` and `json`; the readiness runner's `npm run check` passes no
++reporter flags, so `vitest.config.ts` adds `default` + the outcome reporter when the variable is
++set. The last writer is the outer run (a nested vitest inside a test finishes first), so a nested
++run cannot leave its result as the outer one's.
++
++### B. `--ready` deploys the first commit after the green one that carries its notes
++
++Not the green commit `G` itself — it can never contain its notes — but **the earliest commit `C` on
++`origin/dev` that contains `G` and passes the `changelog` gate** (`notesAt(C).gap === null`),
++walking `git rev-list --reverse --topo-order --ancestry-path G..origin/dev`, `G` itself first. Its
++test gate is A with `X = G`: rerun `G`'s failures (none, when it was green) and the test files
++changed in `G..C`. The deploy prints `G`, `C` and the commits between them.
++
++~~And `G` may now be red-in-files too.~~ Dropped after the plan review (P2-10): `G` stays green-only.
++
++**Today this would have picked `781c53ec` once `9fd040df`'s run finished** (18:02 BST), with that
++green run standing in and nothing to rerun but the test files changed between them (none: the
++commit adds only the notes).
++
++### The simpler option passed over, and the larger one
++
++- **Simpler: only A, and leave `--ready` alone.** A plain deploy at the tip would mostly reuse the
++  loop's run anyway, so `--ready` would add little. Passed over because the brief asks for `--ready`
++  to work, and because it is cheap here: the walk is a loop over `notesAt`, which already exists.
++  What `--ready` then adds is the smallest `X..Y`: the fewest commits shipped that no full run saw.
++- **Simpler: let `changelog:prepare` describe up to the green commit.** Does not help on its own —
++  the notes are still a commit after `G`, so `G` still cannot carry them. Something has to deploy a
++  commit after `G`; B just picks the first one.
++- **Larger: Greg's release branch** — `R = G + a notes-only commit`, pushed to `main` and merged
++  back into `dev` (deployment.md calls it `release/<sha>`). It would ship exactly what the green run
++  saw. Passed over for now: `main` would hold a commit `dev` lacks until a merge lands, which the
++  deploy must do itself from the primary (where it must not run an ordinary merge — other agents'
++  edits live there) or a throwaway worktree, with conflicts in `changelog-pending.json` to handle;
++  and the next deploy's `origin/main` ancestry check refuses every candidate until that merge is on
++  `dev`. B gets `--ready` deploying today with none of that; the branch stays the answer for fixing
++  a release candidate in place, if that need arrives.
++- **Rerun what the import graph says changed** (`vitest list --changed X`). Measured: for the last
++  six commits on `dev` it listed 1,051 of 1,866 test files, because `src/types.ts` and
++  `src/db/schema.ts` reach almost everything. That is a full run in all but name.
++
++## Stages
++
++1. **Outcome.** `scripts/vitest-outcome-reporter.ts`; `vitest.config.ts` adds it under the
++   variable; a pure `testOutcomeFrom(json, exit)` in `scripts/deploy-evidence.ts`. Tests first,
++   against reports built the way the reporter writes them, including the unhandled-error and
++   hook-failure cases.
++2. **Readiness records carry it.** `readiness-run.ts` sets the variable to a fresh path for `test`
++   and `check` runs, reads it after, and puts `testOutcome` on the finished record; the parser
++   reads it strictly (malformed is absent, like `preparation`). Nothing in the tab reads it.
++3. **The deploy's runs are recorded**, and **the partial gate**: `partialEvidenceFor` (pure: runs,
++   ancestry, changed files → `rerun` with files and sentence, or `run` with why), and in
++   `gatesAt` the rerun with the reporter and the "every requested file ran and passed" check.
++   `testEvidenceFor`'s per-record clauses extracted and shared.
++4. **`--ready`'s candidate walk** (`firstCarryingNotes`, pure over an injected `notesGap`) and the
++   red-in-files `G`.
++5. **Docs**: deployment.md § Deploying a commit already known green, overseer.md § Deploying
++   step 5 (no more "wait for a commit after the notes"), readiness.md's line about the record.
++
++A dry run on the box (`npm run deploy -- --dry-run` and `-- --ready --dry-run`) at the end, with
++its gate lines quoted below.
++
++## After the plan review
++
++Sol's verdict was *proceed with changes*. Taken, by finding:
++
++- **P1-5, the report's file is its own.** The reporter takes the path when it is made and deletes
++  the variable before workers start, so a vitest inside a test cannot write it. A real-vitest test
++  proves workers do not see it (and went red when the delete was removed).
++- **P1-6, teardown runs after `onTestRunEnd`** (checked in vitest 4.1.11's `close()`). The report is
++  written `final: false` there and finalised from the process's `exit` handler with the exit code;
++  `tests/setup/private-db-global.ts` marks its own failure with `markFailureOutsideFiles` where it
++  sets `process.exitCode = 1`. A run whose verdict and exit code disagree, or whose report never
++  finalised, is unusable. Both cases have real-vitest tests that went red under mutation.
++- **P1-7, a short report is not a whole run.** The reporter records the filters, shard, project and
++  test-name pattern, and how many specs the unfiltered config collects that did not finish, keyed by
++  project and path. A baseline must be unnarrowed with nothing left out; a rerun must show every
++  requested file *passed* (skipped is not). Measured in the real config: a two-file run reports
++  `notRun: 1866`.
++- **P1-8, the timeline stays.** Readiness `test` runs and running attempts are kept as blockers: a
++  newer one on the nearest commit refuses the older full run. Unreadable records in either store
++  refuse the partial path. The gate re-reads evidence for the commit it deploys, so a nearer
++  unusable run between `G` and `C` sends `--ready` to the whole suite. The test row and the
++  reporter decide, not the check's own exit, so a `cycles` failure does not void a green suite.
++- **P1-9, provenance.** A deploy record carries a run id, the worktree, the sha and cleanliness at
++  both ends, and the `.env.local` hash at both ends. It guards against mistakes; nothing on this box
++  defends against a same-user agent forging one, the readiness store included.
++- **P2-2, B's walk asks all three preflight gates a later commit can fix**: notes, the serving
++  deploy recorded, and `origin/main` contained.
++- **P2-3, green counts, with a leash.** Cross-commit reuse is limited to runs **2 hours** old; the
++  exact-commit reuse keeps 24. What a pass claims is worded "a whole run on X … plus N files here".
++- **P2-4, the harness list** is now every non-test file under `tests/`, plus the root configs,
++  `scripts/db-test-create.ts`, `scripts/corpus-materialise.ts` and the reporter.
++- **P2-10, `--ready` stays green-only.** A red `G` followed by its notes commit and then a fix would
++  have `--ready` pick the notes commit, where the red remains, every time. A plain deploy at the tip
++  already handles that through A.
++- **P2-11** — `tests/vitest-outcome-reporter.test.ts` runs real vitest projects, and the record keeps
++  only the compact judgement (the raw report is ~116 KB; the store's ceiling is 64 KB).
++- **P3-1** — the timing above is corrected.
++
++## Tests, red first
++
++`tests/deploy-partial-evidence.test.ts`, against the pure functions: the outcome classifier (each
++of the three answers, and each way to be unusable); the partial chooser (nearest ancestor wins;
++newest run there decides; an unusable nearest does not fall back; env mismatch; age; future time;
++infra path changed; deleted failed file dropped; changed test files added; exact sha with nothing
++to rerun); the rerun verdict (a requested file missing from the report is a fail); the notes walk
++(first passing commit, `G` itself when it carries notes, none within the cap). The chooser's tests
++were written before it and seen red (33 failing) before it existed.
++
++`tests/vitest-outcome-reporter.test.ts`, against real vitest runs: red in one file, green, a
++failing `beforeAll`, an unhandled error, workers not inheriting the path, a teardown that marks
++itself, a teardown that only sets the exit code, a filtered baseline, a rerun naming a missing
++file, and the reporter named on the command line. Mutations of the reporter — not deleting the
++variable, dropping the marked failures, faking the exit code — each turned exactly its own case red.
++Forcing the filters to empty did not, because `notRun` catches a filtered run independently.
++
++`tests/readiness-preparation.test.ts` now also checks that the real wrapper puts `testOutcome` on
++the finished record.
+diff --git a/docs/plans/261008h-plan-review-prompt.md b/docs/plans/261008h-plan-review-prompt.md
+new file mode 100644
+index 000000000..153179296
+--- /dev/null
++++ b/docs/plans/261008h-plan-review-prompt.md
+@@ -0,0 +1,33 @@
++You are reviewing a plan, read-only. Do not edit files.
++
++The plan: docs/plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md
++
++Context to read: scripts/deploy.ts (gatesAt, chooseReadyCommit, preflight's changelog gate, testGateFailure),
++scripts/deploy-evidence.ts (testEvidenceFor — its silent-success clauses must survive),
++scripts/changelog/release-paths.ts (notesAt), scripts/deploy-checks.ts (changelogGap, failingTestsFromReport),
++tools/fleet/readiness.ts (record shape, parseRunRecord), scripts/readiness-run.ts, vitest.config.ts,
++docs/project/deployment.md § Deploying a commit already known green, docs/project/overseer.md § Deploying,
++docs/plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md, docs/reusable/silent-success.md.
++The readiness store is ~/.fleet-readiness/runs/ on this box; you may read it.
++
++Greg has accepted, in substance, the risk that rerunning only the failed test files misses a break
++elsewhere. The constraints: nothing may claim evidence it does not have (a reused run that is not
++what it claims must fall back to the full suite and say why), and the design should stay simple.
++
++Questions I want answered explicitly:
++1. Is the diagnosis of why --ready never deployed right?
++2. Is B (deploy the earliest commit on origin/dev containing the green commit G whose notes pass)
++   sound? Anything in the changelog gates (changelogGap, servingUnrecorded, `late` commits) or the
++   trunk/main ancestry gates that breaks it?
++3. Should a GREEN ancestor run count for a later commit (the plan says yes, for consistency with red)?
++   Or should partial reuse be limited to red runs, or to a bounded X..Y? Give a recommendation.
++4. Rerun set = failed-at-X files ∪ test files changed in X..Y, full suite if test infrastructure
++   changed. Is the infra list right? Anything cheap and sound to add?
++5. The outcome reporter approach (custom vitest reporter via env var; CLI --reporter overrides config
++   reporters) — holes? Nested vitest runs, workers, projects, interrupted runs, files filtered out.
++6. Any way the new evidence could be stale, spoofed by an ordinary agent mistake, or about a different
++   tree than claimed (e.g. deploy-gate records under logs/deploy/, which any agent could write)?
++7. Anything simpler that gets the same result.
++
++Answer with numbered findings, each P1/P2/P3, each with the concrete failure and the fix. End with a
++one-line verdict: "VERDICT: proceed", "VERDICT: proceed with changes", or "VERDICT: rethink".
+diff --git a/docs/project/deployment.md b/docs/project/deployment.md
+index 1fcc50b0b..dffc8f19b 100644
+--- a/docs/project/deployment.md
++++ b/docs/project/deployment.md
+@@ -196,7 +196,7 @@ the remote box took production migrations over
+ | | |
+ |---|---|
+ | `npm run deploy` | the whole thing |
+-| `-- --ready` | deploy **the newest commit on `origin/dev` the readiness loop saw green**, not `HEAD` — [§ Deploying a commit already known green](#deploying-a-commit-already-known-green). Combines with `--dry-run` |
++| `-- --ready` | deploy from **the newest commit on `origin/dev` the readiness loop saw green**, not `HEAD`: the first commit from it that carries its release notes — [§ Deploying a commit already known green](#deploying-a-commit-already-known-green). Combines with `--dry-run` |
+ | `-- --dry-run` | every local gate, nothing external. Nothing pushed, no migration applied |
+ | `-- --verify-only` | check what is live right now, deploy nothing |
+ | `-- --force-gate=test` | named, never blanket, and printed in the summary as `DEPLOYED WITH … FORCED` |
+@@ -248,8 +248,15 @@ on `dev` got found, one per hour. The [readiness loop](readiness.md) had already
+ on most of those commits. Since 2026-10-07 the deploy reads what it found
+ ([261007k](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md)):
+ 
+-- **`--ready` picks the commit.** The newest commit on `origin/dev` whose test gate the readiness
+-  store already proves, and it stops if there is none rather than falling back to the tip. Its trunk
++- **`--ready` picks the commit.** The newest commit `G` on `origin/dev` whose test gate the
++  readiness store already proves, and it stops if there is none rather than falling back to the tip.
++  It then deploys **the first commit from `G` that the preflight would pass**: one carrying release
++  notes that cover it, recording the deploy now serving, and containing `origin/main`. `G` itself
++  usually cannot, because the notes are committed after it was tested; until 2026-10-08 `--ready`
++  insisted on `G` and so never deployed anything
++  ([261008h](../plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md)).
++  The test gate then reruns the test files changed between them
++  ([§ The test gate reruns only what failed](#the-test-gate-reruns-only-what-failed)). Its trunk
+   gate is `in origin/dev` (an ancestor, so it was pushed) instead of `level with origin/dev`; the
+   commits on `dev` after it are named and left for the next deploy.
+ - **The `test` gate may be reused, in any mode.** When the store proves *this* sha, the gate prints
+@@ -282,14 +289,48 @@ branch:   dev ──●──●──●──●──►            --ready:
+                   release ──fix──fix──► deploy               └──► deploy ✓, tests reused
+ ```
+ 
+-What `--ready` adds is that it never deploys a commit nobody has tested, which was the whole of
+-2026-10-07's five failed attempts. What it lacks is somewhere to fix forward: a red on the candidate
+-is fixed on `dev`, and the deploy waits for the loop to pass a later commit. That wait is its
+-weakness. A full run is 80–90 minutes, the loop skips while the box swaps, and on 2026-10-07 a stale
+-local migration-ledger row stopped it for an evening, so on a busy day there may be no green commit
+-for hours. Not built, for that case: the `release/<sha>` branch for fixing a candidate in place —
+-[261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief).
+-Build it the first time `--ready` waits too long or a release needs a fix of its own.
++What `--ready` adds is that it never deploys far from a commit somebody has tested, which was the
++whole of 2026-10-07's five failed attempts. Its weakness is that green runs are rare on a busy day
++(one in nine on 2026-10-07/08), so there may be no `G` for hours; then a plain deploy, with the
++rerun below, is the way to ship. Still not built: the `release/<sha>` branch for fixing a candidate
++in place —
++[261007k § Not built](../plans/261007k-deploy-a-commit-the-readiness-loop-already-saw-green.md#not-built-a-release-branch-for-fixes-gregs-branch-idea-item-4-of-the-brief),
++and why it was passed over again in
++[261008h](../plans/261008h-deploy-reruns-only-the-tests-that-failed-and-ready-deploys-the-first-commit-carrying-its-notes.md#the-simpler-option-passed-over-and-the-larger-one).
++
++### The test gate reruns only what failed
++
++> The other thing is just, it seems as though if a test, a single test fails, does that then require
++> it to run all the tests again? Because that sounds dumb. Could we not just run the test that failed
++> and if that's been fixed, assume it's okay? I'm willing to take that small risk rather rerun the
++> whole test suite every time.
++>
++> — Greg, 2026-10-08
++
++Since 2026-10-08, when nothing can stand in for the exact commit, the gate looks for **the newest
++whole-suite run on the nearest ancestor** — the deploy's own earlier runs, kept in
++`logs/deploy/test-runs/` of the primary, or the readiness loop's — and if that run was green, or red
++only in files it named, it runs just **those files plus the test files changed since**. If they pass,
++the gate passes and says `ok test — a whole run on <sha> by <who>, <age>, … plus N file(s) here`. If
++they fail, the gate is red with their names; fix them and deploy again, and the next deploy reruns
++them again from the same run. So a red gate costs one fix and a few minutes, not another hour.
++
++Everything else runs the whole suite and the line before it says why. The clauses are
++`partialEvidenceFor` and `readinessFullRuns` in
++[`scripts/deploy-evidence.ts`](../../scripts/deploy-evidence.ts), and the judgement on vitest's own
++report is [`tools/fleet/test-outcome.ts`](../../tools/fleet/test-outcome.ts); the ones worth knowing:
++the run must be at most **2 hours old** when it answers for a different commit (24 for its own); the
++nearest run decides, and a nearer one that cannot be used never falls back to an older one that can;
++a red that belongs to no file — an unhandled error, a failing teardown, a run that did not cover the
++whole suite — cannot be rerun in part; and a change to the harness since (anything under `tests/`
++that is not a test, `vitest.config.ts`, the lockfile …) means the whole suite.
++
++**What a pass claims** is "a whole run at that commit, plus these files here" — never that the suite
++passed at the commit deployed. The risk Greg took is a change since the run that breaks a test
++nobody reran; the readiness loop's next full run is what catches it. The failing files come from
++[`scripts/vitest-outcome-reporter.ts`](../../scripts/vitest-outcome-reporter.ts), not from vitest's
++JSON or its text, because only a reporter is told about unhandled errors, and only one that waits
++for the process to exit sees a teardown fail.
+ 
+ ### The gate needs both halves of the artefact store
+ 
+diff --git a/docs/project/overseer.md b/docs/project/overseer.md
+index a0f9c9d9c..9b19b192a 100644
+--- a/docs/project/overseer.md
++++ b/docs/project/overseer.md
+@@ -581,17 +581,19 @@ Every few hours, as a tmux loop like the feedback sweep's:
+    `scripts/tmux-job.ts`, logging to a file
+    ([deployment.md § Deploying a commit already known green](deployment.md#deploying-a-commit-already-known-green);
+    since 2026-10-07). It picks the newest commit on `origin/dev` whose full check the loop ran
+-   green and stamped, reuses that run for the `test` gate instead of an hour of suite, and leaves
+-   later `dev` commits for the next deploy. The notes from step 3 have to be **inside** that
+-   commit, so after `prepare` wait for the loop to pass a commit after the notes commit — the
+-   Readiness tab shows when; the `changelog` gate says so if you go early. If `--ready` finds no
+-   green commit, `dev` is red: get it fixed on `dev` (dispatch, as for any red) rather than
+-   forcing. **A readiness red that repeats on a second run is fixed that hour**, because until it
++   green and stamped, then deploys the first commit from it that carries the notes from step 3
++   (since 2026-10-08 — there is no waiting for a green run after the notes), reruns only the test
++   files changed in between, and leaves later `dev` commits for the next deploy. If `--ready` finds
++   no green commit, `dev` is red: get it fixed on `dev` (dispatch, as for any red), then deploy the
++   tip plainly — **after a red `test` gate, fix the named files and deploy again: the next deploy
++   reruns only those files and the tests changed since**, not the whole suite
++   ([deployment.md § The test gate reruns only what failed](deployment.md#the-test-gate-reruns-only-what-failed)). **A readiness red that repeats on a second run is fixed that hour**, because until it
+    is, nothing can deploy: on 2026-10-08 one clock-dependent test failed five runs in a row from
+    02:00, nobody acted on it, and production went 17 hours without a deploy while `dev` gathered
+-   41 commits. Greg: *"Why haven't there been any deploys in 17h?"* Plain `npm run deploy` still deploys the tip and runs the suite itself — use it when a
+-   fix cannot wait for the loop. Either way the summary's `test:` line says whether the suite ran
+-   or a readiness run stood in for it; quote it in the report. It applies the migrations by
++   41 commits. Greg: *"Why haven't there been any deploys in 17h?"* Plain `npm run deploy` deploys the tip, and runs the
++   whole suite itself only when no recent run can stand in — use it when a fix cannot wait for the
++   loop. Either way the summary's `test:` line says whether the suite ran, a readiness run stood in
++   for it, or which files were rerun on the strength of which run; quote it in the report. It applies the migrations by
+    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
+    release's; say which tests in the report. `--force-gate=changelog` only for a fix that cannot wait
+    for the notes; say so in the report. If a plain deploy fails only because `dev` moved during the
+diff --git a/docs/project/readiness.md b/docs/project/readiness.md
+index 1c6b07d57..facb692ca 100644
+--- a/docs/project/readiness.md
++++ b/docs/project/readiness.md
+@@ -84,6 +84,14 @@ is a stricter reader than the tab, and it changed three things here:
+ **The loop has to be restarted to pick this up**: it loads its code once, at start, from the runner
+ checkout. Restart it between checks, when the runner's log says it is idle.
+ 
++Since 2026-10-08 a `test` or `check` record also carries **`testOutcome`**: vitest's own verdict on
++the suite inside the run — green, red only in the files it names, or no use, and why — written by
++[`scripts/vitest-outcome-reporter.ts`](../../scripts/vitest-outcome-reporter.ts), which the wrapper
++switches on with `SPIDERYARN_TEST_OUTCOME_FILE`. A later deploy reruns only those files
++([deployment.md § The test gate reruns only what failed](deployment.md#the-test-gate-reruns-only-what-failed)).
++Unlike `failedTestFiles` it does not come from matching text, and the tab does not read it. The
++wrapper is spawned from the runner checkout at the commit under test, so this needed no restart.
++
+ ## Which test files failed
+ 
+ A failed run's record names the test files that failed, and the tab has a **Failing test files**
+@@ -133,7 +141,8 @@ is the one drawn — a failure is never hidden behind a pass.
+ | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
+ | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
+ | `tools/fleet/web/src/readiness-client.ts` | the browser's parser of `/api/readiness`, and its types (the `durationMs` the panel draws) |
+-| `scripts/deploy-evidence.ts` | the deploy's reader: whether a run proves a commit's `test` gate, and which green commit `--ready` picks |
++| `scripts/deploy-evidence.ts` | the deploy's reader: whether a run proves a commit's `test` gate, which files a later commit must rerun, and which green commit `--ready` picks |
++| `tools/fleet/test-outcome.ts` | the judgement on what the outcome reporter wrote, shared by the record and the deploy |
+ | `tools/fleet/web/src/ReadinessPanel.tsx` | the dashboard tab: `useReadinessView` fetches on mount and on Refresh, then polls in a second effect at the server's own `refreshMs` (clamped 15s–10min) |
+ 
+ Tests, in `tests/`: [`fleet-readiness.test.ts`](../../tests/fleet-readiness.test.ts) (records, verdict,
+diff --git a/scripts/deploy-evidence.ts b/scripts/deploy-evidence.ts
+index ebb0b064f..99922a420 100644
+--- a/scripts/deploy-evidence.ts
++++ b/scripts/deploy-evidence.ts
+@@ -23,6 +23,7 @@
+  */
+ import { aboutDevTree, readinessVerdict } from "../tools/fleet/readiness-verdict.js";
+ import { PREPARATION_VERSION, type FinishedRecord, type Reading } from "../tools/fleet/readiness.js";
++import { asTestOutcome, RERUN_FILES_MAX, type TestOutcome } from "../tools/fleet/test-outcome.js";
+ import { SUITE_BUILDS } from "./deploy-checks.js";
+ 
+ /**
+@@ -101,21 +102,49 @@ export function testEvidenceFor(opts: {
+   if (testReadings.some((r) => r.record !== record && r.atMs === Date.parse(record.at))) {
+     return { kind: "run", why: "multiple test/check records share the passing run's timestamp, so its preparation evidence is ambiguous" };
+   }
++  const problem = runnerRecordProblem({ record, sha, runnerCwd, envLocalSha256, testRow: "clean", nowMs, label: "the passing run" });
++  if (problem !== null) return { kind: "run", why: problem };
++  const age = nowMs - Date.parse(record.at);
++
++  const minutes = record.durationMs === null ? "" : `, ${Math.round(record.durationMs / 60_000)}m`;
++  return {
++    kind: "reuse",
++    record,
++    sentence:
++      `reused readiness run ${record.runId} (npm run check in the readiness runner, finished ` +
++      `${record.at} — ${hoursAgo(age)}${minutes}): test and typecheck clean on ${sha.slice(0, 8)}`,
++  };
++}
++
++/**
++ * **Why one readiness run cannot stand behind a deploy's test gate**, or null
++ * when it can — the clauses about the run itself, shared by the exact-commit
++ * reuse above and the partial one below ({@link readinessFullRun}), so neither
++ * restates them. Which run to ask about is the caller's question.
++ */
++function runnerRecordProblem(opts: {
++  record: FinishedRecord;
++  sha: string;
++  runnerCwd: string;
++  envLocalSha256: string | null;
++  /** What the `test` row must say: `clean`, or either for a run whose failures a rerun repeats. */
++  testRow: "clean" | "clean-or-failed";
++  nowMs: number;
++  /** "the passing run", "the run" — for the sentences. */
++  label: string;
++}): string | null {
++  const { record, sha, runnerCwd, envLocalSha256, testRow, nowMs, label } = opts;
+   if (record.check !== "check") {
+-    return {
+-      kind: "run",
+-      why:
+-        `the newest pass for test is a \`${record.check}\` run, not a full \`npm run check\` — ` +
+-        "only the check runs the builds the suite reads, in the order the deploy does",
+-    };
++    return (
++      `${label} is a \`${record.check}\` run, not a full \`npm run check\` — ` +
++      "only the check runs the builds the suite reads, in the order the deploy does"
++    );
+   }
+   if (record.cwd !== runnerCwd) {
+-    return {
+-      kind: "run",
+-      why:
+-        `the newest pass for test ran in ${record.cwd}, not in the readiness runner (${runnerCwd}) — ` +
+-        "another checkout's .env.local, node_modules and corpus are whatever was left there",
+-    };
++    return (
++      `${label} ran in ${record.cwd}, not in the readiness runner (${runnerCwd}) — ` +
++      "another checkout's .env.local, node_modules and corpus are whatever was left there"
++    );
+   }
+   /* **The loop's own statement that it prepared this checkout at this sha.**
+      The directory alone is not that: a record from before the corpus refresh
+@@ -123,24 +152,15 @@ export function testEvidenceFor(opts: {
+      runner, has the right cwd and none of the preparation (GPT Sol, P1-1). */
+   const prep = record.preparation ?? null;
+   if (prep === null) {
+-    return {
+-      kind: "run",
+-      why: "the passing run carries no preparation stamp from the readiness loop (a hand run, or one from before 2026-10-07)",
+-    };
++    return `${label} carries no preparation stamp from the readiness loop (a hand run, or one from before 2026-10-07)`;
+   }
+   if (prep.version !== PREPARATION_VERSION) {
+-    return { kind: "run", why: `the passing run was prepared the version-${prep.version} way, not version ${PREPARATION_VERSION}` };
+-  }
+-  if (prep.envLocalVerified !== true) {
+-    return { kind: "run", why: "the wrapper did not verify the prepared .env.local at both ends of this run" };
+-  }
+-  if (prep.sha !== sha) {
+-    return { kind: "run", why: `the passing run's preparation is about ${prep.sha.slice(0, 8)}, not this commit` };
+-  }
+-  if (envLocalSha256 === null) return { kind: "run", why: "this checkout has no .env.local to compare the run's with" };
+-  if (prep.envLocalSha256 !== envLocalSha256) {
+-    return { kind: "run", why: ".env.local has changed since the passing run read it" };
++    return `${label} was prepared the version-${prep.version} way, not version ${PREPARATION_VERSION}`;
+   }
++  if (prep.envLocalVerified !== true) return "the wrapper did not verify the prepared .env.local at both ends of this run";
++  if (prep.sha !== sha) return `${label}'s preparation is about ${prep.sha.slice(0, 8)}, not ${sha.slice(0, 8)}`;
++  if (envLocalSha256 === null) return "this checkout has no .env.local to compare the run's with";
++  if (prep.envLocalSha256 !== envLocalSha256) return `.env.local has changed since ${label} read it`;
+ 
+   /* **Every step the deploy's own gate runs before its tests, clean in this
+      run's table.** `check.ts` carries on past a failed build, so a clean test
+@@ -150,34 +170,20 @@ export function testEvidenceFor(opts: {
+   const rows = record.counts.kind === "check" ? record.counts.steps : [];
+   for (const step of ["typecheck", ...SUITE_BUILDS, "test"]) {
+     const found = rows.filter((r) => r.name === step);
+-    if (found.length === 0) return { kind: "run", why: `the passing run's summary has no \`${step}\` row` };
+-    const notClean = found.find((r) => r.verdict !== "clean");
+-    if (notClean !== undefined) return { kind: "run", why: `\`${step}\` was ${notClean.verdict} in the passing run` };
++    if (found.length === 0) return `${label}'s summary has no \`${step}\` row`;
++    const allowed = step === "test" && testRow === "clean-or-failed" ? ["clean", "failed"] : ["clean"];
++    const bad = found.find((r) => !allowed.includes(r.verdict));
++    if (bad !== undefined) return `\`${step}\` was ${bad.verdict} in ${label}`;
+   }
+ 
+   const atMs = Date.parse(record.at);
+-  if (!Number.isFinite(atMs)) return { kind: "run", why: `the run's finish time '${record.at}' does not parse` };
+-  if (atMs > nowMs) {
+-    return { kind: "run", why: `the run says it finished at ${record.at}, which is in the future on this clock` };
+-  }
++  if (!Number.isFinite(atMs)) return `${label}'s finish time '${record.at}' does not parse`;
++  if (atMs > nowMs) return `${label} says it finished at ${record.at}, which is in the future on this clock`;
+   const age = nowMs - atMs;
+   if (age > TEST_EVIDENCE_MAX_AGE_MS) {
+-    return {
+-      kind: "run",
+-      why:
+-        `the passing run finished ${hoursAgo(age)}, older than the ` +
+-        `${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h a reused test gate may be`,
+-    };
++    return `${label} finished ${hoursAgo(age)}, older than the ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h a reused test gate may be`;
+   }
+-
+-  const minutes = record.durationMs === null ? "" : `, ${Math.round(record.durationMs / 60_000)}m`;
+-  return {
+-    kind: "reuse",
+-    record,
+-    sentence:
+-      `reused readiness run ${record.runId} (npm run check in the readiness runner, finished ` +
+-      `${record.at} — ${hoursAgo(age)}${minutes}): test and typecheck clean on ${sha.slice(0, 8)}`,
+-  };
++  return null;
+ }
+ 
+ /**
+@@ -195,6 +201,358 @@ function whyUnknown(verdictWhy: string, readings: readonly Reading[], sha: strin
+   return about.ok ? verdictWhy : `${verdictWhy} — the newest run on it (${onSha.record.runId}) does not count: ${about.why}`;
+ }
+ 
++/* ------------------------------------------------------------------ */
++/* Rerunning only what failed — docs/plans/261008h                     */
++/* ------------------------------------------------------------------ */
++
++/**
++ * One full run of the suite on one commit, from either place that keeps them:
++ * the deploy's own test gate (`logs/deploy/test-runs/`) or the readiness loop's
++ * `npm run check`. Built by {@link readinessFullRuns} and the deploy's reader of
++ * its own records; judged by {@link partialEvidenceFor}.
++ */
++export type FullRun = {
++  source: "deploy-gate" | "readiness";
++  /** The readiness run id, or the deploy record's file name. */
++  id: string;
++  sha: string;
++  /** When it finished. */
++  atMs: number;
++  /** What the suite showed, as far as a rerun goes. */
++  outcome: TestOutcome;
++  /** Why this run cannot stand in at all, whatever its outcome — or null. */
++  refusal: string | null;
++  /** Started and not finished; `atMs` is its start. Blocks every run on its commit. */
++  running?: true;
++};
++
++export type PartialEvidence =
++  | {
++      kind: "rerun";
++      from: FullRun;
++      /** The test files to run at the candidate, sorted. Empty: nothing to rerun. */
++      files: string[];
++      /** One line for the gate and the summary. */
++      sentence: string;
++    }
++  | { kind: "run"; why: string };
++
++/**
++ * How old the run may be when it answers for a **different** commit. The
++ * exact-commit reuse keeps {@link TEST_EVIDENCE_MAX_AGE_MS}; a run standing in
++ * for later commits it never saw is held to a much shorter leash, so the
++ * changes it did not test are hours of `dev`, not a day of it (GPT Sol on
++ * 261008h, P2-3).
++ */
++export const CROSS_COMMIT_MAX_AGE_MS = 2 * 60 * 60 * 1000;
++
++/**
++ * **Files whose change can alter a test's result without being a test**: what
++ * the suite is run with rather than what it tests. A change here since the run
++ * means the whole suite, because rerunning the failed files would answer a
++ * question about a different harness. Every file under `tests/` that is not
++ * itself a test is in — fixtures, helpers, setup, snapshots — which is cruder
++ * than listing them and cannot go stale (GPT Sol on 261008h, P2-4).
++ */
++const TEST_INFRASTRUCTURE = [
++  "package.json",
++  "package-lock.json",
++  ".npmrc",
++  "vitest.config.ts",
++  "vitest-admission.ts",
++  "admission-journal.ts",
++  "tsconfig.json",
++  "tsconfig.base.json",
++  "scripts/vitest-outcome-reporter.ts",
++  "scripts/db-test-create.ts",
++  "scripts/corpus-materialise.ts",
++];
++
++export function isTestInfrastructure(p: string): boolean {
++  return TEST_INFRASTRUCTURE.includes(p) || (p.startsWith("tests/") && !isTestFile(p));
++}
++
++/** A file vitest would collect: the include pattern in `vitest.config.ts`. */
++export function isTestFile(p: string): boolean {
++  return /^tests\/.+\.test\.tsx?$/.test(p);
++}
++
++/**
++ * **May the candidate's test gate run only some files, and which?**
++ *
++ * The newest run on the *nearest* ancestor of the candidate (the candidate
++ * itself included) within {@link TEST_EVIDENCE_MAX_AGE_MS} decides, and it must
++ * be a whole-suite run, settled, and — unless it is on the candidate itself —
++ * younger than {@link CROSS_COMMIT_MAX_AGE_MS}. Green or red only in files it
++ * named, the gate reruns those files and every test file changed since;
++ * anything else is `run`, the whole suite, with the reason. A nearer run that
++ * cannot be used does not fall back to an older one that can: whatever made it
++ * unusable may be what changed in between. A newer attempt on the same commit
++ * that is still going, or was not a whole-suite run, blocks the older one the
++ * same way (its `refusal` says so) — the timeline `testEvidenceFor` reads
++ * through `readinessVerdict`, kept here (GPT Sol on 261008h, P1-8).
++ *
++ * What a pass here claims is "a whole run at X, and these files at the
++ * candidate" — never that the suite passed at the candidate. The risk taken is
++ * Greg's (2026-10-08, the plan's header): a change since the run that breaks a
++ * test nobody reruns. The readiness loop's next full run is what catches it.
++ */
++export function partialEvidenceFor(opts: {
++  /** The candidate. */
++  sha: string;
++  runs: readonly FullRun[];
++  nowMs: number;
++  /** Is `a` an ancestor of (or equal to) `b`? null when git could not say. */
++  isAncestor: (a: string, b: string) => boolean | null;
++  /** `git rev-list --count <sha>`, or null. */
++  ancestors: (sha: string) => number | null;
++  /** `git diff --name-only <x> <candidate>`, or null when git could not say. */
++  changedSince: (x: string) => string[] | null;
++  /** Does the candidate have this path? */
++  existsAtCandidate: (p: string) => boolean;
++}): PartialEvidence {
++  const { sha, runs, nowMs, isAncestor, ancestors, changedSince, existsAtCandidate } = opts;
++  const inWindow = runs.filter((r) => nowMs - r.atMs <= TEST_EVIDENCE_MAX_AGE_MS && isAncestor(r.sha, sha) === true);
++  if (inWindow.length === 0) {
++    return {
++      kind: "run",
++      why: `no full run of the suite on ${sha.slice(0, 8)} or an ancestor in the last ${TEST_EVIDENCE_MAX_AGE_MS / 3_600_000}h`,
++    };
++  }
++
++  const depth = new Map<string, number | null>();
++  for (const r of inWindow) if (!depth.has(r.sha)) depth.set(r.sha, ancestors(r.sha));
++  if ([...depth.values()].some((d) => d === null)) {
++    return { kind: "run", why: "git could not count the history of a commit a run was on" };
++  }
++  const deepest = Math.max(...[...depth.values()].map((d) => d ?? 0));
++  const nearestShas = [...depth.entries()].filter(([, d]) => d === deepest).map(([s]) => s);
++  if (nearestShas.length !== 1) {
++    return {
++      kind: "run",
++      why: `${nearestShas.map((s) => s.slice(0, 8)).join(" and ")} are equally near, so which run decides cannot be said`,
++    };
++  }
++  const x = nearestShas[0] as string;
++  const onX = inWindow.filter((r) => r.sha === x).sort((a, b) => b.atMs - a.atMs);
++  const chosen = onX[0] as FullRun;
++  /* A run that started before another finished sorts behind it, and is still
++     an attempt nobody knows the end of. */
++  const running = onX.find((r) => r.running === true);
++  if (running !== undefined) {
++    return { kind: "run", why: `a run on ${x.slice(0, 8)} (${running.source} ${running.id}) is still going — an unfinished run cannot stand behind a deploy` };
++  }
++  if (onX.some((r) => r !== chosen && r.atMs === chosen.atMs)) {
++    return { kind: "run", why: `two runs on ${x.slice(0, 8)} share one instant, so which decides cannot be said` };
++  }
++  const label = `the newest run on ${x.slice(0, 8)} (${chosen.source} ${chosen.id})`;
++  if (chosen.atMs > nowMs) return { kind: "run", why: `${label} says it finished in the future on this clock` };
++  if (chosen.refusal !== null) return { kind: "run", why: `${label} cannot stand in: ${chosen.refusal}` };
++  if (chosen.outcome.kind === "unusable") return { kind: "run", why: `${label} cannot be rerun in part: ${chosen.outcome.why}` };
++  const age = nowMs - chosen.atMs;
++  if (x !== sha && age > CROSS_COMMIT_MAX_AGE_MS) {
++    return {
++      kind: "run",
++      why: `${label} finished ${hoursAgo(age)}; a run on another commit may stand in for ${CROSS_COMMIT_MAX_AGE_MS / 3_600_000}h at most`,
++    };
++  }
++
++  const changed = x === sha ? [] : changedSince(x);
++  if (changed === null) return { kind: "run", why: `git could not list what changed between ${x.slice(0, 8)} and ${sha.slice(0, 8)}` };
++  const infra = changed.filter(isTestInfrastructure);
++  if (infra.length > 0) {
++    return {
++      kind: "run",
++      why: `the test harness changed since ${x.slice(0, 8)} (${infra.slice(0, 4).join(", ")}${infra.length > 4 ? " …" : ""})`,
++    };
++  }
++
++  const failed = chosen.outcome.kind === "red-in-files" ? chosen.outcome.failed : [];
++  const files = [...new Set([...failed, ...changed.filter(isTestFile)])].filter(existsAtCandidate).sort();
++  if (files.length > RERUN_FILES_MAX) {
++    return { kind: "run", why: `${files.length} files to rerun — more than ${RERUN_FILES_MAX}, so the suite in all but name` };
++  }
++
++  const was = chosen.outcome.kind === "pass" ? "green" : `red only in ${failed.join(" ")}`;
++  const on = x === sha ? `this commit` : `${x.slice(0, 8)} (${changed.length} file(s) changed since)`;
++  return {
++    kind: "rerun",
++    from: chosen,
++    files,
++    sentence:
++      `a whole run on ${on} by ${chosen.source} ${chosen.id}, ${hoursAgo(age)}, ${was} — ` +
++      (files.length === 0 ? "nothing to rerun here" : `plus ${files.length} file(s) here: ${files.join(" ")}`),
++  };
++}
++
++/**
++ * The readiness store's runs of the suite, as {@link FullRun}s. A run about no
++ * commit (dirty, or the tree moved under it) and a void one are not readings
++ * about any commit, so they are left out — the verdict's rule. Everything else
++ * that ran the tests on a commit is in, because a newer one can block an older
++ * one: a run still going, or a `test` run rather than a full check, arrives
++ * with a refusal. A full check that cannot be trusted carries the same clauses
++ * the exact-commit reuse applies ({@link runnerRecordProblem}).
++ */
++export function readinessFullRuns(opts: {
++  readings: readonly Reading[];
++  runnerCwd: string;
++  envLocalSha256: string | null;
++  nowMs: number;
++}): FullRun[] {
++  const out: FullRun[] = [];
++  for (const r of opts.readings) {
++    const record = r.record;
++    if (record.source !== "wrapper" || (record.check !== "check" && record.check !== "test")) continue;
++    if (record.treeAtStart.kind !== "known") continue;
++    const sha = record.treeAtStart.sha;
++    const base = { source: "readiness" as const, id: record.runId, sha, atMs: r.atMs };
++    if (r.state === "running") {
++      out.push({ ...base, outcome: { kind: "unusable", why: "still running" }, refusal: "it is still running", running: true });
++      continue;
++    }
++    if (record.state !== "finished" || r.state === "void" || !aboutDevTree(r, sha).ok) continue;
++    if (record.check !== "check" || record.scope !== "full") {
++      out.push({ ...base, outcome: { kind: "unusable", why: "not a full check" }, refusal: `it is a ${record.scope} \`${record.check}\` run, not a full \`npm run check\`` });
++      continue;
++    }
++    const label = `readiness run ${record.runId}`;
++    const refusal = runnerRecordProblem({ ...opts, record, sha, testRow: "clean-or-failed", label });
++    /* The test row and the reporter, not the record's own outcome: a full
++       check fails for its other gates too, and those are not the test gate's
++       business (GPT Sol on 261008h, P1-8). */
++    const row = record.counts.kind === "check" ? record.counts.steps.find((s) => s.name === "test")?.verdict : undefined;
++    const reported = record.testOutcome ?? null;
++    let outcome: TestOutcome;
++    if (row === "clean") {
++      outcome =
++        reported === null || reported.kind === "pass"
++          ? { kind: "pass", files: reported?.files ?? 0 }
++          : { kind: "unusable", why: `its test row is clean but vitest's reporter says ${reported.kind === "unusable" ? reported.why : reported.kind}` };
++    } else if (row === "failed") {
++      outcome =
++        reported === null
++          ? { kind: "unusable", why: "its suite failed, and it carries no reporter outcome naming the files (a run from before 2026-10-08)" }
++          : reported.kind === "pass"
++            ? { kind: "unusable", why: "its test row failed but vitest's reporter says passed" }
++            : reported;
++    } else {
++      outcome = { kind: "unusable", why: `its test row is ${row ?? "missing"}` };
++    }
++    out.push({ ...base, outcome, refusal });
++  }
++  return out;
++}
++
++/** One end of a deploy test run's checkout. */
++export type DeployRunTree = { sha: string; clean: boolean; envLocalSha256: string | null };
++
++/**
++ * What the deploy writes after running the whole suite itself, one file per
++ * run in `logs/deploy/test-runs/` of the primary, so the next deploy can rerun
++ * only what failed. Only whole-suite runs are written: a rerun is reported and
++ * not recorded, so evidence never chains from one partial run to the next.
++ *
++ * It guards against mistakes, not against a same-user agent forging one — no
++ * file on this box can, the readiness store included (GPT Sol on 261008h, P1-9).
++ */
++export type DeployRunRecord = {
++  schema: 2;
++  by: "deploy-gate";
++  /** Unique per run. */
++  runId: string;
++  sha: string;
++  /** The throwaway worktree it ran in. */
++  root: string;
++  startedAt: string;
++  /** When it finished. */
++  at: string;
++  /** vitest's exit status; null when it had none. */
++  exit: number | null;
++  atStart: DeployRunTree;
++  atEnd: DeployRunTree;
++  /** Already checked against `exit` when written ({@link agreeingWithExit}). */
++  outcome: TestOutcome;
++};
++
++/**
++ * One deploy record as a {@link FullRun}, or why it cannot be read. Unreadable
++ * is the caller's to treat as a refusal of the whole partial path — a record
++ * that would not parse could be the nearest red.
++ */
++export function deployFullRun(text: string, id: string, envLocalSha256: string | null): FullRun | { unreadable: string } {
++  let v: Record<string, unknown>;
++  try {
++    v = JSON.parse(text) as Record<string, unknown>;
++  } catch {
++    return { unreadable: `${id} is not JSON` };
++  }
++  const outcome = asTestOutcome(v.outcome);
++  const atMs = typeof v.at === "string" ? Date.parse(v.at) : Number.NaN;
++  const tree = (t: unknown): DeployRunTree | null => {
++    const o = t as Record<string, unknown> | null;
++    return typeof o?.sha === "string" && typeof o.clean === "boolean" && (o.envLocalSha256 === null || typeof o.envLocalSha256 === "string")
++      ? { sha: o.sha, clean: o.clean, envLocalSha256: o.envLocalSha256 as string | null }
++      : null;
++  };
++  const atStart = tree(v.atStart);
++  const atEnd = tree(v.atEnd);
++  if (
++    v.schema !== 2 ||
++    v.by !== "deploy-gate" ||
++    typeof v.runId !== "string" ||
++    typeof v.sha !== "string" ||
++    !/^[0-9a-f]{40}$/.test(v.sha) ||
++    !Number.isFinite(atMs) ||
++    outcome === null ||
++    atStart === null ||
++    atEnd === null
++  ) {
++    return { unreadable: `${id} is not a deploy test record` };
++  }
++  const sha = v.sha;
++  const refusal =
++    atStart.sha !== sha || atEnd.sha !== sha
++      ? `its checkout was not on ${sha.slice(0, 8)} at both ends`
++      : !atStart.clean || !atEnd.clean
++        ? "its checkout was not clean at both ends"
++        : atStart.envLocalSha256 !== atEnd.envLocalSha256
++          ? ".env.local changed during that run"
++          : envLocalSha256 === null
++            ? "this checkout has no .env.local to compare the run's with"
++            : atEnd.envLocalSha256 !== envLocalSha256
++              ? ".env.local has changed since that run read it"
++              : null;
++  return { source: "deploy-gate", id: v.runId, sha, atMs, outcome, refusal };
++}
++
++/**
++ * **`--ready`'s candidate: the first commit from the green one on whose notes
++ * the `changelog` gate passes.** `path` is the green commit then every later
++ * commit on `origin/dev` that contains it, oldest first. The green commit can
++ * never carry notes written after it was tested, so without this `--ready`
++ * waited for a green run on a commit after the notes, which on 2026-10-08 never
++ * came (docs/plans/261008h § What went wrong today).
++ */
++export function firstCarryingNotes(
++  path: readonly string[],
++  notesGap: (sha: string) => string | null,
++): { kind: "found"; sha: string; after: number } | { kind: "none"; why: string } {
++  let first: string | null = null;
++  for (const [i, sha] of path.entries()) {
++    const gap = notesGap(sha);
++    if (gap === null) return { kind: "found", sha, after: i };
++    first ??= gap;
++  }
++  return {
++    kind: "none",
++    why:
++      `no commit from ${path[0]?.slice(0, 8) ?? "?"} to origin/dev carries release notes that cover it` +
++      (first ? ` (the green commit: ${first})` : "") +
++      " — run npm run changelog:prepare",
++  };
++}
++
+ /**
+  * **The newest commit on `origin/dev` whose test gate the store already proves.**
+  *
+diff --git a/scripts/deploy.ts b/scripts/deploy.ts
+index 17a6c2d02..eab29cbb9 100644
+--- a/scripts/deploy.ts
++++ b/scripts/deploy.ts
+@@ -42,7 +42,7 @@
+ 
+ import { execFileSync, spawnSync } from "node:child_process";
+ import { createHash } from "node:crypto";
+-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
++import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+ import { homedir, tmpdir } from "node:os";
+ import path from "node:path";
+ import { fileURLToPath } from "node:url";
+@@ -99,7 +99,22 @@ import {
+   type VercelDeployment,
+ } from "./deploy-checks.js";
+ import { storageBucketProblems } from "./storage-buckets.js";
+-import { newestReadyCommit, readyTrunkGap, TEST_EVIDENCE_MAX_AGE_MS, testEvidenceFor, type TestEvidence } from "./deploy-evidence.js";
++import { agreeingWithExit, rerunVerdict, testOutcomeFrom } from "../tools/fleet/test-outcome.js";
++import { TEST_OUTCOME_FILE_ENV } from "./vitest-outcome-reporter.js";
++import {
++  deployFullRun,
++  firstCarryingNotes,
++  newestReadyCommit,
++  partialEvidenceFor,
++  readinessFullRuns,
++  readyTrunkGap,
++  TEST_EVIDENCE_MAX_AGE_MS,
++  testEvidenceFor,
++  type DeployRunRecord,
++  type FullRun,
++  type PartialEvidence,
++  type TestEvidence,
++} from "./deploy-evidence.js";
+ import { openReadinessStore, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
+ import { readinessRunnerPath, type Reading } from "../tools/fleet/readiness.js";
+ 
+@@ -436,13 +451,117 @@ function testEvidenceAt(sha: string): TestEvidence {
+   });
+ }
+ 
++/** Where the deploy keeps its own whole-suite runs, for the next deploy (docs/plans/261008h). */
++const DEPLOY_TEST_RUNS = path.join(ROOT, "logs", "deploy", "test-runs");
++/** Older than this and a record is swept on the next write; only the last day is read. */
++const DEPLOY_TEST_RUNS_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
++
++/** The deploy's own recorded runs, or why one of them could not be read. */
++function deployFullRuns(): { runs: FullRun[] } | { why: string } {
++  if (!existsSync(DEPLOY_TEST_RUNS)) return { runs: [] };
++  const env = envLocalSha256();
++  const runs: FullRun[] = [];
++  for (const name of readdirSync(DEPLOY_TEST_RUNS).filter((n) => n.endsWith(".json"))) {
++    let text: string;
++    try {
++      text = readFileSync(path.join(DEPLOY_TEST_RUNS, name), "utf8");
++    } catch (err) {
++      return { why: `logs/deploy/test-runs/${name} could not be read (${(err as Error).message})` };
++    }
++    const r = deployFullRun(text, name, env);
++    if ("unreadable" in r) return { why: `a deploy test record will not parse: ${r.unreadable}` };
++    runs.push(r);
++  }
++  return { runs };
++}
++
++/** Write one whole-suite run, and sweep the old ones. Failing to is said, never fatal. */
++function recordDeployRun(rec: DeployRunRecord): void {
++  try {
++    mkdirSync(DEPLOY_TEST_RUNS, { recursive: true });
++    const name = `${rec.at.replace(/[:.]/g, "-")}-${rec.sha.slice(0, 8)}.json`;
++    writeFileSync(path.join(DEPLOY_TEST_RUNS, `${name}.tmp`), `${JSON.stringify(rec, null, 2)}\n`);
++    renameSync(path.join(DEPLOY_TEST_RUNS, `${name}.tmp`), path.join(DEPLOY_TEST_RUNS, name));
++    const cutoff = Date.now() - DEPLOY_TEST_RUNS_KEEP_MS;
++    for (const old of readdirSync(DEPLOY_TEST_RUNS)) {
++      const p = path.join(DEPLOY_TEST_RUNS, old);
++      if (statSync(p).mtimeMs < cutoff) rmSync(p, { force: true });
++    }
++    info(`recorded this run for the next deploy: logs/deploy/test-runs/${name}`);
++  } catch (err) {
++    info(`could not record this test run for the next deploy (${(err as Error).message}) — the next one runs the suite`);
++  }
++}
++
++/**
++ * **May `sha`'s test gate rerun only some files?** — `partialEvidenceFor`
++ * over the deploy's own runs and the readiness loop's, asked at the gate so a
++ * run that finished meanwhile counts. `existsAt` answers for the candidate.
++ */
++function partialEvidenceAt(sha: string, existsAt: (p: string) => boolean): PartialEvidence {
++  const nowMs = Date.now();
++  const own = deployFullRuns();
++  if ("why" in own) return { kind: "run", why: own.why };
++  const store = readinessReadings(nowMs);
++  /* No store (Greg's laptop) is not a refusal here: the deploy's own runs
++     still stand on their own. An unreadable record in one is. */
++  const readiness =
++    "why" in store
++      ? []
++      : store.unreadable > 0
++        ? null
++        : readinessFullRuns({ readings: store.readings, runnerCwd: readinessRunnerPath(ROOT), envLocalSha256: envLocalSha256(), nowMs });
++  if (readiness === null) return { kind: "run", why: "a readiness record in the last day will not parse" };
++  return partialEvidenceFor({
++    sha,
++    runs: [...own.runs, ...readiness],
++    nowMs,
++    isAncestor,
++    ancestors: (s) => {
++      try {
++        return Number(git("rev-list", "--count", s));
++      } catch {
++        return null;
++      }
++    },
++    changedSince: (x) => {
++      const r = run("git", ["diff", "--name-only", "--no-renames", x, sha]);
++      return r.code === 0 ? r.out.split("\n").filter(Boolean) : null;
++    },
++    existsAtCandidate: existsAt,
++  });
++}
++
++/**
++ * The commits from `green` to `origin/dev` that contain it, oldest first, with
++ * `green` itself first — where `--ready` looks for the first one carrying its
++ * notes. Capped: a green commit hundreds of commits back is not worth a walk.
++ */
++const NOTES_WALK_MAX = 300;
++function commitsFrom(green: string, trunkSha: string): string[] {
++  const r = run("git", ["rev-list", "--reverse", "--topo-order", "--ancestry-path", `${green}..${trunkSha}`]);
++  if (r.code !== 0) return [green];
++  return [green, ...r.out.split("\n").filter(Boolean)].slice(0, NOTES_WALK_MAX);
++}
++
++/** Production's deployment id from its build stamp, or null when it could not be read. */
++async function servingDeploymentId(): Promise<string | null> {
++  try {
++    const stamp = await get(`${TARGET_HOST}/build.json`);
++    const body = stamp.status === 200 ? (JSON.parse(stamp.body) as { deploymentId?: unknown }) : null;
++    return typeof body?.deploymentId === "string" ? body.deploymentId : null;
++  } catch {
++    return null;
++  }
++}
++
+ /**
+  * **`--ready`: the newest commit on `origin/dev` whose test gate the store
+  * already proves**, or null with the reasons recorded as a failure. It does
+  * not fall back to HEAD: the operator asked for a green commit, and deploying
+  * some other kind without saying so is what this flag replaced.
+  */
+-function chooseReadyCommit(): string | null {
++async function chooseReadyCommit(): Promise<string | null> {
+   const trunkSha = fetchTrunk();
+   if (trunkSha === null) {
+     record("--ready: read origin/dev", [`could not fetch or read origin/${TRUNK_BRANCH}`]);
+@@ -490,7 +609,38 @@ function chooseReadyCommit(): string | null {
+     return null;
+   }
+   ok(`--ready: ${chosen.sha.slice(0, 8)} is the newest commit on origin/${TRUNK_BRANCH} the readiness loop saw green`);
+-  return chosen.sha;
++
++  /* **Then the first commit from it that the preflight would pass.** The
++     green commit usually cannot: its notes are written after it was tested.
++     So the candidate is the first commit on dev containing it that carries
++     notes covering it, records the deploy now serving, and contains
++     production — the three preflight gates a later commit can fix — and the
++     test gate reruns what changed in between (docs/plans/261008h § B; the
++     third and second are GPT Sol's P2-2). The preflight still asks all three
++     again of the commit chosen. */
++  const fetchedMain = run("git", ["fetch", "origin", "main", "--quiet"]);
++  if (fetchedMain.code !== 0) {
++    record("--ready: git fetch origin main", [tail(fetchedMain.out, 5)]);
++    return null;
++  }
++  const mainSha = git("rev-parse", "origin/main");
++  const serving = await servingDeploymentId();
++  const carrying = firstCarryingNotes(commitsFrom(chosen.sha, trunkSha), (sha) => {
++    if (isAncestor(mainSha, sha) !== true) return `it does not contain production (origin/main ${mainSha.slice(0, 8)})`;
++    const notes = notesAt(sha, ROOT);
++    return notes.gap ?? servingUnrecorded({ servingDeploymentId: serving, recordedDeploymentIds: notes.recordedDeploymentIds });
++  });
++  if (carrying.kind === "none") {
++    record("--ready: a commit carrying its notes", [carrying.why]);
++    return null;
++  }
++  if (carrying.after > 0) {
++    ok(
++      `--ready: deploying ${carrying.sha.slice(0, 8)}, the first commit after it that carries its release notes ` +
++        `(${carrying.after} commit(s) on from ${chosen.sha.slice(0, 8)}; the test gate reruns what changed)`,
++    );
++  }
++  return carrying.sha;
+ }
+ 
+ /* ------------------------------------------------------------------ */
+@@ -513,7 +663,7 @@ async function preflight(): Promise<string | null> {
+     ok(`on ${branch}`);
+   }
+ 
+-  const sha = READY ? chooseReadyCommit() : git("rev-parse", "HEAD");
++  const sha = READY ? await chooseReadyCommit() : git("rev-parse", "HEAD");
+   if (sha === null) return null;
+   info(`deploying ${sha.slice(0, 8)}  ${git("log", "-1", "--format=%s", sha)}`);
+ 
+@@ -573,10 +723,7 @@ async function preflight(): Promise<string | null> {
+     gate("changelog", notes.gap === null, () =>
+       notes.gap === null
+         ? ""
+-        : READY
+-          ? `${notes.gap}\n         Under --ready this usually means the newest green commit is older than the latest\n` +
+-            "         release notes: wait for the readiness loop to pass a commit after them, then deploy again."
+-          : notes.gap,
++        : notes.gap,
+     );
+     if (notes.gap === null) {
+       info(
+@@ -594,16 +741,8 @@ async function preflight(): Promise<string | null> {
+     }
+ 
+     /* And the deploy this one replaces is recorded — `servingUnrecorded`. */
+-    let servingDeploymentId: string | null = null;
+-    try {
+-      const stamp = await get(`${TARGET_HOST}/build.json`);
+-      const body = stamp.status === 200 ? (JSON.parse(stamp.body) as { deploymentId?: unknown }) : null;
+-      servingDeploymentId = typeof body?.deploymentId === "string" ? body.deploymentId : null;
+-    } catch {
+-      servingDeploymentId = null;
+-    }
+     const unrecorded = servingUnrecorded({
+-      servingDeploymentId,
++      servingDeploymentId: await servingDeploymentId(),
+       recordedDeploymentIds: notes.recordedDeploymentIds,
+     });
+     gate("changelog", unrecorded === null, () => unrecorded ?? "");
+@@ -1034,18 +1173,84 @@ function gatesAt(sha: string): void {
+       ok(`test — ${evidence.sentence}`);
+       return;
+     }
+-    testEvidenceNote = `test: ran the suite here — no readiness run could stand in for it: ${evidence.why}`;
+-    info(`test evidence: running the suite here — ${evidence.why}`);
+-
+     /* vitest's own `json` reporter beside its usual one, so a red gate can name
+-       every failing test rather than the last two of 24. The report lives in
+-       the temp directory; what must outlive it is kept by `testGateFailure`. */
++       every failing test rather than the last two of 24, and the outcome
++       reporter, so the next deploy can rerun only what failed (a `--reporter`
++       flag replaces the config's list, so it is named here too). The reports
++       live in the temp directory; what must outlive them is kept by
++       `testGateFailure` and `recordDeployRun`. */
+     const reportPath = path.join(dir, "vitest.json");
+-    const t = run(
+-      "npm",
+-      ["run", "--silent", "test", "--", "--reporter=default", "--reporter=json", `--outputFile.json=${reportPath}`],
+-      { cwd: wt },
+-    );
++    const outcomePath = path.join(dir, "outcome.json");
++    const vitest = (files: string[]) =>
++      run(
++        "npm",
++        [
++          "run", "--silent", "test", "--",
++          "--reporter=default", "--reporter=json", `--outputFile.json=${reportPath}`,
++          "--reporter=./scripts/vitest-outcome-reporter.ts",
++          ...files,
++        ],
++        { cwd: wt, env: { [TEST_OUTCOME_FILE_ENV]: outcomePath } },
++      );
++    const readOutcome = () => (existsSync(outcomePath) ? readFileSync(outcomePath, "utf8") : null);
++
++    /**
++     * **Or only the files that failed last time, and the tests changed since**
++     * — `partialEvidenceFor` (scripts/deploy-evidence.ts) says when a recent
++     * full run on an ancestor can answer for the rest. Greg, 2026-10-08: *"Could
++     * we not just run the test that failed and if that's been fixed, assume it's
++     * okay?"* docs/plans/261008h. A rerun that does not pass is a red gate, not
++     * a reason to run the whole suite.
++     */
++    const partial = partialEvidenceAt(sha, (p) => existsSync(path.join(wt, p)));
++    if (partial.kind === "rerun") {
++      testEvidenceNote = `test: ${partial.sentence}`;
++      if (partial.files.length === 0) {
++        ok(`test — ${partial.sentence}`);
++        return;
++      }
++      info(`test evidence: ${partial.sentence.replace(/ — reran .*/, "")} — rerunning ${partial.files.length} file(s)`);
++      const t = vitest(partial.files);
++      const problem = rerunVerdict(partial.files, readOutcome(), t.captureProblem ? null : t.code);
++      if (problem !== null) {
++        testEvidenceNote = `test: reran ${partial.files.length} file(s) on the strength of ${partial.from.source} run ${partial.from.id}, and ${problem}`;
++        testGateReport = [`         ${problem}`, ...testGateFailure(t.out, reportPath, wt, sha, t.captureProblem)];
++      }
++      gate("test", problem === null, () => (testGateReport ?? []).join("\n"));
++      return;
++    }
++    const why = evidence.why === partial.why ? evidence.why : `${evidence.why}; and no partial rerun: ${partial.why}`;
++    testEvidenceNote = `test: ran the suite here — no earlier run could stand in for it: ${why}`;
++    info(`test evidence: running the suite here — ${why}`);
++
++    /* The checkout at both ends, so the record can say the run was this
++       commit's and nothing else's (GPT Sol on 261008h, P1-9). */
++    const treeNow = () => {
++      const head = run("git", ["rev-parse", "HEAD"], { cwd: wt });
++      const status = run("git", ["status", "--porcelain"], { cwd: wt });
++      return {
++        sha: head.code === 0 ? head.out.trim() : "",
++        clean: status.code === 0 && status.out.trim() === "",
++        envLocalSha256: envLocalSha256(),
++      };
++    };
++    const atStart = treeNow();
++    const startedAt = new Date().toISOString();
++    const t = vitest([]);
++    const exit = t.captureProblem ? null : t.code;
++    recordDeployRun({
++      schema: 2,
++      by: "deploy-gate",
++      runId: `${path.basename(dir)}-${sha.slice(0, 8)}`,
++      sha,
++      root: wt,
++      startedAt,
++      at: new Date().toISOString(),
++      exit,
++      atStart,
++      atEnd: treeNow(),
++      outcome: agreeingWithExit(testOutcomeFrom(readOutcome()), exit),
++    });
+     if (t.code !== 0) testGateReport = testGateFailure(t.out, reportPath, wt, sha, t.captureProblem);
+     gate("test", t.code === 0, () => (testGateReport ?? []).join("\n"));
+   } finally {
+diff --git a/scripts/readiness-run.ts b/scripts/readiness-run.ts
+index bc8af933a..6fa3c6ee7 100644
+--- a/scripts/readiness-run.ts
++++ b/scripts/readiness-run.ts
+@@ -46,9 +46,9 @@
+  *    yesterday's green — a silent success inside the tool built to catch them.
+  */
+ import { spawn } from "node:child_process";
+-import { constants, hostname } from "node:os";
++import { constants, hostname, tmpdir } from "node:os";
+ import { createHash, randomBytes } from "node:crypto";
+-import { readFileSync } from "node:fs";
++import { readFileSync, rmSync } from "node:fs";
+ import path from "node:path";
+ import { fileURLToPath } from "node:url";
+ 
+@@ -79,7 +79,9 @@ import {
+   type StartedRecord,
+   type TreeStamp,
+ } from "../tools/fleet/readiness.js";
++import { testOutcomeFrom } from "../tools/fleet/test-outcome.js";
+ import { READINESS_ADMISSION_TOKEN_ENV } from "../vitest-admission.js";
++import { TEST_OUTCOME_FILE_ENV } from "./vitest-outcome-reporter.js";
+ 
+ /** How much of the child's output we keep for the parsers. The rest is passed through and forgotten. */
+ const HEAD_BYTES = 8 * 1024;
+@@ -170,6 +172,17 @@ function scriptBodies(root: string): Record<string, string> {
+  * nobody audited. Relying on the caller to have scrubbed is how the loop's own
+  * check spawn came to be the one that was missed — GPT Sol's F1, 2026-09-09.
+  */
++/** The outcome reporter's file, then gone; null when it never wrote one. */
++function readOutcome(file: string): string | null {
++  try {
++    return readFileSync(file, "utf8");
++  } catch {
++    return null;
++  } finally {
++    rmSync(file, { force: true });
++  }
++}
++
+ export function checkChildEnv(admissionToken: string): NodeJS.ProcessEnv {
+   const env: NodeJS.ProcessEnv = { ...runnerChildEnv(process.env), [READINESS_ADMISSION_TOKEN_ENV]: admissionToken };
+   // This wrapper consumes the one-run statement. A descendant wrapper must
+@@ -325,9 +338,14 @@ async function main(): Promise<void> {
+   const failedTestFilesSeen = makeFailedTestFilesCapture();
+   const stdoutFailedTestFiles = failedTestFilesSeen.stream();
+   const stderrFailedTestFiles = failedTestFilesSeen.stream();
++  /* Where vitest's outcome reporter writes which files failed, for a later
++     deploy to rerun only those (scripts/vitest-outcome-reporter.ts,
++     docs/plans/261008h). A fresh name per run, so a file left by another run
++     cannot be read as this one's. */
++  const outcomeFile = check === "test" || check === "check" ? path.join(tmpdir(), `spideryarn-test-outcome-${runId}.json`) : null;
+   const child = spawn("npm", ["run", script], {
+     cwd: root,
+-    env: checkChildEnv(admissionToken),
++    env: { ...checkChildEnv(admissionToken), ...(outcomeFile ? { [TEST_OUTCOME_FILE_ENV]: outcomeFile } : {}) },
+     stdio: ["ignore", "pipe", "pipe"],
+   });
+ 
+@@ -432,6 +450,7 @@ async function main(): Promise<void> {
+     /* Decided AFTER the outcome and from nothing the outcome reads, so the
+        names can be wrong without the verdict being wrong. Null is "not known". */
+     failedTestFiles: failedTestFilesForOutcome(outcome, failedTestFilesSeen.result()),
++    ...(outcomeFile === null || outcome === "void" ? {} : { testOutcome: testOutcomeFrom(readOutcome(outcomeFile)) }),
+   };
+ 
+   try {
+diff --git a/scripts/vitest-outcome-reporter.ts b/scripts/vitest-outcome-reporter.ts
+new file mode 100644
+index 000000000..bb0822d74
+--- /dev/null
++++ b/scripts/vitest-outcome-reporter.ts
+@@ -0,0 +1,154 @@
++/**
++ * **Which test files failed, and whether anything failed outside them**, written
++ * where `SPIDERYARN_TEST_OUTCOME_FILE` says, for a later deploy to rerun only
++ * those files. docs/plans/261008h.
++ *
++ * A reporter rather than vitest's `json` one, because the JSON report has no
++ * place for an unhandled error (measured with vitest 4.1.11: a stray throw in a
++ * timer is in the text and nowhere in the JSON), and a run red only from one of
++ * those has no file to rerun. It decides nothing: `testOutcomeFrom` in
++ * tools/fleet/test-outcome.ts reads what it wrote.
++ *
++ * Four things it has to get right, each a way a short list could claim more
++ * than it knows (GPT Sol on the plan, P1-5 to P1-7):
++ *
++ * - **Its file is its own.** The path is taken when the reporter is made and
++ *   the variable deleted, before any worker or child process is started, so a
++ *   vitest run inside a test cannot write a report that reads as this one's.
++ * - **It is not finished at `onTestRunEnd`.** Global teardown runs after that,
++ *   and `tests/setup/private-db-global.ts` can fail the run there. So the file
++ *   is written `final: false` then, and rewritten `final: true` from the
++ *   process's `exit` handler with the exit code and any failure that marked
++ *   itself with {@link markFailureOutsideFiles}. A run killed before `exit`
++ *   leaves a file that says it never finished.
++ * - **It says whether it covered the whole suite**: every spec the config
++ *   would collect, unfiltered, against the modules that finished, keyed by
++ *   project and path, and the filters it was started with.
++ * - **Nothing here throws into the run.** A reporter that broke the suite to
++ *   describe it would be worse than none.
++ *
++ * Used two ways, because CLI `--reporter` flags replace the config's (measured):
++ * `scripts/deploy.ts` names it on its command line, and `vitest.config.ts` adds
++ * it when the variable is set and no flags were given (the readiness runner).
++ */
++import { writeFileSync } from "node:fs";
++import type { Reporter, SerializedError, TestModule, TestRunEndReason, Vitest } from "vitest/node";
++
++export const TEST_OUTCOME_FILE_ENV = "SPIDERYARN_TEST_OUTCOME_FILE";
++
++const OUTSIDE = Symbol.for("spideryarn.test-failures-outside-files");
++
++/**
++ * **Say that the run failed somewhere no test file owns** — a global teardown,
++ * say — so its outcome cannot be read as "red only in these files". Global,
++ * because a global-setup module and this reporter are loaded by different
++ * module runners in the one process.
++ */
++export function markFailureOutsideFiles(why: string): void {
++  const g = globalThis as { [OUTSIDE]?: string[] };
++  g[OUTSIDE] = [...(g[OUTSIDE] ?? []), why];
++}
++
++type Written = {
++  schema: 2;
++  final: boolean;
++  reason: TestRunEndReason;
++  unhandledErrors: number;
++  /** The process's exit code, from its `exit` handler; null until then. */
++  exitCode: number | null;
++  failuresOutsideFiles: string[];
++  /** What the run was narrowed by. All empty for a whole-suite run. */
++  narrowed: { filters: string[]; shard: string | null; project: string[]; testNamePattern: string | null };
++  /** Specs the config collects with no filter that did not finish in this run. Null when they could not be listed. */
++  notRun: number | null;
++  files: { project: string; path: string; state: string }[];
++};
++
++export default class OutcomeReporter implements Reporter {
++  private readonly file: string | undefined;
++  private ctx: Vitest | null = null;
++  private written: Written | null = null;
++
++  constructor() {
++    this.file = process.env[TEST_OUTCOME_FILE_ENV] || undefined;
++    delete process.env[TEST_OUTCOME_FILE_ENV];
++  }
++
++  onInit(ctx: Vitest): void {
++    this.ctx = ctx;
++  }
++
++  async onTestRunEnd(
++    testModules: ReadonlyArray<TestModule>,
++    unhandledErrors: ReadonlyArray<SerializedError>,
++    reason: TestRunEndReason,
++  ): Promise<void> {
++    if (!this.file) return;
++    try {
++      const files = testModules.map((m) => ({ project: m.project.name, path: this.relative(m.moduleId), state: m.state() }));
++      this.written = {
++        schema: 2,
++        final: false,
++        reason,
++        unhandledErrors: unhandledErrors.length,
++        exitCode: null,
++        failuresOutsideFiles: [],
++        narrowed: this.narrowed(),
++        notRun: await this.notRun(files),
++        files,
++      };
++      this.write();
++      process.once("exit", (code) => {
++        if (this.written === null) return;
++        const outside = (globalThis as { [OUTSIDE]?: string[] })[OUTSIDE] ?? [];
++        this.written = { ...this.written, final: true, exitCode: code, failuresOutsideFiles: [...outside] };
++        this.write();
++      });
++    } catch {
++      /* No outcome file is an outcome nobody can reuse, which is the safe one. */
++    }
++  }
++
++  /** Teardown overran: whatever it was doing did not finish, so this run's report is not final. */
++  onProcessTimeout(): void {
++    this.written = null;
++  }
++
++  private narrowed(): Written["narrowed"] {
++    const ctx = this.ctx as (Vitest & { filenamePattern?: string[] }) | null;
++    const shard = ctx?.config.shard;
++    const project = ctx?.config.project;
++    const name = ctx?.config.testNamePattern;
++    return {
++      filters: [...(ctx?.filenamePattern ?? [])],
++      shard: shard ? `${shard.index}/${shard.count}` : null,
++      project: Array.isArray(project) ? [...project] : project ? [String(project)] : [],
++      testNamePattern: name ? String(name) : null,
++    };
++  }
++
++  private async notRun(files: Written["files"]): Promise<number | null> {
++    if (this.ctx === null) return null;
++    try {
++      const all = await this.ctx.globTestSpecifications();
++      const ran = new Set(files.filter((f) => f.state !== "queued" && f.state !== "pending").map((f) => `${f.project}\0${f.path}`));
++      return all.filter((s) => !ran.has(`${s.project.name}\0${this.relative(s.moduleId)}`)).length;
++    } catch {
++      return null;
++    }
++  }
++
++  private relative(moduleId: string): string {
++    const root = this.ctx?.config.root ?? "";
++    return moduleId.startsWith(`${root}/`) ? moduleId.slice(root.length + 1) : moduleId;
++  }
++
++  private write(): void {
++    if (!this.file || this.written === null) return;
++    try {
++      writeFileSync(this.file, `${JSON.stringify(this.written)}\n`);
++    } catch {
++      /* As above. */
++    }
++  }
++}
+diff --git a/tests/deploy-partial-evidence.test.ts b/tests/deploy-partial-evidence.test.ts
+new file mode 100644
+index 000000000..26a0df0c7
+--- /dev/null
++++ b/tests/deploy-partial-evidence.test.ts
+@@ -0,0 +1,508 @@
++/**
++ * A deploy's test gate rerunning only what failed, and `--ready` deploying the
++ * first commit that carries its notes. docs/plans/261008h.
++ *
++ * Most cases are a way a run could look like evidence for a short rerun and
++ * not be one; each must end in the full suite, with a reason. The reporter
++ * itself is exercised against real vitest runs in
++ * tests/vitest-outcome-reporter.test.ts.
++ */
++import { describe, expect, it } from "vitest";
++
++import {
++  CROSS_COMMIT_MAX_AGE_MS,
++  deployFullRun,
++  firstCarryingNotes,
++  isTestInfrastructure,
++  partialEvidenceFor,
++  readinessFullRuns,
++  TEST_EVIDENCE_MAX_AGE_MS,
++  type DeployRunRecord,
++  type FullRun,
++} from "../scripts/deploy-evidence.js";
++import { readinessRunnerPath, PREPARATION_VERSION, type FinishedRecord, type Reading } from "../tools/fleet/readiness.js";
++import { agreeingWithExit, asTestOutcome, RERUN_FILES_MAX, rerunVerdict, testOutcomeFrom } from "../tools/fleet/test-outcome.js";
++
++const file = (path: string, state: string, project = "unit") => ({ project, path, state });
++const outcome = (over: Record<string, unknown> = {}) =>
++  JSON.stringify({
++    schema: 2,
++    final: true,
++    reason: "failed",
++    unhandledErrors: 0,
++    exitCode: 1,
++    failuresOutsideFiles: [],
++    narrowed: { filters: [], shard: null, project: [], testNamePattern: null },
++    notRun: 0,
++    files: [file("tests/a.test.ts", "passed"), file("tests/b.test.ts", "failed"), file("tests/c.test.ts", "skipped")],
++    ...over,
++  });
++const GREEN = { reason: "passed", exitCode: 0, files: [file("tests/a.test.ts", "passed")] };
++
++describe("testOutcomeFrom", () => {
++  it("a run red only in named files names them", () => {
++    expect(testOutcomeFrom(outcome())).toEqual({ kind: "red-in-files", failed: ["tests/b.test.ts"], files: 3 });
++  });
++
++  it("a green run is a pass", () => {
++    expect(testOutcomeFrom(outcome(GREEN))).toEqual({ kind: "pass", files: 1 });
++  });
++
++  it("a file failing in two projects is named once", () => {
++    const o = testOutcomeFrom(outcome({ files: [file("tests/b.test.ts", "failed", "unit"), file("tests/b.test.ts", "failed", "private-postgres")] }));
++    expect(o).toEqual({ kind: "red-in-files", failed: ["tests/b.test.ts"], files: 2 });
++  });
++
++  it.each([
++    ["no file at all", null, /no outcome file/],
++    ["not JSON", "{", /not JSON/],
++    ["the first schema", outcome({ schema: 1 }), /schema/],
++    ["a report never finalised (killed, or teardown overran)", outcome({ final: false }), /never finalised/],
++    ["a teardown that failed after the tests", outcome({ failuresOutsideFiles: ["the private test database's teardown failed"] }), /outside every test file/],
++    ["an unhandled error", outcome({ unhandledErrors: 1 }), /unhandled/],
++    ["an unhandled error on a run whose files all passed", outcome({ unhandledErrors: 2, files: [file("tests/a.test.ts", "passed")] }), /unhandled/],
++    ["a pass whose process exited 1", outcome({ ...GREEN, exitCode: 1 }), /after its tests/],
++    ["a red whose process exited 0", outcome({ exitCode: 0 }), /after its tests/],
++    ["a failure outside every file", outcome({ files: [file("tests/a.test.ts", "passed")] }), /outside every file/],
++    ["an interrupted run", outcome({ reason: "interrupted" }), /interrupted/],
++    ["nothing collected", outcome({ files: [] }), /collected no/],
++    ["a file that never finished", outcome({ files: [file("tests/a.test.ts", "queued")] }), /never finished/],
++    ["an absolute path", outcome({ files: [file("/etc/passwd", "failed")] }), /not a path inside/],
++    ["a path out of the checkout", outcome({ files: [file("tests/../../x.test.ts", "failed")] }), /not a path inside/],
++    ["a malformed entry", outcome({ files: [{ path: "tests/a.test.ts", state: "failed" }] }), /malformed/],
++    ["a pass with a failed file", outcome({ ...GREEN, files: [file("tests/b.test.ts", "failed")] }), /says it passed/],
++    ["a pass where every file skipped", outcome({ ...GREEN, files: [file("tests/a.test.ts", "skipped")] }), /skipped/],
++    ["no unhandled count", outcome({ unhandledErrors: undefined }), /unhandled-error count/],
++    ["a run narrowed to some files", outcome({ narrowed: { filters: ["tests/b"], shard: null, project: [], testNamePattern: null } }), /narrowed by file filters/],
++    ["a shard", outcome({ narrowed: { filters: [], shard: "1/2", project: [], testNamePattern: null } }), /shard/],
++    ["one project", outcome({ narrowed: { filters: [], shard: null, project: ["unit"], testNamePattern: null } }), /projects/],
++    ["a test-name filter", outcome({ narrowed: { filters: [], shard: null, project: [], testNamePattern: "x" } }), /test names/],
++    ["files the suite collects that did not run", outcome({ notRun: 3 }), /did not run/],
++    ["no word on coverage", outcome({ notRun: null }), /whether every test file ran/],
++  ])("%s is unusable", (_name, text, why) => {
++    const o = testOutcomeFrom(text);
++    expect(o.kind).toBe("unusable");
++    if (o.kind === "unusable") expect(o.why).toMatch(why);
++  });
++
++  it("more failed files than a rerun is worth is unusable", () => {
++    const many = Array.from({ length: RERUN_FILES_MAX + 1 }, (_, i) => file(`tests/f${i}.test.ts`, "failed"));
++    const o = testOutcomeFrom(outcome({ files: many }));
++    expect(o.kind).toBe("unusable");
++    if (o.kind === "unusable") expect(o.why).toMatch(/in all but name/);
++  });
++
++  it("vitest's exit as the caller saw it must agree", () => {
++    const red = testOutcomeFrom(outcome());
++    const green = testOutcomeFrom(outcome(GREEN));
++    expect(agreeingWithExit(red, 1)).toEqual(red);
++    expect(agreeingWithExit(red, 0).kind).toBe("unusable");
++    expect(agreeingWithExit(green, 0)).toEqual(green);
++    expect(agreeingWithExit(green, 1).kind).toBe("unusable");
++    expect(agreeingWithExit(green, null).kind).toBe("unusable");
++  });
++});
++
++describe("asTestOutcome", () => {
++  it("reads back each of the three", () => {
++    for (const o of [
++      { kind: "pass", files: 3 },
++      { kind: "red-in-files", failed: ["tests/b.test.ts"], files: 3 },
++      { kind: "unusable", why: "because" },
++    ]) {
++      expect(asTestOutcome(JSON.parse(JSON.stringify(o)))).toEqual(o);
++    }
++  });
++
++  it.each([
++    ["nothing", null],
++    ["an unknown kind", { kind: "green", files: 1 }],
++    ["a pass of no files", { kind: "pass", files: 0 }],
++    ["an empty red list", { kind: "red-in-files", failed: [], files: 3 }],
++    ["a duplicated red file", { kind: "red-in-files", failed: ["tests/b.test.ts", "tests/b.test.ts"], files: 3 }],
++    ["more failed than ran", { kind: "red-in-files", failed: ["tests/a.test.ts", "tests/b.test.ts"], files: 1 }],
++    ["a path outside", { kind: "red-in-files", failed: ["../b.test.ts"], files: 3 }],
++    ["an unusable without why", { kind: "unusable" }],
++  ])("%s reads as not known", (_name, v) => {
++    expect(asTestOutcome(v)).toBeNull();
++  });
++});
++
++/* A straight line of history, oldest first: A ← B ← C ← Y. */
++const [A, B, C, Y] = ["a", "b", "c", "f"].map((c) => c.repeat(40)) as [string, string, string, string];
++const LINE = [A, B, C, Y];
++const OFF_LINE = "9".repeat(40);
++const NOW = Date.parse("2026-10-08T18:00:00.000Z");
++const HOUR = 3_600_000;
++
++const isAncestor = (a: string, b: string): boolean | null => {
++  if (a === OFF_LINE || b === OFF_LINE) return a === b;
++  const ia = LINE.indexOf(a);
++  const ib = LINE.indexOf(b);
++  return ia < 0 || ib < 0 ? null : ia <= ib;
++};
++const ancestors = (sha: string): number | null => (LINE.includes(sha) ? LINE.indexOf(sha) + 1 : null);
++
++let id = 0;
++const run = (sha: string, outcome: FullRun["outcome"], over: Partial<FullRun> = {}, hoursBefore = 1): FullRun => ({
++  source: "deploy-gate",
++  id: `run-${id++}`,
++  sha,
++  atMs: NOW - hoursBefore * HOUR,
++  outcome,
++  refusal: null,
++  ...over,
++});
++const red = (...failed: string[]): FullRun["outcome"] => ({ kind: "red-in-files", failed: failed as [string, ...string[]], files: 1800 });
++const green: FullRun["outcome"] = { kind: "pass", files: 1800 };
++
++function evidence(runs: FullRun[], changed: Record<string, string[] | null> = {}, gone: string[] = []) {
++  return partialEvidenceFor({
++    sha: Y,
++    runs,
++    nowMs: NOW,
++    isAncestor,
++    ancestors,
++    changedSince: (x) => (x in changed ? (changed[x] ?? null) : []),
++    existsAtCandidate: (p) => !gone.includes(p),
++  });
++}
++
++describe("partialEvidenceFor", () => {
++  it("reruns the files that failed at an ancestor, and the test files changed since", () => {
++    const e = evidence([run(C, red("tests/b.test.ts"))], { [C]: ["src/x.ts", "tests/new.test.tsx", "docs/z.md"] });
++    expect(e.kind).toBe("rerun");
++    if (e.kind === "rerun") {
++      expect(e.files).toEqual(["tests/b.test.ts", "tests/new.test.tsx"]);
++      expect(e.from.sha).toBe(C);
++      expect(e.sentence).toMatch(/cccccccc/);
++    }
++  });
++
++  it("a green run on the commit itself leaves nothing to rerun", () => {
++    const e = evidence([run(Y, green)]);
++    expect(e).toMatchObject({ kind: "rerun", files: [] });
++  });
++
++  it("the nearest ancestor is the one asked", () => {
++    const e = evidence([run(B, green, {}, 0.5), run(C, red("tests/b.test.ts"), {}, 2)]);
++    expect(e).toMatchObject({ kind: "rerun", files: ["tests/b.test.ts"] });
++  });
++
++  it("the newest run on the nearest commit decides", () => {
++    const e = evidence([run(C, red("tests/b.test.ts"), {}, 3), run(C, { kind: "unusable", why: "unhandled" }, {}, 1)]);
++    expect(e.kind).toBe("run");
++    if (e.kind === "run") expect(e.why).toMatch(/unhandled/);
++  });
++
++  it("an unusable nearest run does not fall back to an older green one", () => {
++    const e = evidence([run(B, green), run(C, { kind: "unusable", why: "interrupted" })]);
++    expect(e.kind).toBe("run");
++  });
++
++  it("a refused nearest run does not fall back either", () => {
++    const e = evidence([run(B, green), run(C, green, { refusal: ".env.local has changed" })]);
++    expect(e.kind).toBe("run");
++    if (e.kind === "run") expect(e.why).toMatch(/\.env\.local/);
++  });
++
++  it.each([
++    ["no runs at all", []],
++    ["only a run older than the window", [run(C, green, {}, TEST_EVIDENCE_MAX_AGE_MS / HOUR + 1)]],
++    ["only a run on another line of history", [run(OFF_LINE, green)]],
++  ])("%s runs the suite", (_name, runs) => {
++    const e = evidence(runs as FullRun[]);
++    expect(e.kind).toBe("run");
++    if (e.kind === "run") expect(e.why).toMatch(/no full run/);
++  });
++
++  it("a run that says it finished in the future is refused", () => {
++    const e = evidence([run(C, green, {}, -1)]);
++    expect(e.kind).toBe("run");
++    if (e.kind === "run") expect(e.why).toMatch(/future/);
++  });
++
++  it("two runs on the nearest commit at the same instant are ambiguous", () => {
++    const e = evidence([run(C, green, { atMs: NOW - HOUR }), run(C, red("tests/b.test.ts"), { atMs: NOW - HOUR })]);
++    expect(e.kind).toBe("run");
++  });
++
++  it("test infrastructure changed since the run means the whole suite", () => {
++    for (const p of ["vitest.config.ts", "package-lock.json", "tests/setup/private-db.ts", "tests/helpers/x.ts"]) {
++      const e = evidence([run(C, green)], { [C]: [p] });
++      expect(e.kind, p).toBe("run");
++      if (e.kind === "run") expect(e.why).toContain(p);
++    }
++  });
++
++  it("a diff git could not produce means the whole suite", () => {
++    const e = evidence([run(C, green)], { [C]: null });
++    expect(e.kind).toBe("run");
++  });
++
++  it("a failed file the candidate no longer has is not rerun", () => {
++    const e = evidence([run(C, red("tests/gone.test.ts", "tests/b.test.ts"))], {}, ["tests/gone.test.ts"]);
++    expect(e).toMatchObject({ kind: "rerun", files: ["tests/b.test.ts"] });
++  });
++
++  it("more files to rerun than a rerun is worth means the whole suite", () => {
++    const changed = Array.from({ length: RERUN_FILES_MAX + 1 }, (_, i) => `tests/c${i}.test.ts`);
++    const e = evidence([run(C, green)], { [C]: changed });
++    expect(e.kind).toBe("run");
++  });
++});
++
++describe("isTestInfrastructure", () => {
++  it.each([
++    ["vitest.config.ts", true],
++    ["vitest-admission.ts", true],
++    ["package.json", true],
++    ["tests/setup/unit-no-database.ts", true],
++    ["tests/helpers/seed.ts", true],
++    ["tests/store-migration-registry.ts", true],
++    ["scripts/vitest-outcome-reporter.ts", true],
++    ["scripts/db-test-create.ts", true],
++    ["tsconfig.json", true],
++    ["tests/fixtures/corpus/x.json", true],
++    ["tests/__snapshots__/a.test.ts.snap", true],
++    ["tests/overseer-fixtures.ts", true],
++    ["tests/a.test.ts", false],
++    ["tests/b.test.tsx", false],
++    ["src/types.ts", false],
++  ])("%s → %s", (p, want) => {
++    expect(isTestInfrastructure(p)).toBe(want);
++  });
++});
++
++describe("partialEvidenceFor's limits", () => {
++  it("a run on an earlier commit may stand in for two hours, not a day", () => {
++    const hours = CROSS_COMMIT_MAX_AGE_MS / HOUR;
++    expect(evidence([run(C, green, {}, hours - 0.1)]).kind).toBe("rerun");
++    const e = evidence([run(C, green, {}, hours + 0.1)]);
++    expect(e.kind).toBe("run");
++    if (e.kind === "run") expect(e.why).toMatch(/2h at most/);
++  });
++
++  it("a run on the commit itself keeps the day", () => {
++    expect(evidence([run(Y, red("tests/b.test.ts"), {}, 20)])).toMatchObject({ kind: "rerun", files: ["tests/b.test.ts"] });
++  });
++
++  it("an older run that cannot be used is not rescued by a newer age check", () => {
++    /* The nearest run decides even when it is too old to stand in: an older
++       but younger-finishing run further back must not be used instead. */
++    const e = evidence([run(C, green, {}, 3), run(B, green, {}, 0.5)]);
++    expect(e.kind).toBe("run");
++  });
++
++  it("a run still going on the nearest commit blocks the finished one", () => {
++    const going = run(C, { kind: "unusable", why: "still running" }, { refusal: "it is still running", running: true }, 1.5);
++    const e = evidence([run(C, green, {}, 1), going]);
++    expect(e.kind).toBe("run");
++    if (e.kind === "run") expect(e.why).toMatch(/still going/);
++  });
++});
++
++/* ---- readiness records → FullRun ---- */
++
++const RUNNER = readinessRunnerPath("/home/greg/code/spideryarn2");
++const ENV = "e".repeat(64);
++const steps = (test: "clean" | "failed") =>
++  ["typecheck", "build", "build:fleet", "build:tooling", "test"].map((name) => ({
++    name,
++    gate: "unknown" as const,
++    verdict: name === "test" ? test : ("clean" as const),
++    findings: null,
++  }));
++function reading(over: Partial<FinishedRecord> = {}, state: Reading["state"] = "pass"): Reading {
++  const at = NOW - HOUR;
++  const record: FinishedRecord = {
++    schema: 1,
++    runId: `r${id++}`,
++    startedAt: new Date(at - HOUR).toISOString(),
++    pid: 1,
++    host: "box",
++    procStartToken: "1",
++    cwd: RUNNER,
++    check: "check",
++    scope: "full",
++    commandLine: "tsx scripts/check.ts",
++    treeAtStart: { kind: "known", sha: C, branch: null, dirty: false },
++    source: "wrapper",
++    preparation: { by: "readiness-loop", version: PREPARATION_VERSION, sha: C, envLocalSha256: ENV, envLocalVerified: true },
++    state: "finished",
++    at: new Date(at).toISOString(),
++    durationMs: HOUR,
++    outcome: "pass",
++    exit: 0,
++    counts: { kind: "check", steps: steps("clean") },
++    treeAtEnd: { kind: "known", sha: C, branch: null, dirty: false },
++    logPath: null,
++    why: null,
++    failedTestFiles: null,
++    ...over,
++  };
++  return { record, state, atMs: Date.parse(record.at), why: null };
++}
++const fullRuns = (readings: Reading[]) => readinessFullRuns({ readings, runnerCwd: RUNNER, envLocalSha256: ENV, nowMs: NOW });
++
++describe("readinessFullRuns", () => {
++  it("a green check with no reporter outcome (an older record) is a pass", () => {
++    const [r] = fullRuns([reading()]);
++    expect(r).toMatchObject({ sha: C, outcome: { kind: "pass" }, refusal: null });
++  });
++
++  it("a red check is red in the files its reporter named", () => {
++    const [r] = fullRuns([
++      reading({ outcome: "fail", exit: 1, counts: { kind: "check", steps: steps("failed") }, testOutcome: { kind: "red-in-files", failed: ["tests/b.test.ts"], files: 1800 } }, "fail"),
++    ]);
++    expect(r).toMatchObject({ outcome: { kind: "red-in-files", failed: ["tests/b.test.ts"] }, refusal: null });
++  });
++
++  it("a red check with no reporter outcome cannot be rerun in part", () => {
++    const [r] = fullRuns([reading({ outcome: "fail", exit: 1, counts: { kind: "check", steps: steps("failed") } }, "fail")]);
++    expect(r?.outcome.kind).toBe("unusable");
++  });
++
++  it("a check that failed only in another gate still counts as a green suite", () => {
++    const rows = [...steps("clean"), { name: "cycles", gate: "gate" as const, verdict: "failed" as const, findings: null }];
++    const [r] = fullRuns([reading({ outcome: "fail", exit: 1, counts: { kind: "check", steps: rows }, testOutcome: { kind: "pass", files: 1800 } }, "fail")]);
++    expect(r).toMatchObject({ outcome: { kind: "pass" }, refusal: null });
++  });
++
++  it("the reporter and the test row must agree", () => {
++    const [r] = fullRuns([reading({ testOutcome: { kind: "red-in-files", failed: ["tests/b.test.ts"], files: 9 } })]);
++    expect(r?.outcome.kind).toBe("unusable");
++  });
++
++  it("the exact-commit clauses refuse it: no preparation stamp", () => {
++    const [r] = fullRuns([reading({ preparation: null })]);
++    expect(r?.refusal).toMatch(/preparation stamp/);
++  });
++
++  it("the exact-commit clauses refuse it: another .env.local", () => {
++    const [r] = readinessFullRuns({ readings: [reading()], runnerCwd: RUNNER, envLocalSha256: "f".repeat(64), nowMs: NOW });
++    expect(r?.refusal).toMatch(/\.env\.local/);
++  });
++
++  it("a test run, not a check, arrives refused, so it can block an older check", () => {
++    const [r] = fullRuns([reading({ check: "test" })]);
++    expect(r?.refusal).toMatch(/not a full/);
++  });
++
++  it("a dirty or void run is about no commit, and is left out", () => {
++    expect(fullRuns([reading({ treeAtEnd: { kind: "known", sha: C, branch: null, dirty: true } })])).toEqual([]);
++    expect(fullRuns([reading({ outcome: "void", exit: null }, "void")])).toEqual([]);
++  });
++});
++
++/* ---- the deploy's own records ---- */
++
++const deployRecord = (over: Partial<DeployRunRecord> = {}): string =>
++  JSON.stringify({
++    schema: 2,
++    by: "deploy-gate",
++    runId: "spideryarn-deploy-abc-cccccccc",
++    sha: C,
++    root: "/tmp/spideryarn-deploy-abc/tree",
++    startedAt: new Date(NOW - 2 * HOUR).toISOString(),
++    at: new Date(NOW - HOUR).toISOString(),
++    exit: 1,
++    atStart: { sha: C, clean: true, envLocalSha256: ENV },
++    atEnd: { sha: C, clean: true, envLocalSha256: ENV },
++    outcome: { kind: "red-in-files", failed: ["tests/b.test.ts"], files: 1800 },
++    ...over,
++  } satisfies DeployRunRecord);
++
++describe("deployFullRun", () => {
++  it("reads a sound record", () => {
++    expect(deployFullRun(deployRecord(), "x.json", ENV)).toMatchObject({ source: "deploy-gate", sha: C, refusal: null });
++  });
++
++  it.each([
++    ["not on the commit at the end", { atEnd: { sha: B, clean: true, envLocalSha256: ENV } }, /both ends/],
++    ["dirty at the start", { atStart: { sha: C, clean: false, envLocalSha256: ENV } }, /not clean/],
++    [".env.local changed during the run", { atEnd: { sha: C, clean: true, envLocalSha256: "d".repeat(64) } }, /during that run/],
++  ])("%s is refused", (_name, over, why) => {
++    const r = deployFullRun(deployRecord(over as Partial<DeployRunRecord>), "x.json", ENV);
++    expect("refusal" in r && r.refusal).toMatch(why);
++  });
++
++  it(".env.local changed since is refused", () => {
++    const r = deployFullRun(deployRecord(), "x.json", "f".repeat(64));
++    expect("refusal" in r && r.refusal).toMatch(/since/);
++  });
++
++  it.each([
++    ["not JSON", "{"],
++    ["the first schema", JSON.stringify({ ...JSON.parse(deployRecord()), schema: 1 })],
++    ["no outcome", JSON.stringify({ ...JSON.parse(deployRecord()), outcome: null })],
++    ["a short sha", JSON.stringify({ ...JSON.parse(deployRecord()), sha: "ccc" })],
++  ])("%s is unreadable", (_name, text) => {
++    expect(deployFullRun(text, "x.json", ENV)).toHaveProperty("unreadable");
++  });
++});
++
++describe("rerunVerdict", () => {
++  const files = ["tests/a.test.ts", "tests/b.test.ts"];
++  const ran = (states: [string, string][], reason = "passed", exitCode = 0) =>
++    outcome({
++      reason,
++      exitCode,
++      narrowed: { filters: files, shard: null, project: [], testNamePattern: null },
++      notRun: 1800,
++      files: states.map(([path, state]) => file(path, state)),
++    });
++
++  it("every requested file ran and passed", () => {
++    expect(rerunVerdict(files, ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "passed"]]), 0)).toBeNull();
++  });
++
++  it("a requested file the run never collected is a failure, not a pass", () => {
++    expect(rerunVerdict(files, ran([["tests/a.test.ts", "passed"]]), 0)).toMatch(/never ran tests\/b\.test\.ts/);
++  });
++
++  it("a requested file that only skipped is not a pass", () => {
++    expect(rerunVerdict(files, ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "skipped"]]), 0)).toMatch(/skipped/);
++  });
++
++  it("a red rerun names its failures", () => {
++    const text = ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "failed"]], "failed", 1);
++    expect(rerunVerdict(files, text, 1)).toMatch(/still failing: tests\/b\.test\.ts/);
++  });
++
++  it("an extra file that failed fails the rerun too", () => {
++    const text = ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "passed"], ["tests/b.test.tsx", "failed"]], "failed", 1);
++    expect(rerunVerdict(files, text, 1)).toMatch(/b\.test\.tsx/);
++  });
++
++  it("an exit that disagrees is a failure", () => {
++    expect(rerunVerdict(files, ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "passed"]]), 1)).toMatch(/exited 1/);
++  });
++
++  it("a teardown failure after a green rerun is a failure", () => {
++    const text = outcome({ ...JSON.parse(ran([["tests/a.test.ts", "passed"], ["tests/b.test.ts", "passed"]])), failuresOutsideFiles: ["teardown"] });
++    expect(rerunVerdict(files, text, 0)).toMatch(/outside every test file/);
++  });
++
++  it("no outcome is a failure", () => {
++    expect(rerunVerdict(files, null, 0)).toMatch(/no outcome file/);
++  });
++});
++
++describe("firstCarryingNotes", () => {
++  const gaps: Record<string, string | null> = { [A]: "no notes", [B]: "no notes", [C]: null, [Y]: null };
++  const gapOf = (s: string): string | null => (s in gaps ? (gaps[s] as string | null) : "unknown");
++  it("the first commit after the green one whose notes pass", () => {
++    expect(firstCarryingNotes([A, B, C, Y], gapOf)).toEqual({ kind: "found", sha: C, after: 2 });
++  });
++
++  it("the green commit itself, when it carries its notes", () => {
++    expect(firstCarryingNotes([C, Y], gapOf)).toEqual({ kind: "found", sha: C, after: 0 });
++  });
++
++  it("none, with the green commit's own reason", () => {
++    const r = firstCarryingNotes([A, B], gapOf);
++    expect(r.kind).toBe("none");
++    if (r.kind === "none") expect(r.why).toMatch(/no notes/);
++  });
++});
+diff --git a/tests/readiness-preparation.test.ts b/tests/readiness-preparation.test.ts
+index 3a93d6e59..dec1daba5 100644
+--- a/tests/readiness-preparation.test.ts
++++ b/tests/readiness-preparation.test.ts
+@@ -221,9 +221,10 @@ describe("the wrapper writes preparation into the actual started and finished re
+     for (const name of ["node_modules", "vitest-admission.ts"]) {
+       symlinkSync(path.join(root, name), path.join(runner, name));
+     }
+-    for (const name of ["readiness.ts", "readiness-parse.ts", "readiness-store.ts"]) {
++    for (const name of ["readiness.ts", "readiness-parse.ts", "readiness-store.ts", "test-outcome.ts"]) {
+       symlinkSync(path.join(root, "tools", "fleet", name), path.join(runner, "tools", "fleet", name));
+     }
++    symlinkSync(path.join(root, "scripts", "vitest-outcome-reporter.ts"), path.join(runner, "scripts", "vitest-outcome-reporter.ts"));
+     // The wrapper runs for real; only the Git leaf is fixed to a clean SHA.
+     // Git's synchronous child probe is blocked by this review's sandbox.
+     writeFileSync(path.join(runner, "tools", "fleet", "readiness-git.ts"), [
+@@ -256,5 +257,8 @@ describe("the wrapper writes preparation into the actual started and finished re
+     expect(finished?.state).toBe("finished");
+     expect(started?.preparation ?? null).toEqual(startStamped ? preparation : null);
+     expect(finished?.preparation ?? null).toEqual(endStamped ? { ...preparation, envLocalVerified: true } : null);
++    /* The fake npm writes no outcome, and the wrapper says so on the record
++       rather than leaving it off (docs/plans/261008h). */
++    expect(finished?.state === "finished" ? finished.testOutcome : null).toMatchObject({ kind: "unusable", why: expect.stringMatching(/no outcome file/) });
+   });
+ });
+diff --git a/tests/setup/private-db-global.ts b/tests/setup/private-db-global.ts
+index 0c01b65da..a8088f15c 100644
+--- a/tests/setup/private-db-global.ts
++++ b/tests/setup/private-db-global.ts
+@@ -214,6 +214,7 @@ import {
+   type Queryable,
+   sessionsIn,
+ } from "../helpers/db-sessions.js";
++import { markFailureOutsideFiles } from "../../scripts/vitest-outcome-reporter.js";
+ import { seedLocalAccounts } from "../helpers/seed-local-accounts.js";
+ import { seedPrivateBillingPrices } from "../helpers/seed-private-billing-prices.js";
+ 
+@@ -635,7 +636,12 @@ export default async function setup({ provide }: TestProject): Promise<() => Pro
+     if (polluted) reportPolluted(say, db.name, tag, who, ordinary);
+     else reportExpected(say, who, ordinary.kind === "in-use");
+     if (problems.length > 0) reportTeardownFailed(say, db.name, problems);
+-    if (polluted || problems.length > 0) process.exitCode = 1;
++    if (polluted || problems.length > 0) {
++      process.exitCode = 1;
++      /* After vitest has reported the run, so no test file owns this; a deploy
++         must not read the run as red only in its failed files (261008h). */
++      markFailureOutsideFiles(polluted ? "the private test database was polluted" : "the private test database's teardown failed");
++    }
+     say(dropLine);
+   };
+ }
+diff --git a/tests/vitest-outcome-reporter.test.ts b/tests/vitest-outcome-reporter.test.ts
+new file mode 100644
+index 000000000..44339646c
+--- /dev/null
++++ b/tests/vitest-outcome-reporter.test.ts
+@@ -0,0 +1,125 @@
++/**
++ * The outcome reporter against **real vitest runs**, because what it must get
++ * right — which reporters run, what workers inherit, what happens after the
++ * tests — is vitest's behaviour, and a report built by hand proves none of it
++ * (GPT Sol on docs/plans/261008h, P2-11). Each case is a small project in a
++ * temp directory, run by this checkout's vitest with the reporter in its
++ * config, and judged by the same functions the deploy uses.
++ */
++import { spawnSync } from "node:child_process";
++import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from "node:fs";
++import { tmpdir } from "node:os";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++
++import { afterAll, describe, expect, it } from "vitest";
++
++import { rerunVerdict, testOutcomeFrom } from "../tools/fleet/test-outcome.js";
++
++const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
++const VITEST = path.join(REPO, "node_modules", ".bin", "vitest");
++const REPORTER = path.join(REPO, "scripts", "vitest-outcome-reporter.ts");
++const dirs: string[] = [];
++afterAll(() => {
++  for (const d of dirs) rmSync(d, { recursive: true, force: true });
++});
++
++/** Run vitest over `files` in a fresh directory; the reporter's file, and vitest's exit. */
++function runProject(files: Record<string, string>, opts: { args?: string[]; globalSetup?: string } = {}) {
++  const dir = mkdtempSync(path.join(tmpdir(), "outcome-reporter-"));
++  dirs.push(dir);
++  for (const [name, body] of Object.entries(files)) writeFileSync(path.join(dir, name), body);
++  if (opts.globalSetup) writeFileSync(path.join(dir, "global.mjs"), opts.globalSetup);
++  writeFileSync(
++    path.join(dir, "vitest.config.mjs"),
++    `export default { test: { include: ["*.test.mjs"], reporters: ["default", ${JSON.stringify(REPORTER)}]` +
++      `${opts.globalSetup ? ', globalSetup: ["./global.mjs"]' : ""} } };\n`,
++  );
++  const outcomeFile = path.join(dir, "outcome.json");
++  const env: NodeJS.ProcessEnv = { ...process.env, SPIDERYARN_TEST_OUTCOME_FILE: outcomeFile };
++  delete env.VITEST;
++  delete env.VITEST_WORKER_ID;
++  delete env.VITEST_POOL_ID;
++  const r = spawnSync(VITEST, ["run", "--root", dir, "--config", path.join(dir, "vitest.config.mjs"), ...(opts.args ?? [])], {
++    cwd: dir,
++    env,
++    encoding: "utf8",
++    timeout: 60_000,
++  });
++  return { text: existsSync(outcomeFile) ? readFileSync(outcomeFile, "utf8") : null, exit: r.status, out: `${r.stdout}${r.stderr}` };
++}
++
++const PASS = `import { test } from "vitest";\ntest("ok", () => {});\n`;
++const FAIL = `import { test, expect } from "vitest";\ntest("no", () => { expect(1).toBe(2); });\n`;
++
++describe("the outcome reporter, in a real vitest run", { timeout: 60_000 }, () => {
++  it("a run red in one file names that file, and only it", () => {
++    const r = runProject({ "a.test.mjs": PASS, "b.test.mjs": FAIL });
++    expect(r.exit).toBe(1);
++    expect(testOutcomeFrom(r.text)).toEqual({ kind: "red-in-files", failed: ["b.test.mjs"], files: 2 });
++  });
++
++  it("a green run is a pass", () => {
++    const r = runProject({ "a.test.mjs": PASS });
++    expect(r.exit).toBe(0);
++    expect(testOutcomeFrom(r.text)).toEqual({ kind: "pass", files: 1 });
++  });
++
++  it("a failing beforeAll is its file's failure", () => {
++    const hook = `import { test, beforeAll } from "vitest";\nbeforeAll(() => { throw new Error("hook"); });\ntest("x", () => {});\n`;
++    const r = runProject({ "a.test.mjs": PASS, "b.test.mjs": hook });
++    expect(testOutcomeFrom(r.text)).toEqual({ kind: "red-in-files", failed: ["b.test.mjs"], files: 2 });
++  });
++
++  it("an unhandled error beside a red file makes the run unusable", () => {
++    const stray = `import { test } from "vitest";\ntest("stray", () => { setTimeout(() => { throw new Error("stray"); }, 0); });\n`;
++    const r = runProject({ "a.test.mjs": stray, "b.test.mjs": FAIL });
++    const o = testOutcomeFrom(r.text);
++    expect(o.kind).toBe("unusable");
++    if (o.kind === "unusable") expect(o.why).toMatch(/unhandled/);
++  });
++
++  it("workers do not inherit the report's path, so a vitest inside a test cannot write it", () => {
++    const sees = `import { test, expect } from "vitest";\ntest("env", () => { expect(process.env.SPIDERYARN_TEST_OUTCOME_FILE).toBeUndefined(); });\n`;
++    const r = runProject({ "a.test.mjs": sees });
++    expect(testOutcomeFrom(r.text)).toEqual({ kind: "pass", files: 1 });
++  });
++
++  it("a teardown that marks its failure after a red file makes the run unusable", () => {
++    const setup =
++      `import { markFailureOutsideFiles } from ${JSON.stringify(REPORTER)};\n` +
++      `export default () => () => { process.exitCode = 1; markFailureOutsideFiles("teardown failed"); };\n`;
++    const r = runProject({ "a.test.mjs": PASS, "b.test.mjs": FAIL }, { globalSetup: setup });
++    const o = testOutcomeFrom(r.text);
++    expect(o.kind).toBe("unusable");
++    if (o.kind === "unusable") expect(o.why).toMatch(/teardown failed/);
++  });
++
++  it("a teardown that only sets the exit code after a green run makes it unusable", () => {
++    const setup = `export default () => () => { process.exitCode = 1; };\n`;
++    const r = runProject({ "a.test.mjs": PASS }, { globalSetup: setup });
++    expect(r.exit).toBe(1);
++    const o = testOutcomeFrom(r.text);
++    expect(o.kind).toBe("unusable");
++    if (o.kind === "unusable") expect(o.why).toMatch(/after its tests/);
++  });
++
++  it("a filtered run is not a whole-suite baseline", () => {
++    const r = runProject({ "a.test.mjs": PASS, "b.test.mjs": FAIL }, { args: ["a.test.mjs"] });
++    const o = testOutcomeFrom(r.text);
++    expect(o.kind).toBe("unusable");
++    if (o.kind === "unusable") expect(o.why).toMatch(/narrowed|did not run/);
++  });
++
++  it("a rerun naming a file that does not exist is not a pass", () => {
++    const r = runProject({ "a.test.mjs": PASS }, { args: ["a.test.mjs", "gone.test.mjs"] });
++    expect(r.exit).toBe(0);
++    expect(rerunVerdict(["a.test.mjs", "gone.test.mjs"], r.text, r.exit)).toMatch(/never ran gone\.test\.mjs/);
++    expect(rerunVerdict(["a.test.mjs"], r.text, r.exit)).toBeNull();
++  });
++
++  it("named on the command line, it still runs beside the others", () => {
++    const r = runProject({ "a.test.mjs": PASS }, { args: ["--reporter=default", `--reporter=${REPORTER}`] });
++    expect(testOutcomeFrom(r.text)).toEqual({ kind: "pass", files: 1 });
++  });
++});
+diff --git a/tools/fleet/readiness.ts b/tools/fleet/readiness.ts
+index 05e4da315..1bc1d02bf 100644
+--- a/tools/fleet/readiness.ts
++++ b/tools/fleet/readiness.ts
+@@ -47,6 +47,7 @@
+  *     why every record carries two {@link TreeStamp}s and why that type has an
+  *     `unknown` arm rather than a nullable sha.
+  */
++import { asTestOutcome, type TestOutcome } from "./test-outcome.js";
+ 
+ /* ------------------------------------------------------------------ *
+  * Which check.
+@@ -503,6 +504,19 @@ export type FinishedRecord = RunCommon & {
+    * could name some failures without knowing how many it missed.
+    */
+   failedTestFiles: FailedTestFiles | null;
++  /**
++   * What vitest's own outcome reporter said about the suite inside this run —
++   * green, red only in the files it names, or no use — or absent when nothing
++   * wrote one (a `typecheck` run, a log reconstruction, a record from before
++   * 2026-10-08). **The deploy reads it, the tab does not**: a later deploy
++   * reruns only those files (scripts/deploy-evidence.ts, docs/plans/261008h).
++   * Unlike `failedTestFiles` it comes from the reporter, not from matching
++   * text, and it says when a failure belonged to no file.
++   *
++   * Optional, like `preparation`, and for the same reason; malformed reads
++   * back as absent.
++   */
++  testOutcome?: TestOutcome | null;
+ };
+ 
+ export type RunRecord = StartedRecord | FinishedRecord;
+@@ -895,6 +909,7 @@ export function parseRunRecord(text: string): RunRecord | null {
+   const counts = asCounts(parsed["counts"]);
+   if (outcome === "pass" && countsContradictPass(counts)) return null;
+ 
++  const testOutcome = asTestOutcome(parsed["testOutcome"]);
+   return {
+     ...common,
+     state: "finished",
+@@ -907,6 +922,7 @@ export function parseRunRecord(text: string): RunRecord | null {
+     logPath: asString(parsed["logPath"]),
+     why: asString(parsed["why"]),
+     failedTestFiles: failedTestFilesForOutcome(outcome, asFailedTestFiles(parsed["failedTestFiles"])),
++    ...(testOutcome === null ? {} : { testOutcome }),
+   };
+ }
+ 
+diff --git a/tools/fleet/test-outcome.ts b/tools/fleet/test-outcome.ts
+new file mode 100644
+index 000000000..ab9be72e3
+--- /dev/null
++++ b/tools/fleet/test-outcome.ts
+@@ -0,0 +1,193 @@
++/**
++ * **What one run of the suite showed, as far as rerunning part of it goes** —
++ * the judgement on what `scripts/vitest-outcome-reporter.ts` wrote. A leaf, so
++ * the readiness record (tools/fleet/readiness.ts) and the deploy
++ * (scripts/deploy-evidence.ts) read one definition. docs/plans/261008h.
++ */
++
++/** More failed files than this and a rerun is a full run in all but name; the deploy runs the suite. */
++export const RERUN_FILES_MAX = 40;
++
++/**
++ * `red-in-files` is the claim a rerun leans on: **every** failure the run had
++ * is inside the files named, so running those again and seeing them pass
++ * answers for all of it. Anything that could have failed outside a file — an
++ * unhandled error, a teardown, an interrupted run, a run that did not cover
++ * the whole suite — is `unusable`, never a short list.
++ *
++ * Only the compact judgement is kept on a record: the reporter's own file
++ * lists every module, ~116 KB for this suite, past the readiness store's
++ * record ceiling.
++ */
++export type TestOutcome =
++  | { kind: "pass"; files: number }
++  | { kind: "red-in-files"; failed: [string, ...string[]]; files: number }
++  | { kind: "unusable"; why: string };
++
++/** One module's line in the reporter's file. */
++export type OutcomeFile = { project: string; path: string; state: "passed" | "skipped" | "failed" | "pending" | "queued" };
++
++const FILE_STATES = new Set(["passed", "skipped", "failed", "pending", "queued"]);
++
++/**
++ * The reporter's file, read and checked for being a finished run's: its own
++ * verdict, every module's state, and nothing failing outside a file. What it
++ * does not check is whether the run covered the whole suite — that is a
++ * question about a baseline, not a rerun ({@link testOutcomeFrom}).
++ */
++export function readOutcomeFile(
++  text: string | null,
++): { ok: true; reason: "passed" | "failed"; files: OutcomeFile[]; whole: string | null } | { ok: false; why: string } {
++  if (text === null) return { ok: false, why: "the run wrote no outcome file (vitest never reached the end of its run)" };
++  let v: unknown;
++  try {
++    v = JSON.parse(text);
++  } catch {
++    return { ok: false, why: "the outcome file is not JSON" };
++  }
++  if (typeof v !== "object" || v === null) return { ok: false, why: "the outcome file is not an object" };
++  const o = v as Record<string, unknown>;
++  if (o.schema !== 2) return { ok: false, why: `the outcome file's schema is ${String(o.schema)}, not 2` };
++  if (o.final !== true) {
++    return { ok: false, why: "the outcome file was never finalised — the run was killed, or its teardown overran, after its tests" };
++  }
++  const outside = o.failuresOutsideFiles;
++  if (!Array.isArray(outside)) return { ok: false, why: "the outcome file does not say whether anything failed outside a file" };
++  if (outside.length > 0) return { ok: false, why: `the run failed outside every test file: ${outside.map(String).join("; ")}` };
++  if (!Number.isInteger(o.unhandledErrors) || (o.unhandledErrors as number) < 0) {
++    return { ok: false, why: "the outcome file has no unhandled-error count" };
++  }
++  if (o.unhandledErrors !== 0) {
++    return { ok: false, why: `vitest caught ${o.unhandledErrors} unhandled error(s), which belong to no file a rerun could repeat` };
++  }
++  if (!Number.isInteger(o.exitCode)) return { ok: false, why: "the outcome file has no exit code" };
++  if (o.reason !== "passed" && o.reason !== "failed") {
++    return { ok: false, why: `the run ended '${String(o.reason)}', not passed or failed` };
++  }
++  if ((o.reason === "passed") !== (o.exitCode === 0)) {
++    return { ok: false, why: `the run says ${o.reason} but exited ${String(o.exitCode)} — something failed after its tests` };
++  }
++  if (!Array.isArray(o.files)) return { ok: false, why: "the outcome file lists no files" };
++  const files: OutcomeFile[] = [];
++  for (const f of o.files as unknown[]) {
++    const file = f as Record<string, unknown> | null;
++    if (
++      typeof file?.path !== "string" ||
++      typeof file.project !== "string" ||
++      typeof file.state !== "string" ||
++      !FILE_STATES.has(file.state)
++    ) {
++      return { ok: false, why: "the outcome file has a malformed file entry" };
++    }
++    if (!isCheckoutPath(file.path)) {
++      return { ok: false, why: `the outcome file names '${file.path}', which is not a path inside the checkout` };
++    }
++    if (file.state === "pending" || file.state === "queued") {
++      return { ok: false, why: `${file.path} never finished (${file.state})` };
++    }
++    files.push({ project: file.project, path: file.path, state: file.state as OutcomeFile["state"] });
++  }
++
++  /* Whether it covered everything — asked by a baseline, not by a rerun. */
++  const n = o.narrowed as Record<string, unknown> | null | undefined;
++  const narrowedBy = [
++    ...(Array.isArray(n?.filters) && n.filters.length > 0 ? [`file filters ${n.filters.map(String).join(" ")}`] : []),
++    ...(n?.shard ? [`shard ${String(n.shard)}`] : []),
++    ...(Array.isArray(n?.project) && n.project.length > 0 ? [`projects ${n.project.map(String).join(" ")}`] : []),
++    ...(n?.testNamePattern ? [`test names /${String(n.testNamePattern)}/`] : []),
++  ];
++  const whole =
++    n === null || typeof n !== "object"
++      ? "the outcome file does not say how the run was narrowed"
++      : narrowedBy.length > 0
++        ? `the run was narrowed by ${narrowedBy.join(", ")}`
++        : o.notRun !== 0
++          ? Number.isInteger(o.notRun)
++            ? `${String(o.notRun)} test file(s) the suite collects did not run`
++            : "the outcome file does not say whether every test file ran"
++          : null;
++  return { ok: true, reason: o.reason, files, whole };
++}
++
++/**
++ * **A whole-suite run, judged**: green, red only in the files it names, or no
++ * use. A run that did not cover every file the suite collects is no use as a
++ * baseline, however it ended.
++ */
++export function testOutcomeFrom(text: string | null): TestOutcome {
++  const read = readOutcomeFile(text);
++  if (!read.ok) return { kind: "unusable", why: read.why };
++  if (read.whole !== null) return { kind: "unusable", why: read.whole };
++  const { files } = read;
++  if (files.length === 0) return { kind: "unusable", why: "the run collected no test files" };
++  const failed = [...new Set(files.filter((f) => f.state === "failed").map((f) => f.path))].sort();
++  if (read.reason === "passed") {
++    if (failed.length > 0) return { kind: "unusable", why: `the run says it passed but ${failed.length} file(s) failed` };
++    if (!files.some((f) => f.state === "passed")) return { kind: "unusable", why: "no test file passed — the whole run skipped" };
++    return { kind: "pass", files: files.length };
++  }
++  const [first, ...rest] = failed;
++  if (first === undefined) return { kind: "unusable", why: "the run failed, but no file did — the failure was outside every file" };
++  if (failed.length > RERUN_FILES_MAX) {
++    return { kind: "unusable", why: `${failed.length} files failed — more than ${RERUN_FILES_MAX}, so rerunning them is the suite in all but name` };
++  }
++  return { kind: "red-in-files", failed: [first, ...rest], files: files.length };
++}
++
++/**
++ * A whole-suite outcome checked against vitest's exit status as the caller saw
++ * it, which must say the same; an outcome that disagrees is no use.
++ */
++export function agreeingWithExit(outcome: TestOutcome, exit: number | null): TestOutcome {
++  if (outcome.kind === "unusable") return outcome;
++  if (exit === null) return { kind: "unusable", why: "vitest has no exit status (killed?)" };
++  if ((outcome.kind === "pass") !== (exit === 0)) {
++    return { kind: "unusable", why: `the outcome says ${outcome.kind} but vitest exited ${exit}` };
++  }
++  return outcome;
++}
++
++/**
++ * **Did a rerun answer for every file it was asked about?** Null when it did.
++ * vitest silently ignores a filter that matches no file (measured), so a green
++ * exit over fewer files than were named is not a pass; nor is a file that only
++ * skipped. `exit` is vitest's own status as the caller saw it.
++ */
++export function rerunVerdict(requested: readonly string[], text: string | null, exit: number | null): string | null {
++  const read = readOutcomeFile(text);
++  if (!read.ok) return `the rerun cannot be read: ${read.why}`;
++  if (exit === null) return "vitest has no exit status (killed?)";
++  if ((read.reason === "passed") !== (exit === 0)) return `the rerun's outcome says ${read.reason} but vitest exited ${exit}`;
++  const failed = [...new Set(read.files.filter((f) => f.state === "failed").map((f) => f.path))].sort();
++  if (failed.length > 0) return `still failing: ${failed.join(" ")}`;
++  const missing = requested.filter((p) => !read.files.some((f) => f.path === p));
++  if (missing.length > 0) return `the rerun never ran ${missing.join(" ")}`;
++  const notPassed = requested.filter((p) => read.files.some((f) => f.path === p && f.state !== "passed"));
++  if (notPassed.length > 0) return `the rerun did not pass ${notPassed.join(" ")} (skipped)`;
++  return null;
++}
++
++/**
++ * A {@link TestOutcome} read back off a stored record, or null for anything
++ * malformed — which a reader takes as "not known", the same as absent. Strict
++ * the way `asPreparation` is: a list that does not hold together is no list.
++ */
++export function asTestOutcome(v: unknown): TestOutcome | null {
++  if (typeof v !== "object" || v === null) return null;
++  const o = v as Record<string, unknown>;
++  const files = o.files;
++  if (o.kind === "pass") return Number.isInteger(files) && (files as number) > 0 ? { kind: "pass", files: files as number } : null;
++  if (o.kind === "unusable") return typeof o.why === "string" && o.why !== "" ? { kind: "unusable", why: o.why } : null;
++  if (o.kind !== "red-in-files" || !Number.isInteger(files) || !Array.isArray(o.failed)) return null;
++  const failed = o.failed as unknown[];
++  if (failed.length === 0 || failed.length > RERUN_FILES_MAX || failed.length > (files as number)) return null;
++  if (!failed.every((p) => typeof p === "string" && isCheckoutPath(p))) return null;
++  const [first, ...rest] = failed as string[];
++  if (first === undefined || new Set(failed).size !== failed.length) return null;
++  return { kind: "red-in-files", failed: [first, ...rest], files: files as number };
++}
++
++/** Relative, and inside the checkout. */
++function isCheckoutPath(p: string): boolean {
++  return p !== "" && !p.startsWith("/") && !p.split("/").includes("..");
++}
+diff --git a/vitest.config.ts b/vitest.config.ts
+index 8509755cb..0ace62160 100644
+--- a/vitest.config.ts
++++ b/vitest.config.ts
+@@ -3,6 +3,7 @@ import type { InlineConfig } from "vitest/node";
+ import { defaultExclude, defineConfig } from "vitest/config";
+ 
+ import { recordRefusal } from "./admission-journal.js";
++import { TEST_OUTCOME_FILE_ENV } from "./scripts/vitest-outcome-reporter.js";
+ import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
+ import { ACCOUNT_ROUTING_VARIABLES } from "./tests/helpers/account-neutral-env.js";
+ import {
+@@ -227,6 +228,8 @@ const COMMON = {
+  */
+ const NO_PROVIDER_CALLS = "./tests/setup/no-provider-calls.ts";
+ 
++const OUTCOME_REPORTER = "./scripts/vitest-outcome-reporter.ts";
++
+ export default defineConfig({
+   resolve: { alias: ALIAS },
+   test: {
+@@ -240,6 +243,10 @@ export default defineConfig({
+        The private lane names its own `maxWorkers: 1` and so is unaffected by
+        either, which is the point of it. */
+     maxWorkers: PARALLEL_WORKERS,
++    /* Which files failed, for a later deploy to rerun only those — when asked,
++       by the readiness runner (scripts/vitest-outcome-reporter.ts). A
++       `--reporter` flag replaces this list, so the deploy names it there. */
++    ...(process.env[TEST_OUTCOME_FILE_ENV] ? { reporters: ["default", OUTCOME_REPORTER] } : {}),
+     projects: [
+       {
+         resolve: { alias: ALIAS },
