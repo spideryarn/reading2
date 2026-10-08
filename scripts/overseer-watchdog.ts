@@ -65,6 +65,13 @@
  * `console.log`/`console.error` rather than src/log.ts: this is a CLI run by
  * systemd, not a request path — docs/project/logging.md.
  *
+ * **Two more checks run after the daemon's, about the Overseer SESSION**: its
+ * queue pacer's heartbeat, and how far production is behind dev. They live in
+ * `scripts/overseer-watchdog-checks.ts`, print one line each, and any state but
+ * `ok` on either (`unknown` included) makes the run exit 1. They were added on
+ * 2026-10-08, after the pacer expired silently and production went 17 hours
+ * undeployed with this timer reporting healthy throughout.
+ *
  * **The verdict currently reaches nobody but the journal.** A non-zero exit
  * from a systemd oneshot lands in `systemctl is-failed` / `journalctl -u
  * overseer-watchdog` and nowhere a person looks day to day. Writing it into
@@ -77,6 +84,7 @@ import { spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 
+import { formatCheck, runSessionChecks, type SessionCheck } from "./overseer-watchdog-checks.js";
 import { MEASURED_CADENCE_MS, TICK_MS, staleAfterMs } from "../tools/overseer/daemon.js";
 import { STORE_SCHEMA, readCheckpoint, storeRoot, type CheckpointRead } from "../tools/overseer/store.js";
 
@@ -267,7 +275,9 @@ function showUnit(): Record<string, string> | null {
   return shown;
 }
 
-const HELP = `overseer-watchdog -- checks the Overseer daemon's heartbeat AND its snapshot clock, and exits 0 (healthy) or 1 (not)
+const HELP = `overseer-watchdog -- checks the Overseer daemon's heartbeat AND its snapshot clock, the Overseer
+session's pacer heartbeat, and how far production is behind dev; exits 0 (all ok) or 1 (anything
+unhealthy or unknown)
 
   npx tsx scripts/overseer-watchdog.ts [--max-tick-age-ms N] [--max-snapshot-age-ms N]
 
@@ -292,7 +302,13 @@ function parsePositiveMs(raw: string | undefined, flagName: string): { ok: true;
   return { ok: true, value: parsed };
 }
 
-export function main(argv: readonly string[]): number {
+/**
+ * `sessionChecks` are the two about the Overseer SESSION rather than the daemon
+ * — the pacer heartbeat and production's lag behind dev, added 2026-10-08
+ * (scripts/overseer-watchdog-checks.ts). Injected so a test of the daemon
+ * verdict does not read tmux or fetch from GitHub.
+ */
+export function main(argv: readonly string[], sessionChecks: () => SessionCheck[] = () => runSessionChecks()): number {
   const { values } = parseArgs({
     args: [...argv],
     allowPositionals: false,
@@ -324,7 +340,11 @@ export function main(argv: readonly string[]): number {
   const verdict = assessWatchdog(read, Date.now(), tick.value ?? DEFAULT_MAX_TICK_AGE_MS, snapshot.value ?? null);
   console.log(formatVerdict(verdict));
   console.log(describeUnit(showUnit()));
-  return verdict.healthy ? 0 : 1;
+  // Every check runs and prints whatever the others found; any state but ok,
+  // `unknown` included, fails the run.
+  const checks = sessionChecks();
+  for (const check of checks) console.log(formatCheck(check));
+  return verdict.healthy && checks.every((check) => check.state === "ok") ? 0 : 1;
 }
 
 /** Imported by a test, or run directly. Same guard as scripts/overseer.ts. */

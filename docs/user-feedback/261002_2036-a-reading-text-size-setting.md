@@ -1,7 +1,7 @@
 ---
 reports: spya-nnr8ha
-ending: awaiting
-comment: Waiting on you: body text alone can follow one setting, but headings stay fixed. Three options: about ten CSS rules redone as one scale (about a day), body text only (not recommended), or not now and use browser zoom.
+ending: declined
+comment: You chose not now (q-wux4k7, 2026-10-08). Browser zoom, Cmd or Ctrl with +, already scales everything, so no setting was built.
 ---
 # A reading text size setting on /profile
 
@@ -21,3 +21,8 @@ are in [261003a § The question for Greg](../plans/261003a-reading-text-size-set
 **The question for Greg is now a file**, `docs/user-feedback/questions/q-wux4k7.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
 ([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
+
+## Ending
+
+**Declined, on Greg's answer.** 2026-10-08, in the Feedback dialog, to
+[q-wux4k7](questions/q-wux4k7.md): *"C"* — not now. Recorded by the feedback sweep.
