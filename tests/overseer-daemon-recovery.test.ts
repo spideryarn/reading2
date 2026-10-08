@@ -65,6 +65,14 @@ const LATER = "2026-09-08T02:52:00.000Z";
 const LATER_STILL = "2026-09-08T02:55:00.000Z";
 const LATEST = "2026-09-08T02:58:00.000Z";
 
+/**
+ * The clock every store this file opens by hand runs on. Without it the store
+ * falls back to the real time, and a checkpoint prunes resolved records more
+ * than 30 days old (recovery.ts § `pruneResolved`) — so a dismissal stamped
+ * 2026-09-08 vanished from the index once the wall clock passed 2026-10-08.
+ */
+const storeNow = (): Date => new Date(LATEST);
+
 const roots: string[] = [];
 
 afterEach(() => {
@@ -167,7 +175,7 @@ function register(root: string): readonly RegisterEntry[] {
 
 /** The index as the store holds it after the daemon has gone: opened, read, closed. */
 function index(root: string): RecoveryRecord[] {
-  const opened = openStore({ root });
+  const opened = openStore({ root, now: storeNow });
   if (!opened.ok) throw new Error(`the store would not open: ${JSON.stringify(opened.refusal)}`);
   try {
     return [...opened.store.recovery.records.values()];
@@ -510,7 +518,7 @@ describe("distinct disappearances of one run (Sol's F3)", () => {
     const dismissed = first[0];
     if (dismissed === undefined) throw new Error("expected a record");
 
-    const opened = openStore({ root });
+    const opened = openStore({ root, now: storeNow });
     if (!opened.ok) throw new Error("expected the store to open");
     opened.store.append([
       {
@@ -649,7 +657,7 @@ function plantUnparseableLine(root: string): void {
 }
 
 function replayKindOf(root: string): string {
-  const opened = openStore({ root });
+  const opened = openStore({ root, now: storeNow });
   if (!opened.ok) throw new Error("the store did not open");
   try {
     return opened.store.recovery.replay.kind;
@@ -913,7 +921,7 @@ describe("a recovery replay that could not run, and a daemon on its way out", ()
     // A dismissal the fold never saw — fsynced, then a complete line nothing
     // can parse, so the recovery-tail replay refuses the whole range and the
     // fold still says unresolved.
-    const opened = openStore({ root });
+    const opened = openStore({ root, now: storeNow });
     if (!opened.ok) throw new Error("the store did not open");
     opened.store.append([
       {
@@ -1198,7 +1206,7 @@ describe("dismissal through the inbox", () => {
     // up or the request file was removed. A later bad complete line makes the
     // recovery-tail replay all-or-nothing refusal keep the stale unresolved
     // fold, which must not be treated as authority for a second append.
-    const opened = openStore({ root });
+    const opened = openStore({ root, now: storeNow });
     if (!opened.ok) throw new Error("the store did not open");
     opened.store.append([
       {
@@ -1239,7 +1247,7 @@ describe("dismissal through the inbox", () => {
     const { root, ids } = await rebootedStore();
     const target = ids[0] as string;
     await recoveryCli(["dismiss", target, "--why", "bounded scan"], { root, out: () => {} });
-    const opened = openStore({ root });
+    const opened = openStore({ root, now: storeNow });
     if (!opened.ok) throw new Error("the store did not open");
     const append = (events: OverseerEvent[]): boolean => opened.store.append(events).ok;
 
@@ -1296,7 +1304,7 @@ describe("dismissal through the inbox", () => {
     const processing = join(root, RECOVERY_INBOX_DIR, "processing");
     mkdirSync(processing);
     for (let i = 0; i < 200; i += 1) writeFileSync(join(processing, `junk-${i.toString().padStart(3, "0")}`), "x");
-    const opened = openStore({ root });
+    const opened = openStore({ root, now: storeNow });
     if (!opened.ok) throw new Error("the store did not open");
     const lines: string[] = [];
     const results = [];
@@ -1329,7 +1337,7 @@ describe("dismissal through the inbox", () => {
     const nowMs = Date.parse(LATEST);
     utimesSync(young, new Date(nowMs - 5_000), new Date(nowMs - 5_000));
     utimesSync(stale, new Date(nowMs - 10 * 60_000), new Date(nowMs - 10 * 60_000));
-    const opened = openStore({ root });
+    const opened = openStore({ root, now: storeNow });
     if (!opened.ok) throw new Error("the store did not open");
     await drainRecoveryInbox({
       root,
@@ -1354,7 +1362,7 @@ describe("dismissal through the inbox", () => {
       const [file] = pending(root);
       if (file === undefined) throw new Error("the CLI wrote no request");
       const path = join(root, RECOVERY_INBOX_DIR, file);
-      const opened = openStore({ root });
+      const opened = openStore({ root, now: storeNow });
       if (!opened.ok) throw new Error("the store did not open");
       const drain = (log: (line: string) => void) =>
         drainRecoveryInbox({
@@ -1407,7 +1415,7 @@ describe("dismissal through the inbox", () => {
       const claimedBytes = `${JSON.stringify({ ...request, why: "the crash-left copy" }, null, 2)}\n`;
       writeFileSync(claimedCopy, claimedBytes);
 
-      const opened = openStore({ root });
+      const opened = openStore({ root, now: storeNow });
       if (!opened.ok) throw new Error("the store did not open");
       const drain = (log: (line: string) => void) =>
         drainRecoveryInbox({

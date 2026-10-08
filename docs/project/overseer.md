@@ -581,7 +581,10 @@ Every few hours, as a tmux loop like the feedback sweep's:
    commit, so after `prepare` wait for the loop to pass a commit after the notes commit — the
    Readiness tab shows when; the `changelog` gate says so if you go early. If `--ready` finds no
    green commit, `dev` is red: get it fixed on `dev` (dispatch, as for any red) rather than
-   forcing. Plain `npm run deploy` still deploys the tip and runs the suite itself — use it when a
+   forcing. **A readiness red that repeats on a second run is fixed that hour**, because until it
+   is, nothing can deploy: on 2026-10-08 one clock-dependent test failed five runs in a row from
+   02:00, nobody acted on it, and production went 17 hours without a deploy while `dev` gathered
+   41 commits. Greg: *"Why haven't there been any deploys in 17h?"* Plain `npm run deploy` still deploys the tip and runs the suite itself — use it when a
    fix cannot wait for the loop. Either way the summary's `test:` line says whether the suite ran
    or a readiness run stood in for it; quote it in the report. It applies the migrations by
    default. `--force-gate=test` is allowed when the suite is red for reasons that are not the
