@@ -1,0 +1,11 @@
+Review this plan, read-only: docs/plans/261008b-ios-layout-and-zoom-after-a-rotation-or-the-keyboard.md (in this worktree). You were consulted on the diagnosis earlier today; now judge the plan as a plan.
+
+Check against the code: src/web/reader/Reader.tsx (the `.reader` inline style near `minWidth: fit.minWidth + horizontalInset(...)`), src/web/layout.ts (fitView and its helpers), src/web/reader/measure.ts, src/web/styles/shell.css (`.reader`, `body`), src/web/styles/narrow-window.css (any rule that sets or depends on `.reader` width, `.text-alone` auto margins, `--page-w`), src/web/styles/dock.css, src/web/useVisualViewport.ts, src/web/scroll.ts (hide-on-scroll: would `scrollTo(scrollX, scrollY)` trip it?), and the existing browser tests tests/*-in-chrome.test.ts(x) with tests/helpers/stylesheets.ts.
+
+Specifically:
+1. Is `min-width: min(<px>, 100%)` on `.reader` truly inert at steady state? Anything that makes `.reader`'s containing block narrower than root clientWidth (body padding, a wrapper element between body and .reader, `#root` styling, a transform), or anywhere minWidth is legitimately larger than the page (e.g. Tweets' wide band, tiny windows, a 12px/20px root, `?spine=0`), or anything reading `.reader`'s min-width back from the DOM?
+2. Does it remove the transient on the frame WebKit uses? Is there any OTHER element that keeps a stale pixel width across a rotation (e.g. `--page-w`, `--table-w`, `--mode-w`, a sticky bar sized from `--page-w`, the table's own column widths in px, the masthead) that would still overflow the narrowed page and give WebKit the same too-wide content? This matters most: if the table itself has px column widths from the old fit, capping `.reader` alone does not stop the document's scrollWidth from exceeding the viewport. Say exactly which elements would still overflow, and what the minimal complete cap is.
+3. Stage 2: is a guarded `scrollTo(scrollX, scrollY)` after keyboard-down-while-panned worth shipping blind, or should it be left out (simplest first) pending a ?probe=1 trace? If shipped, what's the right trigger and what must the test cover?
+4. The test design: a sound red-first? Anything that would make it pass vacuously?
+
+Give a verdict (BUILD / BUILD WITH CHANGES / RETHINK) and numbered findings with severity. Write them to the output file.

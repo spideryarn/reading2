@@ -185,6 +185,7 @@ import {
   fitView,
   margTitleReserve,
   NARROW_WINDOW_MAX,
+  readerMinWidth,
 } from "../layout.js";
 import { isFolded, subscribeFold } from "../fold.js";
 import { media } from "../media.js";
@@ -3946,7 +3947,7 @@ export function Reader({
          box and the page scrolls sideways by the notch. */
       style={
         {
-          minWidth: fit.minWidth + horizontalInset(safeAreaInsets()),
+          minWidth: readerMinWidth(fit.minWidth + horizontalInset(safeAreaInsets())),
           "--mode-w": `${fit.modeW}px`,
           /* The width `fitView` was given — the page beside the scrollbar,
              notch already out — for the two sticky bars, which were `100vw`

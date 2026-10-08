@@ -109,7 +109,36 @@
      last column does not run under the far corner. */
   padding-left: calc(var(--spine-w) + var(--mode-w) + var(--safe-left));
   padding-right: var(--safe-right);
-  /* min-width is set inline, in pixels, by App — see the note above. */
+  /* min-width is set inline, in pixels, by App — see the note above — and
+     capped at the page (layout.ts § `readerMinWidth`).
+
+     **`overflow-x: clip`, so no in-flow, absolute or sticky content inside the
+     reading view can make the page wider than the window**, even for a moment.
+     Every width in here is pixels
+     for the window React last saw: `--page-w` on the two bars, the table and
+     its `<col>`s, `--mode-w`, Marginalia's `--marg-*`. A rotation narrows the
+     window before React hears of it, and on iOS WebKit chooses the new page
+     scale from the too-wide page it lays out in between, before any script
+     runs — an iPad turned to portrait landed zoomed out, the article short of
+     the right edge and the bottom bar partway up the screen (Greg,
+     spya-gxbwug; docs/plans/261008b-ios-layout-and-zoom-after-a-rotation-or-the-keyboard.md).
+     One declaration here covers every stale width in those positioning
+     schemes, including ones not yet written. Viewport-fixed descendants are
+     deliberately outside this clip: their containing block is the viewport,
+     not `.reader`, and CSS excludes them from an intervening ancestor's
+     overflow clip. They remain visible, and any part outside the layout
+     viewport cannot be scrolled to or widen the page (CSS Positioned Layout 3
+     § 2.1). None has a transformed, filtered or contained ancestor that
+     would move its fixed containing block inside `.reader`.
+
+     `clip`, not `hidden`: `clip` makes no scroll container, so the sticky bars
+     still stick to the viewport, and `overflow-y` may stay `visible` beside it.
+     At rest it removes nothing, because the page never scrolls sideways
+     (`fitView`'s contract). **It does move a future overflow bug from "the page
+     scrolls sideways" to "the end of a row is cut off"**, and out of
+     `documentElement.scrollWidth` — so look at `.reader`'s own `scrollWidth`,
+     which still reports it (narrow-windows.md § the check). */
+  overflow-x: clip;
 }
 /* One rail width, since 2026-08-26: the labelled 13rem form is gone and the
    spine is always the collapsed strip — see Spine.tsx. Mirrors SPINE_W in
