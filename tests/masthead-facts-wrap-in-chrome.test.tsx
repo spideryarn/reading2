@@ -124,7 +124,15 @@ describe.skipIf(chrome === null)("the masthead's facts line on a phone, in Chrom
               return new Set([...r.getClientRects()].filter((b) => b.width > 0).map((b) => Math.round(b.top))).size;
             };
             return {
-              scrollWidth: document.documentElement.scrollWidth,
+              /* Both, because `.reader` clips its sideways overflow since
+                 261008b (shell.css § shell): an overflowing row no longer
+                 widens the document, and `.reader`'s own `scrollWidth` is
+                 where it still shows. The control below is what proves this
+                 measure can see it. */
+              scrollWidth: Math.max(
+                document.documentElement.scrollWidth,
+                document.querySelector(".reader")?.scrollWidth ?? 0,
+              ),
               rights: facts.map((el) => el.getBoundingClientRect().right),
               texts: facts.map((el) => el.textContent ?? ""),
               lines: facts.map(lines),

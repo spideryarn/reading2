@@ -753,6 +753,30 @@ export function fitView({
 }
 
 /**
+ * **The `min-width` `.reader` is given**, as the CSS Reader.tsx writes inline,
+ * from `Fit.minWidth` plus the notch — **capped at the page, `100%`**.
+ *
+ * The pixels are for the window React last saw, and a rotation narrows the
+ * window before React hears of it. WebKit lays the page out at the new size,
+ * with the old number still on it, and on iOS chooses the new page scale from
+ * that too-wide page *before any script runs* (`dynamicViewportSizeUpdate`): an
+ * iPad turned to portrait could land zoomed out to ~0.7 and stay there, with
+ * the article short of the right edge and the bottom bar partway up the screen
+ * (Greg, spya-gxbwug). The cap is in CSS because nothing in JavaScript runs
+ * soon enough; `.reader`'s `overflow-x: clip` (shell.css § shell) is the other
+ * half, for the stale pixels on everything inside it.
+ *
+ * **Inert at rest**, because `fitView` never asks for more than the width it
+ * was given, and the notch term is exactly the gap between that width and the
+ * page; `100%` is `#root`'s width, which is the page (a margin-less body, no
+ * wrapper). tests/reader-after-a-rotation-in-a-browser.test.ts pins both.
+ * docs/plans/261008b-ios-layout-and-zoom-after-a-rotation-or-the-keyboard.md.
+ */
+export function readerMinWidth(px: number): string {
+  return `min(${px}px, 100%)`;
+}
+
+/**
  * The layout when the middle band belongs to a mode: spine, band, prose.
  *
  * Three things are decided here and each is a judgement rather than arithmetic:

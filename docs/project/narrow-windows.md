@@ -40,6 +40,15 @@ The check is one line in the console, at whatever width you are worried about:
 document.documentElement.scrollWidth - document.documentElement.clientWidth  // must be 0
 ```
 
+**On the reading view, check `.reader` too.** Since 2026-10-08 `.reader` clips its sideways
+overflow (`overflow-x: clip`, shell.css § shell), so a row that overflows there is cut off rather
+than widening the document, and the line above stays 0 over the top of it. `.reader`'s own
+`scrollWidth` still reports it:
+
+```js
+(r => r.scrollWidth - r.clientWidth)(document.querySelector(".reader"))  // must be 0 at rest
+```
+
 **Run it beside a classic scrollbar, or it cannot fail on a desktop.** Headless Chrome, the box's
 Playwright and a trackpad Mac all have overlay scrollbars that take no width, and a box sized with
 `100vw` or `innerWidth` overflows only where the scrollbar does take width — a Mac with a mouse, or
@@ -210,6 +219,17 @@ and `tests/layout-viewport-width.test.tsx` fails on a raw `innerWidth` anywhere 
 unless the file is on its list with a reason.
 [260912b](../plans/260912b-a-rotation-lays-the-reading-view-out-for-the-new-width.md); the class is
 [the postmortem](../postmortems/260912b-a-layout-read-from-a-number-that-means-a-different-viewport-on-ios.md).
+
+**And the old window's pixels must never widen the new window's page.** Every width the reading
+view writes is pixels for the window React last saw. A rotation narrows the window first, and on
+iOS WebKit picks the page scale from the page it lays out in between, before any script runs. A
+page wider than the screen then lands zoomed out, with the article short of the right edge and the
+bottom bar partway up (Greg, iPad, 2026-10-08). So `.reader`'s `min-width` is capped at `100%` and
+`.reader` clips its sideways overflow, and
+`tests/reader-after-a-rotation-in-a-browser.test.ts` lays the page out at one width and narrows it
+without re-rendering, in Chrome and WebKit.
+[261008b](../plans/261008b-ios-layout-and-zoom-after-a-rotation-or-the-keyboard.md); the class is
+[the postmortem](../postmortems/261008a-a-width-from-the-last-render-meets-the-browser-before-the-next-one.md).
 
 **Two columns beside the prose, and which one gives way.** Marginalia's notes (`?margin=1`) can
 sit right of the prose while a band sits left of it, since 2026-10-01. All three need
