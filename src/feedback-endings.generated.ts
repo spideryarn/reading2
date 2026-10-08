@@ -521,7 +521,7 @@ export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
   "spya-kbzzk8": "No change at the time: dictation was not on Whisper but on a Gemini model chosen in a bake-off the day before, because it takes the custom vocabulary. The evidence did not justify a swap.",
   "spya-krvuc9": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-mcs4gb": "Skim and More now sit in Structure and Summary's group, and Comments sits with Marginalia, after it. On a phone More is now almost on screen, but the bar still scrolls sideways.",
-  "spya-mdp0em": "Waiting on you: not built. Every way of showing pills on the public shelf edits a security defence, and that shelf has 6 articles where pills need 8. Four options, or did you mean Include public on your own shelf?",
+  "spya-mdp0em": "Waiting on you again: measured against your half-cent bar, the plan is automatic up to 20 public articles, billed to a site account, with an admin rebuild button beyond. It edits a security defence, so it needs your yes to build.",
   "spya-mq05ww": "Shipped: 22 cropped, captioned screenshots and 3 GIFs across 21 Help pages, and help-page.md says how to keep them true. Eight modes still have no picture; that is queued.",
   "spya-n7hvm0": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-n8cuqq": "Shipped: dictation runs fifteen minutes and warns before it stops, and Feedback now takes 20,000 characters, a full fifteen minutes of non-stop speech.",
