@@ -186,7 +186,7 @@ address the import came from (whole) or the uploaded file's name, and the error 
 typed into the box for the reader, who reads them and can delete them before sending, and the page
 says so — the third clause of [feedback.md § The one rule](feedback.md#the-one-rule). Greg's call,
 answering q-a7kffw; plan
-[261008i](../plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 **And the whole address reaches Sentry**, not just our own database. Asked and
 answered, 2026-09-02: Greg chose the full URL everywhere over a path-only copy.
@@ -440,7 +440,7 @@ it. What the code has to keep true for that bullet:
 - **Nothing serves it to anybody.** No route reads the table; only a developer, through
   `scripts/import-records.ts`.
 
-Plan [261008i](../plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md),
+Plan [261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md),
 GPT Sol's finding 2.
 
 ## Reading time

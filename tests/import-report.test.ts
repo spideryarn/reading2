@@ -6,7 +6,7 @@
  * q-a7kffw): the source address, the uploaded file's name and the error
  * sentence go in too, in the box where the reader sees them and can delete
  * them before sending — docs/project/feedback.md § The one rule, and plan
- * 261008i § Stage 1. The article's title still does not.
+ * 261008j § Stage 1. The article's title still does not.
  */
 import { describe, expect, it } from "vitest";
 

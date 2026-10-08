@@ -7,35 +7,39 @@
  * public/site.webmanifest, which is how Greg reads — there is no Back to press.
  * Stage B of docs/plans/260906g-back-to-where-you-jumped-from.md.
  *
- * ## It draws the browser's own stack, and keeps no stack of its own
+ * ## It moves the position, and nothing else
  *
  * Every deliberate jump pushes a history entry (url-state.md § Position
- * replaces history) and Stage A put a stamp on that entry saying where the
- * reader was standing (jump-history.ts). So this component is a *view* of one
- * fact — `readStamp(history.state)`, through `useJumpStamp` — and pressing it
- * calls `history.go` and nothing else. **Nothing here scrolls anything:**
- * `popstate` restores the target entry's `?at=`, nuqs hands it to the `at`
- * parameter, and `useReadingPosition`'s restore effect moves the page, which is
- * the same path a pasted link takes. Adding a `scrollToBlock` here would be a
- * second mover racing that one.
+ * replaces history) stamped with where the reader was standing
+ * (jump-history.ts), and the stamp rides along on every later push that stays
+ * on this article. So this component is a *view* of one fact — the origin on
+ * `history.state`, through `useJumpOrigin` — and pressing it calls `onReturn`,
+ * which is `useReadingPosition`'s `returnToOrigin`: a push of today's address
+ * with only `?at=` changed, and the move (keynav.ts § `beginReturn`).
  *
- * Repeated presses walk the chain backwards, which is the dropdown Greg
- * imagined without any of its machinery — and the machinery is not optional,
- * since JavaScript can see `history.length` and nothing else in the stack.
+ * > I think it would be better if it just changed the position, and so if I
+ * > changed modes since, those modes would stay as they are currently.
+ * >
+ * > — Greg, 2026-10-08 (spya-q3dfmw)
  *
- * ## `history.go(-depth)`, and why it is not `history.back()`
+ * Until then it was `history.go(-depth)`, a Back that walked to the entry the
+ * jump left — and that entry's `?mode=` came back with its position.
+ * docs/plans/261008g-the-way-back-chip-moves-the-position-and-leaves-the-modes-alone.md.
  *
- * It was `history.back()` until 2026-09-16, which was correct only while the
- * origin was always the *immediate* predecessor. Since a stamp now rides across
- * every push that stays on this article — so that leaving a covering band to
- * see where you landed does not destroy the way back
- * (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md) — the
- * origin can be several entries away, and one press has to walk all of them.
+ * **Nothing here scrolls anything**: the one mover is `beginReturn`, beside
+ * `beginJump`, and a `scrollToBlock` here would race it.
  *
- * The depth is carried on the entry rather than counted here, and that is what
- * makes Back, Forward and a second jump all free: each entry knows its own
- * distance, so nothing has to be kept in step with the reader wandering the
- * stack.
+ * Repeated presses unwind the journeys in order — the dropdown Greg imagined
+ * when the chip was built, carried on the stamp as `earlier`.
+ *
+ * ## The prose has to be visible to land in
+ *
+ * The origin is always a place in the prose (keynav.ts § `measureOrigin`
+ * measures only the article's own rows), never inside a mode's band. On a phone
+ * an open band lies over the whole article, so a return there would move prose
+ * nobody can see; the reader view's `onReturn` steps such a band aside first —
+ * the same `bandAway` a passage link in a band uses (Reader.tsx §
+ * `returnFromJump`) — leaving the mode itself as it is.
  *
  * ## When it is not there
  *
@@ -57,19 +61,22 @@ import { X } from "lucide-react";
 import type { BlockId } from "../types.js";
 import type { JumpOrigin } from "./jump-history.js";
 import { type Section, sectionIndexContaining } from "./position.js";
-import { dismissJumpOrigin, useJumpStamp } from "./router.js";
+import { dismissJumpOrigin, useJumpOrigin } from "./router.js";
 
 export function ReturnChip({
   sections,
   rowOf,
+  onReturn,
 }: {
   sections: readonly Section[];
   /** The article's block → row index, which is how a stamp is placed. */
   rowOf: ReadonlyMap<BlockId, number>;
+  /** The press: back to the origin, the position only — see the header. */
+  onReturn: () => void;
 }) {
-  const stamp = useJumpStamp();
-  const label = stamp === null ? null : labelFor(stamp.origin, sections, rowOf);
-  if (stamp === null || label === null) return null;
+  const origin = useJumpOrigin();
+  const label = origin === null ? null : labelFor(origin, sections, rowOf);
+  if (label === null) return null;
 
   return (
     /* `role="note"` and no live region, for `InstallHint`'s reason: this is a
@@ -80,10 +87,9 @@ export function ReturnChip({
       <button
         type="button"
         className="return-chip-go"
-        /* `history.go(-depth)`, and that really is the whole handler — see the
-           header. It is also why this is a button rather than a link: there is
-           no href for "the entry this reader came from". */
-        onClick={() => history.go(-stamp.depth)}
+        /* A button rather than a link: the address it writes is decided at the
+           press, from whatever the reader has open by then. */
+        onClick={onReturn}
       >
         {/* Decorative: the sentence beside it already says what the press
             does, so a screen reader reading "left arrow hook" first would only

@@ -3076,7 +3076,7 @@ export const jobs = spideryarn.table(
  * (spya-f9c9pe): *"let's just make sure that we are making it possible for the
  * dev agent to access, find, debug whatever it needs to solve problems from
  * production after the fact."* Plan
- * docs/plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md.
+ * docs/plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md.
  *
  * A `jobs` row holds all of this already, and does not last: `trimFinished`
  * keeps fifty finished jobs per owner. Keeping the job row itself instead was
@@ -3087,7 +3087,7 @@ export const jobs = spideryarn.table(
  *
  * **Written by a trigger, `jobs_record_import`**, never by the application —
  * four code paths move a job into a terminal status and only two pass through
- * `noteEnded` (drizzle/20261008193827_import_records.sql). The trigger is a
+ * `noteEnded` (drizzle/20261008212426_import_records.sql). The trigger is a
  * narrowly qualified security-definer so a missing runtime-role grant on this
  * auxiliary table cannot stop the job's own ending; PUBLIC cannot execute the
  * function. An import is a job whose steps include `fetch`, as `isImportJob`
@@ -5892,6 +5892,59 @@ export const feedbackQuestionAnswers = spideryarn.table(
     check(
       "feedback_question_answers_body_shape",
       sql`length(btrim(${t.body})) > 0 and length(${t.body}) <= 1000000`,
+    ),
+  ],
+);
+
+/**
+ * **An admin's "not now" on a question an agent asked** — one row per admin
+ * per question, written only by `POST /api/admin/feedback/deferrals`, read by
+ * the Earlier tab (which group the thread is in) and by
+ * `scripts/feedback-questions.ts --answers` (so agents do not chase it).
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
+ *
+ * > And maybe there should be a button to say, do you know what, I think for
+ * > now let's defer this as an alternative to replying.
+ * >
+ * > — Greg, 2026-10-08 (`spya-t6nmxt`)
+ *
+ * **A time, not a flag, and reversible**: `deferred_at` is when it was
+ * deferred, null once brought back; `updated_at` is when either last
+ * happened. Both are the database's `now()`, the same clock as a reply's
+ * `created_at`, because the thread's state is the later of the two (F2).
+ * Writes are conditional both ways (F5), so a retry changes neither time.
+ *
+ * `question_id` has no foreign key, for `feedback_question_answers`' reason.
+ * `environment` is the server's, as there (F6).
+ */
+export const feedbackQuestionDeferrals = spideryarn.table(
+  "feedback_question_deferrals",
+  {
+    /** `auth.users(id)`. FK in the migration by hand, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** `q-k3m9qt`. */
+    questionId: text("question_id").notNull(),
+    /** When it was deferred; null once brought back. */
+    deferredAt: timestamp("deferred_at", { withTimezone: true }),
+    /** When it was last deferred or brought back. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Which deployment wrote the row, asked of the server. */
+    environment: text("environment").notNull(),
+    /**
+     * When it was first deferred, which neither of the two times above keeps:
+     * both move on a later press. Store when it happened (docs/project/sql.md).
+     */
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.questionId] }),
+    check(
+      "feedback_question_deferrals_question_id_format",
+      sql`${t.questionId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX.replace(ID_PREFIX, "q-")}'`)}`,
+    ),
+    check(
+      "feedback_question_deferrals_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
     ),
   ],
 );

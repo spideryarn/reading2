@@ -201,7 +201,7 @@ that is a privacy change, and the privacy page says it.
 
 ## GPT Sol's plan review, and what changed
 
-[261008i-import-records-plan-review-sol.md](261008i-import-records-plan-review-sol.md), verdict
+[261008j-import-records-plan-review-sol.md](261008j-import-records-plan-review-sol.md), verdict
 *rethink*. Each finding, checked:
 
 1. **Keep the `jobs` row instead** — checked, and declined for the reason Sol asked to be written

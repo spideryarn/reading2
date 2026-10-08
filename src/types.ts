@@ -33,6 +33,7 @@
 import { CHAT_BEING_UPDATED, type FailureKind, type PaperUnreadableReason } from "./messages.js";
 import type { Assets } from "./assets.js";
 import { isSpideryarnId, isUuid } from "./ids.js";
+import type { FeedbackQuestionState } from "./feedback-question-values.js";
 import type { DifficultyLevel, RatedDifficulty } from "./reading-time.js";
 
 export type NodeId = string; // "n0042"
@@ -7376,7 +7377,7 @@ export interface AdminEarlierFeedback extends Omit<EarlierFeedback, "shipped"> {
 
 /**
  * **An admin's reply to a question, as the Earlier tab shows it under the
- * question**: the newest one this admin has sent. Their own words back to them.
+ * question**: their own words back to them.
  */
 export interface AdminFeedbackQuestionAnswer {
   id: string;
@@ -7386,11 +7387,13 @@ export interface AdminFeedbackQuestionAnswer {
 }
 
 /**
- * **One open question an agent has put to the admin** — part of
- * `GET /api/admin/feedback/earlier`. An agent wrote `title` and `body` (a
- * file under docs/user-feedback/questions/, compiled into the server): plain
- * text, to be drawn as text with its line breaks kept. The file's `refs` and
- * `acted` lines are for agents and are never here.
+ * **One open question an agent has put to the admin, as a thread** — part of
+ * `GET /api/admin/feedback/earlier?questions=2`. An agent wrote `title` and
+ * `body` (a file under docs/user-feedback/questions/, compiled into the
+ * server): plain text, to be drawn as text with its line breaks kept. The
+ * file's `refs` line is for agents and is never here, and its `acted` ids
+ * reach the browser only as `state` and as which replies are listed.
+ * docs/plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md.
  */
 export interface AdminFeedbackQuestion {
   /** `q-k3m9qt`. */
@@ -7401,11 +7404,45 @@ export interface AdminFeedbackQuestion {
   asked: string;
   /**
    * The report it is about, when it names one **and that report is this
-   * admin's own**; otherwise null, and the body has to stand without it.
+   * admin's own**, with its whole text (shown shut); otherwise null, and the
+   * body has to stand without it.
    */
+  report: { id: string; number: number; firstLine: string; body: string } | null;
+  /**
+   * This admin's replies **no agent has acted on yet**, oldest first. One that
+   * has been acted on is quoted in `body` by the agent that acted on it.
+   */
+  answers: AdminFeedbackQuestionAnswer[];
+  /**
+   * How many older unacted replies there are beyond `answers`, which holds at
+   * most the newest five, so one page stays bounded (GPT Sol's plan review, F12).
+   */
+  olderAnswers: number;
+  /** Which group the thread is in: src/feedback-question-values.ts § `questionState`. */
+  state: FeedbackQuestionState;
+  /** ISO: when this admin deferred it, while it is deferred; otherwise null. */
+  deferredAt: string | null;
+}
+
+/**
+ * **A question as a server before 261008i sends it**, and as the new server
+ * still sends it to a request without `questions=2`, so a tab from before the
+ * deploy keeps working after it (F3). Six keys, the newest reply only.
+ */
+export interface AdminFeedbackQuestionV1 {
+  id: string;
+  title: string;
+  body: string;
+  asked: string;
   report: { id: string; number: number; firstLine: string } | null;
-  /** This admin's newest reply, or null. */
   answer: AdminFeedbackQuestionAnswer | null;
+}
+
+/** What `POST /api/admin/feedback/deferrals` answers with: the question's deferral as it now stands. */
+export interface AdminFeedbackDeferralReceipt {
+  question: string;
+  /** ISO, or null when it is not deferred. */
+  deferredAt: string | null;
 }
 
 /**
@@ -7422,6 +7459,11 @@ export interface AdminEarlierFeedbackPage {
   more: boolean;
   counts: Record<AdminEarlierFeedbackShow, number>;
   questions: AdminFeedbackQuestion[];
+}
+
+/** The same answer to a request without `questions=2`: the shape before 261008i (F3). */
+export interface AdminEarlierFeedbackPageV1 extends Omit<AdminEarlierFeedbackPage, "questions"> {
+  questions: AdminFeedbackQuestionV1[];
 }
 
 /** What `POST /api/admin/feedback/answers` answers with: the stored reply, on a 201 and on a 200 alike. */

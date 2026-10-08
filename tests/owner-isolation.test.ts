@@ -1548,12 +1548,38 @@ describe("one owner's article, asked for by another", { timeout: 20_000 }, () =>
         pgFeedbackStore.submitAnswer({ id, questionId: question, body: "only mine to read", environment: "test" }),
       );
       expect(mine.kind).toBe("created");
-      expect(await as(OUTSIDER, () => pgFeedbackStore.newestAnswers([question]))).toEqual([]);
+      expect(await as(OUTSIDER, () => pgFeedbackStore.answersTo([question]))).toEqual([]);
       /* The positive control: the owner reads it back, so "empty" above is the filter. */
-      const back = await as(theEnvironmentsOwner, () => pgFeedbackStore.newestAnswers([question]));
+      const back = await as(theEnvironmentsOwner, () => pgFeedbackStore.answersTo([question]));
       expect(back.map((answer) => answer.id)).toContain(id);
     } finally {
       await getDb().delete(feedbackQuestionAnswers).where(eq(feedbackQuestionAnswers.id, id));
+    }
+  });
+
+  it("does not share a deferral of a question (261008i)", async () => {
+    /* `feedback_question_deferrals` is keyed by owner: one admin's "not now"
+       must not move another account's thread. */
+    const { pgFeedbackStore } = await import("../src/store/pg-feedback.js");
+    const { feedbackQuestionDeferrals } = await import("../src/db/schema.js");
+    const question = "q-k3m9qt";
+    const as = <T>(owner: OwnerId, body: () => Promise<T>) =>
+      runInRequest(async () => {
+        setRequestOwner(owner);
+        return body();
+      });
+    try {
+      await as(theEnvironmentsOwner, () =>
+        pgFeedbackStore.setDeferred({ questionId: question, deferred: true, environment: "test" }),
+      );
+      expect(await as(OUTSIDER, () => pgFeedbackStore.deferrals([question]))).toEqual([]);
+      /* Bringing it back as the outsider touches nothing of the owner's. */
+      await as(OUTSIDER, () => pgFeedbackStore.setDeferred({ questionId: question, deferred: false, environment: "test" }));
+      /* The positive control: the owner reads it back, still deferred. */
+      const back = await as(theEnvironmentsOwner, () => pgFeedbackStore.deferrals([question]));
+      expect(back.map((one) => one.deferredAt === null)).toEqual([false]);
+    } finally {
+      await getDb().delete(feedbackQuestionDeferrals).where(eq(feedbackQuestionDeferrals.questionId, question));
     }
   });
 });

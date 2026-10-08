@@ -65,7 +65,7 @@ Not deployed: the Overseer deploys.
 **Answered 2026-10-08** (reply `spya-f9c9pe` to q-a7kffw): yes to the address, file name and error
 sentence, and a database record of every import so that a developer can debug a production
 failure afterwards. Both shipped on `dev` in
-[261008i](../plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md):
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md):
 the pre-fill carries the three, `/privacy` says so, and `import_records` keeps one row per import
 that ended, read with `scripts/import-records.ts`. (Dismiss had already stopped deleting the job on
 2026-10-02, so the catch above was gone before this.) The link to an uploaded original stays as

@@ -1,5 +1,5 @@
 {
-  "id": "f306213f-a7ac-4267-bff7-aab2aa56a2b3",
+  "id": "66ef5827-3414-41d8-a54f-bc0b7dbab90f",
   "prevId": "c9b2dcf8-4c36-4b9f-81ea-4c09fd1a0556",
   "version": "7",
   "dialect": "postgresql",
@@ -4387,6 +4387,67 @@
       },
       "isRLSEnabled": false
     },
+    "spideryarn.feedback_question_deferrals": {
+      "name": "feedback_question_deferrals",
+      "schema": "spideryarn",
+      "columns": {
+        "owner_id": {
+          "name": "owner_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "question_id": {
+          "name": "question_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "deferred_at": {
+          "name": "deferred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "environment": {
+          "name": "environment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "feedback_question_deferrals_owner_id_question_id_pk": {
+          "name": "feedback_question_deferrals_owner_id_question_id_pk",
+          "columns": [
+            "owner_id",
+            "question_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "feedback_question_deferrals_question_id_format": {
+          "name": "feedback_question_deferrals_question_id_format",
+          "value": "\"spideryarn\".\"feedback_question_deferrals\".\"question_id\" ~ '^q-[abcdefghjkmnpqrstuvwxyz][abcdefghjkmnpqrstuvwxyz023456789]{5}$'"
+        },
+        "feedback_question_deferrals_environment": {
+          "name": "feedback_question_deferrals_environment",
+          "value": "\"spideryarn\".\"feedback_question_deferrals\".\"environment\" in ('production', 'preview', 'development', 'test')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "spideryarn.feedback_shipped_emails": {
       "name": "feedback_shipped_emails",
       "schema": "spideryarn",
@@ -4650,173 +4711,6 @@
         "glossary_lookups_searches": {
           "name": "glossary_lookups_searches",
           "value": "\"spideryarn\".\"glossary_lookups\".\"searches\" >= 0"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "spideryarn.import_records": {
-      "name": "import_records",
-      "schema": "spideryarn",
-      "columns": {
-        "job_id": {
-          "name": "job_id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "failure_kind": {
-          "name": "failure_kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "failed_step": {
-          "name": "failed_step",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "url": {
-          "name": "url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "upload_id": {
-          "name": "upload_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "upload_filename": {
-          "name": "upload_filename",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ingest_event_id": {
-          "name": "ingest_event_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "steps": {
-          "name": "steps",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "finished_at": {
-          "name": "finished_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "recorded_at": {
-          "name": "recorded_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "import_records_finished_idx": {
-          "name": "import_records_finished_idx",
-          "columns": [
-            {
-              "expression": "finished_at",
-              "isExpression": false,
-              "asc": false,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "import_records_owner_slug_idx": {
-          "name": "import_records_owner_slug_idx",
-          "columns": [
-            {
-              "expression": "owner_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "import_records_upload_id_uploads_id_fk": {
-          "name": "import_records_upload_id_uploads_id_fk",
-          "tableFrom": "import_records",
-          "tableTo": "uploads",
-          "schemaTo": "spideryarn",
-          "columnsFrom": [
-            "upload_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "import_records_status": {
-          "name": "import_records_status",
-          "value": "\"spideryarn\".\"import_records\".\"status\" in ('done','error','cancelled')"
         }
       },
       "isRLSEnabled": false

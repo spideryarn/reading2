@@ -696,7 +696,7 @@ export function JobCard({
                 with the job's ids and times, the address or file name, and the
                 error sentence in the box, where the reader can edit them before
                 sending; src/web/import-report.ts says why (Greg, 2026-10-08,
-                plan 261008i). A fresh request id per press, so pressing it again
+                plan 261008j). A fresh request id per press, so pressing it again
                 after sending is a new request and a re-render is not
                 (FeedbackDialog.tsx § `FeedbackPrefill`). Greg, 2026-10-01,
                 spya-a5gzb9; plan 261001s § Stage 1. */}

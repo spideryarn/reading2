@@ -12,7 +12,7 @@
  * Greg, 2026-10-08 (spya-f9c9pe): *"let's just make sure that we are making it
  * possible for the dev agent to access, find, debug whatever it needs to solve
  * problems from production after the fact."* Plan
- * docs/plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md
+ * docs/plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md
  * § Stage 3.
  *
  * **A listing does not print the address or the error sentence** — the

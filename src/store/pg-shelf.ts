@@ -249,7 +249,7 @@ async function deleteTerminalJobs(
      `importRecords`), and Delete permanently promises to erase "everything you
      did with it", so the reader's record of importing it goes too — Retry's
      records with it, since Retry keeps the slug. Owner-scoped for the reason
-     the jobs are. Plan 261008i § Stage 2. */
+     the jobs are. Plan 261008j § Stage 2. */
   await tx
     .delete(importRecords)
     .where(and(eq(importRecords.ownerId, ownerId), eq(importRecords.slug, slug)));

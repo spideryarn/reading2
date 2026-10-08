@@ -231,7 +231,7 @@ export function PrivacyPage() {
               the home page. It goes with the article (`deleteTerminalJobs`)
               and with the account (the owner key cascades); an import that
               never became an article has no article to go with.
-              docs/project/privacy.md § Import records; plan 261008i. */}
+              docs/project/privacy.md § Import records; plan 261008j. */}
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">A record of each import</strong> — the address
             or file name, when it ran, and if it failed, which step and the error message, so that
@@ -665,7 +665,7 @@ export function PrivacyPage() {
         {/* **Since 2026-10-08**: Report this on a failed import types these
             three into the box for the reader (src/web/import-report.ts), which
             is only inside docs/project/feedback.md § The one rule because this
-            paragraph tells them. Plan 261008i. */}
+            paragraph tells them. Plan 261008j. */}
         <p>
           If you press <strong className="tw:text-foreground">Report this</strong> on an import that
           failed, the box starts filled in with the address you imported from (or the name of the

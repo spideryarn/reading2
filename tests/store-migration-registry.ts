@@ -3068,7 +3068,7 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
   "tests/illustrated-pg.test.ts": "private-postgres",
   "tests/illustrated-route.test.ts": "private-postgres",
-  /* Plan 261008i: the `jobs_record_import` trigger, through plain SQL on
+  /* Plan 261008j: the `jobs_record_import` trigger, through plain SQL on
      `jobs` and once through `enqueue`, and Delete permanently taking the rows. */
   "tests/import-records-pg.test.ts": "private-postgres",
   /* Storage, not Postgres — see `an-upload-is-queued-…` above. */
@@ -3778,7 +3778,7 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   "tests/article-delete-pg.test.ts": {
     "de1e1e00-0000-4000-8000-0000000000a1": { kind: "seeded" },
   },
-  /* Plan 261008i. Both seeded in `beforeEach`: OTHER owns the record that
+  /* Plan 261008j. Both seeded in `beforeEach`: OTHER owns the record that
      Delete permanently must leave alone. */
   "tests/import-records-pg.test.ts": {
     "1d0e7ec0-0000-4000-8000-0000000000a1": { kind: "seeded" },

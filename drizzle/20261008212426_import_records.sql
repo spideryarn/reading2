@@ -23,7 +23,7 @@ CREATE INDEX "import_records_finished_idx" ON "spideryarn"."import_records" USIN
 CREATE INDEX "import_records_owner_slug_idx" ON "spideryarn"."import_records" USING btree ("owner_id","slug");--> statement-breakpoint
 
 -- Appended by hand, below the generated table. Plan
--- docs/plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md.
+-- docs/plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md.
 --
 -- The two keys drizzle cannot declare: `auth.users` is outside its schema, and
 -- the reservation key is composite.

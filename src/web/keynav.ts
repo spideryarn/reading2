@@ -41,7 +41,14 @@
  */
 import { useEffect, useRef } from "react";
 import type { Block, BlockId } from "../types.js";
-import { armJump, clearArmedJump, type JumpOrigin } from "./jump-history.js";
+import {
+  armJump,
+  armReturn,
+  clearArmedJump,
+  type JumpOrigin,
+  oneJourneyBack,
+  readStamp,
+} from "./jump-history.js";
 import { activeSectionIndex } from "./position.js";
 import { dropPendingFlash, flashBlock, type FlashTarget, type JumpAim } from "./flash.js";
 import {
@@ -50,6 +57,7 @@ import {
   glideTarget,
   isPassageOnScreen,
   scrollToBlock,
+  scrollToTop,
   stickyOffset,
 } from "./scroll.js";
 import { navigableItems, type Cell, type Geometry } from "./tree.js";
@@ -473,7 +481,10 @@ export function beginJump(
   const given: FlashTarget = typeof aim === "string" ? { passage: aim } : (aim ?? {});
   const passage = given.passage ?? undefined;
   const flash: FlashTarget = given.quotes === undefined ? { passage } : { passage, quotes: given.quotes };
-  clearArmedJump();
+  /* Do not clear a queued write merely because another jump was asked for.
+     If this request moves, `armJump` supersedes it and preserves the journey a
+     pending return had already moved back to. If it is already here, the old
+     nuqs write is still queued and still needs its own arm to claim it. */
   /* A held landing belongs to the last jump. Supersede it when the next jump
      begins, not only if that next scroll eventually settles: if the reader
      cancels the newer glide, exposing the prose must not resurrect the older
@@ -524,6 +535,57 @@ export function beginJump(
     { align: "centre", passage },
   );
   return true;
+}
+
+/**
+ * **Go back to where the reader jumped from — the position, and only the
+ * position.** What the return chip does (ReturnChip.tsx).
+ *
+ * > I think it would be better if it just changed the position, and so if I
+ * > changed modes since, those modes would stay as they are currently.
+ * >
+ * > — Greg, 2026-10-08 (spya-q3dfmw)
+ *
+ * Until then the chip was `history.go(-depth)`, which took the reader to the
+ * entry they had jumped from — the whole address, so a mode opened since closed
+ * again and one closed since came back. Now it is `beginJump` run backwards:
+ * arm, one push through `push` (nuqs's `setAt`, so only `?at=` changes and a
+ * mode write still queued goes out in the same push rather than being
+ * aborted), and the move. The wrapper that intercepts the push writes the stamp
+ * the press leaves behind — the journey before this one, or none
+ * (jump-history.ts § `ArmedReturn`). Returns the `?at=` it wrote, `null` for
+ * the top, or `undefined` when there was no way back to take.
+ *
+ * **It scrolls itself, rather than leaving it to the restore effect**, and that
+ * is GPT Sol's second finding on the plan (261008g). The restore effect moves
+ * the page only when `?at=` *differs* from the value it last synced, and
+ * `?at=` is section-granular: a reader who jumped from a section's first block,
+ * then scrolled around inside that section, would press and push the value the
+ * address already held — a chip that visibly does nothing. So the move is
+ * unconditional, top-aligned and instant, as Back's was, and the caller records
+ * the value as synced so the effect does not move the page a second time.
+ *
+ * **No flash**, the same line url-state.md draws for Back and a pasted link: a
+ * return goes somewhere the reader has already been.
+ */
+export function beginReturn(push: (at: BlockId | null) => void): BlockId | null | undefined {
+  const stamp = readStamp(history.state);
+  if (stamp === null) return undefined;
+  clearArmedJump();
+  /* A flash held for the jump being undone must not land after the reader has
+     left (§ `beginJump`'s own call, for the same reason). */
+  dropPendingFlash();
+  const at = stamp.origin.kind === "top" ? null : stamp.origin.blockId;
+  armReturn({
+    pathname: location.pathname,
+    from: location.pathname + location.search,
+    target: at,
+    next: oneJourneyBack(stamp),
+  });
+  push(at);
+  if (at === null) scrollToTop();
+  else scrollToBlock(at, "auto");
+  return at;
 }
 
 /**

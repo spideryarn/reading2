@@ -2522,7 +2522,7 @@ trimmed. Successes too; their row is just short.
 
 The schema's note is `importRecords` in [src/db/schema.ts](../../src/db/schema.ts); the plan, with
 GPT Sol's reviews, is
-[261008i](../plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 ## Naming the step is the point
 

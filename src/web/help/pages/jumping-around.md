@@ -7,15 +7,20 @@ related: spine, keyboard, linking-to-a-passage
 
 Following a link to a passage, clicking the spine, choosing a search result: each of these is a
 jump. After one, a **↩ back to** button, naming the section you left, appears above the bottom bar.
-Press it to go back; press it again to keep going back through earlier jumps. The **×** beside it
+Press it to go back; press it again to keep going back through earlier jumps. It moves only your
+place in the article: any mode you have opened or closed since stays as it is. The **×** beside it
 hides it.
 
 ![A click on the spine jumps to another section and a ↩ back to Love of the work button appears at the bottom left; pressing it returns to the passage and the button goes](images/jump-back.gif "Jump with the spine, then ↩ back to … takes you straight back to where you were.")
 
-Your browser’s Back button does the same, because each jump is saved in your history. Ordinary
-scrolling is not, so Back never makes you crawl up the page a screen at a time. The way back
-survives switching mode: jump from inside Chat, open Glossary, and the button still takes you back
-to the passage you left.
+Your browser’s Back button also works, because each jump is saved in your history — but Back
+undoes everything since, so a mode you opened after the jump closes again. Ordinary scrolling is
+not saved, so Back never makes you crawl up the page a screen at a time. The way back survives
+switching mode: jump from inside Chat, open Glossary, and the button still takes you back to the
+passage you left, with Glossary still open.
+
+On a narrow screen where a mode’s panel covers the article, the button moves the panel aside so you
+can see the passage, and a **↩ back to** button naming the mode brings the panel back.
 
 On a narrow screen, tapping a passage link in a mode’s panel moves the panel aside to show you the
 paragraph, and a **↩ back to** button naming the mode brings the panel back as you left it,

@@ -16,7 +16,7 @@
  * private token: they sit in the box, the reader sees them and can delete any
  * of them before sending, and /privacy says a report from here carries them —
  * which is the rule's third clause. The article's title still stays out; it
- * was not asked for. Plan 261008i § Stage 1.
+ * was not asked for. Plan 261008j § Stage 1.
  *
  * **The job id is the way back**, and Dismiss keeps it working: since the same
  * day `DELETE /api/jobs/:id` stamps `jobs.dismissed_at` rather than deleting
@@ -29,7 +29,7 @@ import type { Job } from "../types.js";
  * How much of the error sentence goes in. An error is open-ended and the box
  * has a limit (FeedbackDialog.tsx); a prefill that overran it would open a
  * report the reader cannot send. Two thousand is far more than any sentence
- * of ours and a tenth of the box. GPT Sol, plan 261008i, finding 7.
+ * of ours and a tenth of the box. GPT Sol, plan 261008j, finding 7.
  */
 const ERROR_CHARS = 2000;
 
