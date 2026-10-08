@@ -22,7 +22,14 @@
 import { and, asc, count, desc, eq, gt, inArray, isNotNull, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 
 import { getDb } from "../db/client.js";
-import { articles, articleRevisions, ingestEvents, jobs, revisionBlocks } from "../db/schema.js";
+import {
+  articles,
+  articleRevisions,
+  importRecords,
+  ingestEvents,
+  jobs,
+  revisionBlocks,
+} from "../db/schema.js";
 import { MAX_TITLE_CHARS } from "../shelf.js";
 import { MAX_PURPOSE_CHARS, normaliseProfileText } from "../profile.js";
 import { log } from "../log.js";
@@ -228,14 +235,24 @@ function importRunning(): Error {
  * is not this delete's business. Their retry would create *their* article, which
  * is a different row and already possible today.
  */
-function deleteTerminalJobs(
+async function deleteTerminalJobs(
   tx: Pick<ReturnType<typeof getDb>, "delete">,
   slug: string,
   ownerId: OwnerId,
-) {
-  return tx
+): Promise<void> {
+  await tx
     .delete(jobs)
     .where(and(eq(jobs.ownerId, ownerId), eq(jobs.slug, slug), inArray(jobs.status, TERMINAL)));
+  /* **And the record of every import under this address**, since 2026-10-08.
+     `import_records` keeps an import's address, file name and error for us to
+     debug from after its job row is trimmed (src/db/schema.ts §
+     `importRecords`), and Delete permanently promises to erase "everything you
+     did with it", so the reader's record of importing it goes too — Retry's
+     records with it, since Retry keeps the slug. Owner-scoped for the reason
+     the jobs are. Plan 261008j § Stage 2. */
+  await tx
+    .delete(importRecords)
+    .where(and(eq(importRecords.ownerId, ownerId), eq(importRecords.slug, slug)));
 }
 
 /**

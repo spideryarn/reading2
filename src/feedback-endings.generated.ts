@@ -503,7 +503,7 @@ export const FEEDBACK_NOTE_ENDINGS: Readonly<Record<string, FeedbackEnding>> = {
 
 /** One line about a report, from its note's `comment:`. An admin's Earlier tab only. */
 export const FEEDBACK_NOTE_COMMENTS: Readonly<Record<string, string>> = {
-  "spya-a5gzb9": "Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.",
+  "spya-a5gzb9": "Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.",
   "spya-ar65p3": "Shipped: a sideways iPhone no longer enlarges a band's text. Still waiting on you: should the same kind of line be the same size in every mode? Three choices, from lining up the five or six kinds that recur to leaving it.",
   "spya-bbe74w": "Needs a decision is now threads: a contents, one thread at a time with a reply box, Defer for now, the ids, your report shut, a shortcut beside the tabs. Check the reply box on your iPhone.",
   "spya-btjtbb": "Mostly Apple's: an iPhone home-screen app forgets the grant on every restart and 10 minutes after dictation. We fixed one extra prompt of ours. Try Safari's per-site Microphone: Allow; WebKit bug 280394 tracks the rest.",

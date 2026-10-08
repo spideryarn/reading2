@@ -14,6 +14,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ If something here is yours](#if-something-here-is-yours) — the takedown section
 - [§ Where a reader's voice goes](#where-a-readers-voice-goes) — dictation lost zero-data-retention; the sources the copy is written from
 - [§ Deleting an article](#deleting-an-article-for-good) — what a delete removes and what survives
+- [§ Import records](#import-records) — the record of each import, and when it goes
 - [§ Reading time](#reading-time) — the bullet and what it must keep true
 - [§ Shelf topics](#shelf-topics) — what the topic model is shown
 - [§ Quick search](#quick-search) — what a quick search sends
@@ -179,6 +180,13 @@ article you were reading"* — false, so it went. Its replacement hedges ("may",
 limit, the screenshot) for reasons
 [plan 260913a § The proposed reader-facing wording](../plans/260913a-send-the-source-file-and-the-article-with-extra-diagnostics.md#the-proposed-reader-facing-wording)
 gives clause by clause.
+
+**A failed import's *Report this* starts the box with three more things, since 2026-10-08**: the
+address the import came from (whole) or the uploaded file's name, and the error sentence. They are
+typed into the box for the reader, who reads them and can delete them before sending, and the page
+says so — the third clause of [feedback.md § The one rule](feedback.md#the-one-rule). Greg's call,
+answering q-a7kffw; plan
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 **And the whole address reaches Sentry**, not just our own database. Asked and
 answered, 2026-09-02: Greg chose the full URL everywhere over a path-only copy.
@@ -414,6 +422,26 @@ It was caught by the agent that built the control rather than by a test, and **n
 see the section below for what is pinned and why this is not. The rule it broke is this doc's own:
 the page has to stay true of the code, and a feature that falsifies a sentence on it is not finished
 until that sentence moves. The same trap took three sentences down on 2026-09-02 (`fcb0a209`).
+
+## Import records
+
+**Added 2026-10-08**: `import_records` keeps one row per import that ended — the address or file
+name, when, and for a failure the step and the error sentence — so a failed import can be debugged
+after its job row is trimmed ([ingest-queue.md § The record of every
+import](ingest-queue.md#the-record-of-every-import)). The page's *What we keep* gained a bullet for
+it. What the code has to keep true for that bullet:
+
+- **It goes with the article.** `deleteTerminalJobs` (src/store/pg-shelf.ts) deletes the owner's
+  records for the slug in Delete permanently's own transaction, so *Deleting things* — "everything
+  you did with it" — stays true, and no fifth item joins the list of what outlives an erasure.
+- **One that never became an article stays until the account goes.** An import stopped while queued
+  has no article and so no Delete button; the bullet says so rather than promising otherwise. The
+  owner key cascades, so the by-hand account erasure takes them.
+- **Nothing serves it to anybody.** No route reads the table; only a developer, through
+  `scripts/import-records.ts`.
+
+Plan [261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md),
+GPT Sol's finding 2.
 
 ## Reading time
 

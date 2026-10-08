@@ -1016,6 +1016,7 @@ describe("the schema keeps the promises the plan makes", () => {
                             'uploads_owner_fk','feedback_owner_fk',
                             'feedback_question_answers_owner_fk',
                             'feedback_question_deferrals_owner_fk',
+                            'import_records_owner_fk','import_records_ingest_event_fk',
                             'billing_accounts_owner_fk','ingest_events_owner_fk',
                             'jobs_ingest_event_fk','realtime_sessions_owner_fk',
                             'rate_limit_events_owner_fk','link_summaries_owner_fk',
@@ -1040,6 +1041,11 @@ describe("the schema keeps the promises the plan makes", () => {
         "feedback_question_answers_owner_fk",
         /* drizzle/20261008181231, the same by hand, for the same reason. */
         "feedback_question_deferrals_owner_fk",
+        /* drizzle/20261008212426, appended by hand. The composite key prevents
+           one reader's import record naming another's quota reservation; the
+           owner key cascades because account erasure takes import history. */
+        "import_records_ingest_event_fk",
+        "import_records_owner_fk",
         "ingest_events_owner_fk",
         /* The composite one, and the reason it is composite: a job carries
            `(ingest_event_id, owner_id)` into `ingest_events (id, owner_id)`, so

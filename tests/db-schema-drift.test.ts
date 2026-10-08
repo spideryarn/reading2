@@ -284,6 +284,7 @@ describe("declaredTables", () => {
       "feedback_shipped_emails",
       "glossary_hidden_entries",
       "glossary_lookups",
+      "import_records",
       "ingest_events",
       "jobs",
       "link_previews",
@@ -393,8 +394,9 @@ describe("against a real database", () => {
          261005b); forty-nine since `article_share_link_events` the same day
          (plan 261005e); fifty since `feedback_question_answers`, 2026-10-07
          (plan 261007d); fifty-one since `feedback_question_deferrals`, 2026-10-08
-         (plan 261008i). */
-      expect(report.declaredTables).toBe(51);
+         (plan 261008i); fifty-two since `import_records` the same day (plan
+         261008j). */
+      expect(report.declaredTables).toBe(52);
       expect(driftWarnings(report)).toEqual([]);
     });
   });

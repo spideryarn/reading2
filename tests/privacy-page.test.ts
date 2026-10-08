@@ -193,8 +193,8 @@ describe("the privacy page", () => {
     );
   });
 
-  it("dates the privacy notice to the day the recipient-name and starter-article disclosures were added", () => {
-    expect(PAGE).toContain('const LAST_UPDATED = "7 October 2026"');
+  it("dates the privacy notice to the latest disclosure change", () => {
+    expect(PAGE).toContain('const LAST_UPDATED = "8 October 2026"');
   });
 
   it("says a reader is emailed when their feedback ships, without their words", () => {

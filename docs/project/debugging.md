@@ -5,12 +5,13 @@ you searching the wrong place, which is where the time actually goes.
 
 ## Something is wrong in production
 
-Three places, and they answer different questions:
+Four places, and they answer different questions:
 
 ```
   /api/health     is the deployment even wired up right?      right now
   Vercel logs     what happened during that request           1 day
   Sentry          something threw while nobody was watching   30 days
+  import_records  an import that failed, and why              kept
 ```
 
 **Go in that order.** `curl -sL https://www.spideryarn.com/api/health` is one command and rules out
@@ -25,6 +26,9 @@ actually running, which has been the answer more than once.
 - **[sentry-error-monitoring.md](sentry-error-monitoring.md)** — it *is* installed and it *is* on,
   whatever a quick grep suggests. What reaches it, and the two gaps: nothing alerts, and
   `/api/health` cannot tell you whether it is alive.
+- **[ingest-queue.md § The record of every import](ingest-queue.md#the-record-of-every-import)** —
+  an import that failed, long after its job row was trimmed: `npx tsx scripts/import-records.ts`,
+  or with the job id a *Report this* carried. Read-only.
 - **[deployment.md](deployment.md)** — the deploy process itself, and **what is known to be broken
   in production today**. Check here before debugging something already written down.
 - **[260906a-deployment-and-infrastructure.html](../tutorials/260906a-deployment-and-infrastructure.html)**

@@ -694,17 +694,28 @@ them twice, in opposite directions:
   half of what the buffer is for. Held at both ends, so neither trusts the other.
 - **Never the `console`.** Greg's request said "contents of web browser errors/logs/console", and
   taken literally that is a leak — see below.
-- **A failed import's *Report this* pre-fills ids and times, and never the address, the file name
-  or the error.** The words are `importProblemReport` in
+- **A failed import's *Report this* pre-fills where it came from and what went wrong**, since
+  2026-10-08. The words are `importProblemReport` in
   [`src/web/import-report.ts`](../../src/web/import-report.ts): the job id, the slug, the status,
-  the failed step's name, the failure kind and the timestamps. A pasted URL can carry an access
-  token, a file name is the reader's own words, and an error sentence is open-ended, so none of them
-  fits a clause above just because it sits in the box. Greg kept it that way on 2026-10-02
-  (Q-import-report-details, *"yes"*), with the job id as the way back: **Dismiss no longer deletes
-  the job record** — it stamps `jobs.dismissed_at` and the reader stops seeing it
-  ([ingest-queue.md § The routes](ingest-queue.md#the-routes)) — so the id in a report still names a
-  row we can read in the database, until the usual fifty-finished-jobs trim retires it. Nothing
-  serves the uploaded file back by that id.
+  the **source address** (whole, query string included) or the **uploaded file's name**, the failed
+  step's name, the failure kind, the **error sentence**, and the timestamps. Until then it carried
+  ids and times only, because a pre-typed value is not something the reader typed just because it
+  sits in the box. Greg chose otherwise, knowing an address can carry a private token:
+
+  > yes, it's fine for the filled-in report to carry information about the metadata that you
+  > suggest, whether it's the source address, file name, error sentence, that's definitely fine.
+  >
+  > — Greg, 2026-10-08 (spya-f9c9pe, answering q-a7kffw)
+
+  It enters under the **third clause**: the three values are in the box, where the reader reads them
+  and can delete any of them before sending, and `/privacy` § *If you send us a bug report* says a
+  report from there carries them. The article's title still does not go. The job id is still the way
+  back to the full record — **Dismiss does not delete the job** (it stamps `jobs.dismissed_at`,
+  [ingest-queue.md § The routes](ingest-queue.md#the-routes)), and since the same day an import's
+  ending is copied into `import_records`, which no trim reaches
+  ([ingest-queue.md § The record of every import](ingest-queue.md#the-record-of-every-import)).
+  Nothing serves the uploaded file back by that id. Plan
+  [261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 ## The tick-box, and what is behind it
 
