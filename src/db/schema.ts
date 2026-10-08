@@ -2693,10 +2693,9 @@ export const jobs = spideryarn.table(
      * Dismiss used to delete the row. Since 2026-10-02 it stamps this instead
      * and every reader-facing lookup treats a stamped row as gone, so to the
      * reader it is gone exactly as before. The row stays because a failed import's
-     * *Report this* names the job by id and nothing else — no URL, filename or
-     * error, which may be private (Greg, Q-import-report-details) — and an id
-     * whose record Dismiss deleted traces nothing. `trimFinished` still
-     * retires it with the rest, so it is kept for as long as any finished job.
+     * *Report this* names the job by id, and an id whose record Dismiss
+     * deleted traces nothing. `trimFinished` still retires it with the rest;
+     * an import's ending outlives that in `import_records` below (2026-10-08).
      */
     dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
 
@@ -3068,6 +3067,78 @@ export const jobs = spideryarn.table(
      * `uploads_owner_minted`, really is `NULLS LAST` in the database.)
      */
     index("jobs_owner_created_idx").on(t.ownerId, t.createdAt.desc().nullsFirst()),
+  ],
+);
+
+/**
+ * **One row for every import that ended, kept** — the record a developer reads
+ * to debug a production import after the fact. Greg, 2026-10-08
+ * (spya-f9c9pe): *"let's just make sure that we are making it possible for the
+ * dev agent to access, find, debug whatever it needs to solve problems from
+ * production after the fact."* Plan
+ * docs/plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md.
+ *
+ * A `jobs` row holds all of this already, and does not last: `trimFinished`
+ * keeps fifty finished jobs per owner. Keeping the job row itself instead was
+ * the simpler option, and it is passed over because other code reads a job
+ * row as "something is still attached here" (the draft sweep, the
+ * never-published tidy), so keeping it would pin the leftovers of every failed
+ * import for ever. Nothing reads this table but a person.
+ *
+ * **Written by a trigger, `jobs_record_import`**, never by the application —
+ * four code paths move a job into a terminal status and only two pass through
+ * `noteEnded` (drizzle/20261008193827_import_records.sql). An import is a job
+ * whose steps include `fetch`, as `isImportJob` (src/job-state.ts) says. One
+ * row is the **first** terminal ending of one job id; Retry makes a new job and
+ * so a new row.
+ *
+ * **Never trimmed. Deleted with the article** — `deleteTerminalJobs`
+ * (src/store/pg-shelf.ts) takes the owner's rows for the slug with its jobs.
+ * One that never became an article stays until the account goes (the owner
+ * key cascades), which is what /privacy says.
+ */
+export const importRecords = spideryarn.table(
+  "import_records",
+  {
+    /** The job's id. No foreign key: the job row is trimmed and this outlives it. */
+    jobId: text("job_id").primaryKey(),
+    /** `auth.users(id)`, ON DELETE CASCADE — an erased account takes its records. FK in the migration. */
+    ownerId: uuid("owner_id").notNull(),
+    /**
+     * The article's address when it ran. Slugs are not renamed today; if that
+     * arrives, this is one more table it has to reach.
+     */
+    slug: text("slug").notNull(),
+    status: text("status").notNull(),
+    failureKind: text("failure_kind"),
+    /** The first step whose status was `error` — the column to filter on. */
+    failedStep: text("failed_step"),
+    /** That step's error sentence, else the job's own. */
+    error: text("error"),
+    url: text("url"),
+    uploadId: uuid("upload_id").references(() => uploads.id, { onDelete: "set null" }),
+    uploadFilename: text("upload_filename"),
+    /**
+     * With `owner_id`, FK into `ingest_events (id, owner_id)` as
+     * `jobs_ingest_event_fk`, ON DELETE SET NULL on this column only.
+     */
+    ingestEventId: uuid("ingest_event_id"),
+    /**
+     * Every step's name, status, error and times, as the job had them. JSON
+     * because it is the job's own shape, read whole by a person and never
+     * filtered on; the field anyone filters on is `failed_step`, above.
+     */
+    steps: jsonb("steps").$type<JobStep[]>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** When the trigger wrote this row. */
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("import_records_status", sql`${t.status} in ('done','error','cancelled')`),
+    index("import_records_finished_idx").on(t.finishedAt.desc()),
+    index("import_records_owner_slug_idx").on(t.ownerId, t.slug),
   ],
 );
 

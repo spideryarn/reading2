@@ -15,6 +15,7 @@ Up: [architecture.md](architecture.md)
 - [§ The failures Retry is not offered under](#the-failures-retry-is-not-offered-under) — which errors hide the button
 - [§ The one security check](#the-one-security-check) — `isSlug`, the path-traversal guard
 - [§ The routes](#the-routes) — the job and article endpoints
+- [§ The record of every import](#the-record-of-every-import) — `import_records`, kept for debugging production, and the script that reads it
 - [§ Naming the step is the point](#naming-the-step-is-the-point) — progress-list wording
 - [§ The box only shows this sitting](#the-box-only-shows-this-sitting) — what the Add box lists
 - [§ A finished job publishes the article](#a-finished-job-publishes-the-article-and-until-2026-08-30-it-did-not) — `publishRevision`, why a done job left the shelf empty (history)
@@ -2352,7 +2353,7 @@ derivation so the two agree by construction rather than by trust.
 **Dismiss hides a job; it does not delete it**, since 2026-10-02. `DELETE /api/jobs/:id` stamps
 `jobs.dismissed_at`, and every reader-facing lookup treats a stamped row as absent, so the card,
 poll, Retry and Advance all see the job as gone exactly as when the row was deleted. The row stays
-because a failed import's *Report this* carries the job id and nothing that might be private
+because a failed import's *Report this* carries the job id
 ([feedback.md § The one rule](feedback.md#the-one-rule)), and an id whose record Dismiss had
 deleted traced nothing. `trimFinished` still retires a dismissed job with the other finished ones.
 Greg, Q-import-report-details.
@@ -2490,6 +2491,38 @@ writes `sourceHash: "stopped-part-way"` and the manifest is not current: those i
 publisher until a run that includes `assets` fetches them (*Refresh from source* and *Start again*
 force it). `illustrated` throws on a Stop between plates rather than publish a half-painted set
 over the last good one.
+
+## The record of every import
+
+> let's just make sure that we are making it possible for the dev agent to access, find, debug
+> whatever it needs to solve problems from production after the fact.
+>
+> — Greg, 2026-10-08 (spya-f9c9pe)
+
+A job row is the full account of an import — address, file name, every step's status, error and
+times — and it does not last: `trimFinished` keeps fifty finished jobs per owner. So **every import
+that ends is copied into `spideryarn.import_records`**, one row per job id, and that table is never
+trimmed. Successes too; their row is just short.
+
+- **To read one from production**: `npx tsx scripts/import-records.ts` lists the last twenty
+  failures (`--all` for every ending), and `npx tsx scripts/import-records.ts <job id>` shows one in
+  full. Read-only, through the same guarded connection as the feedback scripts. The job id is what
+  a failed import's *Report this* puts in the report.
+- **Written by a trigger, `jobs_record_import`**, on the transition into `done`, `error` or
+  `cancelled` of a job whose steps include `fetch` — not by the application, because four code paths
+  end a job and only two pass through `noteEnded`. The first ending of a job id is the one kept;
+  Retry is a new job and so a new row. Mode runs are not recorded.
+- **Deleted with the article.** `deleteTerminalJobs` (src/store/pg-shelf.ts) takes the owner's
+  records for that slug alongside the jobs. An import that never became an article stays until the
+  account goes; the owner key cascades.
+- **Why not keep the `jobs` row instead**: other code reads a job row as "something is still
+  attached here" — the draft sweep and the never-published tidy hold what a job names — so keeping
+  failed imports' rows would pin their leftovers for ever. Nothing reads `import_records` but a
+  person.
+
+The schema's note is `importRecords` in [src/db/schema.ts](../../src/db/schema.ts); the plan, with
+GPT Sol's reviews, is
+[261008i](../plans/261008i-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 ## Naming the step is the point
 
