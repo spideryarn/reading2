@@ -263,6 +263,10 @@ Then the residue, which is why this page exists:
   [`voice.ts`](../../src/web/voice.ts) where the voice depends on the data. *[`tests/voices-css.test.ts`](../../tests/voices-css.test.ts) §
   `VOICES_BY_MODE`, a `Record<Mode, …>`: the mode's AI classes, or why it has none. It cannot see an
   element you forgot to name.*
+- **Each recurring line at its role's size**: a row's main line, a quotation, an explaining
+  sentence, a provenance line, a count or a group heading takes its `--type-*` token —
+  [typography.md § Text roles in a band](typography.md#text-roles-in-a-band). *[`tests/type-roles.test.ts`](../../tests/type-roles.test.ts)
+  § `REGISTRY`, once you add your lines to it; nothing, if you don't.*
 - **What [`Reader.tsx`](../../src/web/reader/Reader.tsx) asks about the mode outside the
   `modeBand()` switch.** A signpost, not a rule: the switch is compiler-checked, and the plain
   `mode === "…"` comparisons elsewhere in that file are not, so a new mode that needs one finds

@@ -589,7 +589,7 @@
   padding: 0.4rem 0.7rem;
   border-bottom: 1px solid var(--rule);
 }
-.srch-count { margin-right: auto; color: var(--ink-faint); font-size: 0.83rem; }
+.srch-count { margin-right: auto; color: var(--ink-faint); font-size: var(--type-count); }
 /* One chip with every other band's order row (`.gloss-sort-btn`, glossary.css):
    the same corner, 28px height and neutral "on" — plan 261007h § F4. */
 .srch-sort-btn {
@@ -805,9 +805,12 @@
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* The passage is the row, as a quote is in Quotes, so the item role rather
+     than the quote one (typography.md § Text roles in a band). */
+  font-size: var(--type-item);
   line-height: 1.4;
 }
-.srch-hit-why { color: var(--ink-faint); font-size: 0.84rem; line-height: 1.4; }
+.srch-hit-why { color: var(--ink-faint); font-size: var(--type-body); line-height: 1.4; }
 .srch-hit-whole { color: var(--ink-faint); font-size: 0.79rem; font-style: italic; }
 
 /* The longer snippet, on hover. Wider than the band, because the whole point of

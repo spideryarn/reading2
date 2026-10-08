@@ -104,6 +104,10 @@
   cursor: pointer;
 }
 
+/* A named exception to the text roles (typography.md § Text roles in a band):
+   not --type-item, because this is not a row in a list but the one prompt the
+   reader answers, set above its 0.94rem premise and answer box.
+   tests/type-roles.test.ts holds it at 1.03rem. */
 .quiz-question {
   margin: 0.4rem 0 0.7rem;
   font-size: 1.03rem;
