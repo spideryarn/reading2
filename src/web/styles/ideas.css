@@ -74,14 +74,14 @@
   background: var(--panel);
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.77rem;
+  font-size: var(--type-label);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 /* Hard right, under the "10 ideas" in the head — the two counts mean the same
    kind of thing and lining them up is what says so. */
-.ideas-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; }
+.ideas-group > h3 > .gloss-count { margin-left: auto; letter-spacing: 0; font-size: var(--type-count); }
 /* The group's own sentence, under its heading. It is doing real work: "the
    piece leans on these and never states them" is the whole difference between
    the two groups, and a reader who has not read the plan has no other way to
@@ -102,7 +102,13 @@
    wrapping is the normal case. Truncating it would hide the half that carries
    the claim — "Writing is a test of thought, not a…" is exactly the wrong
    half to keep. */
-/* **The three sizes below are `.gloss-*`'s, on purpose.** This section's own
+/* **The three sizes below are text roles now** (plan 261008k, typography.md §
+   Text roles in a band): the name is `--type-item` as a term's is, the reason
+   `--type-body` as a part's is, and the quote `--type-quote` — a step above the
+   glossary's lead line, which is body. What follows is why they were first
+   matched to `.gloss-*`, and the order it set still holds.
+
+   **They were `.gloss-*`'s, on purpose.** This section's own
    header says `.ideas` is `.gloss` with a class beside it, and ideas.md calls
    the two siblings — a term is a word you look up, an idea is a claim you hold.
    They were not siblings on screen: after the 2026-09-03 lift (§ mode band) an
@@ -125,7 +131,7 @@
   background: none;
   color: var(--ink);
   font-family: var(--font-ui);
-  font-size: 0.95rem;
+  font-size: var(--type-item);
   line-height: 1.35;
   text-align: left;
   cursor: pointer;
@@ -172,7 +178,7 @@
 .ideas-quote {
   display: block;
   color: var(--ink-soft);
-  font-size: 0.89rem; /* `.gloss-gloss` — see the note on `.ideas-name` */
+  font-size: var(--type-quote);
   line-height: 1.4;
 }
 /* The model's one line on what this passage does with the idea. For an assumed
@@ -182,7 +188,7 @@
   display: block;
   margin-top: 0.1rem;
   color: var(--ink-faint);
-  font-size: 0.86rem; /* `.gloss-part-text` — see the note on `.ideas-name` */
+  font-size: var(--type-body); /* `.gloss-part-text`'s role — see the note on `.ideas-name` */
   line-height: 1.35;
 }
 

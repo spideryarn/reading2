@@ -26,7 +26,11 @@
    matches nothing in the article. */
 
 /* The title row is `.band-head`, § mode band. */
+/* Quiz borrows this class for its status sentences ("Question 2 of 5"), so
+   the count role is set on the counts themselves — here, and under the group
+   headings in ideas.css and timeline.css — not on the class. */
 .gloss-count { color: var(--ink-faint); font-size: 0.85rem; }
+.gloss-part-label > .gloss-count { font-size: var(--type-count); }
 
 /* The sort control. Small, quiet, and always visible when there is a choice —
    the whole condition on keeping the model's scores is that ordering by them is
@@ -381,7 +385,7 @@
   min-width: 0;
   overflow-wrap: break-word;
   color: var(--ink);
-  font-size: 0.95rem;
+  font-size: var(--type-item);
   font-weight: 600;
 }
 .gloss-term.on .gloss-name { color: var(--highlight-ink); }
@@ -428,7 +432,7 @@
   display: block;
   margin-top: 0.2rem;
   color: var(--ink-soft);
-  font-size: 0.89rem;
+  font-size: var(--type-body);
   line-height: 1.45;
 }
 
@@ -462,7 +466,7 @@
 .gloss-part-text {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.86rem;
+  font-size: var(--type-body);
   line-height: 1.45;
 }
 /* `tabIndex={0}` on the span it wraps, so the tooltip is reachable by keyboard
@@ -528,7 +532,7 @@
   align-items: center;
   gap: 0.25rem;
   color: var(--ink-faint);
-  font-size: 0.81rem;
+  font-size: var(--type-meta);
   text-decoration: none;
 }
 .gloss-sources a:hover { color: var(--highlight-ink); text-decoration: underline; }

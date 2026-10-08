@@ -453,6 +453,18 @@
    * Set beside the chip's own rule, below.
    */
   --return-chip-h: 0px;
+
+  /* **Text roles in a mode band** (plan 261008k): six sizes, named by the job a
+     line does in its row, not by whose words it holds. A band line doing one of
+     these jobs uses its token; anything else picks its own size.
+     docs/project/typography.md § Text roles in a band says which is which;
+     tests/type-roles.test.ts holds the lines that use them. */
+  --type-item: 0.92rem;  /* a row's main line, the thing you scan down */
+  --type-quote: 0.88rem; /* verbatim source words under a row */
+  --type-body: 0.85rem;  /* a sentence under the row that explains it */
+  --type-meta: 0.78rem;  /* a small line: where, when, from whom */
+  --type-count: 0.83rem; /* a number standing for how many */
+  --type-label: 0.77rem; /* a group's small uppercase heading */
 }
 
 * { box-sizing: border-box; }

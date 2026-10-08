@@ -168,6 +168,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
 import { LIBRARY_HREF } from "./router.js";
 import { useTheme } from "./appearance.js";
 import { BandWaiting } from "./BandWaiting.js";
+import { type Voice, voiceClass } from "./voice.js";
 
 /**
  * The real run button, with only the state under test varying.
@@ -403,6 +404,75 @@ const FACES: { token: string; used: string }[] = [
 ];
 
 /**
+ * **The six text roles in a mode band, against the voices each one meets**
+ * (plan 261008k; docs/project/typography.md § Text roles in a band).
+ *
+ * A cell has a sample only where the app really draws that role in that voice
+ * — the line named in its comment — so a blank says "nowhere", not "not drawn
+ * yet". The value is read off the live token, not copied here, so this page
+ * cannot disagree with tokens.css.
+ */
+const ROLE_VOICES: { voice: Voice; head: string }[] = [
+  { voice: "ui", head: "Geist — ours" },
+  { voice: "ai", head: "mono — the model's" },
+  { voice: "author", head: "serif — the author's" },
+  { voice: "reader", head: "Arial — the reader's" },
+];
+const TEXT_ROLES: {
+  token: string;
+  use: string;
+  upper?: boolean;
+  samples: Partial<Record<Voice, string>>;
+}[] = [
+  {
+    token: "--type-item",
+    use: "a row's main line, the thing you scan down",
+    samples: {
+      ui: "The multiscale wisdom of the body", // a citation's third-party title
+      ai: "Writing is a test of thought", // an idea's name, a term, an FAQ question
+      author: "Prices already contain most of what anyone knows.", // a Quotes row, a Search hit
+      reader: "Does it report its sample size?", // a Criteria row
+    },
+  },
+  {
+    token: "--type-quote",
+    use: "verbatim source words under a row",
+    samples: {
+      ui: "…a cited page's own words, which are nobody's here…", // Debate, Citations
+      author: "“The market can remain irrational longer than you can remain solvent.”",
+    },
+  },
+  {
+    token: "--type-body",
+    use: "a sentence under the row that explains it",
+    samples: {
+      ui: "The model's line about this passage was withheld.", // Claims, withheld
+      ai: "This passage leans on the idea without stating it.", // why-lines, glosses
+      author: "“in the year the war ended”", // Timeline's phrase inside an explanatory line
+    },
+  },
+  {
+    token: "--type-meta",
+    use: "a small line: where, when, from whom",
+    samples: {
+      ui: "nature.com · 2019 · picked by the model", // provenance, a date
+      author: "in the year the war ended", // Timeline's date in the piece's words
+    },
+  },
+  {
+    token: "--type-count",
+    use: "a number standing for how many",
+    samples: { ui: "12 passages" },
+  },
+  {
+    token: "--type-label",
+    use: "a group's small uppercase heading",
+    upper: true,
+    samples: { ui: "Terms it uses" },
+  },
+];
+
+/**
  * Resolve every colour token to an sRGB triple, and measure the contrast.
  *
  * Two browser facts make this fiddlier than it looks, and getting either wrong
@@ -500,6 +570,15 @@ export function DesignPage() {
 
   const measured = useMeasured(ALL_COLOUR_TOKENS);
   const page = measured["--page"]?.rgb ?? null;
+
+  /* The text roles' values, read off the cascade rather than restated here. */
+  const [roleValues, setRoleValues] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const root = getComputedStyle(document.documentElement);
+    setRoleValues(
+      Object.fromEntries(TEXT_ROLES.map((r) => [r.token, root.getPropertyValue(r.token).trim()])),
+    );
+  }, []);
 
   /**
    * The page at a reader's larger default font size.
@@ -600,6 +679,63 @@ const veryLongIdentifierName = computeSomethingExpensive(withArgument, andAnothe
             ))}
           </tbody>
         </table>
+      </section>
+
+      <section>
+        <h2>Text roles</h2>
+        <p className="design-note">
+          The six jobs a line does in a mode band's rows, each one size whoever's words it holds. A
+          band line doing one of these jobs uses its token; anything else picks its own. A role is
+          decided by the line's job in its row, not its voice: in Quotes the quotation is the row, so
+          it is an item. A cell is filled only where the app draws that role in that voice. See
+          docs/project/typography.md § Text roles in a band.
+        </p>
+        <div className="design-panel design-roles-wrap">
+          <table className="design-table design-roles">
+            <thead>
+              <tr>
+                <th scope="col">Role</th>
+                {ROLE_VOICES.map((v) => (
+                  <th key={v.voice} scope="col">
+                    {v.head}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {TEXT_ROLES.map((r) => (
+                <tr key={r.token}>
+                  <th scope="row">
+                    <code className="design-token">{r.token}</code>{" "}
+                    <span className="design-token">{roleValues[r.token] || "measuring…"}</span>
+                    <span className="design-note design-roles-use">{r.use}</span>
+                  </th>
+                  {ROLE_VOICES.map((v) => {
+                    const sample = r.samples[v.voice];
+                    return (
+                      <td
+                        key={v.voice}
+                        className={r.upper ? "design-roles-upper" : undefined}
+                        style={{ fontSize: `var(${r.token})` }}
+                      >
+                        {sample ? (
+                          <span className={voiceClass(v.voice)}>{sample}</span>
+                        ) : (
+                          <>
+                            <span className="design-roles-none" aria-hidden="true">
+                              —
+                            </span>
+                            <span className="sr-only">not used</span>
+                          </>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section>

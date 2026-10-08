@@ -97,7 +97,7 @@
   border-left: 2px solid var(--rule-strong);
   color: var(--ink);
   font-family: var(--font-reading);
-  font-size: 0.93rem;
+  font-size: var(--type-item);
   line-height: 1.45;
 }
 .quotes-row.on .quotes-text { border-left-color: var(--highlight); }
@@ -146,7 +146,7 @@
   display: block;
   color: var(--ink-faint);
   font-family: var(--font-ui);
-  font-size: 0.78rem;
+  font-size: var(--type-meta);
 }
 :is(.quotes-why-reason, .quotes-yours-note) + .quotes-prov { margin-top: 0.3rem; }
 
