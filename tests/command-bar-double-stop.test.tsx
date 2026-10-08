@@ -55,6 +55,11 @@ vi.mock("../src/web/useDictation.js", () => ({
       transcribing: mic.transcribing,
       phase: mic.armed ? "listening" : mic.transcribing ? "transcribing" : "idle",
       error: null,
+      /* The device fields the real hook always returns; the strip compares
+         them from listening through transcribing (plan 261008d). */
+      deviceLabel: null,
+      deviceId: null,
+      deviceUnavailable: false,
       toggle() {
         mic.toggles++;
       },
