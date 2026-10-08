@@ -5274,7 +5274,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
       });
       /* Stage 6 of plan 261001a: a source whose address carries a DOI or arXiv
          id gets the registry's authors and year, when its title agrees.
-         After the searches and outside the stamp; it never fails the step. */
+         After the search and outside the stamp; it never fails the step. */
       const registryStarted = Date.now();
       const registered = await attachDebateRegistry(run.debate, debateRegistryDeps);
       const registryMs = Date.now() - registryStarted;
@@ -5305,7 +5305,7 @@ export const STEPS: { [K in StepName]: PipelineStep<K> } = {
              zero and `directKept` is high on an obscure article is the rule
              failing open, not the web being kind. */
           directLost: direct.counts.lost,
-          /* The third call's outcome, so a `failed` is visible in the logs
+          /* The optional synthesis call's outcome, so a `failed` is visible in the logs
              rather than only as a missing box on screen (plan 260930j). */
           registryIdentified: registered.counts.identified,
           registryFound: registered.counts.found,

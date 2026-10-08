@@ -83,7 +83,8 @@ export const RERUN_COST_NOTE: Partial<Record<MetadataRerunStep, string>> = {
        all four was too long to be read as a note. */
     "Adds more terms to an up-to-date list; otherwise writes a new one",
   sketch: `One model call, ${SKETCH_WAIT}`,
-  debate: "Up to two model calls, each of which searches the web",
+  debate:
+    "One model call that searches the web, plus one search-free call to find themes when it keeps enough sources",
   skim: "Needs Quotes first; without them it stops before any model call",
 };
 

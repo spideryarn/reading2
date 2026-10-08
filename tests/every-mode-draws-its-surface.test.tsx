@@ -1225,7 +1225,7 @@ const SPENDS: Record<Mode, Spend> = {
   ideas: { kind: "posts", steps: ["ideas"] },
   quotes: { kind: "posts", steps: ["quotes"] },
   timeline: { kind: "posts", steps: ["timeline"] },
-  /* The dearest press in the app — two calls out to the open web. */
+  /* The dearest press in the app — one call out to the open web. */
   debate: { kind: "posts", steps: ["debate"] },
   /* One model call over the article, like the timeline. */
   citations: { kind: "posts", steps: ["citations"] },

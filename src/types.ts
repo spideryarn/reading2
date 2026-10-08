@@ -6965,7 +6965,7 @@ export interface Debate {
   elapsedMs: number;
   /**
    * **What the sources keep coming back to, and which of them matter most** —
-   * a third, search-free call over the rows both passes *kept*
+   * an optional search-free call over the rows the search *kept*
    * (src/debate-themes.ts; SPIDERYARN-READING2-6M, plan 260930j).
    *
    * **Absent means the debate was searched before 2026-09-30**, not that the
@@ -7045,7 +7045,7 @@ export interface DebateKeySource {
  *   whose sources share no thread has no themes, and that is an answer.
  * - `too-few` — fewer kept rows than a theme needs, so nothing was asked.
  * - `failed` — the call ran and its answer was refused or unreadable. The rows
- *   are kept anyway: they cost two web searches, and nothing about them
+ *   are kept anyway: they cost a web search, and nothing about them
  *   depends on this call.
  */
 export type DebateSynthesis =

@@ -283,6 +283,13 @@ describe("the sweep over the modes", () => {
     expect(row?.detail).toContain("what the model");
   });
 
+  it("does not tell the owner that a new Debate searched around individual claims", () => {
+    const row = sharedInventory(EVERYTHING).shared.find((item) => item.key === "debate");
+    expect(row?.detail).toContain("Reception");
+    expect(row?.detail).toContain("earlier search");
+    expect(row?.detail).not.toContain("went looking for");
+  });
+
   /**
    * **And `search` crossed the same day, from the other list.**
    *

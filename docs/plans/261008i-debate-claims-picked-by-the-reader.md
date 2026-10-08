@@ -265,3 +265,23 @@ build with these changes. All twelve accepted, each checked against the code it 
 | F10 | P1: POST then GET left the paid call's lifetime unclear | SSE on Referee's pattern; GET sweeps (§ 3) |
 | F11 | P2: the list belongs in the pipeline | a step and artefact; stages recut vertically |
 | F12 | P2: reuse needs an explicit shape | discriminated types; `readCheckedClaimGroup` on `readGroupWith` (§ 3) |
+
+### Stage 1 (2026-10-08): landed
+
+Built by an Opus subagent (`41ad4b649`): `Debate.claims` is a union, a legacy searched group or
+`{pass: "not-run", rows: []}`; `activationForDebate(view)` arms the Reception search for Reception
+and nothing for Claims; `debate/7`. Code review and fixes, GPT Sol:
+[261008i-debate-claims-stage1-code-review-sol.md](261008i-debate-claims-stage1-code-review-sol.md),
+verdict *land with the fixes made*. Accepted:
+
+| | Finding | Fix |
+|---|---|---|
+| C1 | P0: a Reception press could survive a move to Claims and spend when the GET settled | `useAutoRun` takes `enabled`; a disabled press is consumed at once |
+| C2 | P1: the panel's own Reception segment did not arm the search | it does, as a sub-mode chip should (mode.md) |
+| C3 | P1: the eval still assumed two searches | one-search runs score; legacy replay kept |
+| C4 | P1: copy elsewhere still said Debate searched claims | tooltip, sharing inventory, rerun and reset copy |
+| C5 | P1, before this stage: export has no `debate.json` at all | not fixed here; queued separately |
+
+Gates as run by me: typecheck green; 36 files, 1027 passed, 2 skipped (debate, public DTO, command
+bar, activation, metadata, doc-links). The full suite's only failures in the builder's run were
+`chat-live-turn` and `citation-investigate-route`, fixed on dev by `32147ae71` after this tree's base.

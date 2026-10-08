@@ -1925,13 +1925,9 @@ const WHOLE_ARTICLE_KEYWORDS = "over reset whole";
  * tests/no-ai-cost-for-readers.test.ts fails on a figure here.
  *
  * The Sketch's wait is `SKETCH_WAIT` from ./sketch-cost.ts, so this page and
- * the Sketch panel cannot name two different waits. Debate is **up to** two
- * separately metered calls — pass B runs only if pass A succeeded
- * (src/debate.ts) — each with a web search. For developers: a completed live
- * run cost $0.3527, and per-pass cost varied 2.4× with how much the model
- * chose to search — docs/plans/260905f-debate-mode-stage-0-spike-results.md
- * § Stage 3½ § 1; the ~$0.27 in comments across `src/` is the superseded
- * ceiling. Skim refuses before any model call when there are
+ * the Sketch panel cannot name two different waits. Debate is one web-searching
+ * call plus an optional search-free synthesis call when enough sources survive
+ * (src/debate.ts). Skim refuses before any model call when there are
  * no Quotes (src/pipeline.ts), which is worth knowing before pressing rather
  * than learning from the failure.
  *

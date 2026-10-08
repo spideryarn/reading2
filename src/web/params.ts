@@ -1395,7 +1395,7 @@ export function learnInSearch(search: string): LearnView {
 /* --------------------------------------------------------------- debate -- */
 
 /**
- * **Which of Debate's two searches the band draws** — `?debate=claims`, since
+ * **Which of Debate's two groups the band draws** — `?debate=claims`, since
  * 2026-10-03 (docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md).
  *
  * `reception` is what others have written about the piece itself; `claims` is

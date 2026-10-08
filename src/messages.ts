@@ -5225,16 +5225,11 @@ export const OWNER_MODE_NOTE: Record<Mode, string> = {
   search: "The questions you have put to this piece, in your words, and the passages they found.",
   learn: "What you said you took from the piece, and the quizzes on it.",
   referee: "Your peer-review pass over the piece: your criteria, and what it found against them.",
-  /* **"went looking for", not "found"**, and the tense is the whole row. This
-     is the only mode whose content is not in the article, so an owner reading
-     this line has to be told what was searched rather than what exists — and
-     the commonest honest answer is that nobody has written about their piece
-     (src/debate.ts § the search never comes back empty). A row promising
-     *"what other people said about this"* would be a claim about the web that
-     an empty panel then contradicts. */
+  /* Reception is current; claim sources can only be present on a legacy
+     artefact. Say both without implying a current press searched for claims,
+     and without promising that Reception found anything. */
   debate:
-    "What we went looking for on the open web: replies to this piece, and the argument around " +
-    "the claims it makes.",
+    "The Reception search, and any claim sources kept by an earlier search.",
   /* **"where there are gists"**, for the reason the note above `summary`
      gives: a provisional tree has none, and this row is read about articles
      that have not finished ingesting (src/public/dto.ts § `provisional`).

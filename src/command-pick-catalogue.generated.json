@@ -1696,7 +1696,7 @@
  {
   "id": "action:rerun-debate",
   "label": "Debate › Run again",
-  "description": "Up to two model calls, each of which searches the web",
+  "description": "One model call that searches the web, plus one search-free call to find themes when it keeps enough sources",
   "aliases": [
    "rerun debate",
    "re-run debate",

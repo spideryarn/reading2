@@ -764,7 +764,7 @@ export interface PublicClaimDebateRow extends PublicDebateRowBase {
 }
 
 /**
- * One of the two searches, as a visitor gets it: its rows, and **how many
+ * One Debate group, as a visitor gets it: its rows, and **how many
  * rows the public boundary withheld** — computed there, never read off the
  * artefact (260905f § What is counted, Sol's F17). The stored `counts` do not
  * cross: `returnedSources`, `reportedRows`, `keptRows`, `omittedOverCap`, the
@@ -812,7 +812,7 @@ export interface PublicDebate {
   claims: PublicDebateClaims;
   /**
    * **The threads and the key sources** — since 2026-10-01 (plan 261001b,
-   * SPIDERYARN-READING2-6M). The model's words over the rows both passes kept;
+   * SPIDERYARN-READING2-6M). The model's words over the rows the search kept;
    * no profile goes into the call.
    *
    * **A `made` synthesis crosses only when no row was withheld** in either

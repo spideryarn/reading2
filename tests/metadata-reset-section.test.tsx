@@ -468,7 +468,8 @@ describe("the Start this article again section", () => {
     await press(button("Start again"));
 
     const text = card()?.textContent ?? "";
-    expect(text).toContain("Debate uses two");
+    expect(text).toContain("Debate uses one model call that searches the web");
+    expect(text).toContain("one more model call for themes");
     /* The wait, not a price: what AI processing costs us is the administrator's
        alone since 2026-09-30 (plan 260930k § 3). */
     expect(text).toContain("Sketch takes about a minute");

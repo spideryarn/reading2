@@ -29,7 +29,8 @@
  *
  * The prompts are asked for things; a prompt is a wish. Every rule below is a
  * line of code that drops a row, and every drop is counted **per group**, so a
- * panel can say which of the two searches lost what. `src/referee-candidates.ts`
+ * panel can say what the Reception search lost. Legacy claim-search counts stay
+ * readable. `src/referee-candidates.ts`
  * is the closest existing shape and this file copies its discipline.
  *
  * ## One search on the press, and the claims are the reader's
@@ -247,7 +248,7 @@ export const MAX_DIRECT_ROWS = 12;
 export const MAX_CLAIM_ROWS = 12;
 
 /**
- * Results per individual search, both passes — the same 5 `converse` uses.
+ * Results per individual search. The retired claims pass still shares this cap.
  *
  * A different axis from the two caps above: `max_total_results` bounds the whole
  * turn, this bounds one query, and neither bounds the number of *searches*,

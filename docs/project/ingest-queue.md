@@ -1191,8 +1191,8 @@ and keeps the two-sided note only when the server cannot say
 ([261001i](../plans/261001i-glossary-undo-find-more-and-say-append-or-rewrite-in-metadata.md)). It is
 a prediction from the state the page read, and the page reads again after a run and after the
 purpose box saves; the
-sketch's price and wait, debate's **up to two separately metered calls** at $0.20–0.40 on a short
-article, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
+sketch's wait, Debate's **one model call that searches the web plus optional search-free
+synthesis**, and Skim's *needs Quotes first* are the same kind of note under those rows' names.
 Each note is also its button's accessible description. A Retry is one press too, and holds
 *Starting…* across its round trip so a double click sends one. The whole-article reset, the first
 row of the same card, keeps its confirm — it removes the extras and can move comments, which is the

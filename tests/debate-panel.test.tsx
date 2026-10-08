@@ -64,6 +64,7 @@ import type { DebateOrder } from "../src/web/debate-order.js";
 import type { DebateView } from "../src/web/params.js";
 import type { UseDebate } from "../src/web/useDebate.js";
 import type { PublicDebate } from "../src/public-types.js";
+import { pendingActivation, resetActivations } from "../src/web/activation.js";
 import { enclosing, readerCssNoComments } from "./helpers/stylesheets.js";
 import {
   CITERS_ABOUT,
@@ -329,6 +330,7 @@ function card(): string {
 }
 
 beforeEach(() => {
+  resetActivations();
   jumped.length = 0;
   viewed.length = 0;
   ordered.length = 0;
@@ -382,6 +384,35 @@ describe("Reception and Claims, each drawing its own search", () => {
     expect(viewed).toEqual([]);
     press(claims);
     expect(viewed).toEqual(["claims"]);
+  });
+
+  it("arms only an owner's Reception segment press", () => {
+    paint(owner(), "reception");
+    press(host.querySelector('[aria-label="Reception, 1 source"]'));
+    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+
+    resetActivations();
+    paint(owner(), "claims");
+    press(host.querySelector('[aria-label="Reception, 1 source"]'));
+    expect(pendingActivation("a-piece", "debate")).not.toBeNull();
+
+    resetActivations();
+    paint(owner(), "reception");
+    press(host.querySelector('[aria-label="Claims, 1 source"]'));
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+
+    paintShared(shared(), "claims");
+    press(host.querySelector('[aria-label="Reception, 1 source"]'));
+    expect(pendingActivation("a-piece", "debate")).toBeNull();
+  });
+
+  it("does not tell a reader that the unsearched Claims group came from a second search", () => {
+    paint(owner({ debate: artefact({ claims: { pass: "not-run", rows: [] } }) }));
+    const claims = host.querySelector<HTMLElement>('[aria-label="Claims, 0 sources"]');
+    act(() => claims?.focus());
+    const tip = document.querySelector('[role="tooltip"], [role="dialog"]')?.textContent ?? "";
+    expect(tip).toContain("No search for sources about individual claims was run");
+    expect(tip).not.toContain("Found by a second search");
   });
 
   it("shows no claim rows in Reception and no reception rows in Claims", () => {

@@ -2,9 +2,9 @@
 
 Up: [reading-view-overview.md](reading-view-overview.md)
 
-What the rest of the web says about this piece: replies to it, and the argument around the claims it
-makes. **The only mode whose content is not in the article at all**, which is why nearly everything
-the panel draws that is not a row is a disclosure.
+What the rest of the web says about this piece: Reception now, plus claim sources preserved from an
+earlier search. **The only mode whose content is not in the article at all**, which is why nearly
+everything the panel draws that is not a row is a disclosure.
 
 ## What it is for
 
@@ -36,7 +36,7 @@ the panel draws that is not a row is a disclosure.
 
 ## What the reader sees
 
-Two sub-modes, one per search, on a segmented control (`?debate=claims`; Reception is the default):
+Two sub-modes on a segmented control (`?debate=claims`; Reception is the default):
 
 - **Reception**: what others have written about the piece itself, including work that cites it and
   says something about it. Pages that link or quote the piece come first; pages that only name it
@@ -47,15 +47,17 @@ Two sub-modes, one per search, on a segmented control (`?debate=claims`; Recepti
   For the owner it ends with **Cited by**: the papers that cite the piece, from OpenAlex, most cited
   first, ten and then all (see [§ Cited by](#cited-by-the-papers-that-cite-the-piece) below). A
   visitor gets a Google Scholar search for who cites it instead.
-- **Claims**: what has been written about the claims the piece makes. One open disclosure per
-  claim, in article order, headed by the article's own words; the relevance bar belongs here.
+- **Claims**: a current press does not search this group. It says so rather than presenting an empty
+  result as a failed search. A debate from before `debate/7` still draws its saved claim sources
+  exactly as before: one open disclosure per claim, in article order, headed by the article's own
+  words; the relevance bar belongs here.
 
 When the article has changed since the search ran, a banner says so and offers *Search again*.
 That button is held from the press until the new search has been read, so one press cannot buy two
 searches: [reader-profile.md § Regenerate waits for its own result](reader-profile.md#regenerate-waits-for-its-own-result).
 
 Threads and key sources narrow whichever sub-mode is on screen. **The stored search cannot be
-steered**: its two searches choose their own queries, and what they keep is one result per article,
+steered**: its Reception search chooses its own queries, and what it keeps is one result per article,
 the same for the owner and for every visitor. What the owner can do, since 2026-10-05, is start a
 chat from it: about any one claim ([§ Check a claim in chat](#check-a-claim-in-chat)), or from an
 angle of their own typed into the box at the top
@@ -327,8 +329,8 @@ Each module's header comment says what it owns and why; start with `src/debate.t
 
 - [`src/debate.ts`](../../src/debate.ts) — the pipeline step: the searches, and what is kept. Its
   header opens with the one thing to understand first.
-- [`src/debate-themes.ts`](../../src/debate-themes.ts) — the third call: the themes the sources
-  share, and the key sources.
+- [`src/debate-themes.ts`](../../src/debate-themes.ts) — the optional search-free synthesis call:
+  the themes the Reception sources share, and the key sources.
 - [`src/debate-synthesis.ts`](../../src/debate-synthesis.ts) — the rules a synthesis must keep, read
   on both sides of the wire.
 - [`src/debate-registry.ts`](../../src/debate-registry.ts) — authors and year from Crossref or

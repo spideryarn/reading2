@@ -93,9 +93,9 @@ export function DebateBand({
 }) {
   useRenderCount("DebateBand");
   const articleYear = yearOf(publishedAt);
-  const debate = useDebate(slug);
   /* `?debate=`, Reception unless it says `claims`. */
   const [view, setView] = useQueryState("debate", debateParam);
+  const debate = useDebate(slug, view === "reception");
   /* `?debateby=`, Reception's order, defaulting to `prioritised` (*as found*);
      the panel draws what the rows can support (debate-order.ts §
      `effectiveReceptionOrder`). */

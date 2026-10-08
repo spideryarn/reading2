@@ -233,9 +233,9 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * **Debate, and it is the one where being wrong costs the most.**
  *
  * Here for `TimelineBand`'s reason and one of its own. Every other mode in this
- * file spends one model call; Debate spends **two, and both of them go out to
- * the open web** — up to ~$0.27 a run, rising with the length of the article,
- * and it is the newest thing in `MODE_TARGET` (src/web/activation.ts). So the
+ * file spends one model call; Debate spends one call that goes out to the open
+ * web and may add a search-free synthesis call when enough sources survive.
+ * It is the newest thing in `MODE_TARGET` (src/web/activation.ts). So the
  * sentence at the top of this file — *arriving at a mode does not run it* — is
  * worth more here than anywhere, and the only thing holding it is one call to
  * `useAutoRun` in useDebate.ts.
@@ -243,8 +243,8 @@ function QuotesBand({ slug }: { slug: string }): ReactElement {
  * Remove that call, or turn `debate`'s `MODE_TARGET` row to
  * `{ kind: "none" }`, and every other test in this file stays green.
  */
-function DebateBand({ slug }: { slug: string }): ReactElement {
-  const view = useDebate(slug);
+function DebateBand({ slug, reception }: { slug: string; reception: boolean }): ReactElement {
+  const view = useDebate(slug, reception);
   /* The owner's band makes a second read, the papers that cite the piece
      (src/web/modes/debate/DebateMode.tsx, plan 261004h). It is here so the two
      Debate cases below can show it asks on arrival and can start nothing. */
@@ -424,6 +424,8 @@ const SETTLED_EMPTY_IDEAS_READ = {
  * which reach the panel through that setter and through nothing else.
  */
 let arrive: (next: BandMode) => void = () => {};
+/** Move between Debate's two views without unmounting its controller, as Back does. */
+let arriveDebate: (reception: boolean) => void = () => {};
 
 /**
  * **Which picture is on screen**, through the app's own degrade rule rather than
@@ -435,7 +437,9 @@ const diagramKind = (): string => diagramInSearch(window.location.search);
 
 function Reading({ slug, start }: { slug: string; start: BandMode }): ReactElement {
   const [mode, setMode] = useState<BandMode>(start);
+  const [debateReception, setDebateReception] = useState(true);
   arrive = setMode;
+  arriveDebate = setDebateReception;
   return createElement(
     "div",
     null,
@@ -443,7 +447,7 @@ function Reading({ slug, start }: { slug: string; start: BandMode }): ReactEleme
     mode === "quotes" ? createElement(QuotesBand, { slug }) : null,
     mode === "timeline" ? createElement(TimelineBand, { slug }) : null,
     mode === "glossary" ? createElement(GlossaryBand, { slug }) : null,
-    mode === "debate" ? createElement(DebateBand, { slug }) : null,
+    mode === "debate" ? createElement(DebateBand, { slug, reception: debateReception }) : null,
     mode === "faq" ? createElement(FaqBand, { slug }) : null,
     mode === "skim" ? createElement(SkimBand, { slug }) : null,
     /* **The band Diagram opens is whichever picture the address bar names**, and
@@ -681,7 +685,7 @@ describe("a press", () => {
   });
 
   /* The fourth positive control, and the dearest. See DebateBand above. */
-  it("runs the debate, which is two web searches and nothing else here presses", async () => {
+  it("runs the debate search, which nothing else here presses", async () => {
     await open("plain");
     await press("Debate");
     await settle();
@@ -705,6 +709,20 @@ describe("a press", () => {
     expect(artefactGets("debate").length).toBeGreaterThan(0);
     expect(bandSays()).toBe("none");
     expect(artefactGets("citers")).toEqual(["/api/citers/constitution"]);
+    expect(posts).toEqual([]);
+  });
+
+  it("drops a Reception press when Back lands on Claims before the read settles", async () => {
+    holdGets = true;
+    await open("plain");
+    await press("Debate");
+    await act(async () => arriveDebate(false));
+
+    holdGets = false;
+    releaseGets();
+    await settle();
+
+    expect(artefactGets("debate").length).toBeGreaterThan(0);
     expect(posts).toEqual([]);
   });
 

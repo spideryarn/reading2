@@ -233,7 +233,8 @@ export const STRUCTURE_SUB_MODES: Readonly<Record<StructureView, SubModeWords>> 
 };
 
 /**
- * Debate's two sub-modes, one per search. The band's segmented control,
+ * Debate's two sub-modes. Reception is the current search; Claims preserves
+ * rows from the retired claims search. The band's segmented control,
  * DebatePanel.tsx § `DebateViews`; Reception first because it is the default.
  * Greg, 2026-10-03 (spya-caue42): *"there could be a claims submode … And then
  * there's a section, a separate submode besides claims for reception"*.

@@ -28,10 +28,10 @@
  * the quotations were checked against, and **which** of the two empty answers
  * this is.
  *
- * ## Two sub-modes, one per search
+ * ## Two sub-modes; only Reception is searched now
  *
- * Two separately metered searches run — one for pages about this piece, one
- * for the argument around what it claims. Until 2026-09-06 the panel drew them
+ * Until `debate/7`, two separately metered searches ran — one for pages about
+ * this piece, one for the argument around what it claims. Until 2026-09-06 the panel drew them
  * as two headed groups stacked in one band, which on Cargo Cult Science put two
  * headings, two blurbs and two foot lines over *zero rows*. From then until
  * 2026-10-03 it drew them as **one list**, under up to four controls at once.
@@ -42,10 +42,11 @@
  * > study … But A, that's very specific. It's one claim. And B, it doesn't tell
  * > me anything about how the paper has been received more generally.
  *
- * So the two searches are two **sub-modes**, `?debate=`, on one segmented
+ * So the two groups became two **sub-modes**, `?debate=`, on one segmented
  * control (`DebateViews`): **Reception**, what others have written about the
- * piece itself, and **Claims**, what has been written about the claims it
- * makes. Each control then applies to everything on screen.
+ * piece itself, and **Claims**, what an earlier search found about the claims
+ * it makes. Since `debate/7` only Reception is searched; each control still
+ * applies to everything on screen.
  * docs/plans/261003o-debate-reception-and-claims-sub-modes-and-a-tidier-panel.md.
  *
  *  - **Reception** draws the rows that link or quote the piece, then the ones
@@ -153,6 +154,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { armActivationForSubMode } from "./activation.js";
 import {
   CITERS_ABOUT,
   CITERS_HEADING,
@@ -1110,7 +1112,7 @@ export function DebatePanel({
    * @param again beside a debate that is already there, so the run is forced.
    *   The empty state's button is not: it has to make the identical, unforced
    *   request the automatic run makes, or the two carry different `work_key`s
-   *   and the reader pays for two web searches. useDebate.ts § `ensure`.
+   *   and the reader pays for two Reception searches. useDebate.ts § `ensure`.
    */
   /* A forced run has finished and its result is not here yet: the forced
      button gives way to a read, never to a second paid run — IdeasPanel.tsx §
@@ -1304,6 +1306,8 @@ export function DebatePanel({
             <DebateViews
               view={view}
               counts={{ reception: receptionShown.length, claims: claimsShown.length }}
+              claimsNotRun={claimsNotRun}
+              ownerSlug={owner?.slug ?? null}
               onView={onView}
             />
           </div>
@@ -1685,17 +1689,22 @@ function CiterRow({ citer }: { citer: Citer }) {
  * docs/project/mode.md bans a description line there (GPT Sol's F8). The words
  * are sub-modes.ts's, which the command bar's rows share.
  *
- * **A press arms nothing**, unlike Summary's: this control exists only once a
- * debate is stored, and both sub-modes draw that one stored search. Writing
- * the value already open would push a history entry that goes nowhere.
+ * The owner's Reception press arms Debate and Claims arms nothing, the same
+ * contract as their command-bar rows. A stored debate consumes Reception's
+ * token without running; keeping the gesture honest matters when the empty
+ * surface gains these controls. A visitor can never arm owner work.
  */
 function DebateViews({
   view,
   counts,
+  claimsNotRun,
+  ownerSlug,
   onView,
 }: {
   view: DebateView;
   counts: Record<DebateView, number>;
+  claimsNotRun: boolean;
+  ownerSlug: string | null;
   onView(view: DebateView): void;
 }) {
   const group = useRef<HTMLDivElement>(null);
@@ -1713,7 +1722,7 @@ function DebateViews({
               <ControlTip
                 head={DEBATE_SUB_MODES[v].label}
                 what={`${DEBATE_SUB_MODES[v].description}.`}
-                how={VIEW_HOW[v]}
+                how={v === "claims" && claimsNotRun ? CLAIMS_NOT_RUN_HOW : VIEW_HOW[v]}
               />
             }
           >
@@ -1728,6 +1737,7 @@ function DebateViews({
               tabIndex={0}
               className={`summ-view-btn${v === view ? " on" : ""}`}
               onClick={() => {
+                if (ownerSlug !== null) armActivationForSubMode(ownerSlug, { mode: "debate", view: v });
                 if (v !== view) onView(v);
               }}
             >
@@ -1748,6 +1758,9 @@ const VIEW_HOW: Record<DebateView, string> = {
   claims:
     "Found by a second search, run once and kept. Each source sits under the claim it answers, in the article's own words, and each quotation is checked against what the search returned.",
 };
+
+const CLAIMS_NOT_RUN_HOW =
+  "No search for sources about individual claims was run for this Debate.";
 
 /**
  * **Debate's categorical threshold** — the relevance bar (`?bears=`), over
