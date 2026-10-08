@@ -84,6 +84,14 @@ is a stricter reader than the tab, and it changed three things here:
 **The loop has to be restarted to pick this up**: it loads its code once, at start, from the runner
 checkout. Restart it between checks, when the runner's log says it is idle.
 
+Since 2026-10-08 a `test` or `check` record also carries **`testOutcome`**: vitest's own verdict on
+the suite inside the run — green, red only in the files it names, or no use, and why — written by
+[`scripts/vitest-outcome-reporter.ts`](../../scripts/vitest-outcome-reporter.ts), which the wrapper
+switches on with `SPIDERYARN_TEST_OUTCOME_FILE`. A later deploy reruns only those files
+([deployment.md § The test gate reruns only what failed](deployment.md#the-test-gate-reruns-only-what-failed)).
+Unlike `failedTestFiles` it does not come from matching text, and the tab does not read it. The
+wrapper is spawned from the runner checkout at the commit under test, so this needed no restart.
+
 ## Which test files failed
 
 A failed run's record names the test files that failed, and the tab has a **Failing test files**
@@ -133,7 +141,8 @@ is the one drawn — a failure is never hidden behind a pass.
 | `tools/fleet/readiness-wiring.ts` | the composition, and the timer that does the expensive work |
 | `tools/fleet/routes-readiness.ts` | `GET /api/readiness`, which serves a snapshot and computes nothing |
 | `tools/fleet/web/src/readiness-client.ts` | the browser's parser of `/api/readiness`, and its types (the `durationMs` the panel draws) |
-| `scripts/deploy-evidence.ts` | the deploy's reader: whether a run proves a commit's `test` gate, and which green commit `--ready` picks |
+| `scripts/deploy-evidence.ts` | the deploy's reader: whether a run proves a commit's `test` gate, which files a later commit must rerun, and which green commit `--ready` picks |
+| `tools/fleet/test-outcome.ts` | the judgement on what the outcome reporter wrote, shared by the record and the deploy |
 | `tools/fleet/web/src/ReadinessPanel.tsx` | the dashboard tab: `useReadinessView` fetches on mount and on Refresh, then polls in a second effect at the server's own `refreshMs` (clamped 15s–10min) |
 
 Tests, in `tests/`: [`fleet-readiness.test.ts`](../../tests/fleet-readiness.test.ts) (records, verdict,

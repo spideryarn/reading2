@@ -1,0 +1,47 @@
+1. **P3 — The diagnosis is right, but the timing and absolute wording need correcting.** The store contains nine finished prepared checks: one pass, six failures, two voids. `9fd040df` has no pending notes and has 76 uncovered release commits. Its immediate child, `781c53ec`, adds only the pending notes and contains their described commit. Existing `--ready` therefore selects a commit the changelog gate refuses.
+
+   **Fix:** Say this green commit *predates* its notes; green commits can contain previously committed notes. Also correct the timezone arithmetic: the run finished at **17:02 UTC / 18:02 BST**, while `781c53ec` was committed at **16:53 BST**, approximately **69 minutes**, rather than nine minutes, earlier. “Would have deployed” should be conditional on the remaining gates and usable evidence.
+
+2. **P2 — B is workable, but `notesAt(C).gap === null` is insufficient candidate eligibility.** A notes-passing `C` can precede current `origin/main`, or omit the serving deployment’s subsequent changelog promotion. Preflight then refuses it even though a later descendant would pass. These are separate checks in [preflight](/var/tmp/spideryarn-worktrees/deploy-rerun-failed/scripts/deploy.ts:528).
+
+   **Fix:** Choose the earliest descendant satisfying **all three**: production ancestry, `notesAt(C).gap === null`, and `servingUnrecorded(...) === null`. Pin the fetched trunk/main SHAs and serving deployment ID for that selection. Preserve preflight’s checks afterward. `late` commits do **not** break B: valid pending notes deliberately allow them through. The existing trunk ancestry gate also accepts such a descendant.
+
+3. **P2 — Recommend allowing both green and named-red ancestors, with the same explicit reuse boundary.** Restricting reuse to red gives weaker evidence preferential treatment and does not close the accepted regression risk. However, a full run finishing within 24 hours does not establish that `X..Y` contains only one or two hours of changes. Nor does a roughly 75-minute suite guarantee discovery “within the hour.”
+
+   **Fix:** Allow both colours, prohibit evidence chains as proposed, and make the ancestor-reuse limit explicit rather than relying on cadence. I would use a shorter **two-hour finish-age window for cross-SHA reuse**, retaining 24 hours for exact-SHA green reuse. Always describe the result as “full run at X plus these files at Y,” never “the full suite passed at Y.”
+
+4. **P2 — The infrastructure list misses shared test inputs and preparation machinery.** Changes to `tests/fixtures/`, snapshots, `tests/overseer-fixtures.ts`, or `tests/overseer-recovery-resume-fakes.ts` can alter existing tests without changing a `.test.ts` file. `scripts/db-test-create.ts` participates directly in global setup; `scripts/corpus-materialise.ts` changes the corpus preparation contract.
+
+   **Fix:** Conservatively treat **non-test files under `tests/`** as infrastructure, plus `.npmrc`, relevant TypeScript configs, the database factory, corpus materialisation, and the reporter/evidence/preparation code. This is simpler than maintaining many helper exceptions. Use `git diff --name-only --no-renames -z X Y`, validate its exit status, and include added and renamed test destinations. An unreadable diff must trigger the full suite.
+
+5. **P1 — “The outer run is always the last writer” is false.** An interrupted outer run may never write its report. A nested red run can then leave a perfectly shaped report behind, which combines with the outer nonzero exit to qualify as `red-in-files`. Detached children can also finish later. Ordinary tests spawning children are enough to cause this.
+
+   **Fix:** Capture the output destination in the outer reporter instance and **remove its environment variable before workers and child processes inherit it**. Bind the report to the expected run ID and root. Use a fresh destination for each invocation and reject missing or mismatched ownership. CLI reporter replacement is correctly identified; the custom reporter API itself is supported. [Vitest reporter documentation](https://vitest.dev/guide/advanced/reporters).
+
+6. **P1 — `onTestRunEnd` does not cover all failures belonging to the invocation.** In installed Vitest 4.1.11, that callback runs **before global teardown**. This repository’s [private database teardown](/var/tmp/spideryarn-worktrees/deploy-rerun-failed/tests/setup/private-db-global.ts:575) can subsequently set `process.exitCode = 1`. Combine that with one failed test file: the proposed report says `reason: failed`, no unhandled errors, and one failed file, while the final exit is nonzero. It incorrectly claims **all** failures belonged to that file.
+
+   **Fix:** Capture teardown and other post-report lifecycle failures separately, and finalize reusable evidence only after their conclusion. Until that is proved, such runs are unusable. Add a real integration case with **both a test failure and a teardown failure**; either case alone misses this hole.
+
+7. **P1 — A nonempty outcome report does not establish full-suite coverage.** A shard, narrowed project selection, or filtered invocation can finish with some passed/failed modules and satisfy the classifier. Likewise, the report can omit scheduled modules. `{path,state}` also loses project identity; projects can execute the same path independently.
+
+   **Fix:** Capture expected specifications in `onTestRunStart` and compare them with terminal results using **root-relative path plus project identity**. Separately establish that the baseline invocation was unfiltered. For reruns, every requested specification must finish **passed**, rather than merely appear or be skipped. Missing, skipped, queued, or ambiguous requested results should trigger the advertised full-suite fallback. Do not accept an entirely skipped baseline as evidence of executed tests.
+
+8. **P1 — Extracting only per-record clauses would lose existing cross-record safeguards.** [testEvidenceFor](/var/tmp/spideryarn-worktrees/deploy-rerun-failed/scripts/deploy-evidence.ts:74) also rejects unreadable records, later contradictory events, unfinished attempts, and equal-time ambiguity. Selecting the “newest settled full run” first can hide a newer standalone failed test or running attempt. B’s explicit `X = G` can similarly bypass a nearer unusable run at `C`.
+
+   **Fix:** Preserve those timeline checks across both sources before validating the selected baseline. Re-read evidence at the gate for pinned `C`; the nominated `G` must not override nearer contradictory evidence. Record unfinished attempts as blockers, and distinguish “only full runs are reusable” from “only full attempts are recorded.” Also distinguish the **Vitest exit** from `npm run check`’s exit: unrelated check-gate failures must not invalidate an otherwise usable test result that currently counts.
+
+9. **P1 — The proposed deploy record lacks enough provenance to support its claim.** SHA, finish time, exit, one environment hash, and outcome do not show that the tested checkout stayed clean at that SHA or that its environment stayed unchanged. A directory under `logs/deploy/` establishes no writer identity; another agent can accidentally leave fixture or copied records there.
+
+   **Fix:** Write a versioned pending/finished record atomically, with unique run identity, actual tested root, verified start/end SHA and cleanliness, full scope, successful preparation/build prerequisites, and environment hashes verified at both ends. Match these against the owned reporter output. Strictly reject contradictions, signals, future times, and malformed records. Missing evidence means full suite with a reason. This protects against ordinary mistakes; **neither this store nor the readiness store authenticates deliberate same-user fabrication**.
+
+10. **P2 — Extending `--ready` to red baselines introduces a repeatable selection dead end.** Suppose red `G` is followed by notes commit `C`, then repair `F`. B always selects earliest notes-carrying `C`, where the failure remains. Repeating `--ready` repeats that failure until the readiness loop tests something newer, although `F` is available.
+
+    **Fix:** Keep B’s baseline **green-only** initially. Plain deploy’s A handles retries after red runs, including the repair at the tip. That delivers both requested improvements while preserving a clear meaning for `--ready`.
+
+11. **P2 — Pure fabricated-report tests will not verify the proposed instrument.** They cannot establish reporter precedence, worker inheritance, project aggregation, teardown ordering, or interrupted-run ownership. Those are precisely where the important holes lie.
+
+    **Fix:** Add small isolated Vitest subprocess tests covering those behaviours, including a requested file filtered out and a nested reporter followed by outer interruption. Check that each unusable case actually invokes the full fallback. Persist the **compact classified outcome**, rather than the raw module list: approximately 1,867 paths already produce a 116 KB report, exceeding the readiness store’s 64 KB record ceiling.
+
+The simplest implementation I recommend is **A for plain deploys, B for green baselines only**, with one shared validator and outcome classifier, separate storage destinations, and the lifecycle/provenance fixes above. No release branch or import graph is needed.
+
+VERDICT: proceed with changes

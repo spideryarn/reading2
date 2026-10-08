@@ -214,6 +214,7 @@ import {
   type Queryable,
   sessionsIn,
 } from "../helpers/db-sessions.js";
+import { markFailureOutsideFiles } from "../../scripts/vitest-outcome-reporter.js";
 import { seedLocalAccounts } from "../helpers/seed-local-accounts.js";
 import { seedPrivateBillingPrices } from "../helpers/seed-private-billing-prices.js";
 
@@ -635,7 +636,12 @@ export default async function setup({ provide }: TestProject): Promise<() => Pro
     if (polluted) reportPolluted(say, db.name, tag, who, ordinary);
     else reportExpected(say, who, ordinary.kind === "in-use");
     if (problems.length > 0) reportTeardownFailed(say, db.name, problems);
-    if (polluted || problems.length > 0) process.exitCode = 1;
+    if (polluted || problems.length > 0) {
+      process.exitCode = 1;
+      /* After vitest has reported the run, so no test file owns this; a deploy
+         must not read the run as red only in its failed files (261008h). */
+      markFailureOutsideFiles(polluted ? "the private test database was polluted" : "the private test database's teardown failed");
+    }
     say(dropLine);
   };
 }

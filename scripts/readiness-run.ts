@@ -46,9 +46,9 @@
  *    yesterday's green — a silent success inside the tool built to catch them.
  */
 import { spawn } from "node:child_process";
-import { constants, hostname } from "node:os";
+import { constants, hostname, tmpdir } from "node:os";
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,7 +79,9 @@ import {
   type StartedRecord,
   type TreeStamp,
 } from "../tools/fleet/readiness.js";
+import { testOutcomeFrom } from "../tools/fleet/test-outcome.js";
 import { READINESS_ADMISSION_TOKEN_ENV } from "../vitest-admission.js";
+import { TEST_OUTCOME_FILE_ENV } from "./vitest-outcome-reporter.js";
 
 /** How much of the child's output we keep for the parsers. The rest is passed through and forgotten. */
 const HEAD_BYTES = 8 * 1024;
@@ -170,6 +172,17 @@ function scriptBodies(root: string): Record<string, string> {
  * nobody audited. Relying on the caller to have scrubbed is how the loop's own
  * check spawn came to be the one that was missed — GPT Sol's F1, 2026-09-09.
  */
+/** The outcome reporter's file, then gone; null when it never wrote one. */
+function readOutcome(file: string): string | null {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return null;
+  } finally {
+    rmSync(file, { force: true });
+  }
+}
+
 export function checkChildEnv(admissionToken: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...runnerChildEnv(process.env), [READINESS_ADMISSION_TOKEN_ENV]: admissionToken };
   // This wrapper consumes the one-run statement. A descendant wrapper must
@@ -325,9 +338,14 @@ async function main(): Promise<void> {
   const failedTestFilesSeen = makeFailedTestFilesCapture();
   const stdoutFailedTestFiles = failedTestFilesSeen.stream();
   const stderrFailedTestFiles = failedTestFilesSeen.stream();
+  /* Where vitest's outcome reporter writes which files failed, for a later
+     deploy to rerun only those (scripts/vitest-outcome-reporter.ts,
+     docs/plans/261008h). A fresh name per run, so a file left by another run
+     cannot be read as this one's. */
+  const outcomeFile = check === "test" || check === "check" ? path.join(tmpdir(), `spideryarn-test-outcome-${runId}.json`) : null;
   const child = spawn("npm", ["run", script], {
     cwd: root,
-    env: checkChildEnv(admissionToken),
+    env: { ...checkChildEnv(admissionToken), ...(outcomeFile ? { [TEST_OUTCOME_FILE_ENV]: outcomeFile } : {}) },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -432,6 +450,7 @@ async function main(): Promise<void> {
     /* Decided AFTER the outcome and from nothing the outcome reads, so the
        names can be wrong without the verdict being wrong. Null is "not known". */
     failedTestFiles: failedTestFilesForOutcome(outcome, failedTestFilesSeen.result()),
+    ...(outcomeFile === null || outcome === "void" ? {} : { testOutcome: testOutcomeFrom(readOutcome(outcomeFile)) }),
   };
 
   try {

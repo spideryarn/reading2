@@ -42,7 +42,7 @@
 
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -99,7 +99,22 @@ import {
   type VercelDeployment,
 } from "./deploy-checks.js";
 import { storageBucketProblems } from "./storage-buckets.js";
-import { newestReadyCommit, readyTrunkGap, TEST_EVIDENCE_MAX_AGE_MS, testEvidenceFor, type TestEvidence } from "./deploy-evidence.js";
+import { agreeingWithExit, rerunVerdict, testOutcomeFrom } from "../tools/fleet/test-outcome.js";
+import { TEST_OUTCOME_FILE_ENV } from "./vitest-outcome-reporter.js";
+import {
+  deployFullRun,
+  firstCarryingNotes,
+  newestReadyCommit,
+  partialEvidenceFor,
+  readinessFullRuns,
+  readyTrunkGap,
+  TEST_EVIDENCE_MAX_AGE_MS,
+  testEvidenceFor,
+  type DeployRunRecord,
+  type FullRun,
+  type PartialEvidence,
+  type TestEvidence,
+} from "./deploy-evidence.js";
 import { openReadinessStore, readinessDirFromEnv } from "../tools/fleet/readiness-store.js";
 import { readinessRunnerPath, type Reading } from "../tools/fleet/readiness.js";
 
@@ -436,13 +451,117 @@ function testEvidenceAt(sha: string): TestEvidence {
   });
 }
 
+/** Where the deploy keeps its own whole-suite runs, for the next deploy (docs/plans/261008h). */
+const DEPLOY_TEST_RUNS = path.join(ROOT, "logs", "deploy", "test-runs");
+/** Older than this and a record is swept on the next write; only the last day is read. */
+const DEPLOY_TEST_RUNS_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The deploy's own recorded runs, or why one of them could not be read. */
+function deployFullRuns(): { runs: FullRun[] } | { why: string } {
+  if (!existsSync(DEPLOY_TEST_RUNS)) return { runs: [] };
+  const env = envLocalSha256();
+  const runs: FullRun[] = [];
+  for (const name of readdirSync(DEPLOY_TEST_RUNS).filter((n) => n.endsWith(".json"))) {
+    let text: string;
+    try {
+      text = readFileSync(path.join(DEPLOY_TEST_RUNS, name), "utf8");
+    } catch (err) {
+      return { why: `logs/deploy/test-runs/${name} could not be read (${(err as Error).message})` };
+    }
+    const r = deployFullRun(text, name, env);
+    if ("unreadable" in r) return { why: `a deploy test record will not parse: ${r.unreadable}` };
+    runs.push(r);
+  }
+  return { runs };
+}
+
+/** Write one whole-suite run, and sweep the old ones. Failing to is said, never fatal. */
+function recordDeployRun(rec: DeployRunRecord): void {
+  try {
+    mkdirSync(DEPLOY_TEST_RUNS, { recursive: true });
+    const name = `${rec.at.replace(/[:.]/g, "-")}-${rec.sha.slice(0, 8)}.json`;
+    writeFileSync(path.join(DEPLOY_TEST_RUNS, `${name}.tmp`), `${JSON.stringify(rec, null, 2)}\n`);
+    renameSync(path.join(DEPLOY_TEST_RUNS, `${name}.tmp`), path.join(DEPLOY_TEST_RUNS, name));
+    const cutoff = Date.now() - DEPLOY_TEST_RUNS_KEEP_MS;
+    for (const old of readdirSync(DEPLOY_TEST_RUNS)) {
+      const p = path.join(DEPLOY_TEST_RUNS, old);
+      if (statSync(p).mtimeMs < cutoff) rmSync(p, { force: true });
+    }
+    info(`recorded this run for the next deploy: logs/deploy/test-runs/${name}`);
+  } catch (err) {
+    info(`could not record this test run for the next deploy (${(err as Error).message}) — the next one runs the suite`);
+  }
+}
+
+/**
+ * **May `sha`'s test gate rerun only some files?** — `partialEvidenceFor`
+ * over the deploy's own runs and the readiness loop's, asked at the gate so a
+ * run that finished meanwhile counts. `existsAt` answers for the candidate.
+ */
+function partialEvidenceAt(sha: string, existsAt: (p: string) => boolean): PartialEvidence {
+  const nowMs = Date.now();
+  const own = deployFullRuns();
+  if ("why" in own) return { kind: "run", why: own.why };
+  const store = readinessReadings(nowMs);
+  /* No store (Greg's laptop) is not a refusal here: the deploy's own runs
+     still stand on their own. An unreadable record in one is. */
+  const readiness =
+    "why" in store
+      ? []
+      : store.unreadable > 0
+        ? null
+        : readinessFullRuns({ readings: store.readings, runnerCwd: readinessRunnerPath(ROOT), envLocalSha256: envLocalSha256(), nowMs });
+  if (readiness === null) return { kind: "run", why: "a readiness record in the last day will not parse" };
+  return partialEvidenceFor({
+    sha,
+    runs: [...own.runs, ...readiness],
+    nowMs,
+    isAncestor,
+    ancestors: (s) => {
+      try {
+        return Number(git("rev-list", "--count", s));
+      } catch {
+        return null;
+      }
+    },
+    changedSince: (x) => {
+      const r = run("git", ["diff", "--name-only", "--no-renames", x, sha]);
+      return r.code === 0 ? r.out.split("\n").filter(Boolean) : null;
+    },
+    existsAtCandidate: existsAt,
+  });
+}
+
+/**
+ * The commits from `green` to `origin/dev` that contain it, oldest first, with
+ * `green` itself first — where `--ready` looks for the first one carrying its
+ * notes. Capped: a green commit hundreds of commits back is not worth a walk.
+ */
+const NOTES_WALK_MAX = 300;
+function commitsFrom(green: string, trunkSha: string): string[] {
+  const r = run("git", ["rev-list", "--reverse", "--topo-order", "--ancestry-path", `${green}..${trunkSha}`]);
+  if (r.code !== 0) return [green];
+  return [green, ...r.out.split("\n").filter(Boolean)].slice(0, NOTES_WALK_MAX);
+}
+
+/** Production's deployment id from its build stamp, or null when it could not be read. */
+async function servingDeploymentId(): Promise<string | null> {
+  try {
+    const stamp = await get(`${TARGET_HOST}/build.json`);
+    const body = stamp.status === 200 ? (JSON.parse(stamp.body) as { deploymentId?: unknown }) : null;
+    return typeof body?.deploymentId === "string" ? body.deploymentId : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * **`--ready`: the newest commit on `origin/dev` whose test gate the store
  * already proves**, or null with the reasons recorded as a failure. It does
  * not fall back to HEAD: the operator asked for a green commit, and deploying
  * some other kind without saying so is what this flag replaced.
  */
-function chooseReadyCommit(): string | null {
+async function chooseReadyCommit(): Promise<string | null> {
   const trunkSha = fetchTrunk();
   if (trunkSha === null) {
     record("--ready: read origin/dev", [`could not fetch or read origin/${TRUNK_BRANCH}`]);
@@ -490,7 +609,38 @@ function chooseReadyCommit(): string | null {
     return null;
   }
   ok(`--ready: ${chosen.sha.slice(0, 8)} is the newest commit on origin/${TRUNK_BRANCH} the readiness loop saw green`);
-  return chosen.sha;
+
+  /* **Then the first commit from it that the preflight would pass.** The
+     green commit usually cannot: its notes are written after it was tested.
+     So the candidate is the first commit on dev containing it that carries
+     notes covering it, records the deploy now serving, and contains
+     production — the three preflight gates a later commit can fix — and the
+     test gate reruns what changed in between (docs/plans/261008h § B; the
+     third and second are GPT Sol's P2-2). The preflight still asks all three
+     again of the commit chosen. */
+  const fetchedMain = run("git", ["fetch", "origin", "main", "--quiet"]);
+  if (fetchedMain.code !== 0) {
+    record("--ready: git fetch origin main", [tail(fetchedMain.out, 5)]);
+    return null;
+  }
+  const mainSha = git("rev-parse", "origin/main");
+  const serving = await servingDeploymentId();
+  const carrying = firstCarryingNotes(commitsFrom(chosen.sha, trunkSha), (sha) => {
+    if (isAncestor(mainSha, sha) !== true) return `it does not contain production (origin/main ${mainSha.slice(0, 8)})`;
+    const notes = notesAt(sha, ROOT);
+    return notes.gap ?? servingUnrecorded({ servingDeploymentId: serving, recordedDeploymentIds: notes.recordedDeploymentIds });
+  });
+  if (carrying.kind === "none") {
+    record("--ready: a commit carrying its notes", [carrying.why]);
+    return null;
+  }
+  if (carrying.after > 0) {
+    ok(
+      `--ready: deploying ${carrying.sha.slice(0, 8)}, the first commit after it that carries its release notes ` +
+        `(${carrying.after} commit(s) on from ${chosen.sha.slice(0, 8)}; the test gate reruns what changed)`,
+    );
+  }
+  return carrying.sha;
 }
 
 /* ------------------------------------------------------------------ */
@@ -513,7 +663,7 @@ async function preflight(): Promise<string | null> {
     ok(`on ${branch}`);
   }
 
-  const sha = READY ? chooseReadyCommit() : git("rev-parse", "HEAD");
+  const sha = READY ? await chooseReadyCommit() : git("rev-parse", "HEAD");
   if (sha === null) return null;
   info(`deploying ${sha.slice(0, 8)}  ${git("log", "-1", "--format=%s", sha)}`);
 
@@ -573,10 +723,7 @@ async function preflight(): Promise<string | null> {
     gate("changelog", notes.gap === null, () =>
       notes.gap === null
         ? ""
-        : READY
-          ? `${notes.gap}\n         Under --ready this usually means the newest green commit is older than the latest\n` +
-            "         release notes: wait for the readiness loop to pass a commit after them, then deploy again."
-          : notes.gap,
+        : notes.gap,
     );
     if (notes.gap === null) {
       info(
@@ -594,16 +741,8 @@ async function preflight(): Promise<string | null> {
     }
 
     /* And the deploy this one replaces is recorded — `servingUnrecorded`. */
-    let servingDeploymentId: string | null = null;
-    try {
-      const stamp = await get(`${TARGET_HOST}/build.json`);
-      const body = stamp.status === 200 ? (JSON.parse(stamp.body) as { deploymentId?: unknown }) : null;
-      servingDeploymentId = typeof body?.deploymentId === "string" ? body.deploymentId : null;
-    } catch {
-      servingDeploymentId = null;
-    }
     const unrecorded = servingUnrecorded({
-      servingDeploymentId,
+      servingDeploymentId: await servingDeploymentId(),
       recordedDeploymentIds: notes.recordedDeploymentIds,
     });
     gate("changelog", unrecorded === null, () => unrecorded ?? "");
@@ -1034,18 +1173,84 @@ function gatesAt(sha: string): void {
       ok(`test — ${evidence.sentence}`);
       return;
     }
-    testEvidenceNote = `test: ran the suite here — no readiness run could stand in for it: ${evidence.why}`;
-    info(`test evidence: running the suite here — ${evidence.why}`);
-
     /* vitest's own `json` reporter beside its usual one, so a red gate can name
-       every failing test rather than the last two of 24. The report lives in
-       the temp directory; what must outlive it is kept by `testGateFailure`. */
+       every failing test rather than the last two of 24, and the outcome
+       reporter, so the next deploy can rerun only what failed (a `--reporter`
+       flag replaces the config's list, so it is named here too). The reports
+       live in the temp directory; what must outlive them is kept by
+       `testGateFailure` and `recordDeployRun`. */
     const reportPath = path.join(dir, "vitest.json");
-    const t = run(
-      "npm",
-      ["run", "--silent", "test", "--", "--reporter=default", "--reporter=json", `--outputFile.json=${reportPath}`],
-      { cwd: wt },
-    );
+    const outcomePath = path.join(dir, "outcome.json");
+    const vitest = (files: string[]) =>
+      run(
+        "npm",
+        [
+          "run", "--silent", "test", "--",
+          "--reporter=default", "--reporter=json", `--outputFile.json=${reportPath}`,
+          "--reporter=./scripts/vitest-outcome-reporter.ts",
+          ...files,
+        ],
+        { cwd: wt, env: { [TEST_OUTCOME_FILE_ENV]: outcomePath } },
+      );
+    const readOutcome = () => (existsSync(outcomePath) ? readFileSync(outcomePath, "utf8") : null);
+
+    /**
+     * **Or only the files that failed last time, and the tests changed since**
+     * — `partialEvidenceFor` (scripts/deploy-evidence.ts) says when a recent
+     * full run on an ancestor can answer for the rest. Greg, 2026-10-08: *"Could
+     * we not just run the test that failed and if that's been fixed, assume it's
+     * okay?"* docs/plans/261008h. A rerun that does not pass is a red gate, not
+     * a reason to run the whole suite.
+     */
+    const partial = partialEvidenceAt(sha, (p) => existsSync(path.join(wt, p)));
+    if (partial.kind === "rerun") {
+      testEvidenceNote = `test: ${partial.sentence}`;
+      if (partial.files.length === 0) {
+        ok(`test — ${partial.sentence}`);
+        return;
+      }
+      info(`test evidence: ${partial.sentence.replace(/ — reran .*/, "")} — rerunning ${partial.files.length} file(s)`);
+      const t = vitest(partial.files);
+      const problem = rerunVerdict(partial.files, readOutcome(), t.captureProblem ? null : t.code);
+      if (problem !== null) {
+        testEvidenceNote = `test: reran ${partial.files.length} file(s) on the strength of ${partial.from.source} run ${partial.from.id}, and ${problem}`;
+        testGateReport = [`         ${problem}`, ...testGateFailure(t.out, reportPath, wt, sha, t.captureProblem)];
+      }
+      gate("test", problem === null, () => (testGateReport ?? []).join("\n"));
+      return;
+    }
+    const why = evidence.why === partial.why ? evidence.why : `${evidence.why}; and no partial rerun: ${partial.why}`;
+    testEvidenceNote = `test: ran the suite here — no earlier run could stand in for it: ${why}`;
+    info(`test evidence: running the suite here — ${why}`);
+
+    /* The checkout at both ends, so the record can say the run was this
+       commit's and nothing else's (GPT Sol on 261008h, P1-9). */
+    const treeNow = () => {
+      const head = run("git", ["rev-parse", "HEAD"], { cwd: wt });
+      const status = run("git", ["status", "--porcelain"], { cwd: wt });
+      return {
+        sha: head.code === 0 ? head.out.trim() : "",
+        clean: status.code === 0 && status.out.trim() === "",
+        envLocalSha256: envLocalSha256(),
+      };
+    };
+    const atStart = treeNow();
+    const startedAt = new Date().toISOString();
+    const t = vitest([]);
+    const exit = t.captureProblem ? null : t.code;
+    recordDeployRun({
+      schema: 2,
+      by: "deploy-gate",
+      runId: `${path.basename(dir)}-${sha.slice(0, 8)}`,
+      sha,
+      root: wt,
+      startedAt,
+      at: new Date().toISOString(),
+      exit,
+      atStart,
+      atEnd: treeNow(),
+      outcome: agreeingWithExit(testOutcomeFrom(readOutcome()), exit),
+    });
     if (t.code !== 0) testGateReport = testGateFailure(t.out, reportPath, wt, sha, t.captureProblem);
     gate("test", t.code === 0, () => (testGateReport ?? []).join("\n"));
   } finally {
