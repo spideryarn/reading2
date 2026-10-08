@@ -1,5 +1,5 @@
 ---
-reports: spya-caue42
+reports: spya-caue42, spya-thpsnd
 ending: shipped
 comment: Shipped: the Reception and Claims sub-modes. Still waiting on you: should Claims let you choose which claim is checked, by typing or picking one, or stay as built, where the search chooses?
 ---
@@ -9,6 +9,11 @@ comment: Shipped: the Reception and Claims sub-modes. Still waiting on you: shou
 Report `spya-caue42` · suggestion from Greg (admin; the production row, read with
 `feedback-unswept.ts --show`) · 2026-10-03, reading Levin 2024, *Self-Improvising Memory*, in
 Debate. Sentry event `74461136547646cf9068ca35e78ef7aa`.
+
+**Also part 2 of 3 of `spya-thpsnd`, steering Debate** (header added 2026-10-08, plan 261008f).
+The part 1 note names this part; this note queued it (below) and the open question `q-sn37bt` asks
+it, but the header named only `spya-caue42`, so thpsnd had two notes of three and read as waiting
+on Greg, under *Needs a decision* with nothing to answer.
 
 > I don't quite understand what debate mode is doing. The UI is confusing. Like, in this case, it seems to have found some interesting stuff about the RNA and C. elegans study, and like, oh, it turns out that's more controversial. All right, cool. But A, that's very specific. It's one claim. And B, it doesn't tell me anything about how the paper has been received more generally. I mean, this came out a little while ago, so I was hoping, you know, have other people reviewed it or critiqued it or discussed it? So maybe I'm asking for a few things. It may be that you could, as a first pass, say, which of these claims do you want me to check? So there could be a claims submode. So one claim might be, you know, about the RNA and C. elegans, and then there could be effectively a thread or something a bit like with the search mode for each claim, and then papers that have sort of evaluated the claim since then. Okay. And then there's a section, a separate submode besides claims for reception or critiques or responses or something. Yeah, reception sounds about right, which talks about, you know, other people who have—what have they said about this? I don't know if we need a separate submode for has it been cited, who has cited it. Is that the same thing as reception or is that different? Well, use your judgment. Maybe some quick evals, and also tidy up the UI.
 

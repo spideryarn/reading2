@@ -76,12 +76,21 @@ import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRe
 
 import { MAX_FEEDBACK_COMMENT_CHARS } from "../feedback-ending-values.js";
 import {
+  FEEDBACK_QUESTION_STATES,
+  type FeedbackQuestionState,
   isFeedbackQuestionId,
   MAX_FEEDBACK_QUESTION_BODY_CHARS,
   MAX_FEEDBACK_QUESTION_TITLE_CHARS,
+  splitQuestionBody,
 } from "../feedback-question-values.js";
 import { isSpideryarnId, mintId } from "../ids.js";
-import { FEEDBACK_EARLIER_FAILED, FEEDBACK_REPLY_FAILED, FEEDBACK_REPLY_STALE } from "../messages.js";
+import {
+  FEEDBACK_DEFER_FAILED,
+  FEEDBACK_DEFER_SETTLED,
+  FEEDBACK_EARLIER_FAILED,
+  FEEDBACK_REPLY_FAILED,
+  FEEDBACK_REPLY_STALE,
+} from "../messages.js";
 import {
   MAX_FEEDBACK_ANSWER_CHARS,
   type AdminFeedbackQuestion,
@@ -108,6 +117,7 @@ import { Link } from "./Link.js";
 import { exactly, relativeAgo } from "./relative-time.js";
 import { parseRoute, readHref } from "./router.js";
 import { useDictationField } from "./useDictationField.js";
+import { useFitTextarea } from "./useFitTextarea.js";
 
 /**
  * **Which list an answer is**: every reader's (`plain`, `GET /api/feedback`),
@@ -117,7 +127,7 @@ import { useDictationField } from "./useDictationField.js";
  */
 export type EarlierLoaded =
   | { detail: "plain"; page: EarlierFeedbackPage }
-  | { detail: "admin"; page: AdminEarlierFeedbackPage };
+  | { detail: "admin"; page: AdminThreadsPage; startedAt: number };
 
 export type EarlierState =
   | { kind: "idle" }
@@ -147,6 +157,7 @@ const IDLE: EarlierState = { kind: "idle" };
 const ADMIN_PATH = "/api/admin/feedback/earlier";
 const PLAIN_PATH = "/api/feedback";
 const ANSWERS_PATH = "/api/admin/feedback/answers";
+const DEFERRALS_PATH = "/api/admin/feedback/deferrals";
 
 /**
  * **A path on this site, and nothing a browser could read as leaving it** —
@@ -238,7 +249,7 @@ function isEarlierFeedbackPage(value: unknown, which: EarlierFeedbackShow): valu
 function isAdminEarlierFeedbackPage(
   value: unknown,
   which: AdminEarlierFeedbackShow,
-): value is AdminEarlierFeedbackPage {
+): value is AdminThreadsPage {
   const envelope = readEnvelope(value, which, ADMIN_EARLIER_FEEDBACK_SHOWS);
   if (envelope === null) return false;
   const { counts } = envelope;
@@ -276,16 +287,61 @@ function isQuestionAnswer(value: unknown): value is AdminFeedbackQuestionAnswer 
   );
 }
 
-const QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
+const QUESTION_KEYS = ["answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title"];
+const LEGACY_QUESTION_KEYS = ["answer", "asked", "body", "id", "report", "title"];
+
+/**
+ * **A thread as this client draws it**: the server's question, except that
+ * the report's text may be null, which only a server from before 261008f
+ * sends (it had none to send) and which then draws no *Your report*.
+ */
+export type ThreadQuestion = Omit<AdminFeedbackQuestion, "report"> & {
+  report: (Omit<NonNullable<AdminFeedbackQuestion["report"]>, "body"> & { body: string | null }) | null;
+};
+
+/** The admin answer as this client keeps it: threads, not the server's raw questions. */
+export type AdminThreadsPage = Omit<AdminEarlierFeedbackPage, "questions"> & { questions: ThreadQuestion[] };
+
+/**
+ * **A server from before 261008f answers in the six-key shape** — a rollback,
+ * or the minutes of a deploy (F3). Each such question becomes a thread before
+ * the strict check: its newest reply as the only one, *being considered* if
+ * there is one, never deferred, no report text. Only a question with exactly
+ * the six old keys is mapped; anything else reaches the check as it came, and
+ * fails there.
+ */
+function withLegacyQuestions(value: unknown): unknown {
+  if (typeof value !== "object" || value === null) return value;
+  const answer = value as Record<string, unknown>;
+  if (!Array.isArray(answer.questions)) return value;
+  return {
+    ...answer,
+    questions: answer.questions.map((question: unknown) => {
+      if (typeof question !== "object" || question === null) return question;
+      const old = question as Record<string, unknown>;
+      if (Object.keys(old).sort().join() !== LEGACY_QUESTION_KEYS.join()) return question;
+      const { answer: newest, report, ...rest } = old;
+      return {
+        ...rest,
+        report: typeof report === "object" && report !== null ? { ...report, body: null } : report,
+        answers: newest === null ? [] : [newest],
+        olderAnswers: 0,
+        state: newest === null ? "waiting" : "responded",
+        deferredAt: null,
+      };
+    }),
+  };
+}
 
 /**
  * **The questions half of the admin answer, as strict as the reports half.**
- * Exactly the six fields of each, so anything meant for agents that a server
- * one day sent would fail here instead of being carried around; ids no two
- * share; text within the caps the compiler holds a file to. A list that fails
- * fails the whole answer: the failure sentence, never some of the questions.
+ * Exactly the fields of each, so anything meant for agents that a server one
+ * day sent would fail here instead of being carried around; ids no two share;
+ * text within the caps the compiler holds a file to; a state of the three, and
+ * a deferral time exactly when it says deferred. A list that fails fails the
+ * whole answer: the failure sentence, never some of the questions.
  */
-function areQuestions(value: unknown): value is AdminFeedbackQuestion[] {
+function areQuestions(value: unknown): value is ThreadQuestion[] {
   if (!Array.isArray(value) || !value.every(isQuestion)) return false;
   return new Set(value.map((question) => question.id)).size === value.length;
 }
@@ -294,20 +350,23 @@ function areQuestions(value: unknown): value is AdminFeedbackQuestion[] {
 const isTextWithin = (value: unknown, cap: number): value is string =>
   typeof value === "string" && value !== "" && value.length <= cap;
 
-/** The report a question is about, as its card shows it: an id, a number, a first line. */
+/** The report a question is about, as its thread shows it: an id, a number, a first line, its text. */
 function isLinkedReport(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const linked = value as Record<string, unknown>;
   return (
+    Object.keys(linked).sort().join() === "body,firstLine,id,number" &&
     typeof linked.id === "string" && isSpideryarnId(linked.id) &&
     Number.isSafeInteger(linked.number) && (linked.number as number) > 0 &&
-    typeof linked.firstLine === "string"
+    typeof linked.firstLine === "string" &&
+    (linked.body === null || typeof linked.body === "string")
   );
 }
 
-function isQuestion(value: unknown): value is AdminFeedbackQuestion {
+function isQuestion(value: unknown): value is ThreadQuestion {
   if (typeof value !== "object" || value === null) return false;
   const question = value as Record<string, unknown>;
+  const answers = question.answers;
   return (
     Object.keys(question).sort().join() === QUESTION_KEYS.join() &&
     isFeedbackQuestionId(question.id) &&
@@ -315,7 +374,14 @@ function isQuestion(value: unknown): value is AdminFeedbackQuestion {
     isTextWithin(question.body, MAX_FEEDBACK_QUESTION_BODY_CHARS) &&
     typeof question.asked === "string" && dayOf(question.asked) !== null &&
     (question.report === null || isLinkedReport(question.report)) &&
-    (question.answer === null || isQuestionAnswer(question.answer))
+    Array.isArray(answers) && answers.every(isQuestionAnswer) &&
+    new Set(answers.map((one: AdminFeedbackQuestionAnswer) => one.id)).size === answers.length &&
+    Number.isSafeInteger(question.olderAnswers) && (question.olderAnswers as number) >= 0 &&
+    FEEDBACK_QUESTION_STATES.some((state) => state === question.state) &&
+    /* A time exactly when it says deferred, so the group and the line under it agree. */
+    (question.state === "deferred"
+      ? typeof question.deferredAt === "string" && !Number.isNaN(Date.parse(question.deferredAt))
+      : question.deferredAt === null)
   );
 }
 
@@ -362,129 +428,259 @@ export interface EarlierFeedback {
    * of them, so the first read labels every pill.
    */
   choice: EarlierChoice;
+  /** The reader chose a filter: a pill, or the shortcut beside the tabs. */
   setShow(show: AnyShow): void;
   retry(): void;
   /**
-   * Every open question, for an admin, from any answer of this opening (each
-   * carries them all), plus a remembered question while it holds a local
-   * draft; `null` for every other reader and until one lands.
+   * Every open question, for an admin, as threads: from any answer of this
+   * opening (each carries them all), with this page's own replies and
+   * deferrals laid over them until a later read has them (F4, F11), plus a
+   * remembered question while it is open or holds a local draft; `null` for
+   * every other reader and until one lands.
    */
-  questions: AdminFeedbackQuestion[] | null;
-  /** The server's open-question count, without a remembered no-longer-open question. */
-  openQuestionCount: number | null;
+  questions: ThreadQuestion[] | null;
+  /** How many of the server's threads wait on a decision, without a remembered no-longer-open question: the pill's and the shortcut's number. */
+  waitingQuestionCount: number | null;
   replies: QuestionReplies;
 }
 
-/** Where the open reply box's send has got to. */
+/** Where the open thread's send, or its defer, has got to. */
 export type ReplyStage = { kind: "idle" } | { kind: "sending" } | { kind: "failed"; message: string };
 
+/** Something this page did to a thread, and when on the hook's clock: kept until a read started after it lands. */
+interface Receipt<T> {
+  value: T;
+  at: number;
+}
+
 /**
- * **The admin's replies in progress**, held by the hook the dialog keeps
+ * **The admin's threads in progress**, held by the hook the dialog keeps
  * mounted, so a half-written reply survives a look at another tab, another
- * filter, and the dialog being shut. One box open at a time.
+ * filter, another thread, and the dialog being shut. One thread open at a
+ * time, and its reply box is simply there (plan 261008f, decision 5).
  */
 export interface QuestionReplies {
-  /** The question whose reply box is open, or null. */
+  /** The thread showing on its own, or null for the contents. */
   openId: string | null;
-  /** What is typed so far in each question's box. A box that is shut keeps its words. */
+  /** What is typed so far in each question's box. A box out of sight keeps its words. */
   drafts: Readonly<Record<string, string>>;
   stage: ReplyStage;
-  /** Replies sent from this page, newest per question: shown at once, ahead of the list's older answer. */
-  sent: Readonly<Record<string, AdminFeedbackQuestionAnswer>>;
+  /** Where Defer for now or Bring back has got to. */
+  deferring: ReplyStage;
+  /** Replies sent from this page, per question, and when: shown at once, ahead of the list's. */
+  sent: Readonly<Record<string, Receipt<AdminFeedbackQuestionAnswer[]>>>;
+  /** Deferrals set from this page, per question, and when: the time, or null for brought back. */
+  deferrals: Readonly<Record<string, Receipt<string | null>>>;
   /** Whether anything unsent is held: words in a box, or a send in the air. */
   holds: boolean;
   open(id: string): void;
   close(): void;
   setDraft(id: string, text: string): void;
   send(id: string): Promise<void>;
+  defer(id: string, deferred: boolean): Promise<void>;
+}
+
+/** A deferral as the server sends it back: the question asked about, and a time or null. */
+function isDeferralReceipt(value: unknown, question: string, deferred: boolean): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const receipt = value as Record<string, unknown>;
+  return (
+    Object.keys(receipt).sort().join() === "deferredAt,question" &&
+    receipt.question === question &&
+    (deferred
+      ? typeof receipt.deferredAt === "string" && !Number.isNaN(Date.parse(receipt.deferredAt))
+      : receipt.deferredAt === null)
+  );
 }
 
 /**
- * The replies' state and the one POST. **A send's id belongs to its question
+ * The threads' state and the two POSTs. **A send's id belongs to its question
  * and its words**: a retry of the same words carries the same id, which the
  * server answers with the stored row (200), and edited words get a new id, so
  * the server never sees one id with two bodies (its 409).
+ *
+ * `tick` is the hook's clock, which every read and every receipt reads, so a
+ * receipt is retired only by a read that started after it (F4). `chose` is
+ * told when the reader opens a thread, which the opening read must not
+ * overrule (F8).
  */
-function useQuestionReplies(): QuestionReplies {
+function useQuestionReplies(tick: () => number, chose: () => void): QuestionReplies {
   const [openId, setOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
   const [stage, setStage] = useState<ReplyStage>({ kind: "idle" });
-  const [sent, setSent] = useState<Readonly<Record<string, AdminFeedbackQuestionAnswer>>>({});
+  const [deferring, setDeferring] = useState<ReplyStage>({ kind: "idle" });
+  const [sent, setSent] = useState<Readonly<Record<string, Receipt<AdminFeedbackQuestionAnswer[]>>>>({});
+  const [deferrals, setDeferrals] = useState<Readonly<Record<string, Receipt<string | null>>>>({});
   const draftsRef = useRef(drafts);
   draftsRef.current = drafts;
-  /* A ref as well as the stage: two presses in one frame both see the old render. */
+  /* Refs as well as the stages: two presses in one frame both see the old render. */
   const sending = useRef(false);
+  const deferInFlight = useRef(false);
   const attempt = useRef<{ question: string; body: string; id: string } | null>(null);
 
-  const open = useCallback((id: string) => {
-    if (sending.current) return;
-    setOpenId(id);
-    setStage({ kind: "idle" });
-  }, []);
+  const open = useCallback(
+    (id: string) => {
+      if (sending.current || deferInFlight.current) return;
+      chose();
+      setOpenId(id);
+      setStage({ kind: "idle" });
+      setDeferring({ kind: "idle" });
+    },
+    [chose],
+  );
   const close = useCallback(() => {
-    if (sending.current) return;
+    if (sending.current || deferInFlight.current) return;
     setOpenId(null);
     setStage({ kind: "idle" });
+    setDeferring({ kind: "idle" });
   }, []);
   const setDraft = useCallback((id: string, text: string) => {
     setDrafts((all) => ({ ...all, [id]: text }));
   }, []);
 
-  const send = useCallback(async (question: string) => {
-    const body = (draftsRef.current[question] ?? "").trim();
-    if (sending.current || body === "" || body.length > MAX_FEEDBACK_ANSWER_CHARS) return;
-    const previous = attempt.current;
-    const id = previous !== null && previous.question === question && previous.body === body ? previous.id : mintId();
-    attempt.current = { question, body, id };
-    sending.current = true;
-    setStage({ kind: "sending" });
-    let failed = FEEDBACK_REPLY_FAILED.message;
-    try {
-      const res = await apiFetch(ANSWERS_PATH, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, question, body }),
-      });
-      if (res.status === 404) {
-        failed = FEEDBACK_REPLY_STALE.message;
-      } else if (res.ok) {
-        /* 201, or 200 for a retry the server had already stored. Only a
-           well-formed stored reply counts: a 2xx with anything else in it is
-           not evidence the words were kept. */
-        const receipt = (await res.json()) as { answer?: unknown } | null;
-        const answer = receipt?.answer;
-        if (isQuestionAnswer(answer) && answer.id === id && answer.body === body) {
-          attempt.current = null;
-          sending.current = false;
-          setSent((all) => ({ ...all, [question]: answer }));
-          setDrafts((all) => {
-            const { [question]: _sent, ...rest } = all;
-            return rest;
-          });
-          setOpenId((current) => (current === question ? null : current));
-          setStage({ kind: "idle" });
-          return;
+  const send = useCallback(
+    async (question: string) => {
+      const body = (draftsRef.current[question] ?? "").trim();
+      if (sending.current || body === "" || body.length > MAX_FEEDBACK_ANSWER_CHARS) return;
+      const previous = attempt.current;
+      const id =
+        previous !== null && previous.question === question && previous.body === body ? previous.id : mintId();
+      attempt.current = { question, body, id };
+      sending.current = true;
+      setStage({ kind: "sending" });
+      let failed = FEEDBACK_REPLY_FAILED.message;
+      try {
+        const res = await apiFetch(ANSWERS_PATH, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, question, body }),
+        });
+        if (res.status === 404) {
+          failed = FEEDBACK_REPLY_STALE.message;
+        } else if (res.ok) {
+          /* 201, or 200 for a retry the server had already stored. Only a
+             well-formed stored reply counts: a 2xx with anything else in it is
+             not evidence the words were kept. */
+          const receipt = (await res.json()) as { answer?: unknown } | null;
+          const answer = receipt?.answer;
+          if (isQuestionAnswer(answer) && answer.id === id && answer.body === body) {
+            attempt.current = null;
+            sending.current = false;
+            const at = tick();
+            setSent((all) => ({
+              ...all,
+              [question]: { value: [...(all[question]?.value ?? []).filter((one) => one.id !== id), answer], at },
+            }));
+            setDrafts((all) => {
+              const { [question]: _sent, ...rest } = all;
+              return rest;
+            });
+            setStage({ kind: "idle" });
+            return;
+          }
         }
+      } catch {
+        /* The network, or a body that was not JSON: the same sentence. */
       }
-    } catch {
-      /* The network, or a body that was not JSON: the same sentence. */
-    }
-    sending.current = false;
-    setStage({ kind: "failed", message: failed });
-  }, []);
+      sending.current = false;
+      setStage({ kind: "failed", message: failed });
+    },
+    [tick],
+  );
+
+  const defer = useCallback(
+    async (question: string, deferred: boolean) => {
+      if (deferInFlight.current || sending.current) return;
+      deferInFlight.current = true;
+      setDeferring({ kind: "sending" });
+      let failed = FEEDBACK_DEFER_FAILED.message;
+      try {
+        const res = await apiFetch(DEFERRALS_PATH, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question, deferred }),
+        });
+        if (res.status === 409) {
+          failed = FEEDBACK_DEFER_SETTLED.message;
+        } else if (res.ok) {
+          const receipt: unknown = await res.json();
+          if (isDeferralReceipt(receipt, question, deferred)) {
+            deferInFlight.current = false;
+            const at = tick();
+            const value = (receipt as { deferredAt: string | null }).deferredAt;
+            setDeferrals((all) => ({ ...all, [question]: { value, at } }));
+            setDeferring({ kind: "idle" });
+            return;
+          }
+        }
+      } catch {
+        /* The same sentence. */
+      }
+      deferInFlight.current = false;
+      setDeferring({ kind: "failed", message: failed });
+    },
+    [tick],
+  );
 
   const holds = stage.kind === "sending" || Object.values(drafts).some((text) => text.trim() !== "");
-  return { openId, drafts, stage, sent, holds, open, close, setDraft, send };
+  return { openId, drafts, stage, deferring, sent, deferrals, holds, open, close, setDraft, send, defer };
 }
 
-/** The questions any admin answer of this opening carried: the showing filter's first. */
-function questionsOf(choice: EarlierChoice, states: EarlierStates): AdminFeedbackQuestion[] | null {
-  if (choice.detail !== "admin") return null;
-  for (const which of [choice.show, ...ADMIN_EARLIER_FEEDBACK_SHOWS]) {
-    const state = states[which];
-    if (state?.kind === "loaded" && state.detail === "admin") return state.page.questions;
+/**
+ * **A thread with what this page did to it laid over the server's account**,
+ * for as long as the server's account is older than what this page did: a
+ * receipt counts only if it landed after the read behind `startedAt` began
+ * (F4, F11). The later of a reply and a deferral wins, as on the server (F2).
+ */
+export function withLocal(
+  question: ThreadQuestion,
+  startedAt: number,
+  replies: Pick<QuestionReplies, "sent" | "deferrals">,
+): ThreadQuestion {
+  const mine = replies.sent[question.id];
+  const deferral = replies.deferrals[question.id];
+  const sent = mine !== undefined && mine.at > startedAt ? mine : null;
+  const set = deferral !== undefined && deferral.at > startedAt ? deferral : null;
+  if (sent === null && set === null) return question;
+  const answers =
+    sent === null
+      ? question.answers
+      : [...question.answers, ...sent.value.filter((one) => !question.answers.some((known) => known.id === one.id))];
+  if (set !== null && (sent === null || set.at > sent.at)) {
+    return set.value !== null
+      ? { ...question, answers, state: "deferred", deferredAt: set.value }
+      : { ...question, answers, state: answers.length > 0 ? "responded" : "waiting", deferredAt: null };
   }
-  return null;
+  return { ...question, answers, state: "responded", deferredAt: null };
+}
+
+/** The groups in the order the contents draws them, and the pager walks them. */
+export const THREAD_GROUPS: readonly FeedbackQuestionState[] = ["waiting", "responded", "deferred"];
+
+/** Every thread in contents order: waiting, then being considered, then deferred, each oldest first. */
+export function threadOrder(questions: readonly ThreadQuestion[]): ThreadQuestion[] {
+  return THREAD_GROUPS.flatMap((state) => questions.filter((question) => question.state === state));
+}
+
+/**
+ * The questions of this opening's **newest** admin answer, whichever filter
+ * asked, and when that read began. Every answer carries the same questions
+ * whatever its filter, so the newest is the truest; the showing filter's would
+ * let an older answer lay back a receipt a newer read had already retired.
+ */
+function questionsOf(
+  choice: EarlierChoice,
+  states: EarlierStates,
+): { questions: ThreadQuestion[]; startedAt: number } | null {
+  if (choice.detail !== "admin") return null;
+  let newest: { questions: ThreadQuestion[]; startedAt: number } | null = null;
+  for (const which of ADMIN_EARLIER_FEEDBACK_SHOWS) {
+    const state = states[which];
+    if (state?.kind === "loaded" && state.detail === "admin" && (newest === null || state.startedAt > newest.startedAt)) {
+      newest = { questions: state.page.questions, startedAt: state.startedAt };
+    }
+  }
+  return newest;
 }
 
 /** The list's own filter for a wanted one: itself when that list has it, otherwise All. */
@@ -510,20 +706,26 @@ function choiceOf(ask: EarlierAsk, states: EarlierStates): EarlierChoice {
   return { ...ask, counts: null };
 }
 
+/** What one read hands back, before the hook stamps when it began. */
+type ReadAnswer = { detail: "plain"; page: EarlierFeedbackPage } | { detail: "admin"; page: AdminThreadsPage };
+
 /**
  * One read of one filter of one list: the answer checked, or why there is
  * none. `absent` is the admin route answering 404, and only that: a server
- * from before the route (a rollback, or the minutes of a deploy).
+ * from before the route (a rollback, or the minutes of a deploy). The admin
+ * route is asked for threads (`questions=2`); a server that ignores that
+ * answers in the older shape, which `withLegacyQuestions` maps (F3).
  */
-async function read(ask: EarlierAsk): Promise<EarlierLoaded | "failed" | "absent"> {
-  const query = ask.show === "all" ? "" : `?show=${ask.show}`;
+async function read(ask: EarlierAsk): Promise<ReadAnswer | "failed" | "absent"> {
   if (ask.detail === "admin") {
-    const res = await apiFetch(`${ADMIN_PATH}${query}`);
+    const query = new URLSearchParams(ask.show === "all" ? { questions: "2" } : { show: ask.show, questions: "2" });
+    const res = await apiFetch(`${ADMIN_PATH}?${query}`);
     if (res.status === 404) return "absent";
     if (!res.ok) return "failed";
-    const page: unknown = await res.json();
+    const page = withLegacyQuestions(await res.json());
     return isAdminEarlierFeedbackPage(page, ask.show) ? { detail: "admin", page } : "failed";
   }
+  const query = ask.show === "all" ? "" : `?show=${ask.show}`;
   const res = await apiFetch(`${PLAIN_PATH}${query}`);
   if (!res.ok) return "failed";
   const page = withLegacyPage(await res.json());
@@ -540,27 +742,48 @@ async function read(ask: EarlierAsk): Promise<EarlierLoaded | "failed" | "absent
  * plain list and its three pills**, and the next opening asks again. Any other
  * failure is the failure sentence: a 403 means the server disagrees about who
  * this is, and showing the plain list under that would hide it.
+ *
+ * **An admin's dialog reads *Needs a decision* as soon as it opens** (plan
+ * 261008f, decisions 8 and 9), on Write too: that read is the count on the
+ * shortcut beside the tabs, and it decides where Earlier opens. Earlier opens
+ * on *Needs a decision*; when that first read says no thread is waiting, it
+ * moves to All, **unless the reader has chosen anything since the opening
+ * began** (a pill, the shortcut, a thread), which always wins (F8).
  */
 export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false): EarlierFeedback {
   const [states, setStates] = useState<EarlierStates>(NOTHING);
-  const [show, setShow] = useState<AnyShow>("all");
   const [fellBack, setFellBack] = useState(false);
   const detail: EarlierLoaded["detail"] = admin && !fellBack ? "admin" : "plain";
+  const opening: AnyShow = detail === "admin" ? "waiting" : "all";
+  const [show, setShowState] = useState<AnyShow>(opening);
   const generation = useRef(0);
   const sequence = useRef<Partial<Record<AnyShow, number>>>({});
+  /* The hook's clock: every read's start and every receipt is a tick (F4). */
+  const clock = useRef(0);
+  const tick = useCallback(() => {
+    clock.current += 1;
+    return clock.current;
+  }, []);
+  /* How many choices the reader has made in this opening (F8). */
+  const choices = useRef(0);
+  const chose = useCallback(() => {
+    choices.current += 1;
+  }, []);
   /* A question may be resolved by a deploy while Greg is answering it. Keep
-     the question's words beside any open or non-empty local draft, so the
-     draft never becomes an invisible reload veto and a dictation in flight
-     is not unmounted when the dialog closes. */
-  const rememberedQuestions = useRef(new Map<string, AdminFeedbackQuestion>());
-  const replies = useQuestionReplies();
+     the question's words beside the open thread or any non-empty local draft,
+     so the draft never becomes an invisible reload veto and a dictation in
+     flight is not unmounted when the dialog closes. */
+  const rememberedQuestions = useRef(new Map<string, ThreadQuestion>());
+  const replies = useQuestionReplies(tick, chose);
 
   const load = useCallback(async (asked: EarlierAsk) => {
     const which = asked.show;
-    const opening = generation.current;
+    const opened = generation.current;
     const mine = (sequence.current[which] ?? 0) + 1;
     sequence.current[which] = mine;
-    const current = () => opening === generation.current && mine === sequence.current[which];
+    const startedAt = tick();
+    const choicesAtStart = choices.current;
+    const current = () => opened === generation.current && mine === sequence.current[which];
     const settle = (state: EarlierState) => {
       if (current()) setStates((all) => ({ ...all, [which]: state }));
     };
@@ -574,35 +797,69 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
            still in the air lands nowhere: the two lists share filter names. */
         generation.current += 1;
         setFellBack(true);
-        setShow("all");
+        setShowState("all");
         setStates(NOTHING);
         return;
       }
-      settle(answer === "failed" ? failed : { kind: "loaded", ...answer });
+      if (answer === "failed") {
+        settle(failed);
+        return;
+      }
+      if (answer.detail === "admin") {
+        settle({ kind: "loaded", detail: "admin", page: answer.page, startedAt });
+        /* The opening's first look at Needs a decision, with nothing waiting
+           and nothing chosen since: Earlier opens on All instead (F8). */
+        if (
+          current() &&
+          which === "waiting" &&
+          choicesAtStart === 0 &&
+          choices.current === 0 &&
+          !answer.page.questions.some((question) => question.state === "waiting")
+        ) {
+          setShowState((now) => (now === "waiting" ? "all" : now));
+        }
+        return;
+      }
+      settle({ kind: "loaded", detail: "plain", page: answer.page });
     } catch {
       settle(failed);
     }
-  }, []);
+  }, [tick]);
 
-  /* Shut: forget every answer, go back to All and to the list `admin` names,
-     and make any read still in the air land nowhere. */
+  /* Shut: forget every answer, go back to where an opening starts and to the
+     list `admin` names, and make any read still in the air land nowhere. */
   useEffect(() => {
     if (open) return;
     generation.current += 1;
-    setShow("all");
+    choices.current = 0;
     setFellBack(false);
+    setShowState(admin ? "waiting" : "all");
     /* The same object when there is nothing to forget, so a dialog that was
        never on this tab is not re-rendered for being shut. */
     setStates((current) => (Object.keys(current).length === 0 ? current : NOTHING));
-  }, [open]);
+  }, [open, admin]);
 
   const choice = choiceOf(askOf(detail, show), states);
   const earlier = states[choice.show] ?? IDLE;
+  const waitingRead = states.waiting ?? IDLE;
   useEffect(() => {
-    if (open && wanted && earlier.kind === "idle") void load(askOf(detail, show));
-  }, [open, wanted, earlier.kind, detail, show, load]);
+    if (!open) return;
+    if (wanted && earlier.kind === "idle") void load(askOf(detail, show));
+    /* The admin's read on opening, unless the line above is that read. */
+    else if (detail === "admin" && waitingRead.kind === "idle") void load({ detail, show: "waiting" });
+  }, [open, wanted, earlier.kind, waitingRead.kind, detail, show, load]);
 
-  const currentQuestions = questionsOf(choice, states);
+  const setShow = useCallback(
+    (next: AnyShow) => {
+      chose();
+      setShowState(next);
+    },
+    [chose],
+  );
+
+  const seen = questionsOf(choice, states);
+  const currentQuestions =
+    seen === null ? null : seen.questions.map((question) => withLocal(question, seen.startedAt, replies));
   if (currentQuestions !== null) {
     for (const question of currentQuestions) rememberedQuestions.current.set(question.id, question);
   }
@@ -620,7 +877,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
           ...[...heldQuestionIds]
             .filter((id) => !currentQuestions?.some((question) => question.id === id))
             .map((id) => rememberedQuestions.current.get(id))
-            .filter((question): question is AdminFeedbackQuestion => question !== undefined),
+            .filter((question): question is ThreadQuestion => question !== undefined),
         ];
   return {
     earlier,
@@ -628,7 +885,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     setShow,
     retry: () => void load(askOf(detail, show)),
     questions,
-    openQuestionCount: currentQuestions?.length ?? null,
+    waitingQuestionCount: currentQuestions === null ? null : waitingThreads(currentQuestions),
     replies,
   };
 }
@@ -749,7 +1006,7 @@ export function EarlierFilter({
 }: {
   choice: EarlierChoice;
   onShow(show: AnyShow): void;
-  /** The open questions, for an admin; null or none says nothing on the pill. */
+  /** The threads waiting on a decision, for an admin, as on the shortcut; null or none says nothing on the pill. */
   questionCount?: number | null;
 }) {
   const questions = questionCount ?? 0;
@@ -790,7 +1047,7 @@ export function EarlierFilter({
           {which === "waiting" && choice.detail === "admin" && questions > 0 ? (
             <span className="fb-show-questions">
               {" · "}
-              {questions} open {questions === 1 ? "question" : "questions"}
+              {questions} to decide
             </span>
           ) : null}
         </button>
@@ -918,22 +1175,28 @@ function AdminRow({ report, now }: { report: AdminEarlierFeedback; now: number }
 }
 
 /**
- * **The box an admin replies to one question in**, with its own microphone.
- * Mounted only while that question's box is open, so there is at most one, and
- * the dialog's Write box keeps the only other `useDictationField`.
+ * **The box an admin replies to one thread in**, with its own microphone, and
+ * the thread's other way out: *Defer for now*, or *Bring back*. Mounted only
+ * while that thread is open, so there is at most one, and the dialog's Write
+ * box keeps the only other `useDictationField`.
  *
  * `active` is whether the box can be seen: the dialog open, on Earlier, in
  * *Needs a decision*. **Going out of sight stops the microphone**, exactly as
  * the Write box's is stopped on a tab change and on close: the hook's own
  * `toggle` (a stop, so what was said lands in the draft), never the field's,
  * which would pull focus into a box that has just been hidden.
+ *
+ * **It grows with its words and never scrolls itself** (useFitTextarea.ts):
+ * on an iPhone, a dictated paragraph in a three-line box inside a scrolling
+ * panel was two scrollers under one finger with the keyboard up (Greg,
+ * `spya-za2tse`; plan 261008f, decision 10).
  */
 function ReplyBox({
   question,
   replies,
   active,
 }: {
-  question: AdminFeedbackQuestion;
+  question: ThreadQuestion;
   replies: QuestionReplies;
   active: boolean;
 }) {
@@ -941,7 +1204,9 @@ function ReplyBox({
   const draft = replies.drafts[question.id] ?? "";
   const over = draft.length > MAX_FEEDBACK_ANSWER_CHARS;
   const sending = replies.stage.kind === "sending";
+  const deferring = replies.deferring.kind === "sending";
   const transcribe = useReaderTranscriber();
+  useFitTextarea(box, draft);
   /* Read at call time, so a double press on Stop sees this render's `busy`. */
   const busyRef = useRef(false);
   const trySend = () => {
@@ -987,13 +1252,14 @@ function ReplyBox({
     event.stopPropagation();
     trySend();
   };
+  const deferred = question.state === "deferred";
 
   return (
     <div className="fb-reply">
       <textarea
         ref={box}
         className="fb-input fb-reply-input"
-        rows={3}
+        rows={5}
         aria-label={`Your reply to: ${question.title}`}
         value={draft}
         readOnly={dictate.readOnly || sending}
@@ -1019,14 +1285,22 @@ function ReplyBox({
         <button
           type="button"
           className="fb-copy fb-reply-send"
-          disabled={sending || dictate.busy || over || draft.trim() === ""}
+          disabled={sending || deferring || dictate.busy || over || draft.trim() === ""}
           onClick={trySend}
         >
           {sending ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
           Send reply
         </button>
-        <button type="button" className="fb-copy" disabled={sending} onClick={replies.close}>
-          Cancel
+        {/* The alternative to replying (spya-t6nmxt): "not now". Reversible,
+            and it tells agents not to chase it (plan 261008f, decision 3). */}
+        <button
+          type="button"
+          className="fb-copy"
+          disabled={sending || deferring}
+          onClick={() => void replies.defer(question.id, !deferred)}
+        >
+          {deferring ? <LoaderCircle className="cmt-spinner" size={14} aria-hidden="true" /> : null}
+          {deferred ? "Bring back" : "Defer for now"}
         </button>
       </div>
       <DictationStrip dictation={dictate.dictation} sendingAfter={dictate.sendingAfter} />
@@ -1035,25 +1309,212 @@ function ReplyBox({
           {replies.stage.message}
         </p>
       ) : null}
+      {replies.deferring.kind === "failed" ? (
+        <p className="fb-shot-problem" role="alert">
+          {replies.deferring.message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** Each group's heading in the contents, and the word a thread's own meta line ends in. */
+const GROUP_WORD: Record<FeedbackQuestionState, string> = {
+  waiting: "Needs a decision",
+  responded: "You've replied, being considered",
+  deferred: "Deferred",
+};
+
+/**
+ * `q-k3m9qt · about #301 (spya-mdp0em)`: the ids Greg and a terminal share
+ * (`spya-krvuc9`). `feedback-questions.ts --show q-…` prints the file;
+ * `feedback-unswept.ts --show 301` prints the report.
+ */
+function ThreadIds({ question }: { question: ThreadQuestion }) {
+  return (
+    <>
+      <code className="fb-question-id">{question.id}</code>
+      {question.report === null ? null : (
+        <>
+          {" · about "}
+          <span className="fb-earlier-number">#{question.report.number}</span>{" "}
+          <code className="fb-question-id">({question.report.id})</code>
+        </>
+      )}
+    </>
+  );
+}
+
+/**
+ * **The contents** (`spya-t6nmxt`, `spya-bbe74w`): every thread, one line
+ * each, in three groups, and *Deferred* shut. Pressing one shows it alone.
+ */
+function ThreadContents({ questions, replies }: { questions: ThreadQuestion[]; replies: QuestionReplies }) {
+  return (
+    <div className="fb-threads">
+      {THREAD_GROUPS.map((state) => {
+        const group = questions.filter((question) => question.state === state);
+        if (group.length === 0) return null;
+        const list = (
+          <ol key={state} className="fb-threads-list">
+            {group.map((question) => (
+              <li key={question.id}>
+                <button
+                  type="button"
+                  className="fb-thread-row"
+                  data-question={question.id}
+                  onClick={() => replies.open(question.id)}
+                >
+                  <span className="fb-thread-title">{question.title}</span>
+                  <span className="fb-earlier-meta">
+                    <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        );
+        const heading = (
+          <>
+            {GROUP_WORD[state]} <span className="fb-show-count">{group.length}</span>
+          </>
+        );
+        return state === "deferred" ? (
+          <details key={state} className="fb-threads-group" data-group={state}>
+            <summary className="fb-questions-heading">{heading}</summary>
+            {list}
+          </details>
+        ) : (
+          <section key={state} className="fb-threads-group" data-group={state}>
+            <h3 className="fb-questions-heading">{heading}</h3>
+            {list}
+          </section>
+        );
+      })}
     </div>
   );
 }
 
 /**
- * **The questions an agent has put to the admin**, above the reports in
- * *Needs a decision* (261007d). Each: when it was asked and which report it is
- * about, its title, its text, the admin's newest reply if there is one, and
- * either the reply box or the button that opens it.
+ * **One thread on its own**: where it sits among the rest and the way back,
+ * the ids, the question (its *Details* shut), the report it is about (shut),
+ * what the admin has replied that no agent has yet acted on, and the box.
+ */
+function ThreadView({
+  question,
+  order,
+  replies,
+  active,
+}: {
+  question: ThreadQuestion;
+  order: ThreadQuestion[];
+  replies: QuestionReplies;
+  active: boolean;
+}) {
+  const at = order.findIndex((one) => one.id === question.id);
+  const previous = at > 0 ? order[at - 1] : undefined;
+  const next = at >= 0 && at < order.length - 1 ? order[at + 1] : undefined;
+  const { summary, details } = splitQuestionBody(question.body);
+  const now = Date.now();
+  return (
+    <div className="fb-thread">
+      <nav className="fb-thread-nav" aria-label="Threads">
+        <button type="button" className="fb-copy" onClick={replies.close}>
+          ‹ All threads
+        </button>
+        {at >= 0 ? (
+          <span className="fb-thread-place">
+            {at + 1} of {order.length}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          className="fb-copy"
+          disabled={previous === undefined}
+          onClick={() => previous && replies.open(previous.id)}
+        >
+          ‹ Previous
+        </button>
+        <button
+          type="button"
+          className="fb-copy"
+          disabled={next === undefined}
+          onClick={() => next && replies.open(next.id)}
+        >
+          Next ›
+        </button>
+      </nav>
+      <article className="fb-question" data-question={question.id} data-state={question.state}>
+        <p className="fb-earlier-meta">
+          <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked} ·{" "}
+          <span className={question.state === "waiting" ? "fb-earlier-waiting" : "fb-earlier-unshipped"}>
+            {GROUP_WORD[question.state]}
+          </span>
+        </p>
+        <h4 className="fb-question-title">{question.title}</h4>
+        <p className="fb-question-text">{summary}</p>
+        {details === null ? null : (
+          <details className="fb-question-more">
+            <summary>Details</summary>
+            <p className="fb-question-text">{details}</p>
+          </details>
+        )}
+        {question.report === null || question.report.body === null ? null : (
+          /* His own words, shut (spya-za2tse: "perhaps default-collapsed
+             expandable"). Text, and whole. */
+          <details className="fb-question-more">
+            <summary>Your report #{question.report.number}</summary>
+            <p className="fb-earlier-body">{question.report.body}</p>
+          </details>
+        )}
+        {question.answers.length === 0 ? null : (
+          <div className="fb-question-answer">
+            {question.olderAnswers > 0 ? (
+              <p className="fb-earlier-meta">
+                And {question.olderAnswers} earlier {question.olderAnswers === 1 ? "reply" : "replies"}, not shown here.
+              </p>
+            ) : null}
+            {question.answers.map((answer) => (
+              <div key={answer.id} className="fb-question-answer-one">
+                <p className="fb-earlier-meta">
+                  <span className="fb-earlier-shipped">You replied</span>
+                  {" · "}
+                  <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
+                </p>
+                <p className="fb-question-answer-body">{answer.body}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        {question.state === "deferred" && question.deferredAt !== null ? (
+          <p className="fb-earlier-note">
+            Deferred {exactly(question.deferredAt) ?? question.deferredAt}. No agent will chase it until you bring it
+            back.
+          </p>
+        ) : question.state === "responded" ? (
+          <p className="fb-earlier-note">An agent will pick up your reply at the next feedback sweep.</p>
+        ) : null}
+        <ReplyBox question={question} replies={replies} active={active} />
+      </article>
+    </div>
+  );
+}
+
+/**
+ * **The questions an agent has put to the admin, as threads**, in *Needs a
+ * decision* (261007d, reshaped by 261008f). The contents, or one thread on its
+ * own: each waiting report with an open question is inside its thread and
+ * nowhere else, so nothing drawn here lacks a way to answer (`spya-u6h6q8`).
  *
  * **Drawn only in *Needs a decision*, once that filter's own answer is in**,
  * so a read that failed shows its failure sentence and nothing else; and only
- * while the Earlier panel itself is on screen (`open` and `onEarlier`). Out of sight
- * it is hidden rather than unmounted, so an open reply box keeps its
- * microphone's words through a look at another filter or the Write tab. The
- * question's words are a model's and are drawn as text (styles/voices.css
- * gives them the model's face); the reply is the admin's own.
+ * while the Earlier panel itself is on screen (`open` and `onEarlier`). Out of
+ * sight it is hidden rather than unmounted, so an open thread's reply box
+ * keeps its microphone's words through a look at another filter or the Write
+ * tab. The question's words are a model's and are drawn as text
+ * (styles/voices.css gives them the model's face); the reply is the admin's own.
  */
-export function EarlierQuestions({
+export function EarlierThreads({
   questions,
   replies,
   choice,
@@ -1061,7 +1522,7 @@ export function EarlierQuestions({
   open,
   onEarlier,
 }: {
-  questions: AdminFeedbackQuestion[] | null;
+  questions: ThreadQuestion[] | null;
   replies: QuestionReplies;
   choice: EarlierChoice;
   earlier: EarlierState;
@@ -1072,52 +1533,45 @@ export function EarlierQuestions({
 }) {
   if (questions === null || questions.length === 0) return null;
   const showing = open && onEarlier && choice.show === "waiting" && earlier.kind === "loaded";
-  const now = Date.now();
+  const order = threadOrder(questions);
+  const thread = replies.openId === null ? undefined : order.find((one) => one.id === replies.openId);
   return (
     <section className="fb-questions" hidden={!showing} aria-label="Questions for you">
-      <h3 className="fb-questions-heading">
-        {questions.length} {questions.length === 1 ? "question" : "questions"} for you
-      </h3>
-      <ol className="fb-questions-list">
-        {questions.map((question) => {
-          const answer = replies.sent[question.id] ?? question.answer;
-          return (
-            <li key={question.id} className="fb-question" data-question={question.id}>
-              <p className="fb-earlier-meta">
-                Asked {dayOf(question.asked) ?? question.asked}
-                {question.report === null ? null : (
-                  <>
-                    {" · about "}
-                    <span className="fb-earlier-number">#{question.report.number}</span>{" "}
-                    <span className="fb-question-report-line">{question.report.firstLine}</span>
-                  </>
-                )}
-              </p>
-              <h4 className="fb-question-title">{question.title}</h4>
-              <p className="fb-question-text">{question.body}</p>
-              {answer === null ? null : (
-                <div className="fb-question-answer">
-                  <p className="fb-earlier-meta">
-                    <span className="fb-earlier-shipped">Answered</span>
-                    {" · "}
-                    <time dateTime={answer.createdAt}>{when(answer.createdAt, now)}</time>
-                  </p>
-                  <p className="fb-question-answer-body">{answer.body}</p>
-                </div>
-              )}
-              {replies.openId === question.id ? (
-                <ReplyBox question={question} replies={replies} active={showing} />
-              ) : (
-                <button type="button" className="fb-copy" onClick={() => replies.open(question.id)}>
-                  {answer === null ? "Reply" : "Reply again"}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ol>
+      {thread === undefined ? (
+        <ThreadContents questions={order} replies={replies} />
+      ) : (
+        <ThreadView question={thread} order={order} replies={replies} active={showing} />
+      )}
     </section>
   );
+}
+
+/** How many threads wait on a decision: the shortcut's number. */
+export function waitingThreads(questions: readonly ThreadQuestion[]): number {
+  return questions.filter((question) => question.state === "waiting").length;
+}
+
+/**
+ * The shortcut's tooltip: `3 need a decision · newest asked 8 Oct 2026 · 1
+ * you've replied to · 1 deferred`. Greg asked for "how many since my last
+ * visit or when they were most recently added or something"; the newest
+ * question's day says nearly the same with nothing remembered per device
+ * (plan 261008f, decision 8).
+ */
+export function shortcutTitle(questions: readonly ThreadQuestion[]): string {
+  const count = (state: FeedbackQuestionState) => questions.filter((question) => question.state === state).length;
+  const newest = questions.map((question) => question.asked).sort().at(-1);
+  return [
+    `${count("waiting")} need${count("waiting") === 1 ? "s" : ""} a decision`,
+    ...(newest === undefined ? [] : [`newest asked ${dayOf(newest) ?? newest}`]),
+    `${count("responded")} you've replied to`,
+    `${count("deferred")} deferred`,
+  ].join(" · ");
+}
+
+/** Whether one thread is showing on its own: then nothing else in the panel is drawn. */
+export function threadShowing(questions: readonly ThreadQuestion[] | null, replies: QuestionReplies): boolean {
+  return replies.openId !== null && (questions ?? []).some((question) => question.id === replies.openId);
 }
 
 /** What the Earlier panel shows, in each of its four states. */
@@ -1125,10 +1579,16 @@ export function EarlierList({
   earlier,
   choice,
   retry,
+  questions = null,
+  threadOpen = false,
 }: {
   earlier: EarlierState;
   choice: EarlierChoice;
   retry(): void;
+  /** The admin's threads: in *Needs a decision* a report one of them is about is drawn inside it, not here. */
+  questions?: readonly ThreadQuestion[] | null;
+  /** One thread is showing on its own, so the list is not drawn. */
+  threadOpen?: boolean;
 }) {
   switch (earlier.kind) {
     case "idle":
@@ -1159,6 +1619,42 @@ export function EarlierList({
          one thing that must not happen if they ever did not. */
       if (earlier.detail === "admin" && choice.detail === "admin") {
         const { reports, more, counts } = earlier.page;
+        if (choice.show === "waiting") {
+          if (threadOpen) return null;
+          /* **Only the reports no thread is about** (spya-u6h6q8, plan
+             261008f § The bug): a waiting report with an open question is
+             inside that thread, with its reply box. What is left waits on a
+             question nobody has written yet, and says so, so a row here never
+             looks like something to answer that cannot be. */
+          const linked = new Set((questions ?? []).flatMap((question) => question.report?.id ?? []));
+          const orphans = reports.filter((report) => !linked.has(report.id));
+          if (orphans.length === 0) {
+            return (questions ?? []).length === 0 ? (
+              <p className="fb-earlier-status">Nothing needs a decision from you.</p>
+            ) : null;
+          }
+          return (
+            <section className="fb-orphans" aria-label="Waiting, but no question written yet">
+              <h3 className="fb-questions-heading">
+                Waiting, but no question written yet <span className="fb-show-count">{orphans.length}</span>
+              </h3>
+              <p className="fb-earlier-note">
+                Each of these is marked as waiting on you, but no agent has written the question for it yet, so there is
+                nothing to answer here. The next feedback sweep lists them to write one.
+              </p>
+              <ol className="fb-earlier-list">
+                {orphans.map((report) => (
+                  <AdminRow key={report.id} report={report} now={now} />
+                ))}
+              </ol>
+              {more ? (
+                <p className="fb-earlier-status">
+                  Showing the {reports.length} most recent of your {counts.waiting} {ADMIN_CAP_NOUN.waiting}.
+                </p>
+              ) : null}
+            </section>
+          );
+        }
         if (reports.length === 0) return <p className="fb-earlier-status">{ADMIN_EMPTY[choice.show]}</p>;
         return (
           <>

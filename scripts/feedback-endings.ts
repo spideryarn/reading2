@@ -63,6 +63,7 @@ import {
   isFeedbackQuestionId,
   MAX_FEEDBACK_QUESTION_BODY_CHARS,
   MAX_FEEDBACK_QUESTION_TITLE_CHARS,
+  QUESTION_DETAILS_LINE,
 } from "../src/feedback-question-values.js";
 import { isSpideryarnId } from "../src/ids.js";
 import { isMain } from "../src/is-main.js";
@@ -177,17 +178,23 @@ function commentProblem(comment: string): string | null {
 /**
  * **One report's status from all the notes that name it.** A report split into
  * several queue entries gets one note per entry, and a part still waiting on
- * Greg — or not started, so with no note yet, which only `parts` can reveal —
- * keeps the whole report from reading as shipped. Shipped when any part
+ * Greg keeps the whole report from reading as shipped. Shipped when any part
  * shipped, since the label claims a change went out; declined only when every
  * note declined it.
+ *
+ * **Null when a part has no note yet** (fewer notes than `parts`, and none
+ * waiting on Greg): not ended, so not shipped, and not waiting on a decision
+ * either. It said `awaiting` until 2026-10-08, which put spya-thpsnd under
+ * *Needs a decision* with nothing for Greg to answer, when what was owed was
+ * an agent's note (plan 261008f, F1). The admin tab shows it as Open.
  */
 export function combineEndings(
   notes: readonly { ending: FeedbackEnding; parts?: number }[],
-): FeedbackEnding {
+): FeedbackEnding | null {
   const endings = notes.map((note) => note.ending);
   const expected = Math.max(1, ...notes.map((note) => note.parts ?? 1));
-  if (endings.includes("awaiting") || notes.length < expected) return "awaiting";
+  if (endings.includes("awaiting")) return "awaiting";
+  if (notes.length < expected) return null;
   if (endings.includes("shipped")) return "shipped";
   return "declined";
 }
@@ -231,6 +238,11 @@ export interface CompiledEndings {
   endings: Map<string, FeedbackEnding>;
   /** The one comment each report shows (`chooseComment`); a report with none is not a key. */
   comments: Map<string, string>;
+  /**
+   * Split reports with a part that has no note yet: in no ending, so Open on
+   * the admin tab, and listed by `feedback-questions.ts` as an agent's to finish.
+   */
+  incomplete: string[];
   /** `file: problem`, one per note whose header does not parse. A note with no header is not one. */
   problems: string[];
 }
@@ -251,13 +263,16 @@ export function compileEndings(notes: readonly NoteFile[]): CompiledEndings {
   }
   const endings = new Map<string, FeedbackEnding>();
   const comments = new Map<string, string>();
+  const incomplete: string[] = [];
   for (const id of [...byReport.keys()].sort()) {
     const notesOfIt = byReport.get(id) ?? [];
-    endings.set(id, combineEndings(notesOfIt));
+    const ending = combineEndings(notesOfIt);
+    if (ending === null) incomplete.push(id);
+    else endings.set(id, ending);
     const comment = chooseComment(notesOfIt);
     if (comment !== undefined) comments.set(id, comment);
   }
-  return { endings, comments, problems };
+  return { endings, comments, incomplete, problems };
 }
 
 /**
@@ -372,6 +387,11 @@ export function parseQuestionFile(name: string, text: string): QuestionFile | st
   if (body.length > MAX_FEEDBACK_QUESTION_BODY_CHARS) {
     return `the body must be at most ${MAX_FEEDBACK_QUESTION_BODY_CHARS} characters, not ${body.length}`;
   }
+  /* The dialog shuts everything after the first such line: a second would be
+     a heading inside the details that reads as a split nobody gets (261008f). */
+  if (body.split("\n").filter((line) => line === QUESTION_DETAILS_LINE).length > 1) {
+    return `the body may have at most one line that is exactly \`${QUESTION_DETAILS_LINE}\``;
+  }
   const refs = fields.get("refs");
   return {
     id,
@@ -413,8 +433,10 @@ export function compileQuestions(files: readonly NoteFile[]): { questions: Quest
 /**
  * The questions module's text. **Every id with its status** (a reply to an
  * answered question is still accepted, plan 261007d F14), and **the words of
- * the open ones only**: `refs` and `acted` are never written here, so they
- * cannot reach the server's answer.
+ * the open ones only**: `refs` is never written here, so it cannot reach the
+ * server's answer. Each open question's `acted` ids are, in a map of their
+ * own, which the server reads to decide whether Greg's reply is still being
+ * considered and never sends (plan 261008f, decision 1).
  */
 export function renderQuestionsModule(questions: readonly QuestionFile[]): string {
   const open = questions
@@ -442,6 +464,11 @@ export function renderQuestionsModule(questions: readonly QuestionFile[]): strin
         `  { id: "${id}", title: ${JSON.stringify(title)}, report: ${report === null ? "null" : `"${report}"`}, asked: "${asked}", body: ${JSON.stringify(body)} },`,
     ),
     "];",
+    "",
+    "/** Each open question's replies an agent has acted on, by id. The server only: never sent. */",
+    "export const FEEDBACK_QUESTION_ACTED: Readonly<Record<string, readonly string[]>> = {",
+    ...open.map((question) => `  "${question.id}": [${question.acted.map((one) => `"${one}"`).join(", ")}],`),
+    "};",
     "",
   ].join("\n");
 }

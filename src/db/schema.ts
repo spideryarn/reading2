@@ -5823,6 +5823,54 @@ export const feedbackQuestionAnswers = spideryarn.table(
   ],
 );
 
+/**
+ * **An admin's "not now" on a question an agent asked** — one row per admin
+ * per question, written only by `POST /api/admin/feedback/deferrals`, read by
+ * the Earlier tab (which group the thread is in) and by
+ * `scripts/feedback-questions.ts --answers` (so agents do not chase it).
+ * docs/plans/261008f-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md, decision 3.
+ *
+ * > And maybe there should be a button to say, do you know what, I think for
+ * > now let's defer this as an alternative to replying.
+ * >
+ * > — Greg, 2026-10-08 (`spya-t6nmxt`)
+ *
+ * **A time, not a flag, and reversible**: `deferred_at` is when it was
+ * deferred, null once brought back; `updated_at` is when either last
+ * happened. Both are the database's `now()`, the same clock as a reply's
+ * `created_at`, because the thread's state is the later of the two (F2).
+ * Writes are conditional both ways (F5), so a retry changes neither time.
+ *
+ * `question_id` has no foreign key, for `feedback_question_answers`' reason.
+ * `environment` is the server's, as there (F6).
+ */
+export const feedbackQuestionDeferrals = spideryarn.table(
+  "feedback_question_deferrals",
+  {
+    /** `auth.users(id)`. FK in the migration by hand, as with every other `owner_id`. */
+    ownerId: uuid("owner_id").notNull(),
+    /** `q-k3m9qt`. */
+    questionId: text("question_id").notNull(),
+    /** When it was deferred; null once brought back. */
+    deferredAt: timestamp("deferred_at", { withTimezone: true }),
+    /** When it was last deferred or brought back. */
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    /** Which deployment wrote the row, asked of the server. */
+    environment: text("environment").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.questionId] }),
+    check(
+      "feedback_question_deferrals_question_id_format",
+      sql`${t.questionId} ~ ${sql.raw(`'${SPIDERYARN_ID_REGEX.replace(ID_PREFIX, "q-")}'`)}`,
+    ),
+    check(
+      "feedback_question_deferrals_environment",
+      sql`${t.environment} in ('production', 'preview', 'development', 'test')`,
+    ),
+  ],
+);
+
 /* ----------------------------------------------------------- checkpoints -- */
 
 /**

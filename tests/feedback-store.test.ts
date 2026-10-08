@@ -60,7 +60,11 @@ import { closeDb, getDb } from "../src/db/client.js";
  * the whole store layer inside an `it` puts five seconds of module transform
  * inside a five-second test timeout on a busy machine.
  */
-import { feedback as feedbackTable, feedbackQuestionAnswers as answersTable } from "../src/db/schema.js";
+import {
+  feedback as feedbackTable,
+  feedbackQuestionAnswers as answersTable,
+  feedbackQuestionDeferrals as deferralsTable,
+} from "../src/db/schema.js";
 import { loadEnvLocal } from "../src/env.js";
 import { mintId } from "../src/ids.js";
 import { runAsOwner, type OwnerId } from "../src/owner.js";
@@ -202,6 +206,7 @@ async function clear(): Promise<void> {
   const db = getDb();
   for (const owner of [ALICE, BOB]) {
     await db.delete(feedbackTable).where(eq(feedbackTable.ownerId, owner));
+    await db.delete(deferralsTable).where(eq(deferralsTable.ownerId, owner));
     await db.delete(answersTable).where(eq(answersTable.ownerId, owner));
   }
 }
@@ -1189,9 +1194,9 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       /* Not a conflict: the key is (owner_id, id), so Bob's id cannot collide with Alice's. */
       const theirs = await runAsOwner(BOB, () => pgFeedbackStore.submitAnswer(reply({ id, body: "Bob's" })));
       expect([mine.kind, theirs.kind]).toEqual(["created", "created"]);
-      const alices = await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([Q1, Q2]));
+      const alices = await runAsOwner(ALICE, () => pgFeedbackStore.answersTo([Q1, Q2]));
       expect(alices.map((answer) => answer.body)).toEqual(["Alice's"]);
-      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.newestAnswers([Q1, Q2]));
+      const bobs = await runAsOwner(BOB, () => pgFeedbackStore.answersTo([Q1, Q2]));
       expect(bobs.map((answer) => answer.body)).toEqual(["Bob's"]);
 
       /* And a retry is judged against the owner's own row: each gets their own
@@ -1203,7 +1208,8 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       expect(theirsAgain).toMatchObject({ kind: "duplicate", answer: { body: "Bob's" } });
     });
 
-    it("hands back the newest reply to each question asked about, and none for the rest", async () => {
+    it("hands back every reply to each question asked about, oldest first, and none for the rest", async () => {
+      /* A thread lists every reply not yet acted on (plan 261008f, decision 2). */
       const older = mintId();
       await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: older, body: "first thought" })));
       await getDb()
@@ -1213,15 +1219,78 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
       await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), body: "second thought" })));
       await runAsOwner(ALICE, () => pgFeedbackStore.submitAnswer(reply({ id: mintId(), questionId: Q2, body: "about the other" })));
 
-      const both = await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([Q1, Q2]));
-      expect(Object.fromEntries(both.map((answer) => [answer.questionId, answer.body]))).toEqual({
-        [Q1]: "second thought",
-        [Q2]: "about the other",
-      });
+      const both = await runAsOwner(ALICE, () => pgFeedbackStore.answersTo([Q1, Q2]));
+      expect(both.filter((answer) => answer.questionId === Q1).map((answer) => answer.body)).toEqual([
+        "first thought",
+        "second thought",
+      ]);
+      expect(both.filter((answer) => answer.questionId === Q2).map((answer) => answer.body)).toEqual(["about the other"]);
       expect(Object.keys(both[0] ?? {}).sort()).toEqual(["body", "createdAt", "id", "questionId"]);
-      const one = await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([Q2]));
+      const one = await runAsOwner(ALICE, () => pgFeedbackStore.answersTo([Q2]));
       expect(one.map((answer) => answer.questionId)).toEqual([Q2]);
-      expect(await runAsOwner(ALICE, () => pgFeedbackStore.newestAnswers([]))).toEqual([]);
+      expect(await runAsOwner(ALICE, () => pgFeedbackStore.answersTo([]))).toEqual([]);
+    });
+
+    /* Defer for now, and Bring back (plan 261008f, decision 3; GPT Sol's
+       plan review F5): conditional both ways, so a retry moves neither time. */
+    describe("deferrals", () => {
+      const deferral = (questionId: string, deferred: boolean) =>
+        ({ questionId, deferred, environment: "test" }) as const;
+      const rowOf = async (owner: string, questionId: string) =>
+        (
+          await getDb()
+            .select()
+            .from(deferralsTable)
+            .where(and(eq(deferralsTable.ownerId, owner), eq(deferralsTable.questionId, questionId)))
+        )[0];
+
+      it("defers once: a second defer keeps the first time, and bringing back clears it once", async () => {
+        const first = await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, true)));
+        expect(first.questionId).toBe(Q1);
+        expect(first.deferredAt).not.toBeNull();
+        const stored = await rowOf(ALICE, Q1);
+        const again = await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, true)));
+        expect(again.deferredAt).toBe(first.deferredAt);
+        expect((await rowOf(ALICE, Q1))?.updatedAt.toISOString()).toBe(stored?.updatedAt.toISOString());
+
+        const back = await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, false)));
+        expect(back).toEqual({ questionId: Q1, deferredAt: null });
+        const brought = await rowOf(ALICE, Q1);
+        expect(brought?.deferredAt).toBeNull();
+        const backAgain = await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, false)));
+        expect(backAgain.deferredAt).toBeNull();
+        expect((await rowOf(ALICE, Q1))?.updatedAt.toISOString()).toBe(brought?.updatedAt.toISOString());
+
+        /* Deferred again after being brought back: a new time. */
+        const later = await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, true)));
+        expect(later.deferredAt).not.toBeNull();
+      });
+
+      it("brings back a question never deferred without writing a row", async () => {
+        expect(await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q2, false)))).toEqual({
+          questionId: Q2,
+          deferredAt: null,
+        });
+        expect(await rowOf(ALICE, Q2)).toBeUndefined();
+      });
+
+      it("stores one row when two defers of one question arrive together", async () => {
+        const both = await Promise.all([
+          runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, true))),
+          runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, true))),
+        ]);
+        expect(both[0]?.deferredAt).not.toBeNull();
+        expect(both[0]?.deferredAt).toBe(both[1]?.deferredAt);
+      });
+
+      it("keeps one owner's deferrals from another's", async () => {
+        await runAsOwner(ALICE, () => pgFeedbackStore.setDeferred(deferral(Q1, true)));
+        expect(await runAsOwner(BOB, () => pgFeedbackStore.deferrals([Q1, Q2]))).toEqual([]);
+        const alices = await runAsOwner(ALICE, () => pgFeedbackStore.deferrals([Q1, Q2]));
+        expect(alices.map((one) => one.questionId)).toEqual([Q1]);
+        expect(Object.keys(alices[0] ?? {}).sort()).toEqual(["deferredAt", "questionId", "updatedAt"]);
+        expect(await runAsOwner(ALICE, () => pgFeedbackStore.deferrals([]))).toEqual([]);
+      });
     });
 
     /* The reply box's limit is the route's to hold (`MAX_FEEDBACK_ANSWER_CHARS`);
@@ -1265,9 +1334,9 @@ describe("the Postgres feedback store", { timeout: 30_000 }, () => {
 
       const found = await runAsOwner(ALICE, () => pgFeedbackStore.linkedReports([mine, bobs, "spya-n0such"]));
       expect(found).toHaveLength(1);
-      expect(found[0]).toMatchObject({ id: mine, firstLine: "The first line." });
+      expect(found[0]).toMatchObject({ id: mine, firstLine: "The first line.", body: "The first line.\nAnd a second." });
       expect(Number.isSafeInteger(found[0]?.number)).toBe(true);
-      expect(Object.keys(found[0] ?? {}).sort()).toEqual(["firstLine", "id", "number"]);
+      expect(Object.keys(found[0] ?? {}).sort()).toEqual(["body", "firstLine", "id", "number"]);
       expect(await runAsOwner(ALICE, () => pgFeedbackStore.linkedReports([]))).toEqual([]);
 
       /* A long first line is cut, with a mark that it was. */

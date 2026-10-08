@@ -2435,6 +2435,27 @@ export interface LinkedFeedbackReport {
   number: number;
   /** The first line of what the reader wrote, cut to a line's length. */
   firstLine: string;
+  /** All of it, for the thread's shut *Your report* (plan 261008f, decision 7). */
+  body: string;
+}
+
+/** One admin's deferral of one question. Times are the database's. */
+export interface StoredFeedbackDeferral {
+  questionId: string;
+  /** ISO when deferred; null once brought back. */
+  deferredAt: string | null;
+  /** ISO: when it was last deferred or brought back. */
+  updatedAt: string;
+}
+
+/** A question's deferral as it stands after a write: what the route answers with. */
+export type FeedbackDeferralNow = Pick<StoredFeedbackDeferral, "questionId" | "deferredAt">;
+
+/** What the deferral route hands the store: the environment is the server's, never the caller's. */
+export interface NewFeedbackDeferral {
+  questionId: string;
+  deferred: boolean;
+  environment: FeedbackEnvironment;
 }
 
 /** How many reports this reader has filed, and how many of them are among `countIds`. */
@@ -2758,11 +2779,25 @@ export interface FeedbackStore {
    */
   submitAnswer(input: NewFeedbackAnswer): Promise<FeedbackAnswerSubmission>;
   /**
-   * **This owner's newest reply to each of these questions**, at most one a
-   * question; a question they have not replied to is simply absent.
-   * Owner-scoped: another admin's reply is never this one's.
+   * **Every reply of this owner's to these questions**, oldest first; a
+   * question they have not replied to has none. Owner-scoped: another admin's
+   * reply is never this one's. The route keeps the ones not yet acted on and
+   * works out each thread's state from all of them (plan 261008f).
    */
-  newestAnswers(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  answersTo(questionIds: readonly string[]): Promise<StoredFeedbackAnswer[]>;
+  /**
+   * **This owner's deferral of each of these questions**, where there is a
+   * row: deferred (a time) or brought back (null). Owner-scoped.
+   */
+  deferrals(questionIds: readonly string[]): Promise<StoredFeedbackDeferral[]>;
+  /**
+   * **Defer a question, or bring it back** — `POST
+   * /api/admin/feedback/deferrals`. Conditional both ways (GPT Sol's plan
+   * review, F5): deferring writes only when it is not deferred, bringing back
+   * only when it is, so a retry changes neither time. Answers the deferral as
+   * it now stands. The owner is `currentOwnerId()`.
+   */
+  setDeferred(input: NewFeedbackDeferral): Promise<FeedbackDeferralNow>;
   /**
    * **The number and first line of these reports, among this owner's own.**
    * An id the owner did not file (another reader's report, or none) is absent,

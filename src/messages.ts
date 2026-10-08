@@ -5879,6 +5879,27 @@ export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
     "in the box: copy them, reload the page, and reply again. [fb-reply-stale]",
 };
 
+/**
+ * **Defer for now, or Bring back, did not get through** — `POST
+ * /api/admin/feedback/deferrals` failed, or answered with something that is
+ * not a deferral. Nothing changed on screen; pressing again is safe, because
+ * the write is conditional both ways (plan 261008f, F5).
+ */
+export const FEEDBACK_DEFER_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message: "That did not get through, so nothing changed. Try again in a moment. [fb-defer]",
+};
+
+/**
+ * **The question was settled before the press reached the server** — a 409:
+ * an agent marked it answered and the deploy carrying that landed after this
+ * page was loaded. There is nothing left to defer; reloading shows where it is.
+ */
+export const FEEDBACK_DEFER_SETTLED: ReaderFacingFailure = {
+  kind: "retry",
+  message: "That question has been settled since this page was loaded. Reload to see where it stands. [fb-defer-settled]",
+};
+
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */
 
 /** One article, as a refusal names it. Structural, so no import crosses here. */

@@ -116,7 +116,15 @@ import type { FeedbackDiagnosticsV1 } from "../feedback-payload.js";
 /** The stamp the release and the source maps went up under, if this is a build. */
 import { buildCommit } from "./build-stamp.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
-import { EarlierFilter, EarlierList, EarlierQuestions, useEarlierFeedback } from "./FeedbackEarlier.js";
+import {
+  EarlierFilter,
+  EarlierList,
+  EarlierThreads,
+  shortcutTitle,
+  threadShowing,
+  useEarlierFeedback,
+  waitingThreads,
+} from "./FeedbackEarlier.js";
 import { collectFeedbackDiagnostics } from "./feedback-diagnostics.js";
 import { imageFileFromDrop, imageFileFromPaste, screenshotFromFile } from "./feedback-screenshot.js";
 import { apiFetch, failure } from "./lib/api.js";
@@ -778,11 +786,13 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, choice, setShow, retry, questions, openQuestionCount, replies } = useEarlierFeedback(
+  const { earlier, choice, setShow, retry, questions, waitingQuestionCount, replies } = useEarlierFeedback(
     open,
     view === "earlier",
     admin,
   );
+  /* One thread on its own, in Needs a decision: nothing else in the panel. */
+  const threadOpen = choice.show === "waiting" && threadShowing(questions, replies);
   /* A half-written reply to a question is a draft too (261007d): an automatic
      reload would lose it exactly as it would lose the Write box's words. */
   useDraftHeld(holdsDraft, replies.holds);
@@ -1128,6 +1138,27 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           >
             Earlier
           </button>
+          {/* **The way straight to Needs a decision, for an admin** (Greg,
+              `spya-t6nmxt`). A button, not a third tab (GPT Sol's plan review,
+              F7): it opens the Earlier tab on that filter, which is what the
+              pill inside does too, so there are still two tabs and two panels.
+              Its count is the threads waiting on a decision; it is drawn once
+              the opening's read has said. */}
+          {choice.detail === "admin" && questions !== null ? (
+            <button
+              type="button"
+              className="fb-tab fb-tab-shortcut"
+              aria-pressed={view === "earlier" && choice.show === "waiting"}
+              title={shortcutTitle(questions)}
+              onClick={() => {
+                setShow("waiting");
+                replies.close();
+                choose("earlier");
+              }}
+            >
+              Needs a decision <span className="fb-show-count">{waitingQuestionCount ?? waitingThreads(questions)}</span>
+            </button>
+          ) : null}
         </div>
 
         {/* **Only this scrolls**, so the buttons at the foot cannot be
@@ -1343,11 +1374,15 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
           tabIndex={0}
           hidden={view !== "earlier"}
         >
-          <EarlierFilter choice={choice} onShow={setShow} questionCount={openQuestionCount} />
-          {/* An agent's questions, for an admin: the top of Needs a decision.
+          {/* The pills go while one thread shows: on a phone with the keyboard
+              up they cost three lines (plan 261008f, decision 4). */}
+          {threadOpen ? null : (
+            <EarlierFilter choice={choice} onShow={setShow} questionCount={waitingQuestionCount} />
+          )}
+          {/* An agent's questions, for an admin, as threads: Needs a decision.
               Hidden, not unmounted, on every other filter and tab, so a reply
-              in progress survives (FeedbackEarlier.tsx § EarlierQuestions). */}
-          <EarlierQuestions
+              in progress survives (FeedbackEarlier.tsx § EarlierThreads). */}
+          <EarlierThreads
             questions={questions}
             replies={replies}
             choice={choice}
@@ -1355,7 +1390,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
             open={open}
             onEarlier={view === "earlier"}
           />
-          <EarlierList earlier={earlier} choice={choice} retry={retry} />
+          <EarlierList earlier={earlier} choice={choice} retry={retry} questions={questions} threadOpen={threadOpen} />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

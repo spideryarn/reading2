@@ -8,7 +8,19 @@
  * docs/plans/261007d-earlier-tab-says-what-became-of-each-report-numbers-them-and-asks-greg-questions-in-place.md.
  */
 import type { CompiledFeedbackQuestion, FeedbackQuestionStatus } from "./feedback-question-values.js";
-import { FEEDBACK_OPEN_QUESTIONS, FEEDBACK_QUESTION_STATUS } from "./feedback-questions.generated.js";
+import {
+  FEEDBACK_OPEN_QUESTIONS,
+  FEEDBACK_QUESTION_ACTED,
+  FEEDBACK_QUESTION_STATUS,
+} from "./feedback-questions.generated.js";
+
+/**
+ * The ids of an open question's replies an agent has acted on: which replies
+ * the thread still lists, and part of its state (plan 261008f). Never sent.
+ */
+export function feedbackQuestionActed(id: string): readonly string[] {
+  return Object.hasOwn(FEEDBACK_QUESTION_ACTED, id) ? (FEEDBACK_QUESTION_ACTED[id] ?? []) : [];
+}
 
 /** Every open question, oldest first: what an admin's Earlier tab lists. */
 export function openFeedbackQuestions(): readonly CompiledFeedbackQuestion[] {

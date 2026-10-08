@@ -495,19 +495,37 @@ asked: 2026-10-07
 title: Should Feedback take a full fifteen minutes of speech?
 refs: SPIDERYARN-READING2-E8 · qi-8qvg5gwv · docs/plans/261007b-….md · docs/user-feedback/261006_2202-….md
 ---
-The background in plain words. Each option on its own lettered line, with what it costs and
-gives up. What would decide it. The recommendation, marked as one.
+The question in one plain sentence. Each option on its own lettered line, with what it costs and
+gives up. The recommendation, marked as one.
+
+Details
+
+What the report asked and when, what was done, what each option means, and what would decide it.
 ```
 
 - `id` is the file's name. `report` is the one report it is about, or `none`: a question need not
   be about a report. `title` is one line, at most 120 characters, a plain question.
 - `refs` is for agents (the queue item, plan, note and Sentry short id) and **is never sent to the
   browser**. `acted` is added later (below).
-- **The body is plain text, at most 4,000 characters, shown exactly as written with its line
+- **The body is plain text, at most 6,000 characters, shown exactly as written with its line
   breaks.** No markdown is rendered, so no `**`, backticks or links. Write it to
   [ask-me-questions.md](../reusable/ask-me-questions.md): Greg should be able to answer "1A" without
   opening anything else. When `report` is not one of his own reports, he sees no report beside it,
   so the body has to stand alone.
+- **The short version first, then a line that is exactly `Details`, then the rest.**
+
+  > just make sure that it explains really plainly, provides a bit more of the context of what
+  > you've done. Assume that I haven't ever seen the code and that I might have forgotten a lot of
+  > the details. It might have been feedback from a while ago, so really try and lead me through. At
+  > the same time, be concise. So maybe there's a TLDR at the top, and with the choices, and then
+  > kind of a longer appendix with details underneath that I can read if I need to.
+  >
+  > — Greg, 2026-10-08 (`spya-za2tse`)
+
+  Above the line: the question, the options and the recommendation, enough to answer from alone.
+  Below it, shut in the dialog until he opens it: the background that ask-me-questions.md puts
+  first, written for someone who has forgotten the report and never read the code. At most one
+  such line (the compiler refuses a second); a body without one is shown whole.
 - Run `npx tsx scripts/feedback-endings.ts` and commit what it changes with the file. A file that
   does not parse fails that command and `tests/feedback-endings.test.ts`; it is never skipped.
 
@@ -520,7 +538,17 @@ read-only and prints every reply of an administrator's that no question file rec
 **whatever the question's status**: he may reply to a question after it was marked answered, from a
 tab opened earlier. Exit 0 always prints a `Target:` line and a summary, also when there are none.
 **Exit 2 means it could not tell, and is not "no replies"**: stop and say so. Before the deploy that
-creates the replies table it says so and exits 0.
+creates the replies table it says so and exits 0. It then prints the questions Greg has **deferred**
+(*Defer for now* in the dialog, since 2026-10-08): not now, do not chase; each stays `open`, and
+there is nothing to act on. The same provenance rule holds, and the same "not deployed yet" line
+before the deploy that creates that table.
+
+**The plain listing** (`npx tsx scripts/feedback-questions.ts`) also names any report whose note
+says `awaiting` with no open question asking about it: Greg sees those under *Needs a decision*
+with nothing to answer, so write the question, or correct the note. And any split report with a
+part no note covers yet: name the report in the note that covers it, or write the note.
+`--show q-xxxxxx` prints one question's file, `refs:` included, which is how a question Greg names
+in a terminal is found.
 
 **To act on one.** His reply is an admin's own words, so it is trusted input in the sense of
 § [Who sent it](#who-sent-it); it still does not deploy, and still does not let an unattended run

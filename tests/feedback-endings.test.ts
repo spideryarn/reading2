@@ -49,6 +49,15 @@ describe("the committed map", () => {
     ).toBe(renderModule(endings, comments));
   });
 
+  /* GPT Sol's plan review of 261008f, F1: thpsnd sat under Needs a decision
+     because its part 2's note did not name it. Pinned here so a header edit
+     that drops it again goes red. */
+  it("has spya-thpsnd's three parts: shipped, not waiting and not incomplete", () => {
+    const { endings, incomplete } = compileEndings(readNotes());
+    expect(endings.get("spya-thpsnd")).toBe("shipped");
+    expect(incomplete).not.toContain("spya-thpsnd");
+  });
+
   it("carries a comment for every report that waits on Greg or was declined (261007d)", () => {
     /* The reason the comment exists: a row under Needs a decision or Set aside
        says why. A new awaiting or declined note without one goes red here. */
@@ -205,10 +214,15 @@ describe("combineEndings — one report, several notes", () => {
     expect(combineEndings([{ ending: "shipped" }, { ending: "awaiting" }])).toBe("awaiting");
   });
 
-  it("waits while a split report has fewer notes than parts — the unstarted half has none", () => {
+  it("has no ending while a split report has fewer notes than parts — the unstarted half has none", () => {
     /* Report 41, 2026-09-16: the first half's note said shipped while the
-       second half had not started (docs/project/feedback-reports.md). */
-    expect(combineEndings([{ ending: "shipped", parts: 2 }])).toBe("awaiting");
+       second half had not started (docs/project/feedback-reports.md). So it
+       is not shipped; and it is not waiting on Greg either, which is what it
+       said until spya-thpsnd sat under Needs a decision with nothing to
+       answer (plan 261008f, F1). An agent owes the missing note. */
+    expect(combineEndings([{ ending: "shipped", parts: 2 }])).toBeNull();
+    /* A part that does wait on Greg still says so. */
+    expect(combineEndings([{ ending: "awaiting", parts: 3 }])).toBe("awaiting");
     expect(combineEndings([{ ending: "shipped", parts: 2 }, { ending: "shipped", parts: 2 }])).toBe(
       "shipped",
     );
@@ -219,7 +233,7 @@ describe("combineEndings — one report, several notes", () => {
   });
 
   it("compiles across notes, and lists every bad header at once", () => {
-    const { endings, problems } = compileEndings([
+    const { endings, incomplete, problems } = compileEndings([
       { name: "a.md", text: note("reports: spya-aaaaaa\nending: shipped\nparts: 2") },
       { name: "b.md", text: note("reports: spya-aaaaaa\nending: shipped\nparts: 2") },
       { name: "c.md", text: note("reports: spya-cccccc\nending: shipped\nparts: 2") },
@@ -232,11 +246,9 @@ describe("combineEndings — one report, several notes", () => {
         text: note("reports: spya-gggggg, spya-gggggg\nending: shipped"),
       },
     ]);
-    expect([...endings]).toEqual([
-      ["spya-aaaaaa", "shipped"],
-      ["spya-cccccc", "awaiting"],
-      ["spya-gggggg", "awaiting"],
-    ]);
+    expect([...endings]).toEqual([["spya-aaaaaa", "shipped"]]);
+    /* Split, and a part not written up: no ending, and named here instead. */
+    expect(incomplete).toEqual(["spya-cccccc", "spya-gggggg"]);
     expect(problems).toEqual([
       expect.stringMatching(/^e\.md: ending must be one of/),
       expect.stringMatching(/^h\.md: report id named more than once/),
@@ -260,9 +272,11 @@ describe("which note's comment a report shows (261007d, decision 4)", () => {
     ).toEqual([["spya-aaaaaa", "the newer question"]]);
   });
 
-  it("is a lone `ending: shipped, parts: 2` note's: the report waits, and that note says on what", () => {
-    const { endings, comments } = compile(`${R}\nending: shipped\nparts: 2\ncomment: half shipped; the other half is queued`);
-    expect(endings.get("spya-aaaaaa")).toBe("awaiting");
+  it("is a lone `ending: shipped, parts: 2` note's: the report has no ending yet, and that note says on what", () => {
+    const { endings, comments, incomplete } = compile(`${R}\nending: shipped\nparts: 2\ncomment: half shipped; the other half is queued`);
+    /* Not waiting on Greg: an agent owes the other half's note (261008f, F1). */
+    expect(endings.has("spya-aaaaaa")).toBe(false);
+    expect(incomplete).toEqual(["spya-aaaaaa"]);
     expect(comments.get("spya-aaaaaa")).toBe("half shipped; the other half is queued");
   });
 
@@ -383,6 +397,25 @@ describe("a question file", () => {
     expect(text).not.toContain("An answered question's words.");
     expect(text).not.toContain("qi-secret-ref");
     expect(text).not.toContain("SPIDERYARN-READING2-E8");
+  });
+
+  it("compiles each open question's acted ids for the server, and an answered one's not at all (261008f)", () => {
+    const answered = HEADER.replace("q-k3m9qt", "q-answrd").replace("status: open", "status: answered");
+    const { questions } = compileQuestions([
+      { name: "q-k3m9qt.md", text: file(`${HEADER}\nacted: spya-bbbbbb, spya-cccccc`) },
+      { name: "q-answrd.md", text: file(`${answered}\nacted: spya-dddddd`) },
+    ]);
+    const text = renderQuestionsModule(questions);
+    expect(text).toContain('"q-k3m9qt": ["spya-bbbbbb", "spya-cccccc"],');
+    expect(text).not.toContain("spya-dddddd");
+  });
+
+  it("takes one line that is exactly Details, and refuses a second (261008f)", () => {
+    const split = "Which?\n\nA. This.\n\nDetails\n\nWhy.";
+    expect(parse(file(HEADER, split))).toMatchObject({ body: split });
+    expect(parse(file(HEADER, `${split}\nDetails\nmore`))).toMatch(/Details/);
+    /* Padded, it is not the marker, so it is not a second one either (F15). */
+    expect(parse(file(HEADER, `${split}\n Details\nmore`))).toMatchObject({ id: "q-k3m9qt" });
   });
 
   it("names two files that claim one id", () => {

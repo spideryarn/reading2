@@ -55,12 +55,20 @@ import { readdirSync } from "node:fs";
 import type { QueryResultRow } from "pg";
 
 import { isAdmin } from "../src/admin.js";
-import { MAX_FEEDBACK_QUESTION_TITLE_CHARS, mintFeedbackQuestionId } from "../src/feedback-question-values.js";
+import type { FeedbackEnding } from "../src/feedback-ending-values.js";
 import {
+  isFeedbackQuestionId,
+  MAX_FEEDBACK_QUESTION_TITLE_CHARS,
+  mintFeedbackQuestionId,
+  QUESTION_DETAILS_LINE,
+} from "../src/feedback-question-values.js";
+import {
+  compileEndings,
   compileQuestions,
   type NoteFile,
   type QuestionFile,
   QUESTIONS_DIR,
+  readNotes,
   readQuestionFiles,
 } from "./feedback-endings.js";
 import { CannotTell, isMainModule, productionClient } from "./feedback-reporter.js";
@@ -159,6 +167,53 @@ interface StoredAnswer extends QueryResultRow {
   body: string;
   environment: string;
   created_at: Date;
+}
+
+/** Whether production has the deferrals table yet (plan 261008f). The name is a literal. */
+export const DEFERRALS_DEPLOYED_SQL =
+  "select to_regclass('spideryarn.feedback_question_deferrals') is not null as deployed";
+
+export const DEFERRALS_NOT_DEPLOYED =
+  "deferrals are not deployed to production yet (the feedback_question_deferrals table is not there), so none is in force";
+
+/** Every deferral row, deferred or brought back. `table` is a parameter only so a test can point it at a copy. */
+export function deferralsSql(table = "spideryarn.feedback_question_deferrals"): string {
+  return `select d.owner_id, d.question_id, d.deferred_at, d.updated_at, d.environment
+            from ${table} as d
+           order by d.updated_at, d.owner_id, d.question_id`;
+}
+
+/** One deferral, as production stores it. */
+export interface DeferralRow {
+  ownerId: string;
+  questionId: string;
+  /** Null once brought back. */
+  deferredAt: Date | null;
+  environment: string;
+}
+
+interface StoredDeferral extends QueryResultRow {
+  owner_id: string;
+  question_id: string;
+  deferred_at: Date | null;
+  updated_at: Date;
+  environment: string;
+}
+
+/**
+ * **The deferrals in force, held to the replies' rule** (F6): one row from
+ * outside production or preview and it cannot tell; a row whose owner is not
+ * an administrator is left out and counted. A brought-back row is not in force.
+ */
+export function classifyDeferrals(
+  rows: readonly DeferralRow[],
+  admin: (ownerId: string) => boolean = isAdmin,
+): { kind: "cannot-tell"; why: string } | { kind: "read"; deferred: DeferralRow[]; strangers: number } {
+  if (rows.some((row) => !PRODUCTION_ENVIRONMENTS.includes(row.environment))) {
+    return { kind: "cannot-tell", why: "a deferral has an environment that cannot establish it was written in production" };
+  }
+  const strangers = rows.filter((row) => !admin(row.ownerId)).length;
+  return { kind: "read", deferred: rows.filter((row) => admin(row.ownerId) && row.deferredAt !== null), strangers };
 }
 
 /** One read-only select against production, and the `Target:` it reached. */
@@ -263,6 +318,40 @@ export async function runAnswers(
         `once acted on: quote it into docs/user-feedback/questions/${row.questionId}.md and add \`acted: ${row.id}\` to its header`,
       );
     }
+    /* **Deferrals: "not now, do not chase"** (plan 261008f). Nothing to act
+       on, and the question stays open: it is still Greg's to decide. */
+    out("");
+    const deferralsAsked = await read<{ deployed: unknown }>(DEFERRALS_DEPLOYED_SQL, []);
+    const deferralsDeployed = deferralsAsked.rows[0]?.deployed;
+    if (deferralsDeployed !== true && deferralsDeployed !== false) {
+      out("production did not say whether the deferrals table exists");
+      return 2;
+    }
+    if (!deferralsDeployed) {
+      out(DEFERRALS_NOT_DEPLOYED);
+      return 0;
+    }
+    const { rows: deferralRows } = await read<StoredDeferral>(deferralsSql(), []);
+    const deferrals = classifyDeferrals(
+      deferralRows.map((row) => ({
+        ownerId: row.owner_id,
+        questionId: row.question_id,
+        deferredAt: row.deferred_at,
+        environment: row.environment,
+      })),
+    );
+    if (deferrals.kind === "cannot-tell") {
+      out(`cannot tell: ${deferrals.why}`);
+      return 2;
+    }
+    out(
+      `${deferrals.deferred.length} question(s) deferred by an administrator: not now, do not chase; each stays open` +
+        (deferrals.strangers > 0 ? `; ${deferrals.strangers} row(s) from an account that is not an administrator's, left out` : "") +
+        ".",
+    );
+    for (const row of deferrals.deferred) {
+      out(`${row.questionId}  ·  deferred ${row.deferredAt?.toISOString() ?? ""}`);
+    }
     return 0;
   } catch (error) {
     out(error instanceof CannotTell ? error.message : "reading production failed unexpectedly (details withheld)");
@@ -317,7 +406,13 @@ export function newQuestion(
       `title: ${line}`,
       "refs: <queue item, plan path, note path, Sentry short id; for agents, never shown>",
       "---",
-      "<the background in plain words, each option on its own lettered line with what it costs, then the recommendation>",
+      "<the question in one plain sentence; each option on its own lettered line with what it costs and gives up; the recommendation>",
+      "",
+      /* Above this line, what Greg answers from; below it, shut in the dialog
+         until he opens it (feedback-reports.md § To ask; spya-za2tse). */
+      QUESTION_DETAILS_LINE,
+      "",
+      "<for someone who has forgotten the report and never read the code: what it asked and when, what was done, what each option means, what would decide it>",
       "",
     ].join("\n"),
   };
@@ -342,15 +437,65 @@ export function renderOpenQuestions(questions: readonly QuestionFile[]): string[
   ];
 }
 
-type Command = { kind: "list" } | { kind: "answers" } | { kind: "new"; title: string };
+/**
+ * **Reports whose note says they wait on Greg, with no open question asking
+ * him anything.** The admin's *Needs a decision* view draws these under a
+ * heading that says no question has been written yet, and this listing is
+ * where the sweep finds them to write one. Until 2026-10-08 they were drawn as
+ * rows with nothing to press (`spya-u6h6q8`, plan 261008f § The bug). Ids
+ * sorted, so the output is stable.
+ */
+export function waitingWithoutQuestion(
+  endings: ReadonlyMap<string, FeedbackEnding>,
+  questions: readonly QuestionFile[],
+): string[] {
+  const asked = new Set(
+    questions.filter((question) => question.status === "open").flatMap((question) => question.report ?? []),
+  );
+  return [...endings]
+    .filter(([id, ending]) => ending === "awaiting" && !asked.has(id))
+    .map(([id]) => id)
+    .sort();
+}
 
-const USAGE = 'usage: feedback-questions.ts [--answers | --new "<title>"]';
+/**
+ * The listing's third section: split reports with a part no note covers. Not
+ * Greg's to decide and not shipped; Open on his tab until an agent writes the
+ * missing note, or adds the report to the header of the note that already
+ * covers that part (plan 261008f, F1).
+ */
+export function renderIncompleteSplits(ids: readonly string[]): string[] {
+  if (ids.length === 0) return ["Every split report has a note for each of its parts."];
+  return [
+    `${ids.length} split report(s) with a part no note covers yet:`,
+    ...ids.map((id) => `${id}  ·  write the missing part's note, or name ${id} in the note that covers it`),
+  ];
+}
+
+/** The listing's second section: say there are none, or name each with what to do. */
+export function renderWaitingWithoutQuestion(ids: readonly string[]): string[] {
+  if (ids.length === 0) return ["Every report waiting on Greg has an open question."];
+  return [
+    `${ids.length} report(s) wait on Greg with no open question: Greg sees them under Needs a decision with nothing to answer.`,
+    ...ids.map((id) => `${id}  ·  write its question (--new), or correct its note's ending`),
+  ];
+}
+
+type Command =
+  | { kind: "list" }
+  | { kind: "answers" }
+  | { kind: "new"; title: string }
+  | { kind: "show"; id: string };
+
+const USAGE = 'usage: feedback-questions.ts [--answers | --new "<title>" | --show q-xxxxxx]';
 
 export function parseCommand(argv: readonly string[]): Command {
   const [flag, value, ...rest] = argv;
   if (flag === undefined) return { kind: "list" };
   if (flag === "--answers" && value === undefined) return { kind: "answers" };
   if (flag === "--new" && value !== undefined && rest.length === 0) return { kind: "new", title: value };
+  /* The id Greg reads off the dialog, so he and a terminal name the same thing (spya-krvuc9). */
+  if (flag === "--show" && isFeedbackQuestionId(value) && rest.length === 0) return { kind: "show", id: value };
   throw new Error(USAGE);
 }
 
@@ -377,13 +522,36 @@ async function main(argv: readonly string[]): Promise<number> {
         return 2;
       }
     }
+    case "show": {
+      /* The file as written, `refs:` included: this is the agent's side. */
+      const file = readQuestionFiles().find((one) => one.name === `${command.id}.md`);
+      if (file === undefined) {
+        console.error(`no file docs/user-feedback/questions/${command.id}.md in this checkout`);
+        return 2;
+      }
+      console.log(`docs/user-feedback/questions/${file.name}`);
+      console.log("");
+      console.log(file.text);
+      return 0;
+    }
     case "list": {
       const { questions, problems } = compileQuestions(readQuestionFiles());
       if (problems.length > 0) {
         console.error(`${problems.length} question file(s) do not parse:\n  ${problems.join("\n  ")}`);
         return 2;
       }
+      const notes = compileEndings(readNotes());
+      if (notes.problems.length > 0) {
+        console.error(`${notes.problems.length} note header(s) do not parse:\n  ${notes.problems.join("\n  ")}`);
+        return 2;
+      }
       for (const line of renderOpenQuestions(questions)) console.log(line);
+      console.log("");
+      for (const line of renderWaitingWithoutQuestion(waitingWithoutQuestion(notes.endings, questions))) {
+        console.log(line);
+      }
+      console.log("");
+      for (const line of renderIncompleteSplits(notes.incomplete)) console.log(line);
       return 0;
     }
     default: {
