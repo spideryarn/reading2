@@ -317,7 +317,12 @@ not in the daemon. A recurring one is deleted 7 days after it is made, which is 
 silently stopped on 2026-10-07 and production went 17 hours undeployed; the renewal recreates all
 three daily, itself included. Their text, and what to do after a restart:
 [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md). Each
-pacer tick writes `~/.overseer/pacer-heartbeat`.
+pacer tick writes `~/.overseer/pacer-heartbeat`, and **the watchdog, outside this session, fails
+when it is over 90 minutes old** or missing while a session holds your claim. It also fails when
+production is more than 12 hours behind dev, and its line then says how long dev has gone without a
+commit the readiness loop passed. Both land where the daemon check does: `tick.sh`'s last-run line
+for `overseer-watchdog`, and `journalctl -u overseer-watchdog -n 6` for the sentence
+([`scripts/overseer-watchdog-checks.ts`](../../scripts/overseer-watchdog-checks.ts)).
 
 **Two of them are built and switched off.** `get-ready-to-deploy` and the feedback sweep are defined
 as data in [`tools/overseer/standing-jobs.ts`](../../tools/overseer/standing-jobs.ts) and dispatched

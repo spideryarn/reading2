@@ -17,6 +17,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DEFAULT_MAX_SNAPSHOT_AGE_MS, DEFAULT_MAX_TICK_AGE_MS, assessWatchdog, describeUnit, formatVerdict, main } from "../scripts/overseer-watchdog.js";
+import type { SessionCheck } from "../scripts/overseer-watchdog-checks.js";
 import { MEASURED_CADENCE_MS, TICK_MS, runOverseer, staleAfterMs } from "../tools/overseer/daemon.js";
 import {
   CHECKPOINT_FILE,
@@ -349,34 +350,52 @@ describe("main()", () => {
     };
   }
 
+  // The session checks (pacer, deploy lag) read tmux and fetch from GitHub;
+  // these tests are about the daemon, so they are handed checks that pass.
+  // Their own tests are in tests/overseer-watchdog-checks.test.ts.
+  const allOk = (): SessionCheck[] => [
+    { name: "pacer", state: "ok", detail: "stub" },
+    { name: "deploy-lag", state: "ok", detail: "stub" },
+  ];
+
+  it("a healthy daemon still exits 1 when a session check is unhealthy or unknown", () => {
+    const root = tempRoot();
+    process.env["OVERSEER_STORE_DIR"] = root;
+    writeCheckpointFile(root, JSON.stringify(checkpointAgoReal(0, 0)));
+    expect(main([], allOk)).toBe(0);
+    expect(main([], () => [{ name: "pacer", state: "unhealthy", detail: "stale" }])).toBe(1);
+    // Unknown is not ok: a check that could not read its input has not found things healthy.
+    expect(main([], () => [{ name: "deploy-lag", state: "unknown", detail: "fetch failed" }])).toBe(1);
+  });
+
   it("exits 0 for a healthy store and 1 for every unhealthy state", () => {
     const root = tempRoot();
     process.env["OVERSEER_STORE_DIR"] = root;
-    expect(main([])).toBe(1); // (a) no checkpoint yet
+    expect(main([], allOk)).toBe(1); // (a) no checkpoint yet
 
     writeCheckpointFile(root, "not json");
-    expect(main([])).toBe(1); // (c) unreadable
+    expect(main([], allOk)).toBe(1); // (c) unreadable
 
     writeCheckpointFile(root, JSON.stringify(checkpointAgoReal(DEFAULT_MAX_TICK_AGE_MS + 60_000, 0)));
-    expect(main([])).toBe(1); // (b) stale
+    expect(main([], allOk)).toBe(1); // (b) stale
 
     writeCheckpointFile(root, JSON.stringify(checkpointAgoReal(0, DEFAULT_MAX_SNAPSHOT_AGE_MS + 60_000)));
-    expect(main([])).toBe(1); // (d) deaf
+    expect(main([], allOk)).toBe(1); // (d) deaf
 
     writeCheckpointFile(root, JSON.stringify(checkpointAgoReal(0, 0)));
-    expect(main([])).toBe(0); // healthy
+    expect(main([], allOk)).toBe(0); // healthy
   });
 
   it("rejects a non-numeric --max-tick-age-ms rather than silently using the default", () => {
     const root = tempRoot();
     process.env["OVERSEER_STORE_DIR"] = root;
-    expect(main(["--max-tick-age-ms", "not-a-number"])).toBe(2);
+    expect(main(["--max-tick-age-ms", "not-a-number"], allOk)).toBe(2);
   });
 
   it("rejects a non-numeric --max-snapshot-age-ms rather than silently using the default", () => {
     const root = tempRoot();
     process.env["OVERSEER_STORE_DIR"] = root;
-    expect(main(["--max-snapshot-age-ms", "not-a-number"])).toBe(2);
+    expect(main(["--max-snapshot-age-ms", "not-a-number"], allOk)).toBe(2);
   });
 
   it("--max-tick-age-ms lets a caller tighten or loosen the heartbeat threshold", () => {
@@ -384,9 +403,9 @@ describe("main()", () => {
     process.env["OVERSEER_STORE_DIR"] = root;
     writeCheckpointFile(root, JSON.stringify(checkpointAgoReal(2 * TICK_MS, 0)));
     // Healthy against the generous default...
-    expect(main([])).toBe(0);
+    expect(main([], allOk)).toBe(0);
     // ...and stale against a threshold tighter than the age itself.
-    expect(main(["--max-tick-age-ms", String(TICK_MS)])).toBe(1);
+    expect(main(["--max-tick-age-ms", String(TICK_MS)], allOk)).toBe(1);
   });
 
   it("--max-snapshot-age-ms lets a caller tighten or loosen the deaf threshold", () => {
@@ -394,8 +413,8 @@ describe("main()", () => {
     process.env["OVERSEER_STORE_DIR"] = root;
     writeCheckpointFile(root, JSON.stringify(checkpointAgoReal(0, 90_000)));
     // Healthy against the generous default...
-    expect(main([])).toBe(0);
+    expect(main([], allOk)).toBe(0);
     // ...and deaf against a threshold tighter than the snapshot's age.
-    expect(main(["--max-snapshot-age-ms", "60000"])).toBe(1);
+    expect(main(["--max-snapshot-age-ms", "60000"], allOk)).toBe(1);
   });
 });
