@@ -75,6 +75,25 @@ wording fixture went to Opus whenever it was judged.
 (`MAX_ASKS_CHARS`). That is why the Sol and Opus fixtures rarely score. It is the same before and
 after, and fixing it is a separate prompt change.
 
+**Fixed 2026-10-08, in the prompt.** The bound stays: 300 is the card's height on a phone, and two
+dashboard parsers restate it. The `asks` line never said 300. It now asks for the *shortest* exact
+passage, states `MAX_ASKS_CHARS` from the constant the parse checks, says the options before the
+question are not the quote, and gives an example. No version bump, because a verdict means what it
+did and a refused one was never cached. `tests/overseer-attention-classify.test.ts` holds the
+prompt to the constant.
+
+| v3 prompt, 3 runs each (~$0.006 a run) | sort-order (sol) | wording (opus) | routing correct |
+| --- | --- | --- | --- |
+| before: quote unbounded | judged 1 of 3 (426 chars twice) | judged 1 of 3 (413 twice) | 5/10, 2/6, 3/7 |
+| after: shortest, at most 300 | judged and correct 3 of 3 | judged and correct 3 of 3 | 5/9, 4/9, 5/9 |
+
+After the fix the two fixtures quote *"Tell me which and I'll do it."* and *"Your call on the wording;
+I'll swap it in either way."*. **A separate, older cause of unjudged items is still there:**
+`ended-prose-no-question-two-messages` sometimes reasons past `MAX_COMPLETION_TOKENS` (1,000) and
+comes back empty or cut off. Sixteen direct calls each, at temperature 0: 3 with the old wording,
+4 with the new. So the change did not cause it. It is a budget trade-off (the day budget reserves
+against that cap), so it is left for the Overseer to decide.
+
 ## Review
 
 GPT Sol reviewed the code (fix-in-place). One real finding, fixed: bumping the version had

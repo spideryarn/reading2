@@ -202,11 +202,13 @@ export function App() {
    * § the store listens for it itself.
    *
    * **The store starts listening on its first subscriber**, and asks the
-   * server for nobody until then. Since 2026-10-06 that subscriber is this
-   * component, on every route, through `useLastView` below; so a signed-in
-   * visit to any page asks once, and a store update re-renders `App`. The
-   * components that mount a `Dock` — `Reader`, `Metadata` and `VisitorDock`
-   * in PublicPages.tsx — also call `useExperimental()` and hand the answer
+   * server for nobody until then. From 2026-10-06 to 2026-10-08 that was this
+   * component, on every route, through `useLastView` below, which took
+   * "signed in" from the store; it takes it from the reader id now (CR3 of
+   * docs/plans/261007p-code-review-sol.md), so `App` no longer subscribes.
+   * The subscribers are the components that use the switch — among them
+   * those that mount a `Dock` (`Reader`, `Metadata` and `VisitorDock` in
+   * PublicPages.tsx), which call `useExperimental()` and hand the answer
    * down as a prop, because the bar is told rather than going and getting it
    * (Dock.tsx § experimental).
    * A stranger still asks for nothing: the store issues no request for a
@@ -216,7 +218,7 @@ export function App() {
    * what it heard — so that the switch was read once up front rather than when
    * a page mounted. It bought a round trip's head start and existed mainly to
    * keep a trace assertion true, which is the wrong way round. What replaced it
-   * was the real subscriber in `Reader`, and since 2026-10-06 the one above.
+   * was the real subscriber in `Reader`.
    */
 
   /* Keep the arrival identity above the auth branches: signing out remounts

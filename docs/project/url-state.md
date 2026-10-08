@@ -799,11 +799,11 @@ it.
   default once.
 - **Marginalia joins for every signed-in reader with room**, since 2026-10-05 when it left the
   experimental switch ([261005d](../plans/261005d-marginalia-out-of-the-experimental-switch.md)); before that only with the
-  switch on. The ordinary default still waits for the settings store's answer, because that is where
-  "signed in" comes from. If settings are already loaded, the address is settled before paint;
-  otherwise the default waits for them, whether the article payload has arrived yet or not. The
-  shelf does not load settings itself. A store that never answers means no ordinary default; the
-  marked add-page path below does not depend on that unrelated read.
+  switch on. **No first open waits for the settings store** since 2026-10-08: "signed in" comes
+  from the reader id `App` hands the hook once the session is known, so the address is settled
+  before paint whether settings have answered or not. Until then the ordinary default waited for
+  that store, and a read that failed or served an offline copy left the arrival in Plain (CR3 of
+  [261007p's code review](../plans/261007p-code-review-sol.md)).
 - **Signed-out readers get none.** A stranger's first sight of a shared article is the article.
 - **A storage that cannot be read, or cannot take the marker, means no default** — otherwise every
   open would be a first one. `readLastView` tells *failed* from *no key* for this.

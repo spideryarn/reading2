@@ -4,8 +4,8 @@
  *
  * tests/last-view.test.ts pins the three pure functions; this is the part they
  * cannot see — `useLastView`'s two layout effects: that the claim and the
- * default meet, that the default waits for the settings store's answer,
- * and that it is applied once. src/web/last-view.ts § The first-open default;
+ * default meet, that the default does not wait for the settings store's
+ * answer (since 2026-10-08), and that it is applied once. src/web/last-view.ts § The first-open default;
  * docs/plans/261005a-no-home-icon-beside-the-logo-and-a-first-open-default-of-summary-and-marginalia.md.
  *
  * jsdom lays nothing out, so the window is its default 1024px wide: room for
@@ -78,15 +78,13 @@ describe("opening an article this browser has no key for", () => {
     expect(location.search).toBe("");
   });
 
-  it("claims each new slug and does not apply a pending default to the previous one", () => {
-    Object.assign(setting, { signedIn: true });
+  it("claims each new slug, and leaves the previous one's key as that one left it", () => {
     open();
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
     history.replaceState(null, "", "/read/y");
     act(() => root.render(<Page slug="y" />));
-    Object.assign(setting, { on: true, loaded: true });
-    act(() => root.render(<Page slug="y" />));
     expect(location.pathname + location.search).toBe("/read/y?mode=chat&guide=1&margin=1");
-    expect(window.localStorage.getItem(KEY)).toBe("");
+    expect(window.localStorage.getItem(KEY)).toBe("?margin=1");
   });
 
   it("arrives in the guide with the notes, for a reader whose switch is on", () => {
@@ -103,27 +101,28 @@ describe("opening an article this browser has no key for", () => {
     expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
-  it("waits for the switch's answer, then applies it", () => {
-    Object.assign(setting, { signedIn: true });
-    open();
-    expect(location.search).toBe("");
-    Object.assign(setting, { on: true, loaded: true });
+  it("does not wait for the settings store: a read that never answers still lands in the default", () => {
+    /* CR3 of docs/plans/261007p-code-review-sol.md: an unmarked first open
+       waited for the store's `loaded`, so a failed or offline settings read
+       left the arrival in Plain for good. Signed-in status is the reader id's
+       (App hands this hook a null slug until the session is known). */
+    Object.assign(setting, { loaded: false, signedIn: false });
     open();
     expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
 
-  it("leaves a reader who moved while it was waiting alone", () => {
-    Object.assign(setting, { signedIn: true });
+  it("is applied once: the settings store answering later does not apply it again", () => {
     open();
+    expect(location.search).toBe("?mode=chat&guide=1&margin=1");
     history.replaceState(null, "", "/read/x?at=spya-aaaaaa");
-    Object.assign(setting, { on: true, loaded: true });
+    Object.assign(setting, { on: true, loaded: true, signedIn: true });
     open();
     expect(location.search).toBe("?at=spya-aaaaaa");
   });
 
   it("gives a signed-out reader the article alone", () => {
     Object.assign(setting, { loaded: true, signedIn: false });
-    open();
+    act(() => root.render(<Page slug="x" readerId={null} />));
     expect(location.search).toBe("");
   });
 

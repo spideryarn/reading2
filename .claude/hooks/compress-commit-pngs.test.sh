@@ -291,7 +291,7 @@ assert mine[0]["command"].endswith("|| true")
 print(mine[0]["command"])
 PY
 ) || { echo "FAIL  registration"; exit 1; }
-mkdir -p "$REPO/.claude/hooks"; cp -p "$HOOK" "$REPO/.claude/hooks/"
+mkdir -p "$REPO/.claude/hooks"; cp -p "$HOOK" "$(dirname "$HOOK")/commit_command.py" "$REPO/.claude/hooks/"
 png "$REPO/docs/plans/reg.png"
 PAYLOAD=$(REPO="$REPO" python3 -c 'import json, os; print(json.dumps({"cwd":os.environ["REPO"],"tool_input":{"command":"git add -- docs/plans/reg.png && git commit -- docs/plans/reg.png"}}))')
 out=$(printf '%s' "$PAYLOAD" | CLAUDE_PROJECT_DIR="$REPO" bash -c "$REGISTERED" 2>"$SHIM/hook.stderr"); code=$?

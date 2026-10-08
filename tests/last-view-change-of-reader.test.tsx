@@ -44,6 +44,12 @@ const B = "2b2b2b2b-2222-4222-8222-000000000002";
 const A_KEY = lastViewKey("x", A);
 const B_KEY = lastViewKey("x", B);
 const A_VIEW = "?mode=quotes&at=spya-far";
+/* B has no key here, so B's arrival is B's first open, which since
+   2026-10-08 does not wait for the settings store (CR3 of
+   docs/plans/261007p-code-review-sol.md). What matters is that it is not A's. */
+const FIRST_OPEN = "?mode=chat&guide=1&margin=1";
+/* What the save makes of it: the guide's own parameters are not remembered. */
+const FIRST_OPEN_SAVED = "?margin=1";
 
 function Page({ readerId }: { readerId: string | null }) {
   const route = parseRoute(location.pathname);
@@ -88,14 +94,14 @@ describe("A is reading, and the tab becomes B's without the page being remounted
     expect(held.get(A_KEY), "control: A's place was saved as A moved").toBe(A_VIEW);
   });
 
-  it("B arrives at a bare address, not at A's view", () => {
+  it("B arrives at B's own first open, not at A's view", () => {
     as(B);
-    expect(location.pathname + location.search).toBe("/read/x");
+    expect(location.pathname + location.search).toBe(`/read/x${FIRST_OPEN}`);
   });
 
   it("A's query string is not saved under B's key", () => {
     as(B);
-    expect(held.get(B_KEY)).toBe("");
+    expect(held.get(B_KEY)).toBe(FIRST_OPEN_SAVED);
   });
 
   it("A's entry is untouched by the rewrite made for B", () => {
@@ -118,8 +124,7 @@ describe("A is reading, and the tab becomes B's without the page being remounted
     expect(held.get(A_KEY)).toBe(A_VIEW);
   });
 
-  it("B's first open gets the first-open default, as any first open does", () => {
-    Object.assign(setting, { loaded: true });
+  it("B's first open gets the first-open default, as any first open does, settings read or not", () => {
     as(B);
     expect(location.search).toBe("?mode=chat&guide=1&margin=1");
   });
@@ -136,7 +141,7 @@ describe("A is reading, and the tab becomes B's without the page being remounted
   it("takes A's dialog and conversation off the address too, and keeps what is not the article's", () => {
     move("?key=k&mode=quotes&note=spya-a&thread=t1");
     as(B);
-    expect(location.search).toBe("?key=k");
+    expect(location.search).toBe(`?key=k&${FIRST_OPEN.slice(1)}`);
   });
 
   it("leaves the address alone when it has already moved on to somewhere else", () => {
@@ -151,7 +156,7 @@ describe("a fresh mount as B, in a browser A has read in", () => {
   it("is not rewritten to A's view at a bare address", () => {
     held.set(A_KEY, A_VIEW);
     as(B);
-    expect(location.pathname + location.search).toBe("/read/x");
+    expect(location.pathname + location.search).toBe(`/read/x${FIRST_OPEN}`);
     expect(held.get(A_KEY)).toBe(A_VIEW);
   });
 

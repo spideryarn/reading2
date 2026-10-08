@@ -346,6 +346,25 @@ export function buildClassifierPrompt(
 }
 
 /**
+ * The longest `asks` may be, in characters of its normalised form — GPT Sol's
+ * F17.
+ *
+ * **300: a sentence or two**, which is what the prompt asks for ("the sentence
+ * or sentences … that hand over the decision"). The card draws the quote in
+ * full, in the flow, above the tail's disclosure — so without a bound a model
+ * could quote the whole 4,000-character tail back and recreate the exact
+ * failure the disclosure was built to prevent: one card tens of lines tall on a
+ * phone, pushing every other card off the screen. At 13px in a 390px card, 300
+ * characters is about six lines. A turn that ends on a long numbered list of
+ * options can exceed it; that answer is refused (unreadable, never cached) and
+ * the card still stands on its `why` — a quote that cannot fit is not a quote.
+ *
+ * Declared above the prompt that states it, because module-level code
+ * (`WORST_CASE_PROMPT_TOKENS`) builds that prompt while this file loads.
+ */
+export const MAX_ASKS_CHARS = 300;
+
+/**
  * The proposal-aware prompt: version 1's question, then who holds the answer.
  *
  * The recipients are docs/project/overseer-direction.md § Route by who has the
@@ -354,6 +373,11 @@ export function buildClassifierPrompt(
  * because a model asked to pick one of six will otherwise pick the safe-sounding
  * one. `asks` is asked for as a CONTIGUOUS verbatim span because the parse
  * checks it is one (D13): two sentences stitched together would be refused.
+ * And as the SHORTEST one, with `MAX_ASKS_CHARS` stated: until 2026-10-08 the
+ * prompt never said the bound, and the model quoted whole options paragraphs
+ * of 413-426 characters, which the parse refused (plan 261007o § The eval).
+ * Not a version bump: a verdict means what it did, and a refused one was
+ * never cached.
  */
 function proposalSystemPrompt(): string {
   const v1 = classifierSystemPromptV1();
@@ -387,9 +411,11 @@ function proposalSystemPrompt(): string {
     fields,
     'recipient: one of "sol", "opus", "greg", "overseer", "self", "unplaced", as above.',
     "reason: one sentence saying why that holder has what is needed to answer. Never a score.",
-    "asks: the sentence or sentences in the text that hand over the decision, COPIED EXACTLY as one continuous",
-    "  passage in the agent's own words. Never paraphrase, never join two separate places, never quote anything",
-    "  the agent was told.",
+    "asks: the SHORTEST passage in the text that hands over the decision, COPIED EXACTLY as one continuous",
+    `  passage in the agent's own words, and never more than ${MAX_ASKS_CHARS} characters. Usually that is one sentence:`,
+    "  the one that asks, not the options or the reasoning before it, which topic and why already describe.",
+    '  For example, after a paragraph weighing two fixes, "Which would you prefer? I can start on either now." is',
+    "  the whole of asks. Never paraphrase, never join two separate places, never quote anything the agent was told.",
     'unplacedWhy: one sentence saying why you could not tell; only when recipient is "unplaced".',
   ].join("\n");
 }
@@ -549,22 +575,6 @@ export type VerdictContext =
 export function normaliseSpace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
-
-/**
- * The longest `asks` may be, in characters of its normalised form — GPT Sol's
- * F17.
- *
- * **300: a sentence or two**, which is what the prompt asks for ("the sentence
- * or sentences … that hand over the decision"). The card draws the quote in
- * full, in the flow, above the tail's disclosure — so without a bound a model
- * could quote the whole 4,000-character tail back and recreate the exact
- * failure the disclosure was built to prevent: one card tens of lines tall on a
- * phone, pushing every other card off the screen. At 13px in a 390px card, 300
- * characters is about six lines. A turn that ends on a long numbered list of
- * options can exceed it; that answer is refused (unreadable, never cached) and
- * the card still stands on its `why` — a quote that cannot fit is not a quote.
- */
-export const MAX_ASKS_CHARS = 300;
 
 /**
  * The shortest `asks` may be — both bounds must hold: at least this many
