@@ -1,7 +1,7 @@
 ---
 reports: spya-a5gzb9
 ending: shipped
-comment: Shipped. Still waiting on you, from the imports half: may a failed import's pre-filled report also carry the source URL, filename and error sentence? Today it carries ids, step names and times only.
+comment: Shipped. Since 2026-10-08 a failed import's Report this also carries the address, file name and error, and every import is kept on record so we can debug it later.
 ---
 # Past imports say where, when, and have a Report this; "Why are you reading this?" says whether it saved, and asks again on first open
 
@@ -61,3 +61,12 @@ Not deployed: the Overseer deploys.
 **The question for Greg is now a file**, `docs/user-feedback/questions/q-a7kffw.md`, moved there from
 `awaiting-approval.md` on 2026-10-07. He sees it in the Feedback dialog and replies there
 ([feedback-reports.md § Asking Greg a question](../project/feedback-reports.md#asking-greg-a-question-and-acting-on-his-answer)).
+
+**Answered 2026-10-08** (reply `spya-f9c9pe` to q-a7kffw): yes to the address, file name and error
+sentence, and a database record of every import so that a developer can debug a production
+failure afterwards. Both shipped on `dev` in
+[261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md):
+the pre-fill carries the three, `/privacy` says so, and `import_records` keeps one row per import
+that ended, read with `scripts/import-records.ts`. (Dismiss had already stopped deleting the job on
+2026-10-02, so the catch above was gone before this.) The link to an uploaded original stays as
+built: Greg did not answer that half.

@@ -693,9 +693,10 @@ export function JobCard({
             )}
             {/* **Report this, on a failed job only** — a cancelled one is the
                 reader's own doing. It opens the Feedback dialog as a Problem
-                with the job's ids and times in the box, and nothing else: no
-                address, filename or error sentence, which src/web/import-report.ts
-                says why. A fresh request id per press, so pressing it again
+                with the job's ids and times, the address or file name, and the
+                error sentence in the box, where the reader can edit them before
+                sending; src/web/import-report.ts says why (Greg, 2026-10-08,
+                plan 261008j). A fresh request id per press, so pressing it again
                 after sending is a new request and a re-render is not
                 (FeedbackDialog.tsx § `FeedbackPrefill`). Greg, 2026-10-01,
                 spya-a5gzb9; plan 261001s § Stage 1. */}
@@ -704,7 +705,7 @@ export function JobCard({
                 type="button"
                 variant="ghost"
                 size="sm"
-                title="Tell us about this failure — the job's id and times go in the report"
+                title="Tell us about this failure — its address or file name, the error and the times go in the report, and you can edit them first"
                 onClick={() =>
                   openFeedback({ id: mintId(), kind: "problem", body: importProblemReport(job) })
                 }

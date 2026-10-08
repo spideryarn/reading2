@@ -656,6 +656,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "fb-list": "retry",
   "fb-reply": "retry",
   "fb-reply-stale": "retry",
+  /* Defer for now or Bring back not getting through, and the question settled
+     before it arrived (261008i): nothing changed either way. */
+  "fb-defer": "retry",
+  "fb-defer-settled": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -5897,6 +5901,28 @@ export const FEEDBACK_REPLY_STALE: ReaderFacingFailure = {
   message:
     "This page and the server are out of step, so that reply was not sent. Your words are still " +
     "in the box: copy them, reload the page, and reply again. [fb-reply-stale]",
+};
+
+/**
+ * **Defer for now, or Bring back, did not get through** — `POST
+ * /api/admin/feedback/deferrals` failed, or answered with something that is
+ * not a deferral. Nothing changed on screen; pressing again is safe, because
+ * the write is conditional both ways (plan 261008i, F5).
+ */
+export const FEEDBACK_DEFER_FAILED: ReaderFacingFailure = {
+  kind: "retry",
+  message: "That did not get through, so nothing changed. Try again in a moment. [fb-defer]",
+};
+
+/**
+ * **The question was settled before the press reached the server** — a 409:
+ * an agent marked it answered and the deploy carrying that landed after this
+ * page was loaded. There is nothing left to defer; reloading shows where it is.
+ */
+export const FEEDBACK_DEFER_SETTLED: ReaderFacingFailure = {
+  kind: "retry",
+  message:
+    "That question has been settled since this page was loaded, so nothing changed. Reload the page and look again. [fb-defer-settled]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

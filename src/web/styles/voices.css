@@ -220,9 +220,11 @@
     /* Feedback's Earlier tab, for an admin: the line a report's note says
        about it, which an agent wrote (261007d) */
     .fb-earlier-comment,
-    /* and a question an agent put to them: its title and its text */
+    /* and a question an agent put to them: its title and its text, and its
+       title again as a line in the contents (261008i) */
     .fb-question-title,
-    .fb-question-text
+    .fb-question-text,
+    .fb-thread-title
 ) {
     font-family: var(--font-ai);
 }
@@ -273,9 +275,8 @@
     .tip-hit-criterion,
     .fb-body,
     .fb-earlier-body,
-    /* a question's report in the admin's own words, their reply to it, and
+    /* the admin's reply to a question, and
        the box they reply in (261007d) */
-    .fb-question-report-line,
     .fb-question-answer-body,
     .fb-reply-input,
     .ill-steer-input,

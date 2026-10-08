@@ -210,7 +210,9 @@ function provider(
     /** The hosts asked that are not the model gateway — the paper and the registry. */
     outside: () => outside,
     finish(rest: string) {
-      controller?.enqueue(
+      /* Loud, not a no-op: finishing a stream that has not started yet left it open for ever. */
+      if (!controller) throw new Error("finish() before the model stream started");
+      controller.enqueue(
         chunk({
           choices: [
             {
@@ -361,8 +363,20 @@ function frames(body: string): { name: string; data: unknown }[] {
 
 const terminals = (body: string) => frames(body).filter((f) => f.name === "done" || f.name === "error");
 
-async function until(ready: () => boolean): Promise<void> {
-  for (let i = 0; i < 400 && !ready(); i++) await new Promise((r) => setTimeout(r, 5));
+/**
+ * Wait for `ready`, and **throw** if it never comes. It used to give up after
+ * 2 s and return as if it had arrived. The real paper read runs ahead of the
+ * model call (1.4–2.6 s on a busy box), so the case went on to `stub.finish()`
+ * before the stream existed. That finish was a no-op, the stream never ended,
+ * and the test timed out at 30 s somewhere else entirely —
+ * docs/postmortems/261008d-two-streaming-tests-that-hung-instead-of-failing.md.
+ */
+async function until(ready: () => boolean, ms = 20_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!ready()) {
+    if (Date.now() > deadline) throw new Error(`until: still not ready after ${ms} ms`);
+    await new Promise((r) => setTimeout(r, 5));
+  }
 }
 
 const investigateUrl = (id = WORK) => `/api/citations/${SLUG}/${id}/investigate`;

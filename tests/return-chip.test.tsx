@@ -19,19 +19,49 @@
  *  - **Dismissal is a replace, not a push.** It takes the stamp off the entry
  *    the reader is standing on and adds nothing to the stack, or the escape
  *    from the chip would itself need a press of Back. GPT Sol F12.
+ *  - **A press moves the position and nothing else** (Greg, spya-q3dfmw):
+ *    it pushes today's address with `?at=` changed, so a mode opened or
+ *    closed since the jump stays as it is. § pressing the chip leaves the
+ *    modes alone, and docs/plans/261008g-….
  */
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { useQueryState } from "nuqs";
+import { throttle, useQueryState } from "nuqs";
 import { enableHistorySync, NuqsAdapter } from "nuqs/adapters/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Block, BlockId, NodeId } from "../src/types.js";
-import { armJump, clearArmedJump, readStamp } from "../src/web/jump-history.js";
+import {
+  armJump,
+  clearArmedJump,
+  isJumpArmed,
+  readStamp,
+} from "../src/web/jump-history.js";
+import { beginJump, beginReturn } from "../src/web/keynav.js";
 import { atParam } from "../src/web/params.js";
 import type { Section } from "../src/web/position.js";
 import { ReturnChip } from "../src/web/ReturnChip.js";
-import { dismissJumpOrigin, watchHistoryWrites } from "../src/web/router.js";
+import {
+  dismissJumpOrigin,
+  onAddressChange,
+  watchHistoryWrites,
+} from "../src/web/router.js";
+
+/**
+ * **The press's move, recorded rather than performed.** jsdom has no layout and
+ * no `CSS.escape`, and what matters here is that the press moves the page
+ * itself, unconditionally, to the origin (keynav.ts § `beginReturn`, GPT Sol's
+ * second finding on 261008g) — not how scroll.ts does it.
+ */
+const moves = vi.hoisted(() => ({ list: [] as string[] }));
+vi.mock("../src/web/scroll.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/web/scroll.js")>();
+  return {
+    ...real,
+    scrollToBlock: (id: string) => void moves.list.push(id),
+    scrollToTop: () => void moves.list.push("top"),
+  };
+});
 
 /* main.tsx's order — nuqs patches first, so ours is the outer wrapper. Both are
    idempotent; a second patch would double every event. */
@@ -87,10 +117,27 @@ let root: Root;
  */
 let queueAt: (id: BlockId) => void = () => {};
 
+/** A deliberate position push, through the same nuqs queue as a jump or return. */
+let pushAt: (id: BlockId) => void = () => {};
+
+/** The scroll spy's replace once its debounce enters nuqs's global queue. */
+let replaceAtNow: (id: BlockId) => void = () => {};
+
+/** A mode parameter queued the way the Dock's press queues one. */
+let queueMode: (mode: string) => void = () => {};
+
 function Harness(): ReactNode {
   const [, set] = useQueryState("at", atParam);
+  const [, setMode] = useQueryState("mode");
   queueAt = (id) => void set(id);
-  return createElement(ReturnChip, { sections: SECTIONS, rowOf: ROW_OF });
+  pushAt = (id) => void set(id, { history: "push", limitUrlUpdates: throttle(0) });
+  replaceAtNow = (id) => void set(id, { history: "replace", limitUrlUpdates: throttle(0) });
+  queueMode = (mode) => void setMode(mode, { history: "push" });
+  /* `useReadingPosition`'s `returnToOrigin`, less the `synced` bookkeeping that
+     only matters to its restore effect, which is not mounted here. */
+  const onReturn = () =>
+    void beginReturn((id) => void set(id, { history: "push", limitUrlUpdates: throttle(0) }));
+  return createElement(ReturnChip, { sections: SECTIONS, rowOf: ROW_OF, onReturn });
 }
 
 function mount(): void {
@@ -118,7 +165,11 @@ function jumped(origin: typeof TOP | ReturnType<typeof at>, target: BlockId): vo
     origin,
     target,
   });
-  act(() => history.pushState(history.state, "", `/read/x?at=${target}`));
+  /* Today's address with `?at=` changed, as `setAt` would write it: a jump
+     leaves `?mode=` and the rest as they are. */
+  const next = new URLSearchParams(location.search);
+  next.set("at", target);
+  act(() => history.pushState(history.state, "", `/read/x?${next.toString()}`));
 }
 
 /** Step back one entry and wait for the browser to actually be there. */
@@ -131,9 +182,29 @@ async function goForward(): Promise<void> {
   await traversed(() => history.forward());
 }
 
-/** Press the chip, and wait for the entry it asked for to arrive. */
+/**
+ * Press the chip, and wait for its push to land.
+ *
+ * The press goes through nuqs's queue (keynav.ts § `beginReturn`), which
+ * flushes on a later task even at `throttle(0)`, so asserting straight after
+ * the click would read the address before the write.
+ */
 async function pressChip(): Promise<void> {
-  await traversed(() => host.querySelector<HTMLButtonElement>(".return-chip-go")?.click());
+  await act(async () => {
+    const written = new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        stop();
+        reject(new Error("the return's nuqs push did not land within one second"));
+      }, 1000);
+      const stop = onAddressChange(() => {
+        clearTimeout(timer);
+        stop();
+        resolve();
+      });
+    });
+    host.querySelector<HTMLButtonElement>(".return-chip-go")?.click();
+    await written;
+  });
 }
 
 /**
@@ -164,6 +235,7 @@ function viewChanged(search: string): void {
 }
 
 beforeEach(() => {
+  moves.list = [];
   history.replaceState(null, "", "/read/x");
   clearArmedJump();
   /* A same-path replace preserves the stamp on purpose, so resetting the
@@ -262,7 +334,7 @@ describe("when the chip is drawn", () => {
    */
   it("draws nothing for a stamp naming a block this article does not have", () => {
     jumped(at(GHOST), block(25));
-    expect(readStamp(history.state)).toEqual({ origin: at(GHOST), depth: 1 });
+    expect(readStamp(history.state)).toEqual({ origin: at(GHOST), earlier: [] });
     expect(chip()).toBeNull();
   });
 });
@@ -336,58 +408,39 @@ describe("another pushed view of the same article", () => {
   });
 });
 
-/* ---------------------------------------------- the depth keeps its promise -- */
+/* ------------------------------------------- the stamp survives the wander -- */
 
 /**
- * **The arithmetic, walked rather than asserted at one step.**
- *
- * The happy-path cases above stay green with the depth badly wrong — one
- * inherited push is the only shape they exercise, and `depth + 1` and
- * `depth × 2` agree there. GPT Sol's seventh finding on the plan, 2026-09-16:
- * *"they would all remain green with several of these invariants broken."*
- *
- * So each of these walks a real sequence and then **presses the chip**, because
- * the claim being made is not "the number is 3" but "one press lands the reader
- * where the label says". The origin entry is recognisable: `originHref` rewrote
- * it to `?at=<the origin block>` as the jump was made, so landing there is an
- * assertion about the address rather than about our own bookkeeping.
+ * **Walked rather than asserted at one step**, as GPT Sol asked of the depth
+ * on 2026-09-16 (*"they would all remain green with several of these
+ * invariants broken"*). The depth is gone (261008g) but the claim is the same:
+ * one press lands the reader where the label says, however they wandered the
+ * stack first.
  */
 describe("however the reader wanders the stack", () => {
-  /** The whole point: several view changes, still one press. */
   it("comes home in one press after two more view changes", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
     viewChanged(`at=${block(25)}&mode=citations`);
-    viewChanged(`at=${block(25)}&mode=citations&cols=0,2`);
+    viewChanged(`at=${block(25)}&mode=citations&sort=1`);
     expect(label()).toBe("↩ back to The middle bit");
 
-    const entries = history.length;
     await pressChip();
     expect(atNow()).toBe(block(15));
-    /* And it spent nothing to get there — a return that costs a forward entry
-       is a return the reader has to undo. */
-    expect(history.length).toBe(entries);
   });
 
-  /**
-   * **Back, then a push**, which truncates the forward stack. The new entry's
-   * predecessor is the one the reader was standing on, so its distance is that
-   * entry's plus one — and it is right for the same reason it is always right,
-   * which is that a push adds exactly one entry.
-   */
   it("counts from where the reader is, not from where they have been", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
     viewChanged(`at=${block(25)}&mode=citations`);
     await goBack();
-    viewChanged(`at=${block(25)}&cols=0,2`);
+    viewChanged(`at=${block(25)}&sort=1`);
 
     await pressChip();
     expect(atNow()).toBe(block(15));
+    expect(new URLSearchParams(location.search).get("sort")).toBe("1");
   });
 
-  /** Forward puts the reader back on an entry that already knew its own
-      distance, so there is nothing to recompute and nothing to get wrong. */
   it("survives a step back and forward again", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
     jumped(at(block(15)), block(25));
@@ -401,31 +454,8 @@ describe("however the reader wanders the stack", () => {
   });
 
   /**
-   * **A second jump from an inherited entry starts again**, and the two presses
-   * unwind the two journeys in order — which is the dropdown Greg imagined,
-   * without any of its machinery.
-   */
-  it("unwinds two journeys in the order they were made", async () => {
-    history.replaceState(null, "", `/read/x?at=${block(3)}`);
-    jumped(at(block(15)), block(25));
-    viewChanged(`at=${block(25)}&mode=citations`);
-    /* From the mode, a second jump — the reader following a citation. */
-    jumped(at(block(25)), block(2));
-    expect(label()).toBe("↩ back to How it ends");
-
-    await pressChip();
-    expect(atNow()).toBe(block(25));
-    /* And the entry they land on still remembers the journey before it. */
-    expect(label()).toBe("↩ back to The middle bit");
-
-    await pressChip();
-    expect(atNow()).toBe(block(15));
-  });
-
-  /**
-   * **Dismissal is about one entry**, and must not disturb the count on any
-   * other. It is a replace, so it adds and removes nothing from the stack —
-   * an entry further on is still exactly as far from the origin as it was.
+   * **Dismissal is about one entry.** It is a replace, so the entry further on
+   * keeps its own stamp.
    */
   it("is unmoved by a dismissal on an entry the reader has left", async () => {
     history.replaceState(null, "", `/read/x?at=${block(3)}`);
@@ -470,22 +500,6 @@ describe("what the chip says", () => {
 /* ------------------------------------------------------------- the presses -- */
 
 describe("pressing the chip", () => {
-  it("goes back one entry and adds none", async () => {
-    history.replaceState(null, "", `/read/x?at=${block(3)}`);
-    jumped(at(block(15)), block(25));
-    const entries = history.length;
-    const back = host.querySelector<HTMLButtonElement>(".return-chip-go");
-    const landed = new Promise<void>((resolve) =>
-      window.addEventListener("popstate", () => resolve(), { once: true }),
-    );
-    await act(async () => {
-      back?.click();
-      await landed;
-    });
-    expect(history.length).toBe(entries);
-    expect(new URLSearchParams(location.search).get("at")).toBe(block(15));
-  });
-
   /**
    * **F12.** After a jump, ordinary scrolling goes on replacing the entry and
    * preserving its stamp, so the chip can sit on a phone for the rest of a
@@ -534,5 +548,224 @@ describe("pressing the chip", () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
     });
     expect(new URLSearchParams(location.search).get("at")).toBe(block(28));
+  });
+});
+
+/* ------------------------------------------------- the modes stay as they are -- */
+
+/**
+ * **Pressing the chip moves the reading position and nothing else** — Greg,
+ * 2026-10-08 (spya-q3dfmw): *"I think it would be better if it just changed
+ * the position, and so if I changed modes since, those modes would stay as they
+ * are currently."* Until then the press was `history.go(-depth)`, which brought
+ * back the whole address the jump left, `?mode=` included.
+ * docs/plans/261008g-the-way-back-chip-moves-the-position-and-leaves-the-modes-alone.md.
+ *
+ * The press is a push of today's address with `?at=` changed. It has no
+ * `popstate`; `pressChip` waits for the wrapper's history-write notification.
+ */
+describe("pressing the chip leaves the modes alone", () => {
+  const param = (name: string) => new URLSearchParams(location.search).get(name);
+
+  it("keeps a mode opened since the jump, and moves only ?at=", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(15)), block(25));
+    viewChanged(`at=${block(25)}&mode=citations`);
+    const entries = history.length;
+    await pressChip();
+    expect(param("mode")).toBe("citations");
+    expect(param("at")).toBe(block(15));
+    expect(moves.list).toEqual([block(15)]);
+    /* A deliberate act pushes (url-state.md § Position replaces history). */
+    expect(history.length).toBe(entries + 1);
+  });
+
+  it("keeps a mode closed since the jump closed", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}&mode=glossary`);
+    jumped(at(block(15)), block(25));
+    viewChanged(`at=${block(25)}`);
+    await pressChip();
+    expect(param("mode")).toBeNull();
+    expect(param("at")).toBe(block(15));
+  });
+
+  it("returns to the top by removing ?at=, and keeps the mode", async () => {
+    jumped(TOP, block(25));
+    viewChanged(`at=${block(25)}&mode=quotes`);
+    await pressChip();
+    expect(param("at")).toBeNull();
+    expect(param("mode")).toBe("quotes");
+    expect(moves.list).toEqual(["top"]);
+  });
+
+  it("goes away after the only journey is undone", async () => {
+    jumped(at(block(15)), block(25));
+    await pressChip();
+    expect(chip()).toBeNull();
+    expect(readStamp(history.state)).toBeNull();
+  });
+
+  /** The dropdown Greg imagined (260906g), now without travelling the stack. */
+  it("unwinds two journeys in order, with the mode kept throughout", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(15)), block(25));
+    viewChanged(`at=${block(25)}&mode=citations`);
+    jumped(at(block(25)), block(2));
+    expect(label()).toBe("↩ back to How it ends");
+
+    await pressChip();
+    expect(param("at")).toBe(block(25));
+    expect(param("mode")).toBe("citations");
+    expect(label()).toBe("↩ back to The middle bit");
+
+    await pressChip();
+    expect(param("at")).toBe(block(15));
+    expect(param("mode")).toBe("citations");
+    expect(chip()).toBeNull();
+  });
+
+  /**
+   * **A mode pressed a moment before the chip still opens** — GPT Sol's first
+   * finding on the plan. nuqs had the mode queued and had not written it yet;
+   * a raw history push would have aborted it and copied the address from
+   * before it. Through nuqs's queue the two go out together.
+   */
+  it("keeps a mode whose write was still queued when the chip was pressed", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(15)), block(25));
+    act(() => queueMode("glossary"));
+    await pressChip();
+    expect(param("mode")).toBe("glossary");
+    expect(param("at")).toBe(block(15));
+  });
+
+  /**
+   * **It moves the page even when the address already says the origin** — GPT
+   * Sol's second finding. `?at=` is section-granular, so a reader who jumped
+   * from a section's first block and then wandered inside that section has an
+   * address that already names the origin; the restore effect, which moves
+   * only on a *change*, would do nothing.
+   */
+  it("moves the page even when ?at= already names the origin", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(12)), block(25));
+    /* The reader has scrolled back into the origin's section, and the spy has
+       written its first block — the origin itself. */
+    act(() => history.replaceState(history.state, "", `/read/x?at=${block(12)}`));
+    const entries = history.length;
+    await pressChip();
+    expect(moves.list).toEqual([block(12)]);
+    expect(param("at")).toBe(block(12));
+    expect(history.length, "nuqs must push even when its value is unchanged").toBe(entries + 1);
+    expect(readStamp(history.state), "the push must claim and advance the return arm").toBeNull();
+    expect(isJumpArmed(), "an unclaimed arm would hide the chip for later entries").toBe(false);
+    expect(chip()).toBeNull();
+  });
+
+  /**
+   * A second jump can replace the return's queued `?at=` before nuqs flushes.
+   * The return has already happened on the page, so the new jump starts from
+   * that origin and must build on the journey the return left behind — not the
+   * pre-return stamp still present on `history.state`.
+   */
+  it("does not put the undone journey back when another jump wins the queued push", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(15)), block(25));
+    jumped(at(block(25)), block(2));
+    expect(readStamp(history.state)).toEqual({
+      origin: at(block(25)),
+      earlier: [at(block(15))],
+    });
+
+    const written = new Promise<void>((resolve) => {
+      const stop = onAddressChange(() => {
+        stop();
+        resolve();
+      });
+    });
+    act(() => {
+      host.querySelector<HTMLButtonElement>(".return-chip-go")?.click();
+      /* No article rows are mounted in this focused harness, so `beginJump`
+         measures `top`; that makes the chain assertion especially explicit. */
+      beginJump(BLOCKS, block(9), pushAt);
+    });
+    await act(async () => await written);
+
+    expect(param("at")).toBe(block(9));
+    expect(readStamp(history.state)).toEqual({
+      origin: TOP,
+      earlier: [at(block(15))],
+    });
+    expect(isJumpArmed()).toBe(false);
+  });
+
+  it("keeps that journey when the position spy then retargets the winning jump", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(15)), block(25));
+    jumped(at(block(25)), block(2));
+
+    const written = new Promise<void>((resolve) => {
+      const stop = onAddressChange(() => {
+        stop();
+        resolve();
+      });
+    });
+    act(() => {
+      host.querySelector<HTMLButtonElement>(".return-chip-go")?.click();
+      beginJump(BLOCKS, block(9), pushAt);
+      replaceAtNow(block(28));
+    });
+    await act(async () => await written);
+
+    expect(param("at")).toBe(block(28));
+    expect(readStamp(history.state)).toEqual({
+      origin: TOP,
+      earlier: [at(block(15))],
+    });
+    expect(isJumpArmed()).toBe(false);
+  });
+
+  /**
+   * On older Safari nuqs may hold the return for 320ms, while the scroll spy's
+   * debounce is 300ms. A reader who moves immediately after returning can
+   * therefore replace the queued `at` before the one pushed batch flushes. The
+   * final position is the reader's newer one, but the return still owns the
+   * journey transition in that batch.
+   */
+  it("advances the journey when a scroll-spy value wins the return's queued batch", async () => {
+    jumped(at(block(15)), block(25));
+    jumped(at(block(25)), block(2));
+
+    const written = new Promise<void>((resolve) => {
+      const stop = onAddressChange(() => {
+        stop();
+        resolve();
+      });
+    });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(".return-chip-go")?.click();
+      /* This is the state after the spy's 300ms debounce has fired: nuqs's
+         global map now carries the later value, while `history: push` from the
+         return remains sticky for the batch. */
+      replaceAtNow(block(28));
+      await written;
+    });
+
+    expect(param("at")).toBe(block(28));
+    expect(readStamp(history.state)).toEqual({
+      origin: at(block(15)),
+      earlier: [],
+    });
+    expect(isJumpArmed()).toBe(false);
+  });
+
+  /** Browser Back after a return goes to where the jump had landed. */
+  it("leaves Back meaning the jump's destination", async () => {
+    history.replaceState(null, "", `/read/x?at=${block(3)}`);
+    jumped(at(block(15)), block(25));
+    await pressChip();
+    await goBack();
+    expect(param("at")).toBe(block(25));
+    expect(label()).toBe("↩ back to The middle bit");
   });
 });

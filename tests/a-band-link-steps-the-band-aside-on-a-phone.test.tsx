@@ -303,6 +303,11 @@ let host: HTMLDivElement;
 let root: Root;
 
 enableHistorySync();
+/* And ours outside it, as main.tsx installs them: without it no jump is
+   stamped, so there is no section chip to press (router.ts §
+   `watchHistoryWrites`). */
+const { watchHistoryWrites } = await import("../src/web/router.js");
+watchHistoryWrites();
 
 /** A phone, where the band covers the article; and a desktop, where it sits beside it. */
 const PHONE = 390;
@@ -455,6 +460,41 @@ describe("a passage link in a band, on a phone", () => {
     await settle();
 
     expect(document.activeElement, "focus did not come back to the link").toBe(link);
+  });
+
+  /**
+   * **The section chip, pressed while the band covers the prose** — Greg's
+   * spya-q3dfmw and the edge its plan (261008g) names. The chip moves only the
+   * position now, so the mode stays; and the origin is always in the prose, so
+   * with a band over it the landing would be invisible. The band steps aside
+   * as a link in it would, and the pill takes the chip's place and its focus
+   * (GPT Sol, plan review F3).
+   */
+  it("the section chip steps a covering band aside and keeps the mode", async () => {
+    await open(PHONE, "?mode=summary");
+    await pressBandLink();
+    await act(async () => pill()?.click());
+    await settle();
+    expect(bandShowing(), "the band came back over the article").toBe(true);
+    const chip = host.querySelector<HTMLButtonElement>(".return-chip:not(.band-back-chip) .return-chip-go");
+    expect(chip, "after the jump, with the band back, the section chip is the way back").not.toBeNull();
+
+    await act(async () => chip?.focus());
+    await act(async () => chip?.click());
+    await until(() => param("at") !== BAND_TARGET, "the chip never moved the position");
+
+    expect(param("mode"), "the chip changed the mode").toBe("summary");
+    expect(reader().classList.contains("band-away"), "the landing is under the band").toBe(true);
+    expect(pill()?.textContent).toContain(`back to ${MODE_LABEL.summary}`);
+    expect(document.activeElement, "focus was left on a chip that is no longer drawn").toBe(pill());
+
+    await act(async () => pill()?.click());
+    await settle();
+    expect(bandShowing()).toBe(true);
+    expect(
+      band()?.contains(document.activeElement),
+      "focus did not go into the band when it came back",
+    ).toBe(true);
   });
 
   it("restores focus when a resize makes the stepped-aside band visible again", async () => {

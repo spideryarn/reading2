@@ -328,50 +328,92 @@ this is what the app does with it.
  scripts/feedback-questions.ts --answers  ◀── reads those rows from production, read-only
 ```
 
-- **Where they show.** `GET /api/admin/feedback/earlier` carries `questions` on every answer:
-  every open question, oldest first, whatever the filter. The tab draws them **at the top of
-  *Needs a decision***, above the reports, and says *"3 open questions"* beside that pill in every
-  view. The pill's number is still its count of reports, and the pills still sum to All: a question
-  is not a report, and its report may be shipped, set aside, or nothing at all.
-- **What one shows.** When it was asked; the report it is about, as `#number` and that report's
-  first line, **only when the report is the admin's own** (the lookup is owner-scoped, so a
-  question about another reader's report shows none of it); its title and its text, which an agent
-  wrote, in the model's face and as plain text with its line breaks ([fonts.md](fonts.md)); and the
-  admin's newest reply, *Answered · when*, in the reader's face. The file's `refs:` and `acted:`
-  lines are for agents: they are never compiled into the server, and the browser refuses a question
-  carrying any field but the six.
-- **Replying.** *Reply* opens a box under the question, one box at a time; a box that is shut keeps
-  its words. It has its own microphone ([dictation.md](dictation.md)): a second
-  `useDictationField`, with its own keeper name (`feedback-reply`) so a recording left by the Write
-  box is never offered here. The microphone stops when the box goes out of sight (another filter,
-  the Write tab, the dialog shut), as the Write box's does, and *Send reply* is off while it is
-  listening or transcribing. A half-written reply holds the page against an automatic reload, as a
-  half-written report does.
-- **Where a reply goes.** `POST /api/admin/feedback/answers` with `{ id, question, body }` and
-  nothing else: any other key is refused. The `id` is minted by the browser, so a retry is safe:
-  **201** for a new reply, **200** with the stored row for the same reply again, **409** when that
-  id is already a different reply, which changes nothing. The browser keeps one id for one question
-  and one set of words, and mints a new one when the words change, so it does not meet the 409. A
-  question id this build has no file for is a 400. **A reply to a question already marked answered
-  is accepted**: it may have been typed in a tab opened before that deploy, and the words are kept.
-- **The row.** `feedback_question_answers`, keyed `(owner_id, id)`: the question's id, the words
-  (at most 20,000 characters through the route, `MAX_FEEDBACK_ANSWER_CHARS`), when, and the
-  `environment` the server itself was running in, which is what lets the script tell a production
-  row from a local one. **A reply is not a report**: it is never in the Earlier list, on
-  `/admin/feedback`, in Sentry, in the endings map or in a shipped email, and it is not
-  rate-limited (the route is admin-only, and an
-  admin has no cap).
-- **When it fails.** The words stay in the box. A 404 means the page is newer than the server that
-  answered (a rollback, or the minutes of a deploy) and says to copy the words, reload and reply
-  again; anything else says to try again. If the `questions` part of the list's answer is not what
-  the browser expects, the whole list shows the ordinary "would not load" sentence, never some of
-  the questions. If a later list no longer contains a question while its box has words or a
-  transcription in flight, that question remains beside the local draft until it is sent or
-  cancelled; it is not counted as an open question on the pill.
+**Since 2026-10-08 each question is a thread** — Greg's eight reports of that afternoon, the bug
+`spya-u6h6q8` first (*"there doesn't appear to be a reply button or input box"*), plan
+[261008i](../plans/261008i-needs-a-decision-becomes-threads-you-can-reply-to-or-defer.md) and
+postmortem [261008c](../postmortems/261008c-needs-a-decision-lists-reports-nobody-can-answer.md).
 
-After a reply the card says *Answered* and offers *Reply again*; the question itself leaves the
-dialog when an agent marks its file `status: answered` and that commit is deployed, unless the
-browser is still holding an unsent reply to it as above.
+```
+ POST /api/admin/feedback/deferrals ──▶ a row in feedback_question_deferrals ("not now")
+ GET  …/earlier?questions=2         ──▶ threads: unacted replies, a state, the report's text
+```
+
+- **Where they show.** *Needs a decision* is the threads, not a list of reports. It opens on a
+  **contents**: three groups, *Needs a decision*, *You've replied, being considered* and
+  *Deferred* (shut), one line a thread with its title, its `q-` id and its report's `#number`.
+  Pressing one shows **that thread alone**, with *‹ All threads*, *N of M* and *‹ Previous* /
+  *Next ›*; the pills are hidden meanwhile, because on a phone with the keyboard up they cost three
+  lines. Below the contents, and only there, are the waiting reports **no open question is about**,
+  under *Waiting, but no question written yet*, saying there is nothing to answer for them;
+  `feedback-questions.ts` lists the same reports for the sweep to write one. A waiting report that
+  has a question is inside its thread and nowhere else in this view, which is the bug fixed.
+- **Which group.** The server decides, from every reply of the admin's, the question file's
+  `acted:` ids and the admin's deferral: *Deferred* when the deferral is at or after the newest
+  reply (a tie is deferred); otherwise *being considered* when a reply has not been acted on;
+  otherwise *Needs a decision*, which includes a question an agent acted on and left open with a
+  follow-up in its text. Both times are the database's own clock
+  (`questionState` in [`src/feedback-question-values.ts`](../../src/feedback-question-values.ts)).
+- **What a thread shows.** The ids, `q-k3m9qt · about #301 (spya-mdp0em)`, the ones to say to the
+  Overseer in a terminal (`feedback-questions.ts --show q-…` prints the file); when it was asked;
+  its title and text, which an agent wrote, in the model's face and as plain text with its line
+  breaks ([fonts.md](fonts.md)), everything after a line that is exactly `Details` shut under
+  *Details*; the report it is about, **only when it is the admin's own**, whole and shut, under
+  *Your report #301*; and the admin's replies **no agent has acted on yet**, at most the newest
+  five with a count of the rest, in the reader's face (an acted-on reply is quoted in the text by
+  the agent that acted). The file's `refs:` line is never compiled; `acted:` reaches the browser
+  only as the group and as which replies are listed.
+- **Replying.** In a thread the box is simply there, one thread and so one box at a time, and each
+  thread keeps its words when you move to another. It grows with what is in it and never scrolls
+  itself (`useFitTextarea`), so the panel is the one scroller: two scrollers under one finger with
+  an iPhone's keyboard up was `spya-za2tse`. Its own microphone ([dictation.md](dictation.md)): a
+  second `useDictationField`, keeper name `feedback-reply`, stopped when the box goes out of sight
+  as the Write box's is; *Send reply* is off while it listens or transcribes. A half-written reply
+  holds the page against an automatic reload.
+- **Where a reply goes.** `POST /api/admin/feedback/answers` with `{ id, question, body }` and
+  nothing else. The `id` is minted by the browser, so a retry is safe: **201** for a new reply,
+  **200** with the stored row for the same reply again, **409** when that id is already a different
+  reply. A question id this build has no file for is a 400. **A reply to a question already marked
+  answered is accepted**: it may have been typed in a tab opened before that deploy.
+- **Defer for now, and Bring back** (`spya-t6nmxt`). The alternative to replying, beside *Send
+  reply*. `POST /api/admin/feedback/deferrals` with `{ question, deferred }`: a row in
+  `feedback_question_deferrals`, keyed `(owner_id, question_id)`, with `deferred_at` (null once
+  brought back), `updated_at` and the server's `environment`. Each direction writes only when it
+  changes something, so a retry moves neither time; the answer is 200 with the deferral as it now
+  stands. **Only an open question**: deferring one already marked answered is a 409, because a late
+  deferral preserves nothing. `--answers` prints the deferrals in force so agents do not chase them;
+  the question stays open.
+- **What this page did, before the server knows.** A reply sent, or a deferral set, shows at once
+  and moves the thread to its group, and stays so until an answer to a list read **started after
+  it** arrives; a read that began earlier and lands later cannot put the old state back.
+- **The rows.** `feedback_question_answers`, keyed `(owner_id, id)`: the question's id, the words
+  (at most 20,000 characters through the route, `MAX_FEEDBACK_ANSWER_CHARS`), when, and the
+  server's `environment`, which is what lets the script tell a production row from a local one.
+  **A reply is not a report**: it is never in the Earlier list, on `/admin/feedback`, in Sentry,
+  in the endings map or in a shipped email, and it is not rate-limited (the route is admin-only).
+- **The way straight there.** For an admin, a button **Needs a decision N** beside the Write and
+  Earlier tabs, N the threads waiting on a decision; its tooltip says how many, when the newest was
+  asked, how many you have replied to and how many are deferred. It is a button with
+  `aria-pressed`, not a third tab: it opens Earlier on that filter, which the pill inside does too.
+  To have N before Earlier is opened, **an admin's dialog reads *Needs a decision* as soon as it
+  opens**. **Earlier opens on *Needs a decision***, and moves to All when that first read says no
+  thread is waiting, unless the reader has chosen anything in the meantime (a pill, the button, a
+  thread). Every other reader's dialog is unchanged.
+- **Two builds at once.** The browser asks `questions=2`; the server sends threads only then, and
+  the six-key questions of before 261008i otherwise, so a tab loaded before the deploy keeps
+  working after it. A server from before 261008i ignores the parameter, and the browser maps its
+  six-key questions into threads (the newest reply as the only one). A 404 on a reply says to copy
+  the words, reload and reply again. If the questions are not what the browser expects, the whole
+  list shows the ordinary "would not load" sentence, never some of them. If a later list no longer
+  contains a question while its thread is open or its box has words, that question stays beside
+  the draft until it is sent; it is not counted.
+
+A question leaves the dialog when an agent marks its file `status: answered` and that commit is
+deployed, unless the browser is still holding an unsent reply to it as above.
+
+**The dialog is bigger on a big screen** (`spya-frpy22`): from 1024px wide it is up to 46rem wide
+rather than 34rem, and on a window at least 760px tall at least `min(90%, 44rem)` tall. A phone is
+unchanged.
+
 
 ## The thank-you, and getting out of it
 
@@ -652,17 +694,28 @@ them twice, in opposite directions:
   half of what the buffer is for. Held at both ends, so neither trusts the other.
 - **Never the `console`.** Greg's request said "contents of web browser errors/logs/console", and
   taken literally that is a leak — see below.
-- **A failed import's *Report this* pre-fills ids and times, and never the address, the file name
-  or the error.** The words are `importProblemReport` in
+- **A failed import's *Report this* pre-fills where it came from and what went wrong**, since
+  2026-10-08. The words are `importProblemReport` in
   [`src/web/import-report.ts`](../../src/web/import-report.ts): the job id, the slug, the status,
-  the failed step's name, the failure kind and the timestamps. A pasted URL can carry an access
-  token, a file name is the reader's own words, and an error sentence is open-ended, so none of them
-  fits a clause above just because it sits in the box. Greg kept it that way on 2026-10-02
-  (Q-import-report-details, *"yes"*), with the job id as the way back: **Dismiss no longer deletes
-  the job record** — it stamps `jobs.dismissed_at` and the reader stops seeing it
-  ([ingest-queue.md § The routes](ingest-queue.md#the-routes)) — so the id in a report still names a
-  row we can read in the database, until the usual fifty-finished-jobs trim retires it. Nothing
-  serves the uploaded file back by that id.
+  the **source address** (whole, query string included) or the **uploaded file's name**, the failed
+  step's name, the failure kind, the **error sentence**, and the timestamps. Until then it carried
+  ids and times only, because a pre-typed value is not something the reader typed just because it
+  sits in the box. Greg chose otherwise, knowing an address can carry a private token:
+
+  > yes, it's fine for the filled-in report to carry information about the metadata that you
+  > suggest, whether it's the source address, file name, error sentence, that's definitely fine.
+  >
+  > — Greg, 2026-10-08 (spya-f9c9pe, answering q-a7kffw)
+
+  It enters under the **third clause**: the three values are in the box, where the reader reads them
+  and can delete any of them before sending, and `/privacy` § *If you send us a bug report* says a
+  report from there carries them. The article's title still does not go. The job id is still the way
+  back to the full record — **Dismiss does not delete the job** (it stamps `jobs.dismissed_at`,
+  [ingest-queue.md § The routes](ingest-queue.md#the-routes)), and since the same day an import's
+  ending is copied into `import_records`, which no trim reaches
+  ([ingest-queue.md § The record of every import](ingest-queue.md#the-record-of-every-import)).
+  Nothing serves the uploaded file back by that id. Plan
+  [261008j](../plans/261008j-a-failed-import-report-carries-the-address-and-a-record-of-every-import.md).
 
 ## The tick-box, and what is behind it
 

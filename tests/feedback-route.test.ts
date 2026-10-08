@@ -58,6 +58,8 @@ import type {
   NewFeedback,
   NewFeedbackAnswer,
   StoredFeedbackAnswer,
+  StoredFeedbackDeferral,
+  NewFeedbackDeferral,
 } from "../src/store/contracts.js";
 import { acceptAny, AUTHED_HEADERS, TEST_EMAIL, TEST_OWNER } from "./helpers/authed.js";
 import { logLinesWhile } from "./helpers/log-capture.js";
@@ -88,9 +90,12 @@ let statusAnswer: unknown = { reports: [], more: false, counts: { open: 0, waiti
 let answersSubmitted: { input: NewFeedbackAnswer; owner: string }[] = [];
 /** What the fake `submitAnswer` answers with; null means "created, echoing the input". */
 let answerOutcome: FeedbackAnswerSubmission | null = null;
-/** The question ids each `newestAnswers` asked about, and the replies it hands back. */
+/** The question ids each `answersTo` asked about, and the replies it hands back. */
 let newestAsked: { ids: readonly string[]; owner: string }[] = [];
 let newestAnswer: StoredFeedbackAnswer[] = [];
+/** The deferrals the fake store holds, and every `setDeferred` the route made (261008i). */
+let deferralsAnswer: StoredFeedbackDeferral[] = [];
+let deferralsSet: { input: NewFeedbackDeferral; owner: string }[] = [];
 /** The report ids each `linkedReports` asked about, and what it hands back. */
 let linkedAsked: { ids: readonly string[]; owner: string }[] = [];
 let linkedAnswer: LinkedFeedbackReport[] = [];
@@ -170,6 +175,8 @@ vi.mock("../src/feedback-questions.generated.js", () => ({
     { id: "q-bbbbbb", title: "A question about nothing filed", report: null, asked: "2026-10-06", body: "Stands alone." },
     { id: "q-cccccc", title: "About a reader's report", report: "spya-n0tm1n", asked: "2026-10-07", body: "The body says it all." },
   ],
+  /* q-bbbbbb's first reply has been acted on (plan 261008i). */
+  FEEDBACK_QUESTION_ACTED: { "q-aaaaaa": [], "q-bbbbbb": ["spya-act3d0"], "q-cccccc": [] },
 }));
 
 vi.mock("../src/store/index.js", async (importActual) => {
@@ -207,9 +214,14 @@ vi.mock("../src/store/index.js", async (importActual) => {
           }
         );
       },
-      newestAnswers: async (ids: readonly string[]) => {
+      answersTo: async (ids: readonly string[]) => {
         newestAsked.push({ ids, owner: currentOwnerId() });
         return newestAnswer;
+      },
+      deferrals: async () => deferralsAnswer,
+      setDeferred: async (input: NewFeedbackDeferral) => {
+        deferralsSet.push({ input, owner: currentOwnerId() });
+        return { questionId: input.questionId, deferredAt: input.deferred ? "2026-10-08T10:00:00.000Z" : null };
       },
       linkedReports: async (ids: readonly string[]) => {
         linkedAsked.push({ ids, owner: currentOwnerId() });
@@ -449,6 +461,8 @@ beforeEach(() => {
   newestAnswer = [];
   linkedAsked = [];
   linkedAnswer = [];
+  deferralsAnswer = [];
+  deferralsSet = [];
   hooks.clear();
   answer = undefined as unknown as FeedbackSubmission;
   captureBehaviour = () => "sentry-event-id";
@@ -824,9 +838,86 @@ describe("questions for the admin, and replies to them", () => {
   });
   type Sent = { questions: Record<string, unknown>[] };
 
+  const THREADS = `${EARLIER}?questions=2`;
+
+  /* Plan 261008i: a client that asks `questions=2` gets threads. */
+  it("sends threads to a client that asks: unacted replies, the state, the report's text", async () => {
+    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." }];
+    newestAnswer = [
+      /* Acted on (the mock's `acted` names it), so not listed, though it still counts for the state. */
+      { id: "spya-act3d0", questionId: "q-bbbbbb", body: "First go", createdAt: "2026-10-07T07:00:00.000Z" },
+      { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
+    ];
+    /* q-cccccc deferred, and q-bbbbbb deferred before its newest reply, which wins (F2). */
+    deferralsAnswer = [
+      { questionId: "q-cccccc", deferredAt: "2026-10-07T09:00:00.000Z", updatedAt: "2026-10-07T09:00:00.000Z" },
+      { questionId: "q-bbbbbb", deferredAt: "2026-10-07T07:30:00.000Z", updatedAt: "2026-10-07T07:30:00.000Z" },
+    ];
+    const reply = await get(THREADS);
+    expect(reply.status).toBe(200);
+    expect((reply.body as Sent).questions).toEqual([
+      {
+        id: "q-aaaaaa",
+        title: "One switch or two?",
+        body: "Background.\n\nA. One.\nB. Two.",
+        asked: "2026-10-05",
+        report: { id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?\nOr two." },
+        answers: [],
+        olderAnswers: 0,
+        state: "waiting",
+        deferredAt: null,
+      },
+      {
+        id: "q-bbbbbb",
+        title: "A question about nothing filed",
+        body: "Stands alone.",
+        asked: "2026-10-06",
+        report: null,
+        answers: [{ id: "spya-repzyy", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }],
+        olderAnswers: 0,
+        state: "responded",
+        deferredAt: null,
+      },
+      {
+        id: "q-cccccc",
+        title: "About a reader's report",
+        body: "The body says it all.",
+        asked: "2026-10-07",
+        report: null,
+        answers: [],
+        olderAnswers: 0,
+        state: "deferred",
+        deferredAt: "2026-10-07T09:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("sends at most five unacted replies a thread, the newest, and counts the rest (F12)", async () => {
+    newestAnswer = Array.from({ length: 7 }, (_, i) => ({
+      id: `spya-rep00${i}`,
+      questionId: "q-aaaaaa",
+      body: `reply ${i}`,
+      createdAt: `2026-10-07T0${i}:00:00.000Z`,
+    }));
+    const [first] = ((await get(THREADS)).body as Sent).questions;
+    expect(((first?.answers ?? []) as { body: string }[]).map((one) => one.body)).toEqual([
+      "reply 2",
+      "reply 3",
+      "reply 4",
+      "reply 5",
+      "reply 6",
+    ]);
+    expect(first?.olderAnswers).toBe(2);
+  });
+
   it("sends every open question, oldest first, with the admin's own report and newest reply", async () => {
-    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?" }];
-    newestAnswer = [{ id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" }];
+    linkedAnswer = [{ id: "spya-wa1t00", number: 212, firstLine: "Could there be one switch?", body: "Could there be one switch?" }];
+    newestAnswer = [
+      { id: "spya-older0", questionId: "q-bbbbbb", body: "first", createdAt: "2026-10-07T07:00:00.000Z" },
+      { id: "spya-repzyy", questionId: "q-bbbbbb", body: "Yes, do it", createdAt: "2026-10-07T08:00:00.000Z" },
+    ];
+    /* No `questions=2`: a tab from before 261008i, which must keep working
+       after the deploy, gets the six-key shape it was built against (F3). */
     const reply = await get();
     expect(reply.status).toBe(200);
     expect((reply.body as Sent).questions).toEqual([
@@ -875,9 +966,57 @@ describe("questions for the admin, and replies to them", () => {
 
   it("does not let a linked report from the store name a question that did not ask for it", async () => {
     /* The store is asked for two ids; one it should never return is ignored. */
-    linkedAnswer = [{ id: "spya-0ther0", number: 9, firstLine: "unrelated" }];
+    linkedAnswer = [{ id: "spya-0ther0", number: 9, firstLine: "unrelated", body: "unrelated" }];
     const sent = (await get()).body as Sent;
     expect(sent.questions.every((question) => question.report === null)).toBe(true);
+    const threads = (await get(THREADS)).body as Sent;
+    expect(threads.questions.every((question) => question.report === null)).toBe(true);
+  });
+
+  /* Defer for now, and Bring back: plan 261008i, decision 3. */
+  describe("POST /api/admin/feedback/deferrals", () => {
+    const DEFERRALS = "/api/admin/feedback/deferrals";
+    const defer = (body: unknown, verify?: Parameters<typeof handleApi>[2]) =>
+      call(body, { method: "POST", path: DEFERRALS, ...(verify ? { verify } : {}) });
+
+    it("defers and brings back: 200, the deferral as it stands, the server's environment, the owner", async () => {
+      const on = await defer({ question: "q-aaaaaa", deferred: true });
+      expect(on.status).toBe(200);
+      expect(on.headers["cache-control"]).toBe("private, no-store");
+      expect(on.body).toEqual({ question: "q-aaaaaa", deferredAt: "2026-10-08T10:00:00.000Z" });
+      const off = await defer({ question: "q-aaaaaa", deferred: false });
+      expect(off.body).toEqual({ question: "q-aaaaaa", deferredAt: null });
+      expect(deferralsSet).toEqual([
+        { input: { questionId: "q-aaaaaa", deferred: true, environment: "test" }, owner: TEST_OWNER },
+        { input: { questionId: "q-aaaaaa", deferred: false, environment: "test" }, owner: TEST_OWNER },
+      ]);
+    });
+
+    it("refuses an answered question with a 409 and writes nothing: a late deferral preserves nothing (F6)", async () => {
+      const late = await defer({ question: "q-dddddd", deferred: true });
+      expect(late.status).toBe(409);
+      expect(deferralsSet).toEqual([]);
+    });
+
+    it("refuses an unknown question, a field it does not take, and a deferred that is not a boolean", async () => {
+      const SECRET = "thaumaturgical";
+      expect((await defer({ question: "q-zzzzzz", deferred: true })).status).toBe(400);
+      expect((await defer({ question: "constructor", deferred: true })).status).toBe(400);
+      expect((await defer({ question: "q-aaaaaa", deferred: "yes" })).status).toBe(400);
+      expect((await defer({ question: "q-aaaaaa" })).status).toBe(400);
+      expect((await defer([{ question: "q-aaaaaa", deferred: true }])).status).toBe(400);
+      for (const extra of [{ environment: "production" }, { deferredAt: "2020-01-01" }, { [SECRET]: 1 }]) {
+        const reply = await defer({ question: "q-aaaaaa", deferred: true, ...extra });
+        expect(reply.status).toBe(400);
+        expect(JSON.stringify(reply.body)).not.toContain(SECRET);
+      }
+      expect(deferralsSet).toEqual([]);
+    });
+
+    it("is a 403 for a signed-in reader who is not an admin, and reaches no store", async () => {
+      expect((await defer({ question: "q-aaaaaa", deferred: true }, acceptSomebodyElse)).status).toBe(403);
+      expect(deferralsSet).toEqual([]);
+    });
   });
 
   it("stores a reply: 201, the server's own environment, the signed-in owner, never cached", async () => {

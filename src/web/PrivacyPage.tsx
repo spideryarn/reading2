@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "7 October 2026";
+const LAST_UPDATED = "8 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.
@@ -225,6 +225,18 @@ export function PrivacyPage() {
             where you have been, for example. We keep the totals, not a history of your reading (our
             ordinary server logs do show when an update arrived). It is not shown to anybody reading
             an article you have shared, and it goes when the article does.
+          </li>
+          {/* **Since 2026-10-08**: `import_records`, kept so we can find out
+              afterwards why an import failed, and outlasting the job list on
+              the home page. It goes with the article (`deleteTerminalJobs`)
+              and with the account (the owner key cascades); an import that
+              never became an article has no article to go with.
+              docs/project/privacy.md § Import records; plan 261008j. */}
+          <li className="tw:mb-2">
+            <strong className="tw:text-foreground">A record of each import</strong> — the address
+            or file name, when it ran, and if it failed, which step and the error message, so that
+            we can work out afterwards what went wrong. It goes when you delete the article; one that
+            never became an article stays until your account is deleted.
           </li>
           <li className="tw:mb-2">
             <strong className="tw:text-foreground">What the models make for you</strong> — we keep
@@ -649,6 +661,16 @@ export function PrivacyPage() {
           link records the address without the link’s key. It goes to our database, to Sentry and, as an email, to our own inbox, and the
           point of saying so here is that
           you can leave the box until you are on a page you don’t mind us seeing.
+        </p>
+        {/* **Since 2026-10-08**: Report this on a failed import types these
+            three into the box for the reader (src/web/import-report.ts), which
+            is only inside docs/project/feedback.md § The one rule because this
+            paragraph tells them. Plan 261008j. */}
+        <p>
+          If you press <strong className="tw:text-foreground">Report this</strong> on an import that
+          failed, the box starts filled in with the address you imported from (or the name of the
+          file you uploaded), the error we ran into and when it happened. It is all there in the box
+          before you send, so you can change or delete any of it.
         </p>
         <p>
           Two things are optional, and they are optional in different ways.{" "}
