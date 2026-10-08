@@ -98,7 +98,15 @@ The plan, its review and its eval: [261007k](../plans/261007k-help-chatbot.md).
 - **It answers from these pages and nothing else.** Every page is copied, in contents order, into
   [`src/help-corpus.generated.json`](../../src/help-corpus.generated.json), which
   `tests/help-corpus.test.ts` rebuilds and compares, so editing a page without regenerating it is a
-  red test, not a stale answer: `WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts`. The
+  red test, not a stale answer: `WRITE_HELP_CORPUS=1 npx vitest run tests/help-corpus.test.ts`.
+  **Usually you will not need to**: a Claude Code commit hook,
+  [`regenerate-commit-generated.sh`](../../.claude/hooks/regenerate-commit-generated.sh), runs that
+  on the house commit recipe whenever the commit carries anything under `src/web/help/` (or the mode
+  catalogue), and adds the corpus to the same commit. It stays out of a bare `git commit`, a
+  command with anything after the commit (`&& git push`), and a commit while some other Help file is
+  changed and not in it, so the test is still the backstop
+  ([261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). The corpus stays committed
+  rather than built on deploy, because only Vitest or Vite can read the pages. The
   whole corpus is the model's system prompt ([`src/help-chat-call.ts`](../../src/help-chat-call.ts)
   § `HELP_CHAT_SYSTEM`), with a rule to link the page each answer comes from and to decline, in one
   sentence, anything that is not about using Spideryarn. `docs/project/` is not in it: it is written

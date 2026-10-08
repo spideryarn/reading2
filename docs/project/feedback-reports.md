@@ -577,6 +577,16 @@ otherwise, for a split report with a part not yet written up, the newest note wi
 Then run `npx tsx scripts/feedback-endings.ts` and commit what it changes with
 the note. `feedback.md` § Shipped or not.
 
+**A commit hook usually does that for you.** On the house commit recipe, a commit that carries
+anything under `docs/user-feedback/` gets `scripts/feedback-endings.ts` run, and whichever of
+`src/feedback-endings.generated.ts` and `src/feedback-questions.generated.ts` changed added to the
+same commit ([`regenerate-commit-generated.sh`](../../.claude/hooks/regenerate-commit-generated.sh),
+[261007q](../plans/261007q-generated-files-regenerate-on-commit.md)). It stays out of a bare
+`git commit`, a command with anything after the commit (`&& git push`), a commit while another note
+is changed and not in it, and a header that does not parse; `tests/feedback-endings.test.ts` is the
+backstop for all of those. Both files stay committed rather than built on deploy: the deploy's
+shipped-emails step reads the endings map from git, at the commit it just shipped.
+
 ## What a report is not
 
 It is not a ticket, and the reader is not a product manager. The judgment stays with us: a report

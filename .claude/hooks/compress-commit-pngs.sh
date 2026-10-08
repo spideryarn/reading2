@@ -59,8 +59,12 @@ is_commit "$cmd" || quiet
 command -v pngquant >/dev/null || quiet
 # Python handles parsing, NUL-delimited git paths, bounded subprocesses and
 # receipts. Bash 3.2 and BSD tools need no GNU utilities or newer array builtins.
-PAYLOAD="$payload" python3 - <<'PYTHON'
-import hashlib, json, os, shlex, signal, subprocess, time
+HOOK_DIR=$(cd "$(dirname "$0")" && pwd) || quiet
+PAYLOAD="$payload" HOOK_DIR="$HOOK_DIR" python3 - <<'PYTHON'
+import hashlib, json, os, signal, subprocess, sys, time
+sys.dont_write_bytecode = True  # no __pycache__ in .claude/hooks
+sys.path.insert(0, os.environ["HOOK_DIR"])
+import commit_command  # the shared reading of what a commit carries
 
 def main():
     d = json.loads(os.environ["PAYLOAD"])
@@ -68,65 +72,10 @@ def main():
     cmd = (d.get("tool_input") or {}).get("command", "")
     if not isinstance(cwd, str) or not os.path.isdir(cwd) or not isinstance(cmd, str):
         return
-    cwd = os.path.realpath(cwd)  # macOS /var and /tmp are aliases of /private/...
-    # Do not evaluate shell expansion or try to reconstruct shell execution state.
-    if any(c in cmd for c in "$`*?[]{}~\n"):
+    commit = commit_command.parse(cmd, cwd)
+    if commit is None:
         return
-    lex = shlex.shlex(cmd, posix=True, punctuation_chars=";&|()<>")
-    lex.whitespace_split = True
-    segments, part = [], []
-    for word in lex:
-        if word in (";", "&&"):
-            if not part:
-                return
-            segments.append(part)
-            part = []
-        elif word and all(c in ";&|()<>" for c in word):
-            return
-        else:
-            part.append(word)
-    if part:
-        segments.append(part)
-    # A leading `cd <dir> &&` is how sessions here reach their worktree; follow a literal one.
-    while segments and segments[0][:1] == ["cd"]:
-        if len(segments[0]) != 2 or segments[0][1].startswith("-"):
-            return
-        cwd = os.path.realpath(os.path.join(cwd, segments.pop(0)[1]))
-        if not os.path.isdir(cwd):
-            return
-    commits = [s for s in segments if s[:2] == ["git", "commit"]]
-    if len(commits) != 1:
-        return
-    for s in segments:
-        if s is commits[0] or s[:2] == ["git", "add"] or s == ["npm", "run", "check:staged-revert"]:
-            continue
-        return
-    args = commits[0][2:]
-    paths, i, only = [], 0, False
-    while i < len(args):
-        arg = args[i]
-        if arg == "--":
-            paths.extend(args[i + 1:])
-            break
-        if arg in ("-m", "--message", "-F", "--file"):
-            i += 2
-            if i > len(args):
-                return
-            continue
-        if arg.startswith(("--message=", "--file=")) or (arg.startswith(("-m", "-F")) and len(arg) > 2):
-            i += 1
-            continue
-        if arg in ("--only", "-o"):
-            only = True
-        elif arg in ("--amend", "--no-edit", "--allow-empty", "--allow-empty-message", "--no-verify", "-n", "--quiet", "-q", "--verbose", "-v", "--signoff", "-s"):
-            pass
-        elif arg.startswith("-"):
-            return  # -a, -i, --dry-run, --interactive, etc.: let the backstop handle it
-        else:
-            paths.append(arg)
-        i += 1
-    if only and not paths:
-        return  # --only --amend carries no staged changes
+    cwd, paths = commit.cwd, commit.paths
 
     deadline = time.monotonic() + 26
     def run(argv, data=None, timeout=2, directory=None):
@@ -165,19 +114,8 @@ def main():
     # own refusal and could rewrite a different file from the path being committed.
     if paths:
         files = set()
-        added = set()
-        for s in segments[:segments.index(commits[0])]:
-            if s[:2] != ["git", "add"]:
-                continue
-            names = s[2:]
-            if names[:1] == ["--"]:
-                names = names[1:]
-            if any(n.startswith(("-", ":")) for n in names):
-                continue
-            added.update(os.path.relpath(os.path.abspath(os.path.join(cwd, n)), root) for n in names)
+        added = {os.path.relpath(a, root) for a in commit.added}
         for name in paths:
-            if name.startswith(":"):
-                return  # git pathspec magic is not a literal pathname
             relative = os.path.relpath(os.path.abspath(os.path.join(cwd, name)), root)
             if safe(relative) and (relative in added or git("ls-files", "-z", "--", relative)):
                 files.add(relative)
