@@ -730,6 +730,11 @@ describe("the one query that lists articles for nobody in particular", () => {
         /* The `catch`'s 5xx rule: `UNEXPECTED_FAILURE`, and `authoredSentence`
            deciding whether an error's message may reach the reader. Neither
            touches a store (plan 260924a § Stage 2c). */
+        /* The remote MCP route, `POST /api/mcp` (plan 261007p): its own gate,
+           dispatched before `requireUser` as the webhook is. It imports no store;
+           what it reaches after its gate is `handleApi` again, as the verified
+           administrator, which is handed to it rather than imported. */
+        "./mcp/remote.js",
         "./messages.js",
         "./monitoring.js",
         "./public/routes.js",

@@ -442,12 +442,20 @@ const EXPECTED = [
    * entitled to make.
    */
   { name: "SPIDERYARN_OWNER_ID", breaks: null },
+  /**
+   * **The one AI app whose OAuth tokens `POST /api/mcp` accepts** —
+   * src/mcp/remote.ts, plan 261007p. Unset is the shipped state and a
+   * deliberate one: the route then refuses everybody, so remote MCP is off
+   * until Greg registers the client and sets this. Hence `breaks: null`; an
+   * operator still wants to see at a glance whether it is on.
+   */
+  { name: "MCP_OAUTH_CLIENT_ID", breaks: null },
   /* **`SPIDERYARN_BASE_URL` was here for a few hours on 2026-09-07 and is
      not, and the reason is worth more than the entry was.** It is where
      Stripe returns a reader after Checkout, and the production table in
      docs/project/deployment.md lists it under "**must stay unset here**, and
      it is listed so nobody adds it" — production answers `PUBLIC_ORIGIN`
-     before it reads any variable (src/billing/checkout.ts:150), and a preview
+     before it reads any variable (src/site-origin.ts), and a preview
      falls back to `VERCEL_URL`. A line reporting a setting production is
      documented as forbidden to have is not neutral: it is an invitation to
      set it. It belongs to a developer's own machine, which is what it is.

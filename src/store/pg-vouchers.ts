@@ -82,7 +82,7 @@ const logger = log("store");
 
 /** The largest gift one voucher may carry. The table's check says the same. */
 export const VOUCHER_MAX_ARTICLES = 1000;
-/** The longest private note. The table's check says the same. */
+/** The longest private note the app accepts; the table's CHECK is a much higher ceiling. */
 export const VOUCHER_NOTE_MAX = 500;
 
 /**
@@ -701,11 +701,12 @@ function parseArticles(value: unknown): Parsed<number> {
 
 /**
  * A blank note is no note. The same rule for the private note and the note to
- * the recipient, which have the same limit in the table.
+ * the recipient. This is where their limit lives; the table's CHECK is a
+ * ceiling far above it that only catches a runaway (docs/project/sql.md §
+ * "Except a size limit").
  *
  * **Counted in code points**, as Postgres' `char_length` counts, not in UTF-16
- * units as `.length` does — so an emoji-heavy note the table would take is not
- * refused here, and one it would refuse is a 400 rather than a 500.
+ * units as `.length` does, so an emoji-heavy note is not refused early.
  */
 function parseNote(value: unknown, field: "note" | "recipientNote" = "note"): Parsed<string | null> {
   if (value === null) return { ok: true, value: null };

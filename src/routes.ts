@@ -325,6 +325,7 @@ import {
 import { NotProcessed } from "./not-processed.js";
 import { StillBeingAdded } from "./still-being-added.js";
 import { WEBHOOK_PATH, serveStripeWebhook } from "./billing/webhook.js";
+import { isRemoteMcpPath, serveRemoteMcp } from "./mcp/remote.js";
 import {
   confirmCheckout,
   openPortal,
@@ -527,8 +528,8 @@ const MAX_AUDIO_BODY_BYTES = MAX_AUDIO_BASE64 + 16 * 1024;
  * The second one, and the same argument as the first.
  *
  * A bug report may carry a screenshot the reader pasted in, which is a few
- * hundred kilobytes for flat UI and two megabytes at the ceiling the database
- * enforces — far past what the other routes need. So it is a parameter on `readBody` too, and
+ * hundred kilobytes for flat UI and two megabytes at `MAX_FEEDBACK_SCREENSHOT_BYTES`
+ * — far past what the other routes need. So it is a parameter on `readBody` too, and
  * `MAX_BODY_BYTES` stays where it is: widening the shared limit to admit one
  * caller gives away the thing the limit was for.
  *
@@ -7713,8 +7714,9 @@ function feedbackWhere(sent: Record<string, unknown>): {
      model output may become an `href` (src/urls.ts), reused here because the
      admin inbox renders this value and a `javascript:` string in an `href` is
      the whole of that bug. The length cap is the second question and it is
-     ours: the CHECK in src/db/schema.ts is the same 2048, and a value that
-     passed here and failed there would be a 500 on a valid report.
+     ours, and this is the only place that holds it: the CHECK in
+     src/db/schema.ts is a ceiling far above it that only catches a runaway
+     (docs/project/sql.md § "Except a size limit").
 
      What this deliberately does **not** ask is whether the address is one of
      ours. A reader can only pollute their own report by lying about where they
@@ -8349,6 +8351,20 @@ async function serveApi(
      */
     if (path === WEBHOOK_PATH) {
       await serveStripeWebhook(req, res, method);
+      return true;
+    }
+
+    /**
+     * **The MCP tools for an AI app, and the third thing before the gate** —
+     * plan 261007p. `requireUser` refuses an OAuth token everywhere (its
+     * `[auth-oauth-token]`), so this route checks its own: the same claims,
+     * plus the one client it accepts and the administrator only. Exact paths,
+     * like the webhook's. `handleApi` is handed in because each tool calls the
+     * routes below in-process, as the verified person, through this same
+     * function. src/mcp/remote.ts.
+     */
+    if (isRemoteMcpPath(path)) {
+      await serveRemoteMcp({ req, res, method, path, verify, handleApi });
       return true;
     }
 

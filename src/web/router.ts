@@ -313,6 +313,17 @@ export type Route =
    */
   | { kind: "callback" }
   /**
+   * **Where an AI app's sign-in asks you to agree** — `/oauth/consent`, the
+   * consent page Supabase's OAuth server sends the browser to with
+   * `?authorization_id=…`. OAuthConsentPage.tsx, and
+   * docs/plans/261007p-mcp-remote-sign-in-with-oauth.md.
+   *
+   * No payload: the id is read from the query string by the page, as `/login`
+   * reads `?next=`. Signed out, App.tsx sends the reader to `/login` with this
+   * whole address as `next`, so the id comes back with them.
+   */
+  | { kind: "oauth-consent" }
+  /**
    * **An address nobody minted** — `/asdf`, `/read/a/b`, `/privacy/cookies`.
    * See NotFoundPage.tsx, and docs/plans/260903j-not-found-page.md for the
    * decision it reverses.
@@ -390,6 +401,7 @@ const ADMIN_ONLY: Record<Route["kind"], boolean> = {
   help: false,
   opensource: false,
   callback: false,
+  "oauth-consent": false,
   "not-found": false,
 };
 
@@ -670,6 +682,8 @@ export const ADMIN_VOUCHERS_HREF = ADMIN_VOUCHERS_PATH;
 export const ADMIN_COSTS_HREF = ADMIN_COSTS_PATH;
 export const DESIGN_HREF = "/design";
 export const LOGIN_HREF = "/login";
+/** The consent page for an AI app's sign-in — the `oauth-consent` variant. */
+export const OAUTH_CONSENT_HREF = "/oauth/consent";
 /**
  * The sign-in page, told where to go afterwards and which tab to open on.
  *
@@ -862,6 +876,8 @@ const STATIC_ROUTES: readonly (readonly [string, BareRouteKind])[] = [
      nothing may reinterpret it. See the `callback` variant above. */
   [CALLBACK_HREF, "callback"],
   [LOGIN_HREF, "login"],
+  /* Top level and sharing a prefix with nothing, so order is indifferent to it. */
+  [OAUTH_CONSENT_HREF, "oauth-consent"],
   // Beside `design` and above `/read/` for the same reason: it is not about an
   // article, so the article regex must never get a chance at it.
   [PROFILE_HREF, "profile"],

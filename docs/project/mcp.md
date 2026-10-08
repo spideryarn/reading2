@@ -5,8 +5,10 @@ Up: [architecture.md](architecture.md)
 An **MCP server** gives an AI app (Claude Desktop, Cowork, Claude Code, or any MCP client) a set of
 named tools it may call. Spideryarn's runs **on your own computer**, signs in to Spideryarn as you,
 and calls the same `/api/…` routes the web app calls, so **it can do exactly what you can do and
-nothing more**: an admin's voucher tools work, anybody else's get the server's own 403. It changes
-nothing on the server. Built for report `spya-bkkjzy`, Greg's:
+nothing more**: an admin's voucher tools work, anybody else's get the server's own 403. Since
+2026-10-07 the same tools can also be served from the site itself, for Claude on the web or a phone;
+that version is built but switched off (§ From Claude on the web or a phone). Built for report
+`spya-bkkjzy`, Greg's:
 
 > I'd give it to Claude Co-work, and Claude Co-work would prompt an authentication into Spideryarn
 > … what would be even better would be if actually the MCP allows you to do whatever you were
@@ -100,7 +102,30 @@ that conversation too**, which the privacy page says
 ([privacy.md](privacy.md#an-administrators-ai-assistant-can-look-up-accounts)). Both came with
 [261007o](../plans/261007o-mcp-private-link-and-admin-user-tools.md).
 
-**Not there yet:** signing in from Cowork on the web or phone.
+## From Claude on the web or a phone (built, switched off)
+
+The same tools are also served at `https://www.spideryarn.com/api/mcp`, for an AI app that cannot
+start a program on your Mac. Claude signs in with OAuth: it sends you to `/oauth/consent`, you
+press *Allow*, and it gets a token from Supabase's OAuth server for your account
+([261007p](../plans/261007p-mcp-remote-sign-in-with-oauth.md)).
+
+- **Off until Greg switches it on.** It accepts only the token of the one AI app whose id is in
+  `MCP_OAUTH_CLIENT_ID`; unset, it refuses everyone. Before switching on, run the spike in
+  [261007p § What landed](../plans/261007p-mcp-remote-sign-in-with-oauth.md#what-landed-stage-1)
+  against the local stack: it has not been run against a real OAuth server. Switching on: Supabase dashboard,
+  Authentication → OAuth Server on (dynamic registration **off**) and Authentication → OAuth Apps,
+  one confidential app with redirect `https://claude.ai/api/mcp/auth_callback`; its id into Vercel
+  as `MCP_OAUTH_CLIENT_ID`; deploy; then in Claude, Settings → Connectors → *Add custom connector*,
+  the address above, *Use your own OAuth client*, its id and secret.
+- **Administrator only**, for now.
+- **The asking tools refuse there**: no dialog can be shown on your Mac from a server, so gifts,
+  publishing and private links are done in the Mac app or on the site.
+- **What the token can do at Supabase** is more than the tools, and is written up in
+  [security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route).
+
+The code is [`src/mcp/remote.ts`](../../src/mcp/remote.ts) (the route, the per-request server, the
+in-process API) and [`src/web/OAuthConsentPage.tsx`](../../src/web/OAuthConsentPage.tsx). It must
+stay out of the local server's imports: `tests/mcp-remote-import-graph.test.ts`.
 
 ## Where the code is
 

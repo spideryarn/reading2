@@ -102,6 +102,26 @@ describe("requireUser", () => {
     expect(await statusOf(requireUser(req("Bearer t"), says({ ...good, email: "" })))).toBe(401);
   });
 
+  /**
+   * **An AI app's OAuth token opens `/api/mcp` and nothing else** — plan
+   * 261007p § 3. Supabase puts `client_id` on every token it issues to an
+   * OAuth client and never on a browser session's, so its presence is what the
+   * ordinary gate refuses. Any value, even an empty or odd one: the claim being
+   * there at all says the token was not a browser's.
+   */
+  it("refuses a token issued to an OAuth client, whatever its client_id", async () => {
+    for (const client_id of ["9a3c3f8e-1b2c-4d5e-8f90-123456789abc", "", 42, null]) {
+      let thrown: unknown;
+      try {
+        await requireUser(req("Bearer t"), says({ ...good, client_id }));
+      } catch (err) {
+        thrown = err;
+      }
+      expect((thrown as { status?: number } | undefined)?.status, String(client_id)).toBe(401);
+      expect((thrown as Error).message).toMatch(/\[auth-oauth-token\]$/);
+    }
+  });
+
   it("returns the user for a good token", async () => {
     const user = await requireUser(req("Bearer t"), says(good));
     expect(user).toEqual({ id: SUB, email: ADMIN_EMAIL_LOCAL });

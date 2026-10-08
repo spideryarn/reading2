@@ -3246,6 +3246,9 @@ export const TEST_LANES: Readonly<Record<string, TestLane>> = {
      and the public reads with a key. The bucket is a temp directory, mocked at
      the `blobStore()` selector as `asset-route` mocks it. */
   "tests/share-link-pg.test.ts": "private-postgres",
+  /* Plan 261007p: the MCP tools at `POST /api/mcp`, through `handleApi` and
+     the SDK's client, reading two seeded articles through the library route. */
+  "tests/mcp-remote.test.ts": "private-postgres",
   /* Plan 261007f, E14 to E16: two seeded readers who hold the same article,
      through the real billing, upload, share-link and public routes. The bucket
      is a temp directory, mocked as `share-link-pg` mocks it, and the upload
@@ -3615,6 +3618,12 @@ export const OWNER_AUDIT: Readonly<Record<string, Readonly<Record<string, OwnerV
   },
   /* Plan 261005l. `seedAuthUser` in `beforeAll`: its jobs spend real ingest
      reservations, which hang off the `auth.users` foreign key. */
+  /* Plan 261007p. `seedAuthUser` in `beforeAll`: a second reader who owns an
+     article the administrator's tools must not see, and who is refused at
+     `/api/mcp` for not being the administrator. */
+  "tests/mcp-remote.test.ts": {
+    "00000000-0000-4000-8000-00000000b0b0": { kind: "seeded" },
+  },
   "tests/a-paper-queued-before-the-resolver.test.ts": {
     "0b111a99-0000-4000-8000-0000a2c51d01": { kind: "seeded" },
   },

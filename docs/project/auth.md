@@ -366,6 +366,9 @@ on 2026-08-27. What is actually true:
 **There is no allowlist.** Greg's call, twice — *"We can get rid of the allowlist once we've added
 authentication. I'll accept the risk."* `requireUser` in [`src/auth.ts`](../../src/auth.ts) admits
 anybody Supabase will vouch for, and a comment there marks the one place a narrower check would go.
+The one token it refuses is an AI app's OAuth token, which carries a `client_id` and is for
+`/api/mcp` alone (since 2026-10-07,
+[security-map.md](security-map.md#and-since-2026-10-07-an-ai-apps-token-which-opens-one-route)).
 (Until 2026-10-04 that place held an `isAllowed()` that returned `true`, in front of a 403 nothing
 could reach.)
 

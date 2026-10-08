@@ -12,5 +12,7 @@ phone the only one that keeps its name, so you can always find your way out.
 
 ## Reading it
 
+![A paragraph of an essay in Plain, with Millikan underlined with orange dots three times](../images/mode-plain.png "Plain: just the article. Glossary terms keep their orange dots; point at one to read its definition.")
+
 One thing carries over: once an article has a glossary, its terms stay underlined with orange dots
 in Plain. Point at one to read its definition without opening anything.

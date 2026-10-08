@@ -3632,6 +3632,25 @@ export const NOT_FOUND_TO_SHELF = "Go to your shelf";
  */
 export const NOT_FOUND_TO_HOME = "Go to the home page";
 
+/* ── An AI app's sign-in: the consent page ──────────────────────────────────
+   OAuthConsentPage.tsx. Browser-only, like the `st-` and `mic-` families: no
+   job stores them and `kindOfMessage` never reads them, so they are not in
+   `CODE_KINDS`. docs/plans/261007p-mcp-remote-sign-in-with-oauth.md. */
+
+/** `/oauth/consent` with no `authorization_id`: nothing to agree to. */
+export const OAUTH_NO_REQUEST =
+  "This page needs a sign-in request from the app that sent you, and the address has none. " +
+  "Start again from the app. [oauth-no-request]";
+
+/**
+ * Supabase would not say what the request is, or would not take the answer.
+ * Usually a request that has expired or was already used; Supabase's own words
+ * are not shown, for copy.md's rule 4.
+ */
+export const OAUTH_FAILED =
+  "We couldn't complete this sign-in request. It may have expired or already been used; " +
+  "start again from the app. [oauth-failed]";
+
 /* ── The shelf of public articles ──────────────────────────────────────────── */
 
 /**

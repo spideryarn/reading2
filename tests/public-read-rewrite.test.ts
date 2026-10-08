@@ -32,6 +32,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { MCP_METADATA_PATH, MCP_WELL_KNOWN_PATH } from "../src/mcp/remote.js";
 import { decidePublicPage } from "../src/public/page.js";
 import { BAND_MODES, DEFAULT_MODE, MODES } from "../src/modes.js";
 import { redirectsToMetadata, viewFor } from "../src/read-address.js";
@@ -152,6 +153,25 @@ describe("vercel.json's rewrites", () => {
     /* The API keeps its own rule, ahead of the catch-all that excludes it. */
     expect(routedBy("/api/library")).toBe("/api/(.*)");
     expect(routedBy("/api/public/article/some-article")).toBe("/api/(.*)");
+  });
+});
+
+/**
+ * **Where an MCP client looks for `/api/mcp`'s metadata, RFC 9728** — plan
+ * 261007p, Sol's F4. The well-known address is outside `/api/`, so the SPA
+ * catch-all would answer it with the app's HTML unless a rule above it sends
+ * it to the function — and to a concrete `__spy_path`, not to a second rewrite
+ * that might or might not run after this one.
+ */
+describe("the MCP resource-metadata rewrite", () => {
+  it("sends the well-known address to the function, ahead of the SPA catch-all", () => {
+    expect(routedBy(MCP_WELL_KNOWN_PATH)).toBe(MCP_WELL_KNOWN_PATH);
+    const rule = config.rewrites.find((r) => r.source === MCP_WELL_KNOWN_PATH);
+    expect(rule?.destination).toBe("/api/index?__spy_path=mcp/resource-metadata");
+    /* And the function puts back exactly the path src/routes.ts dispatches on. */
+    expect(originalUrl(rule?.destination ?? "")).toBe(MCP_METADATA_PATH);
+    /* `/api/mcp` itself needs nothing new: the API rule already has it. */
+    expect(routedBy("/api/mcp")).toBe("/api/(.*)");
   });
 });
 
