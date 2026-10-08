@@ -41,6 +41,7 @@ const EXPORTED_ARTICLE = path.join(DATA_ROOT, SLUG);
 const LEARN_THREAD = "spya-kndb23";
 const HINTED_ANSWER = "spya-kndm23";
 const HINT_OPENED_AT = "2026-10-04T09:30:00.000Z";
+const CHAT_GIST = "The chat covered the paper's three main confounds";
 
 await pgReady({
   suite: "tests/store-export-thread-kind.test.ts",
@@ -68,6 +69,7 @@ describe("db:export and a conversation's kind", () => {
         ownerId: owner,
         title: kind,
         kind,
+        ...(kind === "chat" ? { gist: CHAT_GIST } : {}),
         createdAt: at,
         updatedAt: at,
       })),
@@ -134,6 +136,20 @@ describe("db:export and a conversation's kind", () => {
       { title: "learn", kind: "learn" },
       { title: "tutorial", kind: "tutorial" },
     ]);
+  });
+
+  it("exports and restores a conversation gist", async () => {
+    const file = JSON.parse(await readFile(path.join(EXPORTED_ARTICLE, "chat.json"), "utf8")) as {
+      threads: ChatThread[];
+    };
+    expect(file.threads.find((thread) => thread.kind === "chat")?.gist).toBe(CHAT_GIST);
+
+    /* The kind test above restored the exported file into these rows. */
+    const restored = await getDb()
+      .select({ kind: chatThreads.kind, gist: chatThreads.gist })
+      .from(chatThreads)
+      .where(eq(chatThreads.articleId, ARTICLE_ID));
+    expect(restored.find((thread) => thread.kind === "chat")?.gist).toBe(CHAT_GIST);
   });
 
   it("exports when a Recall hint was opened, and restores it", async () => {

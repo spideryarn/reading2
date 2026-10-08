@@ -341,7 +341,7 @@
   /* **And the way-back chip's room at its foot.** The chip (dock.css § the way
      back) stands at the band's right edge plus a gutter, which is the window's
      left edge here: it lay over the band's last row, and in Chat that row is
-     the composer — at 390px it hid the start of the input box (plan 261008e).
+     the composer — at 390px it hid the start of the input box (plan 261008f).
      `--return-chip-h` is 0 with no chip, so this costs nothing otherwise, and
      it is the chip's whole room, gap below included, so the foot clears the
      chip's top. Padding rather than a raised `bottom`, so the strip under the

@@ -47,13 +47,13 @@ only way back for a home-screen reader, and the guide opening a mode is exactly 
   beside the article, padding 0, and the composer's rect is identical with and without the chip.
   Glossary at 390, scrolled to the end: last row 747.7, chip top 753.2.
 
-  ![Chat with the chip, 390px](261008e-shot-1-chat-with-chip-390.png)
-  ![Chat, chip dismissed, 390px](261008e-shot-2-chat-no-chip-390.png)
-  ![820px](261008e-shot-3-chat-with-chip-820.png)
-  ![1440px](261008e-shot-4-chat-with-chip-1440.png)
-  ![Glossary's end with the chip, 390px](261008e-shot-5-glossary-end-with-chip-390.png)
+  ![Chat with the chip, 390px](261008f-shot-1-chat-with-chip-390.png)
+  ![Chat, chip dismissed, 390px](261008f-shot-2-chat-no-chip-390.png)
+  ![820px](261008f-shot-3-chat-with-chip-820.png)
+  ![1440px](261008f-shot-4-chat-with-chip-1440.png)
+  ![Glossary's end with the chip, 390px](261008f-shot-5-glossary-end-with-chip-390.png)
 
-## Code review (GPT Sol, write-capable) — [261008e-code-review-sol.md](261008e-code-review-sol.md)
+## Code review (GPT Sol, write-capable) — [261008f-code-review-sol.md](261008f-code-review-sol.md)
 
 The covering selector beats the per-mode padding rules, including Structure's rules loaded later.
 The covering guard restores `--dock-bottom` to `--dock-space` and `--hint-now` to `--hint-h`, so

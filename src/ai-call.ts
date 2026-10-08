@@ -928,6 +928,21 @@ export const AI_JOB_ROUTE: Record<RoutedJob, Route> = {
       allow_fallbacks: true,
     },
   },
+  /* **A conversation's one-line gist** (src/chat-gist.ts). `title-tidy`'s
+     route, copied for a sharper reason: what it sends is the reader's own
+     conversation, so every endpoint is a zero-retention one. A refusal costs
+     the gist and nothing else: the index shows the title alone. */
+  "chat-gist": {
+    path: "/v1/chat/completions",
+    wire: "chat",
+    provider: {
+      order: ["fireworks", "deepinfra", "together"],
+      only: ["fireworks", "deepinfra", "together"],
+      zdr: true,
+      require_parameters: true,
+      allow_fallbacks: true,
+    },
+  },
   embeddings: { path: "/v1/embeddings", wire: "embeddings", provider: {} },
   /* **Forbids fallback — and my first reason for it was wrong.** I wrote that a
      silent fallback would substitute a different *model*; GPT Sol corrected it:
@@ -1178,6 +1193,9 @@ export const CHAT_REASONING: Record<ChatJob, ReasoningDecision> = {
      the eval ran at:
      docs/investigations/261005b-title-tidying-rule-against-a-small-model.md. */
   "title-tidy": { effort: "none" },
+  /* One line describing a conversation. Nobody waits on it, but thinking
+     would spend the 300-token ceiling before the answer began. */
+  "chat-gist": { effort: "none" },
   /* Copying two words out of one sentence needs no thinking, and the reader
      is watching the bar. The setting every chat arm of the eval ran at, with
      no reasoning token spent on any of 600 answers

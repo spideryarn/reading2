@@ -472,6 +472,19 @@ export const READING_DIFFICULTY_MODEL = "deepseek/deepseek-v4.1-flash";
 export const TITLE_TIDY_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
+ * **What writes the one-line gist of a conversation** after each answer, so a
+ * later conversation about the same article can see what an earlier one
+ * covered (src/chat-gist.ts, plan
+ * docs/plans/261008e-chat-knows-the-reader-s-other-conversations.md). Greg,
+ * 2026-10-08: *"auto-generate a descriptive title for each chat thread with a
+ * small model after each response"*. The same cheap model as
+ * `PAPER_METADATA_MODEL` above, on a copy of its zero-retention route
+ * (`chat-gist` in src/ai-call.ts): what it reads is the reader's own
+ * conversation. Its own constant for the reason the two above have theirs.
+ */
+export const CHAT_GIST_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
  * **What scores every block for a quick search** — TypeSafe's Jev, a "decision"
  * model that answers typed questions with probabilities rather than writing
  * text (src/quick-search.ts, docs/plans/261002e-quick-search-v1.md). One `noul`
@@ -933,6 +946,9 @@ export type NonTaskAiJob =
   /* **An imported title, lightly tidied** — src/title-tidy-model.ts, on
      `TITLE_TIDY_MODEL` below. */
   | "title-tidy"
+  /* **A conversation's one-line gist**, written after each answer —
+     src/chat-gist.ts, on `CHAT_GIST_MODEL` below. */
+  | "chat-gist"
   /* ***Dig deeper*'s answer** — `explainStream` with a press's findings
      (src/dig-deeper.ts, plan 261001p). Not a `Task`, deliberately: its model
      is not a tier decision and must not be overridable. It is always the
@@ -1477,6 +1493,8 @@ export const AI_JOB_WIRE: Record<AiJob, Wire> = {
   "reading-difficulty": "chat",
   /* A strict JSON schema back, on chat/completions. src/title-tidy-model.ts. */
   "title-tidy": "chat",
+  /* A strict JSON schema back, on chat/completions. src/chat-gist.ts. */
+  "chat-gist": "chat",
   /* Explain's wire: it is an explain call with a different job name. */
   "dig-deeper": "chat",
   dictation: "transcription",
@@ -1714,6 +1732,7 @@ export const NON_TASK_MODELS: readonly {
   { job: "paper-metadata", id: PAPER_METADATA_MODEL, provider: "openrouter" },
   { job: "reading-difficulty", id: READING_DIFFICULTY_MODEL, provider: "openrouter" },
   { job: "title-tidy", id: TITLE_TIDY_MODEL, provider: "openrouter" },
+  { job: "chat-gist", id: CHAT_GIST_MODEL, provider: "openrouter" },
   { job: "search-quick", id: QUICK_SEARCH_MODEL, provider: "openrouter" },
   { job: "command-pick", id: COMMAND_PICK_MODEL, provider: "openrouter" },
   { job: "command-pick-words", id: QUICK_MODEL_OPENROUTER, provider: "openrouter" },

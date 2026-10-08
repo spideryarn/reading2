@@ -6,7 +6,7 @@
  * which is the window's left edge when the band covers the article. The band's
  * last row is its foot, and in Chat that is the composer: on 2026-10-08 the
  * chip sat over the start of the input box on the Guide thread at 390px
- * (seen in plan 261008c, fixed in 261008e). So the covering band keeps
+ * (seen in plan 261008c, fixed in 261008f). So the covering band keeps
  * `--return-chip-h` free at its foot, the room the offline strip and the
  * herald already read.
  *

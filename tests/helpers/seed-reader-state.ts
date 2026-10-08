@@ -287,6 +287,10 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
       id: thread.id,
       ownerId,
       title: thread.title,
+      /* The rollback's conversation index memory. Like every named field in
+         this hand-written restore, omission would silently turn a successful
+         export/import into data loss. */
+      gist: thread.gist ?? null,
       createdAt: new Date(thread.createdAt),
       updatedAt: new Date(thread.updatedAt),
       /* `"quote" in anchor` rather than `anchor.quote`: the union's block-only

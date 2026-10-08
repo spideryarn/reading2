@@ -311,13 +311,10 @@ facts in these docs **are** rules, and the sentence stating a rule is the rule.
 
 These are queued by definition — they are documents, and the document is the authorisation.
 
-**And three that keep this session moving.** The queue pacer (twice an hour), the 3-hourly
-feedback-and-deploy check, and a daily renewal of both, are scheduled jobs in this Claude session,
-not in the daemon. A recurring one is deleted 7 days after it is made, which is how the pacer
-silently stopped on 2026-10-07 and production went 17 hours undeployed; the renewal recreates all
-three daily, itself included. Their text, and what to do after a restart:
-[`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md). Each
-pacer tick writes `~/.overseer/pacer-heartbeat`.
+**The ones that wake this session are not the daemon's.** After any restart of the session, or if
+`CronList` is empty, open
+[`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md): without
+them nothing paces the queue or deploys, and nothing says so.
 
 **Two of them are built and switched off.** `get-ready-to-deploy` and the feedback sweep are defined
 as data in [`tools/overseer/standing-jobs.ts`](../../tools/overseer/standing-jobs.ts) and dispatched
@@ -423,7 +420,7 @@ recurring form.
 
 ### The tick
 
-Every half hour or so — the queue pacer job is what wakes you for it ([§ The standing jobs](#the-standing-jobs); if `CronList` is empty, recreate them first) — in this order; the first two need no model, the last one spends:
+Every half hour or so (what wakes you for it: [§ The standing jobs](#the-standing-jobs)), in this order; the first two need no model, the last one spends:
 
 1. **Usage and load first.** `npx tsx scripts/overseer.ts usage`, with the cache's age. The account is
    shared and exhaustion freezes you too, so pause **early enough that the five-hour window lasts until

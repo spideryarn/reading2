@@ -1,35 +1,43 @@
-Code review (write-capable: fix what you find inside this change, report anything wider) of a small CSS fix in /var/tmp/spideryarn-worktrees/chat-phone-guide-chip.
+# Code review: 261008e, Chat knows the reader's other conversations
 
-Bug: at phone width (390px), when the mode band covers the article (`.reader.band-covers .mode-band`), the way-back chip (`.return-chip`, drawn by src/web/ReturnChip.tsx or src/web/BandBackChip.tsx; positioned in src/web/styles/dock.css § `.return-chip`, with `--return-chip-h` set by `:root:has(.return-chip)`) sat over the band's last row — in Chat, the composer's input box.
+You are reviewing built code in the Spideryarn repo (this worktree), before it is pushed. You may
+edit files to fix what you find **inside this change's scope**; report anything wider for me to
+decide. Do not commit, do not run git commands that change history or the index, do not touch
+`.env.local`, and do not run anything against a remote database.
 
-Fix: `padding-bottom: var(--return-chip-h)` on `.reader.band-covers .mode-band` in src/web/styles/narrow-window.css. Plan: docs/plans/261008e-the-way-back-chip-covers-chat-s-input-on-a-phone.md. Test: tests/the-way-back-chip-clears-a-covering-band-in-chrome.test.ts (red before, green after; run `npx vitest run <file>`).
+Read first:
+- the plan, `docs/plans/261008e-chat-knows-the-reader-s-other-conversations.md` (your own plan
+  review is `docs/plans/261008e-plan-review-sol.md`; check each of its points was handled as the
+  plan says);
+- the diff, `docs/plans/261008e-code-review.diff` (scoped to src/, tests/, evals/ and the
+  migration). The doc changes are in `docs/project/chat-tools.md` and `docs/project/setup-dev.md`.
 
-Please check:
-1. Does any other rule override padding on the covering band (specificity, per-mode `.mode-band` rules, `:where()` guards in narrow-window.css/shell.css) so the padding is lost in some mode? Check each mode's top-level band children, e.g. modes whose root inside .mode-band does not shrink (min-height, fixed heights) and would overflow into the padding.
-2. The geometry: the chip's bottom is `--dock-space + --hint-h + 0.75rem`; the band's bottom is `max(--dock-bottom, --safe-bottom) + --hint-now`. Under band-covers a guard forces --dock-bottom/--hint-now to the resting values. Is padding of exactly --return-chip-h enough in every state (iOS keyboard via --kb-inset, install hint, safe-area)? Note the chip doesn't move with --kb-inset.
-3. The herald (`.reader.band-covers .mode-herald-slot` in mode-band.css, and `footRoom` in src/web/ModeHerald.tsx) — does the herald now double-count or misplace? Fix the comment there if it is now stale.
-4. Is the test honest (would it pass for nothing)?
-5. Anything the plan doc says that is wrong.
+Then check against the code, numbered findings with file:line, most severe first:
 
-Diff:
-diff --git a/src/web/styles/narrow-window.css b/src/web/styles/narrow-window.css
-index bb43b65d0..2a37ef2bb 100644
---- a/src/web/styles/narrow-window.css
-+++ b/src/web/styles/narrow-window.css
-@@ -338,6 +338,16 @@
-   right: var(--safe-right);
-   width: auto;
-   border-right: none;
-+  /* **And the way-back chip's room at its foot.** The chip (dock.css § the way
-+     back) stands at the band's right edge plus a gutter, which is the window's
-+     left edge here: it lay over the band's last row, and in Chat that row is
-+     the composer — at 390px it hid the start of the input box (plan 261008e).
-+     `--return-chip-h` is 0 with no chip, so this costs nothing otherwise, and
-+     it is the chip's whole room, gap below included, so the foot ends where the
-+     chip begins. Padding rather than a raised `bottom`, so the strip under the
-+     foot is the band's ground and not the article showing through.
-+     tests/the-way-back-chip-clears-a-covering-band-in-chrome.test.ts. */
-+  padding-bottom: var(--return-chip-h);
- }
- 
- /* **And the article's masthead goes while a mode is open.**
+1. `streamChat` in `src/routes.ts`: the gist is awaited after the `finally` (after `release()` and
+   `res.end()`). Is that right in every path — success, error, client disconnect, stop, a superseded
+   attempt? Can it delay or break anything (the next turn, the stream key, Vercel, the dev server,
+   tests that count requests)? Does its model call land on the ledger in request scope as claimed
+   (`src/ai-spend.ts`, `src/vercel.ts`)?
+2. `chatStore.setGist` in `src/store/pg-chat.ts`: the millisecond compare-and-set. Is the
+   `date_trunc('milliseconds', updated_at) = basedOn` comparison sound given how `updatedAt` is
+   read back (node-postgres → JS Date → ISO)? Rounding vs truncation? Time zones? Any write path
+   that changes the transcript without bumping `updated_at`?
+3. `refreshGist`: the "this turn's answer landed" check; owner scope after the response.
+4. `src/chat-gist.ts`: the prompt, parsing, caps, the fence, `answerAsSeen`; anything a hostile
+   transcript could do.
+5. `src/reader-notes.ts`: `indexRow`'s gist and `lastAsked` fallback, `otherConversationsSection`,
+   the raised `THREADS_CHARS` — does any hard-budget promise in that file's header or in
+   `readerNotesDigest` (Explore's digest, `READER_NOTES_CHARS`) now break? Tests that pin these.
+6. `src/converse.ts`: `othersSection` placement below the cache breakpoint; the new SYSTEM bullet
+   and the tool description wording (`src/chat-tools.ts`) — would they make the model open
+   conversations too eagerly, or contradict another rule in SYSTEM?
+7. Registrations: `chat-gist` in every table it must be in (models.ts, ai-call.ts, cost-categories.ts,
+   plain-words.ts, `NON_TASK_MODELS`), the export (`src/store/export.ts`, `export-bundle.ts`), and
+   anything else that enumerates `chat_threads` columns or `ChatThread` fields.
+8. Tests: are they testing the real thing; is anything important untested?
+
+Run `npm run typecheck` and the touched suites (`npx vitest run tests/chat-gist.test.ts
+tests/chat-gist-store.test.ts tests/reader-notes-tool.test.ts tests/explore-digest-route.test.ts
+tests/chat-tools.test.ts tests/plain-words-coverage.test.ts`) after any fix. List every file you
+changed and why. End with a one-line verdict: SHIP / SHIP AFTER MY FIXES / DO NOT SHIP.
