@@ -60,12 +60,15 @@ ALTER TABLE "spideryarn"."import_records"
 -- src/job-state.ts. `steps` is an array of OBJECTS, so the containment is
 -- `[{"name":"fetch"}]`; `'["fetch"]'` matches nothing (docs/project/sql.md).
 --
--- Security invoker: the app role has insert on every spideryarn table by
--- default privileges. `SET search_path = ''` and every name qualified, as
--- `ingest_events_freeze_article_price`.
+-- SECURITY DEFINER: recording diagnostics must not make a job unable to end
+-- because the runtime role's grant on a newly-created table drifted. The
+-- function is owned by the migration role, has an empty search path, and every
+-- name is qualified. PUBLIC loses EXECUTE after the trigger is created; trigger
+-- execution does not require the updating role to retain it.
 CREATE OR REPLACE FUNCTION "spideryarn"."jobs_record_import"()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
@@ -104,4 +107,6 @@ $$;--> statement-breakpoint
 
 CREATE TRIGGER "jobs_record_import"
   AFTER INSERT OR UPDATE OF "status" ON "spideryarn"."jobs"
-  FOR EACH ROW EXECUTE FUNCTION "spideryarn"."jobs_record_import"();
+  FOR EACH ROW EXECUTE FUNCTION "spideryarn"."jobs_record_import"();--> statement-breakpoint
+
+REVOKE ALL ON FUNCTION "spideryarn"."jobs_record_import"() FROM PUBLIC;

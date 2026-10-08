@@ -3087,10 +3087,12 @@ export const jobs = spideryarn.table(
  *
  * **Written by a trigger, `jobs_record_import`**, never by the application —
  * four code paths move a job into a terminal status and only two pass through
- * `noteEnded` (drizzle/20261008193827_import_records.sql). An import is a job
- * whose steps include `fetch`, as `isImportJob` (src/job-state.ts) says. One
- * row is the **first** terminal ending of one job id; Retry makes a new job and
- * so a new row.
+ * `noteEnded` (drizzle/20261008193827_import_records.sql). The trigger is a
+ * narrowly qualified security-definer so a missing runtime-role grant on this
+ * auxiliary table cannot stop the job's own ending; PUBLIC cannot execute the
+ * function. An import is a job whose steps include `fetch`, as `isImportJob`
+ * (src/job-state.ts) says. One row is the **first** terminal ending of one job
+ * id; Retry makes a new job and so a new row.
  *
  * **Never trimmed. Deleted with the article** — `deleteTerminalJobs`
  * (src/store/pg-shelf.ts) takes the owner's rows for the slug with its jobs.

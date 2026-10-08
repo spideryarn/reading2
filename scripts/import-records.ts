@@ -106,7 +106,7 @@ export function origin(row: Pick<RecordRow, "url" | "upload_filename">): string 
   return row.upload_filename !== null ? "(upload)" : "-";
 }
 
-/** One line per record, newest first. Never the address or the error sentence. */
+/** One line per record, newest first. Never the address, slug or error sentence. */
 export function formatList(rows: RecordRow[]): string[] {
   if (rows.length === 0) return ["  (none)"];
   return rows.map((r) =>
@@ -116,7 +116,6 @@ export function formatList(rows: RecordRow[]): string[] {
       (r.failed_step ?? "-").padEnd(10),
       (r.failure_kind ?? "-").padEnd(12),
       r.job_id,
-      r.slug,
       origin(r),
     ].join("  "),
   );

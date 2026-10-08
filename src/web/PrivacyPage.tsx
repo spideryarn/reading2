@@ -55,7 +55,7 @@ import { pageTitle, useDocumentTitle } from "./page-title.js";
  * can honestly promise: there is no changelog, no diff view and nobody to email
  * about a wording change during a beta. Bump it when you change the words.
  */
-const LAST_UPDATED = "7 October 2026";
+const LAST_UPDATED = "8 October 2026";
 
 /**
  * A heading and its paragraphs. Eight of them; nothing else on the page.

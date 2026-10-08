@@ -124,6 +124,36 @@ afterAll(async () => {
 });
 
 describe("the trigger that records an import's ending", () => {
+  it("runs with its owner's privilege, while its hand-written keys keep ownership aligned", async () => {
+    const functionShape = await pool.query<{ security_definer: boolean; anon_can_execute: boolean }>(
+      `select p.prosecdef as security_definer,
+              has_function_privilege('anon', p.oid, 'execute') as anon_can_execute
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'spideryarn' and p.proname = 'jobs_record_import'`,
+    );
+    expect(functionShape.rows).toEqual([{ security_definer: true, anon_can_execute: false }]);
+
+    const [event] = await getDb()
+      .insert(ingestEvents)
+      .values({ ownerId: OWNER, slug: SLUG })
+      .returning({ id: ingestEvents.id });
+    await expect(
+      pool.query(
+        `insert into spideryarn.import_records
+           (job_id, owner_id, slug, status, ingest_event_id, steps, created_at)
+         values ($1, $2, $3, 'error', $4, '[]'::jsonb, now())`,
+        [mintId(), OTHER, SLUG, event!.id],
+      ),
+    ).rejects.toThrow(/import_records_ingest_event_fk/);
+
+    const id = await givenJob({ status: "queued", steps: FAILED_AT_FETCH, owner: OTHER });
+    await setStatus(id, "error");
+    await getDb().delete(jobs).where(eq(jobs.id, id));
+    await pool.query("delete from auth.users where id = $1", [OTHER]);
+    expect(await recordsFor(id)).toEqual([]);
+  });
+
   it("records a failed import: where it came from, the step, the error, every step", async () => {
     /* Queued rather than running: `jobs_running_is_fenced` wants an attempt
        and a lease, and any non-terminal status is the same "before" here. */
@@ -274,6 +304,7 @@ describe("scripts/import-records.ts", () => {
       const listed = formatList(failures).join("\n");
       expect(listed).toContain(id);
       expect(listed).toContain("example.com");
+      expect(listed).not.toContain(SLUG);
       expect(listed).not.toContain("token=abc");
       expect(listed).not.toContain(ERROR);
 

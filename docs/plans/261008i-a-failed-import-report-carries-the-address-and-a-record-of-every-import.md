@@ -97,12 +97,12 @@ Columns, copied from the job at the moment it ended:
 
 **Written by a trigger on `jobs`, not by the application.** `AFTER INSERT OR UPDATE OF status`,
 firing when `NEW.status` is terminal and (on update) `OLD.status` was not, and the steps contain
-`fetch`; `insert … on conflict (job_id) do nothing`. Security invoker (the app role already has
-insert on every `spideryarn` table by default privileges), `SET search_path = ''`, every name
-schema-qualified, as `ingest_events_freeze_article_price`. Why a trigger: four code paths move a
-job into a terminal status (`settlingIfTerminal`, `requestCancel`, `settleExpired`'s sweep,
-`settleIn` — listed in pg-shelf.ts), and `noteEnded` is on only two of them. A rule in one of them
-is not a rule. A trigger also catches a hand-run repair.
+`fetch`; `insert … on conflict (job_id) do nothing`. A narrowly scoped security-definer function,
+with public execution revoked: a missing runtime-role grant must not stop a job ending, while
+`SET search_path = ''` and fully qualified names keep the elevated function closed. Why a trigger:
+four code paths move a job into a terminal status (`settlingIfTerminal`, `requestCancel`,
+`settleExpired`'s sweep, `settleIn` — listed in pg-shelf.ts), and `noteEnded` is on only two of them.
+A rule in one of them is not a rule. A trigger also catches a hand-run repair.
 
 **One record is the first terminal ending of one job id.** Retry makes a new job, so it is a new
 record. A job that a hand repair moves terminal → queued → terminal keeps its first record; tested
@@ -138,9 +138,10 @@ npx tsx scripts/import-records.ts --all           # successes and cancels too
 npx tsx scripts/import-records.ts <job-id>        # one record in full: url, file, error, every step
 ```
 
-Local by default? No — its purpose is production; `--local` reads `DATABASE_URL` instead, which is
-also how its test runs. The list omits the error sentence and the full address (host only), since a
-list is the thing that gets pasted around; one job in full shows everything.
+There is no local command-line mode: its purpose is production. The test hands `readRecords` its
+own test-database connection instead, so the production target selection is not weakened for a test
+seam. The list omits the error sentence, slug and full address (host only), since a list is the thing
+that gets pasted around; one job in full shows everything.
 
 debugging.md § *Something is wrong in production* gains a fourth row (*the database: an import that
 failed — kept for good*), and ingest-queue.md gets a section, *The record of every import*, which
@@ -189,7 +190,8 @@ anywhere else.
   owner's. Plus one end-to-end case through `enqueue` (a fetch that fails offline, as
   `tests/owner-jobs.test.ts` does) so the real path is seen to write it.
 - `tests/import-report.test.ts`: the error cut at 2,000 characters.
-- the script: its pure formatting, and the `--local` read against the test database.
+- the script: its pure formatting, and `readRecords` against the test database through an injected
+  connection.
 
 ## Security
 
@@ -216,4 +218,3 @@ that is a privacy change, and the privacy page says it.
    wanted.
 7. **Migration shape and an unbounded prefill** — taken: an ordinary generated migration with the
    FKs and trigger appended by hand, and the error cut at 2,000 characters.
-
