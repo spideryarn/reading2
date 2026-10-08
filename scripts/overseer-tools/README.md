@@ -14,6 +14,7 @@ export OVERSEER_SCRATCH=/path/to/the/overseer/working/directory
 
 | Script | What it does |
 | --- | --- |
+| `standing-jobs.md` | Not a script: the exact text of the Overseer session's three scheduled jobs (pacer, 3-hourly check, daily renewal), to recreate after any restart. |
 | `tick.sh` | The half-hourly tick's screen: `overseer.ts tick`, usage, the pause state, sessions stuck on a dialog or an API error, and whether the watchdog and tidy timers are running. |
 | `queue-status.sh` | `fb*` sessions that are waiting or started, then memory, swap, load and free disk. |
 | `release.sh SESSION...` | Ends a `gjd-remote --wait` early so Claude starts now, thirty seconds apart. |

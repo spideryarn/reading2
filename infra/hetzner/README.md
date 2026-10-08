@@ -513,6 +513,11 @@ value is written here or anywhere in the repo; each line names where one lives.
    `npx tsx scripts/tmux-job.ts env OVERSEER_SCRATCH=<dir> bash scripts/overseer-tools/feedback-sweep-loop.sh`.
    Check each loop's log under `logs/tmux-jobs/` a minute later; a loop that could not find its
    directory has already exited.
+   **Then create the session's three scheduled jobs** (the queue pacer, the 3-hourly check and
+   their daily renewal) from
+   [`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md),
+   exactly as written. They live only in that Claude session's memory, so every restart of the
+   session needs this step; `CronList` should show three.
 10. **Only if somebody needs to watch the browser**: `start-vnc`
     ([Watching the browser](#watching-the-browser)). Nothing starts it at boot.
 

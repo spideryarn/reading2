@@ -311,6 +311,14 @@ facts in these docs **are** rules, and the sentence stating a rule is the rule.
 
 These are queued by definition — they are documents, and the document is the authorisation.
 
+**And three that keep this session moving.** The queue pacer (twice an hour), the 3-hourly
+feedback-and-deploy check, and a daily renewal of both, are scheduled jobs in this Claude session,
+not in the daemon. A recurring one is deleted 7 days after it is made, which is how the pacer
+silently stopped on 2026-10-07 and production went 17 hours undeployed; the renewal recreates all
+three daily, itself included. Their text, and what to do after a restart:
+[`scripts/overseer-tools/standing-jobs.md`](../../scripts/overseer-tools/standing-jobs.md). Each
+pacer tick writes `~/.overseer/pacer-heartbeat`.
+
 **Two of them are built and switched off.** `get-ready-to-deploy` and the feedback sweep are defined
 as data in [`tools/overseer/standing-jobs.ts`](../../tools/overseer/standing-jobs.ts) and dispatched
 by the daemon's scheduler — but only when `OVERSEER_JOBS_ENABLED=1`, which nothing in
