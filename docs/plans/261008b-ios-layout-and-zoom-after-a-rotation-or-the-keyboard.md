@@ -1,6 +1,6 @@
 # iOS layout and zoom after a rotation, or after the keyboard
 
-**Status:** planned, 2026-10-08; revised after GPT Sol's plan review (RETHINK, § The fix). From Greg's report `spya-gxbwug` (#479, SPIDERYARN-READING2-EP, an
+**Status:** built, 2026-10-08 — on `dev`, not deployed; the keyboard half deferred to `qi-hzramwrk`. Planned, then revised after GPT Sol's plan review (RETHINK, § The fix). From Greg's report `spya-gxbwug` (#479, SPIDERYARN-READING2-EP, an
 iPhone and an iPad, production, build `760f70a2`); Overseer queue item `qi-sd74q8t8`.
 
 > On iPhone and iPad, sometimes the layout and zoom gets a little bit messed up after, for example,
@@ -29,10 +29,12 @@ iPhone and an iPad, production, build `760f70a2`); Overseer queue item `qi-sd74q
 is drawn at *s* × its width and *s* × its height. So the article covers only part of the width, and
 a `position: fixed; bottom: 0` bar (`.dock`, dock.css) sits at *s* × the height: partway up.
 
-**What sets the scale below 1 on a rotation is our own stale `min-width`.** `.reader` carries an
-inline `min-width` in pixels (Reader.tsx, from `fitView`'s `minWidth`) computed for the *previous*
-window width. It changes only when React re-renders after `useWindowWidth` (reader/measure.ts) hears
-the rotation. Until then a wide-to-narrow rotation leaves the document wider than the screen.
+**What sets the scale below 1 on a rotation is our own stale pixel geometry.** `.reader` and its
+contents carry an inline `min-width`, `--page-w`, the table and column widths, `--mode-w`, and
+Marginalia geometry computed for the *previous* window width. They change only when React re-renders
+after `useWindowWidth` (reader/measure.ts) hears the rotation. Until then a wide-to-narrow rotation
+leaves the document wider than the screen. The first draft blamed `.reader`'s `min-width` alone;
+the review correction and the measured Plain case are in § The fix below.
 
 Measured in Playwright WebKit with iPad Pro 11 and iPhone 15 emulation (`isMobile`, `hasTouch`),
 on a real article, with no band, with Structure and with Summary:
@@ -105,8 +107,13 @@ Two declarations:
 minWidth: `min(${fit.minWidth + horizontalInset(safeAreaInsets())}px, 100%)`   // Reader.tsx
 ```
 
-**`overflow-x: clip` stops every descendant's horizontal overflow from reaching the document**,
-whatever stale pixel width it carries now or later: the bars, the table, the band, Marginalia.
+**`overflow-x: clip` stops in-flow, absolute and sticky descendants' horizontal overflow from
+reaching the document**, whatever stale pixel width they carry now or later: the bars, the table,
+and Marginalia's notes. Viewport-fixed descendants (the band, the spine, Marginalia's head, dialogs
+and chips) are not clipped by an intervening ancestor; CSS instead makes the viewport their
+containing block and says the part outside it cannot be scrolled to. No ancestor establishes a
+different fixed containing block. Thus they stay visible and do not widen the document; the clip
+contains the descendants that otherwise can.
 So WebKit's forced layout after a rotation sees a document exactly as wide as the screen and has
 no reason to shrink it. `clip`, not `hidden`, because `clip` makes no scroll container: sticky
 descendants still stick to the viewport, and nothing gains a scroll position. `overflow-y`
@@ -137,17 +144,20 @@ overflows is exactly what makes Safari zoom out. The check stays useful because 
 asserts that its fixture *does* overflow, measures both, so that control would go red rather than
 pass for nothing.
 
-**Red first:** `tests/reader-after-a-rotation-in-a-browser.test.tsx`. The real reader stylesheets
+**Red first:** `tests/reader-after-a-rotation-in-a-browser.test.ts`. The real reader stylesheets
 (`readerCss()` and the token sheet), with production-shaped markup: `#root > .reader` with the
 inline style Reader writes (from a small exported helper, so the test and the component cannot
 drift), the masthead and controls bars, a `TableView`-shaped table with `<col>`s, and a band.
 Every number comes from a real `fitView()` at the old width. The page is narrowed without
-updating any of them, and the test asserts `documentElement.scrollWidth === clientWidth` and that
-`.reader`'s own `scrollWidth` still sees the overflow. Cases: an iPad going 1194 → 834 in Plain and
-with Structure, an iPhone going 852 → 393 with a covering band, and Tweets' wide band. A control
-case with today's styles (no clip, an uncapped `min-width`) must overflow. A steady-state case
-asserts the used `min-width` is the full pixel value when it fits. It runs in Chrome, as the
-sibling `*-in-chrome` tests do, and in Playwright's WebKit where that is installed.
+updating any of them, and the test asserts `documentElement.scrollWidth <= clientWidth` (Chrome's
+root can reserve a scrollbar gutter) and that `.reader`'s own `scrollWidth` still sees the
+overflow. It covers an iPad going 1194 → 834 in Plain, Structure, Tweets, Marginalia,
+band-plus-Marginalia and rail-off arrangements, and an iPhone going 852 → 393 in Plain and with a
+covering band. Every row first proves the old rule overflows and the same layout does not overflow
+at rest. The stale Marginalia rows prove their note and fixed head still carry old geometry; after
+the rotation the test scrolls vertically to prove the controls still stick and fixed bands remain
+visible through the clip. It runs in Chrome, as the sibling `*-in-chrome` tests do, and in
+Playwright's WebKit where that is installed.
 
 ### Deferred — the keyboard
 

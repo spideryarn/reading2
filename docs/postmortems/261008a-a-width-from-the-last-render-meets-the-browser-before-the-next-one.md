@@ -19,9 +19,10 @@ of the screen's width and 70% of its height, so the prose stops short of the rig
 The reading view's widths are pixels computed in JavaScript for the window React last rendered for:
 `.reader`'s inline `min-width`, `--page-w` (the masthead, the controls bar, the stuck crumbs), the
 table's `width` and its `<col>`s, `--mode-w` and Marginalia's `--marg-*`. A rotation narrows the
-window first. React hears of it from `resize`, which in Playwright's WebKit arrived **230–650ms**
-after `orientationchange` on an iPad. In between, the page was **360px wider than the screen**
-(1194 against 834), and 266px on an iPhone.
+window first. React can only hear of it afterwards, from `orientationchange`, `resize` or the root's
+`ResizeObserver`; in Playwright's WebKit the later `resize` arrived **230–650ms** after
+`orientationchange` on an iPad. At the orientation event, before React's resulting render, the page
+was **360px wider than the screen** (1194 against 834), and 266px on an iPhone.
 
 On iOS that gap is not merely a flash. `WebPage::dynamicViewportSizeUpdate` (WebPageIOS.mm) sets
 the new layout size, **forces a layout synchronously, reads the content width, and chooses the new

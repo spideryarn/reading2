@@ -29,7 +29,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { chromePath } from "../scripts/browser-sign-in.js";
-import { type FitInput, fitView, readerMinWidth } from "../src/web/layout.js";
+import {
+  type FitInput,
+  fitView,
+  margTitleReserve,
+  readerMinWidth,
+} from "../src/web/layout.js";
 import { readerCss } from "./helpers/stylesheets.js";
 
 const chrome = (() => {
@@ -48,7 +53,8 @@ const CONTROL_CSS = (px: number) => `.reader { overflow-x: visible !important; m
 /**
  * The reading view's markup, in the shape Reader.tsx and TableView.tsx render
  * it: `#root > .reader` with the inline style Reader writes, the two sticky
- * bars sized from `--page-w`, the table with its `<col>`s, and a band.
+ * bars sized from `--page-w`, the table with its `<col>`s, and, where the fit
+ * asks for them, a band and Marginalia's note and fixed head.
  */
 function page(input: FitInput, extraCss = ""): string {
   const fit = fitView(input);
@@ -59,14 +65,21 @@ function page(input: FitInput, extraCss = ""): string {
     `--mode-w:${fit.modeW}px`,
     `--page-w:${input.windowWidth}px`,
     `--table-w:${fit.tableW}px`,
+    `--marg-w:${fit.margW}px`,
+    `--marg-reserve:${fit.margReserve}px`,
+    `--marg-title-reserve:${margTitleReserve(fit)}px`,
+    `--marg-left:${fit.margLeft}px`,
   ].join(";");
   return `<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><style>${CSS}\n${extraCss}</style>
 <div id="root"><div class="${classes}" style="${style}">
   <header class="masthead"><h1>A title</h1></header>
   <div class="controls"></div>
   <table class="zoom reading only-prose" style="width:${fit.tableW}px"><colgroup>${cols}</colgroup>
-    <tbody><tr><td class="text"><p>Some prose. ${"word ".repeat(200)}</p></td></tr></tbody></table>
+    <tbody><tr><td class="text"><p>Some prose. ${"word ".repeat(200)}</p>
+      ${fit.margW > 0 ? '<div class="marg-note" data-marg-note=""><p>A note in the margin.</p></div>' : ""}
+    </td></tr></tbody></table>
   ${input.modeBand ? `<div class="mode-band" style="height:300px"></div>` : ""}
+  ${fit.margW > 0 ? '<aside class="marg-head"><p>The margin head</p></aside>' : ""}
   <div style="height:3000px"></div>
 </div></div>`;
 }
@@ -88,6 +101,7 @@ const ROTATIONS: Rotation[] = [
   { name: "an iPad, Structure's columns", from: IPAD_L, to: IPAD_P, fit: { modeBand: true, bandShape: "structure" } },
   { name: "an iPad, Tweets' wide band", from: IPAD_L, to: IPAD_P, fit: { modeBand: true, bandShape: "wide" } },
   { name: "an iPad, Marginalia", from: IPAD_L, to: IPAD_P, fit: { margin: true } },
+  { name: "an iPad, a band and Marginalia", from: IPAD_L, to: IPAD_P, fit: { modeBand: true, margin: true } },
   { name: "an iPad, rail off", from: IPAD_L, to: IPAD_P, fit: { showSpine: false } },
   { name: "an iPhone, a band beside the prose", from: IPHONE_L, to: IPHONE_P, fit: { modeBand: true } },
   { name: "an iPhone, Plain", from: IPHONE_L, to: IPHONE_P, fit: {} },
@@ -143,6 +157,8 @@ describe.skipIf(available.length === 0)("a rotation, before React has re-rendere
               win: document.documentElement.clientWidth,
               reader: reader.scrollWidth,
               readerBox: reader.getBoundingClientRect().width,
+              margNoteRight: document.querySelector<HTMLElement>(".marg-note")?.getBoundingClientRect().right ?? null,
+              margHeadRight: document.querySelector<HTMLElement>(".marg-head")?.getBoundingClientRect().right ?? null,
             };
           });
 
@@ -174,6 +190,44 @@ describe.skipIf(available.length === 0)("a rotation, before React has re-rendere
           expect(stale.readerBox, `${r.name}: .reader is wider than the window`).toBeLessThanOrEqual(stale.win);
           /* Not blinded: `.reader` itself still reports what is clipped. */
           expect(stale.reader, `${r.name}: .reader's scrollWidth no longer sees the stale content`).toBeGreaterThan(stale.win);
+          if (r.fit.margin && fitView(input).margW > 0) {
+            /* The Marginalia row must exercise Marginalia, rather than pass on
+               the same stale masthead every other row carries. The note is an
+               absolute descendant and is clipped by `.reader`; the head is
+               viewport-fixed, so `.reader` does not clip it, but a fixed box
+               outside the layout viewport cannot extend the page's scrollable
+               overflow (CSS Positioned Layout 3 § 2.1). */
+            expect(stale.margNoteRight, `${r.name}: the note is not carrying the old margin geometry`).toBeGreaterThan(stale.win);
+            expect(stale.margHeadRight, `${r.name}: the head is not carrying the old margin geometry`).toBeGreaterThan(stale.win);
+          }
+
+          /* `clip`, unlike `hidden`, must not create a scroll container. Check
+             the consequence rather than the declaration: the controls still
+             stick to the viewport after a vertical scroll. A fixed band also
+             remains painted and hit-testable through `.reader`'s clip; there
+             is no transform/filter/contain ancestor changing its containing
+             block in the real styles. */
+          await p.evaluate(() => window.scrollTo(0, 500));
+          const positioned = await p.evaluate(() => {
+            const controls = document.querySelector<HTMLElement>(".controls");
+            const band = document.querySelector<HTMLElement>(".mode-band");
+            const bandRect = band?.getBoundingClientRect() ?? null;
+            const hit =
+              bandRect && bandRect.width > 0
+                ? document.elementFromPoint(
+                    Math.min(document.documentElement.clientWidth - 1, bandRect.left + bandRect.width / 2),
+                    Math.min(document.documentElement.clientHeight - 1, Math.max(0, bandRect.top) + 10),
+                  )
+                : null;
+            return {
+              controlsTop: controls?.getBoundingClientRect().top ?? null,
+              bandHit: band === null ? null : hit?.closest(".mode-band") === band,
+            };
+          });
+          expect(positioned.controlsTop, `${r.name}: overflow-x: clip changed sticky positioning`).toBeCloseTo(0, 1);
+          if (r.fit.modeBand) {
+            expect(positioned.bandHit, `${r.name}: .reader clipped its viewport-fixed band`).toBe(true);
+          }
         }
       } finally {
         await browser.close().catch(() => {});

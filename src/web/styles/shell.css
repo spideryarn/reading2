@@ -112,8 +112,9 @@
   /* min-width is set inline, in pixels, by App — see the note above — and
      capped at the page (layout.ts § `readerMinWidth`).
 
-     **`overflow-x: clip`, so nothing inside the reading view can make the page
-     wider than the window**, even for a moment. Every width in here is pixels
+     **`overflow-x: clip`, so no in-flow, absolute or sticky content inside the
+     reading view can make the page wider than the window**, even for a moment.
+     Every width in here is pixels
      for the window React last saw: `--page-w` on the two bars, the table and
      its `<col>`s, `--mode-w`, Marginalia's `--marg-*`. A rotation narrows the
      window before React hears of it, and on iOS WebKit chooses the new page
@@ -121,8 +122,14 @@
      runs — an iPad turned to portrait landed zoomed out, the article short of
      the right edge and the bottom bar partway up the screen (Greg,
      spya-gxbwug; docs/plans/261008b-ios-layout-and-zoom-after-a-rotation-or-the-keyboard.md).
-     One declaration here covers every stale width, including ones not yet
-     written.
+     One declaration here covers every stale width in those positioning
+     schemes, including ones not yet written. Viewport-fixed descendants are
+     deliberately outside this clip: their containing block is the viewport,
+     not `.reader`, and CSS excludes them from an intervening ancestor's
+     overflow clip. They remain visible, and any part outside the layout
+     viewport cannot be scrolled to or widen the page (CSS Positioned Layout 3
+     § 2.1). None has a transformed, filtered or contained ancestor that
+     would move its fixed containing block inside `.reader`.
 
      `clip`, not `hidden`: `clip` makes no scroll container, so the sticky bars
      still stick to the viewport, and `overflow-y` may stay `visible` beside it.
