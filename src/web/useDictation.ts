@@ -107,6 +107,7 @@ import { type MicClaim, claimMicrophone, releaseMicrophone } from "./mic-lock.js
 import { verdictFor } from "./dictation-errors.js";
 import {
   audioConstraint,
+  chosenInputListed,
   defaultInputListed,
   deviceMissing,
   judgeFallback,
@@ -2223,6 +2224,17 @@ async function beginCapture(
      report false rather than being told apart by inspecting a track we may not
      have. */
   let honoured = false;
+  /* **A remembered microphone the browser no longer lists is not asked for.**
+     The request would be refused without a prompt, but on WebKit it would spend
+     this click's one gesture-privileged microphone request, and the
+     system-default request after it would then re-prompt on an iPhone a minute
+     after the last capture (mic-devices.ts § chosenInputListed; plan 261008d).
+     `ask` is what we request; `preferred` is still what the reader chose, so
+     the not-honoured warning and the same-device check run exactly as they do
+     after a refused request. */
+  let ask = preferred;
+  if (preferred !== null && (await chosenInputListed(preferred)) === "missing") ask = null;
+  if (!stillWanted()) return { kind: "failed" };
   /* The system default by name where the browser lists one
      (mic-devices.ts § audioConstraint). Only a *missing device* earns another
      attempt (§ deviceMissing): a missing choice takes the system-default route,
@@ -2230,28 +2242,32 @@ async function beginCapture(
      route. Retrying on any failure at all would quietly turn refused permission
      into a start on some other microphone with nothing on screen saying so —
      the silent substitution this whole area exists to end. */
-  const defaultListed = preferred === null && (await defaultInputListed());
+  const defaultListed = ask === null && (await defaultInputListed());
   /* `enumerateDevices` is another await before capture. As above, stopping in
      this gap releases the claim; opening afterwards would overlap whoever took
      the microphone next. */
   if (!stillWanted()) return { kind: "failed" };
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(preferred, defaultListed));
+    const stream = await navigator.mediaDevices.getUserMedia(audioConstraint(ask, defaultListed));
     track = stream.getAudioTracks()[0] ?? null;
-    if (track) honoured = true;
+    if (track) honoured = ask === preferred;
   } catch (err) {
     /* The remembered microphone is gone — unplugged, or its id rotated when
        site data was cleared. `exact` rejects rather than substituting, which is
        what we want, and this is the one place that then asks for the system
        default instead. **The preference is not forgotten**: a headset unplugged
        for an afternoon should still be the choice when it comes back. */
-    if ((preferred || defaultListed) && deviceMissing(err)) {
+    if ((ask || defaultListed) && deviceMissing(err)) {
       /* A missing reader choice falls back to the same system-default route as
-         choosing "System default" in the picker. We did not enumerate before a
-         chosen-device request—the common path should not pay for it—so do that
-         now, and re-check ownership before touching the device. */
-      const fallbackDefaultListed = preferred !== null && (await defaultInputListed());
+         choosing "System default" in the picker. The list read before the
+         chosen-device request was about that id, not about a named default, so
+         ask that now, and re-check ownership before touching the device. This
+         second request is not gesture-privileged on WebKit, which is why a
+         stale id is caught before the first one where the ids are visible
+         (`ask`, above); it remains for ids the browser hid, and for a device
+         that went between listing and opening. */
+      const fallbackDefaultListed = ask !== null && (await defaultInputListed());
       if (!stillWanted()) return { kind: "failed" };
       try {
         const stream = await navigator.mediaDevices.getUserMedia(

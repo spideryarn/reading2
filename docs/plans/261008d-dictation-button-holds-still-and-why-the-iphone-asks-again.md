@@ -130,7 +130,48 @@ reads state, and is unreliable on Safari (bug 257710). No manifest field pre-gra
 
 So, on an iPhone home-screen app, **expect a prompt on the first press after the app (re)starts,
 and on any press more than 10 minutes after the last dictation ended.** Presses within 10 minutes of
-each other in one sitting should not prompt.
+each other in one sitting should not prompt — **except on a path of ours, found during this work
+and fixed in stage 2 below.**
+
+### Stage 2: a remembered microphone that no longer resolves spent the gesture
+
+A follow-up read of WebKit's source (`MediaDevices::computeUserGesturePriviledge`,
+`UserMediaPermissionRequestManagerProxy::processUserMediaPermissionRequest`):
+
+- **A click buys one gesture-privileged microphone request.** The first `getUserMedia` for audio
+  under a gesture records it; a second one in the same click is not privileged.
+- **An `exact` request for a device id that matches nothing is refused before any prompt**
+  (`validateRequestConstraints` runs first), but it has already spent that privilege.
+- So when the reader has a remembered microphone whose id no longer resolves, our fallback to the
+  system default is the click's *second* request, has no gesture, and falls under the iPhone's
+  1-minute rule: **a prompt on any press more than a minute after the last capture**, where a
+  privileged request would have reused the grant for ten.
+- **Greg's iPhone was on that path on every press**: [dictation.md](../project/dictation.md) § The
+  ways it fails, item 8 — *"The microphone you chose isn't available. Using another one"* on every
+  press with AirPods (spya-k3q9mc, 2026-09-29). Since 2026-10-01 the new id is adopted when the
+  name matches, which should have reduced it, but each id change still costs a prompt. The persisted
+  device-id salt (`DeviceIdHashSaltStorage`) does not rotate by itself, so why the AirPods' id
+  changed is not known — an iOS audio-route change is the likeliest.
+
+**The fix:** before asking for a remembered id, list the devices (`enumerateDevices` spends
+nothing). If the browser shows real ids and the remembered one is not among them, ask for the system
+default straight away, as the only request of the click. If the ids are hidden (no grant yet in
+this page), ask for the remembered id as before; there is no grant to reuse then, so there is a
+prompt either way. `chosenInputListed` in `mic-devices.ts`; `ask` in `useDictation.ts §
+beginCapture`. The "Couldn't use" warning and the same-device adoption run exactly as after a
+refused request, because `preferred` is still what the reader chose.
+
+- **Tests, red first:** `tests/dictation-recording.test.ts` — "goes straight to the default when
+  the browser lists ids and the remembered one is not among them" failed (the stale id was asked
+  for), then passed. Two more pin what must not change: a listed id is asked for by id, and hidden
+  ids still ask by id. Three tests in `tests/dictation-phases.test.ts` encoded the old order of
+  calls (stale `exact`, then the default) and were updated to the new one, keeping their intent:
+  the named system default, not Chrome's choice; a stop during the default check opens nothing; a
+  stop during the same-device check stops the track inside the claim.
+- **The simpler option passed over:** `{ ideal: storedId }` instead of `exact`, which is one request
+  in every case. On Chromium `ideal` loses to Chrome's own default choice (measured, 261001q), which
+  is the silent substitution `exact` exists to prevent.
+- **Not observed on a device.** The mechanism is read from WebKit's source; the box has no iPhone.
 
 **The only page-side lever, and why it is not built:** keep the microphone capturing between
 dictations, so the 10-minute timer never starts (a disabled track probably still counts; WebKit's
