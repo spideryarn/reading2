@@ -1540,6 +1540,7 @@ export function Conversation({
      has been painted". GPT Sol, plan review 261002j. */
   const liveLines = live?.lines ?? [];
   const liveChars = liveSize(liveLines);
+  const hasTurns = thread.messages.length > 0;
   const empty = thread.messages.length === 0 && liveLines.length === 0;
   const toolsNow = (last?.tools ?? []).map((run) => run.status).join() + (last?.searches ?? "");
   /**
@@ -1640,13 +1641,17 @@ export function Conversation({
    * measured or moved it. Enabled means `chatStep` has somewhere to go, the
    * same call a press makes, so an enabled button always moves.
    */
-  const measureSteps = (el: HTMLElement) => {
-    const at = ends(el);
-    const starts = empty ? [] : turnStarts(el);
+  const measureSteps = (
+    el: HTMLElement,
+    measured?: { readonly starts: readonly number[]; readonly at: StepEnds; readonly top: number },
+  ) => {
+    const at = measured?.at ?? ends(el);
+    const starts = measured?.starts ?? (hasTurns ? turnStarts(el) : []);
+    const top = measured?.top ?? el.scrollTop;
     const next: StepRoom = {
-      shown: !empty && (at.end > 1 || el.scrollTop > SNAP),
-      up: chatStep(starts, el.scrollTop, at, -1) !== null,
-      down: chatStep(starts, el.scrollTop, at, 1) !== null,
+      shown: hasTurns && (at.end > 1 || top > SNAP),
+      up: chatStep(starts, top, at, -1) !== null,
+      down: chatStep(starts, top, at, 1) !== null,
     };
     const was = stepsNow.current;
     if (was.shown !== next.shown || was.up !== next.up || was.down !== next.down) setSteps(next);
@@ -1673,6 +1678,12 @@ export function Conversation({
     const client = el.clientHeight;
     const roomNow = gap.offsetHeight;
     const natural = el.scrollHeight - roomNow;
+    /* Turn starts do not move when only the trailing room or `scrollTop`
+       changes: the former is after them, and the latter cancels out in
+       `turnStarts`. Measure them while layout is already current, before the
+       spacer write below, so a streamed word does not pay for a second forced
+       layout merely to enable the step buttons (review F8, plan 261008b). */
+    const stepStarts = hasTurns ? turnStarts(el) : [];
     const placing = !h.placed;
     let top = was;
     if (placing) {
@@ -1707,13 +1718,17 @@ export function Conversation({
     h.seenAt = seen + was - top;
     h.top = top;
     h.max = Math.max(0, natural + want - client);
+    const stepEnds = {
+      end: Math.max(0, natural - client),
+      max: h.max,
+    };
     if (want !== roomNow) gap.style.height = `${want}px`;
     if (was !== top) el.scrollTop = top;
     /* Nobody scrolled, so no scroll event will say the answer has grown past
        the fold. Guarded, because a same-value set is not free: see `awayNow`. */
     const atBottom = natural + want - top - client < 60;
     if (awayNow.current !== !atBottom) setAway(!atBottom);
-    measureSteps(el);
+    measureSteps(el, { starts: stepStarts, at: stepEnds, top });
   };
   const settleNow = useRef(settle);
   settleNow.current = settle;

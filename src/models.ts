@@ -62,10 +62,11 @@
  * `claude-sonnet-4-5` and gone on disagreeing while looking mended.
  *
  * The rule that falls out of it: **a wire id is what we send, a display name is
- * what we show, and nothing outside this file should be choosing between the
- * two.** `modelFor(task)` gives the first, `displayName(id)` the second, and
- * `wireFor(task)` says which protocol a task speaks — which is what stopped
- * src/routes.ts keeping its own copy of the request-path list.
+ * what we show, and no caller should choose between the two itself.**
+ * `modelFor(task)` gives the first, `displayName(id)` (owned by the client-safe
+ * `model-names.ts`) the second, and `wireFor(task)` says which protocol a task
+ * speaks — which is what stopped src/routes.ts keeping its own copy of the
+ * request-path list.
  *
  * ## Why the quick tier has no Anthropic-SDK spelling
  *

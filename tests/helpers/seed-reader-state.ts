@@ -316,6 +316,11 @@ export async function seedChatFromFiles(slug: string): Promise<{ threads: number
         searches: message.searches ?? null,
         tools: message.tools ?? null,
         model: message.model ?? null,
+        /* A recorded effort is part of the answer beside its model. This seeder
+           is the import half of the rollback round-trip test; omitting a new
+           optional field here makes that test silently prove less than it says
+           (review F7, plan 261008b). */
+        effort: message.effort ?? null,
         error: message.error ?? null,
         stopped: message.stopped ?? false,
         editedAt: message.editedAt ? new Date(message.editedAt) : null,

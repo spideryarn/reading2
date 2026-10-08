@@ -56,6 +56,9 @@ let heights: number[] = [];
 let strip = 0;
 /** Where the streaming cursor sits after a bare text-node answer. */
 let tail = 0;
+/** The spacer height when a turn's geometry was read. A non-zero value means
+ * the hold wrote layout before the step controls measured every turn. */
+let turnRectRooms: number[] = [];
 
 let host: HTMLDivElement;
 let root: Root;
@@ -105,6 +108,7 @@ function layOut(): void {
   define(Element.prototype, "getBoundingClientRect", {
     value(this: Element) {
       const box = this.closest(".chat-scroll");
+      if (box && this.hasAttribute("data-turn")) turnRectRooms.push(roomOf(box));
       let top = 0;
       if (box && this !== box) {
         const turns = [...box.querySelectorAll(":scope > [data-turn]")];
@@ -189,6 +193,7 @@ beforeEach(() => {
   heights = [100, 800];
   strip = 0;
   tail = 0;
+  turnRectRooms = [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -234,6 +239,18 @@ describe("a typed answer in a panel of fixed height", () => {
     expect(scroller().scrollTop, "the question's top is the panel's top").toBe(QUESTION_TOP);
     expect(roomOf(scroller()), "exactly enough for that to be reachable").toBe(QUESTION_TOP + CLIENT - 990);
     expect(pill(), "and that is the bottom, so there is nothing to jump to").toBeNull();
+  });
+
+  it("measures message steps before changing the hold spacer", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 30];
+    turnRectRooms = [];
+    paint(asked(""));
+    expect(roomOf(scroller()), "control: the hold added room").toBeGreaterThan(0);
+    expect(
+      turnRectRooms,
+      "no turn geometry was read after the spacer write, which would force a second layout",
+    ).not.toContain(roomOf(scroller()));
   });
 
   it("does not move as the words arrive, and offers Latest once they pass the fold", () => {
@@ -522,6 +539,13 @@ describe("a Live conversation", () => {
       threadId: "spya-h0ld01",
       stop: async () => {},
     }) as unknown as LiveApi;
+
+  it("does not show disabled message-step buttons before Live has stored a turn", () => {
+    heights = [900];
+    paint([], { live: speaking("A long first spoken exchange that still has not been saved.") });
+    expect(scroller().scrollHeight, "control: the live transcript overflows").toBeGreaterThan(CLIENT);
+    expect(host.querySelector(".chat-steps")).toBeNull();
+  });
 
   it("retires an overflowed typed answer's hold: spoken words are followed, as before", () => {
     paint(EARLIER);

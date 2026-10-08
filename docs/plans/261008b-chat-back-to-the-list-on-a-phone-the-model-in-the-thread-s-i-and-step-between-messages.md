@@ -222,3 +222,19 @@ bottom.
 
 Seen and not ours: on the Guide thread on a phone, a "↩ back to …" chip (the guide's Back) sits
 over the composer's placeholder. Reported, not touched.
+
+## Code review (GPT Sol, write-capable) — [261008b-code-review-sol.md](261008b-code-review-sol.md)
+
+On `ee1ae5850`. `VERDICT: approve with changes`; its four fixes read and kept, each with a test:
+
+- **F6 (P1)** — a Live conversation's unsaved spoken lines could overflow the panel and draw a row
+  of three disabled buttons over no stored turn. The row now needs at least one turn.
+- **F7 (P2)** — the rollback round-trip's seeder (`tests/helpers/seed-reader-state.ts`) dropped
+  `effort`; it carries it now, with a Postgres regression (run locally: green).
+- **F8 (P2)** — the hold path measured every turn *after* writing the room and `scrollTop`, a
+  second forced layout per streamed word. Turn starts are now read in `settle`'s read phase and
+  reused.
+- **F9 (P3)** — `models.ts` still said the names lived there.
+
+It also confirmed the stored effort is right for `candidates` and `guide` threads (both sides use
+`jobFor(kind)`).

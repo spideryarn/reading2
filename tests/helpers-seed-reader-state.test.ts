@@ -41,6 +41,7 @@ import { closeDb, getDb } from "../src/db/client.js";
 import {
   articles,
   blockIdentities,
+  chatMessages,
   comments as commentsTable,
   glossaryLookups,
   jobs,
@@ -50,6 +51,7 @@ import { loadArticleIntoPg } from "./helpers/load-article.js";
 import { FIXTURE_ROOT, requireFixture } from "./helpers/require-fixture.js";
 import {
   seedCommentsFromFiles,
+  seedChatFromFiles,
   seedGlossaryLookupsFromFiles,
   seedShelfFromFiles,
 } from "./helpers/seed-reader-state.js";
@@ -229,6 +231,37 @@ describe("the reader-state seeder", () => {
         .from(commentsTable)
         .where(eq(commentsTable.articleId, article.id));
       expect(rows.map((r) => r.id).sort()).toEqual(["spya-cmtaaa", "spya-cmtbbb"]);
+    } finally {
+      await forget(slug);
+    }
+  });
+
+  it("does not drop a chat answer's recorded thinking effort", async () => {
+    const slug = "test-seed-chat-effort";
+    await forget(slug);
+    await makeFixture(slug, []);
+    const chatAt = path.join(ROOT, "data", slug, "chat.json");
+    const chat = JSON.parse(await readFile(chatAt, "utf8")) as {
+      threads: Array<{ messages: Array<Record<string, unknown>> }>;
+    };
+    const answer = chat.threads[0]?.messages.find((message) => message.id === "spya-fxb204");
+    if (!answer) throw new Error("the fixture has no ordinary chat answer");
+    answer.effort = "high";
+    await writeFile(chatAt, JSON.stringify(chat, null, 2));
+
+    try {
+      await loadArticleIntoPg(slug, { root: ROOT });
+      await seedChatFromFiles(slug);
+      const [article] = await getDb()
+        .select({ id: articles.id })
+        .from(articles)
+        .where(eq(articles.slug, slug));
+      if (!article) throw new Error("the load created no article row");
+      const [stored] = await getDb()
+        .select({ effort: chatMessages.effort })
+        .from(chatMessages)
+        .where(and(eq(chatMessages.articleId, article.id), eq(chatMessages.id, "spya-fxb204")));
+      expect(stored?.effort).toBe("high");
     } finally {
       await forget(slug);
     }
