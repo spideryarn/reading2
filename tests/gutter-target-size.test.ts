@@ -45,13 +45,16 @@ const css = readerCssNoComments();
 
 /* The rule against `grid-area` is the gutter's: its controls are placed by
    source order. Search stacks its own spinner with it (search.css §
-   .srch-upgrading, since 261004l), and that one component is exempt by name.
+   .srch-upgrading, since 261004l), and so does a labelled microphone's word
+   (profile.css § `.talk-label`, since 261008d: both words in one cell so its
+   width holds across Stop); those components are exempt by name.
    An allowlist rather than a "selects a gutter element" test, because the
    gutter's controls do not share one class prefix (`.block-chat` is one). */
 function exemptFromGutterRule(at: number): boolean {
   const preludes = enclosing(css, at);
+  const own = preludes[0] ?? "";
   return (
-    (preludes[0] ?? "").includes(".srch-") &&
+    (own.includes(".srch-") || own.includes(".talk-label")) &&
     !preludes.some((x) => x.includes("blk-") || x.includes("block-"))
   );
 }

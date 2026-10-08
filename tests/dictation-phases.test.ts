@@ -1512,7 +1512,10 @@ describe("the remembered microphone", () => {
     h.unmount();
   });
 
-  it("falls back from a missing choice to the named system default, not Chrome's choice", async () => {
+  /* Since plan 261008d a remembered id the browser no longer lists is not
+     asked for at all: on WebKit the refused request would spend the click's
+     one gesture-privileged microphone request. */
+  it("goes from a missing choice straight to the named system default, not Chrome's choice", async () => {
     store({
       "spya.dictation.deviceId": "airpods-yesterday",
       "spya.dictation.deviceLabel": "AirPods Pro",
@@ -1526,10 +1529,7 @@ describe("the remembered microphone", () => {
     act(() => h.get().toggle());
     await settleCapture();
 
-    expect(gumRequests).toEqual([
-      { audio: { deviceId: { exact: "airpods-yesterday" } } },
-      { audio: { deviceId: { exact: "default" } } },
-    ]);
+    expect(gumRequests).toEqual([{ audio: { deviceId: { exact: "default" } } }]);
     expect(h.get().deviceLabel).toBe("Default - Logitech BRIO");
     expect(h.get().deviceUnavailable).toEqual({ wanted: "AirPods Pro" });
     h.unmount();
@@ -1541,21 +1541,21 @@ describe("the remembered microphone", () => {
       "spya.dictation.deviceLabel": "AirPods Pro",
     });
     inputs = [{ deviceId: "default", label: "Default - Logitech BRIO" }];
-    holdEnumerationAt = 1;
+    /* The first listing finds the choice missing (261008d); hold the second,
+       the system-default check. */
+    holdEnumerationAt = 2;
     const h = drive();
 
     act(() => h.get().toggle());
     await settleCapture();
-    expect(gumRequests).toEqual([
-      { audio: { deviceId: { exact: "airpods-yesterday" } } },
-    ]);
+    expect(gumRequests).toEqual([]);
     expect(releaseEnumeration, "the fallback default-device check never began").not.toBeNull();
 
     act(() => h.get().toggle());
     releaseEnumeration?.();
     await settleCapture();
 
-    expect(gumRequests, "a stopped fallback opened a microphone outside its released claim").toHaveLength(1);
+    expect(gumRequests, "a stopped fallback opened a microphone outside its released claim").toHaveLength(0);
     h.unmount();
   });
 
@@ -1593,9 +1593,10 @@ describe("the remembered microphone", () => {
     });
     inputs = [AIRPODS];
     defaultInput = AIRPODS;
-    /* The first enumeration chooses the system-default fallback. Hold the
-       second, where the opened track is compared with the remembered choice. */
-    holdEnumerationAt = 2;
+    /* The first enumeration finds the choice missing (261008d), the second
+       chooses the system-default route. Hold the third, where the opened track
+       is compared with the remembered choice. */
+    holdEnumerationAt = 3;
     const h = drive();
     act(() => h.get().toggle());
     await settleCapture();

@@ -188,6 +188,39 @@ describe("the voice row's geometry", () => {
     expect(learn.get("min-width")).toBe("0");
   });
 
+  /* **Every line the dictation strip draws is a line of its own, after the
+     voice row.** Only `.prof-listening` had either rule, so in Learn the
+     "Microphone: … Change" line (261001q) joined the voice row at order 0 and
+     squeezed the group to 38px at 390 and 9px at 320, pushing the microphone
+     — which is also Stop — off the right edge of the band. Found by plan
+     261008d's browser check. Each line carries one class, `.dictation-line`,
+     and the containers style that; the lines are read off the strip's source,
+     so a line added there without it fails here. */
+  it("gives each of the strip's lines a row of its own, below Learn's voice row", () => {
+    const strip = readFileSync(join(import.meta.dirname, "..", "src", "web", "DictationStrip.tsx"), "utf8");
+    const lines = [...strip.matchAll(/<p\s+className=\{?["`]([^"`$]*)/g)]
+      .map((m) => (m[1] ?? "").trim())
+      .filter((c) => c !== "sr-only");
+    expect(lines.length, "the strip's lines were not found").toBeGreaterThanOrEqual(6);
+    for (const c of lines) expect(c.split(/\s+/), `a strip line without .dictation-line: ${c}`).toContain("dictation-line");
+    expect(decls(".chat-composer .dictation-line").get("flex-basis")).toBe("100%");
+    expect(decls(".learn .dictation-line").get("order")).toBe("6");
+  });
+
+  /* The comment follow-up drew the strip's lines as items of its one
+     unwrapping row, beside the input and the microphone (GPT Sol's code review
+     of 261008d). Same rule as the composer's. */
+  it("gives the strip's lines a row of their own under the comment follow-up too", () => {
+    const css = readFileSync(join(import.meta.dirname, "..", "src", "web", "styles", "annotations.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    const rule = (sel: string) =>
+      new RegExp(`(?:^|})\\s*${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`, "m").exec(css)?.[1] ?? "";
+    expect(rule(".cmt-followup")).toMatch(/flex-wrap:\s*wrap/);
+    expect(rule(".cmt-followup .dictation-line")).toMatch(/flex-basis:\s*100%/);
+  });
+
   it("lets Learn's Live button and experimental engine picker wrap inside the space beside Send", () => {
     /* The outer group has a zero basis, but an unwrapping .chat-live still
        overflows that group at 288px. Its two controls must break independently.

@@ -352,6 +352,14 @@ move once, with `visibilityState` reading `hidden` throughout; clicking the trac
 So the two pieces of advice on this page are ordered: **visible tab first, then keyboard, then
 refs** — and never pixel arithmetic.
 
+**The one exception: a double press is two presses at the same place.** A locator's `click()` or
+`tap()` finds the element again for each press, so a second press follows a button that moved
+after the first one — which a thumb does not. 261005a's check of the dictation double press passed
+that way while the real button dropped 28.7 px at Stop and Greg's second tap missed. To check a
+double press, read the element's centre once, press there twice with `page.mouse` or
+`page.touchscreen`, and say whether the second press landed —
+[261008b](../postmortems/261008b-a-control-moved-by-its-own-press.md).
+
 ### Counting marks is not counting results
 
 A search result's highlight is drawn as **one `<mark>` per text-node run**, not one per result, so a

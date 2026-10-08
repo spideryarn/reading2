@@ -18,7 +18,7 @@ Up: [reading-view-overview.md](reading-view-overview.md)
 - [§ The audio leaves the machine](#the-audio-leaves-the-machine-now) — what we do and do not promise about a voice
 - [§ The sizes](#the-sizes-and-the-wall-behind-them) — the 4.5 MB wall, tape rotation into parts
 - [§ A closed tab](#a-closed-tab-does-not-lose-a-dictation) — IndexedDB recovery, `keepDictation`
-- [§ The ways it fails](#the-ways-it-fails) — nine failure modes
+- [§ The ways it fails](#the-ways-it-fails) — ten failure modes
 - [§ The codes](#the-codes) — every `[mic-…]` code and where it is raised
 - [§ Where the pieces are](#where-the-pieces-are) — file map
 - [§ What a browser pass could check](#what-a-browser-pass-could-and-could-not-check) (history)
@@ -358,6 +358,16 @@ quiz answer (Answer) and the annotate box (Save, never Ask AI). A sixth, the com
   dictation. After that, or once the press is taken, it is `disabled` as it always was. The field
   returns `again` only while a second press would count, which is the whole of how the button
   knows. Not `aria-disabled`: that says "cannot be used" at the one moment it can (GPT Sol).
+- **The button has to be where the first press left it.** Nothing that positions it may change
+  size at Stop. In Chat the composer grows upwards from a pinned bottom edge, so a line leaving the
+  strip *under* the button moves the button down; the "Microphone: … Change" line did exactly that
+  until 2026-10-08, and Greg's second tap missed (`spya-pd9fnc`). So the strip keeps that line, the
+  "Couldn't use" warning and an open picker drawn, switched off, until the words land, and a
+  labelled microphone's word (`TalkLabel`: *Listening…* / *Writing it down…*) holds the wider
+  word's width while a dictation runs. Something new in the strip or beside the button follows the
+  same rule: drawn from listening through transcribing, or not at all.
+  [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md),
+  `tests/dictation-strip-holds-still.test.tsx`.
 - **Once taken, the strip says** *"Turning that into text, then sending…"*.
 - **It sends only where it was said.** A box that is reused across things — one comment dialog for
   every comment, one quiz box for every question — passes **`doneKey`**, and a wish made on one is
@@ -777,6 +787,21 @@ Feedback draft itself is the next step, and is named in the plan.
    press was Chrome's choice or an old pick of ours was not established.
    [`mic-devices.ts` § `audioConstraint`](../../src/web/mic-devices.ts),
    [261001q](../plans/261001q-mic-follows-the-system-default-and-says-which.md).
+10. **An iPhone asks for the microphone again.** Greg, 2026-10-08, from the home-screen app:
+    *"Is there any way to get it to remember that I've given permission for the microphone?"*
+    Mostly not from a page. WebKit keeps a grant in memory for the page only: a cold start or a
+    background reload of the home-screen app loses it, and it is wiped **10 minutes after the
+    microphone last captured**. So expect a prompt on the first press after the app (re)starts and
+    on any press more than 10 minutes after the last dictation, and none in between. The only page
+    lever is to keep capturing between dictations, which means a live microphone and the orange dot
+    while nobody is dictating, and it is not built. **One extra prompt was ours**: a click buys one
+    gesture-privileged microphone request, and an `exact` request for a remembered id that no longer
+    resolves spent it silently, so the fallback was prompted under the iPhone's 1-minute rule for
+    requests without a gesture. A remembered id the browser no longer lists is now not asked for
+    (`chosenInputListed`). The persistence Apple has not built is
+    [WebKit bug 280394](https://bugs.webkit.org/show_bug.cgi?id=280394). The reading of WebKit's
+    source, and what a reader can try on the phone:
+    [261008d](../plans/261008d-dictation-button-holds-still-and-why-the-iphone-asks-again.md).
 
 ## The codes
 

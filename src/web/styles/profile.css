@@ -409,6 +409,14 @@
 .prof-recording-retry { color: var(--ink); }
 .prof-recording-retry:disabled { opacity: 0.5; cursor: default; }
 
+/* **The labelled microphone's word, while a dictation runs** (`TalkLabel` in
+   DictationStrip.tsx): both of its words in one cell, the other one invisible,
+   so the label keeps the wider one's width across Stop and cannot re-wrap the
+   row under the button. Plan 261008d. */
+.talk-label { display: inline-grid; }
+.talk-label > span { grid-area: 1 / 1; }
+.talk-label-ghost { visibility: hidden; }
+
 .prof-mic {
   display: inline-flex;
   align-items: center;

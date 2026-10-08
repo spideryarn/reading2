@@ -46,6 +46,11 @@ let gumWith: MediaStreamConstraints[] = [];
 let gumPlan: Array<"ok" | "overconstrained" | "denied"> = [];
 let tracksStopped = 0;
 let nextLabel = "MacBook Pro Microphone (Built-in)";
+/**
+ * What `enumerateDevices` lists, or null for a browser without it (the
+ * default here, so every older test sees what it always saw). Plan 261008d.
+ */
+let listed: Array<{ kind: string; deviceId: string; label: string }> | null = null;
 
 class FakeRecognition {
   continuous = false;
@@ -203,6 +208,11 @@ function install() {
         const track = fakeTrack(nextLabel);
         return { getAudioTracks: () => [track], getTracks: () => [track] };
       },
+      /* Read at call time, so a test sets `listed` after `install()`. */
+      get enumerateDevices() {
+        const now = listed;
+        return now ? async () => now : undefined;
+      },
       addEventListener: () => {},
       removeEventListener: () => {},
     },
@@ -296,6 +306,7 @@ beforeEach(() => {
   recorders = [];
   gumWith = [];
   gumPlan = [];
+  listed = null;
   tracksStopped = 0;
   nextLabel = "MacBook Pro Microphone (Built-in)";
   vi.stubGlobal("requestAnimationFrame", () => 1);
@@ -472,6 +483,50 @@ describe("which microphone it opens", () => {
     const h = drive();
     await pressAndOpen(h);
     expect(h.get().deviceUnavailable).toBe(false);
+    h.unmount();
+  });
+
+  /**
+   * **A remembered id the browser no longer lists is not asked for.** On
+   * WebKit a click buys one gesture-privileged microphone request; an `exact`
+   * request for a stale id is refused without a prompt but spends it, and the
+   * fallback then re-prompts on an iPhone a minute after the last capture
+   * instead of ten. Greg's iPhone took that path on every press (spya-k3q9mc,
+   * spya-btjtbb). Plan 261008d.
+   */
+  it("goes straight to the default when the browser lists ids and the remembered one is not among them", async () => {
+    const h = drive();
+    act(() => h.get().chooseDevice("gone"));
+    await settle();
+    listed = [{ kind: "audioinput", deviceId: "other", label: "iPhone Microphone" }];
+    await pressAndOpen(h);
+    expect(gumWith, "the stale id was asked for, spending the click's one privileged request").toEqual([
+      { audio: true },
+    ]);
+    // Still said: the choice was not honoured.
+    expect(h.get().deviceUnavailable).not.toBe(false);
+    h.unmount();
+  });
+
+  it("asks for a remembered id the browser still lists, as before", async () => {
+    const h = drive();
+    act(() => h.get().chooseDevice("abc123"));
+    await settle();
+    listed = [{ kind: "audioinput", deviceId: "abc123", label: "AirPods" }];
+    await pressAndOpen(h);
+    expect(gumWith).toEqual([{ audio: { deviceId: { exact: "abc123" } } }]);
+    h.unmount();
+  });
+
+  /* Before a grant the ids are blank, so nothing can be told; asking is the
+     only way to find out, and with no grant there is a prompt either way. */
+  it("still asks for the remembered id when the browser hides the ids", async () => {
+    const h = drive();
+    act(() => h.get().chooseDevice("abc123"));
+    await settle();
+    listed = [{ kind: "audioinput", deviceId: "", label: "" }];
+    await pressAndOpen(h);
+    expect(gumWith).toEqual([{ audio: { deviceId: { exact: "abc123" } } }]);
     h.unmount();
   });
 

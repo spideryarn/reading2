@@ -209,11 +209,16 @@ describe("the bottom bar's mode segment", () => {
     expect(rule).not.toContain("display: contents");
   });
 
-  it("gives the real radiogroup one coarse-pointer flex share per radio", () => {
+  it("gives the real radiogroup one coarse-pointer flex share per button it encloses", () => {
     paintDock();
     const group = host.querySelector<HTMLElement>(".dock-modes-radios");
     expect(group).not.toBeNull();
-    expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(String(radios().length));
+    /* The radios, and since 2026-10-08 the More button between Skim and
+       Search (plan 261008d § D2). */
+    expect(group?.style.getPropertyValue("--dock-radio-count")).toBe(
+      String(group?.querySelectorAll(".dock-btn").length),
+    );
+    expect(group?.querySelectorAll(".dock-btn").length).toBe(radios().length + 1);
 
     const css = readFileSync(
       path.join(import.meta.dirname, "../src/web/styles/dock-fit.css"),

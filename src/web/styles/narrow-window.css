@@ -748,19 +748,19 @@
    **Do the sum, do not trust a remembered count.** This note said "nine
    buttons" when it was written, GPT Sol counted eleven the same afternoon, and
    a ninth mode (`outline`) landed hours later making it twelve. The count is
-   `MODES_UI.length` for the segment, plus the loose controls the particular
-   page draws, and it only ever goes up.
+   the number of controls the segment actually draws (`--dock-mode-count`),
+   plus the loose controls the particular page draws. Gathered modes count once
+   through More unless one is open and also has its own button.
 
    At 390px there is 383.6px of bar after `.dock`'s own padding. **Each button
-   costs at least 44px** (the floor below); `.dock-modes` adds a frame and
-   0.25rem of margin each side. The
-   fullest signed-in row has six loose controls — Home, Commands, Comments,
-   Metadata, Experimental and Feedback — as well as *m* modes, then about 50px
-   of top-level gaps, segment frame/margins and trailing gutter. So its floor is
-   roughly `44 × (m + 6) + 50`, before Plain's surviving word. At m=12 that is
-   already 842px against a 384px bar, close to the 853px browser measurement
-   above. **A phone in portrait scrolls, and every new mode adds at least another
-   44px.**
+   costs at least 44px** (the floor below); `.dock-modes` adds its frame edges
+   and, at this width, 0.15rem of margin each side. The
+   fullest signed-in row has six loose controls — Home, Commands, Metadata, Help,
+   Experimental and Feedback — plus *d* controls inside `.dock-modes`, where
+   Comments now stands beside Marginalia. Add about 50px of top-level gaps,
+   segment frame/margins and trailing gutter: the floor is roughly
+   `44 × (d + 6) + 50`, before Plain's surviving word. **A phone in portrait
+   scrolls, and every newly drawn control adds at least another 44px.**
 
    **`plain` is the twelfth (2026-08-31), and it is the one that had to be
    leftmost.** A scrolling row means the buttons past the fold are found by

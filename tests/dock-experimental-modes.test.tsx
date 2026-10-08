@@ -194,21 +194,21 @@ function loose(search: string, props: Record<string, unknown> = {}): void {
 /** The mode buttons of the segment, by the mode each one is for — the radios
     and, since 2026-10-01, Marginalia's toggle after them (261001i). */
 function radioModes(): string[] {
-  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
+  return [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
 }
 
 /** The mode links (the metadata page), by the word on each. */
 function linkModes(): string[] {
-  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")].map(
+  return [...host.querySelectorAll<HTMLElement>(".dock-modes a[data-mode]")].map(
     (a) => a.getAttribute("aria-label") ?? a.textContent ?? "",
   );
 }
 
 /** Which of those links carry the visitor's visible unavailable mark. */
 function markedLinkModes(): string[] {
-  return [...host.querySelectorAll<HTMLElement>(".dock-modes a.dock-btn")]
+  return [...host.querySelectorAll<HTMLElement>(".dock-modes a[data-mode]")]
     .filter((a) => a.classList.contains("tw:opacity-55"))
     .map((a) => a.getAttribute("aria-label") ?? a.textContent ?? "");
 }
@@ -290,13 +290,13 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
      drawn only while its notes were on. */
   it("Marginalia's toggle is drawn with the switch off, and pressed while its notes are on", () => {
     reading({ mode: "glossary", margin: true, experimental: EXPERIMENTAL_OFF });
-    const toggle = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
+    const toggle = host.querySelector<HTMLElement>('.dock-modes [data-mode][aria-pressed]');
     expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
     expect(toggle?.getAttribute("aria-pressed")).toBe("true");
     expect(toggle?.closest('[role="radiogroup"]')).toBeNull();
     expect(checked()).toEqual([MODE_LABEL.glossary]);
     reading({ mode: "glossary", margin: false, experimental: EXPERIMENTAL_OFF });
-    const closed = host.querySelector<HTMLElement>('.dock-modes [aria-pressed]');
+    const closed = host.querySelector<HTMLElement>('.dock-modes [data-mode][aria-pressed]');
     expect(closed?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
     expect(closed?.getAttribute("aria-pressed")).toBe("false");
   });
@@ -337,7 +337,7 @@ describe("the mode the bar is in is drawn whatever the switch says", () => {
         /* A bar link, or — for Glossary since 2026-10-07 — the link that is
            its item under More (plan 261007c). The same `modeLinkHref` either
            way, which is what this case is about. */
-        const inBar = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a.dock-btn")].find(
+        const inBar = [...host.querySelectorAll<HTMLAnchorElement>(".dock-modes a[data-mode]")].find(
           (a) => a.getAttribute("aria-label") === MODE_LABEL[mode],
         );
         if (!inBar) openMore(host);

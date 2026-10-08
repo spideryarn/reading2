@@ -107,7 +107,7 @@ import { ModeSurface } from "./ModeSurface.js";
 import { ChatThreadAbout } from "./ChatThreadAbout.js";
 import { LearnSubModesAbout } from "./LearnAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
-import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { DictationButton, DictationStrip, TalkLabel } from "./DictationStrip.js";
 import { LiveButton } from "./live/LiveButton.js";
 import { LiveStatus } from "./live/LiveStatus.js";
 import { LiveTail } from "./live/LiveTail.js";
@@ -3268,9 +3268,10 @@ export function Composer({
              glossary priming all come along unchanged. Only the label is new. */
           <span className="chat-talk">
             <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />
-            <span className="chat-talk-label" aria-hidden="true">
-              {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
-            </span>
+            {/* Holds its width across Stop: in this wrapping row a wider word
+                could push Live onto a line of its own and move the microphone
+                in a bottom-pinned composer. `TalkLabel`. */}
+            <TalkLabel field={dictate} className="chat-talk-label" hidden />
           </span>
         ) : (
           <DictationButton dictation={dictate.dictation} toggle={toggleDictation} disabled={busy} again={dictate.again} sendingAfter={dictate.sendingAfter} />

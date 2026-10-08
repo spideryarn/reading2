@@ -209,6 +209,33 @@ export async function defaultInputListed(): Promise<boolean> {
 }
 
 /**
+ * **Whether a remembered microphone is still listed, asked before asking for it.**
+ *
+ * `"missing"` only when the browser shows real ids and this one is not among
+ * them. Before the page holds a grant the ids are hidden (blank), and then the
+ * answer is `"unknown"` and the caller asks for the device as it always did.
+ *
+ * It exists for WebKit's gesture accounting (plan 261008d). A click buys one
+ * gesture-privileged microphone request, and an `exact` request for an id that
+ * no longer resolves is refused **without a prompt but still spends it**, so
+ * the system-default request that follows counts as having no gesture — which
+ * on an iPhone re-prompts whenever the last capture ended more than a minute
+ * ago, where a gesture-privileged request would have reused the grant for ten.
+ * Greg's iPhone was on that path on every press (spya-k3q9mc, spya-btjtbb).
+ * Listing the devices spends nothing.
+ */
+export async function chosenInputListed(id: string): Promise<"listed" | "missing" | "unknown"> {
+  try {
+    if (!navigator.mediaDevices?.enumerateDevices) return "unknown";
+    const inputs = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "audioinput");
+    if (!inputs.some((d) => d.deviceId !== "")) return "unknown";
+    return inputs.some((d) => d.deviceId === id) ? "listed" : "missing";
+  } catch {
+    return "unknown";
+  }
+}
+
+/**
  * Whether a `getUserMedia` rejection means "that device is not there" — the
  * one failure that earns a second, unconstrained attempt.
  *

@@ -15,15 +15,15 @@ related: spine, gutter, modes, keyboard
 - **Marginalia** is a column of notes on the right of the article, which can stay open beside any
   panel.
 - **The bottom bar** starts with the way home (the Spideryarn wordmark). On your own article, that
-  is followed by the **Commands** button. Next come the mode buttons, ending with **More** and
-  **Marginalia**: **More** opens a short list of the modes you will want less often (Quotes,
-  Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come **Comments**
-  and **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
+  is followed by the **Commands** button. Next come the mode buttons. **More**, just after
+  Structure, Summary and Skim, opens a short list of the modes you will want less often (Quotes,
+  Glossary and Ideas, and with experimental features on, FAQ and Timeline). Then come
+  **Marginalia** and **Comments**, side by side, and **Metadata**. When you are signed in, it also has the **Experimental** switch and **Feedback**.
   Every bar has a **Help** link near its right-hand end, which opens Help at the page about the mode
   you are in. On your own article you can also press **Commands** and type *help*, and wherever
   a mode has an (i), its card ends in **More in Help**.
 
-![The bottom bar: the wordmark, Commands, Plain, Structure and the other mode buttons, More, Marginalia, Quick search, Comments, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Plain open. Most mode buttons show only an icon: point at one for its name.")
+![The bottom bar: the wordmark, Commands, Plain, Structure, Summary, Skim, More and the other mode buttons, Marginalia and Comments, Quick search, Metadata, the Experimental switch and Help](images/bottom-bar.png "The bottom bar on your own article, with Plain open. Most mode buttons show only an icon: point at one for its name.")
 
 When there is not room for everything, the mode buttons drop their words and show only icons. Point
 at one to see its name and what it does; each mode also shows its name for a few seconds when you

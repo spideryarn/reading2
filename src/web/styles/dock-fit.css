@@ -12,9 +12,9 @@
    toggles you could turn on together. A hairline box around them
    says "one of these", which is what the markup already promises a screen
    reader via `role="radiogroup"` — this is the sighted half of the same claim.
-   Since 2026-10-02 there are several boxes (`.dock-frame` below) — four since
-   the More button got one on 2026-10-07 — and this element is the unframed
-   row that holds them.
+   Since 2026-10-02 there are several boxes (`.dock-frame` below) — Plain's,
+   the bands' (with More inside since 2026-10-08), and Marginalia's (with
+   Comments) — and this element is the unframed row that holds them.
 
    **On the metadata page the same row holds links, and none is on**
    (`DockModeLinks`, since 2026-10-04): no mode is open there, so the frames
@@ -57,13 +57,14 @@
    2026-10-05, when the mode left the switch.)
    docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
 
-   **A fourth since 2026-10-07: the More button's**, between the bands and
-   Marginalia and outside the radiogroup as Marginalia's is — a menu button is
-   not one of the things the middle column shows (Dock.tsx § `DockMore`). It
-   needs no rule of its own here: it is a `.dock-btn` with a `.dock-btn-label`
-   inside `.dock-modes`, so every rung of the ladder below drops its word and
-   tightens its padding with its neighbours', and it is never `.on`, so rung
-   2 never gives the word back.
+   **The More button and Comments sit inside these frames since 2026-10-08**
+   (plan 261008d): More in the bands' frame straight after Skim, Comments in
+   Marginalia's after the toggle. More had a fourth frame of its own for a day.
+   Neither needs a rule of its own here: each is a `.dock-btn` with a
+   `.dock-btn-label` inside `.dock-modes`, so every rung of the ladder below
+   drops its word and tightens its padding with its neighbours'. Neither
+   carries `data-mode`, so rung 2 never gives either its word back
+   (§ the mode you are actually in keeps its word).
 
    **Never shrink, for the reason `.dock-modes` gives above**: this clips its
    own overflow. On a coarse pointer the row may grow, and each frame takes
@@ -248,15 +249,17 @@
 .dock.dock-fit-4 .dock-feedback .dock-btn-label,
 .dock.dock-fit-4 .dock-help .dock-btn-label { display: none; }
 
-/* Rung 2 — the modes go to glyphs, and what is left with a word is Commands,
-   Comments and Metadata (and Tweets until it became a mode, 2026-09-29). **Not "the other three":** the app cluster's
+/* Rung 2 — the modes, More and Comments go to glyphs, and what is left with a
+   word is Commands and Metadata (and Tweets until it became a mode,
+   2026-09-29). **Not "the other two":** the app cluster's
    two words went at rung 1 and do not come back, and the experimental switch
    has never carried one. `Commands` joined this list on 2026-09-08 without any
    rule changing — it is a plain `.dock-btn`, so rungs 1 and 2 never named it
    and rung 3's sweep always caught it. What changed that day is only *where*
    the word appears: the button moved to the head of the row, so a middling
-   window now begins with a wordless wordmark and the word `Commands`. Square-ish once the text is gone, so fourteen icons read as one
-   segmented control rather than as loose glyphs. **This was rung 1 until
+   window now begins with a wordless wordmark and the word `Commands`.
+   Square-ish once the text is gone, so the framed controls read as compact
+   groups rather than as loose glyphs. **This was rung 1 until
    2026-09-06** and is still the old `max-width: 1100px` rule's job.
 
    **One selector, because the bar has one outer CSS shape since 2026-10-04.** The
@@ -368,8 +371,16 @@
    2026-09-06**, when a new rung went in above it. Both measurements above were
    taken against the old numbering and are unchanged by the renumber: they are
    about the rung that hides the mode labels, which is this one. Rung 1 hides no
-   mode label, so there is nothing there for this rule to put back. */
-.dock.dock-fit-2 .dock-btn.on .dock-btn-label { display: inline; }
+   mode label, so there is nothing there for this rule to put back.
+
+   **A mode's word only — `[data-mode]` — since 2026-10-08**, when Comments
+   moved into Marginalia's frame (plan 261008d). It is `.on` while its drawer
+   is open, and `fitSignature` does not change when the drawer opens, so a
+   plain `.dock-btn.on` here would give it its word back on rung 2 and widen
+   the bar with nothing remeasuring it. A mode's `.on` changes the signature
+   (it names the current mode), which is what makes the measurement above
+   true. */
+.dock.dock-fit-2 .dock-modes [data-mode].on .dock-btn-label { display: inline; }
 
 /* **The radios inside the segment are a semantic group of their own** —
    Marginalia's toggle sits beside them in the same segment, outside the

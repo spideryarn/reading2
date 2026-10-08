@@ -116,7 +116,7 @@ import type { Attempt, UseQuiz } from "./useQuiz.js";
 import type { LearnView } from "./params.js";
 import { BlockRef } from "./BlockRef.js";
 import { CitedText } from "./Cited.js";
-import { DictationButton, DictationStrip } from "./DictationStrip.js";
+import { DictationButton, DictationStrip, TalkLabel } from "./DictationStrip.js";
 import { JobProgress } from "./JobProgress.js";
 import { AboutMade } from "./BandAbout.js";
 import { ModeSurface } from "./ModeSurface.js";
@@ -1816,9 +1816,7 @@ function Mic({ dictate, disabled }: { dictate: UseDictationField; disabled: bool
   return (
     <span className="quiz-mic">
       <DictationButton dictation={dictate.dictation} toggle={dictate.toggle} disabled={disabled} again={dictate.again} sendingAfter={dictate.sendingAfter} />
-      <span className="quiz-mic-label">
-        {dictate.dictation.armed ? "Listening…" : dictate.readOnly ? "Writing it down…" : "Talk"}
-      </span>
+      <TalkLabel field={dictate} className="quiz-mic-label" />
     </span>
   );
 }

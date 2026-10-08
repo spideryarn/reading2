@@ -136,7 +136,7 @@ function modeControls(): HTMLElement[] {
   /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
   return [
     ...host.querySelectorAll<HTMLElement>(
-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
+      '.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed], .dock-modes a[data-mode]',
     ),
   ];
 }
@@ -569,7 +569,7 @@ describe("the buttons in the bar that are not modes", () => {
     const offIt = await cardFor(barControl("Comments"));
 
     expect(offIt.head).toBe("Comments");
-    expect(offIt.paras.length, "the loose Comments card is not two paragraphs").toBe(2);
+    expect(offIt.paras.length, "the framed Comments card is not two paragraphs").toBe(2);
     expect(offIt.paras[0]).toContain(onReadingView.paras[0]);
     expect(offIt.paras[0]).toContain("back in the article they are about");
     expect(offIt.paras[1], "the second paragraph differs between the arms").toBe(
