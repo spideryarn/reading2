@@ -9,7 +9,7 @@
  * test sat on dev; nothing outside the session noticed. Greg, 2026-10-08:
  * *"Why haven't there been any deploys in 17h? … ideally improve so it's less
  * likely to break going forwards"*. The plan is
- * docs/plans/261008e-watchdog-alarms-for-a-stopped-pacer-and-production-lagging-dev.md;
+ * docs/plans/261008g-watchdog-alarms-for-a-stopped-pacer-and-production-lagging-dev.md;
  * the session side is scripts/overseer-tools/standing-jobs.md.
  *
  * **Three states, and `unknown` is never `ok`** (docs/reusable/silent-success.md).

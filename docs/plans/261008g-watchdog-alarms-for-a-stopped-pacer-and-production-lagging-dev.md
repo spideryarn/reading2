@@ -1,4 +1,4 @@
-# 261008e — Watchdog alarms for a stopped pacer and production lagging dev
+# 261008g — Watchdog alarms for a stopped pacer and production lagging dev
 
 > Why haven't there been any deploys in 17h? … ideally improve so it's less likely to break going
 > forwards, and update provisioning instructions accordingly.

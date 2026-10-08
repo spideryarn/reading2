@@ -5,7 +5,7 @@ reported `ok` despite unreadable inputs, and readiness messages that claimed a
 failure duration their observations did not establish. Reader impact was not
 established. The introducing commit aimed to detect another silently stopped
 pacer after production had gone 17 hours undeployed; see the
-[plan](../plans/261008e-watchdog-alarms-for-a-stopped-pacer-and-production-lagging-dev.md).
+[plan](../plans/261008g-watchdog-alarms-for-a-stopped-pacer-and-production-lagging-dev.md).
 
 ## The class: a partial observation promoted into a complete operational claim
 

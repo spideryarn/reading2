@@ -2,7 +2,7 @@
  * scripts/overseer-watchdog-checks.ts — the two checks the watchdog gained on
  * 2026-10-08, after the Overseer session's pacer expired silently and
  * production went 17 hours undeployed
- * (docs/plans/261008e-watchdog-alarms-for-a-stopped-pacer-and-production-lagging-dev.md).
+ * (docs/plans/261008g-watchdog-alarms-for-a-stopped-pacer-and-production-lagging-dev.md).
  *
  * The thing under test above all is that `unknown` never reads as `ok`
  * (docs/reusable/silent-success.md): a heartbeat that will not parse, a tmux
