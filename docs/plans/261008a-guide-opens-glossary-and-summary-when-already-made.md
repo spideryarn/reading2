@@ -109,3 +109,28 @@ mounts; Marginalia is untouched).
    untrue (it says the exception moves the reader — still true); Help on Chat if it names which
    modes open.
 3. Sol code review (write-capable), gates, Sonnet browser check at 1440 / 820 / 390, push.
+
+## As built
+
+- Code review ([GPT Sol](261008a-code-review-sol.md), *land with its fixes*): no P0–P2; three P3
+  stale comments fixed (one still named the dropped page-side `madeNow`), and `opensFree`
+  assertions added on retry, edit and recovery.
+
+## Log
+
+- 2026-10-08: **seen in a browser**, Sonnet subagent, Playwright, local Supabase, about ten paid
+  turns, no console errors. `fowler-phrenology` (glossary and plain-words summary stored):
+  *"Open the glossary for me please"* opened Glossary by itself as the answer ended, at 1440, 820
+  and 390, with only `GET /api/glossary/…` and `GET /api/jobs` — **no `POST /api/jobs`** — the
+  answer said *"I've opened the Glossary for you"*, and Back returned to the guide. *"open the
+  brief summary"* opened Summary › Brief by itself at 1440, again with no job POST. An article with
+  neither (`name-spya-yegmpb`): an *Open Glossary (generates)* button that did nothing, at 1440 and
+  390. Structure still opens by itself (1440). **Not seen**: Brief at 820/390, the not-stored case
+  at 820. Shots: [Glossary opened](261008a-shot-1-glossary-opened-1440.png),
+  [the answer](261008a-shot-2-answer-says-opened-1440.png),
+  [not stored: a button](261008a-shot-3-not-stored-button-1440.png),
+  [Structure](261008a-shot-4-structure-opened-1440.png),
+  [phone](261008a-shot-5-glossary-opened-390.png).
+- Noticed, not changed: the chip for a made Glossary still carries the bar's static *generates*
+  marker (`modeGenerates`), though pressing it would only reopen it. The marker is the command
+  bar's too; making it per-artefact is a separate change.
