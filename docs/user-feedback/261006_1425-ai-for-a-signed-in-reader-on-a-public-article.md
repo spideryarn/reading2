@@ -1,7 +1,7 @@
 ---
 reports: spya-uc0asn
-ending: awaiting
-comment: Waiting on you: not built. AI for a signed-in reader on someone else's public article means we pay, not the owner, and running it in place edits a security defence. Five options, A to E, and two questions.
+ending: shipped
+comment: You chose B: a signed-in visitor can add a private copy of a public article to their own shelf and use AI there. AI in place on someone else's article (C, D, E) is not for now, as you said on 2026-10-07.
 ---
 # AI for a signed-in reader on a public article
 
@@ -13,8 +13,16 @@ Sentry event itself was not matched), `spya-uc0asn`, SPIDERYARN-READING2-DY, fil
 >
 > Would that create extra complexity? If not, and if you think it's a good idea, proceed.
 
-**Ending: Awaiting Greg.** Nothing built. Mark it ignored in Sentry with this reason; the next
-feedback sweep does the status write.
+**Ending: Shipped** (since 2026-10-08; it was Awaiting Greg until he answered). Greg chose option
+B, built as [261007m](../plans/261007m-a-private-copy-of-a-public-article-on-your-own-shelf.md)
+(`47212c640`, queue item `qi-jp2r4be8`), and on 2026-10-07 said no to the rest for now:
+
+> it's fine if signed-in visitors reading someone else's public articles can't use AI modes for now
+
+Recorded in [261006k](../plans/261006k-signed-in-reader-ai-on-someone-else-s-public-article.md)
+and `q-re2u3r`. Resolved in Sentry by the feedback sweep, 2026-10-08.
+
+What follows is the note as it stood while the report awaited Greg.
 
 The answer to his question is yes, it adds complexity. A signed-in reader spending model calls on
 an article they do not own is a third kind of request the server has no place for, and every
