@@ -139,7 +139,9 @@ cites is then the best account of it.
   `scripts/overseer.ts run`. [`scripts/overseer-activate.ts`](../../scripts/overseer-activate.ts)
   installs and arms it. A timer,
   [`overseer-watchdog.timer`](../../infra/hetzner/systemd/overseer-watchdog.timer), runs
-  [`scripts/overseer-watchdog.ts`](../../scripts/overseer-watchdog.ts) against its heartbeat.
+  [`scripts/overseer-watchdog.ts`](../../scripts/overseer-watchdog.ts) against its heartbeat, and
+  [`scripts/overseer-watchdog-checks.ts`](../../scripts/overseer-watchdog-checks.ts) against the
+  Overseer session's pacer heartbeat and production's lag behind dev.
 - **The readiness loop** is a plain loop under tmux, not a unit:
   [`scripts/readiness-loop.ts`](../../scripts/readiness-loop.ts), and
   [`scripts/readiness-run.ts`](../../scripts/readiness-run.ts) for one run.

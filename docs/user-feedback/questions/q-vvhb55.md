@@ -1,10 +1,11 @@
 ---
 id: q-vvhb55
 report: spya-ucftjt
-status: open
+status: answered
 asked: 2026-10-07
 title: Should Ask about Spideryarn, on the Help pages, work for people who are not signed in?
 refs: qi-e6ksaejb · docs/plans/261007k-help-chatbot.md · docs/user-feedback/261006_2208-help-chatbot-on-the-help-pages.md · SPIDERYARN-READING2-E9
+acted: spya-umnga8
 ---
 You asked for a chatbot on the Help pages that answers only questions about how Spideryarn works, free, and available to people who are not signed in. It is built for signed-in readers: a box on every Help page, one question at a time, answered from the Help pages by a cheap model (GPT-5.6 Luna), nothing stored. A question costs about $0.007 the first time and $0.0006 after that, because the Help pages stay cached between questions, whoever asks. In a test of 24 questions it declined every off-topic question and every attempt to make it do something else.
 
@@ -17,3 +18,9 @@ B. Open it to everybody, with limits (recommended). One extra address that works
 C. B plus a "are you human" check (Cloudflare Turnstile). Stops casual scripts from using up the strangers' ceiling. Costs a third-party script and a widget on the Help page, a privacy line, a key in Vercel, and a short-lived session we would have to mint, because each check can be used only once. About two days.
 
 Pick B if strangers occasionally being told "resting" is acceptable; C if a script emptying the ceiling would be a real loss; A if this should wait.
+
+## Greg's answer, 2026-10-08 (in the Feedback dialog, reply `spya-umnga8`)
+
+> A for now
+
+Settled: Ask about Spideryarn stays for signed-in readers only, for now. Nothing more built. Recorded by the feedback sweep.

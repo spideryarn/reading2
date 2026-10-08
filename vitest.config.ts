@@ -3,6 +3,7 @@ import type { InlineConfig } from "vitest/node";
 import { defaultExclude, defineConfig } from "vitest/config";
 
 import { recordRefusal } from "./admission-journal.js";
+import { TEST_OUTCOME_FILE_ENV } from "./scripts/vitest-outcome-reporter.js";
 import { TEST_LANES, type TestLane } from "./tests/store-migration-registry.js";
 import { ACCOUNT_ROUTING_VARIABLES } from "./tests/helpers/account-neutral-env.js";
 import {
@@ -227,6 +228,8 @@ const COMMON = {
  */
 const NO_PROVIDER_CALLS = "./tests/setup/no-provider-calls.ts";
 
+const OUTCOME_REPORTER = "./scripts/vitest-outcome-reporter.ts";
+
 export default defineConfig({
   resolve: { alias: ALIAS },
   test: {
@@ -240,6 +243,10 @@ export default defineConfig({
        The private lane names its own `maxWorkers: 1` and so is unaffected by
        either, which is the point of it. */
     maxWorkers: PARALLEL_WORKERS,
+    /* Which files failed, for a later deploy to rerun only those — when asked,
+       by the readiness runner (scripts/vitest-outcome-reporter.ts). A
+       `--reporter` flag replaces this list, so the deploy names it there. */
+    ...(process.env[TEST_OUTCOME_FILE_ENV] ? { reporters: ["default", OUTCOME_REPORTER] } : {}),
     projects: [
       {
         resolve: { alias: ALIAS },

@@ -373,9 +373,11 @@ svg.band-waiting-ghost { flex: none; }
   width: auto;
   /* **And the way-back chip's room.** The chip stands at the band's right edge
      (dock.css § the way back), which is the window's left edge when the band
-     covers it — this card's corner. `--return-chip-h` is 0 with no chip, so
-     this is the foot's room whenever there is nothing to clear; a foot taller
-     than the chip already lifts the card past it. GPT Sol, 2026-09-28. */
+     covers it — this card's corner. `footRoom` includes the covering band's
+     bottom padding (narrow-window.css, plan 261008f), so the measured room
+     already clears both the chip and any pinned foot. `max()` avoids counting
+     the chip twice and still clears it in a band with no growing child, where
+     `footRoom` returns 0. `--return-chip-h` is 0 with no chip. */
   padding-bottom: calc(max(var(--herald-foot, 0px), var(--return-chip-h)) + var(--kb-inset, 0px) + 0.6rem);
 }
 /* **A toast, not a strip.** Full width with a bottom rule was right while it

@@ -14,6 +14,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CORPUS_ROOT } from "../scripts/corpus-materialise.js";
 import { ensureRunnerWorktree, linkRunnerEnvLocal, preparationEnv, readinessCheckEnv, refreshRunnerCorpus } from "../scripts/readiness-loop.js";
 import { checkChildEnv, preparationFromEnv } from "../scripts/readiness-run.js";
+import { TEST_OUTCOME_VERSION } from "../tools/fleet/test-outcome.js";
 import {
   PREPARATION_VERSION,
   READINESS_PREPARATION_ENV,
@@ -221,9 +222,10 @@ describe("the wrapper writes preparation into the actual started and finished re
     for (const name of ["node_modules", "vitest-admission.ts"]) {
       symlinkSync(path.join(root, name), path.join(runner, name));
     }
-    for (const name of ["readiness.ts", "readiness-parse.ts", "readiness-store.ts"]) {
+    for (const name of ["readiness.ts", "readiness-parse.ts", "readiness-store.ts", "test-outcome.ts"]) {
       symlinkSync(path.join(root, "tools", "fleet", name), path.join(runner, "tools", "fleet", name));
     }
+    symlinkSync(path.join(root, "scripts", "vitest-outcome-reporter.ts"), path.join(runner, "scripts", "vitest-outcome-reporter.ts"));
     // The wrapper runs for real; only the Git leaf is fixed to a clean SHA.
     // Git's synchronous child probe is blocked by this review's sandbox.
     writeFileSync(path.join(runner, "tools", "fleet", "readiness-git.ts"), [
@@ -256,5 +258,9 @@ describe("the wrapper writes preparation into the actual started and finished re
     expect(finished?.state).toBe("finished");
     expect(started?.preparation ?? null).toEqual(startStamped ? preparation : null);
     expect(finished?.preparation ?? null).toEqual(endStamped ? { ...preparation, envLocalVerified: true } : null);
+    /* The fake npm writes no outcome, and the wrapper says so on the record
+       rather than leaving it off (docs/plans/261008h). */
+    expect(finished?.state === "finished" ? finished.testOutcome : null).toMatchObject({ kind: "unusable", why: expect.stringMatching(/no outcome file/) });
+    expect(finished?.state === "finished" ? finished.testOutcomeVersion : null).toBe(TEST_OUTCOME_VERSION);
   });
 });
