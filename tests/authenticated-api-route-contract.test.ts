@@ -390,6 +390,12 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
     witnesses: ["/api/admin/feedback/answers"],
   },
   {
+    /* An admin's "defer for now" on a question, 261008i. One segment, as `answers` is. */
+    match: { kind: "literal", path: "/api/admin/feedback/deferrals" },
+    methods: ["POST"],
+    witnesses: ["/api/admin/feedback/deferrals"],
+  },
+  {
     match: { kind: "regex", source: "^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$", flags: "" },
     /* PATCH since 261003j: mark one report ignored, or take the mark back. */
     methods: ["GET", "PATCH"],
@@ -963,12 +969,13 @@ const EXPECTED_AUTH_ROUTES: ExpectedRoute[] = [
    the command bar's suggestions (plan 261005k); 95 with an admin's own earlier
    feedback (plan 261007d); 96 with their replies to questions (its stage 2);
    97 with the Help pages' chatbot (plan 261007k); 98 with Hidden text's Opus
-   check (plan 261007l). */
-const EXPECTED_MATCHER_COUNT = 98;
+   check (plan 261007l); 99 with an admin's deferral of a question (plan 261008i). */
+const EXPECTED_MATCHER_COUNT = 99;
 /* 115 since its three verbs, each a guard; 116 with the suggestions' one; 117
    with the admin's earlier feedback; 118 with their replies to questions; 119
-   with the Help pages' chatbot; 120 with Hidden text's Opus check. */
-const EXPECTED_GUARD_COUNT = 120;
+   with the Help pages' chatbot; 120 with Hidden text's Opus check; 121 with the
+   deferral of a question. */
+const EXPECTED_GUARD_COUNT = 121;
 
 /* ------------------------------------------------------------- the source read */
 
@@ -2129,6 +2136,8 @@ describe("the authenticated API's route contract", () => {
         "GET literal /api/admin/feedback/earlier",
         // an admin's reply to a question, 261007d stage 2 — beside the list that carries the questions
         "POST literal /api/admin/feedback/answers",
+        // an admin's deferral of a question, 261008i — beside the replies
+        "POST literal /api/admin/feedback/deferrals",
         "GET regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",
         // mark one report ignored, 261003j — beside the read of it
         "PATCH regex /^\\/api\\/admin\\/feedback\\/([\\w-]+)\\/([\\w-]+)$/",

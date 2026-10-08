@@ -205,8 +205,8 @@ import {
   isFeedbackShipped,
   shippedFeedbackIds,
 } from "./feedback-ending.js";
-import { feedbackQuestionStatus, openFeedbackQuestions } from "./feedback-question.js";
-import { isFeedbackQuestionId } from "./feedback-question-values.js";
+import { feedbackQuestionActed, feedbackQuestionStatus, openFeedbackQuestions } from "./feedback-question.js";
+import { isFeedbackQuestionId, questionState } from "./feedback-question-values.js";
 import { CHAT_TIMEOUT_MS, converse } from "./converse.js";
 import { runTool, type ToolOutcome, type ToolRun } from "./chat-tools.js";
 import { explainStream } from "./explain.js";
@@ -287,6 +287,7 @@ import type {
   CriterionFinish,
   NewFeedback,
   NewFeedbackAnswer,
+  NewFeedbackDeferral,
   SearchFinish,
   Visibility,
 } from "./store/contracts.js";
@@ -489,6 +490,10 @@ import {
   type AdminEarlierFeedbackPage,
   type AdminFeedbackAnswerReceipt,
   type AdminFeedbackQuestion,
+  type AdminFeedbackQuestionAnswer,
+  type AdminFeedbackQuestionV1,
+  type AdminEarlierFeedbackPageV1,
+  type AdminFeedbackDeferralReceipt,
   EARLIER_FEEDBACK_LIMIT,
   EARLIER_FEEDBACK_SHOWS,
   type EarlierFeedbackPage,
@@ -8162,31 +8167,104 @@ async function fileFeedback(
 
 /**
  * **Every open question, as the signed-in admin's Earlier tab shows it**:
- * oldest first, each with their own newest reply and, when it names a report
- * **of theirs**, that report's number and first line. Both lookups are
- * owner-scoped in the store, so a question about another reader's report sends
- * `report: null` and another admin's reply is never this one's. Only the open
+ * oldest first, as threads (plan 261008i). Each carries the admin's own
+ * replies not yet acted on, which group it is in (`questionState`, from every
+ * reply and the admin's deferral), and, when it names a report **of theirs**,
+ * that report's number, first line and text. Every lookup is owner-scoped in
+ * the store, so a question about another reader's report sends `report: null`
+ * and another admin's reply or deferral is never this one's. Only the open
  * ones: an answered question is not sent, whatever a store hands back. Each is
- * picked field by field; the file's `refs` and `acted` were never compiled.
+ * picked field by field; the file's `refs` was never compiled, and its `acted`
+ * ids leave only as the state and as which replies are listed.
+ *
+ * `shape` 1 is the answer before 261008i, for a request without
+ * `questions=2`: a tab loaded before the deploy keeps working after it (F3).
+ * Six keys, the newest reply of any kind, the report without its text.
  */
-async function questionsForAdmin(): Promise<AdminFeedbackQuestion[]> {
+/** At most this many of a thread's unacted replies in one answer, the newest (F12). */
+const THREAD_ANSWERS = 5;
+
+async function questionsForAdmin(shape: 2): Promise<AdminFeedbackQuestion[]>;
+async function questionsForAdmin(shape: 1): Promise<AdminFeedbackQuestionV1[]>;
+async function questionsForAdmin(shape: 1 | 2): Promise<AdminFeedbackQuestion[] | AdminFeedbackQuestionV1[]> {
   const open = openFeedbackQuestions();
   if (open.length === 0) return [];
-  const answers = await feedbackStore.newestAnswers(open.map((question) => question.id));
+  const ids = open.map((question) => question.id);
   const named = [...new Set(open.flatMap((question) => (question.report === null ? [] : [question.report])))];
-  const reports = await feedbackStore.linkedReports(named);
+  const [answers, deferrals, reports] = await Promise.all([
+    feedbackStore.answersTo(ids),
+    shape === 2 ? feedbackStore.deferrals(ids) : Promise.resolve([]),
+    feedbackStore.linkedReports(named),
+  ]);
+  const reply = ({ id, body, createdAt }: AdminFeedbackQuestionAnswer) => ({ id, body, createdAt });
+  if (shape === 1) {
+    return open.map(({ id, title, body, asked, report }) => {
+      const linked = report === null ? undefined : reports.find((one) => one.id === report);
+      /* Oldest first from the store, so the newest is the last. */
+      const newest = answers.filter((one) => one.questionId === id).at(-1);
+      return {
+        id,
+        title,
+        body,
+        asked,
+        report: linked === undefined ? null : { id: linked.id, number: linked.number, firstLine: linked.firstLine },
+        answer: newest === undefined ? null : reply(newest),
+      };
+    });
+  }
   return open.map(({ id, title, body, asked, report }) => {
     const linked = report === null ? undefined : reports.find((one) => one.id === report);
-    const answer = answers.find((one) => one.questionId === id);
+    const acted = feedbackQuestionActed(id);
+    const replies = answers
+      .filter((one) => one.questionId === id)
+      .map((one) => ({ ...one, acted: acted.includes(one.id) }));
+    const deferral = deferrals.find((one) => one.questionId === id)?.deferredAt ?? null;
+    const state = questionState({ replies, deferredAt: deferral });
+    const unacted = replies.filter((one) => !one.acted);
     return {
       id,
       title,
       body,
       asked,
-      report: linked === undefined ? null : { id: linked.id, number: linked.number, firstLine: linked.firstLine },
-      answer: answer === undefined ? null : { id: answer.id, body: answer.body, createdAt: answer.createdAt },
+      report:
+        linked === undefined
+          ? null
+          : { id: linked.id, number: linked.number, firstLine: linked.firstLine, body: linked.body },
+      /* What an agent has acted on is quoted in the body already (261008i, decision 2). */
+      /* The newest few, with a count of the rest (F12): every reply is still
+         stored, and `--answers` prints them all. */
+      answers: unacted.slice(-THREAD_ANSWERS).map(reply),
+      olderAnswers: Math.max(0, unacted.length - THREAD_ANSWERS),
+      state,
+      deferredAt: state === "deferred" ? deferral : null,
     };
   });
+}
+
+/** The two fields a deferral may carry. Exactly these. */
+const FEEDBACK_DEFERRAL_FIELDS = ["question", "deferred"] as const;
+
+/**
+ * **A deferral, built field by field**, by `parseFeedbackAnswer`'s rules: an
+ * unknown key is refused in fixed prose, nothing sent reaches a message, and
+ * the environment is this process's own (F6). The question must be one this
+ * build has a file for; whether it is still open is the route's 409.
+ */
+function parseFeedbackDeferral(raw: unknown): NewFeedbackDeferral {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw httpError(400, "Expected a JSON object [fd-type]");
+  }
+  const sent = raw as Record<string, unknown>;
+  for (const key of Object.keys(sent)) {
+    if (!(FEEDBACK_DEFERRAL_FIELDS as readonly string[]).includes(key)) {
+      throw httpError(400, "A deferral has a field this endpoint does not take [fd-field]");
+    }
+  }
+  const question = sent.question;
+  if (!isFeedbackQuestionId(question)) throw httpError(400, "question must be a question id [fd-question]");
+  if (feedbackQuestionStatus(question) === null) throw httpError(400, "There is no such question. [fd-unknown]");
+  if (typeof sent.deferred !== "boolean") throw httpError(400, "deferred must be true or false [fd-deferred]");
+  return { questionId: question, deferred: sent.deferred, environment: feedbackEnvironment() };
 }
 
 /** The three fields a reply may carry. **Exactly these**, for `FEEDBACK_FIELDS`' reasons. */
@@ -9180,12 +9258,19 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
       /* Whole reports, as many as fit one response, as the plain route does
          below: fifty at 20,000 characters can pass 4.5 MB. Plan 261007j. */
       const fitting = prefixWithinBytes(reports, FEEDBACK_LIST_BYTES);
-      const answer: AdminEarlierFeedbackPage = {
+      const envelope = {
         reports: fitting,
         more: page.more || fitting.length < reports.length,
         counts: { all: open + waiting + aside + shipped, open, waiting, aside, shipped },
-        questions: await questionsForAdmin(),
       };
+      /* **Threads only to a client that asks for them** (plan 261008i, F3): a
+         tab loaded before the deploy sends no `questions`, and its strict
+         check wants the six-key questions it was built against. Anything but
+         `2` is that older client. */
+      const answer: AdminEarlierFeedbackPage | AdminEarlierFeedbackPageV1 =
+        query.get("questions") === "2"
+          ? { ...envelope, questions: await questionsForAdmin(2) }
+          : { ...envelope, questions: await questionsForAdmin(1) };
       send(res, 200, answer);
     },
   },
@@ -9230,6 +9315,35 @@ const AUTH_ROUTES: readonly AuthRoute[] = [
           throw new Error(`unknown answer outcome: ${String(unreachable)}`);
         }
       }
+    },
+  },
+
+  /* **Defer a question, or bring it back** — the *Defer for now* and *Bring
+     back* buttons on a thread in the Earlier tab. Plan 261008i, decision 3.
+     Under `/api/admin/`, so the namespace gate has refused everybody else
+     before this runs; nothing here asks who the caller is, and the row is the
+     signed-in owner's. One segment after `feedback/`, like `answers`.
+
+     **Only an open question** (F6): a late reply is still Greg's words and is
+     kept, but a late deferral of a question already settled preserves nothing
+     and would tell agents not to chase what is closed, so it is a 409 and
+     changes nothing. Idempotent both ways in the store (F5): the answer is the
+     deferral as it now stands, 200 whether or not this press changed it. */
+  {
+    kind: "exact",
+    method: "POST",
+    path: "/api/admin/feedback/deferrals",
+    article: "none",
+    handler: async ({ request: { req, res } }) => {
+      res.setHeader("Cache-Control", "private, no-store");
+      const asked = parseFeedbackDeferral(await readBody(req));
+      if (feedbackQuestionStatus(asked.questionId) !== "open") {
+        throw httpError(409, "That question has been settled since this page was loaded. [fd-settled]");
+      }
+      const now = await feedbackStore.setDeferred(asked);
+      log("http").info({ question: asked.questionId, deferred: asked.deferred }, "feedback deferral accepted");
+      const receipt: AdminFeedbackDeferralReceipt = { question: now.questionId, deferredAt: now.deferredAt };
+      send(res, 200, receipt);
     },
   },
 

@@ -86,14 +86,15 @@ import {
 } from "../urls.js";
 import type { BlockId } from "../types.js";
 import {
+  type ArmedWrite,
   canStamp,
   clearArmedJump,
   consumeArmedJump,
   isJumpArmed,
   type JumpOrigin,
   type JumpStamp,
+  jumpedFrom,
   onArmedJumpChange,
-  oneFurtherBack,
   readStamp,
   withStamp,
 } from "./jump-history.js";
@@ -1535,19 +1536,19 @@ export function onAddressChange(listener: () => void): () => void {
  * kinds of write pass through. Three rules, each from a review finding:
  *
  *  - **A push derives its stamp rather than trusting the caller's.** An armed
- *    jump starts at depth 1; any other push on the same pathname carries the
- *    current entry's stamp at depth + 1; a push to another pathname strips it.
- *    nuqs passes the current entry's state into `pushState` verbatim, but that
- *    state's old depth would make the chip stop one entry short.
+ *    jump writes a new stamp, with the journey the reader was on kept behind it
+ *    (jump-history.ts § `jumpedFrom`); any other push on the same pathname
+ *    carries the current entry's stamp unchanged; a push to another pathname
+ *    strips it.
  *  - **A replace preserves the stamp of the entry it is rewriting**, taken from
  *    `history.state` rather than from the caller — `navigate({replace:true})`
  *    passes `null`, and the scroll spy rewrites `?at=` about once a second, so
  *    trusting the argument would erase the chip the moment the reader moved.
  *  - **A change of pathname clears it.** An excursion belongs to one article.
  *
- * An armed jump is held to the same standard: it is spent only by a push made
- * from the address it was armed at, and every `popstate` throws it away. GPT
- * Sol F14.
+ * An armed jump or return is held to the same standard: it is spent only by a
+ * push made from the address it was armed at, and every `popstate` throws it
+ * away. GPT Sol F14.
  *
  * ## The jump transaction happens here, not at the call site
  *
@@ -1615,20 +1616,26 @@ export function watchHistoryWrites(): void {
        be claimed by whatever the app does next. Match or not, an actual push
        ends the arm — nuqs has one global queue, so a different flush means the
        expected one was superseded or abandoned. */
-    const origin = canStamp(state)
-      ? consumeArmedJump(location.pathname + location.search, pathnameOfWrite(url), atOfWrite(url))
+    const claimed = canStamp(state)
+      ? consumeArmedJump(
+          location.pathname + location.search,
+          pathnameOfWrite(url),
+          atOfWrite(url),
+          marker === NUQS_MARKER,
+        )
       : null;
-    if (origin !== null) innerReplace(history.state, marker, originHref(origin));
-    innerPush(withStamp(state, stampFor(origin, state, url)), marker, url ?? null);
-    if (origin === null) clearArmedJump();
+    if (claimed?.kind === "jump") innerReplace(history.state, marker, originHref(claimed.origin));
+    innerPush(withStamp(state, stampFor(claimed, state, url)), marker, url ?? null);
+    if (claimed === null) clearArmedJump();
     window.dispatchEvent(new Event(NAVIGATED));
   };
 
   history.replaceState = (state: unknown, marker: string, url?: string | URL | null) => {
     const kept = pathnameOfWrite(url) === location.pathname ? readStamp(history.state) : null;
     innerReplace(withStamp(state, kept), marker, url ?? null);
-    /* A jump's queued write is always a push. Any replace that gets here first
-       either reset nuqs's queue or is the flush that superseded it. */
+    /* An armed write's queued history operation is always a push. Any replace
+       that gets here first either reset nuqs's queue or is the flush that
+       superseded it. */
     clearArmedJump();
     window.dispatchEvent(new Event(NAVIGATED));
   };
@@ -1637,63 +1644,54 @@ export function watchHistoryWrites(): void {
 /**
  * **What the entry this push creates should say about the way back.**
  *
- * Three cases, and the middle one is what changed on 2026-09-16
- * (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md):
+ * Four cases:
  *
- *  - **This push *is* a jump** — an arm claimed it — so the stamp is new and
- *    the origin is the entry right behind: depth 1.
- *  - **This push stays on the article.** It carries the stamp forward one
- *    entry further back. A mode change, a column toggle, a sort: the reader is
- *    looking at the same article a different way, and the way back out of the
- *    jump they made a moment ago is exactly as reachable as it was.
- *  - **This push leaves the article.** Nothing is carried. The chip's label is a
- *    section title resolved against *this* article, and `history.go(-n)` from
- *    another document is not an offer it can make.
+ *  - **This push *is* a jump** — an arm claimed it — so the stamp is new, and
+ *    whatever journey the reader was already on goes behind it in `earlier`.
+ *    If it superseded a return still queued in nuqs, that return's `next` is
+ *    the journey it builds on: the page has already moved even though the old
+ *    entry is still in `history.state`.
+ *  - **This push is the return chip's** — a return arm claimed it — so it
+ *    carries what the press left: the journey before, or nothing (keynav.ts §
+ *    `beginReturn`).
+ *  - **This push stays on the article.** It carries the stamp unchanged. A
+ *    mode change, a sort, a panel: the reader is looking at the same article a
+ *    different way, and the way back out of the jump they made a moment ago is
+ *    as good as it was (docs/plans/260916a-back-to-where-you-were-survives-a-mode-change.md;
+ *    on a phone, where a band covers the article, leaving the mode is how a
+ *    reader *sees* where a jump landed, so dropping the chip there destroyed
+ *    it at exactly the moment it was needed — Sentry SPIDERYARN-READING2-41).
+ *  - **This push leaves the article.** Nothing is carried. The chip's label is
+ *    a section title resolved against *this* article.
  *
- * ## Why the condition is only the pathname
+ * **The condition is only the pathname.** "Carry it only when `?at=` is
+ * unchanged" was refused in review on 2026-09-16: `?at=` names a section and
+ * holds still while the reader moves inside it, and its write is debounced, so
+ * the same gesture would keep or lose the chip depending on what had flushed.
  *
- * Until this stage the rule was *any push strips the stamp*
- * (260906g), which is right about a reader who has moved on and wrong about one
- * who has not moved at all — and on a phone, where the mode band covers the
- * article (narrow-window.css § a band with no room), leaving the mode is the
- * only way to *see* where a jump landed. So the chip was destroyed at exactly
- * the moment it was needed. Sentry SPIDERYARN-READING2-41.
- *
- * The obvious replacement — carry it only when the reader has not moved, which
- * is to say when `?at=` is unchanged — was refused in review, twice over.
- * `?at=` names a **section** and `positionToWrite` deliberately holds it still
- * while the reader moves anywhere inside that section (position.ts), so it is
- * not a statement about where the reader is; and its write is debounced, so
- * whether a genuine move had reached the address by the time the reader pressed
- * Plain would decide whether the chip survived. The same gesture, twice, with
- * different answers 300ms apart. GPT Sol, 2026-09-16.
- *
- * **The pathname rule is about stack arithmetic, not what a push means.** A
- * successful same-document push adds one entry, so `depth + 1` names the
- * origin's distance whatever it changed — including a parameter added years
- * from now that this function will never hear about.
- *
- * That statement is exact only while the browser retains the origin. The HTML
- * standard permits an implementation-defined limit on state entries and FIFO
- * eviction after a push. History exposes neither the entries nor the current
- * index, so if eviction eventually removes an origin there is no honest local
- * test for it; fixing that would require the parallel history this feature
- * deliberately does not keep. This stage accepts that platform ceiling, but
- * does not call the pathname rule proof against it.
+ * Until 2026-10-08 the carried stamp also counted one entry further back each
+ * time, because the chip was `history.go(-depth)`. The chip now pushes `?at=`
+ * onto the address the reader is on (keynav.ts § `beginReturn`), so how many
+ * entries lie between is no longer anything it needs to know.
  *
  * `canStamp` is asked again rather than assumed: a state we cannot merge into
  * is one we must hand on untouched, and inheriting into it would mean throwing
  * a stranger's value away for a chip.
  */
 function stampFor(
-  origin: JumpOrigin | null,
+  claimed: ArmedWrite | null,
   state: unknown,
   url: string | URL | null | undefined,
 ): JumpStamp | null {
-  if (origin !== null) return { origin, depth: 1 };
+  if (claimed?.kind === "jump")
+    return jumpedFrom(
+      claimed.origin,
+      claimed.base === undefined ? readStamp(history.state) : claimed.base,
+    );
+  if (claimed?.kind === "return") return claimed.next;
   if (!canStamp(state)) return null;
   if (pathnameOfWrite(url) !== location.pathname) return null;
-  return oneFurtherBack(readStamp(history.state));
+  return readStamp(history.state);
 }
 
 /**
@@ -1835,23 +1833,21 @@ export function useAddress(): string {
  * a freshly parsed `{ kind, blockId }` each call would loop for ever — the same
  * trap `useAddress` and `useRoute` avoid by snapshotting a string. Here the
  * value the caller wants is an object, so the identity is held instead, keyed
- * on a serialisation of it. `history.state` is one global, so each view below
- * needs one module-level cache for all of its callers.
+ * on a serialisation of it. `history.state` is one global, so one module-level
+ * cache serves every caller.
  */
-let stampCache: { key: string; stamp: JumpStamp | null } = { key: "", stamp: null };
-function jumpStampSnapshot(): JumpStamp | null {
-  /* **Nothing to offer while a jump is in flight.** The reader has asked to be
-     somewhere else and the page is already moving, but the push that records it
-     is 50ms away — 320ms on an older Safari — so the entry underneath still
-     describes the jump *before* this one. Drawing it would name the wrong
-     origin, and pressing it would go back one place further than the reader
-     meant while cancelling the jump they just asked for. GPT Sol F19,
+let originCache: { key: string; origin: JumpOrigin | null } = { key: "", origin: null };
+function jumpOriginSnapshot(): JumpOrigin | null {
+  /* **Nothing to offer while a jump or return write is in flight.** The page is
+     already moving, but the push that records it is 50ms away — 320ms on an
+     older Safari — so the entry underneath still describes the journey before
+     the pending act. Drawing it would name the wrong origin. GPT Sol F19,
      2026-09-06; jump-history.ts § isJumpArmed has the fix that was passed over
      and why. */
-  const next = isJumpArmed() ? null : readStamp(history.state);
+  const next = isJumpArmed() ? null : (readStamp(history.state)?.origin ?? null);
   const key = next === null ? "" : JSON.stringify(next);
-  if (key !== stampCache.key) stampCache = { key, stamp: next };
-  return stampCache.stamp;
+  if (key !== originCache.key) originCache = { key, origin: next };
+  return originCache.origin;
 }
 
 /**
@@ -1868,37 +1864,16 @@ function subscribeToJumpStamp(onChange: () => void): () => void {
 }
 
 /**
- * **The whole stamp** — where the jump started *and* how far back that is now.
+ * **Where the jump started**, for the two things that show it: the return chip
+ * (ReturnChip.tsx), which names it, and `Spine.tsx`, which draws one tick at
+ * the block the reader came from.
  *
- * The chip wants both: the origin to name the place, the depth to know how many
- * entries `history.go` has to walk. One store rather than two, because they are
- * one fact and a second store could disagree with this one about which entry
- * the reader is standing on.
- */
-export function useJumpStamp(): JumpStamp | null {
-  return useSyncExternalStore(subscribeToJumpStamp, jumpStampSnapshot, () => null);
-}
-
-let originCache: { key: string; origin: JumpOrigin | null } = { key: "", origin: null };
-function jumpOriginSnapshot(): JumpOrigin | null {
-  const next = jumpStampSnapshot()?.origin ?? null;
-  const key = next === null ? "" : JSON.stringify(next);
-  if (key !== originCache.key) originCache = { key, origin: next };
-  return originCache.origin;
-}
-
-/**
- * **Just where the jump started**, for a caller that has no use for the
- * distance — which is `Spine.tsx`, drawing one tick at the block the reader
- * came from.
- *
- * This is an origin-only snapshot over the same history-state store as
- * `useJumpStamp`, not a second source of truth. Its separate identity cache is
- * load-bearing: a mode or column push changes the stamp's depth, but Spine has
- * no use for that number and must not re-render its 2,000-row rail for it. The
- * plan for this stage claimed Spine needed no change at all; that was false,
- * because Spine and the chip read one store and the store's type was moving
- * (GPT Sol's sixth finding, 2026-09-16).
+ * The origin only, not the whole stamp. The journeys behind it (`earlier`)
+ * matter to nothing on screen until the chip is pressed, which reads them off
+ * `history.state` itself (keynav.ts § `beginReturn`), and an identity keyed on the
+ * origin means a push that changes nothing a reader can see does not re-render
+ * the spine's 2,000-row rail. Until 2026-10-08 there was a second hook,
+ * `useJumpStamp`, for the chip's depth; the depth went with `history.go`.
  */
 export function useJumpOrigin(): JumpOrigin | null {
   return useSyncExternalStore(subscribeToJumpStamp, jumpOriginSnapshot, () => null);

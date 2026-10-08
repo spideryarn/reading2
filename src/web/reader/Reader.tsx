@@ -781,7 +781,7 @@ export function Reader({
      by slug, so leaving it unmounts here; clear both the pending id and the live
      removal timer rather than retaining a detached prose cell for 1.2s. */
   useEffect(() => resetFlash, []);
-  const { at, jumpTo, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
+  const { at, jumpTo, returnToOrigin, rowOf } = useReadingPosition(sections, article.blocks, layoutKey);
   /* The quiz's "Where to look again" names the same sections the reader sees
      here — docs/plans/260930i-quiz-scores-answers-by-section-and-says-where-to-look-again.md. */
   const quizSections = useMemo(() => ({ sections, rowOf }), [sections, rowOf]);
@@ -839,6 +839,29 @@ export function Reader({
      parameter rather than its second, which is a flash aim. The step buttons
      need to hear that their jump is over — keynav.ts § `Chain`. */
   const followTo = useCallback<FollowJump>((blockId, ended) => jumpTo(blockId, undefined, ended), [jumpTo]);
+  /**
+   * **The return chip's press** — the position only (keynav.ts §
+   * `beginReturn`, Greg's spya-q3dfmw). The origin is always in the prose, so
+   * under a band that covers it the band steps aside first, as a passage link
+   * in it would: the mode is kept, the landing is seen, and `BandBackChip`
+   * takes the chip's place. That pill takes focus when the chip had it, or a
+   * keyboard user would be left on an element that is no longer drawn; and
+   * focus goes into the band when it comes back (GPT Sol, plan review F3).
+   */
+  const returnFromJump = useCallback(() => {
+    if (bandOverProse) {
+      const onChip = document.activeElement?.closest(".return-chip") != null;
+      bandStepsAside();
+      if (onChip)
+        bandFocus.current =
+          document
+            .querySelector(".mode-band")
+            ?.querySelector<HTMLElement>(
+              "button, [href], input, textarea, select, [tabindex]:not([tabindex='-1'])",
+            ) ?? null;
+    }
+    returnToOrigin();
+  }, [bandOverProse, bandStepsAside, returnToOrigin]);
   useEffect(() => {
     if (bandBack) return;
     const was = bandFocus.current;
@@ -4635,9 +4658,8 @@ export function Reader({
           origin block itself: the label is a section title, and there must be
           one answer to "which section is this block in" on the page. */}
       {/* **While a band has stepped aside, "back" means the band** —
-          BandBackChip.tsx. The section chip would go back in history with the
-          band still hidden, and two pills saying "back" to two places is one
-          too many. docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md. */}
+          BandBackChip.tsx. Two pills saying "back" to two places is one too
+          many. docs/plans/260929g-on-a-phone-a-band-link-closes-the-band.md. */}
       {bandBack ? (
         <BandBackChip
           label={MODE_LABEL[mode]}
@@ -4645,7 +4667,7 @@ export function Reader({
           onBack={() => setBandAway(false)}
         />
       ) : (
-        <ReturnChip sections={sections} rowOf={rowOf} />
+        <ReturnChip sections={sections} rowOf={rowOf} onReturn={returnFromJump} />
       )}
 
       {/* Last in the DOM as well as topmost in z-index: the bar and its drawer
