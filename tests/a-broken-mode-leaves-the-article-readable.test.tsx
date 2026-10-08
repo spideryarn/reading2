@@ -1680,7 +1680,7 @@ describe("a throw inside any band leaves the article", () => {
 
     /* And the reader can still leave it. */
     if (margin) {
-      const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [aria-pressed]");
+      const toggle = host.querySelector<HTMLButtonElement>(".dock-modes [data-mode][aria-pressed]");
       expect(toggle?.getAttribute("aria-label")).toBe(MODE_LABEL.marginalia);
       await act(async () => (toggle as HTMLButtonElement).click());
       await settle();

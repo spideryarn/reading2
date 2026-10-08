@@ -136,7 +136,7 @@ function modeControls(): HTMLElement[] {
   /* Marginalia's toggle beside the radios since 2026-10-01 (261001i). */
   return [
     ...host.querySelectorAll<HTMLElement>(
-      '.dock-modes [role="radio"], .dock-modes [aria-pressed], .dock-modes a.dock-btn',
+      '.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed], .dock-modes a[data-mode]',
     ),
   ];
 }

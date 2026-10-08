@@ -658,12 +658,15 @@ interface Props {
  * § 1 has the reasoning.
  *
  *  - `exit` — Plain, alone: the way out of a mode.
- *  - `shape` — the article's shape, restated (Structure, Summary, Diagram).
- *  - `guides` — ways through the piece, each drawn from it along one line: a
- *    route through its quotes, the quotes, questions it answers, its terms,
- *    its ideas, its dates (Skim, Quotes, Glossary, FAQ, Ideas,
- *    Timeline). Not "contents": several of these are a model's reading of the
- *    piece rather than things literally in it (GPT Sol, 2026-09-29).
+ *  - `shape` — the article's shape, restated, and the way through it at
+ *    increasing depth (Structure, Summary, Diagram, Skim). Skim joined on
+ *    2026-10-08 (below).
+ *  - `guides` — ways through the piece, each drawn from it along one line: the
+ *    quotes, questions it answers, its terms, its ideas, its dates (Quotes,
+ *    Glossary, FAQ, Ideas, Timeline). Not "contents": several of these are a
+ *    model's reading of the piece rather than things literally in it (GPT Sol,
+ *    2026-09-29). Since 2026-10-07 every one of them is under More, so the run
+ *    is drawn only while one of them is open.
  *  - `critical` — reading it critically and against other work (Citations,
  *    Referee, Debate).
  *  - `input` — modes that wait on the reader's own words: a word to find, a
@@ -680,6 +683,11 @@ interface Props {
  * and Citations one place left each (spya-tnqt2t,
  * docs/plans/261004j-bottom-bar-citations-and-glossary-one-left-and-help-leaves-the-bar.md).
  * No run gained or lost a mode.
+ *
+ * Skim moved from `guides` to `shape` on 2026-10-08, Greg: *"move the skim
+ * mode icon into the same group after structure and summary"* (spya-wm5gu2,
+ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md).
+ * The More button stands at the end of the same run (`MORE_AFTER`).
  */
 type ModeGroup = "exit" | "shape" | "guides" | "critical" | "input" | "margin";
 
@@ -856,10 +864,16 @@ const MODES_UI = [
 
      `Route`, used nowhere else — a path with stops on it, which is the mode.
      Not `ListOrdered`, which was the Tweets mode's numbered thread.
-     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c. */
+     docs/plans/260928a-trajectory-mode-skim-a-paper-at-increasing-depth.md § 5c.
+
+     **In the shape run, at its end, since 2026-10-08** — Greg: *"move the
+     skim mode icon into the same group after structure and summary"*
+     (spya-wm5gu2). Its row did not move, so it still leads into the Quotes it
+     walks, which are now under More, the button drawn straight after it.
+     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
   {
     mode: "skim",
-    group: "guides",
+    group: "shape",
   },
   /* **After Skim, since 2026-09-29**; straight after Summary, with
      Skim after it, on 2026-09-28, when Greg moved both: *"move Quotes mode and Trajectory mode further towards
@@ -1179,13 +1193,42 @@ export function splitForMore(reachable: readonly ModeUi[], current: BandMode | u
   };
 }
 
+/** One More button, or none: 261007c's "draws nothing when there is nothing gathered". */
+const moreCount = (bar: DockBar): number => (bar.menu.length > 0 ? 1 : 0);
+
 /**
- * **How many buttons the bar's mode segment draws**: the drawn rows, and the
- * More button where there is one. `--dock-mode-count`, the share a coarse
- * pointer spreads the row by (narrow-window.css).
+ * **How many buttons the bar's mode segment draws**: the drawn rows, the More
+ * button where there is one, and Comments, which stands in Marginalia's frame
+ * since 2026-10-08. `--dock-mode-count`, the share a coarse pointer spreads the
+ * row by (narrow-window.css).
  */
 function drawnCount(bar: DockBar): number {
-  return bar.drawn.length + (bar.menu.length > 0 ? 1 : 0);
+  return bar.drawn.length + moreCount(bar) + 1;
+}
+
+/**
+ * **The run the More button ends.** Greg, 2026-10-08 (spya-mcs4gb): *"just
+ * after the skim mode, just after structure and summary as part of that
+ * group, rather than out on their own."* Skim is the last row of the shape run
+ * (its `MODES_UI` row), so More stands straight after it, inside the bands'
+ * frame, with no line between them.
+ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
+ */
+const MORE_AFTER: ModeGroup = "shape";
+
+/**
+ * **The bands' frame, cut where More goes**: everything up to the last drawn
+ * row of `MORE_AFTER`'s run, and everything after it. With none of that run
+ * drawn — no bar today — More goes at the end rather than vanishing, so the
+ * gathered modes stay reachable. Both arms cut here, so they cannot disagree.
+ *
+ * Exported for tests/dock-groups.test.tsx.
+ */
+export function cutForMore(bands: readonly ModeUi[]): readonly [readonly ModeUi[], readonly ModeUi[]] {
+  /* `findLastIndex` is ES2023, past the client's lib. */
+  const at = bands.length - [...bands].reverse().findIndex((m) => m.group === MORE_AFTER);
+  if (at > bands.length) return [bands, []];
+  return [bands.slice(0, at), bands.slice(at)];
 }
 
 /**
@@ -2153,6 +2196,107 @@ export function Dock({
     };
   }, [open]);
 
+  /* **Comments, drawn by the mode segment in Marginalia's frame, after it**
+     — Greg, 2026-10-08: *"I wonder if we could put the comments icon inside a
+     group with marginalia, perhaps after marginalia"* (spya-mcs4gb). Built
+     here, where its drawer and counts are, and handed to `DockModes` /
+     `DockModeLinks` as a node, so neither has to learn about the drawer.
+     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md. */
+  /* Two shapes of the same button. On the reading view it opens the
+     drawer in place. Everywhere else it goes back to the reading view
+     with the drawer already open — which is where a question is useful
+     anyway, since clicking one scrolls to the passage it is about, and
+     these pages have no passages. No count off the reading view: this
+     page did not fetch the comments, and a number would have to be
+     guessed or paid for. */
+  const commentsControl = drawer ? (
+    <DockTab
+      panel="questions"
+      current={panel}
+      onPanel={drawer.onPanel}
+      icon={MessageSquareText}
+      label="Comments"
+      /* **The state, as a description — never in the name.** The name
+         stays "Comments" whatever has happened to it, which is the rule
+         § the switch itself states at length and which GPT Sol caught a
+         breach of there: a name that moves changes the control's
+         identity, and a reader driving this by voice is asking for the
+         button called Comments. So the sentence goes where the switch's
+         goes — an `sr-only` node this button points `aria-describedby`
+         at. Sol raised the same thing against this stage's plan. */
+      note={commentError ? "A change to your comments didn't save." : undefined}
+      className={own ? "" : MARKED}
+      /* **One `what` for both, and the ownership in `state`** — the shape
+         the modes use, and it is the shape because the alternative was
+         two descriptions to keep in step and one of them went stale.
+         `NOT_A_MODE.comments` carries the note.
+
+         **A failed write outranks the visitor line, and cannot collide
+         with it**: only the owner writes, so `commentError` is `null`
+         on every arm that could show the visitor sentence. The ternary
+         is ordered that way regardless, because `state` is the slot for
+         *what this control is doing right now* (Tooltip.tsx
+         § `ControlTip`) and a failure is more that than a footing is.
+
+         The service's own sentence is passed through rather than
+         rewritten: it is already reader-facing copy that says whose
+         problem it is (docs/project/copy.md), and a second paraphrase
+         here would be a third place for the wording to drift. */
+      hover={
+        <ControlTip
+          head="Comments"
+          state={
+            commentError
+              ? `A change to your comments didn't save. ${commentError}`
+              : own
+                ? undefined
+                : NOT_A_MODE.comments.visitor
+          }
+          what={NOT_A_MODE.comments.what}
+          how={NOT_A_MODE.comments.how}
+        />
+      }
+    >
+      <CommentsChip
+        count={own ? entries.length : null}
+        pending={pending}
+        failed={commentError !== null}
+      />
+    </DockTab>
+  ) : (
+    <DockLink
+      href={readHref(slug, withPanel(search, "questions"), "article")}
+      current={false}
+      icon={MessageSquareText}
+      label="Comments"
+      /* **Whose, and the visitor pages reach this arm too.**
+         `PublicMetadataPage` and `VisitorPage` mount the bar with no
+         drawer, which lands here — so two of the three visitor pages went
+         on calling somebody else's comments *"Your comments"* after the
+         reading view had been corrected. The heading inside the drawer
+         was fixed and the link that leads to it was not. GPT Sol, second
+         pass, 2026-08-28.
+
+         `signedIn` is not the question; ownership is. A drawer-less bar
+         belongs to the owner on the metadata page of *their*
+         article, and to a visitor on the public stand-ins. */
+      /* **The same card the drawer trigger draws, plus where the press
+         lands** — the rule `DockModeLinks` follows for the modes, and for
+         the same reason: a reader who learned on the reading view what a
+         comment survives should not meet a one-line OS box for it on the
+         metadata page. The trailing clause on `what` is the only
+         difference in the words. */
+      hover={
+        <ControlTip
+          head="Comments"
+          state={isVisitor ? NOT_A_MODE.comments.visitor : undefined}
+          what={`${NOT_A_MODE.comments.what} — back in the article they are about`}
+          how={NOT_A_MODE.comments.how}
+        />
+      }
+    />
+  );
+
   return (
     <>
       {/* The dim. A button rather than a div so closing by clicking away is
@@ -2385,9 +2529,10 @@ export function Dock({
             onOpen={activateMode}
             marked={marked}
             margin={margin}
+            comments={commentsControl}
           />
         ) : (
-          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} />
+          <DockModeLinks slug={slug} search={search} bar={bar} marked={marked} comments={commentsControl} />
         )}
 
         {/* **Quick search, from anywhere** (plan 261002h): a box where
@@ -2402,125 +2547,19 @@ export function Dock({
           />
         )}
 
-        {/* **The three that are not modes, in one group**, so that running
-            along the end of the bar is instant after the first card rather than
-            three separate 300ms waits — the same grouping `DockModes` and
-            `DockModeLinks` give the modes. `TooltipGroup` is
-            `FloatingDelayGroup`, a context provider that renders no element, so
-            it cannot disturb the flex row it wraps (Tooltip.tsx § grouping) —
-            which is why `DockCommands` could join it on 2026-09-08 without
-            moving anything on the page, and why it could leave again the same
-            day when Greg asked for it beside the logo (see there).
+        {/* **Metadata, on its own since 2026-10-08.** It shared a
+            `TooltipGroup` with Comments (and, before 2026-09-08, with
+            `DockCommands`) so that running along the end of the bar was instant
+            after the first card. Comments moved into Marginalia's frame that
+            day (`commentsControl` above), and a group of one is no group, so
+            the wrapper went with it.
 
-            **What the group is now**, having lost that fourth member: the three
-            other views of *this article* — its comments, its thread, its
-            machinery — which is a tighter subject than it had.
+            **The experimental switch was outside that group on purpose**, and
+            still stands apart: it is a setting, not a view of this article.
 
-            **The experimental switch is outside it on purpose.** It is the
-            adjacent account-level control — a setting, not a view of this
-            article — so the gap in the scrubbing is a boundary being felt
-            rather than an oversight. Not *the only button here not about this
-            article*, which was the first wording and is too absolute: `DockHome`
-            and `DockFeedback` are not about it either. GPT Sol. */}
-        <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-          {/* Two shapes of the same button. On the reading view it opens the
-              drawer in place. Everywhere else it goes back to the reading view
-              with the drawer already open — which is where a question is useful
-              anyway, since clicking one scrolls to the passage it is about, and
-              these pages have no passages. No count off the reading view: this
-              page did not fetch the comments, and a number would have to be
-              guessed or paid for. */}
-          {drawer ? (
-            <DockTab
-              panel="questions"
-              current={panel}
-              onPanel={drawer.onPanel}
-              icon={MessageSquareText}
-              label="Comments"
-              /* **The state, as a description — never in the name.** The name
-                 stays "Comments" whatever has happened to it, which is the rule
-                 § the switch itself states at length and which GPT Sol caught a
-                 breach of there: a name that moves changes the control's
-                 identity, and a reader driving this by voice is asking for the
-                 button called Comments. So the sentence goes where the switch's
-                 goes — an `sr-only` node this button points `aria-describedby`
-                 at. Sol raised the same thing against this stage's plan. */
-              note={commentError ? "A change to your comments didn't save." : undefined}
-              className={own ? "" : MARKED}
-              /* **One `what` for both, and the ownership in `state`** — the shape
-                 the modes use, and it is the shape because the alternative was
-                 two descriptions to keep in step and one of them went stale.
-                 `NOT_A_MODE.comments` carries the note.
-
-                 **A failed write outranks the visitor line, and cannot collide
-                 with it**: only the owner writes, so `commentError` is `null`
-                 on every arm that could show the visitor sentence. The ternary
-                 is ordered that way regardless, because `state` is the slot for
-                 *what this control is doing right now* (Tooltip.tsx
-                 § `ControlTip`) and a failure is more that than a footing is.
-
-                 The service's own sentence is passed through rather than
-                 rewritten: it is already reader-facing copy that says whose
-                 problem it is (docs/project/copy.md), and a second paraphrase
-                 here would be a third place for the wording to drift. */
-              hover={
-                <ControlTip
-                  head="Comments"
-                  state={
-                    commentError
-                      ? `A change to your comments didn't save. ${commentError}`
-                      : own
-                        ? undefined
-                        : NOT_A_MODE.comments.visitor
-                  }
-                  what={NOT_A_MODE.comments.what}
-                  how={NOT_A_MODE.comments.how}
-                />
-              }
-            >
-              <CommentsChip
-                count={own ? entries.length : null}
-                pending={pending}
-                failed={commentError !== null}
-              />
-            </DockTab>
-          ) : (
-            <DockLink
-              href={readHref(slug, withPanel(search, "questions"), "article")}
-              current={false}
-              icon={MessageSquareText}
-              label="Comments"
-              /* **Whose, and the visitor pages reach this arm too.**
-                 `PublicMetadataPage` and `VisitorPage` mount the bar with no
-                 drawer, which lands here — so two of the three visitor pages went
-                 on calling somebody else's comments *"Your comments"* after the
-                 reading view had been corrected. The heading inside the drawer
-                 was fixed and the link that leads to it was not. GPT Sol, second
-                 pass, 2026-08-28.
-
-                 `signedIn` is not the question; ownership is. A drawer-less bar
-                 belongs to the owner on the metadata page of *their*
-                 article, and to a visitor on the public stand-ins. */
-              /* **The same card the drawer trigger draws, plus where the press
-                 lands** — the rule `DockModeLinks` follows for the modes, and for
-                 the same reason: a reader who learned on the reading view what a
-                 comment survives should not meet a one-line OS box for it on the
-                 metadata page. The trailing clause on `what` is the only
-                 difference in the words. */
-              hover={
-                <ControlTip
-                  head="Comments"
-                  state={isVisitor ? NOT_A_MODE.comments.visitor : undefined}
-                  what={`${NOT_A_MODE.comments.what} — back in the article they are about`}
-                  how={NOT_A_MODE.comments.how}
-                />
-              }
-            />
-          )}
-
-          {/* A link, not a drawer trigger — the details are a page now. Last in
-              the bar, which is the right end for it: it is the machinery behind
-              the article rather than a way of reading it. */}
+            A link, not a drawer trigger — the details are a page now — and
+            after the modes, because it is the machinery behind the article
+            rather than a way of reading it. */}
           <DockLink
             href={metadataHref}
             current={view === "metadata"}
@@ -2537,7 +2576,6 @@ export function Dock({
               />
             }
           />
-        </TooltipGroup>
 
         {/* **The switch itself, last, and only for somebody who has an account
             to save it to.** Greg, 2026-09-03:
@@ -2904,6 +2942,7 @@ function DockModes({
   onOpen,
   marked,
   margin,
+  comments,
 }: {
   /**
    * The rows to draw and the rows under More, already filtered and split —
@@ -2936,6 +2975,8 @@ function DockModes({
   marked?: ReadonlyMap<Mode, string> | undefined;
   /** Whether Marginalia's column is on — `?margin=1`, the toggle's pressed state. */
   margin: boolean;
+  /** The Comments control, drawn after Marginalia in its frame — `Dock` § `commentsControl`. */
+  comments: ReactNode;
 }) {
   /**
    * **No keyboard handler, and every button its own tab stop — the arrows
@@ -2992,11 +3033,23 @@ function DockModes({
      bands' frame only: a frame's edge already separates the other two.
      docs/plans/261002g-plain-closes-both-columns-a-second-press-closes-a-mode-and-plain-and-marginalia-in-frames-of-their-own.md.
 
-     **And a fourth since 2026-10-07: the More button's**, after the
-     radiogroup and before Marginalia's — `DockMore`. */
+     **The More button had a fourth, from 2026-10-07 to 2026-10-08**, after
+     the radiogroup. Greg then asked for it *"just after the skim mode … as part
+     of that group, rather than out on their own"* (spya-mcs4gb), so it stands
+     inside the bands' frame at the end of the shape run (`cutForMore`) — and
+     so inside the `role="radiogroup"`, which 261007c D6 had kept it out of.
+     It is between two radios in reading order, so in the DOM it has to be;
+     the cost and the options weighed are in
+     docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
+
+     **And Comments joined Marginalia's frame the same day**, after the
+     toggle: Greg, *"put the comments icon inside a group with marginalia,
+     perhaps after marginalia"*. It is not a radio either, and Marginalia's
+     frame is outside the radiogroup, so nothing is claimed for it. */
   const radios = bar.drawn.filter((m) => m.mode !== "marginalia");
   const exits = radios.filter((m) => m.group === "exit");
   const bands = radios.filter((m) => m.group !== "exit");
+  const [lead, rest] = cutForMore(bands);
   const toggle = bar.drawn.find((m) => m.mode === "marginalia");
   const starts = groupStarts(bands);
   const radio = (m: ModeUi) => (
@@ -3044,6 +3097,7 @@ function DockModes({
       <button
         type="button"
         role="radio"
+        data-mode={m.mode}
         className={`dock-btn${m.mode === mode ? " on" : ""}${marked?.has(m.mode) ? ` ${MARKED}` : ""}${starts.has(m.mode) ? " dock-group-start" : ""}`}
         aria-checked={m.mode === mode}
         /* Explicit, because the visible label is `display: none` at
@@ -3094,28 +3148,34 @@ function DockModes({
           className="dock-modes-radios"
           role="radiogroup"
           aria-label="What the middle column shows"
-          style={{ "--dock-radio-count": radios.length } as CSSProperties}
+          /* One share per button it encloses, More included. */
+          style={{ "--dock-radio-count": radios.length + moreCount(bar) } as CSSProperties}
         >
           {exits.length > 0 && (
             <div className="dock-frame" style={{ "--dock-frame-count": exits.length } as CSSProperties}>
               {exits.map(radio)}
             </div>
           )}
-          <div className="dock-frame" style={{ "--dock-frame-count": bands.length } as CSSProperties}>
-            {bands.map(radio)}
+          <div
+            className="dock-frame"
+            style={{ "--dock-frame-count": bands.length + moreCount(bar) } as CSSProperties}
+          >
+            {lead.map(radio)}
+            <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
+            {rest.map(radio)}
           </div>
         </div>
-        <DockMore menu={bar.menu} marked={marked} pick={{ kind: "open", open: onOpen, current: mode }} />
-        {toggle && (
-          <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
+        <div className="dock-frame" style={{ "--dock-frame-count": (toggle ? 1 : 0) + 1 } as CSSProperties}>
+          {toggle && (
             <MarginToggle
               m={toggle}
               on={margin}
               onActivate={onActivate}
               state={marked?.get(toggle.mode)}
             />
-          </div>
-        )}
+          )}
+          {comments}
+        </div>
       </TooltipGroup>
     </div>
   );
@@ -3156,6 +3216,7 @@ function MarginToggle({
       <button
         type="button"
         className={`dock-btn${on ? " on" : ""}`}
+        data-mode={m.mode}
         aria-pressed={on}
         aria-label={MODE_LABEL[m.mode]}
         onClick={(e) => {
@@ -3193,6 +3254,7 @@ function DockModeLinks({
   search,
   bar,
   marked,
+  comments,
 }: {
   slug: string;
   search: string;
@@ -3201,6 +3263,8 @@ function DockModeLinks({
    *  the bar. */
   bar: DockBar;
   marked?: ReadonlyMap<Mode, string> | undefined;
+  /** The Comments link, after Marginalia in its frame, as `DockModes` draws it. */
+  comments: ReactNode;
 }) {
   /* **The segment's non-empty frames, and its lines between runs** — the same
      split `DockModes` makes (Plain; the bands; Marginalia), from the same
@@ -3216,17 +3280,14 @@ function DockModeLinks({
   const toggles = modes.filter((m) => m.mode === "marginalia");
   const exits = modes.filter((m) => m.mode !== "marginalia" && m.group === "exit");
   const bands = modes.filter((m) => m.mode !== "marginalia" && m.group !== "exit");
+  const [lead, rest] = cutForMore(bands);
   const starts = groupStarts(bands);
-  const frame = (ms: readonly ModeUi[]) =>
-    ms.length > 0 && (
-      <div className="dock-frame" style={{ "--dock-frame-count": ms.length } as CSSProperties}>
-        {ms.map(link)}
-      </div>
-    );
+  const frameStyle = (count: number) => ({ "--dock-frame-count": count }) as CSSProperties;
   function link(m: ModeUi) {
     return (
       <DockLink
         key={m.mode}
+        mode={m.mode}
         href={modeLinkHref(slug, search, m.mode)}
         current={false}
         icon={MODE_ICON[m.mode]}
@@ -3267,20 +3328,36 @@ function DockModeLinks({
           for the reason given where it is opened (`Dock` § the three that are
           not modes). */}
       <TooltipGroup delay={{ open: 300, close: 120 }} timeoutMs={400}>
-        {frame(exits)}
-        {frame(bands)}
-        {/* The same place as on the reading view: after the bands, before
-            Marginalia. Its items are these same links (`modeLinkHref`). */}
-        <DockMore
-          menu={bar.menu}
-          marked={marked}
-          pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
-        />
-        {frame(toggles)}
+        {exits.length > 0 && <div className="dock-frame" style={frameStyle(exits.length)}>{exits.map(link)}</div>}
+        {/* More in the same place as on the reading view — straight after
+            the shape run (`cutForMore`) — and its items are these same links
+            (`modeLinkHref`). Comments after Marginalia, as there. */}
+        <div className="dock-frame" style={frameStyle(bands.length + moreCount(bar))}>
+          {lead.map(link)}
+          <DockMore
+            menu={bar.menu}
+            marked={marked}
+            pick={{ kind: "link", href: (m) => modeLinkHref(slug, search, m) }}
+          />
+          {rest.map(link)}
+        </div>
+        <div className="dock-frame" style={frameStyle(toggles.length + 1)}>
+          {toggles.map(link)}
+          {comments}
+        </div>
       </TooltipGroup>
     </div>
   );
 }
+
+/**
+ * **Which controls in the mode segment are modes**: each carries `data-mode`
+ * (the radios, Marginalia's toggle, the links arm's mode links). Since
+ * 2026-10-08 the segment also holds More and Comments (plan 261008d), so
+ * "a button inside `.dock-modes`" no longer means "a mode": dock-fit.css's
+ * rung-2 rule and every test sweep over the modes select by this instead.
+ */
+export const MODE_ATTR = "data-mode";
 
 /** The More button's word, and its accessible name on the rungs that drop the word. */
 const MORE_LABEL = "More";
@@ -3321,11 +3398,15 @@ type MorePick =
  *
  * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
  *
- * **Not a radio, and outside the radiogroup** (D6): a frame of its own between
- * `.dock-modes-radios` and Marginalia's, which is outside the group for the
- * same reason. A menu button announced as one of *what the middle column
- * shows* would be a lie. So it stands after Learn rather than where the five
- * were; the cost is named in the plan.
+ * **Not a radio, but inside the radiogroup since 2026-10-08**, straight after
+ * Skim in the bands' frame (`cutForMore`), because Greg asked for it *"just
+ * after the skim mode … as part of that group, rather than out on their own"*
+ * (spya-mcs4gb). It had a frame of its own after the radiogroup for a day
+ * (261007c D6), kept out because a menu button is not one of *what the middle
+ * column shows*. Between two radios in reading order, the DOM has to put it
+ * inside; what it opens is a list of more of those choices, so the group's
+ * name is still true of it. The options weighed are in
+ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md § D2.
  *
  * **Never `.on`.** The open gathered mode is drawn in the bar as its own
  * checked radio (`splitForMore`), so this button never has to mean two things.
@@ -3375,7 +3456,7 @@ function DockMore({
   if (menu.length === 0) return null;
   const names = menu.map((m) => MODE_LABEL[m.mode]).join(", ");
   return (
-    <div className="dock-frame" style={{ "--dock-frame-count": 1 } as CSSProperties}>
+    <>
       {/* **`modal={false}`**, where the shelf's menu takes Radix's default.
           This bar stays operable over its own drawer (`Dock` § there is
           deliberately no trap), and a modal menu would be the one thing in it
@@ -3490,7 +3571,7 @@ function DockMore({
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
-    </div>
+    </>
   );
 }
 
@@ -3973,6 +4054,7 @@ function DockLink({
   hover,
   className = "",
   keepLabel,
+  mode,
 }: {
   href: string;
   current: boolean;
@@ -4020,12 +4102,16 @@ function DockLink({
    * be looking for the way back from.
    */
   keepLabel?: true | undefined;
+  /** The mode this link opens, as `data-mode` — `MODE_ATTR`. Absent on the
+   *  links that are not modes (Comments, Metadata). */
+  mode?: Mode | undefined;
 }) {
   const link = (
     <Link
       href={href}
       className={`dock-btn${current ? " on" : ""}${className ? ` ${className}` : ""}`}
       aria-current={current ? "page" : undefined}
+      data-mode={mode}
       /* **No `title` here, and its absence is asserted rather than assumed.** A
          `title` beside a card is not a fallback, it is a race: the OS box
          appears over our panel a second later, saying a shorter version of the

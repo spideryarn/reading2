@@ -35,6 +35,12 @@
  * follows; the **lines** are a fact about what is drawn, so every case about
  * them reads the drawn list.
  * docs/plans/261007c-bottom-bar-rises-in-on-first-load-and-a-more-button-gathers-the-lesser-modes.md.
+ *
+ * And on 2026-10-08 (spya-wm5gu2): *"move the skim mode icon into the same
+ * group after structure and summary."* Skim leaves the guides run for the shape
+ * run, at its end; the guides run is the five under More, and is drawn only
+ * while one of them is open —
+ * docs/plans/261008d-bottom-bar-groups-skim-and-more-join-structure-and-summary-comments-joins-marginalia.md.
  */
 import { describe, expect, it } from "vitest";
 import { groupStarts, splitForMore, visibleModes } from "../src/web/Dock.js";
@@ -53,8 +59,8 @@ const RUNS = [
   /* Tweets stood in the shape run, beside Summary, from 2026-09-29 to
      2026-10-03; it is Summary's Thread view now, and one button fewer
      (docs/plans/261003l-fewer-top-level-modes-tweets-become-summary-s-thread.md). */
-  ["structure", "summary", "diagram"],
-  ["skim", "quotes", "glossary", "faq", "ideas", "timeline"],
+  ["structure", "summary", "diagram", "skim"],
+  ["quotes", "glossary", "faq", "ideas", "timeline"],
   ["citations", "referee", "debate"],
   ["search", "chat", "learn"],
   /* Marginalia's toggle, since 2026-10-01 a switch beside the band rather than
@@ -73,16 +79,17 @@ describe("the mode bar's order", () => {
     const gathered: readonly string[] = UNDER_MORE;
     expect(bar.drawn.map((m) => m.mode)).toEqual(RUNS.flat().filter((m) => !gathered.includes(m)));
     expect(bar.menu.map((m) => m.mode)).toEqual(UNDER_MORE);
-    /* All five are in one run, so More takes nothing from any other. */
-    expect(RUNS[2]).toEqual(["skim", ...UNDER_MORE]);
+    /* The five are the whole of one run, so More takes nothing from any other,
+       and that run is drawn only while one of them is open. */
+    expect(RUNS[2]).toEqual(UNDER_MORE);
   });
 
   it("puts a line before each band run, while Marginalia's own frame supplies its edge", () => {
     /* Both Dock arms pass only the bands to `groupStarts`; Plain and
        Marginalia already have frame edges (Dock.tsx § the three frames). The
-       guides run is Skim alone in the bar now, and still begins with a line. */
+       guides run is all under More, so with none of it open it draws no line. */
     const starts = groupStarts(drawnBands(true));
-    expect([...starts].sort()).toEqual(RUNS.slice(1, -1).map((run) => run[0]).sort());
+    expect([...starts].sort()).toEqual(["structure", "citations", "search"].sort());
   });
 
   it("keeps each run in one piece, so a run never draws two lines", () => {
@@ -98,7 +105,7 @@ describe("the mode bar's order", () => {
   });
 
   it("with the switch off, draws lines only where two surviving runs meet", () => {
-    /* Structure, Summary | Skim, Quotes, Glossary, Ideas | Search, Chat,
+    /* Structure, Summary, Skim | Quotes, Glossary, Ideas | Search, Chat,
        Learn (since 2026-10-05, spya-cnqcjf): the critical run is hidden
        whole, so no line is left for it. Marginalia's toggle is last, in a
        frame of its own, since it left the switch the same day (spya-vv54j2). */
@@ -116,8 +123,9 @@ describe("the mode bar's order", () => {
       "learn",
       "marginalia",
     ]);
-    /* Of those the bar draws Structure, Summary | Skim | Search, Chat, Learn
-       since 2026-10-07, with Quotes, Glossary and Ideas under More. */
+    /* Of those the bar draws Structure, Summary, Skim | Search, Chat, Learn
+       — More since 2026-10-07, with Quotes, Glossary and Ideas under it, and
+       Skim in Structure's run since 2026-10-08. */
     expect(drawnBands(false).map((m) => m.mode)).toEqual([
       "plain",
       "structure",
@@ -129,10 +137,10 @@ describe("the mode bar's order", () => {
     ]);
     /* The bar asks about the bands only: the toggle's frame is its own edge
        (Dock.tsx § the three frames). */
-    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "skim", "search"].sort());
+    expect([...groupStarts(drawnBands(false))].sort()).toEqual(["structure", "search"].sort());
   });
 
-  it("a gathered mode drawn while it is open joins Skim's run, and adds no line", () => {
+  it("a gathered mode drawn while it is open is a run of its own, after Skim, with its line", () => {
     for (const current of ["quotes", "glossary", "ideas", "timeline"] as const) {
       const drawn = drawnBands(false, current);
       expect(drawn.map((m) => m.mode), current).toEqual([
@@ -145,7 +153,7 @@ describe("the mode bar's order", () => {
         "chat",
         "learn",
       ]);
-      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", "skim", "search"].sort());
+      expect([...groupStarts(drawn)].sort(), current).toEqual(["structure", current, "search"].sort());
     }
   });
 

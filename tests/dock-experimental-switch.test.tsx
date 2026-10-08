@@ -204,7 +204,7 @@ describe("who sees it at all", () => {
        drawn list, and every mode is still offered. */
     const bar = splitForMore(visibleModes(true, "plain"), "plain");
     expect(bar.drawn.length + bar.menu.length).toBe(MODES.length);
-    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [aria-pressed]')).toHaveLength(
+    expect(host.querySelectorAll('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]')).toHaveLength(
       bar.drawn.length,
     );
   });

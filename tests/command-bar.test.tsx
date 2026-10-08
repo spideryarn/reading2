@@ -195,7 +195,7 @@ const listedOfKind = (kind: RowKind): string[] =>
 /** The mode buttons the Dock itself drew, in the order it drew them. */
 const dockDraws = (): string[] =>
   /* The radios and Marginalia's toggle after them (261001i), in DOM order. */
-  [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [aria-pressed]')].map(
+  [...host.querySelectorAll<HTMLElement>('.dock-modes [role="radio"], .dock-modes [data-mode][aria-pressed]')].map(
     (b) => b.getAttribute("aria-label") ?? "",
   );
 
