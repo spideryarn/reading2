@@ -25,7 +25,7 @@ import {
   watchBarVisibility,
 } from "../scroll.js";
 import { positionToWrite, type Section } from "../position.js";
-import { beginJump, type JumpEnded } from "../keynav.js";
+import { beginJump, beginReturn, type JumpEnded } from "../keynav.js";
 import type { JumpAim } from "../flash.js";
 import { rowsForBlockIds } from "../rows.js";
 import { isFoldedAway, subscribeFold, visibleFrom } from "../fold.js";
@@ -306,6 +306,17 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
     [blocks, setAt],
   );
 
+  // The return chip's press: back to where the last jump started, moving only
+  // the position (keynav.ts § `beginReturn`). `synced` is set for the reason it
+  // is after a jump — `beginReturn` has already moved the page, and the restore
+  // effect must recognise the value rather than move it again.
+  const returnToOrigin = useCallback(() => {
+    const at = beginReturn((id) => {
+      void setAt(id, { history: "push", limitUrlUpdates: throttle(0) });
+    });
+    if (at !== undefined) synced.current = at;
+  }, [setAt]);
+
   // `at` goes out as well as `jumpTo` because it is half of the answer to
   // "where should this link land" — the other half being `?note=`, which the
   // caller has and this hook does not. See arrivalTarget in scroll.ts.
@@ -314,5 +325,5 @@ export function useReadingPosition(sections: Section[], blocks: Block[], layoutK
   // spy does — which section is this block in — and a second `new Map` over
   // every block in the article, kept in step by nothing, is two indexes that
   // can disagree.
-  return { at, jumpTo, rowOf };
+  return { at, jumpTo, returnToOrigin, rowOf };
 }
