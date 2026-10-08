@@ -57,6 +57,7 @@
  * as their selection — it is what they did not understand.
  */
 import type {
+  AnswerEffort,
   Block,
   ChatAnchor,
   ChatMessage,
@@ -86,6 +87,7 @@ import {
   type StreamOutcome,
   classifyEnd,
   openRouterStream,
+  wireEffort,
 } from "./ai-call.js";
 import {
   ENDED_UNFINISHED,
@@ -1984,6 +1986,12 @@ export type ConverseEvent =
       citations: Citation[];
       searches: number;
       model: string;
+      /**
+       * What the answer's thinking was set to — `wireEffort` for this job and
+       * the model *asked for*, which is what `outgoing` put on the wire, or
+       * `"default"` when it put nothing. Stored beside `model` (plan 261008b § 2).
+       */
+      effort: AnswerEffort;
       /** Block ids the model cited that this article does not have. */
       unknownIds: string[];
       /**
@@ -3565,6 +3573,7 @@ export async function* converse({
     citations: [...citations.values()],
     searches,
     model: used,
+    effort: wireEffort(jobFor(kind), model) ?? "default",
     unknownIds,
     tools: toolRuns,
     truncated,

@@ -186,10 +186,31 @@
    `scrollTop` is untouched, so nothing moves, and it cannot flicker, because
    showing it only takes the reader further from the bottom. 2026-10-01,
    docs/plans/261001f-long-url-wraps-and-chat-latest-pill-clears-the-text.md. */
+/* **The row it shares with Top, ↑ and ↓** (spya-qd2agx, plan 261008b § 3),
+   which takes over its place in flow: a centred row of its own between the
+   transcript and the composer. The pill keeps its own `flex` and `align-self`
+   for when a host lays it out by itself. */
+.chat-steps {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.3rem auto;
+}
+.chat-step { width: 1.6rem; height: 1.6rem; }
+/* **A finger gets the whole 40px, drawn**, not `.tap-target`'s invisible
+   halo: three halos 31px apart overlap by 9px each, and the overlap goes to
+   the later button — ↓ for a press aimed at ↑ (Sol's F2 on plan 261008b;
+   tap-target.css says why neighbours need their own room). */
+@media (any-pointer: coarse) {
+  .chat-steps { gap: 0.25rem; margin: 0.15rem auto; }
+  .chat-step { width: 2.5rem; height: 2.5rem; }
+}
 .chat-to-bottom {
   flex: none;
   align-self: center;
-  margin: 0.3rem auto;
+  margin: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;

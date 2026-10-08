@@ -35,7 +35,8 @@ The lines above an answer say where else Chat looked:
 
 An answer with none of these came from the article alone. Chat decides when it needs them.
 
-Each article keeps its own conversations under **All conversations**. That list holds every
+Each article keeps its own list of conversations; **‹ Chats**, at the top left of a conversation,
+takes you back to it. That list holds every
 conversation you have had about the article, not only the ones started in Chat. A row from somewhere
 else has a small icon in front of it: point at it, or tap it, to see where it came from, for example
 a claim in Debate, a passage, or Learn. Pressing a Learn row takes you to Learn, where that
@@ -45,6 +46,9 @@ it.
 
 <kbd>Enter</kbd> sends and <kbd>Shift Enter</kbd> starts a new line; <kbd>Esc</kbd> stops an answer
 still arriving. **Answer again** gets a fresh answer, and the pencil lets you rewrite your question.
+When a conversation is longer than the panel, the arrows under it step to the previous or next
+message, or back to the first, and **Latest** jumps to the end. The (i) in the corner of a
+conversation says which AI model answered it, and how hard it was asked to think.
 
 **Buttons in an answer.** Chat can offer a button when you ask it to bookmark a passage, add or
 remove a tag, look a term up in the glossary, or show where the article first says something.

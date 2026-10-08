@@ -3750,6 +3750,7 @@ async function streamChat(slug: string, body: unknown, res: ServerResponse): Pro
         citations: event.citations,
         searches: event.searches,
         model: event.model,
+        effort: event.effort,
         /* Omitted rather than stored empty, the same rule `stopped` follows on
            the next line: most answers use no tools, and a `"tools": []` on every
            one of them is noise in a file a person may well open. */

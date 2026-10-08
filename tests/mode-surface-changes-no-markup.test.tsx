@@ -413,12 +413,14 @@ const CHAT: BandShape = {
   label: "Chat about this article",
   head: true,
   children: ["button.band-about[aria-expanded,aria-haspopup,aria-label,type]", "div.band-head", "div.chat-scroll", "p.sr-only[aria-live]", "form.chat-composer"],
-  /* The title, `ArmedDelete` in its unarmed state, and the "All conversations"
-     close. `subMode` renders nothing for this fixture. The header is the one
-     part of the band the migration restructured — it went from inline JSX to a
-     fragment passed as `head` — so it is the one part where "the DOM did not
-     change" is a claim rather than a restatement of the diff. */
-  headChildren: ["h2", "button.chat-icon.danger[title,type]", "button.chat-icon[title,type]"],
+  /* "‹ Chats", the way back to the list, then the title and `ArmedDelete` in
+     its unarmed state. `subMode` renders nothing for this fixture. The header
+     is the one part of the band the migration restructured — it went from
+     inline JSX to a fragment passed as `head` — so it is the one part where
+     "the DOM did not change" is a claim rather than a restatement of the diff.
+     The way back was an unlabelled × at the far end until plan 261008b § 1
+     (spya-pd9fnc): on a phone nobody could tell it was the way back. */
+  headChildren: ["button.chat-back.tap-target[aria-label,title,type]", "h2", "button.chat-icon.danger[title,type]"],
 };
 
 /**

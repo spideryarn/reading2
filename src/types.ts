@@ -3764,6 +3764,15 @@ export interface ResetResponse {
    as clickable chips (src/web/ChatPanel.tsx). */
 
 /**
+ * **What an answer's thinking was set to**: one of OpenRouter's
+ * `reasoning.effort` values (`ReasoningEffort` in src/ai-call.ts, which
+ * tests/chat-effort.test.ts holds equal to this), or `"default"` for "we sent
+ * none, so the model's own default". A literal union here because this file
+ * is shared with the browser and imports nothing from the server.
+ */
+export type AnswerEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "default";
+
+/**
  * One turn of a conversation.
  *
  * `status` exists on assistant messages for the same reason it exists on a
@@ -3791,6 +3800,14 @@ export interface ChatMessage {
    */
   tools?: ToolRun[];
   model?: string;
+  /**
+   * How hard the model was asked to think: the effort sent, or `"default"`
+   * when none was and the model chose. Absent on answers from before
+   * 2026-10-08, on spoken ones, and on a failed one — "not recorded", which is
+   * not the same as `"default"`. Assistant turns only. See `effort` in
+   * src/db/schema.ts.
+   */
+  effort?: AnswerEffort;
   error?: string;
   /**
    * The reader pressed stop, so this answer is short on purpose.

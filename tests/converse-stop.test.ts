@@ -135,6 +135,8 @@ describe("a stop ends in `done`, never in a throw", () => {
         citations: [],
         searches: 0,
         model: expect.any(String),
+        // What the request asked for, stopped or not: nothing, at standard power (plan 261008b § 2).
+        effort: "default",
         unknownIds: [],
         // Empty rather than absent: `converse` always says what its tools did,
         // and on a stop before the first byte the honest answer is "nothing".

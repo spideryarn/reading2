@@ -313,6 +313,7 @@ describe("the Postgres chat store", () => {
         citations: [{ url: "https://example.com/one" }],
         searches: 3,
         model: "a-model",
+        effort: "high",
       },
       { attempt },
     );
@@ -329,6 +330,8 @@ describe("the Postgres chat store", () => {
     expect("citations" in (stored ?? {})).toBe(false);
     expect("searches" in (stored ?? {})).toBe(false);
     expect("model" in (stored ?? {})).toBe(false);
+    // The model and its thinking are one fact about the attempt (plan 261008b, Sol's F4).
+    expect("effort" in (stored ?? {})).toBe(false);
     /* And `createdAt` MOVES — opposite to a search run, where it is the
        question's clock. Leave it and the sweep reads the retry the reader is
        watching as an abandoned message and errors it. */
@@ -796,6 +799,7 @@ describe("the Postgres chat store", () => {
         citations: [{ url: "https://example.com/arch" }],
         searches: 2,
         model: "a-model",
+        effort: "default",
       },
       { now: clock, attempt: one.attempt },
     );
@@ -805,6 +809,7 @@ describe("the Postgres chat store", () => {
     expect(answered?.citations).toEqual([{ url: "https://example.com/arch" }]);
     expect(answered?.searches).toBe(2);
     expect(answered?.model).toBe("a-model");
+    expect(answered?.effort, "stored, and read back (plan 261008b § 2)").toBe("default");
 
     // 3. begin two — a later question does NOT rename the thread.
     const two = await pgChatStore.begin(

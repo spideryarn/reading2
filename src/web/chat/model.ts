@@ -17,7 +17,7 @@
  * which is what lets tests/chat-reduce.test.ts run the whole machine without a
  * DOM.
  */
-import type { ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ThreadOrigin, ToolRun } from "../../types.js";
+import type { AnswerEffort, ChatMessage, ChatThread, Citation, LiveEngine, ThreadKind, ThreadOrigin, ToolRun } from "../../types.js";
 
 /**
  * The name of one asynchronous action, and **branded** so that a thread id, a
@@ -792,6 +792,8 @@ export interface TurnDone {
   tools?: ToolRun[];
   truncated?: boolean;
   model?: string;
+  /** What the answer's thinking was set to (src/types.ts § `AnswerEffort`). */
+  effort?: AnswerEffort;
   stopped?: boolean;
   /**
    * **A guide turn's only**: the catalogue keys of generating modes whose

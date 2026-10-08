@@ -59,6 +59,10 @@ import {
   BookOpen,
   BookMarked,
   Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  ChevronsUp,
   ClipboardCheck,
   Compass,
   Copy,
@@ -98,7 +102,9 @@ import { Button } from "./components/ui/button.js";
 import { useChatCommands } from "./CommandChip.js";
 import { chipFor } from "./chat-commands.js";
 import { holdTarget, roomNeeded } from "./chat-hold.js";
+import { chatStep, SNAP, type StepEnds, turnStarts } from "./chat-steps.js";
 import { ModeSurface } from "./ModeSurface.js";
+import { ChatThreadAbout } from "./ChatThreadAbout.js";
 import { LearnSubModesAbout } from "./LearnAbout.js";
 import { PassageLinks } from "./PassageLinks.js";
 import { DictationButton, DictationStrip } from "./DictationStrip.js";
@@ -593,6 +599,10 @@ export function ChatPanel({
           <LearnSubModesAbout
             current={kind === "tutorial" ? "tutorial" : kind === "explore" ? "explore" : "recall"}
           />
+        ) : open ? (
+          /* Which model answered this conversation, and its thinking
+             (spya-pd9fnc; plan 261008b § 2). */
+          <ChatThreadAbout messages={open.messages} />
         ) : undefined
       }
       label={
@@ -606,6 +616,26 @@ export function ChatPanel({
       }
       head={
         <>
+          {/* **The way back to the list, labelled, where "back" is.** It was an
+              unlabelled × at the far end of this row, between the trash and the
+              (i), whose only words were a tooltip — and a phone has no hover.
+              Greg, spya-pd9fnc, 2026-10-08: *"On mobile, I'd opened a chat, and
+              I was in the middle of a chat, and I couldn't see a way to get
+              back to the main chat mode that would let me choose other
+              threads."* The × was there and worked; it read as "close". Not in
+              Learn, which has no list. Plan 261008b § 1. */}
+          {!learn && open && (
+            <button
+              type="button"
+              className="chat-back tap-target"
+              title="All conversations"
+              aria-label="All conversations"
+              onClick={() => void leave()}
+            >
+              <ChevronLeft size={15} aria-hidden="true" />
+              Chats
+            </button>
+          )}
           {/* **The header says the mode's name** (Learn; Remember until 2026-10-05), never the thread's title: there
               is one Learn conversation per article, so the title names
               nothing the reader could mistake it for — and it is their first
@@ -655,9 +685,6 @@ export function ChatPanel({
                   ArmedDelete — because in here the whole conversation is on the
                   screen and there is nothing to put it back. */}
               <ArmedDelete key={open.id} onDelete={() => onDelete(open.id)} />
-              <button type="button" className="chat-icon" title="All conversations" onClick={() => void leave()}>
-                <X size={14} />
-              </button>
             </>
           ) : (
             <button
@@ -1346,6 +1373,10 @@ function RenameRow({
   );
 }
 
+/** Whether the step row shows, and which way it can go. See `steps` in `Conversation`. */
+type StepRoom = { readonly shown: boolean; readonly up: boolean; readonly down: boolean };
+const NO_STEPS: StepRoom = { shown: false, up: false, down: false };
+
 export function Conversation({
   slug,
   thread,
@@ -1452,6 +1483,17 @@ export function Conversation({
   const [editing, setEditing] = useState<string | null>(null);
   /** Whether the reader has scrolled up, which is what shows the jump button. */
   const [away, setAway] = useState(false);
+  /**
+   * **Which of the step buttons have somewhere to go** — Top, ↑ and ↓ between
+   * turns, beside "Latest" (Greg, spya-qd2agx: *"up and down buttons somehow,
+   * and maybe even top"*). Drawn only while the transcript runs past the
+   * panel, so a conversation that fits gets no row. Set only when one of the
+   * three changes, for `awayNow`'s reason below: a same-value set per streamed
+   * word is a render per word. chat-steps.ts is the arithmetic; plan 261008b § 3.
+   */
+  const [steps, setSteps] = useState(NO_STEPS);
+  const stepsNow = useRef(steps);
+  stepsNow.current = steps;
 
   /**
    * Follow new content down — but only if the reader is already at the bottom,
@@ -1583,6 +1625,32 @@ export function Conversation({
     h.top = el.scrollTop;
     h.max = Math.max(0, el.scrollHeight - el.clientHeight);
   };
+  /**
+   * The transcript's two bottoms (chat-steps.ts § StepEnds): where its words
+   * end, without the room a held answer is given, and how far the room lets
+   * it scroll — a held question sits at the top on that room, and ↓ has to be
+   * able to get back to it.
+   */
+  const ends = (el: HTMLElement): StepEnds => {
+    const max = Math.max(0, el.scrollHeight - el.clientHeight);
+    return { end: Math.max(0, max - (room.current?.offsetHeight ?? 0)), max };
+  };
+  /**
+   * Recompute `steps` from where the scroller is now. Every caller has just
+   * measured or moved it. Enabled means `chatStep` has somewhere to go, the
+   * same call a press makes, so an enabled button always moves.
+   */
+  const measureSteps = (el: HTMLElement) => {
+    const at = ends(el);
+    const starts = empty ? [] : turnStarts(el);
+    const next: StepRoom = {
+      shown: !empty && (at.end > 1 || el.scrollTop > SNAP),
+      up: chatStep(starts, el.scrollTop, at, -1) !== null,
+      down: chatStep(starts, el.scrollTop, at, 1) !== null,
+    };
+    const was = stepsNow.current;
+    if (was.shown !== next.shown || was.up !== next.up || was.down !== next.down) setSteps(next);
+  };
   const wasBusy = useRef(false);
   const sizedNow = useRef(sized);
   sizedNow.current = sized;
@@ -1645,9 +1713,12 @@ export function Conversation({
        the fold. Guarded, because a same-value set is not free: see `awayNow`. */
     const atBottom = natural + want - top - client < 60;
     if (awayNow.current !== !atBottom) setAway(!atBottom);
+    measureSteps(el);
   };
   const settleNow = useRef(settle);
   settleNow.current = settle;
+  const measureStepsNow = useRef(measureSteps);
+  measureStepsNow.current = measureSteps;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberate re-run triggers — the effect reads refs, and these are what say "something has been painted"
   useLayoutEffect(() => {
@@ -1705,6 +1776,7 @@ export function Conversation({
       stick.current = true;
       if (awayNow.current) setAway(false);
     }
+    measureSteps(el);
     /* `last?.status` is in here for a reason that is easy to leave out and was:
        the frame that ends an answer usually changes neither the text nor the
        row count, while adding the action row and, if the model searched, the
@@ -1721,6 +1793,8 @@ export function Conversation({
     if (!el || !visible || typeof ResizeObserver === "undefined") return;
     const seen = new ResizeObserver(() => {
       if (hold.current?.placed) settleNow.current();
+      /* A taller or shorter panel changes whether there is anywhere to step. */
+      else measureStepsNow.current(el);
     });
     seen.observe(el);
     return () => seen.disconnect();
@@ -1735,6 +1809,27 @@ export function Conversation({
     /* Now, not when the scroll event arrives: a streamed word can land first,
        and would put a held answer back where it was. */
     noteAnchor(el);
+  };
+
+  /**
+   * **Top, ↑ and ↓: a press moves the view, the same way `toBottom` does.**
+   * Instant rather than smooth: a smooth scroll is a run of scroll events a
+   * hold would take for the reader moving mid-flight. Follow intent, `away`
+   * and a held answer's anchor are all set here, synchronously, because the
+   * scroll event this write causes arrives at the position `noteAnchor` has
+   * just recorded and so says nothing.
+   */
+  const step = (dir: -1 | 1 | "top") => {
+    const el = scroller.current;
+    if (!el) return;
+    const to = dir === "top" ? 0 : chatStep(turnStarts(el), el.scrollTop, ends(el), dir);
+    if (to === null) return;
+    el.scrollTop = to;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+    stick.current = atBottom;
+    if (awayNow.current !== !atBottom) setAway(!atBottom);
+    noteAnchor(el);
+    measureSteps(el);
   };
 
   return (
@@ -1788,6 +1883,7 @@ export function Conversation({
              Our own writes and a browser's clamp fire this too, after `settle`
              has already put things back, and record what it left. */
           noteAnchor(el);
+          measureSteps(el);
         }}
       >
         {empty &&
@@ -1845,11 +1941,53 @@ export function Conversation({
       </div>
       {/* The jump button sits *outside* the scroller so it does not scroll with
           it, and only exists while the reader is somewhere else — a permanent
-          one is a permanent claim that you are lost. */}
-      {away && (
-        <button type="button" className="chat-to-bottom" onClick={toBottom} title="Jump to the latest">
-          <ArrowDown size={13} /> Latest
-        </button>
+          one is a permanent claim that you are lost. **The step buttons beside
+          it are not that claim**: they show whenever the transcript runs past
+          the panel, because there is then somewhere to go, at the bottom as
+          much as anywhere (spya-qd2agx, plan 261008b § 3). One row, in flow,
+          for the pill's reason in chat-actions.css. */}
+      {(steps.shown || away) && (
+        <div className="chat-steps">
+          {steps.shown && (
+            <>
+              <button
+                type="button"
+                className="chat-icon chat-step"
+                aria-label="To the first message"
+                title="To the first message"
+                disabled={!steps.up}
+                onClick={() => step("top")}
+              >
+                <ChevronsUp size={15} />
+              </button>
+              <button
+                type="button"
+                className="chat-icon chat-step"
+                aria-label="Previous message"
+                title="Previous message"
+                disabled={!steps.up}
+                onClick={() => step(-1)}
+              >
+                <ChevronUp size={15} />
+              </button>
+              <button
+                type="button"
+                className="chat-icon chat-step"
+                aria-label="Next message"
+                title="Next message"
+                disabled={!steps.down}
+                onClick={() => step(1)}
+              >
+                <ChevronDown size={15} />
+              </button>
+            </>
+          )}
+          {away && (
+            <button type="button" className="chat-to-bottom" onClick={toBottom} title="Jump to the latest">
+              <ArrowDown size={13} /> Latest
+            </button>
+          )}
+        </div>
       )}
       {/*
         What a screen reader is told, and deliberately not the answer itself.

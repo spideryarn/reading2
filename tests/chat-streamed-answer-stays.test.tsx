@@ -555,3 +555,73 @@ describe("a Live conversation", () => {
     expect(pill()).not.toBeNull();
   });
 });
+
+/* **Top, ↑ and ↓ between turns** (Greg, spya-qd2agx). They share the pill's
+   row and move the view the way the pill does, so a hold has to survive them.
+   docs/plans/261008b-chat-back-to-the-list-on-a-phone-the-model-in-the-thread-s-i-and-step-between-messages.md § 3. */
+describe("the step buttons", () => {
+  const row = () => host.querySelector<HTMLElement>(".chat-steps");
+  const button = (label: string) => {
+    const b = host.querySelector<HTMLButtonElement>(`.chat-steps button[aria-label="${label}"]`);
+    if (!b) throw new Error(`no ${label}`);
+    return b;
+  };
+  const press = (label: string) => act(() => button(label).click());
+
+  it("are not drawn for a conversation that fits the panel", () => {
+    heights = [100, 200];
+    paint(EARLIER);
+    expect(row()).toBeNull();
+  });
+
+  it("step a finished conversation turn by turn, ↑ to the start of the turn the view is in first", () => {
+    paint(EARLIER);
+    expect(scroller().scrollTop, "control: it opens at its end").toBe(900 - CLIENT);
+    expect(row(), "it runs past the panel, so there is somewhere to go").not.toBeNull();
+    expect(button("Next message").disabled, "at the bottom ↓ has nowhere to go").toBe(true);
+
+    press("Previous message");
+    expect(scroller().scrollTop, "the long answer's own start").toBe(100);
+    press("Previous message");
+    expect(scroller().scrollTop, "then the question before it").toBe(0);
+    expect(button("Previous message").disabled).toBe(true);
+    expect(button("To the first message").disabled).toBe(true);
+    expect(pill(), "away from the bottom, so Latest is offered beside them").not.toBeNull();
+
+    press("Next message");
+    expect(scroller().scrollTop).toBe(100);
+    press("Next message");
+    expect(scroller().scrollTop, "no turn after the answer, so the bottom").toBe(900 - CLIENT);
+    expect(button("Next message").disabled).toBe(true);
+    expect(pill()).toBeNull();
+
+    press("To the first message");
+    expect(scroller().scrollTop).toBe(0);
+  });
+
+  it("↓ gets back to a held question, which sits at the top on room only the hold gave it", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 30];
+    paint(asked("Short."));
+    expect(scroller().scrollTop, "control: held at the top on room").toBe(QUESTION_TOP);
+    press("Previous message");
+    expect(scroller().scrollTop).toBe(100);
+    press("Next message");
+    expect(scroller().scrollTop, "back on the question, not the words' end at 590").toBe(QUESTION_TOP);
+    expect(button("Next message").disabled, "and nowhere further: below is empty room").toBe(true);
+  });
+
+  it("leave a held answer where the reader stepped to, as the stream goes on", () => {
+    paint(EARLIER);
+    heights = [100, 800, 60, 900];
+    paint(asked("The first sentence. And a great deal more."));
+    expect(scroller().scrollTop, "control: the question is held at the top").toBe(QUESTION_TOP);
+
+    press("Previous message");
+    expect(scroller().scrollTop, "from the question's start, the turn before it").toBe(100);
+
+    heights = [100, 800, 60, 1000];
+    paint(asked("The first sentence. And a great deal more. Still more."));
+    expect(scroller().scrollTop, "the hold did not put the question back").toBe(100);
+  });
+});

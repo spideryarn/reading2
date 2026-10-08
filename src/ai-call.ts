@@ -1229,7 +1229,7 @@ export function effortOf(job: ChatJob): ReasoningEffort | null {
  * Keyed on the model sent, because the reason is that model's default. Plan
  * 260930f decision 1, Sol F2.
  */
-function wireEffort(job: ChatJob, model: unknown): ReasoningEffort | null {
+export function wireEffort(job: ChatJob, model: unknown): ReasoningEffort | null {
   const row = CHAT_REASONING[job];
   if ("effort" in row) return row.effort;
   return typeof model === "string" && isHighPowerModel(model) ? "high" : null;

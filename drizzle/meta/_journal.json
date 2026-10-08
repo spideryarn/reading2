@@ -1191,6 +1191,13 @@
       "when": 1791406082833,
       "tag": "20261007204802_raise_size_caps",
       "breakpoints": true
+    },
+    {
+      "idx": 170,
+      "version": "7",
+      "when": 1791455344000,
+      "tag": "20261008102903_chat_message_effort",
+      "breakpoints": true
     }
   ]
 }

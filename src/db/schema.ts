@@ -102,6 +102,7 @@ import type {
   SearchHit,
   Timeline,
   ToolRun,
+  AnswerEffort,
   Tree,
   TweetThread,
 } from "../types.js";
@@ -4280,6 +4281,19 @@ export const chatMessages = spideryarn.table(
      */
     tools: jsonb("tools").$type<ToolRun[]>(),
     model: text("model"),
+    /**
+     * **How hard the model was asked to think for this answer** — the
+     * `reasoning.effort` we sent (`low`…`max`, `none`), or `default` when we
+     * sent none and the model thought as much as it likes. Null on every row
+     * written before 2026-10-08 and on a spoken answer, which has no effort of
+     * ours: "not recorded", never guessed. Stamped from `wireEffort`
+     * (src/ai-call.ts), the function that decides what goes on the wire, so
+     * the two cannot disagree. Stored rather than worked out from `model` when
+     * read, because the decision table changes and an old answer must keep
+     * saying what it was given. A thread's (i) shows it (spya-pd9fnc; plan
+     * 261008b § 2).
+     */
+    effort: text("effort").$type<AnswerEffort>(),
     error: text("error"),
     /**
      * The reader pressed stop, so this answer is short on purpose.
@@ -4424,6 +4438,12 @@ export const chatMessages = spideryarn.table(
        describes the reader's own request, so only the reader's rows may carry
        one. Without this a bug that wrote it onto the answer would be invisible —
        nothing reads it there, and the transcript would look right. */
+    check(
+      "chat_messages_effort",
+      sql`${t.effort} is null or ${t.effort} in ('none','minimal','low','medium','high','xhigh','max','default')`,
+    ),
+    /* Only an answer was thought about. */
+    check("chat_messages_effort_assistant_only", sql`${t.effort} is null or ${t.role} = 'assistant'`),
     check("chat_messages_help_user_only", sql`${t.help} = false or ${t.role} = 'user'`),
     /* A hint sits under an answer, so only an assistant row can have had one
        opened. Same shape as the stance check above. */

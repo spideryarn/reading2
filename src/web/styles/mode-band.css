@@ -419,6 +419,27 @@ svg.band-waiting-ghost { flex: none; }
   .mode-herald { animation: none; }
 }
 
+/* **"‹ Chats": an open conversation's way back to the list**, first in its
+   header and in words, because a phone has no hover to read a tooltip from
+   (spya-pd9fnc, plan 261008b § 1). Quiet like the icons beside it, so the
+   title stays the thing the eye lands on. */
+.chat-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  height: 1.4rem;
+  padding: 0 0.35rem 0 0.1rem;
+  margin-left: -0.25rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.chat-back:hover { background: var(--surface-raised); color: var(--ink); }
 .chat-icon {
   display: inline-flex;
   align-items: center;

@@ -1,0 +1,3 @@
+ALTER TABLE "spideryarn"."chat_messages" ADD COLUMN "effort" text;--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_effort" CHECK ("spideryarn"."chat_messages"."effort" is null or "spideryarn"."chat_messages"."effort" in ('none','minimal','low','medium','high','xhigh','max','default'));--> statement-breakpoint
+ALTER TABLE "spideryarn"."chat_messages" ADD CONSTRAINT "chat_messages_effort_assistant_only" CHECK ("spideryarn"."chat_messages"."effort" is null or "spideryarn"."chat_messages"."role" = 'assistant');

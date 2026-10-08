@@ -124,6 +124,7 @@ function toMessage(row: typeof chatMessages.$inferSelect): ChatMessage {
     ...(row.searches === null ? {} : { searches: row.searches }),
     ...(row.tools === null ? {} : { tools: row.tools as ToolRun[] }),
     ...(row.model === null ? {} : { model: row.model }),
+    ...(row.effort === null ? {} : { effort: row.effort }),
     ...(row.error === null ? {} : { error: row.error }),
     ...(row.stopped ? { stopped: true } : {}),
     /* **Both of these must be named here or they do not exist.** This mapping
@@ -279,6 +280,7 @@ function messageRow(
     searches: message.searches ?? null,
     tools: message.tools ?? null,
     model: message.model ?? null,
+    effort: message.effort ?? null,
     error: message.error ?? null,
     stopped: message.stopped ?? false,
     /* **The write half of the mapping, and it has to be listed here too.**
@@ -496,6 +498,7 @@ const rawPgChatStore: ChatStore = {
           ...(patch.searches === undefined ? {} : { searches: patch.searches }),
           ...(patch.tools === undefined ? {} : { tools: patch.tools }),
           ...(patch.model === undefined ? {} : { model: patch.model }),
+          ...(patch.effort === undefined ? {} : { effort: patch.effort }),
           ...(patch.error === undefined ? {} : { error: patch.error }),
           ...(patch.stopped === undefined ? {} : { stopped: patch.stopped }),
           ...(patch.editedAt === undefined ? {} : { editedAt: new Date(patch.editedAt) }),
@@ -561,6 +564,8 @@ const rawPgChatStore: ChatStore = {
           // Same rule, same line of reasoning, as the citations above it.
           tools: null,
           model: null,
+          // The model and its thinking are one fact about the attempt (Sol's F4, plan 261008b).
+          effort: null,
           error: null,
           stopped: false,
           /* Retrying is a new one-voice attempt. The row id survives, but the

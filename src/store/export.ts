@@ -664,6 +664,8 @@ export async function exportArticle(
                tests/store-roundtrip.test.ts compares the bytes. */
             tools: row.tools,
             model: row.model,
+            // Beside `model`, and named for `stance`'s reason below (plan 261008b, Sol's F4).
+            effort: row.effort,
             error: row.error,
             // `false` is the default and the file simply had no key.
             stopped: row.stopped ? true : null,
