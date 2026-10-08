@@ -417,7 +417,8 @@ Which task is on which wire is a `Record<Task, Wire>` (`TASK_WIRE`), not a list 
 an unassigned task fails to compile rather than quietly getting the pipeline answer. `PIPELINE_TASKS`
 and `REQUEST_PATH_TASKS` are derived from it.
 
-Two things worth knowing about `displayName`. It is a **table of literals**, not
+Two things worth knowing about `displayName`, which lives in `src/model-names.ts` (it imports
+nothing, so the browser uses it too) and is re-exported from `src/models.ts`. It is a **table of literals**, not
 `id.split("/").pop()` — the same rule the file applies to wire spellings, and not a hypothetical
 one: the previous model pair would have stripped to `claude-sonnet-4.5` against Anthropic's
 `claude-sonnet-4-5`, so the two rows would have gone on disagreeing while looking mended. And an id

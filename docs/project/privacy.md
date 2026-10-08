@@ -730,7 +730,7 @@ says *"every AI call our reading features make, bar one"* so the two do not cont
 imports, the Feedback button's `withoutShareKey` and the audit table.
 
 [`tests/privacy-page.test.ts`](../../tests/privacy-page.test.ts) holds the **model names** to
-`DISPLAY_NAME` in [`src/models.ts`](../../src/models.ts) and to `LIVE_MODEL` / `LIVE_TRANSCRIBER` in
+`DISPLAY_NAME` in [`src/model-names.ts`](../../src/model-names.ts) and to `LIVE_MODEL` / `LIVE_TRANSCRIBER` in
 [`src/live.ts`](../../src/live.ts). That is the claim that would go stale first and silently: swap a
 model and nothing else in the repo would make anybody open the policy. It reads the page **with the
 comments stripped**, because the file is heavily commented and several of those comments name a
