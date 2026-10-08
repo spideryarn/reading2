@@ -1,7 +1,9 @@
 # Text styles for the recurring lines in a mode band
 
 **Status: done, 2026-10-08, on `dev`, not deployed. Session `fbar65p3-type-sizes-across-modes`, queue item `qi-t76rmqxr`,
-report `spya-ar65p3`, question `q-dhnbhw` (answered `spya-k99f8e`).**
+report `spya-ar65p3`, question `q-dhnbhw` (answered `spya-k99f8e`). Written as 261008i and renamed
+to 261008k before landing, because `261008i-needs-a-decision-…` reached `dev` first with the same
+letter.**
 
 Up: [261006k](261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md)
 § Questions for Greg, which asked the question this builds.
@@ -158,7 +160,7 @@ ourselves over."*
 ## Progress
 
 - [x] GPT Sol plan review: approve with changes, eight findings, all taken
-  ([answer](261008i-plan-review-sol.md)). F1 a sixth role, count; F2 the quote role is any verbatim
+  ([answer](261008k-plan-review-sol.md)). F1 a sixth role, count; F2 the quote role is any verbatim
   source, and Quotes' and FAQ's quotes are in; F3 Quiz's question an exception, Citations' title
   in; F4 split shared selectors; F5 Search in, Diagram out by name; F6 the ratchet dropped for a
   registry; F7 label at 0.77; F8 blurbs left alone, a role-by-voice matrix, a landscape shot
@@ -177,7 +179,7 @@ ourselves over."*
   Seen side by side there, the model's mono and the reader's Arial read larger than the serif at
   one size; that is the face question 261006k left open, not a size one, and is not acted on
 - [x] GPT Sol code review: approve with changes, six findings, all fixed by the reviewer and kept
-  ([findings](261008i-code-review-findings.md), [answer](261008i-code-review-sol.md)): F1 FAQ's
+  ([findings](261008k-code-review-findings.md), [answer](261008k-code-review-sol.md)): F1 FAQ's
   quote wins by specificity, not sheet order; F2 Debate's claim heading and F3 Mirror's block-id
   line made explicit exceptions; F4 the test now also loads the whole cascade onto DOM witnesses,
   so a different, more specific selector cannot override a role unseen (negative controls red);
@@ -188,6 +190,6 @@ ourselves over."*
 ## Screenshots kept
 
 Before on the left, after on the right, at 1440:
-[Skim](261008i-shot-skim-before-after.png) (section line and quote up by about 0.6px) ·
-[Glossary](261008i-shot-glossary-before-after.png) (the biggest move, the definition down 0.6px) ·
-and [/design's Text roles](261008i-shot-design-text-roles.png).
+[Skim](261008k-shot-skim-before-after.png) (section line and quote up by about 0.6px) ·
+[Glossary](261008k-shot-glossary-before-after.png) (the biggest move, the definition down 0.6px) ·
+and [/design's Text roles](261008k-shot-design-text-roles.png).

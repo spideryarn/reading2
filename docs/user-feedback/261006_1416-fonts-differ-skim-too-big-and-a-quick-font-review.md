@@ -44,7 +44,7 @@ reopens.
 
 **Greg answered it on 2026-10-08** (`spya-k99f8e`): option A, as a step toward a design system,
 with lots of screenshots and without disrupting what looks fine. Built in
-[261008i](../plans/261008i-text-styles-for-the-recurring-lines-in-a-mode-band.md): six named sizes
+[261008k](../plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md): six named sizes
 for the lines that recur in a mode band, ten modes moved onto them, a Text roles section on
 `/design`, and [typography.md § Text roles in a band](../project/typography.md#text-roles-in-a-band).
 On `dev`, not deployed. Queue item `qi-t76rmqxr`.

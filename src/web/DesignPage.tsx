@@ -405,7 +405,7 @@ const FACES: { token: string; used: string }[] = [
 
 /**
  * **The six text roles in a mode band, against the voices each one meets**
- * (plan 261008i; docs/project/typography.md § Text roles in a band).
+ * (plan 261008k; docs/project/typography.md § Text roles in a band).
  *
  * A cell has a sample only where the app really draws that role in that voice
  * — the line named in its comment — so a blank says "nowhere", not "not drawn

@@ -102,7 +102,7 @@
    wrapping is the normal case. Truncating it would hide the half that carries
    the claim — "Writing is a test of thought, not a…" is exactly the wrong
    half to keep. */
-/* **The three sizes below are text roles now** (plan 261008i, typography.md §
+/* **The three sizes below are text roles now** (plan 261008k, typography.md §
    Text roles in a band): the name is `--type-item` as a term's is, the reason
    `--type-body` as a part's is, and the quote `--type-quote` — a step above the
    glossary's lead line, which is body. What follows is why they were first

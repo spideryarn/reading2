@@ -1,4 +1,4 @@
-Review complete. I recorded six findings in [261008i-code-review-findings.md](/var/tmp/spideryarn-worktrees/fbar65p3-type-sizes-across-modes/docs/plans/261008i-code-review-findings.md) before fixing them.
+Review complete. I recorded six findings in [261008k-code-review-findings.md](/var/tmp/spideryarn-worktrees/fbar65p3-type-sizes-across-modes/docs/plans/261008k-code-review-findings.md) before fixing them.
 
 Fixed:
 
@@ -32,7 +32,7 @@ VERDICT: approve with changes
 
 Files changed:
 
-- `docs/plans/261008i-code-review-findings.md`
+- `docs/plans/261008k-code-review-findings.md`
 - `docs/project/typography.md`
 - `src/web/DesignPage.tsx`
 - `src/web/styles/debate.css`

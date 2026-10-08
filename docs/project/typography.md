@@ -119,7 +119,7 @@ part of a fixed composition; Chat, whose turns are prose; and everything outside
 [`tests/type-roles.test.ts`](../../tests/type-roles.test.ts) holds each moved line to its token and
 each exception to its literal; a line that never joins its registry is not caught. The plan, the
 measurements and what was passed over:
-[261008i](../plans/261008i-text-styles-for-the-recurring-lines-in-a-mode-band.md).
+[261008k](../plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md).
 
 ## Weight, and the variable axis
 

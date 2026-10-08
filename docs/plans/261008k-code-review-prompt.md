@@ -1,11 +1,11 @@
-# GPT Sol code review: 261008i, text roles in a mode band
+# GPT Sol code review: 261008k, text roles in a mode band
 
 You are reviewing AND FIXING, in this worktree. Scope: the commit `1406562e0` (diff it against its
 parent: `git show 1406562e0` / `git diff 1406562e0~1 1406562e0`). The plan it builds is
-`docs/plans/261008i-text-styles-for-the-recurring-lines-in-a-mode-band.md`; the plan review it
-absorbed is `docs/plans/261008i-plan-review-sol.md`.
+`docs/plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md`; the plan review it
+absorbed is `docs/plans/261008k-plan-review-sol.md`.
 
-**First, write your findings to `docs/plans/261008i-code-review-findings.md`** before you fix
+**First, write your findings to `docs/plans/261008k-code-review-findings.md`** before you fix
 anything: ID (F1…), severity (P0 ships broken / P1 must fix / P2 should fix / P3 nit), file:line,
 evidence, the fix. Then fix what is inside this stage, narrowly; for a behaviour change, make the
 test red first. Report — do not fix — anything wider you notice. Do not commit, stash, reset,

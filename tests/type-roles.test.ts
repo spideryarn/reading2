@@ -6,7 +6,7 @@
  * words, a sentence explaining the row, a small provenance line, a count, a
  * group's small heading — takes that job's `--type-*` token from
  * src/web/styles/tokens.css. Anything else may pick its own size. The plan is
- * docs/plans/261008i-text-styles-for-the-recurring-lines-in-a-mode-band.md.
+ * docs/plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md.
  *
  * Three checks:
  *

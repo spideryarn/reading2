@@ -1,8 +1,8 @@
 # Code review findings: text roles in a mode band
 
 Scope: commit `1406562e0`, reviewed against
-[`261008i`](261008i-text-styles-for-the-recurring-lines-in-a-mode-band.md) and its
-[`plan review`](261008i-plan-review-sol.md).
+[`261008k`](261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md) and its
+[`plan review`](261008k-plan-review-sol.md).
 
 ## Findings
 

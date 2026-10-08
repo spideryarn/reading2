@@ -1,9 +1,9 @@
-# GPT Sol plan review: 261008i, text styles for the recurring lines in a mode band
+# GPT Sol plan review: 261008k, text styles for the recurring lines in a mode band
 
 You are reviewing a plan, read-only. Do not edit any file. Write your answer as your final message.
 
 Repo: this worktree (Spideryarn, a reading app). The plan is
-`docs/plans/261008i-text-styles-for-the-recurring-lines-in-a-mode-band.md` (untracked file; read it
+`docs/plans/261008k-text-styles-for-the-recurring-lines-in-a-mode-band.md` (untracked file; read it
 from disk). Background: `docs/plans/261006k-text-size-adjust-for-a-landscape-phone-and-a-quick-review-of-fonts-and-sizes.md`
 § The quick review and § Questions for Greg, `docs/user-feedback/questions/q-dhnbhw.md`,
 `docs/project/typography.md`, `docs/project/fonts.md`, `src/web/styles/tokens.css`, and the band

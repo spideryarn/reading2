@@ -454,7 +454,7 @@
    */
   --return-chip-h: 0px;
 
-  /* **Text roles in a mode band** (plan 261008i): six sizes, named by the job a
+  /* **Text roles in a mode band** (plan 261008k): six sizes, named by the job a
      line does in its row, not by whose words it holds. A band line doing one of
      these jobs uses its token; anything else picks its own size.
      docs/project/typography.md § Text roles in a band says which is which;

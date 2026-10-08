@@ -773,7 +773,7 @@ a.clm-jump.block-ref:focus-visible { outline: 2px solid var(--highlight-text); o
 /* The reader's criterion, printed where a coverage remark has no passage to
    quote. It stands in the quote's place at the quote's size, but it is the
    reader's own line rather than source words, so it is a named exception to
-   the quote role (plan 261008i § F4). */
+   the quote role (plan 261008k § F4). */
 .mir-criterion { font-size: 0.88rem; color: var(--ink); }
 
 /* The referee's own sentence, and the passage under it — set apart from the
