@@ -5,7 +5,9 @@ builds on [261007d](261007d-earlier-tab-says-what-became-of-each-report-numbers-
 reports `spya-u6h6q8` (bug), `spya-bzwzfw`, `spya-t6nmxt`, `spya-bbe74w`, `spya-n7hvm0`,
 `spya-krvuc9`, `spya-za2tse`, `spya-frpy22` · worktree `feedback-earlier-decisions`
 
-Status as of 2026-10-08: **plan reviewed twice by GPT Sol (refused, then refused on F1 and F10; both answered below); building.**
+Status as of 2026-10-08: **built, reviewed by GPT Sol (plan twice, code once: approve with six fixes, applied), seen in Chromium and iPhone-sized WebKit, and on `dev`; not deployed.** The reply box on a real iPhone with its keyboard up is still to be seen (Greg's phone).
+
+**The code review** (`261008f-needs-a-decision-code-review-sol.md`, C1–C6, all fixed by the reviewer): `--answers` printed deferrals of settled or since-replied questions as in force (C1); a question kept on screen only to protect a draft was counted and grouped as live (C2); a reply could be sent by keyboard while a deferral was in flight (C3); a deferral receipt that another tab had overtaken was refused (C4); nested answers and the reply receipt were not held to exact keys (C5); and the endings map was stale against this plan's own note, so the eight reports would have shown as Open (C6).
 
 ## What Greg asked for
 

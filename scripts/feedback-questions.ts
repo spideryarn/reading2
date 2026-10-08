@@ -203,17 +203,36 @@ interface StoredDeferral extends QueryResultRow {
 /**
  * **The deferrals in force, held to the replies' rule** (F6): one row from
  * outside production or preview and it cannot tell; a row whose owner is not
- * an administrator is left out and counted. A brought-back row is not in force.
+ * an administrator is left out and counted. A brought-back row, a row for a
+ * question no longer open, or a deferral superseded by a later reply is not in
+ * force.
  */
 export function classifyDeferrals(
   rows: readonly DeferralRow[],
+  questions: readonly QuestionFile[],
+  answers: readonly AnswerRow[],
   admin: (ownerId: string) => boolean = isAdmin,
-): { kind: "cannot-tell"; why: string } | { kind: "read"; deferred: DeferralRow[]; strangers: number } {
+):
+  | { kind: "cannot-tell"; why: string }
+  | { kind: "read"; deferred: DeferralRow[]; strangers: number; inactive: number } {
   if (rows.some((row) => !PRODUCTION_ENVIRONMENTS.includes(row.environment))) {
     return { kind: "cannot-tell", why: "a deferral has an environment that cannot establish it was written in production" };
   }
   const strangers = rows.filter((row) => !admin(row.ownerId)).length;
-  return { kind: "read", deferred: rows.filter((row) => admin(row.ownerId) && row.deferredAt !== null), strangers };
+  const open = new Set(questions.filter((question) => question.status === "open").map((question) => question.id));
+  const candidates = rows.filter((row) => admin(row.ownerId) && row.deferredAt !== null);
+  const deferred = candidates.filter((row) => {
+    if (!open.has(row.questionId) || row.deferredAt === null) return false;
+    const newestReply = Math.max(
+      -Infinity,
+      ...answers
+        .filter((answer) => answer.ownerId === row.ownerId && answer.questionId === row.questionId)
+        .map((answer) => answer.createdAt.getTime()),
+    );
+    /* The server's state rule: the later action wins, and a tie is deferred. */
+    return row.deferredAt.getTime() >= newestReply;
+  });
+  return { kind: "read", deferred, strangers, inactive: candidates.length - deferred.length };
 }
 
 /** One read-only select against production, and the `Target:` it reached. */
@@ -273,17 +292,15 @@ export async function runAnswers(
       return 0;
     }
     const { target, rows: stored } = await read<StoredAnswer>(answersSql(), []);
-    const verdict = classifyAnswers(
-      stored.map((row) => ({
-        id: row.id,
-        ownerId: row.owner_id,
-        questionId: row.question_id,
-        body: row.body,
-        environment: row.environment,
-        createdAt: row.created_at,
-      })),
-      questions,
-    );
+    const answerRows = stored.map((row) => ({
+      id: row.id,
+      ownerId: row.owner_id,
+      questionId: row.question_id,
+      body: row.body,
+      environment: row.environment,
+      createdAt: row.created_at,
+    }));
+    const verdict = classifyAnswers(answerRows, questions);
     if (verdict.kind === "cannot-tell") {
       out(`cannot tell: ${verdict.why}`);
       return 2;
@@ -339,6 +356,8 @@ export async function runAnswers(
         deferredAt: row.deferred_at,
         environment: row.environment,
       })),
+      questions,
+      answerRows,
     );
     if (deferrals.kind === "cannot-tell") {
       out(`cannot tell: ${deferrals.why}`);
@@ -346,6 +365,7 @@ export async function runAnswers(
     }
     out(
       `${deferrals.deferred.length} question(s) deferred by an administrator: not now, do not chase; each stays open` +
+        (deferrals.inactive > 0 ? `; ${deferrals.inactive} stored deferral(s) no longer in force, left out` : "") +
         (deferrals.strangers > 0 ? `; ${deferrals.strangers} row(s) from an account that is not an administrator's, left out` : "") +
         ".",
     );

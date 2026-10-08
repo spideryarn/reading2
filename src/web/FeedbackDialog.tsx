@@ -786,7 +786,7 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
   useEffect(() => {
     if (!open) setView("write");
   }, [open]);
-  const { earlier, choice, setShow, retry, questions, waitingQuestionCount, replies } = useEarlierFeedback(
+  const { earlier, choice, setShow, retry, questions, liveQuestions, waitingQuestionCount, replies } = useEarlierFeedback(
     open,
     view === "earlier",
     admin,
@@ -1144,19 +1144,19 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               pill inside does too, so there are still two tabs and two panels.
               Its count is the threads waiting on a decision; it is drawn once
               the opening's read has said. */}
-          {choice.detail === "admin" && questions !== null ? (
+          {choice.detail === "admin" && liveQuestions !== null ? (
             <button
               type="button"
               className="fb-tab fb-tab-shortcut"
               aria-pressed={view === "earlier" && choice.show === "waiting"}
-              title={shortcutTitle(questions)}
+              title={shortcutTitle(liveQuestions)}
               onClick={() => {
                 setShow("waiting");
                 replies.close();
                 choose("earlier");
               }}
             >
-              Needs a decision <span className="fb-show-count">{waitingQuestionCount ?? waitingThreads(questions)}</span>
+              Needs a decision <span className="fb-show-count">{waitingQuestionCount ?? waitingThreads(liveQuestions)}</span>
             </button>
           ) : null}
         </div>
@@ -1384,13 +1384,14 @@ export function FeedbackDialog({ open, onClose, where, prefill = null, admin = f
               in progress survives (FeedbackEarlier.tsx § EarlierThreads). */}
           <EarlierThreads
             questions={questions}
+            liveQuestions={liveQuestions}
             replies={replies}
             choice={choice}
             earlier={earlier}
             open={open}
             onEarlier={view === "earlier"}
           />
-          <EarlierList earlier={earlier} choice={choice} retry={retry} questions={questions} threadOpen={threadOpen} />
+          <EarlierList earlier={earlier} choice={choice} retry={retry} questions={liveQuestions} threadOpen={threadOpen} />
         </div>
 
         <div className="fb-actions" hidden={view !== "earlier"}>

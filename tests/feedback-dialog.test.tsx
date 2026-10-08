@@ -2299,6 +2299,25 @@ describe("the Earlier tab", () => {
         expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
       });
 
+      it("treats a reply receipt with a field more as not sent", async () => {
+        await openThread();
+        typeReply("1A");
+        answer = async () => {
+          const request = sent(0);
+          return new Response(
+            JSON.stringify({
+              answer: { id: request.id, body: request.body, createdAt: "2026-10-07T09:00:00.000Z" },
+              environment: "production",
+            }),
+            { status: 201 },
+          );
+        };
+        click(button(thread(), "Send reply"));
+        await settle();
+        expect(thread().textContent).toContain("[fb-reply]");
+        expect(replyBoxes()[0]?.value).toBe("1A");
+      });
+
       it("treats a well-formed receipt for different words as not sent", async () => {
         await openThread();
         typeReply("1A");
@@ -2394,6 +2413,52 @@ describe("the Earlier tab", () => {
         expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("responded");
       });
 
+      it("does not start a reply while a deferral is still in flight through the keyboard path", async () => {
+        await openThread();
+        typeReply("Actually, A.");
+        const gate: { release?: () => void } = {};
+        answer = () => {
+          const last = posts.at(-1);
+          if (last?.input === DEFERRALS_PATH) {
+            return new Promise((resolve) => {
+              gate.release = () =>
+                resolve(
+                  new Response(
+                    JSON.stringify({ question: "q-aaaaaa", deferredAt: "2026-10-08T09:30:00.000Z" }),
+                    { status: 200 },
+                  ),
+                );
+            });
+          }
+          const posted = JSON.parse(String(last?.init.body)) as { id: string; body: string };
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({ answer: { id: posted.id, body: posted.body, createdAt: "2026-10-08T09:31:00.000Z" } }),
+              { status: 201 },
+            ),
+          );
+        };
+        click(button(thread(), "Defer for now"));
+        act(() => {
+          replyBoxes()[0]?.dispatchEvent(
+            new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }),
+          );
+        });
+        expect(posts).toHaveLength(1);
+        await act(async () => gate.release?.());
+        await settle();
+      });
+
+      it("accepts the deferral state now stored when another request superseded this one", async () => {
+        await openThread();
+        answer = async () =>
+          new Response(JSON.stringify({ question: "q-aaaaaa", deferredAt: null }), { status: 200 });
+        click(button(thread(), "Defer for now"));
+        await settle();
+        expect(thread().textContent).not.toContain("[fb-defer]");
+        expect(thread().querySelector(".fb-question")?.getAttribute("data-state")).toBe("waiting");
+      });
+
       it("says a settled question is settled on a 409, and that it did not get through otherwise; nothing changes", async () => {
         await openThread();
         answer = ok(409);
@@ -2419,7 +2484,7 @@ describe("the Earlier tab", () => {
       });
 
       it.each([
-        ["no time", { question: "q-aaaaaa", deferredAt: null }],
+        ["no deferredAt field", { question: "q-aaaaaa" }],
         ["a time that is not one", { question: "q-aaaaaa", deferredAt: "soon" }],
         ["another question", { question: "q-bbbbbb", deferredAt: "2026-10-08T09:30:00.000Z" }],
         ["a field more", { question: "q-aaaaaa", deferredAt: "2026-10-08T09:30:00.000Z", state: "deferred" }],
@@ -2479,6 +2544,27 @@ describe("the Earlier tab", () => {
         );
         /* On Write it is not pressed. */
         expect(found?.getAttribute("aria-pressed")).toBe("false");
+      });
+
+      it("does not restore the shortcut from a retained draft before the next opening read lands", async () => {
+        await openThread();
+        typeReply("a decision in progress");
+        show(false);
+
+        const gate: { release?: () => void } = {};
+        listAnswer = (input) =>
+          input === WAITING_URL
+            ? new Promise((resolve) => {
+                gate.release = () => resolve(new Response(JSON.stringify({ ...WAITING, questions: [Q2] }), { status: 200 }));
+              })
+            : serve({ ...WITH_QUESTIONS, questions: [Q2] })(input);
+        show(true);
+
+        expect(gate.release).toBeTypeOf("function");
+        expect(shortcut()).toBeNull();
+        await act(async () => gate.release?.());
+        await settle();
+        expect(shortcut()?.textContent?.replace(/\s+/g, " ").trim()).toBe("Needs a decision 1");
       });
 
       it("takes the reader from Write straight to Needs a decision's contents, even from inside a thread", async () => {
@@ -2674,6 +2760,12 @@ describe("the Earlier tab", () => {
         expect(pills()).toContain("Needs a decision 1 · 1 to decide");
         expect(rows()).toContain("q-aaaaaa");
         expect(rows()).toContain("q-bbbbbb");
+        expect(inGroup("waiting")).toEqual(["q-bbbbbb"]);
+        expect(inGroup("retained")).toEqual(["q-aaaaaa"]);
+        expect(shortcut()?.getAttribute("title")).toMatch(/^1 needs a decision/);
+        expect(
+          [...panelOf("Earlier").querySelectorAll(".fb-orphans .fb-earlier-number")].map((number) => number.textContent),
+        ).toEqual(["#214"]);
         click(row("q-aaaaaa"));
         expect(replyBoxes()[0]?.value).toBe("a decision in progress");
       });
@@ -2705,6 +2797,7 @@ describe("the Earlier tab", () => {
         ["a linked report with no body key", { ...WAITING, questions: [{ ...Q1, report: { id: "spya-a2b2c3", number: 214, firstLine: "x" } }] }],
         ["a reply that is not text", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: 7, createdAt: "2026-10-06T18:30:00.000Z" }] }] }],
         ["a reply with no time", { ...WAITING, questions: [{ ...Q1, answers: [{ id: "spya-a9b2c3", body: "x", createdAt: "soon" }] }] }],
+        ["a reply with a field more", { ...WAITING, questions: [{ ...Q1, answers: [{ ...REPLIED, environment: "production" }] }] }],
         ["answers that are not a list", { ...WAITING, questions: [{ ...Q1, answers: REPLIED }] }],
         ["older replies that are not a count", { ...WAITING, questions: [{ ...Q1, olderAnswers: -1 }] }],
         ["a state it does not know", { ...WAITING, questions: [{ ...Q1, state: "answered" }] }],
@@ -2716,6 +2809,20 @@ describe("the Earlier tab", () => {
           {
             ...WAITING,
             questions: [{ id: Q2.id, title: Q2.title, body: Q2.body, asked: Q2.asked, report: null, answer: null, refs: "qi-8qvg5gwv" }],
+          },
+        ],
+        [
+          "an older server's reply with a field more",
+          {
+            ...WAITING,
+            questions: [{
+              id: Q2.id,
+              title: Q2.title,
+              body: Q2.body,
+              asked: Q2.asked,
+              report: null,
+              answer: { ...REPLIED, environment: "production" },
+            }],
           },
         ],
       ])("refuses an admin answer with %s: the failure sentence, no rows and no threads", async (_case, body) => {

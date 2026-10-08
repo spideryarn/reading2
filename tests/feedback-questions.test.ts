@@ -249,6 +249,45 @@ describe("runAnswers — the run, through a fake reader", () => {
     expect(text).not.toContain("q-cccccc");
   });
 
+  it("does not call a deferral in force once its question is answered or absent from this checkout", async () => {
+    const { read } = reader(true, [], [
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-bbbbbb", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+      { ownerId: ADMIN_USER_ID_PROD, questionId: "q-cccccc", deferredAt: new Date("2026-10-08T09:00:00Z"), environment: "production" },
+    ]);
+    const { code, text } = await run(read, [
+      question("q-aaaaaa"),
+      question("q-bbbbbb", { status: "answered" }),
+    ]);
+    expect(code).toBe(0);
+    expect(text).toContain("q-aaaaaa  ·  deferred");
+    expect(text).not.toContain("q-bbbbbb  ·  deferred");
+    expect(text).not.toContain("q-cccccc  ·  deferred");
+  });
+
+  it("uses the same latest-action rule as the server: a later reply supersedes a deferral, and a tie does not", async () => {
+    const at = new Date("2026-10-08T10:00:00Z");
+    const { read } = reader(
+      true,
+      [
+        row("spya-aaaaaa", "q-aaaaaa", { createdAt: at }),
+        row("spya-bbbbbb", "q-bbbbbb", { createdAt: at }),
+      ],
+      [
+        { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date("2026-10-08T09:59:59Z"), environment: "production" },
+        { ownerId: ADMIN_USER_ID_PROD, questionId: "q-bbbbbb", deferredAt: at, environment: "production" },
+      ],
+    );
+    const { code, text } = await run(read, [
+      question("q-aaaaaa", { acted: ["spya-aaaaaa"] }),
+      question("q-bbbbbb"),
+    ]);
+    expect(code).toBe(0);
+    expect(text).not.toContain("q-aaaaaa  ·  deferred");
+    expect(text).toContain("q-bbbbbb  ·  deferred 2026-10-08T10:00:00.000Z");
+    expect(text).toContain("1 stored deferral(s) no longer in force, left out");
+  });
+
   it("is exit 2 when a deferral was not written in production (F6)", async () => {
     const { read } = reader(true, [], [
       { ownerId: ADMIN_USER_ID_PROD, questionId: "q-aaaaaa", deferredAt: new Date(), environment: "development" },

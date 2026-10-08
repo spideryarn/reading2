@@ -656,6 +656,10 @@ export const CODE_KINDS: Record<string, FailureKind> = {
   "fb-list": "retry",
   "fb-reply": "retry",
   "fb-reply-stale": "retry",
+  /* Defer for now or Bring back not getting through, and the question settled
+     before it arrived (261008f): nothing changed either way. */
+  "fb-defer": "retry",
+  "fb-defer-settled": "retry",
   /* The subscription allowance, `pay-`. All six are registered rather than
      left to fall through, and the four `blocked` ones are the reason: an
      unrecognised code means *offer another go*, so "you have used all three of
@@ -5897,7 +5901,8 @@ export const FEEDBACK_DEFER_FAILED: ReaderFacingFailure = {
  */
 export const FEEDBACK_DEFER_SETTLED: ReaderFacingFailure = {
   kind: "retry",
-  message: "That question has been settled since this page was loaded. Reload to see where it stands. [fb-defer-settled]",
+  message:
+    "That question has been settled since this page was loaded, so nothing changed. Reload the page and look again. [fb-defer-settled]",
 };
 
 /* ---- the subscription allowance. docs/project/billing.md ----------------------- */

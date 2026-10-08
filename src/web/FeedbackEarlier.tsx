@@ -66,10 +66,13 @@
  * flips back and forth. Nothing can be filed and then looked for within one
  * opening — a successful send shuts the dialog and thanks the reader in a
  * toast — so reading again would buy no freshness. Shutting the dialog forgets
- * every filter's answer and goes back to All. An answer is stored under the
- * filter that asked for it, and only if it is that filter's latest request in
- * this opening: a generation counter drops anything that lands after the
- * dialog shut, and a per-filter sequence drops a Try again's older twin.
+ * every filter's answer and returns to the opening default: Needs a decision
+ * for an admin, All for everybody else. An answer is stored under the filter
+ * that asked for it, and only if it is that filter's latest request in this
+ * opening: a generation counter drops anything that lands after the dialog
+ * shut, and a per-filter sequence drops a Try again's older twin. The admin's
+ * opening read moves the default to All when no question is waiting, unless
+ * the reader has already chosen a filter.
  */
 import { LoaderCircle } from "lucide-react";
 import { type KeyboardEvent as ReactKeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -281,10 +284,18 @@ function isQuestionAnswer(value: unknown): value is AdminFeedbackQuestionAnswer 
   if (typeof value !== "object" || value === null) return false;
   const answer = value as Record<string, unknown>;
   return (
+    Object.keys(answer).sort().join() === "body,createdAt,id" &&
     typeof answer.id === "string" && isSpideryarnId(answer.id) &&
     typeof answer.body === "string" && answer.body.trim() !== "" &&
     typeof answer.createdAt === "string" && !Number.isNaN(Date.parse(answer.createdAt))
   );
+}
+
+/** A reply POST's whole receipt: one stored answer and no server-only sibling fields. */
+function isAnswerReceipt(value: unknown): value is { answer: AdminFeedbackQuestionAnswer } {
+  if (typeof value !== "object" || value === null) return false;
+  const receipt = value as Record<string, unknown>;
+  return Object.keys(receipt).join() === "answer" && isQuestionAnswer(receipt.answer);
 }
 
 const QUESTION_KEYS = ["answers", "asked", "body", "deferredAt", "id", "olderAnswers", "report", "state", "title"];
@@ -439,6 +450,8 @@ export interface EarlierFeedback {
    * every other reader and until one lands.
    */
   questions: ThreadQuestion[] | null;
+  /** The newest server answer's questions, without a closed one retained only to protect a local draft. */
+  liveQuestions: ThreadQuestion[] | null;
   /** How many of the server's threads wait on a decision, without a remembered no-longer-open question: the pill's and the shortcut's number. */
   waitingQuestionCount: number | null;
   replies: QuestionReplies;
@@ -481,15 +494,14 @@ export interface QuestionReplies {
 }
 
 /** A deferral as the server sends it back: the question asked about, and a time or null. */
-function isDeferralReceipt(value: unknown, question: string, deferred: boolean): boolean {
+function isDeferralReceipt(value: unknown, question: string): boolean {
   if (typeof value !== "object" || value === null) return false;
   const receipt = value as Record<string, unknown>;
   return (
     Object.keys(receipt).sort().join() === "deferredAt,question" &&
     receipt.question === question &&
-    (deferred
-      ? typeof receipt.deferredAt === "string" && !Number.isNaN(Date.parse(receipt.deferredAt))
-      : receipt.deferredAt === null)
+    (receipt.deferredAt === null ||
+      (typeof receipt.deferredAt === "string" && !Number.isNaN(Date.parse(receipt.deferredAt))))
   );
 }
 
@@ -541,7 +553,7 @@ function useQuestionReplies(tick: () => number, chose: () => void): QuestionRepl
   const send = useCallback(
     async (question: string) => {
       const body = (draftsRef.current[question] ?? "").trim();
-      if (sending.current || body === "" || body.length > MAX_FEEDBACK_ANSWER_CHARS) return;
+      if (sending.current || deferInFlight.current || body === "" || body.length > MAX_FEEDBACK_ANSWER_CHARS) return;
       const previous = attempt.current;
       const id =
         previous !== null && previous.question === question && previous.body === body ? previous.id : mintId();
@@ -561,9 +573,9 @@ function useQuestionReplies(tick: () => number, chose: () => void): QuestionRepl
           /* 201, or 200 for a retry the server had already stored. Only a
              well-formed stored reply counts: a 2xx with anything else in it is
              not evidence the words were kept. */
-          const receipt = (await res.json()) as { answer?: unknown } | null;
-          const answer = receipt?.answer;
-          if (isQuestionAnswer(answer) && answer.id === id && answer.body === body) {
+          const receipt: unknown = await res.json();
+          const answer = isAnswerReceipt(receipt) ? receipt.answer : null;
+          if (answer !== null && answer.id === id && answer.body === body) {
             attempt.current = null;
             sending.current = false;
             const at = tick();
@@ -604,7 +616,9 @@ function useQuestionReplies(tick: () => number, chose: () => void): QuestionRepl
           failed = FEEDBACK_DEFER_SETTLED.message;
         } else if (res.ok) {
           const receipt: unknown = await res.json();
-          if (isDeferralReceipt(receipt, question, deferred)) {
+          /* The receipt is the state now stored. Another tab may have changed
+             it between this request's write and the store's final read. */
+          if (isDeferralReceipt(receipt, question)) {
             deferInFlight.current = false;
             const at = tick();
             const value = (receipt as { deferredAt: string | null }).deferredAt;
@@ -885,6 +899,7 @@ export function useEarlierFeedback(open: boolean, wanted: boolean, admin = false
     setShow,
     retry: () => void load(askOf(detail, show)),
     questions,
+    liveQuestions: currentQuestions,
     waitingQuestionCount: currentQuestions === null ? null : waitingThreads(currentQuestions),
     replies,
   };
@@ -1346,34 +1361,47 @@ function ThreadIds({ question }: { question: ThreadQuestion }) {
 }
 
 /**
- * **The contents** (`spya-t6nmxt`, `spya-bbe74w`): every thread, one line
- * each, in three groups, and *Deferred* shut. Pressing one shows it alone.
+ * **The contents** (`spya-t6nmxt`, `spya-bbe74w`): every live thread, one line
+ * each, in three groups, and *Deferred* shut. A question no longer in the
+ * server's open list stays reachable while this tab holds its draft, but in a
+ * separate uncounted group rather than changing what *Needs a decision* says.
  */
-function ThreadContents({ questions, replies }: { questions: ThreadQuestion[]; replies: QuestionReplies }) {
+function ThreadContents({
+  questions,
+  liveQuestions,
+  replies,
+}: {
+  questions: ThreadQuestion[];
+  liveQuestions: readonly ThreadQuestion[];
+  replies: QuestionReplies;
+}) {
+  const live = new Set(liveQuestions.map((question) => question.id));
+  const rowsFor = (group: readonly ThreadQuestion[]) => (
+    <ol className="fb-threads-list">
+      {group.map((question) => (
+        <li key={question.id}>
+          <button
+            type="button"
+            className="fb-thread-row"
+            data-question={question.id}
+            onClick={() => replies.open(question.id)}
+          >
+            <span className="fb-thread-title">{question.title}</span>
+            <span className="fb-earlier-meta">
+              <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
+  const retained = questions.filter((question) => !live.has(question.id));
   return (
     <div className="fb-threads">
       {THREAD_GROUPS.map((state) => {
-        const group = questions.filter((question) => question.state === state);
+        const group = questions.filter((question) => live.has(question.id) && question.state === state);
         if (group.length === 0) return null;
-        const list = (
-          <ol key={state} className="fb-threads-list">
-            {group.map((question) => (
-              <li key={question.id}>
-                <button
-                  type="button"
-                  className="fb-thread-row"
-                  data-question={question.id}
-                  onClick={() => replies.open(question.id)}
-                >
-                  <span className="fb-thread-title">{question.title}</span>
-                  <span className="fb-earlier-meta">
-                    <ThreadIds question={question} /> · asked {dayOf(question.asked) ?? question.asked}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ol>
-        );
+        const list = rowsFor(group);
         const heading = (
           <>
             {GROUP_WORD[state]} <span className="fb-show-count">{group.length}</span>
@@ -1391,6 +1419,14 @@ function ThreadContents({ questions, replies }: { questions: ThreadQuestion[]; r
           </section>
         );
       })}
+      {retained.length === 0 ? null : (
+        <section className="fb-threads-group" data-group="retained">
+          <h3 className="fb-questions-heading">
+            No longer open — kept in this tab <span className="fb-show-count">{retained.length}</span>
+          </h3>
+          {rowsFor(retained)}
+        </section>
+      )}
     </div>
   );
 }
@@ -1516,6 +1552,7 @@ function ThreadView({
  */
 export function EarlierThreads({
   questions,
+  liveQuestions,
   replies,
   choice,
   earlier,
@@ -1523,6 +1560,8 @@ export function EarlierThreads({
   onEarlier,
 }: {
   questions: ThreadQuestion[] | null;
+  /** Authoritative membership from the newest read; retained drafts are not in this list. */
+  liveQuestions: ThreadQuestion[] | null;
   replies: QuestionReplies;
   choice: EarlierChoice;
   earlier: EarlierState;
@@ -1533,12 +1572,16 @@ export function EarlierThreads({
 }) {
   if (questions === null || questions.length === 0) return null;
   const showing = open && onEarlier && choice.show === "waiting" && earlier.kind === "loaded";
-  const order = threadOrder(questions);
+  const live = new Set((liveQuestions ?? []).map((question) => question.id));
+  const order = [
+    ...threadOrder(questions.filter((question) => live.has(question.id))),
+    ...threadOrder(questions.filter((question) => !live.has(question.id))),
+  ];
   const thread = replies.openId === null ? undefined : order.find((one) => one.id === replies.openId);
   return (
     <section className="fb-questions" hidden={!showing} aria-label="Questions for you">
       {thread === undefined ? (
-        <ThreadContents questions={order} replies={replies} />
+        <ThreadContents questions={order} liveQuestions={liveQuestions ?? []} replies={replies} />
       ) : (
         <ThreadView question={thread} order={order} replies={replies} active={showing} />
       )}
