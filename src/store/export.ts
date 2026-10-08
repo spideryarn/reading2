@@ -649,6 +649,11 @@ export async function exportArticle(
            docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
            stage 0. */
         kind: storedThreadKind(thread.kind),
+        /* What the conversation covered, for the model in the reader's other
+           conversations (src/chat-gist.ts, plan 261008e). Omitted where there
+           is none, as the store's own read omits it, so a thread written
+           before the column exists exports exactly as it did. */
+        ...(thread.gist ? { gist: thread.gist } : {}),
         messages: messageRows.map((row) =>
           compact({
             id: row.id,

@@ -4003,6 +4003,18 @@ export const chatThreads = spideryarn.table(
      * conversation to the top. Stored, not shown (plan 261003j).
      */
     renamedAt: timestamp("renamed_at", { withTimezone: true }),
+    /**
+     * **One line saying what this conversation covered**, written by a small
+     * model after each finished answer (src/chat-gist.ts, plan 261008e). Read
+     * by the model in the reader's *other* conversations, beside the title, so
+     * a new one can see what an earlier one already said. Never shown on
+     * screen and never the title: the reader's title and renames are untouched.
+     * Null until the first gist, and whenever the last attempt failed before
+     * any succeeded.
+     */
+    gist: text("gist"),
+    /** When `gist` was written. Store when it happened. */
+    gistAt: timestamp("gist_at", { withTimezone: true }),
 
     /**
      * **The passage this conversation was started from**, as three columns.

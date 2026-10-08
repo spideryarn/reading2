@@ -48,7 +48,7 @@ contract come from.
 - [§ The nine, and the filter they had to pass](#the-nine-and-the-filter-they-had-to-pass) — adding or judging a tool
 - [§ The links the prompt does not carry](#the-links-the-prompt-does-not-carry) — `article_links` and `read_web_page`
 - [§ The citations list: one more tool](#the-citations-list-one-more-tool) — `article_citations`
-- [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`
+- [§ The reader's notes: the one tool not every conversation gets](#the-readers-notes-the-one-tool-not-every-conversation-gets) — `reader_notes`, `toolsFor(kind)`, and [the other conversations with every question](#the-other-conversations-come-with-every-question) (each one's gist)
 - [§ The loop, and the three things that are not obvious](#the-loop-and-the-three-things-that-are-not-obvious) — rounds, withheld tools
 - [§ What the reader sees](#what-the-reader-sees) — tool rows in the panel
 - [§ Chat's list shows every conversation about the article](#chats-list-shows-every-conversation-about-the-article) — list sources, icons, the `?chatfrom=` filter, chats started from a mode
@@ -112,7 +112,7 @@ and this file does not change.
 | `article_links` | The hyperlinks **this** article contains: which blocks each sits in, the author's words for it, where it goes | The address behind a link is the one thing about this article the prompt does not carry. Without it the model has a fetching tool and nothing to point it at — see [The links the prompt does not carry](#the-links-the-prompt-does-not-carry) |
 | `article_glossary` | This article's [glossary](glossary.md), if one has been generated | So an answer about a term agrees with what the app has already told the reader, rather than quietly contradicting it |
 | `article_citations` | The works **this** article cites, from its stored [citations](citations.md) list if one has been made: what the piece uses each for, where it cites it, and the link with where that link came from. An optional `query` narrows it | So a question about a work, author or study the piece leans on — or a web search about one — starts from the right paper rather than from a guess. Reads the list and never makes one. See [§ The citations list](#the-citations-list-one-more-tool) |
-| `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
+| `reader_notes` | The reader's own comments, highlights and bookmarks on **this** article, and a list of their other conversations about it. Given a conversation's id as `thread`, that conversation | The reader's own thinking about the piece is the one thing about this article the prompt does not hold. **Typed Chat only**: it is not in `CHAT_TOOLS`. Since 2026-10-08 the list of other conversations, each with a line on what it covered, also comes with every Chat question, so the model knows when one is worth opening. See [§ The reader's notes](#the-readers-notes-the-one-tool-not-every-conversation-gets) |
 
 **Eight of the nine are `CHAT_TOOLS`**, the list every kind of conversation but the guide, and
 Live, share. The ninth is added by `toolsFor(kind)` in [`src/chat-tools.ts`](../../src/chat-tools.ts),
@@ -308,7 +308,7 @@ reads and what to say when one fails.
 - **A comment's stored answer is never passed through.** It can hold web text, and the reader's own
   words are what this is for. The row says only that there is one.
 - **The index of conversations is capped too**: `MAX_THREAD_ROWS` (20), titles clipped to
-  `THREAD_TITLE_CHARS` (80), `THREADS_CHARS` (3,000), newest first. The first plan left it
+  `THREAD_TITLE_CHARS` (80), `THREADS_CHARS` (5,000; 3,000 until rows gained a gist), newest first. The first plan left it
   uncapped, and a reader can make any number of chats (GPT Sol's plan review, PR-2).
 - **One budget over the complete answer**, `READER_NOTES_CHARS` (8,000), including the escaped
   rows, headings and fences. It is smaller than the two row budgets added up, so a full list of
@@ -381,20 +381,74 @@ on bulk, and a single note can still leave. The tool's description tells the mod
 what it read in a search or a URL, which is advice to a model and not a boundary. The fix is the
 same allowlist as before ([§ Still open](#still-open)), and this is one more thing waiting on it.
 
+**And since 2026-10-08 part of it is in the prompt without a call.** Every typed Chat turn now
+carries the index of the reader's other conversations, each with a model-written line on what it
+covered ([§ The other conversations come with every question](#the-other-conversations-come-with-every-question)).
+So a hostile article no longer has to persuade the model to call `reader_notes` before a line of
+the reader's private conversations is in front of it. It is a line per conversation, capped and
+fenced, and not the notes or a transcript; the fence is advice to a model, not a boundary, and the
+same allowlist is the fix.
+
 **The strip and the log.** The row reads *read your notes on this article* / *7 notes, 3
 conversations*, or *read one of your earlier conversations* / *4 exchanges*: counts, and no note,
 title or thread id, because `ToolRun` is stored on the message. The log line has the slug and the
 same counts.
 
-**The prompt** gained one bullet in `SYSTEM`'s tool list: read the notes when the reader asks what
-they think, what they marked, or about an earlier conversation, and not otherwise.
+**The prompt** has two bullets in `SYSTEM`'s tool list: read the notes when the reader asks what
+they think, what they marked, or about an earlier conversation; and BUILD ON THEIR EARLIER
+CONVERSATIONS, below.
 
 **Passed over**: putting the notes into every Chat turn's final message with no tool. It costs
 tokens on every turn for the many questions that do not need them, and it gives nowhere to read one
-earlier conversation on request.
+earlier conversation on request. (The *index* of conversations does now go with every turn, for a
+reason the notes do not have: see the next section.)
 
-**Not checked yet**: whether Chat reaches for it when it should and leaves it alone when it should
-not. The plan's eval is in its second stage.
+### The other conversations come with every question
+
+**Built 2026-10-08**, plan
+[261008e](../plans/261008e-chat-knows-the-reader-s-other-conversations.md), from Greg's report
+`spya-whq0j0`:
+
+> I've just had a really interesting chat thread where the model pointed out some deficiencies in
+> the paper, potential confounds. Now, if I was to start a new chat thread and say, Are there any
+> potential confounds? I would be disappointed if the model sort of didn't make reference to points
+> it had already made.
+>
+> — Greg, 2026-10-08
+
+The tool could already read an earlier conversation. What stopped it was that the model never knew
+there was one worth reading: it had to call `reader_notes()` to find out, and the prompt told it to
+do that only when the reader mentioned their notes or an earlier conversation. And had it looked, a
+conversation's title is its first question cut to sixty characters, which says nothing about where
+the conversation went. Two pieces fix that:
+
+- **A gist per conversation.** After each finished answer, a small model writes one line on what the
+  whole conversation covered and the points it reached — *"Cinnamon bun (Mother Teresa) as Seth's
+  pareidolia example, then where his argument is weakest: …"* — stored in `chat_threads.gist`
+  with `gist_at` ([`src/chat-gist.ts`](../../src/chat-gist.ts), job `chat-gist`, DeepSeek V4.1
+  Flash on the zero-retention route). It runs in `streamChat` after the response has ended and the
+  turn has let go of the thread, and is awaited there so its spend reaches the ledger. It is written
+  only if nothing has been stored in the thread since it was read (`chatStore.setGist`), only when
+  this turn's answer is what landed, and never for Candidates. A failure costs the gist, never the
+  turn. **It is never shown to the reader**, and never replaces their title. Measured: $0.0001 to
+  $0.0003 and about a second per answer on short conversations; the input is capped at 16,000
+  characters, so roughly $0.002 at the most.
+- **The index with every typed Chat question**, in the final user message (below the cache
+  breakpoint): `otherConversationsSection` in [`src/reader-notes.ts`](../../src/reader-notes.ts),
+  the same rows `reader_notes()` lists — same caps, same exclusions — each now carrying its gist,
+  or, until it has one, its latest question. Absent when there is no other conversation, so a first
+  chat sends what it always did. Chat only: the other kinds either have the whole digest already
+  (Explore) or have no tool to open a conversation with. The rows share `THREADS_CHARS`, raised to
+  5,000 for the longer rows; with the sentences around them the section is under 6,000 characters,
+  a few hundred tokens for a reader with a handful of conversations.
+
+The prompt's bullet asks for a narrow trigger: open a conversation that took up the same question,
+claim, passage or objection, not one on a nearby topic, and add to it rather than repeat it.
+**Checked** with [`evals/chat-other-threads.ts`](../../evals/chat-other-threads.ts) on the Noema
+fixture, three runs each: with the list, "where is his argument weakest?" opened the earlier
+conversation that had covered it 3/3 and answered by building on its three points; a question
+about a term opened the conversation about that term 3/3; "who is Blake Lemoine?" opened nothing
+3/3. Without the list, nothing was ever opened. Figures in the plan.
 
 ## The loop, and the three things that are not obvious
 

@@ -275,7 +275,20 @@ beforeAll(async () => {
     /* Storage is reached through `fetch` too, and the Hidden text case reads a
        source document from it: only the model call is answered here. */
     if (!String(url instanceof Request ? url.url : url).includes("openrouter")) return realFetch(url, init);
-    sent.push(String((JSON.parse(String(init?.body)) as { model?: unknown }).model));
+    const request = JSON.parse(String(init?.body)) as {
+      model?: unknown;
+      response_format?: { json_schema?: { name?: unknown } };
+    };
+    /* The background conversation gist is a separate non-task job. These
+       assertions are about the foreground route selected by High-powered AI. */
+    if (request.response_format?.json_schema?.name === "conversation_gist") {
+      return Promise.resolve(
+        Response.json({
+          choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ gist: "A short answer" }) } }],
+        }),
+      );
+    }
+    sent.push(String(request.model));
     return Promise.resolve(streamedSentence());
   }) as unknown as typeof fetch;
 }, 120_000);

@@ -1198,6 +1198,13 @@
       "when": 1791455344000,
       "tag": "20261008102903_chat_message_effort",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1791476868851,
+      "tag": "20261008162748_chat_thread_gist",
+      "breakpoints": true
     }
   ]
 }

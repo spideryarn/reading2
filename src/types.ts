@@ -4363,6 +4363,13 @@ export interface ChatThread {
    * places instead of at every read.
    */
   kind: ThreadKind;
+  /**
+   * **One line saying what this conversation covered**, written by a small
+   * model after each finished answer (src/chat-gist.ts). For the model in the
+   * reader's other conversations (src/reader-notes.ts § `indexRow`), never
+   * drawn on screen. Absent until the first one is written.
+   */
+  gist?: string;
   messages: ChatMessage[];
 }
 

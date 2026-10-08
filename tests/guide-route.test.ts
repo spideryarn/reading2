@@ -90,6 +90,7 @@ interface Sent {
   messages: { role: string; content: unknown }[];
   tools?: { type: string; function?: { name: string } }[];
   tool_choice?: unknown;
+  response_format?: { json_schema?: { name?: unknown } };
 }
 const sent: Sent[] = [];
 /** What the route wrote back, for the `done` frame. */
@@ -111,6 +112,13 @@ beforeAll(() => {
   globalThis.fetch = ((_url: unknown, init?: { body?: unknown }) => {
     try {
       const body = JSON.parse(String(init?.body ?? "null")) as Sent | null;
+      if (body?.response_format?.json_schema?.name === "conversation_gist") {
+        return Promise.resolve(
+          Response.json({
+            choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ gist: "A short answer" }) } }],
+          }),
+        );
+      }
       if (body && Array.isArray(body.messages)) sent.push(body);
     } catch {
       /* not a model request */

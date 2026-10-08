@@ -249,6 +249,8 @@ export async function threadsFor(articleId: string, db: Db | Tx = getDb()): Prom
        docs/plans/261006a-remember-identifiers-become-learn-all-the-way-down.md
        stage 0. */
     kind: storedThreadKind(t.kind),
+    /* Omitted rather than `undefined` when there is none, like `anchor`. */
+    ...(t.gist ? { gist: t.gist } : {}),
     messages: byThread.get(t.id) ?? [],
   }));
 }
@@ -355,7 +357,16 @@ async function upsertThread(tx: Tx, articleId: string, thread: ChatThread): Prom
          throughout. `withTurn` refuses a contradicting kind before we are
          reached; this is why it would not have mattered if it had not.
          docs/plans/260827ah-review-mode.md § `kind` belongs to the thread. */
-      set: { title: thread.title, updatedAt: new Date(thread.updatedAt) },
+      /* A stored gist describes the settled transcript before this new turn.
+         Clear it as the transcript moves, rather than leave a confident stale
+         line behind if this turn fails or its replacement gist cannot be made.
+         Never copy `thread.gist`: that snapshot can itself be stale. */
+      set: {
+        title: thread.title,
+        updatedAt: new Date(thread.updatedAt),
+        gist: null,
+        gistAt: null,
+      },
     });
 }
 
@@ -457,7 +468,7 @@ const rawPgChatStore: ChatStore = {
        see, so that it reaches `MissingAttempt` below and not a `TypeError` on
        `undefined.now`. */
     opts: { attempt?: string; now?: (() => string) | undefined } = {},
-  ): Promise<void> {
+  ): Promise<boolean> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
     const at = new Date((opts.now ?? (() => new Date().toISOString()))());
@@ -474,7 +485,7 @@ const rawPgChatStore: ChatStore = {
       throw new MissingAttempt("ChatStore.finish", "begin/retry/edit");
     }
 
-    await db.transaction(async (tx) => {
+    const landed = await db.transaction(async (tx) => {
       await lockArticleRow(tx, articleId);
       /* **The thread's clock moves whether or not the message matched.**
 
@@ -489,7 +500,7 @@ const rawPgChatStore: ChatStore = {
       /* `id` and `role` are deliberately not settable — src/chat.ts pins both
          back after its spread, so a patch can change what an answer says but
          never whose turn it was. */
-      await tx
+      const rows = await tx
         .update(chatMessages)
         .set({
           ...(patch.text === undefined ? {} : { text: patch.text }),
@@ -521,10 +532,13 @@ const rawPgChatStore: ChatStore = {
             eq(chatMessages.status, "pending"),
             eq(chatMessages.attemptId, attempt),
           ),
-        );
+        )
+        .returning({ id: chatMessages.id });
+      return rows.length > 0;
     }, READ_COMMITTED);
 
     if (patch.status === "error") logger.warn({ slug, threadId, messageId }, "chat answer failed");
+    return landed;
   },
 
   async retry(slug, threadId, messageId, now = () => new Date().toISOString()) {
@@ -541,7 +555,10 @@ const rawPgChatStore: ChatStore = {
 
       await tx
         .update(chatThreads)
-        .set({ updatedAt: new Date(thread.updatedAt) })
+        /* Retrying removes a settled answer immediately. If the replacement
+           fails, the old gist must not keep describing words no longer in the
+           conversation. */
+        .set({ updatedAt: new Date(thread.updatedAt), gist: null, gistAt: null })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, thread.id)));
 
       /* Everything the replaced attempt wrote goes, and **`created_at` moves**.
@@ -631,7 +648,10 @@ const rawPgChatStore: ChatStore = {
 
       await tx
         .update(chatThreads)
-        .set({ title: thread.title, updatedAt: new Date(thread.updatedAt) })
+        /* An edit can discard several settled exchanges. Clear their gist in
+           the same transaction; a failed replacement then falls back to the
+           stored questions instead of advertising the discarded answers. */
+        .set({ title: thread.title, updatedAt: new Date(thread.updatedAt), gist: null, gistAt: null })
         .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, thread.id)));
 
       /* **`>` and never `>=`, and the delete comes first.**
@@ -712,6 +732,44 @@ const rawPgChatStore: ChatStore = {
     return threads;
   },
 
+  async setGist(slug: string, threadId: string, gist: string, basedOn: ChatThread): Promise<boolean> {
+    const db = getDb();
+    const articleId = await articleIdForOwned(slug);
+    /* **Compare the transcript, not only its clock.** PostgreSQL timestamps
+       survive the trip through node-postgres only to milliseconds, and Hint
+       deliberately does not move `updated_at` (opening a hint is not adding to
+       a conversation). A timestamp CAS can therefore accept two writes in one
+       millisecond, and cannot see a hint opened while the gist model ran.
+
+       The article lock makes this read/compare/write atomic with every path
+       that changes messages. The normalized comparison deliberately includes
+       pending messages too: rejecting a gist unnecessarily is cheap; storing
+       one made from a transcript the reader no longer has is not. */
+    const basis = (thread: ChatThread) =>
+      JSON.stringify({
+        kind: thread.kind,
+        messages: thread.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
+          text: message.text,
+          status: message.status,
+          interrupted: message.interrupted ?? false,
+          hintOpenedAt: message.hintOpenedAt ?? null,
+        })),
+      });
+    return db.transaction(async (tx) => {
+      await lockArticleRow(tx, articleId);
+      const current = (await threadsFor(articleId, tx)).find((thread) => thread.id === threadId);
+      if (!current || current.updatedAt !== basedOn.updatedAt || basis(current) !== basis(basedOn)) return false;
+      const written = await tx
+        .update(chatThreads)
+        .set({ gist, gistAt: DB_NOW })
+        .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)))
+        .returning({ id: chatThreads.id });
+      return written.length > 0;
+    }, READ_COMMITTED);
+  },
+
   async remove(slug: string, threadId: string): Promise<ChatThread[]> {
     const db = getDb();
     const articleId = await articleIdForOwned(slug);
@@ -757,7 +815,12 @@ const rawPgChatStore: ChatStore = {
     const out = await db.transaction(async (tx): Promise<HintOpened> => {
       await lockArticleRow(tx, articleId);
       const [row] = await tx
-        .select({ role: chatMessages.role, text: chatMessages.text, kind: chatThreads.kind })
+        .select({
+          role: chatMessages.role,
+          text: chatMessages.text,
+          kind: chatThreads.kind,
+          hintOpenedAt: chatMessages.hintOpenedAt,
+        })
         .from(chatMessages)
         .innerJoin(
           chatThreads,
@@ -768,12 +831,21 @@ const rawPgChatStore: ChatStore = {
       if (row.kind !== "learn" || row.role !== "assistant") return { ok: false, reason: "not-a-recall-answer" };
       if (splitHint(row.text).hint !== hint) return { ok: false, reason: "hint-changed" };
 
+      /* A repeated press returns the first time without invalidating a gist
+         made since then. The first press changes `answerAsSeen`, so the old
+         gist no longer describes the transcript another conversation may read. */
+      if (row.hintOpenedAt) return { ok: true, hintOpenedAt: row.hintOpenedAt.toISOString() };
+
       const [stamped] = await tx
         .update(chatMessages)
-        .set({ hintOpenedAt: sql`coalesce(${chatMessages.hintOpenedAt}, clock_timestamp())` })
+        .set({ hintOpenedAt: DB_NOW })
         .where(thisMessage)
         .returning({ hintOpenedAt: chatMessages.hintOpenedAt });
       if (!stamped?.hintOpenedAt) return { ok: false, reason: "no-such-message" };
+      await tx
+        .update(chatThreads)
+        .set({ gist: null, gistAt: null })
+        .where(and(eq(chatThreads.articleId, articleId), eq(chatThreads.id, threadId)));
       return { ok: true, hintOpenedAt: stamped.hintOpenedAt.toISOString() };
     }, READ_COMMITTED);
 
